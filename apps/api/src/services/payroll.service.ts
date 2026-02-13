@@ -76,11 +76,11 @@ export async function calculatePayroll(
 
       const existing = employeeTotals.get(empId);
       if (existing) {
-        existing.hoursWorked += regularHours;
+        existing.hoursWorked += hoursWorked;
         existing.overtimeHours += overtimeHours;
       } else {
         employeeTotals.set(empId, {
-          hoursWorked: regularHours,
+          hoursWorked,
           overtimeHours,
           hourlyRate,
         });

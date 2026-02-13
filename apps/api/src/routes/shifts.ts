@@ -32,12 +32,13 @@ export async function shiftsRoutes(app: FastifyInstance) {
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
-    const employeeId = request.query.employeeId as string | undefined;
-    const siteId = request.query.siteId as string | undefined;
-    const startDate = request.query.startDate as string | undefined;
-    const endDate = request.query.endDate as string | undefined;
-    const limit = Math.min(Number(request.query.limit) || 50, 100);
-    const offset = Number(request.query.offset) || 0;
+    const q = request.query as Record<string, string | undefined>;
+    const employeeId = q.employeeId;
+    const siteId = q.siteId;
+    const startDate = q.startDate;
+    const endDate = q.endDate;
+    const limit = Math.min(Number(q.limit) || 50, 100);
+    const offset = Number(q.offset) || 0;
 
     const where: Record<string, unknown> = {
       companyId: user.companyId,

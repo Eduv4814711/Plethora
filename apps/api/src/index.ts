@@ -27,7 +27,7 @@ await app.register(cors, {
   credentials: true,
 });
 
-await app.register(helmet, {
+await app.register(helmet as never, {
   contentSecurityPolicy: false,
 });
 

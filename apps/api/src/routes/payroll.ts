@@ -20,8 +20,9 @@ export async function payrollRoutes(app: FastifyInstance) {
 
   app.get("/runs", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
-    const limit = Math.min(Number(request.query.limit) || 20, 100);
-    const offset = Number(request.query.offset) || 0;
+    const q = request.query as Record<string, string | undefined>;
+    const limit = Math.min(Number(q.limit) || 20, 100);
+    const offset = Number(q.offset) || 0;
 
     const [runs, total] = await Promise.all([
       prisma.payrollRun.findMany({

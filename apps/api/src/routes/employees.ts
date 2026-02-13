@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import type { EmployeeStatus } from "@prisma/client";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
@@ -78,10 +79,11 @@ export async function employeesRoutes(app: FastifyInstance) {
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
-    const limit = Math.min(Number(request.query.limit) || 20, 100);
-    const offset = Number(request.query.offset) || 0;
-    const status = request.query.status as string | undefined;
-    const employeeType = request.query.employeeType as string | undefined;
+    const q = request.query as Record<string, string | undefined>;
+    const limit = Math.min(Number(q.limit) || 20, 100);
+    const offset = Number(q.offset) || 0;
+    const status = q.status as EmployeeStatus | undefined;
+    const employeeType = q.employeeType;
 
     const where = {
       companyId: user.companyId,
@@ -109,12 +111,15 @@ export async function employeesRoutes(app: FastifyInstance) {
       prisma.employee.count({ where }),
     ]);
 
-    const data = employees.map((e) => ({
-      ...e,
-      currentSite: e.shifts[0]?.post?.site?.name ?? null,
-      currentPost: e.shifts[0]?.post?.name ?? null,
-      shifts: undefined,
-    }));
+    const data = employees.map((e) => {
+      const emp = e as typeof e & { shifts?: Array<{ post?: { site?: { name?: string }; name?: string } }> };
+      return {
+        ...e,
+        currentSite: emp.shifts?.[0]?.post?.site?.name ?? null,
+        currentPost: emp.shifts?.[0]?.post?.name ?? null,
+        shifts: undefined,
+      };
+    });
 
     return reply.send({ data, total, limit, offset });
   });

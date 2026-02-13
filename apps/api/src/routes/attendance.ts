@@ -18,12 +18,13 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
-    const shiftId = request.query.shiftId as string | undefined;
-    const employeeId = request.query.employeeId as string | undefined;
-    const startDate = request.query.startDate as string | undefined;
-    const endDate = request.query.endDate as string | undefined;
-    const limit = Math.min(Number(request.query.limit) || 50, 100);
-    const offset = Number(request.query.offset) || 0;
+    const q = request.query as Record<string, string | undefined>;
+    const shiftId = q.shiftId;
+    const employeeId = q.employeeId;
+    const startDate = q.startDate;
+    const endDate = q.endDate;
+    const limit = Math.min(Number(q.limit) || 50, 100);
+    const offset = Number(q.offset) || 0;
 
     const shiftWhere: Record<string, unknown> = { companyId: user.companyId };
     if (employeeId) shiftWhere.employeeId = employeeId;

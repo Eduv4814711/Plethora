@@ -25,8 +25,9 @@ export async function usersRoutes(app: FastifyInstance) {
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
-    const limit = Math.min(Number(request.query.limit) || 20, 100);
-    const offset = Number(request.query.offset) || 0;
+    const q = request.query as Record<string, string | undefined>;
+    const limit = Math.min(Number(q.limit) || 20, 100);
+    const offset = Number(q.offset) || 0;
 
     const [users, total] = await Promise.all([
       prisma.user.findMany({

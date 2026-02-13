@@ -8,10 +8,11 @@ export async function auditRoutes(app: FastifyInstance) {
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
-    const entityType = request.query.entityType as string | undefined;
-    const entityId = request.query.entityId as string | undefined;
-    const limit = Math.min(Number(request.query.limit) || 50, 100);
-    const offset = Number(request.query.offset) || 0;
+    const q = request.query as Record<string, string | undefined>;
+    const entityType = q.entityType;
+    const entityId = q.entityId;
+    const limit = Math.min(Number(q.limit) || 50, 100);
+    const offset = Number(q.offset) || 0;
 
     const where = {
       companyId: user.companyId,

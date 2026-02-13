@@ -93,6 +93,12 @@ This guide covers deploying Plethora to Railway. All components (web, API, datab
 
 ## Troubleshooting
 
+- **`secret JWT_REFRESH_SECRET: not found`** (or similar): Railway requires all env vars used by the API to exist **before** the build. In your API service → **Variables**, add every variable from the table in Phase 3, including:
+  - `DATABASE_URL`
+  - `JWT_SECRET` (e.g. a random 32+ char string)
+  - `JWT_REFRESH_SECRET` (e.g. a different random 32+ char string)
+  - `CORS_ORIGIN` (use a placeholder like `https://placeholder.up.railway.app` until the web URL exists, then update)
+  - `PORT` = `3001`
 - **CORS errors**: Ensure `CORS_ORIGIN` exactly matches your web URL (including `https://`).
 - **Database connection**: Use Railway's variable reference to link the PostgreSQL service, e.g. `${{Postgres.DATABASE_URL}}`. Replace `Postgres` with your database service name.
 - **Build fails**: Check that Root Directory is set correctly (`apps/api` or `apps/web`).
