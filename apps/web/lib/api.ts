@@ -1,4 +1,5 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api";
+// Use /api proxy to avoid CORS - Next.js rewrites /api/* to the backend
+const API_BASE = "/api";
 
 export interface AuthUser {
   id: string;
