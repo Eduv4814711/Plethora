@@ -1,0 +1,1059 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { authFetch } from "@/lib/api";
+
+interface Employee {
+  id: string;
+  firstName: string;
+  lastName: string;
+  idNumber?: string | null;
+  phone?: string | null;
+  status: string;
+  hourlyRate?: number | null;
+  monthlySalary?: number | null;
+  currentSite: string | null;
+  currentPost: string | null;
+  employeeType?: string | null;
+  dateOfBirth?: string | null;
+  gender?: string | null;
+  email?: string | null;
+  physicalAddress?: string | null;
+  postalAddress?: string | null;
+  postalCode?: string | null;
+  taxNumber?: string | null;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  bankBranchCode?: string | null;
+  commencementDate?: string | null;
+  occupation?: string | null;
+  placeOfWork?: string | null;
+  ordinaryHours?: string | null;
+  ordinaryDays?: string | null;
+  overtimeRate?: number | null;
+  payFrequency?: string | null;
+  leaveEntitlement?: string | null;
+  noticePeriod?: string | null;
+  previousService?: string | null;
+  psiraNumber?: string | null;
+  psiraExpiryDate?: string | null;
+  securityServiceType?: string | null;
+  nextOfKin1Name?: string | null;
+  nextOfKin1Phone?: string | null;
+  nextOfKin2Name?: string | null;
+  nextOfKin2Phone?: string | null;
+  nextOfKin3Name?: string | null;
+  nextOfKin3Phone?: string | null;
+  residedOutsideSA?: boolean | null;
+  militaryPoliceService?: boolean | null;
+  criminalInvestigation?: boolean | null;
+  mentallyUnstable?: boolean | null;
+  trainingCompleted?: boolean | null;
+}
+
+const statusColors: Record<string, string> = {
+  applicant: "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300",
+  hired: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
+  training: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400",
+  active: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400",
+  suspended: "bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400",
+  offboarded: "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400",
+};
+
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  applicant: ["hired"],
+  hired: ["training", "offboarded"],
+  training: ["active", "offboarded"],
+  active: ["suspended", "offboarded"],
+  suspended: ["active", "offboarded"],
+  offboarded: [],
+};
+
+export default function EmployeesPage() {
+  const { token, user } = useAuth();
+  const defaultCompanyName = (user as { company?: { name: string } } | null)?.company?.name ?? "";
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [statusChangeId, setStatusChangeId] = useState<string | null>(null);
+
+  const fetchEmployees = () => {
+    if (!token) return;
+    const url = statusFilter === "all" ? "/employees" : `/employees?status=${statusFilter}`;
+    authFetch(url, token)
+      .then((r) => r.json())
+      .then((d) => setEmployees(d.data || []));
+  };
+
+  useEffect(() => {
+    if (!token) return;
+    fetchEmployees();
+    setLoading(false);
+  }, [token, statusFilter]);
+
+  if (loading) {
+    return (
+      <div className="animate-pulse grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div key={i} className="h-44 bg-slate-200 dark:bg-slate-800 rounded-2xl" />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+            Employees
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">
+            Manage your workforce
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="input-modern py-2.5 w-auto min-w-[140px]"
+          >
+            <option value="all">All statuses</option>
+            <option value="applicant">Applicant</option>
+            <option value="hired">Hired</option>
+            <option value="training">Training</option>
+            <option value="active">Active</option>
+            <option value="suspended">Suspended</option>
+            <option value="offboarded">Offboarded</option>
+          </select>
+          <button onClick={() => setShowForm(!showForm)} className="btn-primary">
+            {showForm ? "Cancel" : "Add Employee"}
+          </button>
+        </div>
+      </div>
+
+      {showForm && (
+        <EmployeeForm
+          token={token!}
+          defaultPlaceOfWork={defaultCompanyName}
+          onSuccess={() => {
+            setShowForm(false);
+            fetchEmployees();
+          }}
+        />
+      )}
+
+      {editingId && (
+        <EditModal
+          employeeId={editingId}
+          token={token!}
+          defaultPlaceOfWork={defaultCompanyName}
+          onClose={() => setEditingId(null)}
+          onSuccess={() => {
+            setEditingId(null);
+            fetchEmployees();
+          }}
+        />
+      )}
+
+      {statusChangeId && (
+        <StatusModal
+          employee={employees.find((e) => e.id === statusChangeId)!}
+          token={token!}
+          onClose={() => setStatusChangeId(null)}
+          onSuccess={() => {
+            setStatusChangeId(null);
+            fetchEmployees();
+          }}
+        />
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {employees.map((emp) => (
+          <div
+            key={emp.id}
+            className="p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-soft hover:shadow-lg hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200"
+          >
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="font-semibold text-slate-900 dark:text-white">
+                  {emp.firstName} {emp.lastName}
+                </h3>
+                <span
+                  className={`inline-block mt-1 px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                    statusColors[emp.status] || "bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  {emp.status}
+                </span>
+              </div>
+            </div>
+            {emp.employeeType && (
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                {emp.employeeType === "office" ? "Office Staff" : "Guard"}
+              </span>
+            )}
+            {emp.idNumber && (
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">ID: {emp.idNumber}</p>
+            )}
+            {emp.psiraNumber && (
+              <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">PSIRA: {emp.psiraNumber}</p>
+            )}
+            {emp.phone && (
+              <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{emp.phone}</p>
+            )}
+            {emp.employeeType === "office" && emp.monthlySalary != null && (
+              <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">R{emp.monthlySalary}/month</p>
+            )}
+            {emp.employeeType !== "office" && emp.hourlyRate != null && (
+              <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">R{emp.hourlyRate}/hr</p>
+            )}
+            {(emp.currentSite || emp.currentPost) && (
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                {[emp.currentSite, emp.currentPost].filter(Boolean).join(" - ")}
+              </p>
+            )}
+            <div className="mt-4 flex gap-3">
+              <button
+                onClick={() => setEditingId(emp.id)}
+                className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+              >
+                Edit
+              </button>
+              {emp.status !== "offboarded" && (
+                <button
+                  onClick={() => setStatusChangeId(emp.id)}
+                  className="text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                >
+                  Change Status
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {employees.length === 0 && (
+        <div className="text-center py-16 text-slate-500 dark:text-slate-400">
+          <p className="font-medium">No employees yet</p>
+          <p className="text-sm mt-1">Add your first employee to get started</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function toDateStr(d: string | Date | null | undefined): string {
+  if (!d) return "";
+  const x = typeof d === "string" ? d : d.toISOString?.().slice(0, 10);
+  return x?.slice(0, 10) ?? "";
+}
+
+/**
+ * Parse South African 13-digit ID number to extract date of birth and gender.
+ * Format: YYMMDD SSSS C AZ (first 6 = DOB, digits 7-10: 0000-4999 = F, 5000-9999 = M)
+ */
+function parseSAIdNumber(id: string): { dateOfBirth?: string; gender?: "M" | "F" } | null {
+  const clean = id.replace(/\s/g, "");
+  if (clean.length !== 13 || !/^\d{13}$/.test(clean)) return null;
+  const yy = parseInt(clean.slice(0, 2), 10);
+  const mm = parseInt(clean.slice(2, 4), 10);
+  const dd = parseInt(clean.slice(4, 6), 10);
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
+  // SA convention: 00-29 = 2000-2029, 30-99 = 1930-1999
+  const century = yy <= 29 ? 2000 : 1900;
+  const year = century + yy;
+  const dateOfBirth = `${year}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+  const genderSeq = parseInt(clean.slice(6, 10), 10);
+  const gender = genderSeq < 5000 ? "F" : "M";
+  return { dateOfBirth, gender };
+}
+
+function EmployeeForm({
+  token,
+  defaultPlaceOfWork,
+  onSuccess,
+}: {
+  token: string;
+  defaultPlaceOfWork?: string;
+  onSuccess: () => void;
+}) {
+  const [employeeType, setEmployeeType] = useState<"office" | "security">("security");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [idNumber, setIdNumber] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [hourlyRate, setHourlyRate] = useState("");
+  const [monthlySalary, setMonthlySalary] = useState("");
+  const [status, setStatus] = useState("applicant");
+  const [error, setError] = useState("");
+
+  // Labour Law (BCEA) - office staff
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [gender, setGender] = useState("");
+  const [physicalAddress, setPhysicalAddress] = useState("");
+  const [postalAddress, setPostalAddress] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [taxNumber, setTaxNumber] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [bankAccountNumber, setBankAccountNumber] = useState("");
+  const [bankBranchCode, setBankBranchCode] = useState("");
+  const [commencementDate, setCommencementDate] = useState("");
+  const [occupation, setOccupation] = useState("");
+  const [placeOfWork, setPlaceOfWork] = useState(defaultPlaceOfWork ?? "");
+  const [ordinaryHours, setOrdinaryHours] = useState("");
+  const [ordinaryDays, setOrdinaryDays] = useState("");
+  const [overtimeRate, setOvertimeRate] = useState("");
+  const [payFrequency, setPayFrequency] = useState("");
+  const [leaveEntitlement, setLeaveEntitlement] = useState("");
+  const [noticePeriod, setNoticePeriod] = useState("");
+  const [previousService, setPreviousService] = useState("");
+
+  // PSIRA - security staff
+  const [psiraNumber, setPsiraNumber] = useState("");
+  const [psiraExpiryDate, setPsiraExpiryDate] = useState("");
+  const [securityServiceType, setSecurityServiceType] = useState("");
+  const [nextOfKin1Name, setNextOfKin1Name] = useState("");
+  const [nextOfKin1Phone, setNextOfKin1Phone] = useState("");
+  const [nextOfKin2Name, setNextOfKin2Name] = useState("");
+  const [nextOfKin2Phone, setNextOfKin2Phone] = useState("");
+  const [nextOfKin3Name, setNextOfKin3Name] = useState("");
+  const [nextOfKin3Phone, setNextOfKin3Phone] = useState("");
+  const [residedOutsideSA, setResidedOutsideSA] = useState<boolean | "">("");
+  const [militaryPoliceService, setMilitaryPoliceService] = useState<boolean | "">("");
+  const [criminalInvestigation, setCriminalInvestigation] = useState<boolean | "">("");
+  const [mentallyUnstable, setMentallyUnstable] = useState<boolean | "">("");
+  const [trainingCompleted, setTrainingCompleted] = useState<boolean | "">("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    try {
+      const payload: Record<string, unknown> = {
+        firstName,
+        lastName,
+        idNumber: idNumber || undefined,
+        phone: phone || undefined,
+        email: email || undefined,
+        hourlyRate: employeeType === "security" && hourlyRate ? parseFloat(hourlyRate) : undefined,
+        monthlySalary: employeeType === "office" && monthlySalary ? parseFloat(monthlySalary) : undefined,
+        status,
+        employeeType,
+        dateOfBirth: dateOfBirth || undefined,
+        gender: gender || undefined,
+        physicalAddress: physicalAddress || undefined,
+        postalAddress: postalAddress || undefined,
+        postalCode: postalCode || undefined,
+        taxNumber: taxNumber || undefined,
+        bankName: bankName || undefined,
+        bankAccountNumber: bankAccountNumber || undefined,
+        bankBranchCode: bankBranchCode || undefined,
+        commencementDate: commencementDate || undefined,
+        occupation: occupation || undefined,
+        placeOfWork: placeOfWork || undefined,
+        ordinaryHours: ordinaryHours || undefined,
+        ordinaryDays: ordinaryDays || undefined,
+        overtimeRate: overtimeRate ? parseFloat(overtimeRate) : undefined,
+        payFrequency: payFrequency || undefined,
+        leaveEntitlement: leaveEntitlement || undefined,
+        noticePeriod: noticePeriod || undefined,
+        previousService: previousService || undefined,
+        psiraNumber: psiraNumber || undefined,
+        psiraExpiryDate: psiraExpiryDate || undefined,
+        securityServiceType: securityServiceType || undefined,
+        nextOfKin1Name: nextOfKin1Name || undefined,
+        nextOfKin1Phone: nextOfKin1Phone || undefined,
+        nextOfKin2Name: nextOfKin2Name || undefined,
+        nextOfKin2Phone: nextOfKin2Phone || undefined,
+        nextOfKin3Name: nextOfKin3Name || undefined,
+        nextOfKin3Phone: nextOfKin3Phone || undefined,
+        residedOutsideSA: residedOutsideSA === "" ? undefined : residedOutsideSA,
+        militaryPoliceService: militaryPoliceService === "" ? undefined : militaryPoliceService,
+        criminalInvestigation: criminalInvestigation === "" ? undefined : criminalInvestigation,
+        mentallyUnstable: mentallyUnstable === "" ? undefined : mentallyUnstable,
+        trainingCompleted: trainingCompleted === "" ? undefined : trainingCompleted,
+      };
+      const res = await authFetch("/employees", token, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Failed to create");
+      }
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed");
+    }
+  };
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="mb-8 p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-soft max-h-[85vh] overflow-y-auto"
+    >
+      <h3 className="font-semibold text-slate-900 dark:text-white mb-4">New Employee</h3>
+      {error && (
+        <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">
+          {error}
+        </div>
+      )}
+
+      <div className="space-y-6">
+        <section className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+          <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Staff type</h4>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">Who are you onboarding?</p>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="staffType"
+                value="office"
+                checked={employeeType === "office"}
+                onChange={() => setEmployeeType("office")}
+                className="w-4 h-4"
+              />
+              <span className="font-medium">Office Staff</span>
+              <span className="text-sm text-slate-500">(fixed monthly salary)</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="staffType"
+                value="security"
+                checked={employeeType === "security"}
+                onChange={() => setEmployeeType("security")}
+                className="w-4 h-4"
+              />
+              <span className="font-medium">Guard</span>
+              <span className="text-sm text-slate-500">(hourly rate)</span>
+            </label>
+          </div>
+        </section>
+
+        <section>
+          <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Basic Information</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-modern">
+              <option value="applicant">Applicant</option>
+              <option value="hired">Hired</option>
+              <option value="training">Training</option>
+              <option value="active">Active</option>
+              <option value="suspended">Suspended</option>
+              <option value="offboarded">Offboarded</option>
+            </select>
+            <input placeholder="First name *" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className="input-modern" />
+            <input placeholder="Last name *" value={lastName} onChange={(e) => setLastName(e.target.value)} required className="input-modern" />
+            <input
+              placeholder="ID number (13-digit RSA ID)"
+              value={idNumber}
+              onChange={(e) => {
+                const v = e.target.value;
+                setIdNumber(v);
+                const parsed = parseSAIdNumber(v);
+                if (parsed) {
+                  setDateOfBirth(parsed.dateOfBirth ?? "");
+                  if (parsed.gender) setGender(parsed.gender);
+                }
+              }}
+              className="input-modern"
+              title="Enter 13-digit SA ID – date of birth and gender will auto-fill"
+            />
+            <input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="input-modern" />
+            <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-modern" />
+            {employeeType === "office" ? (
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="Monthly salary (R)"
+                value={monthlySalary}
+                onChange={(e) => setMonthlySalary(e.target.value)}
+                className="input-modern"
+              />
+            ) : (
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="Hourly rate (R)"
+                value={hourlyRate}
+                onChange={(e) => setHourlyRate(e.target.value)}
+                className="input-modern"
+              />
+            )}
+          </div>
+        </section>
+
+        <section>
+          <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Labour Law (BCEA) – Office Staff</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Date of birth</label>
+              <input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="input-modern" aria-label="Date of birth" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Gender</label>
+              <select value={gender} onChange={(e) => setGender(e.target.value)} className="input-modern">
+                <option value="">Select gender</option>
+                <option value="M">Male</option>
+                <option value="F">Female</option>
+              </select>
+            </div>
+            <input placeholder="Physical address" value={physicalAddress} onChange={(e) => setPhysicalAddress(e.target.value)} className="input-modern sm:col-span-2" />
+            <input placeholder="Postal address (if different)" value={postalAddress} onChange={(e) => setPostalAddress(e.target.value)} className="input-modern" />
+            <input placeholder="Postal code" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className="input-modern" />
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Employment commencement date</label>
+              <input type="date" value={commencementDate} onChange={(e) => setCommencementDate(e.target.value)} className="input-modern" aria-label="Employment commencement date" />
+            </div>
+            <input placeholder="Occupation / Job title" value={occupation} onChange={(e) => setOccupation(e.target.value)} className="input-modern" />
+            <input placeholder="Place of work" value={placeOfWork} onChange={(e) => setPlaceOfWork(e.target.value)} className="input-modern" />
+            <input placeholder="Ordinary hours (e.g. 45 hrs/week)" value={ordinaryHours} onChange={(e) => setOrdinaryHours(e.target.value)} className="input-modern" />
+            <input placeholder="Ordinary days (e.g. Mon–Fri)" value={ordinaryDays} onChange={(e) => setOrdinaryDays(e.target.value)} className="input-modern" />
+            <input type="number" step="0.01" min="0" placeholder="Overtime rate (R)" value={overtimeRate} onChange={(e) => setOvertimeRate(e.target.value)} className="input-modern" />
+            <select value={payFrequency} onChange={(e) => setPayFrequency(e.target.value)} className="input-modern">
+              <option value="">Pay frequency</option>
+              <option value="weekly">Weekly</option>
+              <option value="bi-weekly">Bi-weekly</option>
+              <option value="monthly">Monthly</option>
+            </select>
+            <input placeholder="Leave entitlement" value={leaveEntitlement} onChange={(e) => setLeaveEntitlement(e.target.value)} className="input-modern" />
+            <input placeholder="Notice period" value={noticePeriod} onChange={(e) => setNoticePeriod(e.target.value)} className="input-modern" />
+            <input placeholder="Previous service (for continuity)" value={previousService} onChange={(e) => setPreviousService(e.target.value)} className="input-modern sm:col-span-2" />
+            <input placeholder="Tax number (SARS)" value={taxNumber} onChange={(e) => setTaxNumber(e.target.value)} className="input-modern" />
+            <input placeholder="Bank name" value={bankName} onChange={(e) => setBankName(e.target.value)} className="input-modern" />
+            <input placeholder="Bank account number" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} className="input-modern" />
+            <input placeholder="Branch code" value={bankBranchCode} onChange={(e) => setBankBranchCode(e.target.value)} className="input-modern" />
+          </div>
+        </section>
+
+        <section>
+          <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">PSIRA – Security Staff</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <input placeholder="PSIRA number" value={psiraNumber} onChange={(e) => setPsiraNumber(e.target.value)} className="input-modern" />
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-slate-600 dark:text-slate-400">PSIRA registration expiry date</label>
+              <input type="date" value={psiraExpiryDate} onChange={(e) => setPsiraExpiryDate(e.target.value)} className="input-modern" aria-label="PSIRA registration expiry date" />
+            </div>
+            <select value={securityServiceType} onChange={(e) => setSecurityServiceType(e.target.value)} className="input-modern sm:col-span-2">
+              <option value="">Nature of security service</option>
+              <option value="guarding">Guarding / Patrolling</option>
+              <option value="close_protection">Close protection / Bodyguard</option>
+              <option value="reaction">Reaction / Response</option>
+              <option value="control_room">Control room / Monitoring</option>
+              <option value="other">Other</option>
+            </select>
+            <input placeholder="Next of kin 1 – Name" value={nextOfKin1Name} onChange={(e) => setNextOfKin1Name(e.target.value)} className="input-modern" />
+            <input placeholder="Next of kin 1 – Phone" value={nextOfKin1Phone} onChange={(e) => setNextOfKin1Phone(e.target.value)} className="input-modern" />
+            <input placeholder="Next of kin 2 – Name" value={nextOfKin2Name} onChange={(e) => setNextOfKin2Name(e.target.value)} className="input-modern" />
+            <input placeholder="Next of kin 2 – Phone" value={nextOfKin2Phone} onChange={(e) => setNextOfKin2Phone(e.target.value)} className="input-modern" />
+            <input placeholder="Next of kin 3 – Name" value={nextOfKin3Name} onChange={(e) => setNextOfKin3Name(e.target.value)} className="input-modern" />
+            <input placeholder="Next of kin 3 – Phone" value={nextOfKin3Phone} onChange={(e) => setNextOfKin3Phone(e.target.value)} className="input-modern" />
+            <div className="sm:col-span-2 space-y-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={residedOutsideSA === true} onChange={(e) => setResidedOutsideSA(e.target.checked ? true : "")} />
+                Resided outside SA for 1+ year in last 10 years
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={militaryPoliceService === true} onChange={(e) => setMilitaryPoliceService(e.target.checked ? true : "")} />
+                Military / Police / Intelligence service
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={criminalInvestigation === true} onChange={(e) => setCriminalInvestigation(e.target.checked ? true : "")} />
+                Criminal investigation or proceedings pending
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={mentallyUnstable === true} onChange={(e) => setMentallyUnstable(e.target.checked ? true : "")} />
+                Ever declared mentally unstable
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={trainingCompleted === true} onChange={(e) => setTrainingCompleted(e.target.checked ? true : "")} />
+                Accredited training completed
+              </label>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <button type="submit" className="mt-6 btn-primary">
+        Create
+      </button>
+    </form>
+  );
+}
+
+function EditModal({
+  employeeId,
+  token,
+  defaultPlaceOfWork,
+  onClose,
+  onSuccess,
+}: {
+  employeeId: string;
+  token: string;
+  defaultPlaceOfWork?: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [employeeType, setEmployeeType] = useState<"office" | "security">("security");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [idNumber, setIdNumber] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [hourlyRate, setHourlyRate] = useState("");
+  const [monthlySalary, setMonthlySalary] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [gender, setGender] = useState("");
+  const [physicalAddress, setPhysicalAddress] = useState("");
+  const [postalAddress, setPostalAddress] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [taxNumber, setTaxNumber] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [bankAccountNumber, setBankAccountNumber] = useState("");
+  const [bankBranchCode, setBankBranchCode] = useState("");
+  const [commencementDate, setCommencementDate] = useState("");
+  const [occupation, setOccupation] = useState("");
+  const [placeOfWork, setPlaceOfWork] = useState("");
+  const [ordinaryHours, setOrdinaryHours] = useState("");
+  const [ordinaryDays, setOrdinaryDays] = useState("");
+  const [overtimeRate, setOvertimeRate] = useState("");
+  const [payFrequency, setPayFrequency] = useState("");
+  const [leaveEntitlement, setLeaveEntitlement] = useState("");
+  const [noticePeriod, setNoticePeriod] = useState("");
+  const [previousService, setPreviousService] = useState("");
+
+  const [psiraNumber, setPsiraNumber] = useState("");
+  const [psiraExpiryDate, setPsiraExpiryDate] = useState("");
+  const [securityServiceType, setSecurityServiceType] = useState("");
+  const [nextOfKin1Name, setNextOfKin1Name] = useState("");
+  const [nextOfKin1Phone, setNextOfKin1Phone] = useState("");
+  const [nextOfKin2Name, setNextOfKin2Name] = useState("");
+  const [nextOfKin2Phone, setNextOfKin2Phone] = useState("");
+  const [nextOfKin3Name, setNextOfKin3Name] = useState("");
+  const [nextOfKin3Phone, setNextOfKin3Phone] = useState("");
+  const [residedOutsideSA, setResidedOutsideSA] = useState<boolean | "">("");
+  const [militaryPoliceService, setMilitaryPoliceService] = useState<boolean | "">("");
+  const [criminalInvestigation, setCriminalInvestigation] = useState<boolean | "">("");
+  const [mentallyUnstable, setMentallyUnstable] = useState<boolean | "">("");
+  const [trainingCompleted, setTrainingCompleted] = useState<boolean | "">("");
+
+  useEffect(() => {
+    authFetch(`/employees/${employeeId}`, token)
+      .then((r) => r.json())
+      .then((emp) => {
+        setEmployeeType((emp.employeeType || "security") as "office" | "security");
+        setFirstName(emp.firstName);
+        setLastName(emp.lastName);
+        setIdNumber(emp.idNumber || "");
+        setPhone(emp.phone || "");
+        setEmail(emp.email || "");
+        setHourlyRate(emp.hourlyRate != null ? String(emp.hourlyRate) : "");
+        setMonthlySalary(emp.monthlySalary != null ? String(emp.monthlySalary) : "");
+        setDateOfBirth(toDateStr(emp.dateOfBirth));
+        setGender(emp.gender || "");
+        setPhysicalAddress(emp.physicalAddress || "");
+        setPostalAddress(emp.postalAddress || "");
+        setPostalCode(emp.postalCode || "");
+        setTaxNumber(emp.taxNumber || "");
+        setBankName(emp.bankName || "");
+        setBankAccountNumber(emp.bankAccountNumber || "");
+        setBankBranchCode(emp.bankBranchCode || "");
+        setCommencementDate(toDateStr(emp.commencementDate));
+        setOccupation(emp.occupation || "");
+        setPlaceOfWork(emp.placeOfWork || defaultPlaceOfWork || "");
+        setOrdinaryHours(emp.ordinaryHours || "");
+        setOrdinaryDays(emp.ordinaryDays || "");
+        setOvertimeRate(emp.overtimeRate != null ? String(emp.overtimeRate) : "");
+        setPayFrequency(emp.payFrequency || "");
+        setLeaveEntitlement(emp.leaveEntitlement || "");
+        setNoticePeriod(emp.noticePeriod || "");
+        setPreviousService(emp.previousService || "");
+        setPsiraNumber(emp.psiraNumber || "");
+        setPsiraExpiryDate(toDateStr(emp.psiraExpiryDate));
+        setSecurityServiceType(emp.securityServiceType || "");
+        setNextOfKin1Name(emp.nextOfKin1Name || "");
+        setNextOfKin1Phone(emp.nextOfKin1Phone || "");
+        setNextOfKin2Name(emp.nextOfKin2Name || "");
+        setNextOfKin2Phone(emp.nextOfKin2Phone || "");
+        setNextOfKin3Name(emp.nextOfKin3Name || "");
+        setNextOfKin3Phone(emp.nextOfKin3Phone || "");
+        setResidedOutsideSA(emp.residedOutsideSA ?? "");
+        setMilitaryPoliceService(emp.militaryPoliceService ?? "");
+        setCriminalInvestigation(emp.criminalInvestigation ?? "");
+        setMentallyUnstable(emp.mentallyUnstable ?? "");
+        setTrainingCompleted(emp.trainingCompleted ?? "");
+      })
+      .catch(() => setError("Failed to load employee"))
+      .finally(() => setLoading(false));
+  }, [employeeId, token]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSaving(true);
+    try {
+      const payload: Record<string, unknown> = {
+        firstName,
+        lastName,
+        idNumber: idNumber || undefined,
+        phone: phone || undefined,
+        email: email || undefined,
+        hourlyRate: employeeType === "security" && hourlyRate ? parseFloat(hourlyRate) : employeeType === "office" ? null : undefined,
+        monthlySalary: employeeType === "office" && monthlySalary ? parseFloat(monthlySalary) : employeeType === "security" ? null : undefined,
+        employeeType,
+        dateOfBirth: dateOfBirth || undefined,
+        gender: gender || undefined,
+        physicalAddress: physicalAddress || undefined,
+        postalAddress: postalAddress || undefined,
+        postalCode: postalCode || undefined,
+        taxNumber: taxNumber || undefined,
+        bankName: bankName || undefined,
+        bankAccountNumber: bankAccountNumber || undefined,
+        bankBranchCode: bankBranchCode || undefined,
+        commencementDate: commencementDate || undefined,
+        occupation: occupation || undefined,
+        placeOfWork: placeOfWork || undefined,
+        ordinaryHours: ordinaryHours || undefined,
+        ordinaryDays: ordinaryDays || undefined,
+        overtimeRate: overtimeRate ? parseFloat(overtimeRate) : undefined,
+        payFrequency: payFrequency || undefined,
+        leaveEntitlement: leaveEntitlement || undefined,
+        noticePeriod: noticePeriod || undefined,
+        previousService: previousService || undefined,
+        psiraNumber: psiraNumber || undefined,
+        psiraExpiryDate: psiraExpiryDate || undefined,
+        securityServiceType: securityServiceType || undefined,
+        nextOfKin1Name: nextOfKin1Name || undefined,
+        nextOfKin1Phone: nextOfKin1Phone || undefined,
+        nextOfKin2Name: nextOfKin2Name || undefined,
+        nextOfKin2Phone: nextOfKin2Phone || undefined,
+        nextOfKin3Name: nextOfKin3Name || undefined,
+        nextOfKin3Phone: nextOfKin3Phone || undefined,
+        residedOutsideSA: residedOutsideSA === "" ? undefined : residedOutsideSA,
+        militaryPoliceService: militaryPoliceService === "" ? undefined : militaryPoliceService,
+        criminalInvestigation: criminalInvestigation === "" ? undefined : criminalInvestigation,
+        mentallyUnstable: mentallyUnstable === "" ? undefined : mentallyUnstable,
+        trainingCompleted: trainingCompleted === "" ? undefined : trainingCompleted,
+      };
+      const res = await authFetch(`/employees/${employeeId}`, token, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+      onSuccess();
+    } catch {
+      setError("Failed to update employee");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-800 shrink-0">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Edit Employee</h3>
+        </div>
+        {loading ? (
+          <div className="p-8 text-center text-slate-500">Loading...</div>
+        ) : (
+          <form onSubmit={handleSubmit} className="p-6 overflow-y-auto max-h-[calc(90vh-180px)] space-y-6">
+            {error && (
+              <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">
+                {error}
+              </div>
+            )}
+
+            <section className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+              <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Staff type</h4>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="editStaffType"
+                    value="office"
+                    checked={employeeType === "office"}
+                    onChange={() => setEmployeeType("office")}
+                    className="w-4 h-4"
+                  />
+                  <span className="font-medium">Office Staff</span>
+                  <span className="text-sm text-slate-500">(monthly salary)</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="editStaffType"
+                    value="security"
+                    checked={employeeType === "security"}
+                    onChange={() => setEmployeeType("security")}
+                    className="w-4 h-4"
+                  />
+                  <span className="font-medium">Guard</span>
+                  <span className="text-sm text-slate-500">(hourly rate)</span>
+                </label>
+              </div>
+            </section>
+
+            <section>
+              <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Basic Information</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <input placeholder="First name *" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className="input-modern" />
+                <input placeholder="Last name *" value={lastName} onChange={(e) => setLastName(e.target.value)} required className="input-modern" />
+                <input
+                  placeholder="ID number (13-digit RSA ID)"
+                  value={idNumber}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setIdNumber(v);
+                    const parsed = parseSAIdNumber(v);
+                    if (parsed) {
+                      setDateOfBirth(parsed.dateOfBirth ?? "");
+                      if (parsed.gender) setGender(parsed.gender);
+                    }
+                  }}
+                  className="input-modern"
+                  title="Enter 13-digit SA ID – date of birth and gender will auto-fill"
+                />
+                <input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="input-modern" />
+                <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-modern" />
+                {employeeType === "office" ? (
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Monthly salary (R)"
+                    value={monthlySalary}
+                    onChange={(e) => setMonthlySalary(e.target.value)}
+                    className="input-modern"
+                  />
+                ) : (
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Hourly rate (R)"
+                    value={hourlyRate}
+                    onChange={(e) => setHourlyRate(e.target.value)}
+                    className="input-modern"
+                  />
+                )}
+              </div>
+            </section>
+
+            <section>
+              <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Labour Law (BCEA)</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Date of birth</label>
+                  <input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="input-modern" aria-label="Date of birth" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Gender</label>
+                  <select value={gender} onChange={(e) => setGender(e.target.value)} className="input-modern">
+                    <option value="">Select gender</option>
+                    <option value="M">Male</option>
+                    <option value="F">Female</option>
+                  </select>
+                </div>
+                <input placeholder="Physical address" value={physicalAddress} onChange={(e) => setPhysicalAddress(e.target.value)} className="input-modern sm:col-span-2" />
+                <input placeholder="Postal address" value={postalAddress} onChange={(e) => setPostalAddress(e.target.value)} className="input-modern" />
+                <input placeholder="Postal code" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className="input-modern" />
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Employment commencement date</label>
+                  <input type="date" value={commencementDate} onChange={(e) => setCommencementDate(e.target.value)} className="input-modern" aria-label="Employment commencement date" />
+                </div>
+                <input placeholder="Occupation" value={occupation} onChange={(e) => setOccupation(e.target.value)} className="input-modern" />
+                <input placeholder="Place of work" value={placeOfWork} onChange={(e) => setPlaceOfWork(e.target.value)} className="input-modern" />
+                <input placeholder="Ordinary hours" value={ordinaryHours} onChange={(e) => setOrdinaryHours(e.target.value)} className="input-modern" />
+                <input placeholder="Ordinary days" value={ordinaryDays} onChange={(e) => setOrdinaryDays(e.target.value)} className="input-modern" />
+                <input type="number" step="0.01" min="0" placeholder="Overtime rate (R)" value={overtimeRate} onChange={(e) => setOvertimeRate(e.target.value)} className="input-modern" />
+                <select value={payFrequency} onChange={(e) => setPayFrequency(e.target.value)} className="input-modern">
+                  <option value="">Pay frequency</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="bi-weekly">Bi-weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+                <input placeholder="Leave entitlement" value={leaveEntitlement} onChange={(e) => setLeaveEntitlement(e.target.value)} className="input-modern" />
+                <input placeholder="Notice period" value={noticePeriod} onChange={(e) => setNoticePeriod(e.target.value)} className="input-modern" />
+                <input placeholder="Previous service" value={previousService} onChange={(e) => setPreviousService(e.target.value)} className="input-modern sm:col-span-2" />
+                <input placeholder="Tax number" value={taxNumber} onChange={(e) => setTaxNumber(e.target.value)} className="input-modern" />
+                <input placeholder="Bank name" value={bankName} onChange={(e) => setBankName(e.target.value)} className="input-modern" />
+                <input placeholder="Bank account number" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} className="input-modern" />
+                <input placeholder="Branch code" value={bankBranchCode} onChange={(e) => setBankBranchCode(e.target.value)} className="input-modern" />
+              </div>
+            </section>
+
+            <section>
+              <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">PSIRA – Security Staff</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <input placeholder="PSIRA number" value={psiraNumber} onChange={(e) => setPsiraNumber(e.target.value)} className="input-modern" />
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium text-slate-600 dark:text-slate-400">PSIRA registration expiry date</label>
+                  <input type="date" value={psiraExpiryDate} onChange={(e) => setPsiraExpiryDate(e.target.value)} className="input-modern" aria-label="PSIRA registration expiry date" />
+                </div>
+                <select value={securityServiceType} onChange={(e) => setSecurityServiceType(e.target.value)} className="input-modern sm:col-span-2">
+                  <option value="">Nature of security service</option>
+                  <option value="guarding">Guarding / Patrolling</option>
+                  <option value="close_protection">Close protection / Bodyguard</option>
+                  <option value="reaction">Reaction / Response</option>
+                  <option value="control_room">Control room / Monitoring</option>
+                  <option value="other">Other</option>
+                </select>
+                <input placeholder="Next of kin 1 – Name" value={nextOfKin1Name} onChange={(e) => setNextOfKin1Name(e.target.value)} className="input-modern" />
+                <input placeholder="Next of kin 1 – Phone" value={nextOfKin1Phone} onChange={(e) => setNextOfKin1Phone(e.target.value)} className="input-modern" />
+                <input placeholder="Next of kin 2 – Name" value={nextOfKin2Name} onChange={(e) => setNextOfKin2Name(e.target.value)} className="input-modern" />
+                <input placeholder="Next of kin 2 – Phone" value={nextOfKin2Phone} onChange={(e) => setNextOfKin2Phone(e.target.value)} className="input-modern" />
+                <input placeholder="Next of kin 3 – Name" value={nextOfKin3Name} onChange={(e) => setNextOfKin3Name(e.target.value)} className="input-modern" />
+                <input placeholder="Next of kin 3 – Phone" value={nextOfKin3Phone} onChange={(e) => setNextOfKin3Phone(e.target.value)} className="input-modern" />
+                <div className="sm:col-span-2 space-y-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={residedOutsideSA === true} onChange={(e) => setResidedOutsideSA(e.target.checked ? true : "")} />
+                    Resided outside SA 1+ year in last 10 years
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={militaryPoliceService === true} onChange={(e) => setMilitaryPoliceService(e.target.checked ? true : "")} />
+                    Military / Police / Intelligence service
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={criminalInvestigation === true} onChange={(e) => setCriminalInvestigation(e.target.checked ? true : "")} />
+                    Criminal investigation pending
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={mentallyUnstable === true} onChange={(e) => setMentallyUnstable(e.target.checked ? true : "")} />
+                    Ever declared mentally unstable
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={trainingCompleted === true} onChange={(e) => setTrainingCompleted(e.target.checked ? true : "")} />
+                    Accredited training completed
+                  </label>
+                </div>
+              </div>
+            </section>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 py-2.5 font-medium rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button type="submit" disabled={saving} className="flex-1 btn-primary">
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatusModal({
+  employee,
+  token,
+  onClose,
+  onSuccess,
+}: {
+  employee: Employee;
+  token: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [selectedStatus, setSelectedStatus] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const validNext = VALID_TRANSITIONS[employee.status] || [];
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStatus) return;
+    setError("");
+    setSaving(true);
+    try {
+      const res = await authFetch(`/employees/${employee.id}/status`, token, {
+        method: "POST",
+        body: JSON.stringify({ status: selectedStatus }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Invalid transition");
+      }
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (validNext.length === 0) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-slate-200 dark:border-slate-800">
+          <p className="text-slate-600 dark:text-slate-400">No status transitions available for offboarded employees.</p>
+          <button onClick={onClose} className="mt-4 btn-primary w-full">Close</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm border border-slate-200 dark:border-slate-800">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-800">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Change Status</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            {employee.firstName} {employee.lastName}
+          </p>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6">
+          {error && (
+            <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">
+              {error}
+            </div>
+          )}
+          <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+            Current: <span className={`font-semibold ${statusColors[employee.status]}`}>{employee.status}</span>
+          </p>
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            required
+            className="input-modern mb-4"
+          >
+            <option value="">Select new status</option>
+            {validNext.map((s) => (
+              <option key={s} value={s}>
+                {s.charAt(0).toUpperCase() + s.slice(1)}
+              </option>
+            ))}
+          </select>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 font-medium rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              Cancel
+            </button>
+            <button type="submit" disabled={saving} className="flex-1 btn-primary">
+              {saving ? "Updating..." : "Update"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

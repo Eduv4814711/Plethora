@@ -1,0 +1,298 @@
+// Plethora - Workforce & Payroll Management
+// Multi-tenant ready schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users        User[]
+  employees    Employee[]
+  sites        Site[]
+  shifts       Shift[]
+  payrollRuns  PayrollRun[]
+  auditLogs    AuditLog[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  companyId    String
+  name         String
+  email        String
+  passwordHash String
+  role         UserRole
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  auditLogs  AuditLog[]
+
+  @@unique([companyId, email])
+  @@index([companyId])
+  @@index([email])
+}
+
+enum UserRole {
+  admin
+  operations_manager
+  hr_payroll
+  supervisor
+}
+
+model Employee {
+  id        String   @id @default(cuid())
+  companyId String
+  firstName String
+  lastName  String
+  idNumber  String?
+  phone     String?
+  status    EmployeeStatus
+  hourlyRate Decimal? @db.Decimal(10, 2)   // For Guards
+  monthlySalary Decimal? @db.Decimal(12, 2) // For Office staff (fixed monthly)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Employee type: office (Labour Law) vs security/guard (PSIRA)
+  employeeType String @default("security") // "office" | "security"
+
+  // Labour Law (BCEA) - office staff
+  dateOfBirth      DateTime?
+  gender           String?   // M/F
+  email            String?
+  physicalAddress  String?
+  postalAddress    String?
+  postalCode       String?
+  taxNumber        String?
+  bankName         String?
+  bankAccountNumber String?
+  bankBranchCode   String?
+  commencementDate DateTime?
+  occupation       String?
+  placeOfWork      String?
+  ordinaryHours    String?   // e.g. "45 hours/week"
+  ordinaryDays     String?   // e.g. "Mon-Fri"
+  overtimeRate     Decimal?  @db.Decimal(10, 2)
+  payFrequency     String?   // weekly, bi-weekly, monthly
+  leaveEntitlement String?
+  noticePeriod     String?
+  previousService  String?
+
+  // PSIRA - security staff
+  psiraNumber      String?
+  psiraExpiryDate  DateTime?
+  securityServiceType String? // guarding, patrolling, close_protection, etc.
+  nextOfKin1Name   String?
+  nextOfKin1Phone  String?
+  nextOfKin2Name   String?
+  nextOfKin2Phone  String?
+  nextOfKin3Name   String?
+  nextOfKin3Phone  String?
+  residedOutsideSA Boolean?
+  militaryPoliceService Boolean?
+  criminalInvestigation Boolean?
+  mentallyUnstable Boolean?
+  trainingCompleted Boolean?
+
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  shifts          Shift[]
+  payrollItems    PayrollItem[]
+  siteAssignments SiteAssignment[]
+  postAssignments PostAssignment[]
+
+  @@index([companyId])
+  @@index([status])
+  @@index([employeeType])
+}
+
+enum EmployeeStatus {
+  applicant
+  hired
+  training
+  active
+  suspended
+  offboarded
+}
+
+model Site {
+  id                     String   @id @default(cuid())
+  companyId              String
+  name                   String
+  location               String?  // Legacy/short name
+  physicalAddress        String?  // Full physical address
+  contactPersonName      String?
+  contactPersonPhone     String?
+  contractOrServiceAgreement String?  // Contract reference or description
+  serviceType            String?  // guarding, access_control, patrols, etc.
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  company  Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  posts    Post[]           @relation("SitePosts")
+  assignedGuards SiteAssignment[]
+
+  @@index([companyId])
+}
+
+model SiteAssignment {
+  id         String   @id @default(cuid())
+  siteId     String
+  employeeId String
+  assignedAt DateTime @default(now())
+
+  site     Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, employeeId])
+  @@index([siteId])
+  @@index([employeeId])
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  siteId    String
+  name      String
+  shiftType String?  // "day" (6-18) | "night" (18-6)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  site            Site            @relation("SitePosts", fields: [siteId], references: [id], onDelete: Cascade)
+  shifts          Shift[]
+  assignedGuards  PostAssignment[]
+
+  @@index([siteId])
+}
+
+model PostAssignment {
+  id         String   @id @default(cuid())
+  postId     String
+  employeeId String
+  assignedAt DateTime @default(now())
+
+  post     Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, employeeId])
+  @@index([postId])
+  @@index([employeeId])
+}
+
+model Shift {
+  id         String   @id @default(cuid())
+  companyId  String
+  employeeId String
+  postId     String
+  startTime  DateTime
+  endTime    DateTime
+  status     ShiftStatus
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee   Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  post       Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  attendances Attendance[]
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([postId])
+  @@index([startTime])
+  @@index([status])
+}
+
+enum ShiftStatus {
+  created
+  assigned
+  active
+  completed
+  verified
+}
+
+model Attendance {
+  id         String   @id @default(cuid())
+  shiftId    String
+  clockIn    DateTime?
+  clockOut   DateTime?
+  hoursWorked Decimal? @db.Decimal(10, 2)
+  overtimeHours Decimal? @db.Decimal(10, 2)
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  @@index([shiftId])
+}
+
+model PayrollRun {
+  id         String   @id @default(cuid())
+  companyId  String
+  periodStart DateTime
+  periodEnd   DateTime
+  status     PayrollStatus
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  items  PayrollItem[]
+
+  @@index([companyId])
+  @@index([periodStart])
+  @@index([periodEnd])
+  @@index([status])
+}
+
+enum PayrollStatus {
+  draft
+  calculated
+  approved
+  paid
+}
+
+model PayrollItem {
+  id           String   @id @default(cuid())
+  payrollRunId String
+  employeeId   String
+  hoursWorked  Decimal  @db.Decimal(10, 2)
+  overtimeHours Decimal @db.Decimal(10, 2)
+  basePay      Decimal  @db.Decimal(12, 2)
+  overtimePay  Decimal  @db.Decimal(12, 2)
+  deductions   Decimal  @db.Decimal(12, 2)
+  netPay       Decimal  @db.Decimal(12, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  payrollRun PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employee  Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([payrollRunId])
+  @@index([employeeId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  companyId  String
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  timestamp  DateTime @default(now())
+
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([timestamp])
+}

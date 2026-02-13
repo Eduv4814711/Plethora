@@ -1,0 +1,870 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useAuth } from "@/lib/auth-context";
+import { authFetch } from "@/lib/api";
+
+const SERVICE_TYPE_LABELS: Record<string, string> = {
+  guarding: "Guarding",
+  access_control: "Access Control",
+  patrols: "Patrols",
+  close_protection: "Close Protection",
+  reaction: "Reaction / Response",
+  control_room: "Control Room",
+  monitoring: "Monitoring",
+  other: "Other",
+};
+
+const SHIFT_LABELS: Record<string, string> = {
+  day: "Day (6–18)",
+  night: "Night (18–6)",
+};
+
+interface PostAssignedGuard {
+  id: string;
+  employee: { id: string; firstName: string; lastName: string; status: string; phone: string | null };
+}
+
+interface Post {
+  id: string;
+  name: string;
+  shiftType: string | null;
+  assignedGuards?: PostAssignedGuard[];
+}
+
+interface AssignedGuard {
+  id: string;
+  employee: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    status: string;
+    phone: string | null;
+  };
+}
+
+interface Site {
+  id: string;
+  name: string;
+  location: string | null;
+  physicalAddress: string | null;
+  contactPersonName: string | null;
+  contactPersonPhone: string | null;
+  contractOrServiceAgreement: string | null;
+  serviceType: string | null;
+  posts: Post[];
+  assignedGuards: AssignedGuard[];
+}
+
+interface Guard {
+  id: string;
+  firstName: string;
+  lastName: string;
+  status: string;
+  phone: string | null;
+  employeeType?: string;
+}
+
+export default function SitesPage() {
+  const { token, user } = useAuth();
+  const [sites, setSites] = useState<Site[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [editingSite, setEditingSite] = useState<Site | null>(null);
+  const [deletingSite, setDeletingSite] = useState<Site | null>(null);
+  const isAdmin = (user as { role?: string })?.role === "admin";
+
+  const refresh = () => {
+    if (!token) return;
+    authFetch("/sites", token)
+      .then((r) => r.json())
+      .then((d) => setSites(d.data || []))
+      .catch(console.error);
+  };
+
+  useEffect(() => {
+    if (!token) return;
+    authFetch("/sites", token)
+      .then((r) => r.json())
+      .then((d) => setSites(d.data || []))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  if (loading) {
+    return (
+      <div className="animate-pulse space-y-6">
+        <div className="flex justify-between items-center">
+          <div className="h-9 bg-slate-200 dark:bg-slate-700 rounded w-48" />
+          <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded w-32" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-64 bg-slate-200 dark:bg-slate-700 rounded-2xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+            Site Management
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">
+            Register and manage company sites, contacts, and assigned guards
+          </p>
+        </div>
+        {isAdmin && (
+          <button
+            onClick={() => setShowCreateForm(!showCreateForm)}
+            className="btn-primary flex items-center gap-2 shrink-0"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            {showCreateForm ? "Cancel" : "Register Site"}
+          </button>
+        )}
+      </div>
+
+      {showCreateForm && isAdmin && (
+        <SiteForm
+          token={token!}
+          onSuccess={() => {
+            setShowCreateForm(false);
+            refresh();
+          }}
+          onCancel={() => setShowCreateForm(false)}
+        />
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {sites.map((site) => (
+          <SiteCard
+            key={site.id}
+            site={site}
+            token={token!}
+            isAdmin={isAdmin}
+            onEdit={() => setEditingSite(site)}
+            onDelete={() => setDeletingSite(site)}
+            onRefresh={refresh}
+          />
+        ))}
+      </div>
+
+      {sites.length === 0 && (
+        <div className="text-center py-16 px-6 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center mb-4">
+            <svg className="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+          </div>
+          <p className="font-semibold text-slate-700 dark:text-slate-300">No sites registered</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+            Register your first site to start managing locations, contacts, and guard assignments.
+          </p>
+          {isAdmin && (
+            <button
+              onClick={() => setShowCreateForm(true)}
+              className="mt-6 btn-primary"
+            >
+              Register Site
+            </button>
+          )}
+        </div>
+      )}
+
+      {editingSite && (
+        <EditSiteModal
+          site={editingSite}
+          token={token!}
+          onClose={() => setEditingSite(null)}
+          onSuccess={() => {
+            setEditingSite(null);
+            refresh();
+          }}
+        />
+      )}
+
+      {deletingSite && (
+        <DeleteConfirmModal
+          site={deletingSite}
+          token={token!}
+          onClose={() => setDeletingSite(null)}
+          onSuccess={() => {
+            setDeletingSite(null);
+            refresh();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function SiteCard({
+  site,
+  token,
+  isAdmin,
+  onEdit,
+  onDelete,
+  onRefresh,
+}: {
+  site: Site;
+  token: string;
+  isAdmin: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onRefresh: () => void;
+}) {
+  const address = site.physicalAddress || site.location;
+  const guards = site.assignedGuards?.map((a) => a.employee) ?? [];
+
+  return (
+    <div className="group p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-lg hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200">
+      <div className="flex justify-between items-start gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500/20 to-indigo-600/20 flex items-center justify-center shrink-0">
+              <svg className="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-semibold text-slate-900 dark:text-white truncate">
+                {site.name}
+              </h3>
+              {site.serviceType && (
+                <span className="inline-block mt-0.5 px-2.5 py-0.5 rounded-lg text-xs font-medium bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300">
+                  {SERVICE_TYPE_LABELS[site.serviceType] || site.serviceType}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {address && (
+            <p className="mt-3 text-sm text-slate-600 dark:text-slate-400 flex items-start gap-2">
+              <svg className="w-4 h-4 mt-0.5 shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span>{address}</span>
+            </p>
+          )}
+
+          {(site.contactPersonName || site.contactPersonPhone) && (
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 flex items-center gap-2">
+              <svg className="w-4 h-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              <span>
+                {site.contactPersonName}
+                {site.contactPersonName && site.contactPersonPhone && " • "}
+                {site.contactPersonPhone && (
+                  <a href={`tel:${site.contactPersonPhone}`} className="text-indigo-600 dark:text-indigo-400 hover:underline">
+                    {site.contactPersonPhone}
+                  </a>
+                )}
+              </span>
+            </p>
+          )}
+
+          {site.contractOrServiceAgreement && (
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-500 truncate" title={site.contractOrServiceAgreement}>
+              Contract: {site.contractOrServiceAgreement}
+            </p>
+          )}
+        </div>
+
+        {isAdmin && (
+          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={onEdit}
+              className="p-2 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+              title="Edit site"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+            <button
+              onClick={onDelete}
+              className="p-2 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              title="Delete site"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {guards.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+          <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+            Assigned Guards
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            {guards.map((g) => (
+              <span
+                key={g.id}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                {g.firstName} {g.lastName}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+            Posts
+          </h4>
+          <Link
+            href={`/sites/${site.id}`}
+            className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+          >
+            Manage posts →
+          </Link>
+        </div>
+        <ul className="space-y-1.5">
+          {site.posts.map((post) => (
+            <li
+              key={post.id}
+              className="text-sm text-slate-700 dark:text-slate-300 flex items-center gap-2"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+              {post.name}
+              {post.shiftType && (
+                <span className="text-slate-500 text-xs">
+                  ({SHIFT_LABELS[post.shiftType] ?? post.shiftType})
+                </span>
+              )}
+              {post.assignedGuards?.length ? (
+                <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                  {post.assignedGuards.length} guard{post.assignedGuards.length !== 1 ? "s" : ""}
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+        {isAdmin && (
+          <PostForm siteId={site.id} token={token} onSuccess={onRefresh} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function useGuards(token: string) {
+  const [guards, setGuards] = useState<Guard[]>([]);
+  useEffect(() => {
+    if (!token) return;
+    authFetch("/employees?limit=200", token)
+      .then((r) => r.json())
+      .then((d) => {
+        const list = (d.data || []).filter(
+          (e: Guard) => e.employeeType === "security" && ["active", "training", "hired"].includes(e.status)
+        );
+        setGuards(list);
+      })
+      .catch(console.error);
+  }, [token]);
+  return guards;
+}
+
+function SiteForm({
+  token,
+  onSuccess,
+  onCancel,
+}: {
+  token: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const guards = useGuards(token);
+  const [name, setName] = useState("");
+  const [location, setLocation] = useState("");
+  const [physicalAddress, setPhysicalAddress] = useState("");
+  const [contactPersonName, setContactPersonName] = useState("");
+  const [contactPersonPhone, setContactPersonPhone] = useState("");
+  const [contractOrServiceAgreement, setContractOrServiceAgreement] = useState("");
+  const [serviceType, setServiceType] = useState("");
+  const [assignedGuardIds, setAssignedGuardIds] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const toggleGuard = (id: string) => {
+    setAssignedGuardIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSubmitting(true);
+    try {
+      const res = await authFetch("/sites", token, {
+        method: "POST",
+        body: JSON.stringify({
+          name,
+          location: location || undefined,
+          physicalAddress: physicalAddress || undefined,
+          contactPersonName: contactPersonName || undefined,
+          contactPersonPhone: contactPersonPhone || undefined,
+          contractOrServiceAgreement: contractOrServiceAgreement || undefined,
+          serviceType: serviceType || undefined,
+          assignedGuardIds: assignedGuardIds.length ? assignedGuardIds : undefined,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Failed to create site");
+      }
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create site");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-lg"
+    >
+      <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+        <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+        Register New Site
+      </h3>
+
+      {error && (
+        <div className="mb-6 p-4 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">
+          {error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Site name *</label>
+          <input
+            placeholder="e.g. Head Office Building"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            className="input-modern"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Type of service</label>
+          <select
+            value={serviceType}
+            onChange={(e) => setServiceType(e.target.value)}
+            className="input-modern"
+          >
+            <option value="">Select service type</option>
+            {Object.entries(SERVICE_TYPE_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Physical address</label>
+          <input
+            placeholder="Full street address, suburb, city"
+            value={physicalAddress}
+            onChange={(e) => setPhysicalAddress(e.target.value)}
+            className="input-modern"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Short location (optional)</label>
+          <input
+            placeholder="e.g. Sandton"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            className="input-modern"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Contact person</label>
+          <input
+            placeholder="Name"
+            value={contactPersonName}
+            onChange={(e) => setContactPersonName(e.target.value)}
+            className="input-modern"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Contact phone</label>
+          <input
+            placeholder="e.g. 082 123 4567"
+            value={contactPersonPhone}
+            onChange={(e) => setContactPersonPhone(e.target.value)}
+            className="input-modern"
+          />
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Contract / service agreement</label>
+          <input
+            placeholder="Contract reference or description"
+            value={contractOrServiceAgreement}
+            onChange={(e) => setContractOrServiceAgreement(e.target.value)}
+            className="input-modern"
+          />
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+            Assigned guards
+          </label>
+          <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-slate-50/50 dark:bg-slate-800/30 max-h-40 overflow-y-auto">
+            {guards.length === 0 ? (
+              <p className="text-sm text-slate-500">No active guards available</p>
+            ) : (
+              <div className="space-y-2">
+                {guards.map((g) => (
+                  <label key={g.id} className="flex items-center gap-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/50 rounded-lg p-2 -mx-2">
+                    <input
+                      type="checkbox"
+                      checked={assignedGuardIds.includes(g.id)}
+                      onChange={() => toggleGuard(g.id)}
+                      className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      {g.firstName} {g.lastName}
+                    </span>
+                    <span className="text-xs text-slate-500">{g.status}</span>
+                    {g.phone && <span className="text-xs text-slate-400">{g.phone}</span>}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 flex gap-3">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-5 py-2.5 font-medium rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        >
+          Cancel
+        </button>
+        <button type="submit" disabled={submitting} className="btn-primary">
+          {submitting ? "Creating..." : "Register Site"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function EditSiteModal({
+  site,
+  token,
+  onClose,
+  onSuccess,
+}: {
+  site: Site;
+  token: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const guards = useGuards(token);
+  const [name, setName] = useState(site.name);
+  const [location, setLocation] = useState(site.location ?? "");
+  const [physicalAddress, setPhysicalAddress] = useState(site.physicalAddress ?? "");
+  const [contactPersonName, setContactPersonName] = useState(site.contactPersonName ?? "");
+  const [contactPersonPhone, setContactPersonPhone] = useState(site.contactPersonPhone ?? "");
+  const [contractOrServiceAgreement, setContractOrServiceAgreement] = useState(site.contractOrServiceAgreement ?? "");
+  const [serviceType, setServiceType] = useState(site.serviceType ?? "");
+  const [assignedGuardIds, setAssignedGuardIds] = useState<string[]>(
+    site.assignedGuards?.map((a) => a.employee.id) ?? []
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const toggleGuard = (id: string) => {
+    setAssignedGuardIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSubmitting(true);
+    try {
+      const res = await authFetch(`/sites/${site.id}`, token, {
+        method: "PUT",
+        body: JSON.stringify({
+          name,
+          location: location || undefined,
+          physicalAddress: physicalAddress || undefined,
+          contactPersonName: contactPersonName || undefined,
+          contactPersonPhone: contactPersonPhone || undefined,
+          contractOrServiceAgreement: contractOrServiceAgreement || undefined,
+          serviceType: serviceType || undefined,
+          assignedGuardIds,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Failed to update site");
+      }
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update site");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-800 shrink-0">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Edit Site</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{site.name}</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto flex-1 space-y-6">
+          {error && (
+            <div className="p-4 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">
+              {error}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Site name *</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} required className="input-modern" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Type of service</label>
+              <select value={serviceType} onChange={(e) => setServiceType(e.target.value)} className="input-modern">
+                <option value="">Select service type</option>
+                {Object.entries(SERVICE_TYPE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Physical address</label>
+              <input value={physicalAddress} onChange={(e) => setPhysicalAddress(e.target.value)} className="input-modern" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Short location</label>
+              <input value={location} onChange={(e) => setLocation(e.target.value)} className="input-modern" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Contact person</label>
+              <input value={contactPersonName} onChange={(e) => setContactPersonName(e.target.value)} className="input-modern" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Contact phone</label>
+              <input value={contactPersonPhone} onChange={(e) => setContactPersonPhone(e.target.value)} className="input-modern" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Contract / service agreement</label>
+              <input value={contractOrServiceAgreement} onChange={(e) => setContractOrServiceAgreement(e.target.value)} className="input-modern" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Assigned guards</label>
+              <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-slate-50/50 dark:bg-slate-800/30 max-h-40 overflow-y-auto">
+                {guards.length === 0 ? (
+                  <p className="text-sm text-slate-500">No active guards available</p>
+                ) : (
+                  <div className="space-y-2">
+                    {guards.map((g) => (
+                      <label key={g.id} className="flex items-center gap-3 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/50 rounded-lg p-2 -mx-2">
+                        <input
+                          type="checkbox"
+                          checked={assignedGuardIds.includes(g.id)}
+                          onChange={() => toggleGuard(g.id)}
+                          className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                          {g.firstName} {g.lastName}
+                        </span>
+                        <span className="text-xs text-slate-500">{g.status}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 font-medium rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+              Cancel
+            </button>
+            <button type="submit" disabled={submitting} className="flex-1 btn-primary">
+              {submitting ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function DeleteConfirmModal({
+  site,
+  token,
+  onClose,
+  onSuccess,
+}: {
+  site: Site;
+  token: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleDelete = async () => {
+    setError("");
+    setDeleting(true);
+    try {
+      const res = await authFetch(`/sites/${site.id}`, token, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Failed to delete site");
+      }
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-800">
+        <div className="p-6">
+          <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
+            <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Delete Site</h3>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+            Are you sure you want to delete <strong>{site.name}</strong>? This will remove all posts and guard assignments. This action cannot be undone.
+          </p>
+          {error && (
+            <div className="mt-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">
+              {error}
+            </div>
+          )}
+          <div className="mt-6 flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 font-medium rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="flex-1 py-2.5 font-semibold rounded-xl bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50"
+            >
+              {deleting ? "Deleting..." : "Delete"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PostForm({
+  siteId,
+  token,
+  onSuccess,
+}: {
+  siteId: string;
+  token: string;
+  onSuccess: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [shiftType, setShiftType] = useState<"day" | "night">("day");
+  const [show, setShow] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await authFetch(`/sites/${siteId}/posts`, token, {
+      method: "POST",
+      body: JSON.stringify({ name, shiftType }),
+    });
+    setName("");
+    setShiftType("day");
+    setShow(false);
+    onSuccess();
+  };
+
+  return (
+    <div className="mt-3">
+      {show ? (
+        <form onSubmit={handleSubmit} className="flex gap-2 items-end flex-wrap">
+          <input
+            placeholder="Post name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            className="input-modern flex-1 min-w-[120px] py-2"
+          />
+          <select
+            value={shiftType}
+            onChange={(e) => setShiftType(e.target.value as "day" | "night")}
+            className="input-modern flex-1 min-w-[120px] py-2"
+          >
+            <option value="day">Day (6–18)</option>
+            <option value="night">Night (18–6)</option>
+          </select>
+          <button type="submit" className="px-4 py-2 text-sm font-semibold bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors">
+            Add
+          </button>
+          <button
+            type="button"
+            onClick={() => setShow(false)}
+            className="px-4 py-2 text-sm font-medium border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            Cancel
+          </button>
+        </form>
+      ) : (
+        <button
+          onClick={() => setShow(true)}
+          className="mt-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1.5"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Add post
+        </button>
+      )}
+    </div>
+  );
+}
