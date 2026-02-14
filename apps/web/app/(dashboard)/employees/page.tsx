@@ -809,8 +809,18 @@ function EditModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="bg-white dark:bg-neutral-900 rounded-sm  w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-black dark:border-white">
-        <div className="p-6 border-b border-black dark:border-white shrink-0">
+        <div className="p-6 border-b border-black dark:border-white shrink-0 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Edit Employee</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+            aria-label="Close"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
         {loading ? (
           <div className="p-8 text-center text-neutral-500">Loading...</div>
