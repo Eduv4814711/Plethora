@@ -31,7 +31,7 @@ const OFFICE_STAFF = [
 
 function baseLabourLawFields(idNumber: string, gender: string, dateOfBirth: Date, commencementDate: Date, occupation: string) {
   return {
-    dateOfBirth,
+    dateOfBirth: sanitizeDateForPrisma(dateOfBirth) ?? undefined,
     gender,
     physicalAddress: "123 Church Street, Johannesburg, 2000",
     postalAddress: "PO Box 456, Johannesburg, 2000",
@@ -40,7 +40,7 @@ function baseLabourLawFields(idNumber: string, gender: string, dateOfBirth: Date
     bankName: "FNB",
     bankAccountNumber: `62${idNumber.slice(-9)}`,
     bankBranchCode: "250655",
-    commencementDate,
+    commencementDate: sanitizeDateForPrisma(commencementDate) ?? undefined,
     occupation,
     placeOfWork: "Quick Bopha Security HQ",
     ordinaryHours: "45 hours/week",
@@ -53,9 +53,10 @@ function baseLabourLawFields(idNumber: string, gender: string, dateOfBirth: Date
 }
 
 function basePsiraFields(psiraNum: string, securityServiceType: string, nextOfKin1: string, nextOfKin1Phone: string, nextOfKin2: string, nextOfKin2Phone: string) {
+  const psiraExpiry = new Date("2026-12-31");
   return {
     psiraNumber: psiraNum,
-    psiraExpiryDate: new Date("2026-12-31"),
+    psiraExpiryDate: sanitizeDateForPrisma(psiraExpiry) ?? undefined,
     securityServiceType,
     nextOfKin1Name: nextOfKin1,
     nextOfKin1Phone,
@@ -69,6 +70,13 @@ function basePsiraFields(psiraNum: string, securityServiceType: string, nextOfKi
     mentallyUnstable: false,
     trainingCompleted: true,
   };
+}
+
+/** Return Date only if year is 1900-2100 to avoid Prisma/database errors in deployment */
+function sanitizeDateForPrisma(d: Date): Date | undefined {
+  const y = d.getFullYear();
+  if (Number.isNaN(d.getTime()) || y < 1900 || y > 2100) return undefined;
+  return d;
 }
 
 function parseIdToDob(idNumber: string): Date {
@@ -129,27 +137,6 @@ async function main() {
 
     const overtimeRate = g.hourlyRate * 1.5;
 
-    const labourFields = baseLabourLawFields(g.idNumber, gender, dateOfBirth, commencement, "Security Officer");
-    const psiraFields = basePsiraFields(
-          `1234${String(i + 1).padStart(3, "0")}`,
-          g.securityServiceType,
-          `${g.firstName} Family`,
-          `+2783${String(1234567 + i).slice(-7)}`,
-          `${g.lastName} Relative`,
-          `+2784${String(3334444 + i).slice(-7)}`
-        );
-    // #region agent log
-    try {
-      const fs = await import("fs");
-      const pathMod = await import("path");
-      const logPath = pathMod.join(process.cwd(), "..", "..", ".cursor", "debug.log");
-      const dobYear = dateOfBirth?.getFullYear?.();
-      const commYear = commencement?.getFullYear?.();
-      const psiraYear = (psiraFields.psiraExpiryDate as Date)?.getFullYear?.();
-      const entry = JSON.stringify({location:"seed.ts:guardCreate",message:"Seed guard dates - ALL date fields",data:{idNumber:g.idNumber,dobISO:dateOfBirth?.toISOString?.(),dobYear,commISO:commencement?.toISOString?.(),commYear,psiraISO:(psiraFields.psiraExpiryDate as Date)?.toISOString?.(),psiraYear,labourDOBYear:(labourFields.dateOfBirth as Date)?.getFullYear?.()},timestamp:Date.now(),hypothesisId:"H4"}) + "\n";
-      fs.appendFileSync(logPath, entry);
-    } catch (_) {}
-    // #endregion
     await prisma.employee.create({
       data: {
         companyId: company.id,
@@ -162,8 +149,15 @@ async function main() {
         employeeType: "security",
         hourlyRate: g.hourlyRate,
         overtimeRate,
-        ...labourFields,
-        ...psiraFields,
+        ...baseLabourLawFields(g.idNumber, gender, dateOfBirth, commencement, "Security Officer"),
+        ...basePsiraFields(
+          `1234${String(i + 1).padStart(3, "0")}`,
+          g.securityServiceType,
+          `${g.firstName} Family`,
+          `+2783${String(1234567 + i).slice(-7)}`,
+          `${g.lastName} Relative`,
+          `+2784${String(3334444 + i).slice(-7)}`
+        ),
       },
     });
     created++;
@@ -181,15 +175,6 @@ async function main() {
     const commencement = new Date(commencementBase);
     commencement.setMonth(commencement.getMonth() + SECURITY_GUARDS.length + i);
 
-    // #region agent log
-    try {
-      const fs = await import("fs");
-      const pathMod = await import("path");
-      const logPath = pathMod.join(process.cwd(), "..", "..", ".cursor", "debug.log");
-      const entry = JSON.stringify({location:"seed.ts:officeCreate",message:"Seed office dates before create",data:{idNumber:o.idNumber,dateOfBirth:dateOfBirth?.toISOString?.(),commencement:commencement?.toISOString?.()},timestamp:Date.now(),hypothesisId:"H4"}) + "\n";
-      fs.appendFileSync(logPath, entry);
-    } catch (_) {}
-    // #endregion
     await prisma.employee.create({
       data: {
         companyId: company.id,

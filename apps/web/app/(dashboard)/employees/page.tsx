@@ -269,9 +269,6 @@ function parseSAIdNumber(id: string): { dateOfBirth?: string; gender?: "M" | "F"
   const dateOfBirth = `${year}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
   const genderSeq = parseInt(clean.slice(6, 10), 10);
   const gender = genderSeq < 5000 ? "F" : "M";
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'employees/page.tsx:parseSAIdNumber',message:'Parsed ID to DOB',data:{id,clean,yy,century,year,dateOfBirth},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
-  // #endregion
   return { dateOfBirth, gender };
 }
 
@@ -382,9 +379,6 @@ function EmployeeForm({
         mentallyUnstable: mentallyUnstable === "" ? undefined : mentallyUnstable,
         trainingCompleted: trainingCompleted === "" ? undefined : trainingCompleted,
       };
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'employees/page.tsx:createPayload',message:'Create payload date fields',data:{dateOfBirth,commencementDate,psiraExpiryDate,idNumber},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
-      // #endregion
       const res = await authFetch("/employees", token, {
         method: "POST",
         body: JSON.stringify(payload),
@@ -753,9 +747,6 @@ function EditModal({
         mentallyUnstable: mentallyUnstable === "" ? undefined : mentallyUnstable,
         trainingCompleted: trainingCompleted === "" ? undefined : trainingCompleted,
       };
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'employees/page.tsx:updatePayload',message:'Update payload date fields',data:{dateOfBirth,commencementDate,psiraExpiryDate},timestamp:Date.now(),hypothesisId:'H5'})}).catch(()=>{});
-      // #endregion
       const res = await authFetch(`/employees/${employeeId}`, token, {
         method: "PUT",
         body: JSON.stringify(payload),

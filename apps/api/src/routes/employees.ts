@@ -9,10 +9,18 @@ import { createAuditLog } from "../lib/audit.js";
 
 const optionalString = z.string().optional();
 const optionalNumber = z.number().optional();
-const optionalDate = z
-  .string()
-  .optional()
-  .transform((v) => (v ? new Date(v) : undefined));
+
+/** Reject dates with year outside 1900-2100 to avoid Prisma/database errors (e.g. year 202500) */
+function sanitizeDate(v: string | undefined): Date | undefined {
+  if (!v) return undefined;
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return undefined;
+  const y = d.getFullYear();
+  if (y < 1900 || y > 2100) return undefined;
+  return d;
+}
+
+const optionalDate = z.string().optional().transform(sanitizeDate);
 const optionalBool = z.boolean().optional();
 
 const createEmployeeSchema = z.object({
@@ -125,15 +133,6 @@ export async function employeesRoutes(app: FastifyInstance) {
   });
 
   app.post("/", { preHandler: protect }, async (request, reply) => {
-    // #region agent log
-    const body = request.body as Record<string, unknown>;
-    try {
-      const fs = await import("fs");
-      const path = await import("path");
-      const logPath = path.join(process.cwd(), "..", "..", ".cursor", "debug.log");
-      fs.appendFileSync(logPath, JSON.stringify({location:"employees.ts:POST:raw",message:"Raw body date fields",data:{dateOfBirth:body?.dateOfBirth,commencementDate:body?.commencementDate,psiraExpiryDate:body?.psiraExpiryDate},timestamp:Date.now(),hypothesisId:"H1"}) + "\n");
-    } catch (_) {}
-    // #endregion
     const parsed = createEmployeeSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -145,17 +144,6 @@ export async function employeesRoutes(app: FastifyInstance) {
     const companyId = request.user!.companyId;
 
     const d = parsed.data;
-    // #region agent log
-    try {
-      const fs = await import("fs");
-      const path = await import("path");
-      const logPath = path.join(process.cwd(), "..", "..", ".cursor", "debug.log");
-      const dobYear = d.dateOfBirth?.getFullYear?.();
-      const commYear = d.commencementDate?.getFullYear?.();
-      const psiraYear = d.psiraExpiryDate?.getFullYear?.();
-      fs.appendFileSync(logPath, JSON.stringify({location:"employees.ts:POST:parsed",message:"Parsed dates before Prisma",data:{dobISO:d.dateOfBirth?.toISOString?.(),dobYear,commISO:d.commencementDate?.toISOString?.(),commYear,psiraISO:d.psiraExpiryDate?.toISOString?.(),psiraYear},timestamp:Date.now(),hypothesisId:"H2"}) + "\n");
-    } catch (_) {}
-    // #endregion
     const employee = await prisma.employee.create({
       data: {
         companyId,
@@ -232,15 +220,6 @@ export async function employeesRoutes(app: FastifyInstance) {
 
   app.put("/:id", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    // #region agent log
-    const body = request.body as Record<string, unknown>;
-    try {
-      const fs = await import("fs");
-      const path = await import("path");
-      const logPath = path.join(process.cwd(), "..", "..", ".cursor", "debug.log");
-      fs.appendFileSync(logPath, JSON.stringify({location:"employees.ts:PUT:raw",message:"Update raw body date fields",data:{dateOfBirth:body?.dateOfBirth,commencementDate:body?.commencementDate,psiraExpiryDate:body?.psiraExpiryDate},timestamp:Date.now(),hypothesisId:"H1"}) + "\n");
-    } catch (_) {}
-    // #endregion
     const parsed = updateEmployeeSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -258,17 +237,6 @@ export async function employeesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Employee not found" });
     }
 
-    // #region agent log
-    const d = parsed.data;
-    try {
-      const fs = await import("fs");
-      const path = await import("path");
-      const logPath = path.join(process.cwd(), "..", "..", ".cursor", "debug.log");
-      const dobYear = d.dateOfBirth?.getFullYear?.();
-      const psiraYear = d.psiraExpiryDate?.getFullYear?.();
-      fs.appendFileSync(logPath, JSON.stringify({location:"employees.ts:PUT:parsed",message:"Update parsed dates before Prisma",data:{dobISO:d.dateOfBirth?.toISOString?.(),dobYear,commISO:d.commencementDate?.toISOString?.(),psiraISO:d.psiraExpiryDate?.toISOString?.(),psiraYear},timestamp:Date.now(),hypothesisId:"H2"}) + "\n");
-    } catch (_) {}
-    // #endregion
     const employee = await prisma.employee.update({
       where: { id },
       data: parsed.data,
