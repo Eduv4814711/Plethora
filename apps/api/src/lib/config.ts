@@ -6,7 +6,7 @@ export const config = {
     refreshExpiry: "7d",
   },
   bcrypt: {
-    rounds: 12,
+    rounds: process.env.NODE_ENV === "production" ? 12 : 10,
   },
   overtime: {
     standardHoursPerDay: 8,

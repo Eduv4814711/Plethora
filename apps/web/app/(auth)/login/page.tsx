@@ -5,19 +5,19 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 
 function LoginForm() {
-  const { user, loading, login, error, setError } = useAuth();
+  const { user, login, error, setError } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!loading && user) {
+    if (user) {
       router.replace("/");
     }
-  }, [user, loading, router]);
+  }, [user, router]);
 
-  if (loading || user) return null;
+  if (user) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -12,23 +12,31 @@ const loginSchema = z.object({
 
 export async function authRoutes(app: FastifyInstance) {
   app.post("/login", async (request, reply) => {
-    const parsed = loginSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({
-        error: "Validation error",
-        message: parsed.error.flatten().fieldErrors,
+    try {
+      const parsed = loginSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: "Validation error",
+          message: parsed.error.flatten().fieldErrors,
+        });
+      }
+
+      const result = await login(parsed.data);
+      if (!result) {
+        return reply.code(401).send({
+          error: "Invalid credentials",
+          message: "Invalid email or password",
+        });
+      }
+
+      return reply.send(result);
+    } catch (err) {
+      request.log.error(err);
+      return reply.code(500).send({
+        error: "Login failed",
+        message: err instanceof Error ? err.message : "An error occurred during login",
       });
     }
-
-    const result = await login(parsed.data);
-    if (!result) {
-      return reply.code(401).send({
-        error: "Invalid credentials",
-        message: "Invalid email or password",
-      });
-    }
-
-    return reply.send(result);
   });
 
   app.post("/refresh", async (request, reply) => {
@@ -65,7 +73,22 @@ export async function authRoutes(app: FastifyInstance) {
         email: true,
         role: true,
         companyId: true,
-        company: { select: { id: true, name: true } },
+        company: {
+          select: {
+            id: true,
+            name: true,
+            legalName: true,
+            registrationNumber: true,
+            taxNumber: true,
+            address: true,
+            phone: true,
+            email: true,
+            logoUrl: true,
+            website: true,
+            settings: true,
+            theme: true,
+          },
+        },
       },
     });
 

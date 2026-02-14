@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { useSettings } from "@/lib/settings-context";
 import { clsx } from "clsx";
 
 const navItems = [
@@ -21,6 +22,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout, loading } = useAuth();
+  const { settings } = useSettings();
+  const companyName = settings?.name ?? "Plethora";
 
   if (loading) {
     return (
@@ -43,11 +46,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <aside className="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shrink-0">
         <div className="p-5 border-b border-slate-200 dark:border-slate-800">
           <Link href="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <span className="text-lg font-bold text-white">P</span>
-            </div>
-            <span className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">
-              Plethora
+            {settings?.logoUrl ? (
+              <img src={settings.logoUrl} alt="" className="w-10 h-10 rounded-xl object-cover" />
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                <span className="text-lg font-bold text-white">{companyName.charAt(0)}</span>
+              </div>
+            )}
+            <span className="text-xl font-bold text-slate-900 dark:text-white tracking-tight truncate">
+              {companyName}
             </span>
           </Link>
         </div>

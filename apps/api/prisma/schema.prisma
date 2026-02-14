@@ -16,6 +16,20 @@ model Company {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Business details
+  legalName          String?
+  registrationNumber String?
+  taxNumber          String?
+  address            String?
+  phone              String?
+  email              String?
+  logoUrl            String?
+  website            String?
+
+  // Business settings & theme (JSON for flexibility)
+  settings Json? // { currency, dateFormat, timezone, payrollPeriod, etc. }
+  theme    Json? // { primaryColor, accentColor, mode: "light"|"dark"|"system" }
+
   users        User[]
   employees    Employee[]
   sites        Site[]
