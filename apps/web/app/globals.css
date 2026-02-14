@@ -2,45 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
 :root {
-  --foreground: #0f172a;
-  --background: #f1f5f9;
+  --foreground: #0a0a0a;
+  --background: #fafafa;
   --card: #ffffff;
-  --card-border: #e2e8f0;
-  --accent: #6366f1;
-  --accent-hover: #4f46e5;
-  --muted: #64748b;
+  --card-border: #e5e5e5;
+  --muted: #737373;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --foreground: #f1f5f9;
-    --background: #0f172a;
-    --card: #1e293b;
-    --card-border: #334155;
-    --muted: #94a3b8;
+    --foreground: #fafafa;
+    --background: #0a0a0a;
+    --card: #171717;
+    --card-border: #404040;
+    --muted: #a3a3a3;
   }
 }
 
 body {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: 'IBM Plex Sans', 'IBM Plex Mono', system-ui, monospace, sans-serif;
   color: var(--foreground);
   background: var(--background);
 }
 
 @layer utilities {
-  .glass {
-    @apply bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl;
-  }
-  .card-hover {
-    @apply transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5;
-  }
+  /* Wireframe: outlined button, no gradients, minimal radius */
   .btn-primary {
-    @apply px-4 py-2.5 font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all duration-200 active:scale-[0.98];
+    @apply px-4 py-2.5 font-semibold rounded-sm border border-neutral-300 dark:border-neutral-600 bg-transparent dark:bg-transparent text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900;
+  }
+  .btn-secondary {
+    @apply px-4 py-2.5 font-medium rounded-sm border border-neutral-300 dark:border-neutral-600 bg-transparent dark:bg-transparent text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900;
   }
   .input-modern {
-    @apply w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200 outline-none;
+    @apply w-full px-4 py-2.5 rounded-sm border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-neutral-400 focus:border-neutral-500 dark:focus:border-neutral-500 transition-colors outline-none;
+  }
+  .card-wireframe {
+    @apply border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded-sm;
   }
 }

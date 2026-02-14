@@ -53,12 +53,12 @@ interface Employee {
 }
 
 const statusColors: Record<string, string> = {
-  applicant: "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300",
-  hired: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
-  training: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400",
-  active: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400",
-  suspended: "bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400",
-  offboarded: "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400",
+  applicant: "border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
+  hired: "border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
+  training: "border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
+  active: "border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
+  suspended: "border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
+  offboarded: "border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-600 dark:text-neutral-400",
 };
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -98,7 +98,7 @@ export default function EmployeesPage() {
     return (
       <div className="animate-pulse grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {[1, 2, 3, 4, 5, 6].map((i) => (
-          <div key={i} className="h-44 bg-slate-200 dark:bg-slate-800 rounded-2xl" />
+          <div key={i} className="h-44 border border-dashed border-neutral-300 dark:border-neutral-600 rounded-sm" />
         ))}
       </div>
     );
@@ -108,10 +108,10 @@ export default function EmployeesPage() {
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">
             Employees
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">
+          <p className="text-[10px] uppercase tracking-widest text-neutral-500 dark:text-neutral-400 mt-1">
             Manage your workforce
           </p>
         </div>
@@ -175,16 +175,16 @@ export default function EmployeesPage() {
         {employees.map((emp) => (
           <div
             key={emp.id}
-            className="p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-soft hover:shadow-lg hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200"
+            className="p-5 bg-white dark:bg-neutral-900 rounded-sm border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800/30 transition-colors"
           >
             <div className="flex justify-between items-start">
               <div>
-                <h3 className="font-semibold text-slate-900 dark:text-white">
+                <h3 className="font-semibold text-neutral-900 dark:text-neutral-100">
                   {emp.firstName} {emp.lastName}
                 </h3>
                 <span
-                  className={`inline-block mt-1 px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                    statusColors[emp.status] || "bg-slate-100 text-slate-700"
+                  className={`inline-block mt-1 px-2.5 py-1 rounded-sm text-[10px] font-semibold uppercase tracking-wider ${
+                    statusColors[emp.status] || "border border-neutral-300 text-neutral-700 dark:text-neutral-300"
                   }`}
                 >
                   {emp.status}
@@ -192,41 +192,41 @@ export default function EmployeesPage() {
               </div>
             </div>
             {emp.employeeType && (
-              <span className="text-xs text-slate-500 dark:text-slate-400">
+              <span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
                 {emp.employeeType === "office" ? "Office Staff" : "Guard"}
               </span>
             )}
             {emp.idNumber && (
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">ID: {emp.idNumber}</p>
+              <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">ID: {emp.idNumber}</p>
             )}
             {emp.psiraNumber && (
-              <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">PSIRA: {emp.psiraNumber}</p>
+              <p className="mt-0.5 text-sm text-neutral-500 dark:text-neutral-400">PSIRA: {emp.psiraNumber}</p>
             )}
             {emp.phone && (
-              <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{emp.phone}</p>
+              <p className="mt-0.5 text-sm text-neutral-500 dark:text-neutral-400">{emp.phone}</p>
             )}
             {emp.employeeType === "office" && emp.monthlySalary != null && (
-              <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">R{emp.monthlySalary}/month</p>
+              <p className="mt-0.5 text-sm text-neutral-500 dark:text-neutral-400">R{emp.monthlySalary}/month</p>
             )}
             {emp.employeeType !== "office" && emp.hourlyRate != null && (
-              <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">R{emp.hourlyRate}/hr</p>
+              <p className="mt-0.5 text-sm text-neutral-500 dark:text-neutral-400">R{emp.hourlyRate}/hr</p>
             )}
             {(emp.currentSite || emp.currentPost) && (
-              <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+              <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
                 {[emp.currentSite, emp.currentPost].filter(Boolean).join(" - ")}
               </p>
             )}
             <div className="mt-4 flex gap-3">
               <button
                 onClick={() => setEditingId(emp.id)}
-                className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                className="text-xs font-medium uppercase tracking-wider text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border-b border-neutral-400 dark:border-neutral-500 pb-0.5"
               >
                 Edit
               </button>
               {emp.status !== "offboarded" && (
                 <button
                   onClick={() => setStatusChangeId(emp.id)}
-                  className="text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+                  className="text-xs font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
                 >
                   Change Status
                 </button>
@@ -237,9 +237,9 @@ export default function EmployeesPage() {
       </div>
 
       {employees.length === 0 && (
-        <div className="text-center py-16 text-slate-500 dark:text-slate-400">
-          <p className="font-medium">No employees yet</p>
-          <p className="text-sm mt-1">Add your first employee to get started</p>
+        <div className="text-center py-16 border border-dashed border-neutral-300 dark:border-neutral-600 rounded-sm">
+          <p className="text-sm font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">No employees yet</p>
+          <p className="text-xs mt-1 text-neutral-400 dark:text-neutral-500">Add your first employee to get started</p>
         </div>
       )}
     </div>
@@ -396,19 +396,19 @@ function EmployeeForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="mb-8 p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-soft max-h-[85vh] overflow-y-auto"
+      className="mb-8 p-6 bg-white dark:bg-neutral-900 rounded-sm border border-neutral-200 dark:border-neutral-800  max-h-[85vh] overflow-y-auto"
     >
-      <h3 className="font-semibold text-slate-900 dark:text-white mb-4">New Employee</h3>
+      <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-4">New Employee</h3>
       {error && (
-        <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">
+        <div className="mb-4 p-3 text-sm text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-sm">
           {error}
         </div>
       )}
 
       <div className="space-y-6">
-        <section className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-          <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Staff type</h4>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">Who are you onboarding?</p>
+        <section className="p-4 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
+          <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">Staff type</h4>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-3">Who are you onboarding?</p>
           <div className="flex gap-4">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -420,7 +420,7 @@ function EmployeeForm({
                 className="w-4 h-4"
               />
               <span className="font-medium">Office Staff</span>
-              <span className="text-sm text-slate-500">(fixed monthly salary)</span>
+              <span className="text-sm text-neutral-500">(fixed monthly salary)</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -432,13 +432,13 @@ function EmployeeForm({
                 className="w-4 h-4"
               />
               <span className="font-medium">Guard</span>
-              <span className="text-sm text-slate-500">(hourly rate)</span>
+              <span className="text-sm text-neutral-500">(hourly rate)</span>
             </label>
           </div>
         </section>
 
         <section>
-          <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Basic Information</h4>
+          <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">Basic Information</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-modern">
               <option value="applicant">Applicant</option>
@@ -492,14 +492,14 @@ function EmployeeForm({
         </section>
 
         <section>
-          <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Labour Law (BCEA) – Office Staff</h4>
+          <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">Labour Law (BCEA) – Office Staff</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Date of birth</label>
+              <label className="text-sm font-medium text-neutral-600 dark:text-neutral-400">Date of birth</label>
               <input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="input-modern" aria-label="Date of birth" />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Gender</label>
+              <label className="text-sm font-medium text-neutral-600 dark:text-neutral-400">Gender</label>
               <select value={gender} onChange={(e) => setGender(e.target.value)} className="input-modern">
                 <option value="">Select gender</option>
                 <option value="M">Male</option>
@@ -510,7 +510,7 @@ function EmployeeForm({
             <input placeholder="Postal address (if different)" value={postalAddress} onChange={(e) => setPostalAddress(e.target.value)} className="input-modern" />
             <input placeholder="Postal code" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className="input-modern" />
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Employment commencement date</label>
+              <label className="text-sm font-medium text-neutral-600 dark:text-neutral-400">Employment commencement date</label>
               <input type="date" value={commencementDate} onChange={(e) => setCommencementDate(e.target.value)} className="input-modern" aria-label="Employment commencement date" />
             </div>
             <input placeholder="Occupation / Job title" value={occupation} onChange={(e) => setOccupation(e.target.value)} className="input-modern" />
@@ -535,11 +535,11 @@ function EmployeeForm({
         </section>
 
         <section>
-          <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">PSIRA – Security Staff</h4>
+          <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">PSIRA – Security Staff</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <input placeholder="PSIRA number" value={psiraNumber} onChange={(e) => setPsiraNumber(e.target.value)} className="input-modern" />
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-slate-600 dark:text-slate-400">PSIRA registration expiry date</label>
+              <label className="text-sm font-medium text-neutral-600 dark:text-neutral-400">PSIRA registration expiry date</label>
               <input type="date" value={psiraExpiryDate} onChange={(e) => setPsiraExpiryDate(e.target.value)} className="input-modern" aria-label="PSIRA registration expiry date" />
             </div>
             <select value={securityServiceType} onChange={(e) => setSecurityServiceType(e.target.value)} className="input-modern sm:col-span-2">
@@ -762,22 +762,22 @@ function EditModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800">
-        <div className="p-6 border-b border-slate-200 dark:border-slate-800 shrink-0">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Edit Employee</h3>
+      <div className="bg-white dark:bg-neutral-900 rounded-sm  w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-neutral-200 dark:border-neutral-800">
+        <div className="p-6 border-b border-neutral-200 dark:border-neutral-800 shrink-0">
+          <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Edit Employee</h3>
         </div>
         {loading ? (
-          <div className="p-8 text-center text-slate-500">Loading...</div>
+          <div className="p-8 text-center text-neutral-500">Loading...</div>
         ) : (
           <form onSubmit={handleSubmit} className="p-6 overflow-y-auto max-h-[calc(90vh-180px)] space-y-6">
             {error && (
-              <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">
+              <div className="p-3 text-sm text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-sm">
                 {error}
               </div>
             )}
 
-            <section className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-              <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Staff type</h4>
+            <section className="p-4 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
+              <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">Staff type</h4>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -789,7 +789,7 @@ function EditModal({
                     className="w-4 h-4"
                   />
                   <span className="font-medium">Office Staff</span>
-                  <span className="text-sm text-slate-500">(monthly salary)</span>
+                  <span className="text-sm text-neutral-500">(monthly salary)</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -801,13 +801,13 @@ function EditModal({
                     className="w-4 h-4"
                   />
                   <span className="font-medium">Guard</span>
-                  <span className="text-sm text-slate-500">(hourly rate)</span>
+                  <span className="text-sm text-neutral-500">(hourly rate)</span>
                 </label>
               </div>
             </section>
 
             <section>
-              <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Basic Information</h4>
+              <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">Basic Information</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <input placeholder="First name *" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className="input-modern" />
                 <input placeholder="Last name *" value={lastName} onChange={(e) => setLastName(e.target.value)} required className="input-modern" />
@@ -853,14 +853,14 @@ function EditModal({
             </section>
 
             <section>
-              <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Labour Law (BCEA)</h4>
+              <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">Labour Law (BCEA)</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Date of birth</label>
+                  <label className="text-sm font-medium text-neutral-600 dark:text-neutral-400">Date of birth</label>
                   <input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="input-modern" aria-label="Date of birth" />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Gender</label>
+                  <label className="text-sm font-medium text-neutral-600 dark:text-neutral-400">Gender</label>
                   <select value={gender} onChange={(e) => setGender(e.target.value)} className="input-modern">
                     <option value="">Select gender</option>
                     <option value="M">Male</option>
@@ -871,7 +871,7 @@ function EditModal({
                 <input placeholder="Postal address" value={postalAddress} onChange={(e) => setPostalAddress(e.target.value)} className="input-modern" />
                 <input placeholder="Postal code" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className="input-modern" />
                 <div className="flex flex-col gap-1">
-                  <label className="text-sm font-medium text-slate-600 dark:text-slate-400">Employment commencement date</label>
+                  <label className="text-sm font-medium text-neutral-600 dark:text-neutral-400">Employment commencement date</label>
                   <input type="date" value={commencementDate} onChange={(e) => setCommencementDate(e.target.value)} className="input-modern" aria-label="Employment commencement date" />
                 </div>
                 <input placeholder="Occupation" value={occupation} onChange={(e) => setOccupation(e.target.value)} className="input-modern" />
@@ -896,11 +896,11 @@ function EditModal({
             </section>
 
             <section>
-              <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">PSIRA – Security Staff</h4>
+              <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">PSIRA – Security Staff</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <input placeholder="PSIRA number" value={psiraNumber} onChange={(e) => setPsiraNumber(e.target.value)} className="input-modern" />
                 <div className="flex flex-col gap-1">
-                  <label className="text-sm font-medium text-slate-600 dark:text-slate-400">PSIRA registration expiry date</label>
+                  <label className="text-sm font-medium text-neutral-600 dark:text-neutral-400">PSIRA registration expiry date</label>
                   <input type="date" value={psiraExpiryDate} onChange={(e) => setPsiraExpiryDate(e.target.value)} className="input-modern" aria-label="PSIRA registration expiry date" />
                 </div>
                 <select value={securityServiceType} onChange={(e) => setSecurityServiceType(e.target.value)} className="input-modern sm:col-span-2">
@@ -946,7 +946,7 @@ function EditModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-2.5 font-medium rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="flex-1 py-2.5 font-medium rounded-sm border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
               >
                 Cancel
               </button>
@@ -1003,8 +1003,8 @@ function StatusModal({
   if (validNext.length === 0) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-slate-200 dark:border-slate-800">
-          <p className="text-slate-600 dark:text-slate-400">No status transitions available for offboarded employees.</p>
+        <div className="bg-white dark:bg-neutral-900 rounded-sm  w-full max-w-sm p-6 border border-neutral-200 dark:border-neutral-800">
+          <p className="text-neutral-600 dark:text-neutral-400">No status transitions available for offboarded employees.</p>
           <button onClick={onClose} className="mt-4 btn-primary w-full">Close</button>
         </div>
       </div>
@@ -1013,20 +1013,20 @@ function StatusModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm border border-slate-200 dark:border-slate-800">
-        <div className="p-6 border-b border-slate-200 dark:border-slate-800">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Change Status</h3>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+      <div className="bg-white dark:bg-neutral-900 rounded-sm  w-full max-w-sm border border-neutral-200 dark:border-neutral-800">
+        <div className="p-6 border-b border-neutral-200 dark:border-neutral-800">
+          <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Change Status</h3>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
             {employee.firstName} {employee.lastName}
           </p>
         </div>
         <form onSubmit={handleSubmit} className="p-6">
           {error && (
-            <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">
+            <div className="mb-4 p-3 text-sm text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-sm">
               {error}
             </div>
           )}
-          <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+          <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
             Current: <span className={`font-semibold ${statusColors[employee.status]}`}>{employee.status}</span>
           </p>
           <select
@@ -1046,7 +1046,7 @@ function StatusModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 font-medium rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="flex-1 py-2.5 font-medium rounded-sm border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
             >
               Cancel
             </button>

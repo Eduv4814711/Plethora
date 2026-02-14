@@ -84,10 +84,10 @@ export default function AttendancePage() {
   if (loading) {
     return (
       <div className="animate-pulse">
-        <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-48 mb-4" />
+        <div className="h-8 bg-neutral-200 dark:bg-neutral-700 rounded w-48 mb-4" />
         <div className="space-y-2">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-16 bg-slate-200 dark:bg-slate-700 rounded" />
+            <div key={i} className="h-16 bg-neutral-200 dark:bg-neutral-700 rounded" />
           ))}
         </div>
       </div>
@@ -96,13 +96,13 @@ export default function AttendancePage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-800 dark:text-white mb-6">
+      <h1 className="text-2xl font-bold text-neutral-800 dark:text-white mb-6">
         Attendance
       </h1>
 
       {shiftsForClockIn.length > 0 && (
-        <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-          <h3 className="font-medium text-amber-800 dark:text-amber-200 mb-2">
+        <div className="mb-6 p-4 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-neutral-200 dark:border-neutral-800">
+          <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
             Clock in (within window)
           </h3>
           <div className="space-y-2">
@@ -122,24 +122,24 @@ export default function AttendancePage() {
         {attendances.map((att) => (
           <div
             key={att.id}
-            className="p-4 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-between"
+            className="p-4 bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-700 flex items-center justify-between"
           >
             <div>
               <span className="font-medium">
                 {att.shift.employee.firstName} {att.shift.employee.lastName}
               </span>
-              <span className="text-slate-500 mx-2">at</span>
+              <span className="text-neutral-500 mx-2">at</span>
               <span>
                 {att.shift.post.site.name} - {att.shift.post.name}
               </span>
-              <span className="ml-2 text-sm text-slate-600 dark:text-slate-400">
+              <span className="ml-2 text-sm text-neutral-600 dark:text-neutral-400">
                 {att.clockIn
                   ? new Date(att.clockIn).toLocaleString()
                   : "Not clocked in"}
                 {att.clockOut && ` - ${new Date(att.clockOut).toLocaleString()}`}
               </span>
               {(att.overtimeHours ?? 0) > 0 && (
-                <span className="ml-2 text-amber-600 font-medium">
+                <span className="ml-2 text-neutral-600 font-medium">
                   OT: {att.overtimeHours}h
                 </span>
               )}
@@ -147,8 +147,8 @@ export default function AttendancePage() {
             <span
               className={`px-2 py-0.5 rounded text-xs ${
                 att.status === "completed"
-                  ? "bg-green-100 text-green-700"
-                  : "bg-blue-100 text-blue-700"
+                  ? "border border-neutral-400 dark:border-neutral-500 bg-neutral-100 dark:bg-neutral-700/50 text-neutral-800 dark:text-neutral-200"
+                  : "border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300"
               }`}
             >
               {att.status}
@@ -158,7 +158,7 @@ export default function AttendancePage() {
       </div>
 
       {attendances.length === 0 && !shiftsForClockIn.length && (
-        <p className="text-slate-500 py-8 text-center">No attendance records</p>
+        <p className="text-neutral-500 py-8 text-center">No attendance records</p>
       )}
     </div>
   );
@@ -197,7 +197,7 @@ function ClockInButton({
   };
 
   return (
-    <div className="flex items-center justify-between bg-white dark:bg-slate-800 p-2 rounded">
+    <div className="flex items-center justify-between bg-white dark:bg-neutral-800 p-2 rounded">
       <span>
         {shift.employee.firstName} {shift.employee.lastName} at{" "}
         {shift.post.site.name} - {shift.post.name}
@@ -207,7 +207,7 @@ function ClockInButton({
         <button
           onClick={handleSubmit}
           disabled={loading}
-          className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+          className="btn-primary text-sm disabled:opacity-50"
         >
           {loading ? "..." : "Clock In"}
         </button>

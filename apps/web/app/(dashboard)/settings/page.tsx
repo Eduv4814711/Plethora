@@ -34,30 +34,30 @@ export default function SettingsPage() {
   if (loading && !settings) {
     return (
       <div className="flex items-center justify-center min-h-[200px]">
-        <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 animate-pulse" />
+        <div className="w-10 h-10 rounded-sm bg-neutral-100 dark:bg-neutral-900/30 animate-pulse" />
       </div>
     );
   }
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-800 dark:text-white mb-6">
+      <h1 className="text-2xl font-bold text-neutral-800 dark:text-white mb-6">
         Settings
       </h1>
 
       {error && (
-        <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800/50">
+        <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-sm border border-red-200 dark:border-red-800/50">
           {error}
         </div>
       )}
 
       {!isAdmin && activeTab !== "profile" && (
-        <div className="mb-4 p-3 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800/50">
+        <div className="mb-4 p-3 text-sm text-neutral-700 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-neutral-200 dark:border-neutral-800/50">
           Only administrators can edit business details, settings, and theme.
         </div>
       )}
 
-      <div className="flex gap-1 mb-6 border-b border-slate-200 dark:border-slate-700 overflow-x-auto">
+      <div className="flex gap-1 mb-6 border-b border-neutral-200 dark:border-neutral-700 overflow-x-auto">
         {tabs
           .filter((t) => !t.adminOnly || isAdmin)
           .map((tab) => (
@@ -65,10 +65,10 @@ export default function SettingsPage() {
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={clsx(
-              "px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors",
+              "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors",
               activeTab === tab.id
-                ? "bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 border border-slate-200 dark:border-slate-700 border-b-transparent -mb-px"
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                ? "bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border border-neutral-200 dark:border-neutral-700 border-b-transparent -mb-px"
+                : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
             )}
           >
             {tab.label}
@@ -76,7 +76,7 @@ export default function SettingsPage() {
         ))}
       </div>
 
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
+      <div className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-700 p-6">
         {activeTab === "profile" && (
           <ProfileSection user={user} />
         )}
@@ -191,13 +191,13 @@ function LogoUpload({
 
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Logo</label>
+      <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">Logo</label>
       <div className="flex flex-col sm:flex-row gap-4 items-start">
-        <div className="w-24 h-24 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-600 flex items-center justify-center overflow-hidden bg-slate-50 dark:bg-slate-800/50 shrink-0">
+        <div className="w-24 h-24 rounded-sm border-2 border-dashed border-neutral-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden bg-neutral-50 dark:bg-neutral-800/50 shrink-0">
           {previewUrl ? (
             <img src={previewUrl} alt="Logo" className="w-full h-full object-contain" />
           ) : (
-            <span className="text-3xl text-slate-400 dark:text-slate-500">?</span>
+            <span className="text-3xl text-neutral-400 dark:text-neutral-500">?</span>
           )}
         </div>
         <div className="flex-1 min-w-0">
@@ -224,14 +224,14 @@ function LogoUpload({
                   type="button"
                   onClick={() => onLogoChange("")}
                   disabled={uploading}
-                  className="ml-2 px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                  className="ml-2 px-3 py-2 text-sm font-medium text-neutral-600 dark:text-neutral-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-sm transition-colors"
                 >
                   Remove
                 </button>
               )}
             </>
           )}
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-2">
             JPEG, PNG, GIF or WebP. Max 2MB.
           </p>
           {uploadError && (
@@ -246,19 +246,19 @@ function LogoUpload({
 function ProfileSection({ user }: { user: { name?: string; email?: string; role?: string } | null }) {
   return (
     <div>
-      <h3 className="font-semibold text-slate-800 dark:text-white mb-4">Profile</h3>
+      <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Profile</h3>
       <dl className="space-y-3 text-sm">
         <div>
-          <dt className="text-slate-500 dark:text-slate-400">Name</dt>
-          <dd className="text-slate-900 dark:text-white">{user?.name}</dd>
+          <dt className="text-neutral-500 dark:text-neutral-400">Name</dt>
+          <dd className="text-neutral-900 dark:text-white">{user?.name}</dd>
         </div>
         <div>
-          <dt className="text-slate-500 dark:text-slate-400">Email</dt>
-          <dd className="text-slate-900 dark:text-white">{user?.email}</dd>
+          <dt className="text-neutral-500 dark:text-neutral-400">Email</dt>
+          <dd className="text-neutral-900 dark:text-white">{user?.email}</dd>
         </div>
         <div>
-          <dt className="text-slate-500 dark:text-slate-400">Role</dt>
-          <dd className="text-slate-900 dark:text-white">{user?.role}</dd>
+          <dt className="text-neutral-500 dark:text-neutral-400">Role</dt>
+          <dd className="text-neutral-900 dark:text-white">{user?.role}</dd>
         </div>
       </dl>
     </div>
@@ -313,13 +313,13 @@ function BusinessDetailsSection({
 
   return (
     <div>
-      <h3 className="font-semibold text-slate-800 dark:text-white mb-4">Business Details</h3>
-      <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+      <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Business Details</h3>
+      <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-6">
         Configure your company information. This is used across the system (invoices, reports, etc.).
       </p>
       <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Company Name</label>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Company Name</label>
           <input
             type="text"
             value={form.name}
@@ -330,7 +330,7 @@ function BusinessDetailsSection({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Legal Name</label>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Legal Name</label>
           <input
             type="text"
             value={form.legalName}
@@ -342,7 +342,7 @@ function BusinessDetailsSection({
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Registration Number</label>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Registration Number</label>
             <input
               type="text"
               value={form.registrationNumber}
@@ -352,7 +352,7 @@ function BusinessDetailsSection({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tax Number</label>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Tax Number</label>
             <input
               type="text"
               value={form.taxNumber}
@@ -363,7 +363,7 @@ function BusinessDetailsSection({
           </div>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Address</label>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Address</label>
           <textarea
             value={form.address}
             onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
@@ -374,7 +374,7 @@ function BusinessDetailsSection({
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Phone</label>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Phone</label>
             <input
               type="text"
               value={form.phone}
@@ -384,7 +384,7 @@ function BusinessDetailsSection({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Email</label>
             <input
               type="email"
               value={form.email}
@@ -395,7 +395,7 @@ function BusinessDetailsSection({
           </div>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Website</label>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Website</label>
           <input
             type="url"
             value={form.website}
@@ -463,13 +463,13 @@ function BusinessSettingsSection({
 
   return (
     <div>
-      <h3 className="font-semibold text-slate-800 dark:text-white mb-4">Business Settings</h3>
-      <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+      <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Business Settings</h3>
+      <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-6">
         Configure defaults used for payroll, dates, and reporting.
       </p>
       <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Currency</label>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Currency</label>
           <select
             value={form.currency}
             onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
@@ -483,7 +483,7 @@ function BusinessSettingsSection({
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Date Format</label>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Date Format</label>
           <select
             value={form.dateFormat}
             onChange={(e) => setForm((f) => ({ ...f, dateFormat: e.target.value }))}
@@ -496,7 +496,7 @@ function BusinessSettingsSection({
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Timezone</label>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Timezone</label>
           <input
             type="text"
             value={form.timezone}
@@ -507,7 +507,7 @@ function BusinessSettingsSection({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Payroll Period</label>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Payroll Period</label>
           <select
             value={form.payrollPeriod}
             onChange={(e) => setForm((f) => ({ ...f, payrollPeriod: e.target.value }))}
@@ -570,13 +570,13 @@ function ThemeSection({
 
   return (
     <div>
-      <h3 className="font-semibold text-slate-800 dark:text-white mb-4">Theme</h3>
-      <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+      <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Theme</h3>
+      <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-6">
         Customize the appearance of the application. Changes apply globally.
       </p>
       <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Color Mode</label>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Color Mode</label>
           <select
             value={form.mode}
             onChange={(e) => setForm((f) => ({ ...f, mode: e.target.value }))}
@@ -589,13 +589,13 @@ function ThemeSection({
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Primary Color</label>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Primary Color</label>
           <div className="flex gap-3 items-center">
             <input
               type="color"
               value={form.primaryColor}
               onChange={(e) => setForm((f) => ({ ...f, primaryColor: e.target.value }))}
-              className="w-12 h-12 rounded-lg cursor-pointer border border-slate-200 dark:border-slate-600"
+              className="w-12 h-12 rounded-sm cursor-pointer border border-neutral-200 dark:border-neutral-600"
               disabled={readOnly}
             />
             <input
@@ -608,13 +608,13 @@ function ThemeSection({
           </div>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Accent Color</label>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Accent Color</label>
           <div className="flex gap-3 items-center">
             <input
               type="color"
               value={form.accentColor}
               onChange={(e) => setForm((f) => ({ ...f, accentColor: e.target.value }))}
-              className="w-12 h-12 rounded-lg cursor-pointer border border-slate-200 dark:border-slate-600"
+              className="w-12 h-12 rounded-sm cursor-pointer border border-neutral-200 dark:border-neutral-600"
               disabled={readOnly}
             />
             <input
@@ -702,27 +702,27 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[120px]">
-        <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 animate-pulse" />
+        <div className="w-8 h-8 rounded-sm bg-neutral-100 dark:bg-neutral-900/30 animate-pulse" />
       </div>
     );
   }
 
   return (
     <div>
-      <h3 className="font-semibold text-slate-800 dark:text-white mb-4">Users & Roles</h3>
-      <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+      <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Users & Roles</h3>
+      <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-6">
         Add users to your organization and assign role-based permissions. Only admins can manage users.
       </p>
 
       {error && (
-        <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800/50">
+        <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-sm border border-red-200 dark:border-red-800/50">
           {error}
         </div>
       )}
 
       <div className="space-y-4 max-w-2xl">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+          <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
             {users.length} user{users.length !== 1 ? "s" : ""}
           </span>
           <button
@@ -737,12 +737,12 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
         {showAddForm && (
           <form
             onSubmit={handleAddUser}
-            className="p-4 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 space-y-4"
+            className="p-4 rounded-sm border border-neutral-200 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800/50 space-y-4"
           >
-            <h4 className="font-medium text-slate-800 dark:text-white">New User</h4>
+            <h4 className="font-medium text-neutral-800 dark:text-white">New User</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Name</label>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Name</label>
                 <input
                   type="text"
                   value={addForm.name}
@@ -753,7 +753,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Email</label>
                 <input
                   type="email"
                   value={addForm.email}
@@ -766,7 +766,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Password</label>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Password</label>
                 <input
                   type="password"
                   value={addForm.password}
@@ -778,7 +778,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Role</label>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Role</label>
                 <select
                   value={addForm.role}
                   onChange={(e) => setAddForm((f) => ({ ...f, role: e.target.value as UserRole }))}
@@ -798,13 +798,13 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
           </form>
         )}
 
-        <div className="rounded-xl border border-slate-200 dark:border-slate-600 overflow-hidden">
+        <div className="rounded-sm border border-neutral-200 dark:border-neutral-600 overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-600">
-                <th className="text-left py-3 px-4 font-medium text-slate-700 dark:text-slate-300">Name</th>
-                <th className="text-left py-3 px-4 font-medium text-slate-700 dark:text-slate-300">Email</th>
-                <th className="text-left py-3 px-4 font-medium text-slate-700 dark:text-slate-300">Role</th>
+              <tr className="bg-neutral-50 dark:bg-neutral-800/50 border-b border-neutral-200 dark:border-neutral-600">
+                <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Name</th>
+                <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Email</th>
+                <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Role</th>
                 <th className="w-24" />
               </tr>
             </thead>
@@ -812,15 +812,15 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
               {users.map((u) => (
                 <tr
                   key={u.id}
-                  className="border-b border-slate-100 dark:border-slate-700/50 last:border-0 hover:bg-slate-50/50 dark:hover:bg-slate-800/30"
+                  className="border-b border-neutral-100 dark:border-neutral-700/50 last:border-0 hover:bg-neutral-50/50 dark:hover:bg-neutral-800/30"
                 >
-                  <td className="py-3 px-4 text-slate-900 dark:text-white">
+                  <td className="py-3 px-4 text-neutral-900 dark:text-white">
                     {u.name}
                     {u.id === currentUserId && (
-                      <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">(you)</span>
+                      <span className="ml-2 text-xs text-neutral-500 dark:text-neutral-400">(you)</span>
                     )}
                   </td>
-                  <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{u.email}</td>
+                  <td className="py-3 px-4 text-neutral-600 dark:text-neutral-400">{u.email}</td>
                   <td className="py-3 px-4">
                     {editingRole === u.id ? (
                       <select
@@ -837,14 +837,14 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                         ))}
                       </select>
                     ) : (
-                      <span className="text-slate-700 dark:text-slate-300">
+                      <span className="text-neutral-700 dark:text-neutral-300">
                         {ROLE_LABELS[u.role]}
                         {u.id !== currentUserId && (
                           <button
                             type="button"
                             onClick={() => setEditingRole(u.id)}
                             disabled={submitting}
-                            className="ml-2 text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                            className="ml-2 text-xs text-neutral-600 dark:text-neutral-400 hover:underline"
                           >
                             Edit
                           </button>

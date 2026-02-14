@@ -36,15 +36,15 @@ function LoginForm() {
 
   return (
     <div className="w-full max-w-[420px] animate-fade-in">
-      <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-2xl shadow-2xl shadow-black/10 dark:shadow-black/40 border border-white/20 dark:border-slate-700/50 p-8 md:p-10">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-600 shadow-lg shadow-indigo-500/30 mb-4">
-            <span className="text-2xl font-bold text-white">P</span>
+      <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-sm p-8 md:p-10">
+        <div className="text-center mb-8 pb-8 border-b border-neutral-200 dark:border-neutral-700">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-sm border-2 border-neutral-300 dark:border-neutral-600 mb-4">
+            <span className="text-xl font-bold text-neutral-900 dark:text-neutral-100">P</span>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">
             Plethora
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">
+          <p className="text-[10px] uppercase tracking-widest text-neutral-500 dark:text-neutral-400 mt-2">
             Workforce & Payroll Management
           </p>
         </div>
@@ -53,7 +53,7 @@ function LoginForm() {
           <div>
             <label
               htmlFor="email"
-              className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2"
+              className="block text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-2"
             >
               Email
             </label>
@@ -71,7 +71,7 @@ function LoginForm() {
           <div>
             <label
               htmlFor="password"
-              className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2"
+              className="block text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-2"
             >
               Password
             </label>
@@ -86,7 +86,7 @@ function LoginForm() {
           </div>
 
           {error && (
-            <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800/50">
+            <div className="p-3 text-sm text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-sm">
               {error}
             </div>
           )}
@@ -94,13 +94,13 @@ function LoginForm() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-3.5 px-4 font-semibold rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/40 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-indigo-500/30 active:scale-[0.99]"
+            className="w-full py-3 px-4 font-semibold rounded-sm border border-neutral-300 dark:border-neutral-600 bg-transparent dark:bg-transparent text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 outline-none"
           >
             {submitting ? "Signing in..." : "Sign in"}
           </button>
         </form>
       </div>
-      <p className="text-center text-slate-400 dark:text-slate-500 text-xs mt-6">
+      <p className="text-center text-[10px] uppercase tracking-widest text-neutral-400 dark:text-neutral-500 mt-6">
         Quick Bopha Security
       </p>
     </div>

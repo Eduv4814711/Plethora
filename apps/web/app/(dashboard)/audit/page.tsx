@@ -34,10 +34,10 @@ export default function AuditPage() {
   if (loading) {
     return (
       <div className="animate-pulse">
-        <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-48 mb-4" />
+        <div className="h-8 bg-neutral-200 dark:bg-neutral-700 rounded w-48 mb-4" />
         <div className="space-y-2">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-12 bg-slate-200 dark:bg-slate-700 rounded" />
+            <div key={i} className="h-12 bg-neutral-200 dark:bg-neutral-700 rounded" />
           ))}
         </div>
       </div>
@@ -47,7 +47,7 @@ export default function AuditPage() {
   if (error) {
     return (
       <div>
-        <h1 className="text-2xl font-bold text-slate-800 dark:text-white mb-6">
+        <h1 className="text-2xl font-bold text-neutral-800 dark:text-white mb-6">
           Audit Logs
         </h1>
         <p className="text-red-600">Access denied. Admin role required.</p>
@@ -57,13 +57,13 @@ export default function AuditPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-800 dark:text-white mb-6">
+      <h1 className="text-2xl font-bold text-neutral-800 dark:text-white mb-6">
         Audit Logs
       </h1>
 
-      <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-700 overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 dark:bg-slate-700">
+          <thead className="bg-neutral-50 dark:bg-neutral-700">
             <tr>
               <th className="px-4 py-2 text-left">Timestamp</th>
               <th className="px-4 py-2 text-left">User</th>
@@ -75,9 +75,9 @@ export default function AuditPage() {
             {logs.map((log) => (
               <tr
                 key={log.id}
-                className="border-t border-slate-200 dark:border-slate-700"
+                className="border-t border-neutral-200 dark:border-neutral-700"
               >
-                <td className="px-4 py-2 text-slate-600 dark:text-slate-400">
+                <td className="px-4 py-2 text-neutral-600 dark:text-neutral-400">
                   {new Date(log.timestamp).toLocaleString()}
                 </td>
                 <td className="px-4 py-2">
@@ -95,7 +95,7 @@ export default function AuditPage() {
       </div>
 
       {logs.length === 0 && (
-        <p className="text-slate-500 py-8 text-center">No audit logs</p>
+        <p className="text-neutral-500 py-8 text-center">No audit logs</p>
       )}
     </div>
   );

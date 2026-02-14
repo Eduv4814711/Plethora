@@ -12,10 +12,10 @@ interface PayrollRun {
 }
 
 const statusColors: Record<string, string> = {
-  draft: "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300",
-  calculated: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
-  approved: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400",
-  paid: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400",
+  draft: "bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300",
+  calculated: "bg-neutral-100 dark:bg-neutral-900/30 text-neutral-700 dark:text-neutral-400",
+  approved: "bg-neutral-100 dark:bg-neutral-900/30 text-neutral-700 dark:text-neutral-400",
+  paid: "bg-neutral-100 dark:bg-neutral-900/30 text-neutral-700 dark:text-neutral-400",
 };
 
 export default function PayrollPage() {
@@ -43,10 +43,10 @@ export default function PayrollPage() {
   if (loading) {
     return (
       <div className="animate-pulse">
-        <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-48 mb-4" />
+        <div className="h-8 bg-neutral-200 dark:bg-neutral-700 rounded w-48 mb-4" />
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-20 bg-slate-200 dark:bg-slate-700 rounded" />
+            <div key={i} className="h-20 bg-neutral-200 dark:bg-neutral-700 rounded" />
           ))}
         </div>
       </div>
@@ -57,8 +57,8 @@ export default function PayrollPage() {
     <div>
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Payroll</h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">Manage payroll runs and payments</p>
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white tracking-tight">Payroll</h1>
+          <p className="text-neutral-500 dark:text-neutral-400 mt-1 text-sm">Manage payroll runs and payments</p>
         </div>
         <button onClick={() => setShowForm(!showForm)} className="btn-primary">
           {showForm ? "Cancel" : "New Payroll Run"}
@@ -75,18 +75,18 @@ export default function PayrollPage() {
         />
       )}
 
-      <div className="mb-8 p-5 bg-indigo-50 dark:bg-indigo-950/30 rounded-2xl border border-indigo-100 dark:border-indigo-900/50">
-        <h3 className="font-semibold text-slate-900 dark:text-white mb-4">Pipeline</h3>
+      <div className="mb-8 p-5 bg-neutral-50 dark:bg-neutral-950/30 rounded-sm border border-neutral-100 dark:border-neutral-900/50">
+        <h3 className="font-semibold text-neutral-900 dark:text-white mb-4">Pipeline</h3>
         <div className="flex gap-2 flex-wrap mb-2">
-          <span className="px-3 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-medium">Attendance</span>
-          <span className="text-slate-400">→</span>
-          <span className="px-3 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-medium">Calculation</span>
-          <span className="text-slate-400">→</span>
-          <span className="px-3 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-medium">Approval</span>
-          <span className="text-slate-400">→</span>
-          <span className="px-3 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-medium">Paid</span>
+          <span className="px-3 py-1 rounded-sm bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-sm font-medium">Attendance</span>
+          <span className="text-neutral-400">→</span>
+          <span className="px-3 py-1 rounded-sm bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-sm font-medium">Calculation</span>
+          <span className="text-neutral-400">→</span>
+          <span className="px-3 py-1 rounded-sm bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-sm font-medium">Approval</span>
+          <span className="text-neutral-400">→</span>
+          <span className="px-3 py-1 rounded-sm bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-sm font-medium">Paid</span>
         </div>
-        <p className="text-sm text-slate-600 dark:text-slate-400">
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">
           Each payroll run progresses through these stages. Calculate first, then approve, then mark as paid.
         </p>
       </div>
@@ -103,7 +103,7 @@ export default function PayrollPage() {
       </div>
 
       {runs.length === 0 && (
-        <p className="text-slate-500 py-8 text-center">No payroll runs</p>
+        <p className="text-neutral-500 py-8 text-center">No payroll runs</p>
       )}
     </div>
   );
@@ -132,8 +132,8 @@ function PayrollRunForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="mb-8 p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-soft">
-      <h3 className="font-semibold text-slate-900 dark:text-white mb-4">New Payroll Run</h3>
+    <form onSubmit={handleSubmit} className="mb-8 p-6 bg-white dark:bg-neutral-900 rounded-sm border border-neutral-200 dark:border-neutral-800 ">
+      <h3 className="font-semibold text-neutral-900 dark:text-white mb-4">New Payroll Run</h3>
       <div className="grid grid-cols-2 gap-4">
         <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} required className="input-modern" />
         <input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} required className="input-modern" />
@@ -183,7 +183,7 @@ function PayrollRunCard({
   };
 
   return (
-    <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-soft">
+    <div className="p-4 bg-white dark:bg-neutral-900 rounded-sm border border-neutral-200 dark:border-neutral-800 ">
       <div className="flex justify-between items-center">
         <div>
           <span className="font-medium">
@@ -192,7 +192,7 @@ function PayrollRunCard({
           </span>
           <span
             className={`ml-2 inline-block px-2 py-0.5 rounded text-xs ${
-              statusColors[run.status] || "bg-slate-100"
+              statusColors[run.status] || "bg-neutral-100"
             }`}
           >
             {run.status}
@@ -202,7 +202,7 @@ function PayrollRunCard({
           {run.status === "draft" && (
             <button
               onClick={handleCalculate}
-              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+              className="btn-primary text-sm"
             >
               Calculate
             </button>
@@ -210,7 +210,7 @@ function PayrollRunCard({
           {run.status === "calculated" && (
             <button
               onClick={handleApprove}
-              className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+              className="btn-primary text-sm"
             >
               Approve
             </button>
@@ -218,7 +218,7 @@ function PayrollRunCard({
           {run.status === "approved" && (
             <button
               onClick={handleMarkPaid}
-              className="px-3 py-1 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700"
+              className="btn-primary text-sm"
             >
               Mark Paid
             </button>
@@ -228,14 +228,14 @@ function PayrollRunCard({
               setShowItems(!showItems);
               if (!showItems) fetchItems();
             }}
-            className="px-3 py-1 text-sm border rounded dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+            className="btn-secondary text-sm"
           >
             {showItems ? "Hide" : "View"} Items
           </button>
         </div>
       </div>
       {showItems && (
-        <div className="mt-4 border-t border-slate-200 dark:border-slate-700 pt-4">
+        <div className="mt-4 border-t border-neutral-200 dark:border-neutral-700 pt-4">
           {items.length > 0 ? (
             <table className="w-full text-sm">
               <thead>
@@ -256,7 +256,7 @@ function PayrollRunCard({
               </tbody>
             </table>
           ) : (
-            <p className="text-slate-500 text-sm">No items yet. Run Calculate.</p>
+            <p className="text-neutral-500 text-sm">No items yet. Run Calculate.</p>
           )}
         </div>
       )}

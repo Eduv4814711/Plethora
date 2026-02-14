@@ -24,11 +24,11 @@ const SHIFT_LABELS: Record<string, string> = {
 };
 
 const SHIFT_STATUS_COLORS: Record<string, string> = {
-  created: "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300",
-  assigned: "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300",
-  active: "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300",
-  completed: "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400",
-  verified: "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300",
+  created: "bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300",
+  assigned: "border border-neutral-400 dark:border-neutral-500 bg-neutral-100 dark:bg-neutral-700/50 text-neutral-800 dark:text-neutral-200",
+  active: "border border-neutral-500 dark:border-neutral-400 bg-neutral-200 dark:bg-neutral-600/50 text-neutral-900 dark:text-neutral-100",
+  completed: "bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400",
+  verified: "border border-neutral-500 dark:border-neutral-400 bg-neutral-200 dark:bg-neutral-600/50 text-neutral-900 dark:text-neutral-100",
 };
 
 interface PostAssignedGuard {
@@ -267,8 +267,8 @@ export default function SiteDetailPage() {
   if (loading || !site) {
     return (
       <div className="animate-pulse space-y-6">
-        <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded w-64" />
-        <div className="h-96 bg-slate-200 dark:bg-slate-700 rounded-2xl" />
+        <div className="h-10 bg-neutral-200 dark:bg-neutral-700 rounded w-64" />
+        <div className="h-96 bg-neutral-200 dark:bg-neutral-700 rounded-sm" />
       </div>
     );
   }
@@ -281,15 +281,15 @@ export default function SiteDetailPage() {
         <div className="flex items-center gap-4">
           <Link
             href="/sites"
-            className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-2 rounded-sm border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
           >
-            <svg className="w-5 h-5 text-slate-600 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-neutral-600 dark:text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{site.name}</h1>
-            <p className="text-slate-500 dark:text-slate-400 mt-0.5 text-sm">
+            <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">{site.name}</h1>
+            <p className="text-neutral-500 dark:text-neutral-400 mt-0.5 text-sm">
               Manage posts and assign guards — drag guards into posts
             </p>
           </div>
@@ -299,13 +299,13 @@ export default function SiteDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           {deleteError && (
-            <div className="p-4 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">
+            <div className="p-4 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-sm">
               {deleteError}
               <button onClick={() => setDeleteError(null)} className="ml-2 underline">Dismiss</button>
             </div>
           )}
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Posts</h2>
+            <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Posts</h2>
             {canManage && (
               <button
                 onClick={() => setShowAddPost(!showAddPost)}
@@ -346,9 +346,9 @@ export default function SiteDetailPage() {
           </div>
 
           {site.posts.length === 0 && (
-            <div className="text-center py-12 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30">
-              <p className="font-medium text-slate-600 dark:text-slate-400">No posts yet</p>
-              <p className="text-sm text-slate-500 mt-1">Add a Day or Night shift post to get started</p>
+            <div className="text-center py-12 rounded-sm border-2 border-dashed border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-900/30">
+              <p className="font-medium text-neutral-600 dark:text-neutral-400">No posts yet</p>
+              <p className="text-sm text-neutral-500 mt-1">Add a Day or Night shift post to get started</p>
               {canManage && (
                 <button onClick={() => setShowAddPost(true)} className="mt-4 btn-primary">Add Post</button>
               )}
@@ -357,11 +357,11 @@ export default function SiteDetailPage() {
         </div>
 
         <div className="lg:col-span-1">
-          <div className="sticky top-6 p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-3">
+          <div className="sticky top-6 p-5 bg-white dark:bg-neutral-900 rounded-sm border border-neutral-200 dark:border-neutral-800 ">
+            <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider mb-3">
               Available Guards
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4">
               Drag guards into posts to assign them
             </p>
             <div className="space-y-2 max-h-[400px] overflow-y-auto">
@@ -376,7 +376,7 @@ export default function SiteDetailPage() {
                 />
               ))}
               {unassignedGuards.length === 0 && (
-                <p className="text-sm text-slate-500 py-4">All guards assigned</p>
+                <p className="text-sm text-neutral-500 py-4">All guards assigned</p>
               )}
             </div>
           </div>
@@ -386,9 +386,9 @@ export default function SiteDetailPage() {
       <div className="space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Scheduled Shifts</h2>
+            <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Scheduled Shifts</h2>
             {calendarDays.length > 0 && (
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
                 {dateRange === "week"
                   ? `${format(calendarDays[0], "d MMM")} – ${format(calendarDays[calendarDays.length - 1], "d MMM yyyy")}`
                   : format(calendarDays[0], "MMMM yyyy")}
@@ -396,31 +396,31 @@ export default function SiteDetailPage() {
             )}
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 rounded-xl border border-slate-200 dark:border-slate-700 p-1 bg-slate-50/50 dark:bg-slate-800/30">
+            <div className="flex items-center gap-1 rounded-sm border border-neutral-200 dark:border-neutral-700 p-1 bg-neutral-50/50 dark:bg-neutral-800/30">
               <button
                 type="button"
                 onClick={() => setViewOffset((o) => o - 1)}
-                className="p-2 rounded-lg hover:bg-white dark:hover:bg-slate-700 transition-colors"
+                className="p-2 rounded-lg hover:bg-white dark:hover:bg-neutral-700 transition-colors"
                 aria-label="Previous"
               >
-                <svg className="w-4 h-4 text-slate-600 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-neutral-600 dark:text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
               <button
                 type="button"
                 onClick={() => setViewOffset(0)}
-                className="px-3 py-2 text-sm font-medium rounded-lg hover:bg-white dark:hover:bg-slate-700 transition-colors text-slate-700 dark:text-slate-300"
+                className="px-3 py-2 text-sm font-medium rounded-lg hover:bg-white dark:hover:bg-neutral-700 transition-colors text-neutral-700 dark:text-neutral-300"
               >
                 Today
               </button>
               <button
                 type="button"
                 onClick={() => setViewOffset((o) => o + 1)}
-                className="p-2 rounded-lg hover:bg-white dark:hover:bg-slate-700 transition-colors"
+                className="p-2 rounded-lg hover:bg-white dark:hover:bg-neutral-700 transition-colors"
                 aria-label="Next"
               >
-                <svg className="w-4 h-4 text-slate-600 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 text-neutral-600 dark:text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
@@ -428,7 +428,7 @@ export default function SiteDetailPage() {
             <select
               value={dateRange}
               onChange={(e) => { setDateRange(e.target.value as "week" | "month"); setViewOffset(0); }}
-              className="input-modern py-2 text-sm rounded-xl"
+              className="input-modern py-2 text-sm rounded-sm"
             >
               <option value="week">Week</option>
               <option value="month">Month</option>
@@ -436,7 +436,7 @@ export default function SiteDetailPage() {
             {canManage && site.posts.length > 0 && (
               <button
                 onClick={() => { setSelectedDayForShift(null); setShowAddShift(!showAddShift); }}
-                className="btn-primary flex items-center gap-2 text-sm py-2 rounded-xl"
+                className="btn-primary flex items-center gap-2 text-sm py-2 rounded-sm"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -461,15 +461,15 @@ export default function SiteDetailPage() {
           />
         )}
 
-        <div className="rounded-2xl overflow-hidden bg-white dark:bg-slate-900 relative shadow-[0_4px_24px_-4px_rgba(15,23,42,0.08),0_8px_16px_-8px_rgba(15,23,42,0.04)] dark:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.3)] ring-1 ring-slate-200/60 dark:ring-slate-700/50">
+        <div className="rounded-sm overflow-hidden bg-white dark:bg-neutral-900 relative shadow-[0_4px_24px_-4px_rgba(15,23,42,0.08),0_8px_16px_-8px_rgba(15,23,42,0.04)] dark:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.3)] ring-1 ring-neutral-200/60 dark:ring-neutral-700/50">
           <div className="grid min-h-[400px] w-full" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((wd, i) => (
               <div
                 key={wd}
                 className={`shrink-0 py-3.5 px-3 text-center text-[11px] font-semibold uppercase tracking-[0.08em] border-b ${
                   i >= 5
-                    ? "text-slate-400 dark:text-slate-500 bg-slate-50/80 dark:bg-slate-800/30 border-slate-100 dark:border-slate-700/80"
-                    : "text-slate-600 dark:text-slate-400 bg-gradient-to-b from-slate-50 to-slate-100/50 dark:from-slate-800/60 dark:to-slate-800/30 border-slate-200/80 dark:border-slate-700"
+                    ? "text-neutral-400 dark:text-neutral-500 bg-neutral-50/80 dark:bg-neutral-800/30 border-neutral-100 dark:border-neutral-700/80"
+                    : "text-neutral-600 dark:text-neutral-400 bg-gradient-to-b from-neutral-50 to-neutral-100/50 dark:from-neutral-800/60 dark:to-neutral-800/30 border-neutral-200/80 dark:border-neutral-700"
                 }`}
               >
                 {wd}
@@ -480,7 +480,7 @@ export default function SiteDetailPage() {
                 return (
                   <div
                     key={`empty-${idx}`}
-                    className="min-h-[100px] bg-slate-50/40 dark:bg-slate-800/10 border-b border-r border-slate-100/80 dark:border-slate-700/40"
+                    className="min-h-[100px] bg-neutral-50/40 dark:bg-neutral-800/10 border-b border-r border-neutral-100/80 dark:border-neutral-700/40"
                   />
                 );
               }
@@ -491,25 +491,25 @@ export default function SiteDetailPage() {
               return (
                 <div
                   key={key}
-                  className={`flex flex-col min-h-0 border-b border-r border-slate-100/80 dark:border-slate-700/40 transition-colors ${
+                  className={`flex flex-col min-h-0 border-b border-r border-neutral-100/80 dark:border-neutral-700/40 transition-colors ${
                     isToday
-                      ? "bg-indigo-50/50 dark:bg-indigo-950/30"
+                      ? "bg-neutral-50/50 dark:bg-neutral-950/30"
                       : isWeekend
-                        ? "bg-slate-50/30 dark:bg-slate-800/10"
-                        : "bg-white dark:bg-slate-900"
+                        ? "bg-neutral-50/30 dark:bg-neutral-800/10"
+                        : "bg-white dark:bg-neutral-900"
                   }`}
                 >
                   <div className="shrink-0 py-2.5 px-3 text-center">
                     <span
-                      className={`inline-flex items-center justify-center w-9 h-9 rounded-xl text-sm font-semibold transition-all ${
+                      className={`inline-flex items-center justify-center w-9 h-9 rounded-sm text-sm font-semibold transition-all ${
                         isToday
-                          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25 dark:shadow-indigo-500/20 ring-2 ring-indigo-400/30"
-                          : "text-slate-600 dark:text-slate-300 bg-slate-100/80 dark:bg-slate-700/50"
+                          ? "bg-neutral-600 text-neutral-100 shadow-lg shadow-neutral-500/25 dark:shadow-neutral-500/20 ring-2 ring-neutral-400/30"
+                          : "text-neutral-600 dark:text-neutral-300 bg-neutral-100/80 dark:bg-neutral-700/50"
                       }`}
                     >
                       {format(day, "d")}
                     </span>
-                    <div className={`text-[10px] font-medium mt-1 ${isToday ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400 dark:text-slate-500"}`}>
+                    <div className={`text-[10px] font-medium mt-1 ${isToday ? "text-neutral-600 dark:text-neutral-400" : "text-neutral-400 dark:text-neutral-500"}`}>
                       {format(day, "MMM")}
                     </div>
                   </div>
@@ -518,8 +518,8 @@ export default function SiteDetailPage() {
                     className={`flex-1 px-3 py-2.5 space-y-2 overflow-y-auto min-h-0 max-h-[200px] ${canManage ? "cursor-pointer group" : ""}`}
                   >
                     {dayShifts.length === 0 && canManage ? (
-                      <div className="flex-1 min-h-[60px] flex items-center justify-center rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700/60 group-hover:border-indigo-300 dark:group-hover:border-indigo-600/50 group-hover:bg-indigo-50/30 dark:group-hover:bg-indigo-950/20 transition-all duration-200">
-                        <span className="text-slate-400 dark:text-slate-500 group-hover:text-indigo-500 dark:group-hover:text-indigo-400 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5">
+                      <div className="flex-1 min-h-[60px] flex items-center justify-center rounded-sm border-2 border-dashed border-neutral-200 dark:border-neutral-700/60 group-hover:border-neutral-300 dark:group-hover:border-neutral-600/50 group-hover:bg-neutral-50/30 dark:group-hover:bg-neutral-950/20 transition-all duration-200">
+                        <span className="text-neutral-400 dark:text-neutral-500 group-hover:text-neutral-500 dark:group-hover:text-neutral-400 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                           </svg>
@@ -533,10 +533,10 @@ export default function SiteDetailPage() {
                         <div
                           key={s.id}
                           onClick={(e) => e.stopPropagation()}
-                          className={`px-3 py-2 rounded-xl text-xs font-medium shrink-0 transition-all duration-200 hover:scale-[1.02] ${
+                          className={`px-3 py-2 rounded-sm text-xs font-medium shrink-0 transition-all duration-200 hover:scale-[1.02] ${
                             s.post.shiftType === "night"
-                              ? "bg-gradient-to-br from-indigo-500/15 to-indigo-600/10 dark:from-indigo-500/20 dark:to-indigo-600/10 text-indigo-800 dark:text-indigo-200 border border-indigo-200/60 dark:border-indigo-700/50 shadow-sm"
-                              : "bg-gradient-to-br from-amber-500/15 to-orange-500/10 dark:from-amber-500/20 dark:to-orange-600/10 text-amber-900 dark:text-amber-100 border border-amber-200/60 dark:border-amber-700/50 shadow-sm"
+                              ? "bg-gradient-to-br from-neutral-500/15 to-neutral-600/10 dark:from-neutral-500/20 dark:to-neutral-600/10 text-neutral-800 dark:text-neutral-200 border border-neutral-200/60 dark:border-neutral-700/50 "
+                              : "bg-gradient-to-br from-neutral-500/15 to-orange-500/10 dark:from-neutral-500/20 dark:to-orange-600/10 text-neutral-900 dark:text-neutral-100 border border-neutral-200/60 dark:border-neutral-700/50 "
                           }`}
                         >
                           <span className="truncate block">{s.employee.firstName} {s.employee.lastName}</span>
@@ -545,7 +545,7 @@ export default function SiteDetailPage() {
                               <button
                                 type="button"
                                 onClick={(e) => { e.stopPropagation(); setEditingShift(s); }}
-                                className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
+                                className="text-[10px] text-neutral-600 dark:text-neutral-400 hover:underline font-medium"
                               >
                                 Edit
                               </button>
@@ -567,26 +567,26 @@ export default function SiteDetailPage() {
             })}
           </div>
           {shifts.length === 0 && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-slate-900 pointer-events-none rounded-2xl">
+            <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-neutral-900 pointer-events-none rounded-sm">
               <div className="text-center px-8">
-                <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-800/50 flex items-center justify-center ring-1 ring-slate-200/50 dark:ring-slate-700/50">
-                  <svg className="w-10 h-10 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" strokeWidth={1.25} viewBox="0 0 24 24">
+                <div className="w-20 h-20 mx-auto mb-4 rounded-sm bg-gradient-to-br from-neutral-100 to-neutral-50 dark:from-neutral-800 dark:to-neutral-800/50 flex items-center justify-center ring-1 ring-neutral-200/50 dark:ring-neutral-700/50">
+                  <svg className="w-10 h-10 text-neutral-400 dark:text-neutral-500" fill="none" stroke="currentColor" strokeWidth={1.25} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
-                <p className="text-slate-600 dark:text-slate-400 font-semibold">No shifts scheduled</p>
-                <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">Click on a day to add a shift</p>
+                <p className="text-neutral-600 dark:text-neutral-400 font-semibold">No shifts scheduled</p>
+                <p className="text-sm text-neutral-400 dark:text-neutral-500 mt-1">Click on a day to add a shift</p>
               </div>
             </div>
           )}
         </div>
         <div className="flex items-center gap-8 mt-4 pl-1">
-          <span className="flex items-center gap-2.5 text-sm text-slate-600 dark:text-slate-400">
-            <span className="w-4 h-4 rounded-lg bg-gradient-to-br from-amber-400/30 to-orange-500/20 dark:from-amber-500/30 dark:to-orange-600/20 border border-amber-300/50 dark:border-amber-600/40 shadow-sm" />
+          <span className="flex items-center gap-2.5 text-sm text-neutral-600 dark:text-neutral-400">
+            <span className="w-4 h-4 rounded-lg bg-gradient-to-br from-neutral-400/30 to-orange-500/20 dark:from-neutral-500/30 dark:to-orange-600/20 border border-neutral-300/50 dark:border-neutral-600/40 " />
             <span className="font-medium">Day shift</span>
           </span>
-          <span className="flex items-center gap-2.5 text-sm text-slate-600 dark:text-slate-400">
-            <span className="w-4 h-4 rounded-lg bg-gradient-to-br from-indigo-400/30 to-indigo-600/20 dark:from-indigo-500/30 dark:to-indigo-600/20 border border-indigo-300/50 dark:border-indigo-600/40 shadow-sm" />
+          <span className="flex items-center gap-2.5 text-sm text-neutral-600 dark:text-neutral-400">
+            <span className="w-4 h-4 rounded-lg bg-gradient-to-br from-neutral-400/30 to-neutral-600/20 dark:from-neutral-500/30 dark:to-neutral-600/20 border border-neutral-300/50 dark:border-neutral-600/40 " />
             <span className="font-medium">Night shift</span>
           </span>
         </div>
@@ -618,22 +618,22 @@ export default function SiteDetailPage() {
         />
       )}
 
-      <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-        <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Site info</h4>
+      <div className="p-4 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
+        <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">Site info</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           {(site.physicalAddress || site.location) && (
-            <p className="text-slate-600 dark:text-slate-400">
+            <p className="text-neutral-600 dark:text-neutral-400">
               <span className="font-medium">Address:</span> {site.physicalAddress || site.location}
             </p>
           )}
           {(site.contactPersonName || site.contactPersonPhone) && (
-            <p className="text-slate-600 dark:text-slate-400">
+            <p className="text-neutral-600 dark:text-neutral-400">
               <span className="font-medium">Contact:</span> {site.contactPersonName}
               {site.contactPersonPhone && ` • ${site.contactPersonPhone}`}
             </p>
           )}
           {site.serviceType && (
-            <p className="text-slate-600 dark:text-slate-400">
+            <p className="text-neutral-600 dark:text-neutral-400">
               <span className="font-medium">Service:</span> {SERVICE_TYPE_LABELS[site.serviceType] || site.serviceType}
             </p>
           )}
@@ -681,32 +681,32 @@ function PostCard({
       onDragOver={canManage ? onDragOver : undefined}
       onDragLeave={canManage ? onDragLeave : undefined}
       onDrop={canManage ? onDrop : undefined}
-      className={`p-5 rounded-2xl border-2 transition-all duration-200 ${
+      className={`p-5 rounded-sm border-2 transition-all duration-200 ${
         isDragOver
-          ? "border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30"
-          : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
+          ? "border-neutral-500 bg-neutral-50/50 dark:bg-neutral-950/30"
+          : "border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900"
       }`}
     >
       <div className="flex items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+        <div className={`w-10 h-10 rounded-sm flex items-center justify-center shrink-0 ${
           post.shiftType === "day"
-            ? "bg-amber-100 dark:bg-amber-900/30"
-            : "bg-slate-800 dark:bg-slate-700"
+            ? "bg-neutral-100 dark:bg-neutral-900/30"
+            : "bg-neutral-800 dark:bg-neutral-700"
         }`}>
           {post.shiftType === "day" ? (
-            <svg className="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-neutral-600 dark:text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
             </svg>
           ) : (
-            <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
             </svg>
           )}
         </div>
         <div>
-          <h3 className="font-semibold text-slate-900 dark:text-white">{post.name}</h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400">{shiftLabel}</p>
+          <h3 className="font-semibold text-neutral-900 dark:text-neutral-100">{post.name}</h3>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">{shiftLabel}</p>
         </div>
         </div>
         {canManage && (
@@ -726,7 +726,7 @@ function PostCard({
                 onError?.("Failed to delete post");
               }
             }}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-neutral-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
             title="Delete post"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -737,9 +737,9 @@ function PostCard({
         )}
       </div>
 
-      <div className="min-h-[80px] rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-dashed border-slate-200 dark:border-slate-700 p-3">
+      <div className="min-h-[80px] rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-dashed border-neutral-200 dark:border-neutral-700 p-3">
         {guards.length === 0 ? (
-          <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-4">
             {canManage ? "Drag guards here" : "No guards assigned"}
           </p>
         ) : (
@@ -787,19 +787,19 @@ function GuardChip({
         }
       }}
       onDragEnd={onDragEnd}
-      className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm cursor-grab active:cursor-grabbing select-none ${
-        isDragging ? "opacity-50 scale-95" : "hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-700"
+      className={`inline-flex items-center gap-2 px-3 py-2 rounded-sm text-sm font-medium bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700  cursor-grab active:cursor-grabbing select-none ${
+        isDragging ? "opacity-50 scale-95" : "hover:shadow-md hover:border-neutral-300 dark:hover:border-neutral-700"
       } ${draggable ? "" : "cursor-default"}`}
     >
-      <span className="w-2 h-2 rounded-full bg-emerald-500" />
-      <span className="text-slate-700 dark:text-slate-300">
+      <span className="w-2 h-2 rounded-full bg-neutral-500" />
+      <span className="text-neutral-700 dark:text-neutral-300">
         {guard.firstName} {guard.lastName}
       </span>
       {onRemove && (
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          className="ml-1 p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-600 transition-colors"
+          className="ml-1 p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-neutral-400 hover:text-red-600 transition-colors"
           title="Remove"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -849,10 +849,10 @@ function AddPostForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
-      <h4 className="font-semibold text-slate-900 dark:text-white mb-4">New Post</h4>
+    <form onSubmit={handleSubmit} className="p-5 bg-white dark:bg-neutral-900 rounded-sm border border-neutral-200 dark:border-neutral-800">
+      <h4 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-4">New Post</h4>
       {error && (
-        <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">
+        <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-sm">
           {error}
         </div>
       )}
@@ -970,16 +970,16 @@ function SiteShiftForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
-      <h4 className="font-semibold text-slate-900 dark:text-white mb-4">New Shift</h4>
+    <form onSubmit={handleSubmit} className="p-5 bg-white dark:bg-neutral-900 rounded-sm border border-neutral-200 dark:border-neutral-800">
+      <h4 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-4">New Shift</h4>
       {error && (
-        <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">
+        <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-sm">
           {error}
         </div>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Employee</label>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Employee</label>
           <select
             value={employeeId}
             onChange={(e) => setEmployeeId(e.target.value)}
@@ -995,7 +995,7 @@ function SiteShiftForm({
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Post</label>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Post</label>
           <select
             value={postId}
             onChange={(e) => handlePostChange(e.target.value)}
@@ -1011,7 +1011,7 @@ function SiteShiftForm({
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Start time</label>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Start time</label>
           <input
             type="datetime-local"
             value={startTime}
@@ -1021,7 +1021,7 @@ function SiteShiftForm({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">End time</label>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">End time</label>
           <input
             type="datetime-local"
             value={endTime}
@@ -1094,17 +1094,17 @@ function EditShiftModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-800">
+      <div className="bg-white dark:bg-neutral-900 rounded-sm shadow-2xl w-full max-w-md border border-neutral-200 dark:border-neutral-800">
         <div className="p-6">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Edit Shift</h3>
+          <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-4">Edit Shift</h3>
           {error && (
-            <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">
+            <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-sm">
               {error}
             </div>
           )}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Employee</label>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Employee</label>
               <select
                 value={employeeId}
                 onChange={(e) => setEmployeeId(e.target.value)}
@@ -1119,7 +1119,7 @@ function EditShiftModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Post</label>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Post</label>
               <select
                 value={postId}
                 onChange={(e) => setPostId(e.target.value)}
@@ -1134,7 +1134,7 @@ function EditShiftModal({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Start time</label>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Start time</label>
               <input
                 type="datetime-local"
                 value={startTime}
@@ -1144,7 +1144,7 @@ function EditShiftModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">End time</label>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">End time</label>
               <input
                 type="datetime-local"
                 value={endTime}
@@ -1157,7 +1157,7 @@ function EditShiftModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-2.5 font-medium rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="flex-1 py-2.5 font-medium rounded-sm border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
               >
                 Cancel
               </button>
@@ -1205,15 +1205,15 @@ function DeleteShiftModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-800">
+      <div className="bg-white dark:bg-neutral-900 rounded-sm shadow-2xl w-full max-w-md border border-neutral-200 dark:border-neutral-800">
         <div className="p-6">
-          <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
+          <div className="w-12 h-12 rounded-sm bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
             <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
           </div>
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Delete Shift</h3>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+          <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Delete Shift</h3>
+          <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
             Are you sure you want to delete the shift for{" "}
             <strong>
               {shift.employee.firstName} {shift.employee.lastName}
@@ -1221,7 +1221,7 @@ function DeleteShiftModal({
             at {shift.post.name}? This action cannot be undone.
           </p>
           {error && (
-            <div className="mt-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl">
+            <div className="mt-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-sm">
               {error}
             </div>
           )}
@@ -1229,14 +1229,14 @@ function DeleteShiftModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 font-medium rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="flex-1 py-2.5 font-medium rounded-sm border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleDelete}
               disabled={deleting}
-              className="flex-1 py-2.5 font-semibold rounded-xl bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50"
+              className="flex-1 py-2.5 font-semibold rounded-sm bg-red-600 hover:bg-red-700 text-neutral-100 transition-colors disabled:opacity-50"
             >
               {deleting ? "Deleting..." : "Delete"}
             </button>
