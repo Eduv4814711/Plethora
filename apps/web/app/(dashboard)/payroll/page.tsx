@@ -75,16 +75,16 @@ export default function PayrollPage() {
         />
       )}
 
-      <div className="mb-8 p-5 bg-neutral-50 dark:bg-neutral-950/30 rounded-sm border border-neutral-100 dark:border-neutral-900/50">
+      <div className="mb-8 p-5 bg-neutral-50 dark:bg-neutral-950/30 rounded-sm border border-black dark:border-white">
         <h3 className="font-semibold text-neutral-900 dark:text-white mb-4">Pipeline</h3>
         <div className="flex gap-2 flex-wrap mb-2">
-          <span className="px-3 py-1 rounded-sm bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-sm font-medium">Attendance</span>
+          <span className="px-3 py-1 rounded-sm bg-white dark:bg-neutral-800 border border-black dark:border-white text-sm font-medium">Attendance</span>
           <span className="text-neutral-400">→</span>
-          <span className="px-3 py-1 rounded-sm bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-sm font-medium">Calculation</span>
+          <span className="px-3 py-1 rounded-sm bg-white dark:bg-neutral-800 border border-black dark:border-white text-sm font-medium">Calculation</span>
           <span className="text-neutral-400">→</span>
-          <span className="px-3 py-1 rounded-sm bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-sm font-medium">Approval</span>
+          <span className="px-3 py-1 rounded-sm bg-white dark:bg-neutral-800 border border-black dark:border-white text-sm font-medium">Approval</span>
           <span className="text-neutral-400">→</span>
-          <span className="px-3 py-1 rounded-sm bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-sm font-medium">Paid</span>
+          <span className="px-3 py-1 rounded-sm bg-white dark:bg-neutral-800 border border-black dark:border-white text-sm font-medium">Paid</span>
         </div>
         <p className="text-sm text-neutral-600 dark:text-neutral-400">
           Each payroll run progresses through these stages. Calculate first, then approve, then mark as paid.
@@ -132,7 +132,7 @@ function PayrollRunForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="mb-8 p-6 bg-white dark:bg-neutral-900 rounded-sm border border-neutral-200 dark:border-neutral-800 ">
+    <form onSubmit={handleSubmit} className="mb-8 p-6 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white ">
       <h3 className="font-semibold text-neutral-900 dark:text-white mb-4">New Payroll Run</h3>
       <div className="grid grid-cols-2 gap-4">
         <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} required className="input-modern" />
@@ -183,7 +183,7 @@ function PayrollRunCard({
   };
 
   return (
-    <div className="p-4 bg-white dark:bg-neutral-900 rounded-sm border border-neutral-200 dark:border-neutral-800 ">
+    <div className="p-4 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white ">
       <div className="flex justify-between items-center">
         <div>
           <span className="font-medium">
@@ -235,7 +235,7 @@ function PayrollRunCard({
         </div>
       </div>
       {showItems && (
-        <div className="mt-4 border-t border-neutral-200 dark:border-neutral-700 pt-4">
+        <div className="mt-4 border-t border-black dark:border-white pt-4">
           {items.length > 0 ? (
             <table className="w-full text-sm">
               <thead>

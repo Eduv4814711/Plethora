@@ -8,7 +8,7 @@
   --foreground: #0a0a0a;
   --background: #fafafa;
   --card: #ffffff;
-  --card-border: #e5e5e5;
+  --card-border: #000000;
   --muted: #737373;
 }
 
@@ -17,7 +17,7 @@
     --foreground: #fafafa;
     --background: #0a0a0a;
     --card: #171717;
-    --card-border: #404040;
+    --card-border: #ffffff;
     --muted: #a3a3a3;
   }
 }
@@ -31,15 +31,15 @@ body {
 @layer utilities {
   /* Wireframe: outlined button, no gradients, minimal radius */
   .btn-primary {
-    @apply px-4 py-2.5 font-semibold rounded-sm border border-neutral-300 dark:border-neutral-600 bg-transparent dark:bg-transparent text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900;
+    @apply px-4 py-2.5 font-semibold rounded-sm border-2 border-black dark:border-white bg-transparent dark:bg-transparent text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900;
   }
   .btn-secondary {
-    @apply px-4 py-2.5 font-medium rounded-sm border border-neutral-300 dark:border-neutral-600 bg-transparent dark:bg-transparent text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900;
+    @apply px-4 py-2.5 font-medium rounded-sm border-2 border-black dark:border-white bg-transparent dark:bg-transparent text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900;
   }
   .input-modern {
-    @apply w-full px-4 py-2.5 rounded-sm border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-neutral-400 focus:border-neutral-500 dark:focus:border-neutral-500 transition-colors outline-none;
+    @apply w-full px-4 py-2.5 rounded-sm border-2 border-black dark:border-white bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-neutral-400 focus:border-neutral-900 dark:focus:border-neutral-100 transition-colors outline-none;
   }
   .card-wireframe {
-    @apply border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded-sm;
+    @apply border-2 border-black dark:border-white bg-white dark:bg-neutral-900 rounded-sm;
   }
 }

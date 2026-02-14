@@ -52,12 +52,12 @@ export default function SettingsPage() {
       )}
 
       {!isAdmin && activeTab !== "profile" && (
-        <div className="mb-4 p-3 text-sm text-neutral-700 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-neutral-200 dark:border-neutral-800/50">
+        <div className="mb-4 p-3 text-sm text-neutral-700 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-black dark:border-white">
           Only administrators can edit business details, settings, and theme.
         </div>
       )}
 
-      <div className="flex gap-1 mb-6 border-b border-neutral-200 dark:border-neutral-700 overflow-x-auto">
+      <div className="flex gap-1 mb-6 border-b border-black dark:border-white overflow-x-auto">
         {tabs
           .filter((t) => !t.adminOnly || isAdmin)
           .map((tab) => (
@@ -67,7 +67,7 @@ export default function SettingsPage() {
             className={clsx(
               "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors",
               activeTab === tab.id
-                ? "bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border border-neutral-200 dark:border-neutral-700 border-b-transparent -mb-px"
+                ? "bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border border-black dark:border-white border-b-transparent -mb-px"
                 : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
             )}
           >
@@ -76,7 +76,7 @@ export default function SettingsPage() {
         ))}
       </div>
 
-      <div className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-700 p-6">
+      <div className="bg-white dark:bg-neutral-800 rounded-sm border border-black dark:border-white p-6">
         {activeTab === "profile" && (
           <ProfileSection user={user} />
         )}
@@ -193,7 +193,7 @@ function LogoUpload({
     <div>
       <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">Logo</label>
       <div className="flex flex-col sm:flex-row gap-4 items-start">
-        <div className="w-24 h-24 rounded-sm border-2 border-dashed border-neutral-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden bg-neutral-50 dark:bg-neutral-800/50 shrink-0">
+        <div className="w-24 h-24 rounded-sm border-2 border-dashed border-black dark:border-white flex items-center justify-center overflow-hidden bg-neutral-50 dark:bg-neutral-800/50 shrink-0">
           {previewUrl ? (
             <img src={previewUrl} alt="Logo" className="w-full h-full object-contain" />
           ) : (
@@ -595,7 +595,7 @@ function ThemeSection({
               type="color"
               value={form.primaryColor}
               onChange={(e) => setForm((f) => ({ ...f, primaryColor: e.target.value }))}
-              className="w-12 h-12 rounded-sm cursor-pointer border border-neutral-200 dark:border-neutral-600"
+              className="w-12 h-12 rounded-sm cursor-pointer border border-black dark:border-white"
               disabled={readOnly}
             />
             <input
@@ -614,7 +614,7 @@ function ThemeSection({
               type="color"
               value={form.accentColor}
               onChange={(e) => setForm((f) => ({ ...f, accentColor: e.target.value }))}
-              className="w-12 h-12 rounded-sm cursor-pointer border border-neutral-200 dark:border-neutral-600"
+              className="w-12 h-12 rounded-sm cursor-pointer border border-black dark:border-white"
               disabled={readOnly}
             />
             <input
@@ -737,7 +737,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
         {showAddForm && (
           <form
             onSubmit={handleAddUser}
-            className="p-4 rounded-sm border border-neutral-200 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800/50 space-y-4"
+            className="p-4 rounded-sm border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 space-y-4"
           >
             <h4 className="font-medium text-neutral-800 dark:text-white">New User</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -798,10 +798,10 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
           </form>
         )}
 
-        <div className="rounded-sm border border-neutral-200 dark:border-neutral-600 overflow-hidden">
+        <div className="rounded-sm border border-black dark:border-white overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-neutral-50 dark:bg-neutral-800/50 border-b border-neutral-200 dark:border-neutral-600">
+              <tr className="bg-neutral-50 dark:bg-neutral-800/50 border-b border-black dark:border-white">
                 <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Name</th>
                 <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Email</th>
                 <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Role</th>
@@ -812,7 +812,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
               {users.map((u) => (
                 <tr
                   key={u.id}
-                  className="border-b border-neutral-100 dark:border-neutral-700/50 last:border-0 hover:bg-neutral-50/50 dark:hover:bg-neutral-800/30"
+                  className="border-b border-black dark:border-white last:border-0 hover:bg-neutral-50/50 dark:hover:bg-neutral-800/30"
                 >
                   <td className="py-3 px-4 text-neutral-900 dark:text-white">
                     {u.name}

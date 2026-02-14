@@ -15,11 +15,11 @@ interface Shift {
 }
 
 const statusColors: Record<string, string> = {
-  created: "border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
-  assigned: "border border-neutral-400 dark:border-neutral-500 bg-neutral-100 dark:bg-neutral-700/50 text-neutral-800 dark:text-neutral-200",
-  active: "border border-neutral-500 dark:border-neutral-400 bg-neutral-200 dark:bg-neutral-600/50 text-neutral-900 dark:text-neutral-100",
-  completed: "border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-600 dark:text-neutral-400",
-  verified: "border border-neutral-500 dark:border-neutral-400 bg-neutral-200 dark:bg-neutral-600/50 text-neutral-900 dark:text-neutral-100",
+  created: "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
+  assigned: "border border-black dark:border-white bg-neutral-100 dark:bg-neutral-700/50 text-neutral-800 dark:text-neutral-200",
+  active: "border border-black dark:border-white bg-neutral-200 dark:bg-neutral-600/50 text-neutral-900 dark:text-neutral-100",
+  completed: "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-600 dark:text-neutral-400",
+  verified: "border border-black dark:border-white bg-neutral-200 dark:bg-neutral-600/50 text-neutral-900 dark:text-neutral-100",
 };
 
 export default function RosteringPage() {
@@ -152,7 +152,7 @@ export default function RosteringPage() {
             {periodLabel && <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">{periodLabel}</p>}
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 rounded-sm border border-neutral-200 dark:border-neutral-700 p-1 bg-neutral-50/50 dark:bg-neutral-800/30">
+            <div className="flex items-center gap-1 rounded-sm border border-black dark:border-white p-1 bg-neutral-50/50 dark:bg-neutral-800/30">
               <button
                 type="button"
                 onClick={() => setViewOffset((o) => o - 1)}
@@ -226,8 +226,8 @@ export default function RosteringPage() {
                 key={wd}
                 className={`shrink-0 py-3.5 px-3 text-center text-[11px] font-semibold uppercase tracking-[0.08em] border-b ${
                   i >= 5
-                    ? "text-neutral-400 dark:text-neutral-500 bg-neutral-50/80 dark:bg-neutral-800/30 border-neutral-100 dark:border-neutral-700/80"
-                    : "text-neutral-600 dark:text-neutral-400 bg-gradient-to-b from-neutral-50 to-neutral-100/50 dark:from-neutral-800/60 dark:to-neutral-800/30 border-neutral-200/80 dark:border-neutral-700"
+                    ? "text-neutral-400 dark:text-neutral-500 bg-neutral-50/80 dark:bg-neutral-800/30 border-black dark:border-white"
+                    : "text-neutral-600 dark:text-neutral-400 bg-gradient-to-b from-neutral-50 to-neutral-100/50 dark:from-neutral-800/60 dark:to-neutral-800/30 border-black dark:border-white"
                 }`}
               >
                 {wd}
@@ -238,7 +238,7 @@ export default function RosteringPage() {
                 return (
                   <div
                     key={`empty-${idx}`}
-                    className="min-h-[100px] bg-neutral-50/40 dark:bg-neutral-800/10 border-b border-r border-neutral-100/80 dark:border-neutral-700/40"
+                    className="min-h-[100px] bg-neutral-50/40 dark:bg-neutral-800/10 border-b border-r border-black dark:border-white"
                   />
                 );
               }
@@ -249,7 +249,7 @@ export default function RosteringPage() {
               return (
                 <div
                   key={key}
-                  className={`flex flex-col min-h-0 border-b border-r border-neutral-100/80 dark:border-neutral-700/40 last:border-r-0 transition-colors ${
+                  className={`flex flex-col min-h-0 border-b border-r border-black dark:border-white last:border-r-0 transition-colors ${
                     isToday
                       ? "bg-neutral-50/50 dark:bg-neutral-950/30"
                       : isWeekend
@@ -276,7 +276,7 @@ export default function RosteringPage() {
                     className="flex-1 px-3 py-2.5 space-y-2 overflow-y-auto min-h-0 cursor-pointer group"
                   >
                     {dayShifts.length === 0 ? (
-                      <div className="flex-1 min-h-[60px] flex items-center justify-center rounded-sm border-2 border-dashed border-neutral-200 dark:border-neutral-700/60 group-hover:border-neutral-300 dark:group-hover:border-neutral-600/50 group-hover:bg-neutral-50/30 dark:group-hover:bg-neutral-950/20 transition-all duration-200">
+                      <div className="flex-1 min-h-[60px] flex items-center justify-center rounded-sm border-2 border-dashed border-black dark:border-white group-hover:border-black dark:group-hover:border-white group-hover:bg-neutral-50/30 dark:group-hover:bg-neutral-950/20 transition-all duration-200">
                         <span className="text-neutral-400 dark:text-neutral-500 group-hover:text-neutral-500 dark:group-hover:text-neutral-400 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -291,8 +291,8 @@ export default function RosteringPage() {
                           onClick={(e) => e.stopPropagation()}
                           className={`px-3 py-2 rounded-sm text-xs font-medium shrink-0 transition-all duration-200 hover:scale-[1.02] ${
                             s.post.shiftType === "night"
-                              ? "bg-gradient-to-br from-neutral-500/15 to-neutral-600/10 dark:from-neutral-500/20 dark:to-neutral-600/10 text-neutral-800 dark:text-neutral-200 border border-neutral-200/60 dark:border-neutral-700/50 shadow-sm"
-                              : "bg-gradient-to-br from-neutral-500/15 to-orange-500/10 dark:from-neutral-500/20 dark:to-orange-600/10 text-neutral-900 dark:text-neutral-100 border border-neutral-200/60 dark:border-neutral-700/50 shadow-sm"
+                              ? "bg-gradient-to-br from-neutral-500/15 to-neutral-600/10 dark:from-neutral-500/20 dark:to-neutral-600/10 text-neutral-800 dark:text-neutral-200 border border-black dark:border-white"
+                              : "bg-gradient-to-br from-neutral-500/15 to-orange-500/10 dark:from-neutral-500/20 dark:to-orange-600/10 text-neutral-900 dark:text-neutral-100 border border-black dark:border-white"
                           }`}
                         >
                           <span className="truncate block">{s.employee.firstName} {s.employee.lastName}</span>
@@ -320,11 +320,11 @@ export default function RosteringPage() {
         </div>
         <div className="flex items-center gap-8 mt-4 pl-1">
           <span className="flex items-center gap-2.5 text-sm text-neutral-600 dark:text-neutral-400">
-            <span className="w-4 h-4 rounded-lg bg-gradient-to-br from-neutral-400/30 to-orange-500/20 dark:from-neutral-500/30 dark:to-orange-600/20 border border-neutral-300/50 dark:border-neutral-600/40 shadow-sm" />
+            <span className="w-4 h-4 rounded-lg bg-gradient-to-br from-neutral-400/30 to-orange-500/20 dark:from-neutral-500/30 dark:to-orange-600/20 border border-black dark:border-white" />
             <span className="font-medium">Day shift</span>
           </span>
           <span className="flex items-center gap-2.5 text-sm text-neutral-600 dark:text-neutral-400">
-            <span className="w-4 h-4 rounded-lg bg-gradient-to-br from-neutral-400/30 to-neutral-600/20 dark:from-neutral-500/30 dark:to-neutral-600/20 border border-neutral-300/50 dark:border-neutral-600/40 shadow-sm" />
+            <span className="w-4 h-4 rounded-lg bg-gradient-to-br from-neutral-400/30 to-neutral-600/20 dark:from-neutral-500/30 dark:to-neutral-600/20 border border-black dark:border-white" />
             <span className="font-medium">Night shift</span>
           </span>
         </div>
@@ -401,7 +401,7 @@ function ShiftForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="p-4 bg-white dark:bg-neutral-900 rounded-sm border border-neutral-200 dark:border-neutral-700"
+      className="p-4 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white"
     >
       <h3 className="font-medium mb-4 text-neutral-900 dark:text-neutral-100">New Shift</h3>
       {error && (

@@ -101,7 +101,7 @@ export default function AttendancePage() {
       </h1>
 
       {shiftsForClockIn.length > 0 && (
-        <div className="mb-6 p-4 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-neutral-200 dark:border-neutral-800">
+        <div className="mb-6 p-4 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-black dark:border-white">
           <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
             Clock in (within window)
           </h3>
@@ -122,7 +122,7 @@ export default function AttendancePage() {
         {attendances.map((att) => (
           <div
             key={att.id}
-            className="p-4 bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-700 flex items-center justify-between"
+            className="p-4 bg-white dark:bg-neutral-800 rounded-sm border border-black dark:border-white flex items-center justify-between"
           >
             <div>
               <span className="font-medium">
@@ -147,8 +147,8 @@ export default function AttendancePage() {
             <span
               className={`px-2 py-0.5 rounded text-xs ${
                 att.status === "completed"
-                  ? "border border-neutral-400 dark:border-neutral-500 bg-neutral-100 dark:bg-neutral-700/50 text-neutral-800 dark:text-neutral-200"
-                  : "border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300"
+                  ? "border border-black dark:border-white bg-neutral-100 dark:bg-neutral-700/50 text-neutral-800 dark:text-neutral-200"
+                  : "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300"
               }`}
             >
               {att.status}

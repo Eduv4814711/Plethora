@@ -36,9 +36,9 @@ function LoginForm() {
 
   return (
     <div className="w-full max-w-[420px] animate-fade-in">
-      <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-sm p-8 md:p-10">
-        <div className="text-center mb-8 pb-8 border-b border-neutral-200 dark:border-neutral-700">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-sm border-2 border-neutral-300 dark:border-neutral-600 mb-4">
+      <div className="bg-white dark:bg-neutral-900 border border-black dark:border-white rounded-sm p-8 md:p-10">
+        <div className="text-center mb-8 pb-8 border-b border-black dark:border-white">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-sm border-2 border-black dark:border-white mb-4">
             <span className="text-xl font-bold text-neutral-900 dark:text-neutral-100">P</span>
           </div>
           <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">
@@ -86,7 +86,7 @@ function LoginForm() {
           </div>
 
           {error && (
-            <div className="p-3 text-sm text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-sm">
+            <div className="p-3 text-sm text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 border border-black dark:border-white rounded-sm">
               {error}
             </div>
           )}
@@ -94,7 +94,7 @@ function LoginForm() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-3 px-4 font-semibold rounded-sm border border-neutral-300 dark:border-neutral-600 bg-transparent dark:bg-transparent text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 outline-none"
+            className="w-full py-3 px-4 font-semibold rounded-sm border border-black dark:border-white bg-transparent dark:bg-transparent text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 outline-none"
           >
             {submitting ? "Signing in..." : "Sign in"}
           </button>

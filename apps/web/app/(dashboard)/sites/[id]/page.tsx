@@ -25,10 +25,10 @@ const SHIFT_LABELS: Record<string, string> = {
 
 const SHIFT_STATUS_COLORS: Record<string, string> = {
   created: "bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300",
-  assigned: "border border-neutral-400 dark:border-neutral-500 bg-neutral-100 dark:bg-neutral-700/50 text-neutral-800 dark:text-neutral-200",
-  active: "border border-neutral-500 dark:border-neutral-400 bg-neutral-200 dark:bg-neutral-600/50 text-neutral-900 dark:text-neutral-100",
+  assigned: "border border-black dark:border-white bg-neutral-100 dark:bg-neutral-700/50 text-neutral-800 dark:text-neutral-200",
+  active: "border border-black dark:border-white bg-neutral-200 dark:bg-neutral-600/50 text-neutral-900 dark:text-neutral-100",
   completed: "bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400",
-  verified: "border border-neutral-500 dark:border-neutral-400 bg-neutral-200 dark:bg-neutral-600/50 text-neutral-900 dark:text-neutral-100",
+  verified: "border border-black dark:border-white bg-neutral-200 dark:bg-neutral-600/50 text-neutral-900 dark:text-neutral-100",
 };
 
 interface PostAssignedGuard {
@@ -281,7 +281,7 @@ export default function SiteDetailPage() {
         <div className="flex items-center gap-4">
           <Link
             href="/sites"
-            className="p-2 rounded-sm border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+            className="p-2 rounded-sm border border-black dark:border-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
           >
             <svg className="w-5 h-5 text-neutral-600 dark:text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -346,7 +346,7 @@ export default function SiteDetailPage() {
           </div>
 
           {site.posts.length === 0 && (
-            <div className="text-center py-12 rounded-sm border-2 border-dashed border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-900/30">
+            <div className="text-center py-12 rounded-sm border-2 border-dashed border-black dark:border-white bg-neutral-50/50 dark:bg-neutral-900/30">
               <p className="font-medium text-neutral-600 dark:text-neutral-400">No posts yet</p>
               <p className="text-sm text-neutral-500 mt-1">Add a Day or Night shift post to get started</p>
               {canManage && (
@@ -357,7 +357,7 @@ export default function SiteDetailPage() {
         </div>
 
         <div className="lg:col-span-1">
-          <div className="sticky top-6 p-5 bg-white dark:bg-neutral-900 rounded-sm border border-neutral-200 dark:border-neutral-800 ">
+          <div className="sticky top-6 p-5 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white ">
             <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider mb-3">
               Available Guards
             </h3>
@@ -396,7 +396,7 @@ export default function SiteDetailPage() {
             )}
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 rounded-sm border border-neutral-200 dark:border-neutral-700 p-1 bg-neutral-50/50 dark:bg-neutral-800/30">
+            <div className="flex items-center gap-1 rounded-sm border border-black dark:border-white p-1 bg-neutral-50/50 dark:bg-neutral-800/30">
               <button
                 type="button"
                 onClick={() => setViewOffset((o) => o - 1)}
@@ -468,8 +468,8 @@ export default function SiteDetailPage() {
                 key={wd}
                 className={`shrink-0 py-3.5 px-3 text-center text-[11px] font-semibold uppercase tracking-[0.08em] border-b ${
                   i >= 5
-                    ? "text-neutral-400 dark:text-neutral-500 bg-neutral-50/80 dark:bg-neutral-800/30 border-neutral-100 dark:border-neutral-700/80"
-                    : "text-neutral-600 dark:text-neutral-400 bg-gradient-to-b from-neutral-50 to-neutral-100/50 dark:from-neutral-800/60 dark:to-neutral-800/30 border-neutral-200/80 dark:border-neutral-700"
+                    ? "text-neutral-400 dark:text-neutral-500 bg-neutral-50/80 dark:bg-neutral-800/30 border-black dark:border-white"
+                    : "text-neutral-600 dark:text-neutral-400 bg-gradient-to-b from-neutral-50 to-neutral-100/50 dark:from-neutral-800/60 dark:to-neutral-800/30 border-black dark:border-white"
                 }`}
               >
                 {wd}
@@ -480,7 +480,7 @@ export default function SiteDetailPage() {
                 return (
                   <div
                     key={`empty-${idx}`}
-                    className="min-h-[100px] bg-neutral-50/40 dark:bg-neutral-800/10 border-b border-r border-neutral-100/80 dark:border-neutral-700/40"
+                    className="min-h-[100px] bg-neutral-50/40 dark:bg-neutral-800/10 border-b border-r border-black dark:border-white"
                   />
                 );
               }
@@ -491,7 +491,7 @@ export default function SiteDetailPage() {
               return (
                 <div
                   key={key}
-                  className={`flex flex-col min-h-0 border-b border-r border-neutral-100/80 dark:border-neutral-700/40 transition-colors ${
+                  className={`flex flex-col min-h-0 border-b border-r border-black dark:border-white transition-colors ${
                     isToday
                       ? "bg-neutral-50/50 dark:bg-neutral-950/30"
                       : isWeekend
@@ -518,7 +518,7 @@ export default function SiteDetailPage() {
                     className={`flex-1 px-3 py-2.5 space-y-2 overflow-y-auto min-h-0 max-h-[200px] ${canManage ? "cursor-pointer group" : ""}`}
                   >
                     {dayShifts.length === 0 && canManage ? (
-                      <div className="flex-1 min-h-[60px] flex items-center justify-center rounded-sm border-2 border-dashed border-neutral-200 dark:border-neutral-700/60 group-hover:border-neutral-300 dark:group-hover:border-neutral-600/50 group-hover:bg-neutral-50/30 dark:group-hover:bg-neutral-950/20 transition-all duration-200">
+                      <div className="flex-1 min-h-[60px] flex items-center justify-center rounded-sm border-2 border-dashed border-black dark:border-white/60 group-hover:border-black dark:group-hover:border-white group-hover:bg-neutral-50/30 dark:group-hover:bg-neutral-950/20 transition-all duration-200">
                         <span className="text-neutral-400 dark:text-neutral-500 group-hover:text-neutral-500 dark:group-hover:text-neutral-400 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -535,8 +535,8 @@ export default function SiteDetailPage() {
                           onClick={(e) => e.stopPropagation()}
                           className={`px-3 py-2 rounded-sm text-xs font-medium shrink-0 transition-all duration-200 hover:scale-[1.02] ${
                             s.post.shiftType === "night"
-                              ? "bg-gradient-to-br from-neutral-500/15 to-neutral-600/10 dark:from-neutral-500/20 dark:to-neutral-600/10 text-neutral-800 dark:text-neutral-200 border border-neutral-200/60 dark:border-neutral-700/50 "
-                              : "bg-gradient-to-br from-neutral-500/15 to-orange-500/10 dark:from-neutral-500/20 dark:to-orange-600/10 text-neutral-900 dark:text-neutral-100 border border-neutral-200/60 dark:border-neutral-700/50 "
+                              ? "bg-gradient-to-br from-neutral-500/15 to-neutral-600/10 dark:from-neutral-500/20 dark:to-neutral-600/10 text-neutral-800 dark:text-neutral-200 border border-black dark:border-white "
+                              : "bg-gradient-to-br from-neutral-500/15 to-orange-500/10 dark:from-neutral-500/20 dark:to-orange-600/10 text-neutral-900 dark:text-neutral-100 border border-black dark:border-white "
                           }`}
                         >
                           <span className="truncate block">{s.employee.firstName} {s.employee.lastName}</span>
@@ -582,11 +582,11 @@ export default function SiteDetailPage() {
         </div>
         <div className="flex items-center gap-8 mt-4 pl-1">
           <span className="flex items-center gap-2.5 text-sm text-neutral-600 dark:text-neutral-400">
-            <span className="w-4 h-4 rounded-lg bg-gradient-to-br from-neutral-400/30 to-orange-500/20 dark:from-neutral-500/30 dark:to-orange-600/20 border border-neutral-300/50 dark:border-neutral-600/40 " />
+            <span className="w-4 h-4 rounded-lg bg-gradient-to-br from-neutral-400/30 to-orange-500/20 dark:from-neutral-500/30 dark:to-orange-600/20 border border-black dark:border-white " />
             <span className="font-medium">Day shift</span>
           </span>
           <span className="flex items-center gap-2.5 text-sm text-neutral-600 dark:text-neutral-400">
-            <span className="w-4 h-4 rounded-lg bg-gradient-to-br from-neutral-400/30 to-neutral-600/20 dark:from-neutral-500/30 dark:to-neutral-600/20 border border-neutral-300/50 dark:border-neutral-600/40 " />
+            <span className="w-4 h-4 rounded-lg bg-gradient-to-br from-neutral-400/30 to-neutral-600/20 dark:from-neutral-500/30 dark:to-neutral-600/20 border border-black dark:border-white " />
             <span className="font-medium">Night shift</span>
           </span>
         </div>
@@ -618,7 +618,7 @@ export default function SiteDetailPage() {
         />
       )}
 
-      <div className="p-4 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
+      <div className="p-4 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
         <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">Site info</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           {(site.physicalAddress || site.location) && (
@@ -683,8 +683,8 @@ function PostCard({
       onDrop={canManage ? onDrop : undefined}
       className={`p-5 rounded-sm border-2 transition-all duration-200 ${
         isDragOver
-          ? "border-neutral-500 bg-neutral-50/50 dark:bg-neutral-950/30"
-          : "border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900"
+          ? "border-black dark:border-white bg-neutral-50/50 dark:bg-neutral-950/30"
+          : "border-black dark:border-white bg-white dark:bg-neutral-900"
       }`}
     >
       <div className="flex items-center justify-between gap-3 mb-4">
@@ -737,7 +737,7 @@ function PostCard({
         )}
       </div>
 
-      <div className="min-h-[80px] rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-dashed border-neutral-200 dark:border-neutral-700 p-3">
+      <div className="min-h-[80px] rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-dashed border-black dark:border-white p-3">
         {guards.length === 0 ? (
           <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-4">
             {canManage ? "Drag guards here" : "No guards assigned"}
@@ -787,8 +787,8 @@ function GuardChip({
         }
       }}
       onDragEnd={onDragEnd}
-      className={`inline-flex items-center gap-2 px-3 py-2 rounded-sm text-sm font-medium bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700  cursor-grab active:cursor-grabbing select-none ${
-        isDragging ? "opacity-50 scale-95" : "hover:shadow-md hover:border-neutral-300 dark:hover:border-neutral-700"
+      className={`inline-flex items-center gap-2 px-3 py-2 rounded-sm text-sm font-medium bg-white dark:bg-neutral-800 border border-black dark:border-white  cursor-grab active:cursor-grabbing select-none ${
+        isDragging ? "opacity-50 scale-95" : "hover:shadow-md hover:border-black dark:hover:border-white"
       } ${draggable ? "" : "cursor-default"}`}
     >
       <span className="w-2 h-2 rounded-full bg-neutral-500" />
@@ -849,7 +849,7 @@ function AddPostForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-5 bg-white dark:bg-neutral-900 rounded-sm border border-neutral-200 dark:border-neutral-800">
+    <form onSubmit={handleSubmit} className="p-5 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white">
       <h4 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-4">New Post</h4>
       {error && (
         <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-sm">
@@ -970,7 +970,7 @@ function SiteShiftForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-5 bg-white dark:bg-neutral-900 rounded-sm border border-neutral-200 dark:border-neutral-800">
+    <form onSubmit={handleSubmit} className="p-5 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white">
       <h4 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-4">New Shift</h4>
       {error && (
         <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-sm">
@@ -1094,7 +1094,7 @@ function EditShiftModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-neutral-900 rounded-sm shadow-2xl w-full max-w-md border border-neutral-200 dark:border-neutral-800">
+      <div className="bg-white dark:bg-neutral-900 rounded-sm shadow-2xl w-full max-w-md border border-black dark:border-white">
         <div className="p-6">
           <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-4">Edit Shift</h3>
           {error && (
@@ -1157,7 +1157,7 @@ function EditShiftModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-2.5 font-medium rounded-sm border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                className="flex-1 py-2.5 font-medium rounded-sm border border-black dark:border-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
               >
                 Cancel
               </button>
@@ -1205,7 +1205,7 @@ function DeleteShiftModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-neutral-900 rounded-sm shadow-2xl w-full max-w-md border border-neutral-200 dark:border-neutral-800">
+      <div className="bg-white dark:bg-neutral-900 rounded-sm shadow-2xl w-full max-w-md border border-black dark:border-white">
         <div className="p-6">
           <div className="w-12 h-12 rounded-sm bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
             <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1229,7 +1229,7 @@ function DeleteShiftModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 font-medium rounded-sm border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+              className="flex-1 py-2.5 font-medium rounded-sm border border-black dark:border-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
             >
               Cancel
             </button>

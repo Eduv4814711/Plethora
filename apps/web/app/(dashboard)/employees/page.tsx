@@ -53,12 +53,12 @@ interface Employee {
 }
 
 const statusColors: Record<string, string> = {
-  applicant: "border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
-  hired: "border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
-  training: "border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
-  active: "border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
-  suspended: "border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
-  offboarded: "border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-600 dark:text-neutral-400",
+  applicant: "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
+  hired: "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
+  training: "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
+  active: "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
+  suspended: "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
+  offboarded: "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-600 dark:text-neutral-400",
 };
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -98,7 +98,7 @@ export default function EmployeesPage() {
     return (
       <div className="animate-pulse grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {[1, 2, 3, 4, 5, 6].map((i) => (
-          <div key={i} className="h-44 border border-dashed border-neutral-300 dark:border-neutral-600 rounded-sm" />
+          <div key={i} className="h-44 border border-dashed border-black dark:border-white rounded-sm" />
         ))}
       </div>
     );
@@ -175,7 +175,7 @@ export default function EmployeesPage() {
         {employees.map((emp) => (
           <div
             key={emp.id}
-            className="p-5 bg-white dark:bg-neutral-900 rounded-sm border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800/30 transition-colors"
+            className="p-5 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white hover:bg-neutral-50 dark:hover:bg-neutral-800/30 transition-colors"
           >
             <div className="flex justify-between items-start">
               <div>
@@ -184,7 +184,7 @@ export default function EmployeesPage() {
                 </h3>
                 <span
                   className={`inline-block mt-1 px-2.5 py-1 rounded-sm text-[10px] font-semibold uppercase tracking-wider ${
-                    statusColors[emp.status] || "border border-neutral-300 text-neutral-700 dark:text-neutral-300"
+                    statusColors[emp.status] || "border border-black dark:border-white text-neutral-700 dark:text-neutral-300"
                   }`}
                 >
                   {emp.status}
@@ -219,7 +219,7 @@ export default function EmployeesPage() {
             <div className="mt-4 flex gap-3">
               <button
                 onClick={() => setEditingId(emp.id)}
-                className="text-xs font-medium uppercase tracking-wider text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border-b border-neutral-400 dark:border-neutral-500 pb-0.5"
+                className="text-xs font-medium uppercase tracking-wider text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border-b border-black dark:border-white pb-0.5"
               >
                 Edit
               </button>
@@ -237,7 +237,7 @@ export default function EmployeesPage() {
       </div>
 
       {employees.length === 0 && (
-        <div className="text-center py-16 border border-dashed border-neutral-300 dark:border-neutral-600 rounded-sm">
+        <div className="text-center py-16 border border-dashed border-black dark:border-white rounded-sm">
           <p className="text-sm font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">No employees yet</p>
           <p className="text-xs mt-1 text-neutral-400 dark:text-neutral-500">Add your first employee to get started</p>
         </div>
@@ -396,17 +396,17 @@ function EmployeeForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="mb-8 p-6 bg-white dark:bg-neutral-900 rounded-sm border border-neutral-200 dark:border-neutral-800  max-h-[85vh] overflow-y-auto"
+      className="mb-8 p-6 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white  max-h-[85vh] overflow-y-auto"
     >
       <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-4">New Employee</h3>
       {error && (
-        <div className="mb-4 p-3 text-sm text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-sm">
+        <div className="mb-4 p-3 text-sm text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 border border-black dark:border-white rounded-sm">
           {error}
         </div>
       )}
 
       <div className="space-y-6">
-        <section className="p-4 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
+        <section className="p-4 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
           <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">Staff type</h4>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-3">Who are you onboarding?</p>
           <div className="flex gap-4">
@@ -762,8 +762,8 @@ function EditModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-neutral-900 rounded-sm  w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-neutral-200 dark:border-neutral-800">
-        <div className="p-6 border-b border-neutral-200 dark:border-neutral-800 shrink-0">
+      <div className="bg-white dark:bg-neutral-900 rounded-sm  w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-black dark:border-white">
+        <div className="p-6 border-b border-black dark:border-white shrink-0">
           <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Edit Employee</h3>
         </div>
         {loading ? (
@@ -771,12 +771,12 @@ function EditModal({
         ) : (
           <form onSubmit={handleSubmit} className="p-6 overflow-y-auto max-h-[calc(90vh-180px)] space-y-6">
             {error && (
-              <div className="p-3 text-sm text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-sm">
+              <div className="p-3 text-sm text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 border border-black dark:border-white rounded-sm">
                 {error}
               </div>
             )}
 
-            <section className="p-4 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
+            <section className="p-4 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
               <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">Staff type</h4>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -946,7 +946,7 @@ function EditModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-2.5 font-medium rounded-sm border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                className="flex-1 py-2.5 font-medium rounded-sm border border-black dark:border-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
               >
                 Cancel
               </button>
@@ -1003,7 +1003,7 @@ function StatusModal({
   if (validNext.length === 0) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-        <div className="bg-white dark:bg-neutral-900 rounded-sm  w-full max-w-sm p-6 border border-neutral-200 dark:border-neutral-800">
+        <div className="bg-white dark:bg-neutral-900 rounded-sm  w-full max-w-sm p-6 border border-black dark:border-white">
           <p className="text-neutral-600 dark:text-neutral-400">No status transitions available for offboarded employees.</p>
           <button onClick={onClose} className="mt-4 btn-primary w-full">Close</button>
         </div>
@@ -1013,8 +1013,8 @@ function StatusModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-neutral-900 rounded-sm  w-full max-w-sm border border-neutral-200 dark:border-neutral-800">
-        <div className="p-6 border-b border-neutral-200 dark:border-neutral-800">
+      <div className="bg-white dark:bg-neutral-900 rounded-sm  w-full max-w-sm border border-black dark:border-white">
+        <div className="p-6 border-b border-black dark:border-white">
           <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Change Status</h3>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
             {employee.firstName} {employee.lastName}
@@ -1022,7 +1022,7 @@ function StatusModal({
         </div>
         <form onSubmit={handleSubmit} className="p-6">
           {error && (
-            <div className="mb-4 p-3 text-sm text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-sm">
+            <div className="mb-4 p-3 text-sm text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 border border-black dark:border-white rounded-sm">
               {error}
             </div>
           )}
@@ -1046,7 +1046,7 @@ function StatusModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 font-medium rounded-sm border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+              className="flex-1 py-2.5 font-medium rounded-sm border border-black dark:border-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
             >
               Cancel
             </button>
