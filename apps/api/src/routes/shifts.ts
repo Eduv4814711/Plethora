@@ -214,6 +214,7 @@ async function handleBulkCreateSite(
 
 export async function shiftsRoutes(app: FastifyInstance) {
   const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"])];
+  const verifyProtect = [authMiddleware, requireRole(["admin", "hr_payroll"])];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
@@ -670,6 +671,44 @@ export async function shiftsRoutes(app: FastifyInstance) {
       entityType: "shift",
       entityId: id,
       metadata: { newStatus: parsed.data.status },
+    });
+
+    return reply.send(shift);
+  });
+
+  app.post("/:id/verify", { preHandler: verifyProtect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const companyId = request.user!.companyId;
+    const existing = await prisma.shift.findFirst({
+      where: { id, companyId },
+    });
+
+    if (!existing) {
+      return reply.code(404).send({ error: "Shift not found" });
+    }
+
+    if (!canTransitionShift(existing.status, "verified")) {
+      return reply.code(400).send({
+        error: "Cannot verify",
+        message: `Shift must be completed to verify. Current status: ${existing.status}`,
+      });
+    }
+
+    const shift = await prisma.shift.update({
+      where: { id },
+      data: { status: "verified" },
+      include: {
+        employee: { select: { id: true, firstName: true, lastName: true } },
+        post: { include: { site: true } },
+      },
+    });
+
+    await createAuditLog({
+      userId: request.user!.sub,
+      companyId,
+      action: "shift.verify",
+      entityType: "shift",
+      entityId: id,
     });
 
     return reply.send(shift);

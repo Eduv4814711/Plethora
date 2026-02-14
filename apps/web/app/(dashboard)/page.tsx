@@ -125,7 +125,18 @@ export default function DashboardPage() {
                 {data.alerts.map((a, i) => (
                   <li key={i} className="flex items-center gap-2 text-neutral-700 dark:text-neutral-300">
                     <span className="w-1.5 h-1.5 border border-black dark:border-white" />
-                    {a.message} {a.count != null && `(${a.count})`}
+                    {a.type === "missed_shifts" ? (
+                      <Link
+                        href="/attendance?mode=missed"
+                        className="underline underline-offset-2 hover:text-neutral-900 dark:hover:text-neutral-100"
+                      >
+                        {a.message} {a.count != null && `(${a.count})`}
+                      </Link>
+                    ) : (
+                      <>
+                        {a.message} {a.count != null && `(${a.count})`}
+                      </>
+                    )}
                   </li>
                 ))}
               </ul>

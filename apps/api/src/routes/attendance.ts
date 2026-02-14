@@ -26,8 +26,10 @@ export async function attendanceRoutes(app: FastifyInstance) {
     const limit = Math.min(Number(q.limit) || 50, 100);
     const offset = Number(q.offset) || 0;
 
+    const siteId = q.siteId;
     const shiftWhere: Record<string, unknown> = { companyId: user.companyId };
     if (employeeId) shiftWhere.employeeId = employeeId;
+    if (siteId) shiftWhere.post = { siteId };
     if (startDate) shiftWhere.startTime = { gte: new Date(startDate) };
     if (endDate) shiftWhere.endTime = { lte: new Date(endDate) };
 
@@ -53,6 +55,41 @@ export async function attendanceRoutes(app: FastifyInstance) {
     ]);
 
     return reply.send({ data: attendances, total, limit, offset });
+  });
+
+  app.get("/missed", { preHandler: protect }, async (request, reply) => {
+    const user = request.user!;
+    const q = request.query as Record<string, string | undefined>;
+    const employeeId = q.employeeId;
+    const siteId = q.siteId;
+    const limit = Math.min(Number(q.limit) || 50, 100);
+    const offset = Number(q.offset) || 0;
+
+    const now = new Date();
+    const where: Record<string, unknown> = {
+      companyId: user.companyId,
+      status: { in: ["assigned", "created"] },
+      endTime: { lt: now },
+      attendances: { none: { clockIn: { not: null } } },
+    };
+    if (employeeId) where.employeeId = employeeId;
+    if (siteId) where.post = { siteId };
+
+    const [missedShifts, total] = await Promise.all([
+      prisma.shift.findMany({
+        where,
+        include: {
+          employee: { select: { id: true, firstName: true, lastName: true } },
+          post: { include: { site: true } },
+        },
+        take: limit,
+        skip: offset,
+        orderBy: { endTime: "desc" },
+      }),
+      prisma.shift.count({ where }),
+    ]);
+
+    return reply.send({ data: missedShifts, total, limit, offset });
   });
 
   app.post("/clock-in", { preHandler: protect }, async (request, reply) => {
