@@ -15,7 +15,18 @@ export type BulkPattern =
   | "4_on_4_off"
   | "5_on_2_off"
   | "6_on_3_off"
-  | "custom";
+  | "3_on_3_off"
+  | "custom"
+  | "custom_builder";
+
+export type CustomBlockType = "day" | "night" | "off";
+
+export interface CustomBlock {
+  type: CustomBlockType;
+  count: number;
+}
+
+export type DualPatternResult = { date: Date; shiftType: "day" | "night" }[];
 
 /**
  * Compute which dates in [startDate, endDate] should get shifts based on pattern.
@@ -100,6 +111,71 @@ export function computeDatesFromPattern(
   }
 
   return dates;
+}
+
+/**
+ * Compute dates with shift type (day/night) for dual-type patterns.
+ * Returns array of { date, shiftType } for each day that gets a shift.
+ * Used for 3_on_3_off (3D3N3O) and custom_builder.
+ */
+export function computeDatesFromPatternDual(
+  startDate: Date,
+  endDate: Date,
+  pattern: "3_on_3_off" | "custom_builder",
+  customBlocks?: CustomBlock[]
+): DualPatternResult {
+  const result: DualPatternResult = [];
+  let d = new Date(startDate);
+  d.setHours(0, 0, 0, 0);
+  const end = new Date(endDate);
+  end.setHours(23, 59, 59, 999);
+
+  if (pattern === "3_on_3_off") {
+    const blocks: CustomBlock[] = [
+      { type: "day", count: 3 },
+      { type: "night", count: 3 },
+      { type: "off", count: 3 },
+    ];
+    result.push(...iterateBlocks(d, end, blocks));
+    return result;
+  }
+
+  if (pattern === "custom_builder" && customBlocks && customBlocks.length > 0) {
+    const hasWork = customBlocks.some((b) => b.type === "day" || b.type === "night");
+    if (!hasWork) return result;
+    result.push(...iterateBlocks(d, end, customBlocks));
+    return result;
+  }
+
+  return result;
+}
+
+function iterateBlocks(
+  start: Date,
+  end: Date,
+  blocks: CustomBlock[]
+): DualPatternResult {
+  const result: DualPatternResult = [];
+  let d = new Date(start);
+  let blockIdx = 0;
+  let dayInBlock = 0;
+
+  while (d <= end) {
+    const block = blocks[blockIdx];
+    if (block.type === "day") {
+      result.push({ date: new Date(d), shiftType: "day" });
+    } else if (block.type === "night") {
+      result.push({ date: new Date(d), shiftType: "night" });
+    }
+    dayInBlock++;
+    if (dayInBlock >= block.count) {
+      dayInBlock = 0;
+      blockIdx = (blockIdx + 1) % blocks.length;
+    }
+    d = addDays(d, 1);
+  }
+
+  return result;
 }
 
 const ROSTERABLE_STATUSES = ["active", "training", "hired"] as const;

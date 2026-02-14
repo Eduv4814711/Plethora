@@ -12,7 +12,12 @@ type BulkPattern =
   | "4_on_4_off"
   | "5_on_2_off"
   | "6_on_3_off"
-  | "custom";
+  | "3_on_3_off"
+  | "custom"
+  | "custom_builder";
+
+import { CustomPatternBuilder } from "./CustomPatternBuilder";
+import type { CustomBlock } from "./CustomPatternBuilder";
 
 const PATTERN_LABELS: Record<BulkPattern, string> = {
   all_days: "All days",
@@ -21,7 +26,9 @@ const PATTERN_LABELS: Record<BulkPattern, string> = {
   "4_on_4_off": "4 on 4 off",
   "5_on_2_off": "5 on 2 off",
   "6_on_3_off": "6 on 3 off",
+  "3_on_3_off": "3 days, 3 nights, 3 off",
   custom: "Custom days",
+  custom_builder: "Build custom pattern",
 };
 
 interface Shift {
@@ -72,11 +79,118 @@ export default function RosteringPage() {
   const [dateRange, setDateRange] = useState<"week" | "month">("week");
   const [viewOffset, setViewOffset] = useState(0);
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
-  const [pattern, setPattern] = useState<BulkPattern>("all_days");
+  const [pattern, setPattern] = useState<BulkPattern>("3_on_3_off");
   const [customDays, setCustomDays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [customBlocks, setCustomBlocks] = useState<CustomBlock[]>([
+    { type: "day", count: 3 },
+    { type: "night", count: 3 },
+    { type: "off", count: 3 },
+  ]);
   const [draggedGuard, setDraggedGuard] = useState<Employee | null>(null);
   const [dragOverPostId, setDragOverPostId] = useState<string | null>(null);
+  const [dragOverSiteId, setDragOverSiteId] = useState<string | null>(null);
+
+  const isDualPattern = pattern === "3_on_3_off" || pattern === "custom_builder";
   const [bulkError, setBulkError] = useState<string | null>(null);
+  const [deletingShiftId, setDeletingShiftId] = useState<string | null>(null);
+  const [showResetMenu, setShowResetMenu] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  const rosteredEmployees = useMemo(() => {
+    const seen = new Set<string>();
+    const list: { id: string; firstName: string; lastName: string }[] = [];
+    for (const s of shifts) {
+      if (!seen.has(s.employee.id)) {
+        seen.add(s.employee.id);
+        list.push(s.employee);
+      }
+    }
+    return list.sort((a, b) => (a.lastName + a.firstName).localeCompare(b.lastName + b.firstName));
+  }, [shifts]);
+
+  const handleResetPerson = async (employeeId: string) => {
+    if (!token) return;
+    const emp = rosteredEmployees.find((e) => e.id === employeeId);
+    const name = emp ? `${emp.firstName} ${emp.lastName}` : "this person";
+    if (!confirm(`Reset all rostered shifts for ${name} in the visible period?`)) return;
+    setShowResetMenu(false);
+    setResetting(true);
+    setBulkError(null);
+    try {
+      const { startDate, endDate } = getDateRangeParams();
+      const body: Record<string, unknown> = {
+        startDate: startDate.slice(0, 10),
+        endDate: endDate.slice(0, 10),
+        employeeId,
+      };
+      if (selectedSiteId) body.siteId = selectedSiteId;
+      const res = await authFetch("/shifts/reset", token, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || data?.error || "Failed to reset");
+      await refresh();
+      if (data.deleted > 0) {
+        setBulkError(`Removed ${data.deleted} shift(s) for ${name}.`);
+        setTimeout(() => setBulkError(null), 4000);
+      }
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : "Failed to reset");
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const handleResetAll = async () => {
+    if (!token) return;
+    if (!confirm("Reset the entire roster for the visible period? This will remove all created/assigned shifts.")) return;
+    setShowResetMenu(false);
+    setResetting(true);
+    setBulkError(null);
+    try {
+      const { startDate, endDate } = getDateRangeParams();
+      const body: Record<string, unknown> = {
+        startDate: startDate.slice(0, 10),
+        endDate: endDate.slice(0, 10),
+      };
+      if (selectedSiteId) body.siteId = selectedSiteId;
+      const res = await authFetch("/shifts/reset", token, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || data?.error || "Failed to reset");
+      await refresh();
+      if (data.deleted > 0) {
+        setBulkError(`Removed ${data.deleted} shift(s) from roster.`);
+        setTimeout(() => setBulkError(null), 4000);
+      }
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : "Failed to reset");
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const handleRemoveShift = async (shift: Shift) => {
+    if (!token) return;
+    const name = `${shift.employee.firstName} ${shift.employee.lastName}`;
+    if (!confirm(`Remove ${name} from this shift?`)) return;
+    setDeletingShiftId(shift.id);
+    try {
+      const res = await authFetch(`/shifts/${shift.id}`, token, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.message || "Failed to remove shift");
+      }
+      await refresh();
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : "Failed to remove shift");
+    } finally {
+      setDeletingShiftId(null);
+    }
+  };
 
   const getDateRangeParams = () => {
     const now = new Date();
@@ -194,10 +308,41 @@ export default function RosteringPage() {
     }
   };
 
-  const refresh = () => {
+  const handleBulkDropOnSite = async (employeeId: string, siteId: string) => {
     if (!token) return;
+    setBulkError(null);
     const { startDate, endDate } = getDateRangeParams();
-    Promise.all([
+    const body: Record<string, unknown> = {
+      employeeId,
+      siteId,
+      startDate: startDate.slice(0, 10),
+      endDate: endDate.slice(0, 10),
+      pattern,
+    };
+    if (pattern === "custom_builder") body.customBlocks = customBlocks;
+    try {
+      const res = await authFetch("/shifts/bulk", token, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || "Failed to create shifts");
+      refresh();
+      if (data.deleted > 0 && data.created > 0) {
+        setBulkError(`Replaced ${data.deleted} shift(s), created ${data.created} for the period.`);
+        setTimeout(() => setBulkError(null), 4000);
+      } else if (data.errors?.length) {
+        setBulkError(`Created ${data.created}. Some skipped: ${data.errors.slice(0, 3).join("; ")}`);
+      }
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : "Failed to create shifts");
+    }
+  };
+
+  const refresh = () => {
+    if (!token) return Promise.resolve();
+    const { startDate, endDate } = getDateRangeParams();
+    return Promise.all([
       authFetch(`/shifts?startDate=${startDate}&endDate=${endDate}`, token).then((r) => r.json()),
       authFetch("/employees?limit=100", token).then((r) => r.json()),
       authFetch("/sites?limit=100", token).then((r) => r.json()),
@@ -238,8 +383,8 @@ export default function RosteringPage() {
 
   return (
     <div className="flex h-[calc(100vh-8rem)] min-h-[500px] w-full">
-      <aside className="w-64 shrink-0 border-r border-black dark:border-white bg-white dark:bg-neutral-900 flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-black dark:border-white">
+      <aside className="w-64 shrink-0 border border-black dark:border-white bg-white dark:bg-neutral-900 flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-black dark:border-white shrink-0">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-3">
             Drag guard to post
           </h3>
@@ -287,44 +432,79 @@ export default function RosteringPage() {
               ))}
             </div>
           )}
+          {pattern === "custom_builder" && (
+            <CustomPatternBuilder blocks={customBlocks} onChange={setCustomBlocks} />
+          )}
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {selectedSiteId && (
             <>
-              <div>
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
-                  Posts (drop zone)
-                </h4>
-                <div className="space-y-2">
-                  {postsForSelectedSite.map((post) => (
-                    <div
-                      key={post.id}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = "move";
-                        setDragOverPostId(post.id);
-                      }}
-                      onDragLeave={() => setDragOverPostId(null)}
-                      onDrop={async (e) => {
-                        e.preventDefault();
-                        setDragOverPostId(null);
-                        const guardId = e.dataTransfer.getData("guardId");
-                        if (guardId) {
-                          await handleBulkDrop(guardId, post.id);
-                        }
-                        setDraggedGuard(null);
-                      }}
-                      className={`min-h-[48px] p-3 rounded-sm border-2 border-dashed flex items-center justify-center text-sm font-medium transition-colors ${
-                        dragOverPostId === post.id
-                          ? "border-black dark:border-white bg-neutral-100 dark:bg-neutral-800"
-                          : "border-neutral-300 dark:border-neutral-600 text-neutral-600 dark:text-neutral-400"
-                      }`}
-                    >
-                      {post.name} {post.shiftType ? `(${post.shiftType})` : ""}
-                    </div>
-                  ))}
+              {isDualPattern ? (
+                <div>
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
+                    Drop guard on site
+                  </h4>
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      setDragOverSiteId(selectedSiteId);
+                    }}
+                    onDragLeave={() => setDragOverSiteId(null)}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      setDragOverSiteId(null);
+                      const guardId = e.dataTransfer.getData("guardId");
+                      if (guardId) {
+                        await handleBulkDropOnSite(guardId, selectedSiteId);
+                      }
+                      setDraggedGuard(null);
+                    }}
+                    className={`min-h-[56px] p-3 rounded-sm border-2 border-dashed flex items-center justify-center text-sm font-medium transition-colors ${
+                      dragOverSiteId === selectedSiteId
+                        ? "border-black dark:border-white bg-neutral-100 dark:bg-neutral-800"
+                        : "border-neutral-300 dark:border-neutral-600 text-neutral-600 dark:text-neutral-400"
+                    }`}
+                  >
+                    {sites.find((s) => s.id === selectedSiteId)?.name ?? "Site"}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
+                    Posts (drop zone)
+                  </h4>
+                  <div className="space-y-2">
+                    {postsForSelectedSite.map((post) => (
+                      <div
+                        key={post.id}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                          setDragOverPostId(post.id);
+                        }}
+                        onDragLeave={() => setDragOverPostId(null)}
+                        onDrop={async (e) => {
+                          e.preventDefault();
+                          setDragOverPostId(null);
+                          const guardId = e.dataTransfer.getData("guardId");
+                          if (guardId) {
+                            await handleBulkDrop(guardId, post.id);
+                          }
+                          setDraggedGuard(null);
+                        }}
+                        className={`min-h-[48px] p-3 rounded-sm border-2 border-dashed flex items-center justify-center text-sm font-medium transition-colors ${
+                          dragOverPostId === post.id
+                            ? "border-black dark:border-white bg-neutral-100 dark:bg-neutral-800"
+                            : "border-neutral-300 dark:border-neutral-600 text-neutral-600 dark:text-neutral-400"
+                        }`}
+                      >
+                        {post.name} {post.shiftType ? `(${post.shiftType})` : ""}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div>
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
                   Available guards
@@ -416,6 +596,55 @@ export default function RosteringPage() {
               </svg>
               {showForm ? "Cancel" : "Add Shift"}
             </button>
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowResetMenu((v) => !v)}
+                disabled={resetting}
+                className="h-11 px-5 py-2.5 text-sm font-semibold rounded-sm border-2 border-black dark:border-white bg-transparent dark:bg-transparent text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Reset
+              </button>
+              {showResetMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    aria-hidden
+                    onClick={() => setShowResetMenu(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-1 z-20 min-w-[200px] py-1 rounded-sm border-2 border-black dark:border-white bg-white dark:bg-neutral-900 shadow-lg">
+                    <button
+                      type="button"
+                      onClick={handleResetAll}
+                      className="w-full px-4 py-2.5 text-left text-sm font-medium text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                    >
+                      Reset whole roster
+                    </button>
+                    {rosteredEmployees.length > 0 && (
+                      <>
+                        <div className="border-t border-neutral-200 dark:border-neutral-700 my-1" />
+                        <div className="px-3 py-1.5 text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                          Reset for person
+                        </div>
+                        {rosteredEmployees.map((e) => (
+                          <button
+                            key={e.id}
+                            type="button"
+                            onClick={() => handleResetPerson(e.id)}
+                            className="w-full px-4 py-2 text-left text-sm text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                          >
+                            {e.firstName} {e.lastName}
+                          </button>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -437,7 +666,7 @@ export default function RosteringPage() {
       </div>
 
       <div className="flex-1 min-h-0 px-6 pb-6 flex flex-col overflow-hidden">
-        <div className="flex-1 min-h-0 rounded-sm bg-white dark:bg-neutral-900 relative shadow-[0_4px_24px_-4px_rgba(15,23,42,0.08),0_8px_16px_-8px_rgba(15,23,42,0.04)] dark:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.3)] ring-1 ring-neutral-200/60 dark:ring-neutral-700/50 overflow-y-auto overflow-x-hidden">
+        <div className="flex-1 min-h-0 rounded-sm bg-white dark:bg-neutral-900 relative border border-black dark:border-white overflow-y-auto overflow-x-hidden">
           <div className="grid min-h-full w-full" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((wd, i) => (
               <div
@@ -506,12 +735,20 @@ export default function RosteringPage() {
                       dayShifts.map((s) => (
                         <div
                           key={s.id}
-                          onClick={(e) => e.stopPropagation()}
-                          className={`px-3 py-2 rounded-sm text-xs font-medium shrink-0 transition-all duration-200 hover:scale-[1.02] ${
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveShift(s);
+                          }}
+                          className={`px-3 py-2 rounded-sm text-xs font-medium shrink-0 transition-all duration-200 hover:scale-[1.02] cursor-pointer group/guard ${
+                            deletingShiftId === s.id
+                              ? "opacity-60 pointer-events-none"
+                              : "hover:ring-2 hover:ring-rose-500/50 dark:hover:ring-rose-400/50"
+                          } ${
                             s.post.shiftType === "night"
                               ? "bg-gradient-to-br from-neutral-500/15 to-neutral-600/10 dark:from-neutral-500/20 dark:to-neutral-600/10 text-neutral-800 dark:text-neutral-200 border border-black dark:border-white"
                               : "bg-gradient-to-br from-neutral-500/15 to-orange-500/10 dark:from-neutral-500/20 dark:to-orange-600/10 text-neutral-900 dark:text-neutral-100 border border-black dark:border-white"
                           }`}
+                          title="Click to remove from roster"
                         >
                           <span className="truncate block">{s.employee.firstName} {s.employee.lastName}</span>
                         </div>

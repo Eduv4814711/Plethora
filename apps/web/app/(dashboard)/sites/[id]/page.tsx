@@ -396,11 +396,11 @@ export default function SiteDetailPage() {
             )}
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 rounded-sm border border-black dark:border-white p-1 bg-neutral-50/50 dark:bg-neutral-800/30">
+            <div className="flex items-center gap-0.5 rounded-sm border border-black dark:border-white p-1 bg-neutral-50/50 dark:bg-neutral-800/30">
               <button
                 type="button"
                 onClick={() => setViewOffset((o) => o - 1)}
-                className="p-2 rounded-lg hover:bg-white dark:hover:bg-neutral-700 transition-colors"
+                className="p-2 rounded-sm hover:bg-white dark:hover:bg-neutral-700 transition-colors"
                 aria-label="Previous"
               >
                 <svg className="w-4 h-4 text-neutral-600 dark:text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -410,14 +410,14 @@ export default function SiteDetailPage() {
               <button
                 type="button"
                 onClick={() => setViewOffset(0)}
-                className="px-3 py-2 text-sm font-medium rounded-lg hover:bg-white dark:hover:bg-neutral-700 transition-colors text-neutral-700 dark:text-neutral-300"
+                className="px-3 py-2 text-sm font-medium rounded-sm hover:bg-white dark:hover:bg-neutral-700 transition-colors text-neutral-700 dark:text-neutral-300"
               >
                 Today
               </button>
               <button
                 type="button"
                 onClick={() => setViewOffset((o) => o + 1)}
-                className="p-2 rounded-lg hover:bg-white dark:hover:bg-neutral-700 transition-colors"
+                className="p-2 rounded-sm hover:bg-white dark:hover:bg-neutral-700 transition-colors"
                 aria-label="Next"
               >
                 <svg className="w-4 h-4 text-neutral-600 dark:text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -428,7 +428,7 @@ export default function SiteDetailPage() {
             <select
               value={dateRange}
               onChange={(e) => { setDateRange(e.target.value as "week" | "month"); setViewOffset(0); }}
-              className="input-modern py-2 text-sm rounded-sm"
+              className="input-modern w-auto min-w-[7rem] py-2.5 px-3 text-sm rounded-sm"
             >
               <option value="week">Week</option>
               <option value="month">Month</option>
@@ -436,7 +436,7 @@ export default function SiteDetailPage() {
             {canManage && site.posts.length > 0 && (
               <button
                 onClick={() => { setSelectedDayForShift(null); setShowAddShift(!showAddShift); }}
-                className="btn-primary flex items-center gap-2 text-sm py-2 rounded-sm"
+                className="btn-primary flex items-center gap-2 text-sm shrink-0"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -461,7 +461,7 @@ export default function SiteDetailPage() {
           />
         )}
 
-        <div className="rounded-sm overflow-hidden bg-white dark:bg-neutral-900 relative shadow-[0_4px_24px_-4px_rgba(15,23,42,0.08),0_8px_16px_-8px_rgba(15,23,42,0.04)] dark:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.3)] ring-1 ring-neutral-200/60 dark:ring-neutral-700/50">
+        <div className="rounded-sm overflow-hidden bg-white dark:bg-neutral-900 relative border border-black dark:border-white shadow-[0_4px_24px_-4px_rgba(15,23,42,0.08),0_8px_16px_-8px_rgba(15,23,42,0.04)] dark:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.3)]">
           <div className="grid min-h-[400px] w-full" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((wd, i) => (
               <div

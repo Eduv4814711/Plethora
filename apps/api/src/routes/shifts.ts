@@ -8,6 +8,7 @@ import {
   validateShiftAssignment,
   RosteringValidationError,
   computeDatesFromPattern,
+  computeDatesFromPatternDual,
   type BulkPattern,
 } from "../services/rostering.service.js";
 import { createAuditLog } from "../lib/audit.js";
@@ -31,22 +32,185 @@ const transitionSchema = z.object({
   status: z.enum(["created", "assigned", "active", "completed", "verified"]),
 });
 
-const bulkCreateSchema = z.object({
-  employeeId: z.string().min(1),
-  postId: z.string().min(1),
-  startDate: z.string(),
-  endDate: z.string(),
-  pattern: z.enum([
-    "all_days",
-    "weekdays",
-    "2_on_2_off",
-    "4_on_4_off",
-    "5_on_2_off",
-    "6_on_3_off",
-    "custom",
-  ]),
-  customDays: z.array(z.number().min(0).max(6)).optional(),
+const customBlockSchema = z.object({
+  type: z.enum(["day", "night", "off"]),
+  count: z.number().min(1).max(14),
 });
+
+const bulkCreateSchema = z
+  .object({
+    employeeId: z.string().min(1),
+    postId: z.string().min(1).optional(),
+    siteId: z.string().min(1).optional(),
+    startDate: z.string(),
+    endDate: z.string(),
+    pattern: z.enum([
+      "all_days",
+      "weekdays",
+      "2_on_2_off",
+      "4_on_4_off",
+      "5_on_2_off",
+      "6_on_3_off",
+      "3_on_3_off",
+      "custom",
+      "custom_builder",
+    ]),
+    customDays: z.array(z.number().min(0).max(6)).optional(),
+    customBlocks: z.array(customBlockSchema).optional(),
+  })
+  .superRefine((data, ctx) => {
+    const hasPost = !!data.postId;
+    const hasSite = !!data.siteId;
+    if (hasPost === hasSite) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Exactly one of postId or siteId is required",
+        path: ["postId"],
+      });
+      return;
+    }
+    if (hasSite && data.pattern !== "3_on_3_off" && data.pattern !== "custom_builder") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "siteId requires pattern 3_on_3_off or custom_builder",
+        path: ["siteId"],
+      });
+    }
+    if (data.pattern === "custom_builder" && hasSite && (!data.customBlocks || data.customBlocks.length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "customBlocks required when pattern is custom_builder",
+        path: ["customBlocks"],
+      });
+    }
+  });
+
+async function handleBulkCreateSite(
+  request: { user?: { sub: string } },
+  reply: { code: (n: number) => { send: (o: object) => unknown } },
+  companyId: string,
+  employeeId: string,
+  siteId: string,
+  start: Date,
+  end: Date,
+  pattern: "3_on_3_off" | "custom_builder",
+  customBlocks?: { type: "day" | "night" | "off"; count: number }[]
+) {
+  const site = await prisma.site.findFirst({
+    where: { id: siteId, companyId },
+    include: { posts: true },
+  });
+
+  if (!site) {
+    return reply.code(404).send({ error: "Site not found" });
+  }
+
+  const dayPost = site.posts.find((p) => (p.shiftType ?? "day") === "day");
+  const nightPost = site.posts.find((p) => p.shiftType === "night");
+
+  if (!dayPost) {
+    return reply.code(400).send({
+      error: "Site has no day post",
+      message: "Add a day post to use this pattern.",
+    });
+  }
+  if (!nightPost) {
+    return reply.code(400).send({
+      error: "Site has no night post",
+      message: "Add a night post to use this pattern.",
+    });
+  }
+
+  const dualDates = computeDatesFromPatternDual(start, end, pattern, customBlocks);
+
+  if (pattern === "custom_builder" && dualDates.length === 0) {
+    return reply.code(400).send({
+      error: "Pattern must include at least one day or night block",
+      message: "Pattern must include at least one day or night block.",
+    });
+  }
+
+  const deleted = await prisma.shift.deleteMany({
+    where: {
+      companyId,
+      employeeId,
+      postId: { in: [dayPost.id, nightPost.id] },
+      status: { in: ["created", "assigned"] },
+      startTime: { lt: end },
+      endTime: { gt: start },
+    },
+  });
+
+  let created = 0;
+  const errors: string[] = [];
+
+  for (const { date, shiftType } of dualDates) {
+    const post = shiftType === "day" ? dayPost : nightPost;
+    let shiftStart: Date;
+    let shiftEnd: Date;
+
+    if (shiftType === "night") {
+      shiftStart = new Date(date);
+      shiftStart.setHours(18, 0, 0, 0);
+      shiftEnd = new Date(date);
+      shiftEnd.setDate(shiftEnd.getDate() + 1);
+      shiftEnd.setHours(6, 0, 0, 0);
+    } else {
+      shiftStart = new Date(date);
+      shiftStart.setHours(6, 0, 0, 0);
+      shiftEnd = new Date(date);
+      shiftEnd.setHours(18, 0, 0, 0);
+    }
+
+    try {
+      await validateShiftAssignment({
+        companyId,
+        employeeId,
+        postId: post.id,
+        startTime: shiftStart,
+        endTime: shiftEnd,
+        allowRosterable: true,
+      });
+    } catch (err) {
+      if (err instanceof RosteringValidationError) {
+        errors.push(`${date.toISOString().slice(0, 10)}: ${err.message}`);
+        continue;
+      }
+      throw err;
+    }
+
+    await prisma.shift.create({
+      data: {
+        companyId,
+        employeeId,
+        postId: post.id,
+        startTime: shiftStart,
+        endTime: shiftEnd,
+        status: "assigned",
+      },
+    });
+
+    created++;
+  }
+
+  if (created > 0) {
+    await createAuditLog({
+      userId: request.user!.sub,
+      companyId,
+      action: "shift.bulk_create",
+      entityType: "shift",
+      entityId: undefined,
+      metadata: { employeeId, siteId, created, pattern },
+    });
+  }
+
+  return reply.code(201).send({
+    deleted: deleted.count,
+    created,
+    skipped: dualDates.length - created,
+    errors: errors.length > 0 ? errors : undefined,
+  });
+}
 
 export async function shiftsRoutes(app: FastifyInstance) {
   const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"])];
@@ -157,6 +321,62 @@ export async function shiftsRoutes(app: FastifyInstance) {
     return reply.code(201).send(shift);
   });
 
+  const resetSchema = z.object({
+    startDate: z.string(),
+    endDate: z.string(),
+    employeeId: z.string().optional(),
+    siteId: z.string().optional(),
+  });
+
+  app.post("/reset", { preHandler: protect }, async (request, reply) => {
+    const parsed = resetSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const companyId = request.user!.companyId;
+    const { startDate, endDate, employeeId, siteId } = parsed.data;
+
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    if (start > end) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "endDate must be on or after startDate",
+      });
+    }
+
+    const where = {
+      companyId,
+      status: { in: ["created", "assigned"] as ("created" | "assigned")[] },
+      startTime: { lt: end },
+      endTime: { gt: start },
+      ...(employeeId && { employeeId }),
+      ...(siteId && { post: { siteId } }),
+    };
+
+    const deleted = await prisma.shift.deleteMany({ where });
+
+    if (deleted.count > 0) {
+      await createAuditLog({
+        userId: request.user!.sub,
+        companyId,
+        action: "shift.reset",
+        entityType: "shift",
+        entityId: undefined,
+        metadata: { startDate, endDate, employeeId, siteId, deleted: deleted.count },
+      });
+    }
+
+    return reply.send({ deleted: deleted.count });
+  });
+
   app.post("/bulk", { preHandler: protect }, async (request, reply) => {
     const parsed = bulkCreateSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -167,7 +387,7 @@ export async function shiftsRoutes(app: FastifyInstance) {
     }
 
     const companyId = request.user!.companyId;
-    const { employeeId, postId, startDate, endDate, pattern, customDays } = parsed.data;
+    const { employeeId, postId, siteId, startDate, endDate, pattern, customDays, customBlocks } = parsed.data;
 
     const start = new Date(startDate);
     start.setHours(0, 0, 0, 0);
@@ -185,6 +405,27 @@ export async function shiftsRoutes(app: FastifyInstance) {
       return reply.code(400).send({
         error: "Validation error",
         message: "customDays required when pattern is custom",
+      });
+    }
+
+    if (siteId) {
+      return await handleBulkCreateSite(
+        request,
+        reply,
+        companyId,
+        employeeId,
+        siteId,
+        start,
+        end,
+        pattern as "3_on_3_off" | "custom_builder",
+        customBlocks
+      );
+    }
+
+    if (!postId) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "postId or siteId is required",
       });
     }
 
