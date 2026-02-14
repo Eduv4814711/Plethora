@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 
@@ -221,11 +221,15 @@ function SiteCard({
   onDelete: () => void;
   onRefresh: () => void;
 }) {
+  const router = useRouter();
   const address = site.physicalAddress || site.location;
   const guards = site.assignedGuards?.map((a) => a.employee) ?? [];
 
   return (
-    <div className="group p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-lg hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200">
+    <div
+      onClick={() => router.push(`/sites/${site.id}`)}
+      className="group p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-lg hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200 cursor-pointer"
+    >
       <div className="flex justify-between items-start gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-3">
@@ -265,7 +269,7 @@ function SiteCard({
                 {site.contactPersonName}
                 {site.contactPersonName && site.contactPersonPhone && " • "}
                 {site.contactPersonPhone && (
-                  <a href={`tel:${site.contactPersonPhone}`} className="text-indigo-600 dark:text-indigo-400 hover:underline">
+                  <a href={`tel:${site.contactPersonPhone}`} onClick={(e) => e.stopPropagation()} className="text-indigo-600 dark:text-indigo-400 hover:underline">
                     {site.contactPersonPhone}
                   </a>
                 )}
@@ -281,9 +285,9 @@ function SiteCard({
         </div>
 
         {isAdmin && (
-          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
             <button
-              onClick={onEdit}
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
               className="p-2 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
               title="Edit site"
             >
@@ -292,7 +296,7 @@ function SiteCard({
               </svg>
             </button>
             <button
-              onClick={onDelete}
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
               className="p-2 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
               title="Delete site"
             >
@@ -324,17 +328,9 @@ function SiteCard({
       )}
 
       <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
-        <div className="flex items-center justify-between mb-2">
-          <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-            Posts
-          </h4>
-          <Link
-            href={`/sites/${site.id}`}
-            className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
-          >
-            Manage posts →
-          </Link>
-        </div>
+        <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+          Posts
+        </h4>
         <ul className="space-y-1.5">
           {site.posts.map((post) => (
             <li
@@ -357,7 +353,9 @@ function SiteCard({
           ))}
         </ul>
         {isAdmin && (
-          <PostForm siteId={site.id} token={token} onSuccess={onRefresh} />
+          <div onClick={(e) => e.stopPropagation()}>
+            <PostForm siteId={site.id} token={token} onSuccess={onRefresh} />
+          </div>
         )}
       </div>
     </div>

@@ -144,12 +144,67 @@ export async function uploadLogo(token: string, file: File): Promise<{ url: stri
 }
 
 export function authFetch(url: string, token: string, init?: RequestInit) {
+  const hasBody = init?.body !== undefined && init?.body !== null && init?.body !== "";
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    ...(hasBody ? { "Content-Type": "application/json" } : {}),
+    ...(init?.headers as Record<string, string> | undefined),
+  };
   return fetch(`${API_BASE}${url}`, {
     ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
+    headers,
   });
+}
+
+// User management (admin only)
+export type UserRole = "admin" | "operations_manager" | "hr_payroll" | "supervisor";
+
+export interface UserListItem {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  companyId: string;
+  createdAt: string;
+}
+
+export async function listUsers(token: string): Promise<{ data: UserListItem[]; total: number }> {
+  const res = await authFetch("/users", token);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to fetch users");
+  }
+  return res.json();
+}
+
+export async function createUser(
+  token: string,
+  data: { name: string; email: string; password: string; role: UserRole }
+): Promise<UserListItem> {
+  const res = await authFetch("/users", token, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const msg = err?.message?.email?.[0] ?? err?.message ?? "Failed to create user";
+    throw new Error(typeof msg === "string" ? msg : "Failed to create user");
+  }
+  return res.json();
+}
+
+export async function updateUser(
+  token: string,
+  id: string,
+  data: Partial<{ name: string; email: string; password: string; role: UserRole }>
+): Promise<UserListItem> {
+  const res = await authFetch(`/users/${id}`, token, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to update user");
+  }
+  return res.json();
 }

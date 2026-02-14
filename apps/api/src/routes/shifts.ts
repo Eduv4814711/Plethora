@@ -284,4 +284,36 @@ export async function shiftsRoutes(app: FastifyInstance) {
 
     return reply.send(shift);
   });
+
+  app.delete("/:id", { preHandler: protect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const companyId = request.user!.companyId;
+
+    const existing = await prisma.shift.findFirst({
+      where: { id, companyId },
+    });
+
+    if (!existing) {
+      return reply.code(404).send({ error: "Shift not found" });
+    }
+
+    if (existing.status !== "created" && existing.status !== "assigned") {
+      return reply.code(400).send({
+        error: "Cannot delete",
+        message: "Only created or assigned shifts can be deleted",
+      });
+    }
+
+    await prisma.shift.delete({ where: { id } });
+
+    await createAuditLog({
+      userId: request.user!.sub,
+      companyId,
+      action: "shift.delete",
+      entityType: "shift",
+      entityId: id,
+    });
+
+    return reply.code(204).send();
+  });
 }

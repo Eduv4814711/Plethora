@@ -1,26 +1,34 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
-import { uploadLogo } from "@/lib/api";
+import { uploadLogo, listUsers, createUser, updateUser, type UserListItem, type UserRole } from "@/lib/api";
 import { clsx } from "clsx";
 
-type Tab = "profile" | "business" | "settings" | "theme";
+type Tab = "profile" | "business" | "settings" | "theme" | "users";
+
+const ROLE_LABELS: Record<UserRole, string> = {
+  admin: "Admin",
+  operations_manager: "Operations Manager",
+  hr_payroll: "HR & Payroll",
+  supervisor: "Supervisor",
+};
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { settings, loading, update, error } = useSettings();
   const isAdmin = user?.role === "admin";
   const [activeTab, setActiveTab] = useState<Tab>("profile");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const tabs: { id: Tab; label: string }[] = [
+  const tabs: { id: Tab; label: string; adminOnly?: boolean }[] = [
     { id: "profile", label: "Profile" },
     { id: "business", label: "Business Details" },
     { id: "settings", label: "Business Settings" },
     { id: "theme", label: "Theme" },
+    { id: "users", label: "Users", adminOnly: true },
   ];
 
   if (loading && !settings) {
@@ -50,7 +58,9 @@ export default function SettingsPage() {
       )}
 
       <div className="flex gap-1 mb-6 border-b border-slate-200 dark:border-slate-700 overflow-x-auto">
-        {tabs.map((tab) => (
+        {tabs
+          .filter((t) => !t.adminOnly || isAdmin)
+          .map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
@@ -127,6 +137,9 @@ export default function SettingsPage() {
               }
             }}
           />
+        )}
+        {activeTab === "users" && isAdmin && token && (
+          <UsersSection token={token} currentUserId={user?.id} />
         )}
       </div>
     </div>
@@ -622,6 +635,230 @@ function ThemeSection({
           </button>
         )}
       </form>
+    </div>
+  );
+}
+
+function UsersSection({ token, currentUserId }: { token: string; currentUserId?: string }) {
+  const [users, setUsers] = useState<UserListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addForm, setAddForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    role: "supervisor" as UserRole,
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [editingRole, setEditingRole] = useState<string | null>(null);
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      setError(null);
+      const { data } = await listUsers(token);
+      setUsers(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load users");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  const handleAddUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      await createUser(token, addForm);
+      setAddForm({ name: "", email: "", password: "", role: "supervisor" });
+      setShowAddForm(false);
+      await fetchUsers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add user");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRoleChange = async (userId: string, role: UserRole) => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await updateUser(token, userId, { role });
+      setEditingRole(null);
+      await fetchUsers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update role");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[120px]">
+        <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 animate-pulse" />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h3 className="font-semibold text-slate-800 dark:text-white mb-4">Users & Roles</h3>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+        Add users to your organization and assign role-based permissions. Only admins can manage users.
+      </p>
+
+      {error && (
+        <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800/50">
+          {error}
+        </div>
+      )}
+
+      <div className="space-y-4 max-w-2xl">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            {users.length} user{users.length !== 1 ? "s" : ""}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowAddForm((v) => !v)}
+            className="btn-primary text-sm"
+          >
+            {showAddForm ? "Cancel" : "Add User"}
+          </button>
+        </div>
+
+        {showAddForm && (
+          <form
+            onSubmit={handleAddUser}
+            className="p-4 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 space-y-4"
+          >
+            <h4 className="font-medium text-slate-800 dark:text-white">New User</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Name</label>
+                <input
+                  type="text"
+                  value={addForm.name}
+                  onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))}
+                  className="input-modern"
+                  placeholder="Jane Doe"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={addForm.email}
+                  onChange={(e) => setAddForm((f) => ({ ...f, email: e.target.value }))}
+                  className="input-modern"
+                  placeholder="jane@company.com"
+                  required
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Password</label>
+                <input
+                  type="password"
+                  value={addForm.password}
+                  onChange={(e) => setAddForm((f) => ({ ...f, password: e.target.value }))}
+                  className="input-modern"
+                  placeholder="Min 8 characters"
+                  minLength={8}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Role</label>
+                <select
+                  value={addForm.role}
+                  onChange={(e) => setAddForm((f) => ({ ...f, role: e.target.value as UserRole }))}
+                  className="input-modern"
+                >
+                  {(Object.keys(ROLE_LABELS) as UserRole[]).map((r) => (
+                    <option key={r} value={r}>
+                      {ROLE_LABELS[r]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <button type="submit" disabled={submitting} className="btn-primary">
+              {submitting ? "Adding..." : "Add User"}
+            </button>
+          </form>
+        )}
+
+        <div className="rounded-xl border border-slate-200 dark:border-slate-600 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-600">
+                <th className="text-left py-3 px-4 font-medium text-slate-700 dark:text-slate-300">Name</th>
+                <th className="text-left py-3 px-4 font-medium text-slate-700 dark:text-slate-300">Email</th>
+                <th className="text-left py-3 px-4 font-medium text-slate-700 dark:text-slate-300">Role</th>
+                <th className="w-24" />
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr
+                  key={u.id}
+                  className="border-b border-slate-100 dark:border-slate-700/50 last:border-0 hover:bg-slate-50/50 dark:hover:bg-slate-800/30"
+                >
+                  <td className="py-3 px-4 text-slate-900 dark:text-white">
+                    {u.name}
+                    {u.id === currentUserId && (
+                      <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">(you)</span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{u.email}</td>
+                  <td className="py-3 px-4">
+                    {editingRole === u.id ? (
+                      <select
+                        defaultValue={u.role}
+                        onChange={(e) => handleRoleChange(u.id, e.target.value as UserRole)}
+                        onBlur={() => setEditingRole(null)}
+                        autoFocus
+                        className="input-modern py-1.5 text-sm"
+                      >
+                        {(Object.keys(ROLE_LABELS) as UserRole[]).map((r) => (
+                          <option key={r} value={r}>
+                            {ROLE_LABELS[r]}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-slate-700 dark:text-slate-300">
+                        {ROLE_LABELS[u.role]}
+                        {u.id !== currentUserId && (
+                          <button
+                            type="button"
+                            onClick={() => setEditingRole(u.id)}
+                            disabled={submitting}
+                            className="ml-2 text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4" />
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
