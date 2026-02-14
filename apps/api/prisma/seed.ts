@@ -129,6 +129,9 @@ async function main() {
 
     const overtimeRate = g.hourlyRate * 1.5;
 
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'seed.ts:guardCreate',message:'Seed guard dates before create',data:{idNumber:g.idNumber,dateOfBirth:dateOfBirth?.toISOString?.(),commencement:commencement?.toISOString?.()},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+    // #endregion
     await prisma.employee.create({
       data: {
         companyId: company.id,
@@ -167,6 +170,9 @@ async function main() {
     const commencement = new Date(commencementBase);
     commencement.setMonth(commencement.getMonth() + SECURITY_GUARDS.length + i);
 
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'seed.ts:officeCreate',message:'Seed office dates before create',data:{idNumber:o.idNumber,dateOfBirth:dateOfBirth?.toISOString?.(),commencement:commencement?.toISOString?.()},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+    // #endregion
     await prisma.employee.create({
       data: {
         companyId: company.id,
