@@ -126,7 +126,13 @@ export async function employeesRoutes(app: FastifyInstance) {
 
   app.post("/", { preHandler: protect }, async (request, reply) => {
     // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'employees.ts:POST',message:'Raw body date fields',data:{dateOfBirth:(request.body as Record<string,unknown>)?.dateOfBirth,commencementDate:(request.body as Record<string,unknown>)?.commencementDate,psiraExpiryDate:(request.body as Record<string,unknown>)?.psiraExpiryDate},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+    const body = request.body as Record<string, unknown>;
+    try {
+      const fs = await import("fs");
+      const path = await import("path");
+      const logPath = path.join(process.cwd(), "..", "..", ".cursor", "debug.log");
+      fs.appendFileSync(logPath, JSON.stringify({location:"employees.ts:POST:raw",message:"Raw body date fields",data:{dateOfBirth:body?.dateOfBirth,commencementDate:body?.commencementDate,psiraExpiryDate:body?.psiraExpiryDate},timestamp:Date.now(),hypothesisId:"H1"}) + "\n");
+    } catch (_) {}
     // #endregion
     const parsed = createEmployeeSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -140,7 +146,15 @@ export async function employeesRoutes(app: FastifyInstance) {
 
     const d = parsed.data;
     // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'employees.ts:beforePrisma',message:'Parsed date values before Prisma',data:{dateOfBirth:d.dateOfBirth,dobISO:d.dateOfBirth?.toISOString?.(),commencementDate:d.commencementDate,commISO:d.commencementDate?.toISOString?.(),psiraExpiryDate:d.psiraExpiryDate,psiraISO:d.psiraExpiryDate?.toISOString?.()},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+    try {
+      const fs = await import("fs");
+      const path = await import("path");
+      const logPath = path.join(process.cwd(), "..", "..", ".cursor", "debug.log");
+      const dobYear = d.dateOfBirth?.getFullYear?.();
+      const commYear = d.commencementDate?.getFullYear?.();
+      const psiraYear = d.psiraExpiryDate?.getFullYear?.();
+      fs.appendFileSync(logPath, JSON.stringify({location:"employees.ts:POST:parsed",message:"Parsed dates before Prisma",data:{dobISO:d.dateOfBirth?.toISOString?.(),dobYear,commISO:d.commencementDate?.toISOString?.(),commYear,psiraISO:d.psiraExpiryDate?.toISOString?.(),psiraYear},timestamp:Date.now(),hypothesisId:"H2"}) + "\n");
+    } catch (_) {}
     // #endregion
     const employee = await prisma.employee.create({
       data: {
@@ -220,7 +234,12 @@ export async function employeesRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     // #region agent log
     const body = request.body as Record<string, unknown>;
-    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'employees.ts:PUT:rawBody',message:'Update raw body date fields',data:{dateOfBirth:body?.dateOfBirth,commencementDate:body?.commencementDate,psiraExpiryDate:body?.psiraExpiryDate},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+    try {
+      const fs = await import("fs");
+      const path = await import("path");
+      const logPath = path.join(process.cwd(), "..", "..", ".cursor", "debug.log");
+      fs.appendFileSync(logPath, JSON.stringify({location:"employees.ts:PUT:raw",message:"Update raw body date fields",data:{dateOfBirth:body?.dateOfBirth,commencementDate:body?.commencementDate,psiraExpiryDate:body?.psiraExpiryDate},timestamp:Date.now(),hypothesisId:"H1"}) + "\n");
+    } catch (_) {}
     // #endregion
     const parsed = updateEmployeeSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -241,7 +260,14 @@ export async function employeesRoutes(app: FastifyInstance) {
 
     // #region agent log
     const d = parsed.data;
-    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'employees.ts:PUT:beforePrisma',message:'Update parsed dates before Prisma',data:{dateOfBirth:d.dateOfBirth,dobISO:d.dateOfBirth?.toISOString?.(),commencementDate:d.commencementDate,psiraExpiryDate:d.psiraExpiryDate,psiraISO:d.psiraExpiryDate?.toISOString?.()},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+    try {
+      const fs = await import("fs");
+      const path = await import("path");
+      const logPath = path.join(process.cwd(), "..", "..", ".cursor", "debug.log");
+      const dobYear = d.dateOfBirth?.getFullYear?.();
+      const psiraYear = d.psiraExpiryDate?.getFullYear?.();
+      fs.appendFileSync(logPath, JSON.stringify({location:"employees.ts:PUT:parsed",message:"Update parsed dates before Prisma",data:{dobISO:d.dateOfBirth?.toISOString?.(),dobYear,commISO:d.commencementDate?.toISOString?.(),psiraISO:d.psiraExpiryDate?.toISOString?.(),psiraYear},timestamp:Date.now(),hypothesisId:"H2"}) + "\n");
+    } catch (_) {}
     // #endregion
     const employee = await prisma.employee.update({
       where: { id },

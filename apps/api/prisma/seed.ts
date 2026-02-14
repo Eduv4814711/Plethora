@@ -129,8 +129,26 @@ async function main() {
 
     const overtimeRate = g.hourlyRate * 1.5;
 
+    const labourFields = baseLabourLawFields(g.idNumber, gender, dateOfBirth, commencement, "Security Officer");
+    const psiraFields = basePsiraFields(
+          `1234${String(i + 1).padStart(3, "0")}`,
+          g.securityServiceType,
+          `${g.firstName} Family`,
+          `+2783${String(1234567 + i).slice(-7)}`,
+          `${g.lastName} Relative`,
+          `+2784${String(3334444 + i).slice(-7)}`
+        );
     // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'seed.ts:guardCreate',message:'Seed guard dates before create',data:{idNumber:g.idNumber,dateOfBirth:dateOfBirth?.toISOString?.(),commencement:commencement?.toISOString?.()},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+    try {
+      const fs = await import("fs");
+      const pathMod = await import("path");
+      const logPath = pathMod.join(process.cwd(), "..", "..", ".cursor", "debug.log");
+      const dobYear = dateOfBirth?.getFullYear?.();
+      const commYear = commencement?.getFullYear?.();
+      const psiraYear = (psiraFields.psiraExpiryDate as Date)?.getFullYear?.();
+      const entry = JSON.stringify({location:"seed.ts:guardCreate",message:"Seed guard dates - ALL date fields",data:{idNumber:g.idNumber,dobISO:dateOfBirth?.toISOString?.(),dobYear,commISO:commencement?.toISOString?.(),commYear,psiraISO:(psiraFields.psiraExpiryDate as Date)?.toISOString?.(),psiraYear,labourDOBYear:(labourFields.dateOfBirth as Date)?.getFullYear?.()},timestamp:Date.now(),hypothesisId:"H4"}) + "\n";
+      fs.appendFileSync(logPath, entry);
+    } catch (_) {}
     // #endregion
     await prisma.employee.create({
       data: {
@@ -144,15 +162,8 @@ async function main() {
         employeeType: "security",
         hourlyRate: g.hourlyRate,
         overtimeRate,
-        ...baseLabourLawFields(g.idNumber, gender, dateOfBirth, commencement, "Security Officer"),
-        ...basePsiraFields(
-          `1234${String(i + 1).padStart(3, "0")}`,
-          g.securityServiceType,
-          `${g.firstName} Family`,
-          `+2783${String(1234567 + i).slice(-7)}`,
-          `${g.lastName} Relative`,
-          `+2784${String(3334444 + i).slice(-7)}`
-        ),
+        ...labourFields,
+        ...psiraFields,
       },
     });
     created++;
@@ -171,7 +182,13 @@ async function main() {
     commencement.setMonth(commencement.getMonth() + SECURITY_GUARDS.length + i);
 
     // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'seed.ts:officeCreate',message:'Seed office dates before create',data:{idNumber:o.idNumber,dateOfBirth:dateOfBirth?.toISOString?.(),commencement:commencement?.toISOString?.()},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+    try {
+      const fs = await import("fs");
+      const pathMod = await import("path");
+      const logPath = pathMod.join(process.cwd(), "..", "..", ".cursor", "debug.log");
+      const entry = JSON.stringify({location:"seed.ts:officeCreate",message:"Seed office dates before create",data:{idNumber:o.idNumber,dateOfBirth:dateOfBirth?.toISOString?.(),commencement:commencement?.toISOString?.()},timestamp:Date.now(),hypothesisId:"H4"}) + "\n";
+      fs.appendFileSync(logPath, entry);
+    } catch (_) {}
     // #endregion
     await prisma.employee.create({
       data: {
