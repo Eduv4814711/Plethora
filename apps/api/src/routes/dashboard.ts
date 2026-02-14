@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { PayrollStatus } from "@prisma/client";
 import { authMiddleware } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 
@@ -54,7 +55,8 @@ export async function dashboardRoutes(app: FastifyInstance) {
       ]);
 
     const payrollByStatus = payrollStatus.reduce(
-      (acc, p) => ({ ...acc, [p.status]: p._count.id }),
+      (acc: Record<string, number>, p: { status: PayrollStatus; _count: { id: number } }) =>
+        ({ ...acc, [p.status]: p._count.id }),
       {} as Record<string, number>
     );
 

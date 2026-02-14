@@ -21,17 +21,54 @@ export async function login(
   password: string,
   companyId?: string
 ): Promise<LoginResponse> {
-  const res = await fetch(`${API_BASE}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password, companyId }),
-  });
+  const url = `${API_BASE}/auth/login`;
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:login:beforeFetch',message:'Login attempt',data:{url,emailLen:email?.length,hasPassword:!!password},hypothesisId:'H1,H4,H5',timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, companyId }),
+    });
+  } catch (fetchErr) {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:login:fetchCatch',message:'Fetch failed',data:{errMsg:fetchErr instanceof Error?fetchErr.message:String(fetchErr)},hypothesisId:'H1',timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    const msg = fetchErr instanceof Error ? fetchErr.message : "Network error";
+    throw new Error(
+      msg.includes("fetch") || msg.includes("Failed") || msg.includes("Network")
+        ? "Cannot connect to server. Ensure the API is running (npm run dev:api)."
+        : msg
+    );
+  }
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:login:afterFetch',message:'Response received',data:{status:res.status,ok:res.ok},hypothesisId:'H2,H3,H4,H5',timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    const message = err?.message || err?.error || (res.status === 401 ? "Invalid email or password" : "Login failed");
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:login:resNotOk',message:'Error response body',data:{status:res.status,errKeys:Object.keys(err),message:err?.message},hypothesisId:'H2,H3',timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    const message =
+      err?.message ||
+      err?.error ||
+      (res.status === 401 ? "Invalid email or password" : "Login failed");
     throw new Error(message);
   }
-  return res.json();
+  try {
+    const data = await res.json();
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:login:parseSuccess',message:'Login success',data:{hasUser:!!data?.user},hypothesisId:'H5',timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    return data;
+  } catch (parseErr) {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:login:parseCatch',message:'JSON parse failed',data:{errMsg:parseErr instanceof Error?parseErr.message:String(parseErr)},hypothesisId:'H4,H5',timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    throw new Error("Invalid response from server");
+  }
 }
 
 export async function refreshToken(refreshToken: string): Promise<LoginResponse> {

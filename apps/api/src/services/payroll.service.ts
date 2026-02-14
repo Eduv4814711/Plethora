@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { canTransitionPayroll } from "../lib/state-machines.js";
 import type { PayrollStatus } from "@prisma/client";
@@ -88,7 +89,7 @@ export async function calculatePayroll(
     }
   }
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.payrollItem.deleteMany({
       where: { payrollRunId },
     });

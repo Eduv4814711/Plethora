@@ -119,7 +119,7 @@ export async function employeesRoutes(app: FastifyInstance) {
       prisma.employee.count({ where }),
     ]);
 
-    const data = employees.map((e) => {
+    const data = employees.map((e: (typeof employees)[number]) => {
       const emp = e as typeof e & { shifts?: Array<{ post?: { site?: { name?: string }; name?: string } }> };
       return {
         ...e,

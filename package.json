@@ -2,11 +2,14 @@
   "name": "plethora",
   "version": "1.0.0",
   "private": true,
-  "workspaces": ["apps/*"],
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
     "dev": "npm run dev:web",
     "dev:api": "npm run dev --workspace=api",
     "dev:web": "npm run dev --workspace=web",
+    "dev:all": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
     "build": "npm run build --workspaces",
     "db:generate": "npm run db:generate --workspace=api",
     "db:migrate": "npm run db:migrate --workspace=api",
@@ -14,6 +17,7 @@
     "db:seed": "npm run db:seed --workspace=api"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "typescript": "^5.3.3"
   },
   "engines": {

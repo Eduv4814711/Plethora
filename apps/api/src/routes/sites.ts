@@ -149,7 +149,7 @@ export async function sitesRoutes(app: FastifyInstance) {
         },
       });
       await prisma.siteAssignment.createMany({
-        data: guards.map((g) => ({ siteId: site.id, employeeId: g.id })),
+        data: guards.map((g: { id: string }) => ({ siteId: site.id, employeeId: g.id })),
         skipDuplicates: true,
       });
     }
@@ -286,7 +286,7 @@ export async function sitesRoutes(app: FastifyInstance) {
           },
         });
         await prisma.siteAssignment.createMany({
-          data: guards.map((g) => ({ siteId: id, employeeId: g.id })),
+          data: guards.map((g: { id: string }) => ({ siteId: id, employeeId: g.id })),
           skipDuplicates: true,
         });
       }

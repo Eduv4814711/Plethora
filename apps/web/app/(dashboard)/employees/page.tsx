@@ -79,6 +79,7 @@ export default function EmployeesPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [statusChangeId, setStatusChangeId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const fetchEmployees = () => {
     if (!token) return;
@@ -115,11 +116,11 @@ export default function EmployeesPage() {
             Manage your workforce
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="input-modern py-2.5 w-auto min-w-[140px]"
+            className="h-11 min-w-[160px] pl-4 pr-9 py-2.5 text-sm font-medium rounded-sm border-2 border-black dark:border-white bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 outline-none cursor-pointer"
           >
             <option value="all">All statuses</option>
             <option value="applicant">Applicant</option>
@@ -129,7 +130,10 @@ export default function EmployeesPage() {
             <option value="suspended">Suspended</option>
             <option value="offboarded">Offboarded</option>
           </select>
-          <button onClick={() => setShowForm(!showForm)} className="btn-primary">
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="h-11 px-5 py-2.5 text-sm font-semibold rounded-sm border-2 border-black dark:border-white bg-transparent dark:bg-transparent text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 shrink-0"
+          >
             {showForm ? "Cancel" : "Add Employee"}
           </button>
         </div>
@@ -175,7 +179,10 @@ export default function EmployeesPage() {
         {employees.map((emp) => (
           <div
             key={emp.id}
-            className="p-5 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white hover:bg-neutral-50 dark:hover:bg-neutral-800/30 transition-colors"
+            onClick={() => setExpandedId((prev) => (prev === emp.id ? null : emp.id))}
+            className={`p-5 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white hover:bg-neutral-50 dark:hover:bg-neutral-800/30 transition-colors cursor-pointer ${
+              expandedId === emp.id ? "ring-2 ring-offset-2 ring-neutral-400 dark:ring-neutral-500" : ""
+            }`}
           >
             <div className="flex justify-between items-start">
               <div>
@@ -190,6 +197,9 @@ export default function EmployeesPage() {
                   {emp.status}
                 </span>
               </div>
+              <span className="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
+                {expandedId === emp.id ? "−" : "+"}
+              </span>
             </div>
             {emp.employeeType && (
               <span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
@@ -216,7 +226,43 @@ export default function EmployeesPage() {
                 {[emp.currentSite, emp.currentPost].filter(Boolean).join(" - ")}
               </p>
             )}
-            <div className="mt-4 flex gap-3">
+
+            {expandedId === emp.id && (
+              <div className="mt-4 pt-4 border-t border-black dark:border-white space-y-3 text-sm">
+                {emp.email && (
+                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Email</span><br />{emp.email}</p>
+                )}
+                {emp.dateOfBirth && (
+                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">DOB</span><br />{toDateStr(emp.dateOfBirth)}</p>
+                )}
+                {emp.gender && (
+                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Gender</span><br />{emp.gender === "M" ? "Male" : "Female"}</p>
+                )}
+                {emp.physicalAddress && (
+                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Address</span><br />{emp.physicalAddress}{emp.postalCode ? ` ${emp.postalCode}` : ""}</p>
+                )}
+                {emp.commencementDate && (
+                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Started</span><br />{toDateStr(emp.commencementDate)}</p>
+                )}
+                {(emp.bankName || emp.bankAccountNumber) && (
+                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Bank</span><br />{emp.bankName || "—"}{emp.bankAccountNumber ? ` •••• ${String(emp.bankAccountNumber).slice(-4)}` : ""}</p>
+                )}
+                {(emp.nextOfKin1Name || emp.nextOfKin1Phone) && (
+                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Next of kin</span><br />{emp.nextOfKin1Name || "—"} {emp.nextOfKin1Phone ? `• ${emp.nextOfKin1Phone}` : ""}</p>
+                )}
+                {emp.psiraExpiryDate && (
+                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">PSIRA expiry</span><br />{toDateStr(emp.psiraExpiryDate)}</p>
+                )}
+                {emp.occupation && (
+                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Occupation</span><br />{emp.occupation}</p>
+                )}
+                {emp.placeOfWork && (
+                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Place of work</span><br />{emp.placeOfWork}</p>
+                )}
+              </div>
+            )}
+
+            <div className="mt-4 flex gap-3" onClick={(e) => e.stopPropagation()}>
               <button
                 onClick={() => setEditingId(emp.id)}
                 className="text-xs font-medium uppercase tracking-wider text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border-b border-black dark:border-white pb-0.5"

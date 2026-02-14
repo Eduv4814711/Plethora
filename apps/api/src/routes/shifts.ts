@@ -4,8 +4,12 @@ import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
 import { canTransitionShift } from "../lib/state-machines.js";
 import { prisma } from "../lib/prisma.js";
-import { validateShiftAssignment } from "../services/rostering.service.js";
-import { RosteringValidationError } from "../services/rostering.service.js";
+import {
+  validateShiftAssignment,
+  RosteringValidationError,
+  computeDatesFromPattern,
+  type BulkPattern,
+} from "../services/rostering.service.js";
 import { createAuditLog } from "../lib/audit.js";
 
 const createShiftSchema = z.object({
@@ -25,6 +29,23 @@ const updateShiftSchema = z.object({
 
 const transitionSchema = z.object({
   status: z.enum(["created", "assigned", "active", "completed", "verified"]),
+});
+
+const bulkCreateSchema = z.object({
+  employeeId: z.string().min(1),
+  postId: z.string().min(1),
+  startDate: z.string(),
+  endDate: z.string(),
+  pattern: z.enum([
+    "all_days",
+    "weekdays",
+    "2_on_2_off",
+    "4_on_4_off",
+    "5_on_2_off",
+    "6_on_3_off",
+    "custom",
+  ]),
+  customDays: z.array(z.number().min(0).max(6)).optional(),
 });
 
 export async function shiftsRoutes(app: FastifyInstance) {
@@ -134,6 +155,134 @@ export async function shiftsRoutes(app: FastifyInstance) {
     });
 
     return reply.code(201).send(shift);
+  });
+
+  app.post("/bulk", { preHandler: protect }, async (request, reply) => {
+    const parsed = bulkCreateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const companyId = request.user!.companyId;
+    const { employeeId, postId, startDate, endDate, pattern, customDays } = parsed.data;
+
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    if (start > end) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "endDate must be on or after startDate",
+      });
+    }
+
+    if (pattern === "custom" && (!customDays || customDays.length === 0)) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "customDays required when pattern is custom",
+      });
+    }
+
+    const post = await prisma.post.findFirst({
+      where: { id: postId },
+      include: { site: true },
+    });
+
+    if (!post) {
+      return reply.code(404).send({ error: "Post not found" });
+    }
+
+    if (post.site.companyId !== companyId) {
+      return reply.code(404).send({ error: "Post not found" });
+    }
+
+    const shiftType = post.shiftType ?? "day";
+    const dates = computeDatesFromPattern(start, end, pattern as BulkPattern, customDays);
+
+    const deleted = await prisma.shift.deleteMany({
+      where: {
+        companyId,
+        employeeId,
+        postId,
+        status: { in: ["created", "assigned"] },
+        startTime: { lt: end },
+        endTime: { gt: start },
+      },
+    });
+
+    let created = 0;
+    const errors: string[] = [];
+
+    for (const date of dates) {
+      let shiftStart: Date;
+      let shiftEnd: Date;
+
+      if (shiftType === "night") {
+        shiftStart = new Date(date);
+        shiftStart.setHours(18, 0, 0, 0);
+        shiftEnd = new Date(date);
+        shiftEnd.setDate(shiftEnd.getDate() + 1);
+        shiftEnd.setHours(6, 0, 0, 0);
+      } else {
+        shiftStart = new Date(date);
+        shiftStart.setHours(6, 0, 0, 0);
+        shiftEnd = new Date(date);
+        shiftEnd.setHours(18, 0, 0, 0);
+      }
+
+      try {
+        await validateShiftAssignment({
+          companyId,
+          employeeId,
+          postId,
+          startTime: shiftStart,
+          endTime: shiftEnd,
+          allowRosterable: true,
+        });
+      } catch (err) {
+        if (err instanceof RosteringValidationError) {
+          errors.push(`${date.toISOString().slice(0, 10)}: ${err.message}`);
+          continue;
+        }
+        throw err;
+      }
+
+      await prisma.shift.create({
+        data: {
+          companyId,
+          employeeId,
+          postId,
+          startTime: shiftStart,
+          endTime: shiftEnd,
+          status: "assigned",
+        },
+      });
+
+      created++;
+    }
+
+    if (created > 0) {
+      await createAuditLog({
+        userId: request.user!.sub,
+        companyId,
+        action: "shift.bulk_create",
+        entityType: "shift",
+        entityId: undefined,
+        metadata: { employeeId, postId, created, pattern, startDate, endDate },
+      });
+    }
+
+    return reply.code(201).send({
+      deleted: deleted.count,
+      created,
+      skipped: dates.length - created,
+      errors: errors.length > 0 ? errors : undefined,
+    });
   });
 
   app.get("/:id", { preHandler: protect }, async (request, reply) => {
