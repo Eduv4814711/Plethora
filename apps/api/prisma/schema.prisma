@@ -64,11 +64,12 @@ enum UserRole {
 }
 
 model Employee {
-  id        String   @id @default(cuid())
-  companyId String
-  firstName String
-  lastName  String
-  idNumber  String?
+  id             String   @id @default(cuid())
+  companyId      String
+  employeeNumber String   // Unique per company - required for every employee
+  firstName      String
+  lastName       String
+  idNumber       String?
   phone     String?
   status    EmployeeStatus
   hourlyRate Decimal? @db.Decimal(10, 2)   // For Guards
@@ -123,6 +124,7 @@ model Employee {
   siteAssignments SiteAssignment[]
   postAssignments PostAssignment[]
 
+  @@unique([companyId, employeeNumber])
   @@index([companyId])
   @@index([status])
   @@index([employeeType])

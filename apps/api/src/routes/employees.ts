@@ -23,7 +23,22 @@ function sanitizeDate(v: string | undefined): Date | undefined {
 const optionalDate = z.string().optional().transform(sanitizeDate);
 const optionalBool = z.boolean().optional();
 
+/** Generate next unique employee number for a company (e.g. EMP-0001, EMP-0002) */
+async function generateNextEmployeeNumber(companyId: string): Promise<string> {
+  const employees = await prisma.employee.findMany({
+    where: { companyId },
+    select: { employeeNumber: true },
+  });
+  let maxNum = 0;
+  for (const e of employees) {
+    const m = e.employeeNumber.match(/^EMP-(\d+)$/i);
+    if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+  }
+  return `EMP-${String(maxNum + 1).padStart(4, "0")}`;
+}
+
 const createEmployeeSchema = z.object({
+  employeeNumber: z.string().min(1).max(50).optional(), // Optional: auto-generated if not provided
   firstName: z.string().min(1),
   lastName: z.string().min(1),
   idNumber: optionalString,
@@ -71,6 +86,7 @@ const createEmployeeSchema = z.object({
 });
 
 const updateEmployeeSchema = createEmployeeSchema.partial().extend({
+  employeeNumber: z.string().min(1).max(50).optional(),
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
   status: z.enum(["applicant", "hired", "training", "active", "suspended", "offboarded"]).optional(),
@@ -144,9 +160,26 @@ export async function employeesRoutes(app: FastifyInstance) {
     const companyId = request.user!.companyId;
 
     const d = parsed.data;
+    let employeeNumber: string;
+    if (d.employeeNumber?.trim()) {
+      const existing = await prisma.employee.findFirst({
+        where: { companyId, employeeNumber: d.employeeNumber.trim() },
+      });
+      if (existing) {
+        return reply.code(400).send({
+          error: "Validation error",
+          message: { employeeNumber: ["Employee ID already exists. Each employee must have a unique employee ID."] },
+        });
+      }
+      employeeNumber = d.employeeNumber.trim();
+    } else {
+      employeeNumber = await generateNextEmployeeNumber(companyId);
+    }
+
     const employee = await prisma.employee.create({
       data: {
         companyId,
+        employeeNumber,
         firstName: d.firstName,
         lastName: d.lastName,
         idNumber: d.idNumber,
@@ -237,9 +270,30 @@ export async function employeesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Employee not found" });
     }
 
+    const updateData = { ...parsed.data };
+    if (updateData.employeeNumber !== undefined) {
+      const trimmed = updateData.employeeNumber.trim();
+      if (!trimmed) {
+        return reply.code(400).send({
+          error: "Validation error",
+          message: { employeeNumber: ["Employee ID is required and must be unique."] },
+        });
+      }
+      const duplicate = await prisma.employee.findFirst({
+        where: { companyId, employeeNumber: trimmed, id: { not: id } },
+      });
+      if (duplicate) {
+        return reply.code(400).send({
+          error: "Validation error",
+          message: { employeeNumber: ["Employee ID already exists. Each employee must have a unique employee ID."] },
+        });
+      }
+      updateData.employeeNumber = trimmed;
+    }
+
     const employee = await prisma.employee.update({
       where: { id },
-      data: parsed.data,
+      data: updateData,
     });
 
     await createAuditLog({

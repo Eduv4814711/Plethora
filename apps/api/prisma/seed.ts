@@ -136,10 +136,12 @@ async function main() {
     commencement.setMonth(commencement.getMonth() + i);
 
     const overtimeRate = g.hourlyRate * 1.5;
+    const employeeNumber = `EMP-${String(i + 1).padStart(4, "0")}`;
 
     await prisma.employee.create({
       data: {
         companyId: company.id,
+        employeeNumber,
         firstName: g.firstName,
         lastName: g.lastName,
         idNumber: g.idNumber,
@@ -175,9 +177,12 @@ async function main() {
     const commencement = new Date(commencementBase);
     commencement.setMonth(commencement.getMonth() + SECURITY_GUARDS.length + i);
 
+    const employeeNumber = `EMP-${String(SECURITY_GUARDS.length + i + 1).padStart(4, "0")}`;
+
     await prisma.employee.create({
       data: {
         companyId: company.id,
+        employeeNumber,
         firstName: o.firstName,
         lastName: o.lastName,
         idNumber: o.idNumber,

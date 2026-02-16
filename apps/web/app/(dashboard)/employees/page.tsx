@@ -6,6 +6,7 @@ import { authFetch } from "@/lib/api";
 
 interface Employee {
   id: string;
+  employeeNumber: string;
   firstName: string;
   lastName: string;
   idNumber?: string | null;
@@ -189,6 +190,9 @@ export default function EmployeesPage() {
                 <h3 className="font-semibold text-neutral-900 dark:text-neutral-100">
                   {emp.firstName} {emp.lastName}
                 </h3>
+                <p className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mt-0.5">
+                  ID: {emp.employeeNumber}
+                </p>
                 <span
                   className={`inline-block mt-1 px-2.5 py-1 rounded-sm text-[10px] font-semibold uppercase tracking-wider ${
                     statusColors[emp.status] || "border border-black dark:border-white text-neutral-700 dark:text-neutral-300"
@@ -328,6 +332,7 @@ function EmployeeForm({
   onSuccess: () => void;
 }) {
   const [employeeType, setEmployeeType] = useState<"office" | "security">("security");
+  const [employeeNumber, setEmployeeNumber] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [idNumber, setIdNumber] = useState("");
@@ -380,6 +385,7 @@ function EmployeeForm({
     setError("");
     try {
       const payload: Record<string, unknown> = {
+        employeeNumber: employeeNumber.trim() || undefined,
         firstName,
         lastName,
         idNumber: idNumber || undefined,
@@ -431,7 +437,8 @@ function EmployeeForm({
       });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.message || "Failed to create");
+        const msg = data?.message?.employeeNumber?.[0] ?? (typeof data?.message === "string" ? data.message : null) ?? "Failed to create";
+        throw new Error(msg);
       }
       onSuccess();
     } catch (err) {
@@ -489,6 +496,13 @@ function EmployeeForm({
         <section className="p-5 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
           <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-4">Basic Information</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <input
+              placeholder="Employee ID (optional – auto-generated if blank)"
+              value={employeeNumber}
+              onChange={(e) => setEmployeeNumber(e.target.value)}
+              className="input-modern"
+              title="Leave blank to auto-generate a unique ID (e.g. EMP-0001)"
+            />
             <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-modern">
               <option value="applicant">Applicant</option>
               <option value="hired">Hired</option>
@@ -655,6 +669,7 @@ function EditModal({
   onSuccess: () => void;
 }) {
   const [employeeType, setEmployeeType] = useState<"office" | "security">("security");
+  const [employeeNumber, setEmployeeNumber] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [idNumber, setIdNumber] = useState("");
@@ -706,6 +721,7 @@ function EditModal({
       .then((r) => r.json())
       .then((emp) => {
         setEmployeeType((emp.employeeType || "security") as "office" | "security");
+        setEmployeeNumber(emp.employeeNumber || "");
         setFirstName(emp.firstName);
         setLastName(emp.lastName);
         setIdNumber(emp.idNumber || "");
@@ -757,6 +773,7 @@ function EditModal({
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {
+        employeeNumber: employeeNumber.trim() || undefined,
         firstName,
         lastName,
         idNumber: idNumber || undefined,
@@ -803,10 +820,14 @@ function EditModal({
         method: "PUT",
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("Failed to update");
+      if (!res.ok) {
+        const data = await res.json();
+        const msg = data?.message?.employeeNumber?.[0] ?? data?.message ?? "Failed to update";
+        throw new Error(typeof msg === "string" ? msg : "Failed to update");
+      }
       onSuccess();
-    } catch {
-      setError("Failed to update employee");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update employee");
     } finally {
       setSaving(false);
     }
@@ -871,6 +892,14 @@ function EditModal({
             <section>
               <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">Basic Information</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <input
+                  placeholder="Employee ID *"
+                  value={employeeNumber}
+                  onChange={(e) => setEmployeeNumber(e.target.value)}
+                  required
+                  className="input-modern"
+                  title="Unique employee ID – must not match any other employee"
+                />
                 <input placeholder="First name *" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className="input-modern" />
                 <input placeholder="Last name *" value={lastName} onChange={(e) => setLastName(e.target.value)} required className="input-modern" />
                 <input
