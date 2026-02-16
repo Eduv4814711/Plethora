@@ -97,6 +97,7 @@ export interface CompanySettings {
     dateFormat?: string;
     timezone?: string;
     payrollPeriod?: "weekly" | "biweekly" | "monthly";
+    employeeIdPrefix?: string;
   } | null;
   theme?: {
     primaryColor?: string;
@@ -140,6 +141,7 @@ export async function updateSettings(
       dateFormat: string;
       timezone: string;
       payrollPeriod: "weekly" | "biweekly" | "monthly";
+      employeeIdPrefix: string;
     }>;
     theme: Partial<{
       primaryColor: string;

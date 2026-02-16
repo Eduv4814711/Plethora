@@ -23,18 +23,22 @@ function sanitizeDate(v: string | undefined): Date | undefined {
 const optionalDate = z.string().optional().transform(sanitizeDate);
 const optionalBool = z.boolean().optional();
 
-/** Generate next unique employee number for a company (e.g. EMP-0001, EMP-0002) */
-async function generateNextEmployeeNumber(companyId: string): Promise<string> {
+/** Generate next unique employee number for a company (e.g. EMP-0001, STAFF-0001) */
+async function generateNextEmployeeNumber(companyId: string, prefix: string = "EMP"): Promise<string> {
+  const safePrefix = (prefix || "EMP").replace(/[^a-zA-Z0-9_-]/g, "").trim() || "EMP";
+  const escaped = safePrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`^${escaped}-(\\d+)$`, "i");
+
   const employees = await prisma.employee.findMany({
     where: { companyId },
     select: { employeeNumber: true },
   });
   let maxNum = 0;
   for (const e of employees) {
-    const m = e.employeeNumber.match(/^EMP-(\d+)$/i);
+    const m = e.employeeNumber.match(pattern);
     if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
   }
-  return `EMP-${String(maxNum + 1).padStart(4, "0")}`;
+  return `${safePrefix}-${String(maxNum + 1).padStart(4, "0")}`;
 }
 
 const createEmployeeSchema = z.object({
@@ -173,7 +177,13 @@ export async function employeesRoutes(app: FastifyInstance) {
       }
       employeeNumber = d.employeeNumber.trim();
     } else {
-      employeeNumber = await generateNextEmployeeNumber(companyId);
+      const company = await prisma.company.findUnique({
+        where: { id: companyId },
+        select: { settings: true },
+      });
+      const settings = (company?.settings as Record<string, unknown>) ?? {};
+      const prefix = ((settings.employeeIdPrefix as string) ?? "EMP").trim() || "EMP";
+      employeeNumber = await generateNextEmployeeNumber(companyId, prefix);
     }
 
     const employee = await prisma.employee.create({

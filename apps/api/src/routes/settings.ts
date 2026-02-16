@@ -21,6 +21,7 @@ const businessSettingsSchema = z.object({
   dateFormat: z.string().optional(),
   timezone: z.string().optional(),
   payrollPeriod: z.enum(["weekly", "biweekly", "monthly"]).optional(),
+  employeeIdPrefix: z.string().max(20).optional(),
 });
 
 const themeSchema = z.object({

@@ -442,6 +442,7 @@ function BusinessSettingsSection({
     dateFormat: "DD/MM/YYYY",
     timezone: "Africa/Johannesburg",
     payrollPeriod: "monthly",
+    employeeIdPrefix: "EMP",
   });
 
   useEffect(() => {
@@ -452,6 +453,7 @@ function BusinessSettingsSection({
         dateFormat: s.dateFormat ?? "DD/MM/YYYY",
         timezone: s.timezone ?? "Africa/Johannesburg",
         payrollPeriod: s.payrollPeriod ?? "monthly",
+        employeeIdPrefix: s.employeeIdPrefix ?? "EMP",
       });
     }
   }, [settings?.settings]);
@@ -518,6 +520,21 @@ function BusinessSettingsSection({
             <option value="biweekly">Bi-weekly</option>
             <option value="monthly">Monthly</option>
           </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Employee ID Prefix</label>
+          <input
+            type="text"
+            value={form.employeeIdPrefix}
+            onChange={(e) => setForm((f) => ({ ...f, employeeIdPrefix: e.target.value.toUpperCase() }))}
+            className="input-modern"
+            placeholder="EMP"
+            maxLength={20}
+            disabled={readOnly}
+          />
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+            Prefix for auto-generated employee IDs (e.g. EMP-0001, STAFF-0001)
+          </p>
         </div>
         {saveError && (
           <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>
