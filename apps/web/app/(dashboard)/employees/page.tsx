@@ -679,6 +679,7 @@ function EditModal({
   const [monthlySalary, setMonthlySalary] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
 
   const [dateOfBirth, setDateOfBirth] = useState("");
@@ -1043,6 +1044,31 @@ function EditModal({
               </button>
               <button type="submit" disabled={saving} className="flex-1 btn-primary">
                 {saving ? "Saving..." : "Save"}
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!confirm(`Permanently delete ${firstName} ${lastName} from the system? This cannot be undone.`)) return;
+                  setError("");
+                  setDeleting(true);
+                  try {
+                    const res = await authFetch(`/employees/${employeeId}`, token, { method: "DELETE" });
+                    if (!res.ok) {
+                      const data = await res.json();
+                      throw new Error(data?.message || data?.error || "Failed to delete");
+                    }
+                    onSuccess();
+                    onClose();
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to delete employee");
+                  } finally {
+                    setDeleting(false);
+                  }
+                }}
+                disabled={deleting}
+                className="flex-1 py-2.5 font-medium rounded-sm border-2 border-red-600 dark:border-red-500 bg-red-600 dark:bg-red-600 text-white hover:bg-red-700 dark:hover:bg-red-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {deleting ? "Deleting..." : "Delete"}
               </button>
             </div>
           </form>

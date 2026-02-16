@@ -317,6 +317,34 @@ export async function employeesRoutes(app: FastifyInstance) {
     return reply.send(employee);
   });
 
+  app.delete("/:id", { preHandler: [authMiddleware, requireRole(["admin"])] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const user = request.user!;
+
+    const employee = await prisma.employee.findFirst({
+      where: { id, companyId: user.companyId },
+    });
+
+    if (!employee) {
+      return reply.code(404).send({ error: "Employee not found" });
+    }
+
+    await prisma.employee.delete({
+      where: { id },
+    });
+
+    await createAuditLog({
+      userId: user.sub,
+      companyId: user.companyId,
+      action: "employee.delete",
+      entityType: "employee",
+      entityId: id,
+      metadata: { employeeNumber: employee.employeeNumber, firstName: employee.firstName, lastName: employee.lastName },
+    });
+
+    return reply.code(204).send();
+  });
+
   app.post("/:id/status", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const parsed = statusTransitionSchema.safeParse(request.body);
