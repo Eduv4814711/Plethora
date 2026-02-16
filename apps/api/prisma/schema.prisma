@@ -66,7 +66,7 @@ enum UserRole {
 model Employee {
   id             String   @id @default(cuid())
   companyId      String
-  employeeNumber String   // Unique per company - required for every employee
+  employeeNumber String   @default(cuid()) // Unique per company - auto-generated for existing rows, can be set on create
   firstName      String
   lastName       String
   idNumber       String?
