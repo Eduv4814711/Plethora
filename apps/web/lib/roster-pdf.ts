@@ -49,6 +49,16 @@ export function generateFullRosterPDF(
     doc.setFontSize(10);
     doc.text("No shifts scheduled for this period.", 14, 40);
   } else {
+    // #region agent log
+    const sample = shifts[0];
+    if (sample) {
+      const startParsed = parseISO(sample.startTime);
+      const endParsed = parseISO(sample.endTime);
+      const startFormatted = format(startParsed, "HH:mm");
+      const endFormatted = format(endParsed, "HH:mm");
+      fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'roster-pdf.ts:generateFullRosterPDF',message:'PDF time formatting',data:{rawStartTime:sample.startTime,rawEndTime:sample.endTime,startParsedIso:startParsed.toISOString(),endParsedIso:endParsed.toISOString(),startFormatted,endFormatted,tzOffsetMin:new Date().getTimezoneOffset(),shiftsCount:shifts.length},hypothesisId:'H1,H2,H3,H4,H5',timestamp:Date.now()})}).catch(()=>{});
+    }
+    // #endregion
     const head = [["Date", "Employee", "Site", "Post", "Type", "Start", "End"]];
     const body = shifts
       .sort((a, b) => parseISO(a.startTime).getTime() - parseISO(b.startTime).getTime())
@@ -116,6 +126,14 @@ export function generateGuardRosterPDF(
     doc.setFontSize(10);
     doc.text("No shifts scheduled for this period.", 14, 40);
   } else {
+    // #region agent log
+    const sample = filteredShifts[0];
+    if (sample) {
+      const startParsed = parseISO(sample.startTime);
+      const endParsed = parseISO(sample.endTime);
+      fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'roster-pdf.ts:generateGuardRosterPDF',message:'Guard PDF time formatting',data:{rawStartTime:sample.startTime,rawEndTime:sample.endTime,startFormatted:format(startParsed,'HH:mm'),endFormatted:format(endParsed,'HH:mm'),tzOffsetMin:new Date().getTimezoneOffset()},hypothesisId:'H1,H2,H3,H4,H5',timestamp:Date.now()})}).catch(()=>{});
+    }
+    // #endregion
     const head = [["Date", "Site", "Post", "Type", "Start", "End"]];
     const body = filteredShifts.map((s) => {
       const start = parseISO(s.startTime);
