@@ -18,6 +18,7 @@ type BulkPattern =
 
 import { CustomPatternBuilder } from "./CustomPatternBuilder";
 import type { CustomBlock } from "./CustomPatternBuilder";
+import { generateFullRosterPDF, generateGuardRosterPDF } from "@/lib/roster-pdf";
 
 const PATTERN_LABELS: Record<BulkPattern, string> = {
   all_days: "All days",
@@ -95,6 +96,7 @@ export default function RosteringPage() {
   const [deletingShiftId, setDeletingShiftId] = useState<string | null>(null);
   const [showResetMenu, setShowResetMenu] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [showPdfMenu, setShowPdfMenu] = useState(false);
 
   const rosteredEmployees = useMemo(() => {
     const seen = new Set<string>();
@@ -171,6 +173,45 @@ export default function RosteringPage() {
     } finally {
       setResetting(false);
     }
+  };
+
+  const safeFilename = (s: string) => s.replace(/[^a-zA-Z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "roster";
+
+  const getGuardName = (id: string) => {
+    const emp = rosteredEmployees.find((e) => e.id === id);
+    return emp ? `${emp.firstName} ${emp.lastName}` : "Guard";
+  };
+
+  const handlePdfPreview = (employeeId?: string) => {
+    const period = periodLabel || "";
+    const blob = employeeId
+      ? generateGuardRosterPDF(shifts.filter((s) => s.employee.id === employeeId), getGuardName(employeeId), period)
+      : generateFullRosterPDF(shifts, calendarDays, period);
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (!win) {
+      handlePdfDownload(employeeId);
+    } else {
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+    setShowPdfMenu(false);
+  };
+
+  const handlePdfDownload = (employeeId?: string) => {
+    const period = periodLabel || "roster";
+    const filename = employeeId
+      ? `roster-${safeFilename(getGuardName(employeeId))}-${safeFilename(period)}.pdf`
+      : `roster-${safeFilename(period)}.pdf`;
+    const blob = employeeId
+      ? generateGuardRosterPDF(shifts.filter((s) => s.employee.id === employeeId), getGuardName(employeeId), periodLabel || "")
+      : generateFullRosterPDF(shifts, calendarDays, periodLabel || "");
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowPdfMenu(false);
   };
 
   const handleRemoveShift = async (shift: Shift) => {
@@ -599,7 +640,76 @@ export default function RosteringPage() {
             <div className="relative shrink-0">
               <button
                 type="button"
-                onClick={() => setShowResetMenu((v) => !v)}
+                onClick={() => { setShowResetMenu(false); setShowPdfMenu((v) => !v); }}
+                className="h-11 px-5 py-2.5 text-sm font-semibold rounded-sm border-2 border-black dark:border-white bg-transparent dark:bg-transparent text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                PDF
+              </button>
+              {showPdfMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    aria-hidden
+                    onClick={() => setShowPdfMenu(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-1 z-20 min-w-[260px] py-1 rounded-sm border-2 border-black dark:border-white bg-white dark:bg-neutral-900 shadow-lg">
+                    <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                      Full roster
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handlePdfPreview()}
+                      className="w-full px-4 py-2 text-left text-sm text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                    >
+                      Preview
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handlePdfDownload()}
+                      className="w-full px-4 py-2 text-left text-sm text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                    >
+                      Download
+                    </button>
+                    {rosteredEmployees.length > 0 && (
+                      <>
+                        <div className="border-t border-neutral-200 dark:border-neutral-700 my-1" />
+                        <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                          Per guard
+                        </div>
+                        {rosteredEmployees.map((e) => (
+                          <div key={e.id} className="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handlePdfPreview(e.id)}
+                              className="flex-1 px-4 py-2 text-left text-sm text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                            >
+                              Preview
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handlePdfDownload(e.id)}
+                              className="flex-1 px-4 py-2 text-left text-sm text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                            >
+                              Download
+                            </button>
+                            <span className="px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400 truncate min-w-0">
+                              {e.firstName} {e.lastName}
+                            </span>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => { setShowPdfMenu(false); setShowResetMenu((v) => !v); }}
                 disabled={resetting}
                 className="h-11 px-5 py-2.5 text-sm font-semibold rounded-sm border-2 border-black dark:border-white bg-transparent dark:bg-transparent text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >

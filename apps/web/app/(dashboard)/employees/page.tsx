@@ -442,49 +442,52 @@ function EmployeeForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="mb-8 p-6 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white  max-h-[85vh] overflow-y-auto"
+      className="mb-8 p-6 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white max-h-[85vh] overflow-y-auto"
     >
-      <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-4">New Employee</h3>
+      <div className="mb-6 pb-4 border-b border-black dark:border-white">
+        <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 tracking-tight">New Employee</h3>
+        <p className="text-[10px] uppercase tracking-widest text-neutral-500 dark:text-neutral-400 mt-1">Add a new team member</p>
+      </div>
       {error && (
-        <div className="mb-4 p-3 text-sm text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 border border-black dark:border-white rounded-sm">
+        <div className="mb-6 p-4 text-sm text-neutral-900 dark:text-neutral-100 bg-neutral-50 dark:bg-neutral-800 border border-black dark:border-white rounded-sm">
           {error}
         </div>
       )}
 
       <div className="space-y-6">
-        <section className="p-4 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
-          <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">Staff type</h4>
-          <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-3">Who are you onboarding?</p>
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2 cursor-pointer">
+        <section className="p-5 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
+          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-1">Staff type</h4>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">Who are you onboarding?</p>
+          <div className="flex flex-wrap gap-6">
+            <label className="flex items-center gap-2.5 cursor-pointer">
               <input
                 type="radio"
                 name="staffType"
                 value="office"
                 checked={employeeType === "office"}
                 onChange={() => setEmployeeType("office")}
-                className="w-4 h-4"
+                className="w-4 h-4 border-2 border-black dark:border-white accent-neutral-900 dark:accent-white"
               />
-              <span className="font-medium">Office Staff</span>
-              <span className="text-sm text-neutral-500">(fixed monthly salary)</span>
+              <span className="font-medium text-neutral-900 dark:text-neutral-100">Office Staff</span>
+              <span className="text-sm text-neutral-500 dark:text-neutral-400">(fixed monthly salary)</span>
             </label>
-            <label className="flex items-center gap-2 cursor-pointer">
+            <label className="flex items-center gap-2.5 cursor-pointer">
               <input
                 type="radio"
                 name="staffType"
                 value="security"
                 checked={employeeType === "security"}
                 onChange={() => setEmployeeType("security")}
-                className="w-4 h-4"
+                className="w-4 h-4 border-2 border-black dark:border-white accent-neutral-900 dark:accent-white"
               />
-              <span className="font-medium">Guard</span>
-              <span className="text-sm text-neutral-500">(hourly rate)</span>
+              <span className="font-medium text-neutral-900 dark:text-neutral-100">Guard</span>
+              <span className="text-sm text-neutral-500 dark:text-neutral-400">(hourly rate)</span>
             </label>
           </div>
         </section>
 
-        <section>
-          <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">Basic Information</h4>
+        <section className="p-5 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
+          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-4">Basic Information</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-modern">
               <option value="applicant">Applicant</option>
@@ -537,15 +540,15 @@ function EmployeeForm({
           </div>
         </section>
 
-        <section>
-          <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">Labour Law (BCEA) – Office Staff</h4>
+        <section className="p-5 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
+          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-4">Labour Law (BCEA) – Office Staff</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-neutral-600 dark:text-neutral-400">Date of birth</label>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400">Date of birth</label>
               <input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="input-modern" aria-label="Date of birth" />
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-neutral-600 dark:text-neutral-400">Gender</label>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400">Gender</label>
               <select value={gender} onChange={(e) => setGender(e.target.value)} className="input-modern">
                 <option value="">Select gender</option>
                 <option value="M">Male</option>
@@ -555,8 +558,8 @@ function EmployeeForm({
             <input placeholder="Physical address" value={physicalAddress} onChange={(e) => setPhysicalAddress(e.target.value)} className="input-modern sm:col-span-2" />
             <input placeholder="Postal address (if different)" value={postalAddress} onChange={(e) => setPostalAddress(e.target.value)} className="input-modern" />
             <input placeholder="Postal code" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className="input-modern" />
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-neutral-600 dark:text-neutral-400">Employment commencement date</label>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400">Employment commencement date</label>
               <input type="date" value={commencementDate} onChange={(e) => setCommencementDate(e.target.value)} className="input-modern" aria-label="Employment commencement date" />
             </div>
             <input placeholder="Occupation / Job title" value={occupation} onChange={(e) => setOccupation(e.target.value)} className="input-modern" />
@@ -580,12 +583,12 @@ function EmployeeForm({
           </div>
         </section>
 
-        <section>
-          <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">PSIRA – Security Staff</h4>
+        <section className="p-5 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
+          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-4">PSIRA – Security Staff</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <input placeholder="PSIRA number" value={psiraNumber} onChange={(e) => setPsiraNumber(e.target.value)} className="input-modern" />
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium text-neutral-600 dark:text-neutral-400">PSIRA registration expiry date</label>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400">PSIRA registration expiry date</label>
               <input type="date" value={psiraExpiryDate} onChange={(e) => setPsiraExpiryDate(e.target.value)} className="input-modern" aria-label="PSIRA registration expiry date" />
             </div>
             <select value={securityServiceType} onChange={(e) => setSecurityServiceType(e.target.value)} className="input-modern sm:col-span-2">
@@ -602,25 +605,26 @@ function EmployeeForm({
             <input placeholder="Next of kin 2 – Phone" value={nextOfKin2Phone} onChange={(e) => setNextOfKin2Phone(e.target.value)} className="input-modern" />
             <input placeholder="Next of kin 3 – Name" value={nextOfKin3Name} onChange={(e) => setNextOfKin3Name(e.target.value)} className="input-modern" />
             <input placeholder="Next of kin 3 – Phone" value={nextOfKin3Phone} onChange={(e) => setNextOfKin3Phone(e.target.value)} className="input-modern" />
-            <div className="sm:col-span-2 space-y-2">
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={residedOutsideSA === true} onChange={(e) => setResidedOutsideSA(e.target.checked ? true : "")} />
+            <div className="sm:col-span-2 p-4 rounded-sm border border-black dark:border-white bg-white dark:bg-neutral-900 space-y-3">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-2">Declaration</p>
+              <label className="flex items-center gap-3 text-sm cursor-pointer">
+                <input type="checkbox" checked={residedOutsideSA === true} onChange={(e) => setResidedOutsideSA(e.target.checked ? true : "")} className="w-4 h-4 rounded-sm border-2 border-black dark:border-white accent-neutral-900 dark:accent-white" />
                 Resided outside SA for 1+ year in last 10 years
               </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={militaryPoliceService === true} onChange={(e) => setMilitaryPoliceService(e.target.checked ? true : "")} />
+              <label className="flex items-center gap-3 text-sm cursor-pointer">
+                <input type="checkbox" checked={militaryPoliceService === true} onChange={(e) => setMilitaryPoliceService(e.target.checked ? true : "")} className="w-4 h-4 rounded-sm border-2 border-black dark:border-white accent-neutral-900 dark:accent-white" />
                 Military / Police / Intelligence service
               </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={criminalInvestigation === true} onChange={(e) => setCriminalInvestigation(e.target.checked ? true : "")} />
+              <label className="flex items-center gap-3 text-sm cursor-pointer">
+                <input type="checkbox" checked={criminalInvestigation === true} onChange={(e) => setCriminalInvestigation(e.target.checked ? true : "")} className="w-4 h-4 rounded-sm border-2 border-black dark:border-white accent-neutral-900 dark:accent-white" />
                 Criminal investigation or proceedings pending
               </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={mentallyUnstable === true} onChange={(e) => setMentallyUnstable(e.target.checked ? true : "")} />
+              <label className="flex items-center gap-3 text-sm cursor-pointer">
+                <input type="checkbox" checked={mentallyUnstable === true} onChange={(e) => setMentallyUnstable(e.target.checked ? true : "")} className="w-4 h-4 rounded-sm border-2 border-black dark:border-white accent-neutral-900 dark:accent-white" />
                 Ever declared mentally unstable
               </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={trainingCompleted === true} onChange={(e) => setTrainingCompleted(e.target.checked ? true : "")} />
+              <label className="flex items-center gap-3 text-sm cursor-pointer">
+                <input type="checkbox" checked={trainingCompleted === true} onChange={(e) => setTrainingCompleted(e.target.checked ? true : "")} className="w-4 h-4 rounded-sm border-2 border-black dark:border-white accent-neutral-900 dark:accent-white" />
                 Accredited training completed
               </label>
             </div>
@@ -628,9 +632,11 @@ function EmployeeForm({
         </section>
       </div>
 
-      <button type="submit" className="mt-6 btn-primary">
-        Create
-      </button>
+      <div className="mt-8 pt-6 border-t border-black dark:border-white">
+        <button type="submit" className="btn-primary">
+          Create Employee
+        </button>
+      </div>
     </form>
   );
 }
