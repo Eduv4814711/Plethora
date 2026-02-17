@@ -70,7 +70,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function RosteringPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
@@ -184,9 +184,10 @@ export default function RosteringPage() {
 
   const handlePdfPreview = (employeeId?: string) => {
     const period = periodLabel || "";
+    const generatedBy = user?.name ?? undefined;
     const blob = employeeId
-      ? generateGuardRosterPDF(shifts.filter((s) => s.employee.id === employeeId), getGuardName(employeeId), period)
-      : generateFullRosterPDF(shifts, calendarDays, period);
+      ? generateGuardRosterPDF(shifts.filter((s) => s.employee.id === employeeId), getGuardName(employeeId), period, generatedBy)
+      : generateFullRosterPDF(shifts, calendarDays, period, generatedBy);
     const url = URL.createObjectURL(blob);
     const win = window.open(url, "_blank");
     if (!win) {
@@ -199,12 +200,13 @@ export default function RosteringPage() {
 
   const handlePdfDownload = (employeeId?: string) => {
     const period = periodLabel || "roster";
+    const generatedBy = user?.name ?? undefined;
     const filename = employeeId
       ? `roster-${safeFilename(getGuardName(employeeId))}-${safeFilename(period)}.pdf`
       : `roster-${safeFilename(period)}.pdf`;
     const blob = employeeId
-      ? generateGuardRosterPDF(shifts.filter((s) => s.employee.id === employeeId), getGuardName(employeeId), periodLabel || "")
-      : generateFullRosterPDF(shifts, calendarDays, periodLabel || "");
+      ? generateGuardRosterPDF(shifts.filter((s) => s.employee.id === employeeId), getGuardName(employeeId), periodLabel || "", generatedBy)
+      : generateFullRosterPDF(shifts, calendarDays, periodLabel || "", generatedBy);
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
