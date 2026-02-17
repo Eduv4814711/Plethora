@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
-import { uploadLogo, listUsers, createUser, updateUser, type UserListItem, type UserRole } from "@/lib/api";
+import { uploadLogo, listUsers, createUser, updateUser, deleteUser, type UserListItem, type UserRole } from "@/lib/api";
 import { clsx } from "clsx";
 
-type Tab = "profile" | "business" | "settings" | "theme" | "users";
+type Tab = "profile" | "business" | "settings" | "users";
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Admin",
@@ -27,7 +27,6 @@ export default function SettingsPage() {
     { id: "profile", label: "Profile" },
     { id: "business", label: "Business Details" },
     { id: "settings", label: "Business Settings" },
-    { id: "theme", label: "Theme" },
     { id: "users", label: "Users", adminOnly: true },
   ];
 
@@ -53,7 +52,7 @@ export default function SettingsPage() {
 
       {!isAdmin && activeTab !== "profile" && (
         <div className="mb-4 p-3 text-sm text-neutral-700 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-black dark:border-white">
-          Only administrators can edit business details, settings, and theme.
+          Only administrators can edit business details and settings.
         </div>
       )}
 
@@ -111,25 +110,6 @@ export default function SettingsPage() {
               setSaveError(null);
               try {
                 await update({ businessSettings: data });
-              } catch (err) {
-                setSaveError(err instanceof Error ? err.message : "Failed to save");
-              } finally {
-                setSaving(false);
-              }
-            }}
-          />
-        )}
-        {activeTab === "theme" && (
-          <ThemeSection
-            readOnly={!isAdmin}
-            settings={settings}
-            saving={saving}
-            saveError={saveError}
-            onSave={async (data) => {
-              setSaving(true);
-              setSaveError(null);
-              try {
-                await update({ theme: data });
               } catch (err) {
                 setSaveError(err instanceof Error ? err.message : "Failed to save");
               } finally {
@@ -549,113 +529,6 @@ function BusinessSettingsSection({
   );
 }
 
-function ThemeSection({
-  settings,
-  saving,
-  saveError,
-  onSave,
-  readOnly,
-}: {
-  settings: ReturnType<typeof useSettings>["settings"];
-  saving: boolean;
-  saveError: string | null;
-  onSave: (data: Record<string, string>) => Promise<void>;
-  readOnly?: boolean;
-}) {
-  const theme = settings?.theme ?? {};
-  const [form, setForm] = useState({
-    primaryColor: "#6366f1",
-    accentColor: "#6366f1",
-    mode: "system",
-  });
-
-  useEffect(() => {
-    if (settings?.theme) {
-      const t = settings.theme;
-      setForm({
-        primaryColor: t.primaryColor ?? "#6366f1",
-        accentColor: t.accentColor ?? "#6366f1",
-        mode: t.mode ?? "system",
-      });
-    }
-  }, [settings?.theme]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSave(form);
-  };
-
-  return (
-    <div>
-      <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Theme</h3>
-      <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-6">
-        Customize the appearance of the application. Changes apply globally.
-      </p>
-      <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
-        <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Color Mode</label>
-          <select
-            value={form.mode}
-            onChange={(e) => setForm((f) => ({ ...f, mode: e.target.value }))}
-            className="input-modern"
-            disabled={readOnly}
-          >
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-            <option value="system">System (follow device)</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Primary Color</label>
-          <div className="flex gap-3 items-center">
-            <input
-              type="color"
-              value={form.primaryColor}
-              onChange={(e) => setForm((f) => ({ ...f, primaryColor: e.target.value }))}
-              className="w-12 h-12 rounded-sm cursor-pointer border border-black dark:border-white"
-              disabled={readOnly}
-            />
-            <input
-              type="text"
-              value={form.primaryColor}
-              onChange={(e) => setForm((f) => ({ ...f, primaryColor: e.target.value }))}
-              className="input-modern flex-1 font-mono text-sm"
-              readOnly={readOnly}
-            />
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Accent Color</label>
-          <div className="flex gap-3 items-center">
-            <input
-              type="color"
-              value={form.accentColor}
-              onChange={(e) => setForm((f) => ({ ...f, accentColor: e.target.value }))}
-              className="w-12 h-12 rounded-sm cursor-pointer border border-black dark:border-white"
-              disabled={readOnly}
-            />
-            <input
-              type="text"
-              value={form.accentColor}
-              onChange={(e) => setForm((f) => ({ ...f, accentColor: e.target.value }))}
-              className="input-modern flex-1 font-mono text-sm"
-              readOnly={readOnly}
-            />
-          </div>
-        </div>
-        {saveError && (
-          <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>
-        )}
-        {!readOnly && (
-          <button type="submit" disabled={saving} className="btn-primary">
-            {saving ? "Saving..." : "Save Theme"}
-          </button>
-        )}
-      </form>
-    </div>
-  );
-}
-
 function UsersSection({ token, currentUserId }: { token: string; currentUserId?: string }) {
   const [users, setUsers] = useState<UserListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -668,7 +541,13 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
     role: "supervisor" as UserRole,
   });
   const [submitting, setSubmitting] = useState(false);
-  const [editingRole, setEditingRole] = useState<string | null>(null);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    role: "supervisor" as UserRole,
+  });
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -702,18 +581,50 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
     }
   };
 
-  const handleRoleChange = async (userId: string, role: UserRole) => {
+  const handleEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUserId) return;
     setSubmitting(true);
     setError(null);
     try {
-      await updateUser(token, userId, { role });
-      setEditingRole(null);
+      const payload: Partial<{ name: string; email: string; password: string; role: UserRole }> = {
+        name: editForm.name,
+        email: editForm.email,
+        role: editForm.role,
+      };
+      if (editForm.password) payload.password = editForm.password;
+      await updateUser(token, editingUserId, payload);
+      setEditingUserId(null);
       await fetchUsers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update role");
+      setError(err instanceof Error ? err.message : "Failed to update user");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (!confirm(`Delete user "${userName}"? This cannot be undone.`)) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await deleteUser(token, userId);
+      await fetchUsers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete user");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const startEditing = (u: UserListItem) => {
+    setEditingUserId(u.id);
+    setEditForm({
+      name: u.name,
+      email: u.email,
+      password: "",
+      role: u.role,
+    });
   };
 
   if (loading) {
@@ -728,7 +639,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
     <div>
       <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Users & Roles</h3>
       <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-6">
-        Add users to your organization and assign role-based permissions. Only admins can manage users.
+        Add, edit, and delete users. Assign role-based permissions. Only admins can manage users.
       </p>
 
       {error && (
@@ -822,55 +733,139 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                 <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Name</th>
                 <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Email</th>
                 <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Role</th>
-                <th className="w-24" />
+                <th className="text-right py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300 w-32">Actions</th>
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr
-                  key={u.id}
-                  className="border-b border-black dark:border-white last:border-0 hover:bg-neutral-50/50 dark:hover:bg-neutral-800/30"
-                >
-                  <td className="py-3 px-4 text-neutral-900 dark:text-white">
-                    {u.name}
-                    {u.id === currentUserId && (
-                      <span className="ml-2 text-xs text-neutral-500 dark:text-neutral-400">(you)</span>
-                    )}
-                  </td>
-                  <td className="py-3 px-4 text-neutral-600 dark:text-neutral-400">{u.email}</td>
-                  <td className="py-3 px-4">
-                    {editingRole === u.id ? (
-                      <select
-                        defaultValue={u.role}
-                        onChange={(e) => handleRoleChange(u.id, e.target.value as UserRole)}
-                        onBlur={() => setEditingRole(null)}
-                        autoFocus
-                        className="input-modern py-1.5 text-sm"
-                      >
-                        {(Object.keys(ROLE_LABELS) as UserRole[]).map((r) => (
-                          <option key={r} value={r}>
-                            {ROLE_LABELS[r]}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="text-neutral-700 dark:text-neutral-300">
-                        {ROLE_LABELS[u.role]}
-                        {u.id !== currentUserId && (
-                          <button
-                            type="button"
-                            onClick={() => setEditingRole(u.id)}
-                            disabled={submitting}
-                            className="ml-2 text-xs text-neutral-600 dark:text-neutral-400 hover:underline"
-                          >
-                            Edit
-                          </button>
-                        )}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-3 px-4" />
-                </tr>
+                <React.Fragment key={u.id}>
+                  <tr
+                    key={u.id}
+                    className="border-b border-black dark:border-white last:border-0 hover:bg-neutral-50/50 dark:hover:bg-neutral-800/30"
+                  >
+                    <td className="py-3 px-4 text-neutral-900 dark:text-white">
+                      {editingUserId === u.id ? null : (
+                        <>
+                          {u.name}
+                          {u.id === currentUserId && (
+                            <span className="ml-2 text-xs text-neutral-500 dark:text-neutral-400">(you)</span>
+                          )}
+                        </>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-neutral-600 dark:text-neutral-400">
+                      {editingUserId === u.id ? null : u.email}
+                    </td>
+                    <td className="py-3 px-4 text-neutral-700 dark:text-neutral-300">
+                      {editingUserId === u.id ? null : ROLE_LABELS[u.role]}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      {editingUserId === u.id ? (
+                        <button
+                          type="button"
+                          onClick={() => setEditingUserId(null)}
+                          disabled={submitting}
+                          className="text-xs text-neutral-600 dark:text-neutral-400 hover:underline"
+                        >
+                          Cancel
+                        </button>
+                      ) : (
+                        <div className="flex justify-end gap-2">
+                          {u.id !== currentUserId && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => startEditing(u)}
+                                disabled={submitting}
+                                className="text-xs text-neutral-600 dark:text-neutral-400 hover:underline"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteUser(u.id, u.name)}
+                                disabled={submitting}
+                                className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                  {editingUserId === u.id && (
+                    <tr className="border-b border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50">
+                      <td colSpan={4} className="py-4 px-4">
+                        <form onSubmit={handleEditUser} className="space-y-4">
+                          <h4 className="font-medium text-neutral-800 dark:text-white">Edit User</h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Name</label>
+                              <input
+                                type="text"
+                                value={editForm.name}
+                                onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                                className="input-modern"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Email</label>
+                              <input
+                                type="email"
+                                value={editForm.email}
+                                onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+                                className="input-modern"
+                                required
+                              />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Password</label>
+                              <input
+                                type="password"
+                                value={editForm.password}
+                                onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))}
+                                className="input-modern"
+                                placeholder="Leave blank to keep current"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Role</label>
+                              <select
+                                value={editForm.role}
+                                onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value as UserRole }))}
+                                className="input-modern"
+                              >
+                                {(Object.keys(ROLE_LABELS) as UserRole[]).map((r) => (
+                                  <option key={r} value={r}>
+                                    {ROLE_LABELS[r]}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button type="submit" disabled={submitting} className="btn-primary text-sm">
+                              {submitting ? "Saving..." : "Save"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingUserId(null)}
+                              disabled={submitting}
+                              className="px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700/50 rounded-sm"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </form>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               ))}
             </tbody>
           </table>

@@ -99,11 +99,6 @@ export interface CompanySettings {
     payrollPeriod?: "weekly" | "biweekly" | "monthly";
     employeeIdPrefix?: string;
   } | null;
-  theme?: {
-    primaryColor?: string;
-    accentColor?: string;
-    mode?: "light" | "dark" | "system";
-  } | null;
 }
 
 export async function getMe(token: string): Promise<AuthUser & { company: CompanySettings }> {
@@ -142,11 +137,6 @@ export async function updateSettings(
       timezone: string;
       payrollPeriod: "weekly" | "biweekly" | "monthly";
       employeeIdPrefix: string;
-    }>;
-    theme: Partial<{
-      primaryColor: string;
-      accentColor: string;
-      mode: "light" | "dark" | "system";
     }>;
   }>
 ): Promise<CompanySettings> {
@@ -246,4 +236,12 @@ export async function updateUser(
     throw new Error(err.message || "Failed to update user");
   }
   return res.json();
+}
+
+export async function deleteUser(token: string, id: string): Promise<void> {
+  const res = await authFetch(`/users/${id}`, token, { method: "DELETE" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to delete user");
+  }
 }

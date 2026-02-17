@@ -165,4 +165,35 @@ export async function usersRoutes(app: FastifyInstance) {
 
     return reply.send(updated);
   });
+
+  app.delete("/:id", { preHandler: protect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const user = request.user!;
+
+    const existing = await prisma.user.findFirst({
+      where: { id, companyId: user.companyId },
+    });
+
+    if (!existing) {
+      return reply.code(404).send({ error: "User not found" });
+    }
+
+    if (id === user.sub) {
+      return reply.code(400).send({ error: "You cannot delete your own account" });
+    }
+
+    await prisma.user.delete({
+      where: { id },
+    });
+
+    await createAuditLog({
+      userId: user.sub,
+      companyId: user.companyId,
+      action: "user.delete",
+      entityType: "user",
+      entityId: id,
+    });
+
+    return reply.code(204).send();
+  });
 }

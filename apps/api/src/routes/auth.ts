@@ -98,7 +98,6 @@ export async function authRoutes(app: FastifyInstance) {
             logoUrl: true,
             website: true,
             settings: true,
-            theme: true,
           },
         },
       },

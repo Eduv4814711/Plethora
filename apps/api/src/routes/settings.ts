@@ -24,17 +24,10 @@ const businessSettingsSchema = z.object({
   employeeIdPrefix: z.string().max(20).optional(),
 });
 
-const themeSchema = z.object({
-  primaryColor: z.string().optional(),
-  accentColor: z.string().optional(),
-  mode: z.enum(["light", "dark", "system"]).optional(),
-});
-
 const updateSettingsSchema = z.object({
   name: z.string().min(1).optional(),
   businessDetails: businessDetailsSchema.optional(),
   businessSettings: businessSettingsSchema.optional(),
-  theme: themeSchema.optional(),
 });
 
 export async function settingsRoutes(app: FastifyInstance) {
@@ -55,7 +48,6 @@ export async function settingsRoutes(app: FastifyInstance) {
         logoUrl: true,
         website: true,
         settings: true,
-        theme: true,
       },
     });
 
@@ -95,10 +87,6 @@ export async function settingsRoutes(app: FastifyInstance) {
     if (data.businessSettings !== undefined) {
       updateData.settings = data.businessSettings;
     }
-    if (data.theme !== undefined) {
-      updateData.theme = data.theme;
-    }
-
     const company = await prisma.company.update({
       where: { id: companyId },
       data: updateData,
@@ -114,7 +102,6 @@ export async function settingsRoutes(app: FastifyInstance) {
         logoUrl: true,
         website: true,
         settings: true,
-        theme: true,
       },
     });
 
