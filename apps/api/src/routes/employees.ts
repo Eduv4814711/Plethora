@@ -89,6 +89,12 @@ const createEmployeeSchema = z.object({
   trainingCompleted: optionalBool,
 });
 
+const createEmployeeSchemaWithRefine = createEmployeeSchema.superRefine((data, ctx) => {
+  if (data.employeeType === "security" && (!data.psiraNumber || !String(data.psiraNumber).trim())) {
+    ctx.addIssue({ code: "custom", path: ["psiraNumber"], message: "PSIRA number is required for security guards" });
+  }
+});
+
 const updateEmployeeSchema = createEmployeeSchema.partial().extend({
   employeeNumber: z.string().min(1).max(50).optional(),
   firstName: z.string().min(1).optional(),
@@ -153,7 +159,7 @@ export async function employeesRoutes(app: FastifyInstance) {
   });
 
   app.post("/", { preHandler: protect }, async (request, reply) => {
-    const parsed = createEmployeeSchema.safeParse(request.body);
+    const parsed = createEmployeeSchemaWithRefine.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Validation error",
@@ -281,6 +287,14 @@ export async function employeesRoutes(app: FastifyInstance) {
     }
 
     const updateData = { ...parsed.data };
+    const effectiveType = updateData.employeeType ?? existing.employeeType;
+    const effectivePsira = updateData.psiraNumber !== undefined ? updateData.psiraNumber : existing.psiraNumber;
+    if (effectiveType === "security" && (!effectivePsira || !String(effectivePsira).trim())) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: { psiraNumber: ["PSIRA number is required for security guards"] },
+      });
+    }
     if (updateData.employeeNumber !== undefined) {
       const trimmed = updateData.employeeNumber.trim();
       if (!trimmed) {

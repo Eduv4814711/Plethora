@@ -383,6 +383,10 @@ function EmployeeForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    if (employeeType === "security" && !psiraNumber.trim()) {
+      setError("PSIRA number is required for security guards.");
+      return;
+    }
     try {
       const payload: Record<string, unknown> = {
         employeeNumber: employeeNumber.trim() || undefined,
@@ -437,7 +441,7 @@ function EmployeeForm({
       });
       if (!res.ok) {
         const data = await res.json();
-        const msg = data?.message?.employeeNumber?.[0] ?? (typeof data?.message === "string" ? data.message : null) ?? "Failed to create";
+        const msg = data?.message?.psiraNumber?.[0] ?? data?.message?.employeeNumber?.[0] ?? (typeof data?.message === "string" ? data.message : null) ?? "Failed to create";
         throw new Error(msg);
       }
       onSuccess();
@@ -600,7 +604,10 @@ function EmployeeForm({
         <section className="p-5 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
           <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-4">PSIRA – Security Staff</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <input placeholder="PSIRA number" value={psiraNumber} onChange={(e) => setPsiraNumber(e.target.value)} className="input-modern" />
+            <div>
+              <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-1">PSIRA number <span className="text-red-600 dark:text-red-400">*</span></label>
+              <input placeholder="PSIRA number" value={psiraNumber} onChange={(e) => setPsiraNumber(e.target.value)} className="input-modern" required={employeeType === "security"} />
+            </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400">PSIRA registration expiry date</label>
               <input type="date" value={psiraExpiryDate} onChange={(e) => setPsiraExpiryDate(e.target.value)} className="input-modern" aria-label="PSIRA registration expiry date" />
@@ -771,6 +778,10 @@ function EditModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    if (employeeType === "security" && !psiraNumber.trim()) {
+      setError("PSIRA number is required for security guards.");
+      return;
+    }
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {
@@ -823,7 +834,7 @@ function EditModal({
       });
       if (!res.ok) {
         const data = await res.json();
-        const msg = data?.message?.employeeNumber?.[0] ?? data?.message ?? "Failed to update";
+        const msg = data?.message?.psiraNumber?.[0] ?? data?.message?.employeeNumber?.[0] ?? data?.message ?? "Failed to update";
         throw new Error(typeof msg === "string" ? msg : "Failed to update");
       }
       onSuccess();
@@ -990,7 +1001,10 @@ function EditModal({
             <section>
               <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">PSIRA – Security Staff</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <input placeholder="PSIRA number" value={psiraNumber} onChange={(e) => setPsiraNumber(e.target.value)} className="input-modern" />
+                <div>
+                  <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1">PSIRA number <span className="text-red-600 dark:text-red-400">*</span></label>
+                  <input placeholder="PSIRA number" value={psiraNumber} onChange={(e) => setPsiraNumber(e.target.value)} className="input-modern" required={employeeType === "security"} />
+                </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-sm font-medium text-neutral-600 dark:text-neutral-400">PSIRA registration expiry date</label>
                   <input type="date" value={psiraExpiryDate} onChange={(e) => setPsiraExpiryDate(e.target.value)} className="input-modern" aria-label="PSIRA registration expiry date" />
