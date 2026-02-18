@@ -92,6 +92,9 @@ export interface CompanySettings {
   email?: string | null;
   logoUrl?: string | null;
   website?: string | null;
+  fax?: string | null;
+  psiraRegistration?: string | null;
+  uifReference?: string | null;
   settings?: {
     currency?: string;
     dateFormat?: string;
@@ -130,6 +133,9 @@ export async function updateSettings(
       email: string;
       logoUrl: string;
       website: string;
+      fax: string;
+      psiraRegistration: string;
+      uifReference: string;
     }>;
     businessSettings: Partial<{
       currency: string;

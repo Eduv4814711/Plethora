@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payslip</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 10mm;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-size: 11px;
+      line-height: 1.25;
+      color: #111;
+      margin: 0;
+      padding: 0;
+    }
+    .page {
+      width: 210mm;
+      padding: 6mm;
+      page-break-inside: avoid;
+    }
+    table { border-collapse: collapse; width: 100%; }
+    th, td {
+      border: 1px solid #111;
+      padding: 3px 6px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 9px;
+      letter-spacing: 0.04em;
+      color: #111;
+    }
+    .section-heading {
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      margin: 6px 0 3px 0;
+      padding-bottom: 2px;
+      border-bottom: 1px solid #111;
+    }
+    .two-col { display: flex; gap: 8px; }
+    .two-col > div { flex: 1; }
+    .amount-right { text-align: right; }
+    .total-row {
+      font-weight: 600;
+      border-top: 1px solid #111;
+    }
+    .nett-pay-box {
+      border: 2px solid #111;
+      font-weight: 600;
+      font-size: 12px;
+      padding: 5px 10px;
+      margin-top: 5px;
+      text-align: right;
+    }
+    .bank-section {
+      padding: 5px;
+      border: 1px solid #111;
+      margin-top: 5px;
+    }
+    .header-site { font-size: 11px; font-weight: 600; }
+    .label-cell { font-weight: 600; width: 35%; }
+    .value-cell { width: 65%; }
+    .currency { font-family: 'Consolas', 'Monaco', monospace; }
+    .earnings-table, .deductions-table { margin-bottom: 0; }
+    .earnings-deductions { display: flex; gap: 8px; }
+    .earnings-deductions > div { flex: 1; }
+    @media print {
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: #fff;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        color-adjust: exact;
+      }
+      .page {
+        padding: 0;
+        page-break-inside: avoid;
+      }
+      table, .section-heading, .nett-pay-box, .bank-section {
+        page-break-inside: avoid;
+      }
+      th, td {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <!-- SECTION 1 — HEADER -->
+    <table style="margin-bottom: 5px;">
+      <tr>
+        <th class="label-cell">Employer Name</th>
+        <td class="value-cell" id="employerName">-</td>
+        <th class="label-cell">Employee Name</th>
+        <td class="value-cell" id="employeeName">-</td>
+      </tr>
+      <tr>
+        <th class="label-cell">Date Engaged</th>
+        <td class="value-cell" id="dateEngaged">-</td>
+        <th class="label-cell">Employee Number</th>
+        <td class="value-cell" id="employeeNumber">-</td>
+      </tr>
+      <tr>
+        <th class="label-cell">Job Title</th>
+        <td class="value-cell" id="jobTitle">-</td>
+        <th class="label-cell">Pay Date</th>
+        <td class="value-cell" id="payDate">-</td>
+      </tr>
+      <tr>
+        <th class="label-cell" colspan="2">Site Name</th>
+        <td class="value-cell header-site" colspan="2" id="siteName">-</td>
+      </tr>
+    </table>
+
+    <!-- SECTION 2 — COMPANY DETAILS -->
+    <div class="section-heading">Company Details</div>
+    <div class="two-col">
+      <div>
+        <table>
+          <tr><th class="label-cell">Company Name</th><td class="value-cell" id="companyName">-</td></tr>
+          <tr><th class="label-cell">Address</th><td class="value-cell" id="companyAddress">-</td></tr>
+        </table>
+      </div>
+      <div>
+        <table>
+          <tr><th class="label-cell">PSIRA Registration</th><td class="value-cell" id="psiraRegistration">-</td></tr>
+          <tr><th class="label-cell">Company Registration</th><td class="value-cell" id="companyRegistration">-</td></tr>
+          <tr><th class="label-cell">Tax Number</th><td class="value-cell" id="taxNumber">-</td></tr>
+          <tr><th class="label-cell">UIF Reference</th><td class="value-cell" id="uifReference">-</td></tr>
+          <tr><th class="label-cell">Telephone</th><td class="value-cell" id="telephone">-</td></tr>
+          <tr><th class="label-cell">Fax</th><td class="value-cell" id="fax">-</td></tr>
+          <tr><th class="label-cell">Email</th><td class="value-cell" id="email">-</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- SECTION 3 — EMPLOYEE DETAILS -->
+    <div class="section-heading">Employee Details</div>
+    <table style="margin-bottom: 5px;">
+      <tr>
+        <th class="label-cell">Employer Name</th>
+        <td class="value-cell" id="empEmployerName">-</td>
+        <th class="label-cell">PSIRA Number</th>
+        <td class="value-cell" id="empPsiraNumber">-</td>
+      </tr>
+      <tr>
+        <th class="label-cell">Employee Name</th>
+        <td class="value-cell" id="empEmployeeName">-</td>
+        <th class="label-cell">Date Engaged</th>
+        <td class="value-cell" id="empDateEngaged">-</td>
+      </tr>
+      <tr>
+        <th class="label-cell">Employee Number</th>
+        <td class="value-cell" id="empEmployeeNumber">-</td>
+        <th class="label-cell">Job Title</th>
+        <td class="value-cell" id="empJobTitle">-</td>
+      </tr>
+      <tr>
+        <th class="label-cell">Pay Date</th>
+        <td class="value-cell" id="empPayDate">-</td>
+        <th class="label-cell">Identity Number</th>
+        <td class="value-cell" id="identityNumber">-</td>
+      </tr>
+      <tr>
+        <th class="label-cell">Date of Birth</th>
+        <td class="value-cell" id="dateOfBirth">-</td>
+        <th class="label-cell">Marital Status</th>
+        <td class="value-cell" id="maritalStatus">-</td>
+      </tr>
+      <tr>
+        <th class="label-cell">Gender</th>
+        <td class="value-cell" id="gender">-</td>
+        <th class="label-cell">Job Grade</th>
+        <td class="value-cell" id="jobGrade">-</td>
+      </tr>
+    </table>
+
+    <!-- SECTION 4 — EARNINGS AND DEDUCTIONS -->
+    <div class="section-heading">Earnings and Deductions</div>
+    <div class="earnings-deductions">
+      <div>
+        <table class="earnings-table">
+          <thead><tr><th>Earnings</th><th class="amount-right">Amount (R)</th></tr></thead>
+          <tbody id="earningsBody"></tbody>
+          <tr class="total-row"><td>Total Earnings</td><td class="amount-right currency" id="totalEarnings">0.00</td></tr>
+        </table>
+      </div>
+      <div>
+        <table class="deductions-table">
+          <thead><tr><th>Deductions</th><th class="amount-right">Amount (R)</th></tr></thead>
+          <tbody id="deductionsBody"></tbody>
+          <tr class="total-row"><td>Total Deductions</td><td class="amount-right currency" id="totalDeductions">0.00</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- SECTION 5 — WORK SUMMARY -->
+    <div class="section-heading">Work Summary</div>
+    <table>
+      <tr>
+        <th class="label-cell">Total Leave Days</th>
+        <td class="value-cell" id="totalLeaveDays">0</td>
+        <th class="label-cell">Total Hours Worked</th>
+        <td class="value-cell" id="totalHoursWorked">0</td>
+      </tr>
+      <tr>
+        <th class="label-cell">Normal Hours Worked</th>
+        <td class="value-cell" id="normalHoursWorked">0</td>
+        <th class="label-cell">Overtime Hours</th>
+        <td class="value-cell" id="overtimeHours">0</td>
+      </tr>
+      <tr>
+        <th class="label-cell">Sunday Hours</th>
+        <td class="value-cell" id="sundayHours">0</td>
+        <th class="label-cell">Public Holiday Hours</th>
+        <td class="value-cell" id="publicHolidayHours">0</td>
+      </tr>
+      <tr>
+        <th class="label-cell">Annual Leave Hours</th>
+        <td class="value-cell" id="annualLeaveHours">0</td>
+        <th class="label-cell">Sick Leave Hours</th>
+        <td class="value-cell" id="sickLeaveHours">0</td>
+      </tr>
+    </table>
+
+    <!-- SECTION 6 — CONTRIBUTIONS AND TAX -->
+    <div class="section-heading">Contributions and Tax</div>
+    <table>
+      <tr>
+        <th class="label-cell">Total Employee Contribution</th>
+        <td class="value-cell amount-right currency" id="totalEmployeeContribution">0.00</td>
+        <th class="label-cell">Total Company Contribution</th>
+        <td class="value-cell amount-right currency" id="totalCompanyContribution">0.00</td>
+      </tr>
+      <tr>
+        <th class="label-cell">Taxable Earnings</th>
+        <td class="value-cell amount-right currency" id="taxableEarnings">0.00</td>
+        <th class="label-cell">Tax</th>
+        <td class="value-cell amount-right currency" id="tax">0.00</td>
+      </tr>
+      <tr>
+        <th class="label-cell">Additional Tax</th>
+        <td class="value-cell amount-right currency" id="additionalTax">0.00</td>
+        <th class="label-cell">Total Perks</th>
+        <td class="value-cell amount-right currency" id="totalPerks">0.00</td>
+      </tr>
+    </table>
+
+    <div class="nett-pay-box">NETT PAY: R <span id="nettPay" class="currency">0.00</span></div>
+
+    <!-- SECTION 7 — BANK DETAILS -->
+    <div class="section-heading">Bank Details</div>
+    <div class="bank-section">
+      <table>
+        <tr><th class="label-cell">Account Holder</th><td class="value-cell" id="accountHolder">-</td></tr>
+        <tr><th class="label-cell">Bank Name</th><td class="value-cell" id="bankName">-</td></tr>
+        <tr><th class="label-cell">Account Number</th><td class="value-cell" id="accountNumber">-</td></tr>
+        <tr><th class="label-cell">Branch Code</th><td class="value-cell" id="branchCode">-</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      const data = window.__PAYSLIP_DATA__ || {};
+      const fmt = (n) => (n == null || n === '' ? '-' : n);
+      const curr = (n) => (typeof n === 'number' ? n.toFixed(2) : (n != null ? String(n) : '0.00'));
+
+      document.getElementById('employerName').textContent = fmt(data.employerName);
+      document.getElementById('employeeName').textContent = fmt(data.employeeName);
+      document.getElementById('dateEngaged').textContent = fmt(data.dateEngaged);
+      document.getElementById('employeeNumber').textContent = fmt(data.employeeNumber);
+      document.getElementById('jobTitle').textContent = fmt(data.jobTitle);
+      document.getElementById('payDate').textContent = fmt(data.payDate);
+      document.getElementById('siteName').textContent = fmt(data.siteName);
+
+      document.getElementById('companyName').textContent = fmt(data.companyName);
+      document.getElementById('companyAddress').textContent = fmt(data.companyAddress);
+      document.getElementById('psiraRegistration').textContent = fmt(data.psiraRegistration);
+      document.getElementById('companyRegistration').textContent = fmt(data.companyRegistration);
+      document.getElementById('taxNumber').textContent = fmt(data.taxNumber);
+      document.getElementById('uifReference').textContent = fmt(data.uifReference);
+      document.getElementById('telephone').textContent = fmt(data.telephone);
+      document.getElementById('fax').textContent = fmt(data.fax);
+      document.getElementById('email').textContent = fmt(data.email);
+
+      document.getElementById('empEmployerName').textContent = fmt(data.employerName);
+      document.getElementById('empPsiraNumber').textContent = fmt(data.psiraNumber);
+      document.getElementById('empEmployeeName').textContent = fmt(data.employeeName);
+      document.getElementById('empDateEngaged').textContent = fmt(data.dateEngaged);
+      document.getElementById('empEmployeeNumber').textContent = fmt(data.employeeNumber);
+      document.getElementById('empJobTitle').textContent = fmt(data.jobTitle);
+      document.getElementById('empPayDate').textContent = fmt(data.payDate);
+      document.getElementById('identityNumber').textContent = fmt(data.identityNumber);
+      document.getElementById('dateOfBirth').textContent = fmt(data.dateOfBirth);
+      document.getElementById('maritalStatus').textContent = fmt(data.maritalStatus);
+      document.getElementById('gender').textContent = fmt(data.gender);
+      document.getElementById('jobGrade').textContent = fmt(data.jobGrade);
+
+      const earnings = data.earnings || [];
+      const deductions = data.deductions || [];
+      const earningsBody = document.getElementById('earningsBody');
+      const deductionsBody = document.getElementById('deductionsBody');
+      earnings.forEach(e => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + fmt(e.name) + '</td><td class="amount-right currency">' + curr(e.amount) + '</td>';
+        earningsBody.appendChild(tr);
+      });
+      if (earnings.length === 0) earningsBody.innerHTML = '<tr><td colspan="2">-</td></tr>';
+      deductions.forEach(d => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + fmt(d.name) + '</td><td class="amount-right currency">' + curr(d.amount) + '</td>';
+        deductionsBody.appendChild(tr);
+      });
+      if (deductions.length === 0) deductionsBody.innerHTML = '<tr><td colspan="2">-</td></tr>';
+
+      document.getElementById('totalEarnings').textContent = curr(data.grossPay);
+      document.getElementById('totalDeductions').textContent = curr(data.totalDeductions);
+      document.getElementById('nettPay').textContent = curr(data.netPay);
+
+      document.getElementById('totalLeaveDays').textContent = fmt(data.totalLeaveDays);
+      document.getElementById('totalHoursWorked').textContent = fmt(data.totalHoursWorked);
+      document.getElementById('normalHoursWorked').textContent = fmt(data.normalHoursWorked);
+      document.getElementById('overtimeHours').textContent = fmt(data.overtimeHours);
+      document.getElementById('sundayHours').textContent = fmt(data.sundayHours);
+      document.getElementById('publicHolidayHours').textContent = fmt(data.publicHolidayHours);
+      document.getElementById('annualLeaveHours').textContent = fmt(data.annualLeaveHours);
+      document.getElementById('sickLeaveHours').textContent = fmt(data.sickLeaveHours);
+
+      document.getElementById('totalEmployeeContribution').textContent = curr(data.totalEmployeeContribution);
+      document.getElementById('totalCompanyContribution').textContent = curr(data.totalCompanyContribution);
+      document.getElementById('taxableEarnings').textContent = curr(data.taxableEarnings);
+      document.getElementById('tax').textContent = curr(data.tax);
+      document.getElementById('additionalTax').textContent = curr(data.additionalTax);
+      document.getElementById('totalPerks').textContent = curr(data.totalPerks);
+
+      document.getElementById('accountHolder').textContent = fmt(data.accountHolder);
+      document.getElementById('bankName').textContent = fmt(data.bankName);
+      document.getElementById('accountNumber').textContent = fmt(data.accountNumber);
+      document.getElementById('branchCode').textContent = fmt(data.branchCode);
+    })();
+  </script>
+</body>
+</html>

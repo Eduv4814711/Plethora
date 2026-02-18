@@ -32,6 +32,7 @@
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",
     "pdf-lib": "^1.17.1",
+    "puppeteer": "^23.11.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {

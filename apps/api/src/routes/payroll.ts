@@ -8,7 +8,8 @@ import {
   canTransitionPayrollStatus,
 } from "../services/payroll.service.js";
 import { PayrollServiceError } from "../services/payroll.service.js";
-import { generatePayslipPDF } from "../services/payslip.service.js";
+import { fetchPayslipData, buildPayslipTemplateData } from "../services/payslip-data.service.js";
+import { generatePayslipPDFFromTemplate } from "../services/payslip-pdf.service.js";
 import { createAuditLog } from "../lib/audit.js";
 import { format } from "date-fns";
 
@@ -251,31 +252,16 @@ export async function payrollRoutes(app: FastifyInstance) {
     const { id, itemId } = request.params as { id: string; itemId: string };
     const user = request.user!;
 
-    const run = await prisma.payrollRun.findFirst({
-      where: { id, companyId: user.companyId },
-    });
-    if (!run) return reply.code(404).send({ error: "Payroll run not found" });
+    const payslipInput = await fetchPayslipData(id, itemId, user.companyId);
+    if (!payslipInput) {
+      return reply.code(404).send({ error: "Payroll item not found" });
+    }
 
-    const item = await prisma.payrollItem.findFirst({
-      where: { id: itemId, payrollRunId: id },
-      include: { employee: true, payslip: true },
-    });
-    if (!item) return reply.code(404).send({ error: "Payroll item not found" });
+    const templateData = buildPayslipTemplateData(payslipInput);
+    const pdfBuffer = await generatePayslipPDFFromTemplate(templateData);
 
-    const company = await prisma.company.findUnique({
-      where: { id: user.companyId },
-      select: { name: true },
-    });
-
-    const pdfBuffer = generatePayslipPDF({
-      payrollItem: item,
-      companyName: company?.name ?? "Company",
-      periodStart: run.periodStart,
-      periodEnd: run.periodEnd,
-    });
-
-    const emp = item.employee;
-    const filename = `payslip-${emp.firstName}-${emp.lastName}-${format(run.periodStart, "yyyy-MM")}.pdf`;
+    const emp = payslipInput.payrollItem.employee;
+    const filename = `payslip-${emp.firstName}-${emp.lastName}-${format(payslipInput.periodStart, "yyyy-MM")}.pdf`;
     return reply
       .header("Content-Type", "application/pdf")
       .header("Content-Disposition", `attachment; filename="${filename}"`)
@@ -297,22 +283,14 @@ export async function payrollRoutes(app: FastifyInstance) {
     });
     if (!run) return reply.code(404).send({ error: "Payroll run not found" });
 
-    const company = await prisma.company.findUnique({
-      where: { id: user.companyId },
-      select: { name: true },
-    });
-    const companyName = company?.name ?? "Company";
-
     const { PDFDocument } = await import("pdf-lib");
     const mergedPdf = await PDFDocument.create();
 
     for (const item of run.items) {
-      const pdfBuffer = generatePayslipPDF({
-        payrollItem: item,
-        companyName,
-        periodStart: run.periodStart,
-        periodEnd: run.periodEnd,
-      });
+      const payslipInput = await fetchPayslipData(id, item.id, user.companyId);
+      if (!payslipInput) continue;
+      const templateData = buildPayslipTemplateData(payslipInput);
+      const pdfBuffer = await generatePayslipPDFFromTemplate(templateData);
       const donorPdf = await PDFDocument.load(pdfBuffer);
       const pages = await mergedPdf.copyPages(donorPdf, donorPdf.getPageIndices());
       for (const page of pages) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { format } from "date-fns";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { DateInput } from "@/components/date-input";
@@ -584,6 +585,12 @@ function PayrollRunForm({
   );
 }
 
+interface PayrollItem {
+  id: string;
+  employee: { firstName: string; lastName: string };
+  netPay: string;
+}
+
 function PayrollRunCard({
   run,
   token,
@@ -593,8 +600,10 @@ function PayrollRunCard({
   token: string;
   onAction: () => void;
 }) {
-  const [items, setItems] = useState<{ employee: { firstName: string; lastName: string }; netPay: string }[]>([]);
+  const [items, setItems] = useState<PayrollItem[]>([]);
   const [showItems, setShowItems] = useState(false);
+  const [previewingId, setPreviewingId] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const fetchItems = () => {
     authFetch(`/payroll/runs/${run.id}/items`, token)
@@ -621,6 +630,23 @@ function PayrollRunCard({
       method: "POST",
     });
     onAction();
+  };
+
+  const handlePreviewPayslip = async (item: PayrollItem) => {
+    setPreviewingId(item.id);
+    setPreviewError(null);
+    try {
+      const res = await authFetch(`/payroll/runs/${run.id}/items/${item.id}/payslip/pdf`, token);
+      if (!res.ok) throw new Error("Failed to load payslip");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : "Failed to load payslip");
+    } finally {
+      setPreviewingId(null);
+    }
   };
 
   return (
@@ -677,21 +703,35 @@ function PayrollRunCard({
       </div>
       {showItems && (
         <div className="mt-4 border-t border-black dark:border-white pt-4">
+          {previewError && (
+            <p className="text-red-600 dark:text-red-400 text-sm mb-2">{previewError}</p>
+          )}
           {items.length > 0 ? (
             <table className="w-full text-sm">
               <thead>
                 <tr>
                   <th className="text-left">Employee</th>
                   <th className="text-right">Net Pay</th>
+                  <th className="text-right w-32">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((item, i) => (
-                  <tr key={i}>
+                {items.map((item) => (
+                  <tr key={item.id}>
                     <td>
                       {item.employee.firstName} {item.employee.lastName}
                     </td>
                     <td className="text-right">{item.netPay}</td>
+                    <td className="text-right">
+                      <button
+                        type="button"
+                        onClick={() => handlePreviewPayslip(item)}
+                        disabled={previewingId === item.id}
+                        className="btn-secondary text-xs py-1.5 px-2 disabled:opacity-50"
+                      >
+                        {previewingId === item.id ? "Opening…" : "Preview Payslip"}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

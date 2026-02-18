@@ -25,6 +25,9 @@ model Company {
   email              String?
   logoUrl            String?
   website            String?
+  fax                String?
+  psiraRegistration  String?
+  uifReference       String?
 
   // Business settings & theme (JSON for flexibility)
   settings Json? // { currency, dateFormat, timezone, payrollPeriod, etc. }
@@ -90,6 +93,7 @@ model Employee {
   // Labour Law (BCEA) - office staff
   dateOfBirth      DateTime?
   gender           String?   // M/F
+  maritalStatus    String?   // single, married, divorced, widowed
   email            String?
   physicalAddress  String?
   postalAddress    String?

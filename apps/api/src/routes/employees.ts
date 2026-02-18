@@ -56,6 +56,7 @@ const createEmployeeSchema = z.object({
   // Labour Law (BCEA)
   dateOfBirth: optionalDate,
   gender: optionalString,
+  maritalStatus: optionalString,
   email: optionalString,
   physicalAddress: optionalString,
   postalAddress: optionalString,
@@ -222,6 +223,7 @@ export async function employeesRoutes(app: FastifyInstance) {
         jobRole: d.jobRole,
         dateOfBirth: d.dateOfBirth,
         gender: d.gender,
+        maritalStatus: d.maritalStatus,
         email: d.email,
         physicalAddress: d.physicalAddress,
         postalAddress: d.postalAddress,

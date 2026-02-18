@@ -14,6 +14,9 @@ const businessDetailsSchema = z.object({
   email: z.union([z.string().email(), z.literal("")]).optional(),
   logoUrl: z.string().optional(),
   website: z.string().optional(),
+  fax: z.string().optional(),
+  psiraRegistration: z.string().optional(),
+  uifReference: z.string().optional(),
 });
 
 const businessSettingsSchema = z.object({
@@ -47,6 +50,9 @@ export async function settingsRoutes(app: FastifyInstance) {
         email: true,
         logoUrl: true,
         website: true,
+        fax: true,
+        psiraRegistration: true,
+        uifReference: true,
         settings: true,
       },
     });
@@ -83,6 +89,9 @@ export async function settingsRoutes(app: FastifyInstance) {
       if (d.email !== undefined) updateData.email = d.email || null;
       if (d.logoUrl !== undefined) updateData.logoUrl = d.logoUrl || null;
       if (d.website !== undefined) updateData.website = d.website || null;
+      if (d.fax !== undefined) updateData.fax = d.fax || null;
+      if (d.psiraRegistration !== undefined) updateData.psiraRegistration = d.psiraRegistration || null;
+      if (d.uifReference !== undefined) updateData.uifReference = d.uifReference || null;
     }
     if (data.businessSettings !== undefined) {
       updateData.settings = data.businessSettings;
@@ -101,6 +110,9 @@ export async function settingsRoutes(app: FastifyInstance) {
         email: true,
         logoUrl: true,
         website: true,
+        fax: true,
+        psiraRegistration: true,
+        uifReference: true,
         settings: true,
       },
     });

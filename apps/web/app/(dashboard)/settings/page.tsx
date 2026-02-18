@@ -268,6 +268,9 @@ function BusinessDetailsSection({
     email: "",
     website: "",
     logoUrl: "",
+    fax: "",
+    psiraRegistration: "",
+    uifReference: "",
   });
 
   useEffect(() => {
@@ -282,6 +285,9 @@ function BusinessDetailsSection({
         email: settings.email ?? "",
         website: settings.website ?? "",
         logoUrl: settings.logoUrl ?? "",
+        fax: settings.fax ?? "",
+        psiraRegistration: settings.psiraRegistration ?? "",
+        uifReference: settings.uifReference ?? "",
       });
     }
   }, [settings]);
@@ -320,26 +326,86 @@ function BusinessDetailsSection({
             readOnly={readOnly}
           />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Registration Number</label>
-            <input
-              type="text"
-              value={form.registrationNumber}
-              onChange={(e) => setForm((f) => ({ ...f, registrationNumber: e.target.value }))}
-              className="input-modern"
-              readOnly={readOnly}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Tax Number</label>
-            <input
-              type="text"
-              value={form.taxNumber}
-              onChange={(e) => setForm((f) => ({ ...f, taxNumber: e.target.value }))}
-              className="input-modern"
-              readOnly={readOnly}
-            />
+        <div className="border-t border-neutral-200 dark:border-neutral-700 pt-6 mt-6">
+          <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-4">Payslip & Compliance</h4>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4">
+            These details appear on payslips and reports. Used for PSIRA, UIF, and tax compliance.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">PSIRA Registration</label>
+              <input
+                type="text"
+                value={form.psiraRegistration}
+                onChange={(e) => setForm((f) => ({ ...f, psiraRegistration: e.target.value }))}
+                className="input-modern"
+                placeholder="Company PSIRA number"
+                readOnly={readOnly}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Company Registration</label>
+              <input
+                type="text"
+                value={form.registrationNumber}
+                onChange={(e) => setForm((f) => ({ ...f, registrationNumber: e.target.value }))}
+                className="input-modern"
+                placeholder="Registration number"
+                readOnly={readOnly}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Tax Number</label>
+              <input
+                type="text"
+                value={form.taxNumber}
+                onChange={(e) => setForm((f) => ({ ...f, taxNumber: e.target.value }))}
+                className="input-modern"
+                readOnly={readOnly}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">UIF Reference</label>
+              <input
+                type="text"
+                value={form.uifReference}
+                onChange={(e) => setForm((f) => ({ ...f, uifReference: e.target.value }))}
+                className="input-modern"
+                placeholder="UIF reference number"
+                readOnly={readOnly}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Telephone</label>
+              <input
+                type="text"
+                value={form.phone}
+                onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                className="input-modern"
+                readOnly={readOnly}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Fax</label>
+              <input
+                type="text"
+                value={form.fax}
+                onChange={(e) => setForm((f) => ({ ...f, fax: e.target.value }))}
+                className="input-modern"
+                placeholder="Fax number"
+                readOnly={readOnly}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Email</label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                className="input-modern"
+                readOnly={readOnly}
+              />
+            </div>
           </div>
         </div>
         <div>
@@ -351,28 +417,6 @@ function BusinessDetailsSection({
             rows={3}
             readOnly={readOnly}
           />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Phone</label>
-            <input
-              type="text"
-              value={form.phone}
-              onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-              className="input-modern"
-              readOnly={readOnly}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Email</label>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-              className="input-modern"
-              readOnly={readOnly}
-            />
-          </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Website</label>
