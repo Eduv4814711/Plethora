@@ -245,3 +245,31 @@ export async function deleteUser(token: string, id: string): Promise<void> {
     throw new Error(err.message || "Failed to delete user");
   }
 }
+
+// Global search
+export interface SearchEmployee {
+  id: string;
+  employeeNumber: string;
+  firstName: string;
+  lastName: string;
+  status: string;
+}
+
+export interface SearchSite {
+  id: string;
+  name: string;
+  location: string | null;
+}
+
+export interface SearchResults {
+  employees: SearchEmployee[];
+  sites: SearchSite[];
+}
+
+export async function search(token: string, q: string): Promise<SearchResults> {
+  const trimmed = q.trim();
+  if (trimmed.length < 2) return { employees: [], sites: [] };
+  const res = await authFetch(`/search?q=${encodeURIComponent(trimmed)}`, token);
+  if (!res.ok) return { employees: [], sites: [] };
+  return res.json();
+}

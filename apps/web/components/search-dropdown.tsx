@@ -1,0 +1,205 @@
+"use client";
+
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
+import { search, type SearchResults } from "@/lib/api";
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debouncedValue;
+}
+
+export function SearchDropdown() {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResults | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const { token } = useAuth();
+  const router = useRouter();
+  const debouncedQuery = useDebounce(query, 300);
+
+  const fetchResults = useCallback(async () => {
+    if (!token || debouncedQuery.length < 2) {
+      setResults(null);
+      return;
+    }
+    setLoading(true);
+    try {
+      const data = await search(token, debouncedQuery);
+      setResults(data);
+      setFocusedIndex(-1);
+    } catch {
+      setResults({ employees: [], sites: [] });
+    } finally {
+      setLoading(false);
+    }
+  }, [token, debouncedQuery]);
+
+  useEffect(() => {
+    fetchResults();
+  }, [fetchResults]);
+
+  useEffect(() => {
+    setOpen(debouncedQuery.length >= 2);
+  }, [debouncedQuery]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const employees = results?.employees ?? [];
+  const sites = results?.sites ?? [];
+  const totalItems = employees.length + sites.length;
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!open || totalItems === 0) {
+      if (e.key === "Escape") setOpen(false);
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setFocusedIndex((i) => (i < totalItems - 1 ? i + 1 : i));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setFocusedIndex((i) => (i > 0 ? i - 1 : -1));
+    } else if (e.key === "Enter" && focusedIndex >= 0) {
+      e.preventDefault();
+      const idx = focusedIndex;
+      if (idx < employees.length) {
+        router.push(debouncedQuery ? `/employees?q=${encodeURIComponent(debouncedQuery)}` : "/employees");
+        setOpen(false);
+        setQuery("");
+      } else {
+        const site = sites[idx - employees.length];
+        router.push(`/sites/${site.id}`);
+        setOpen(false);
+        setQuery("");
+      }
+    } else if (e.key === "Escape") {
+      setOpen(false);
+      setFocusedIndex(-1);
+    }
+  };
+
+  useEffect(() => {
+    if (focusedIndex >= 0 && listRef.current) {
+      const el = listRef.current.children[focusedIndex] as HTMLElement;
+      el?.scrollIntoView({ block: "nearest" });
+    }
+  }, [focusedIndex]);
+
+  const handleSelectEmployee = () => {
+    router.push(debouncedQuery ? `/employees?q=${encodeURIComponent(debouncedQuery)}` : "/employees");
+    setOpen(false);
+    setQuery("");
+  };
+
+  const handleSelectSite = (id: string) => {
+    router.push(`/sites/${id}`);
+    setOpen(false);
+    setQuery("");
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
+      <input
+        type="search"
+        placeholder="Search employees, sites..."
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onFocus={() => debouncedQuery.length >= 2 && setOpen(true)}
+        onKeyDown={handleKeyDown}
+        className="w-72 pl-10 pr-4 py-2 rounded-sm border border-black dark:border-white bg-white dark:bg-neutral-900 text-sm placeholder-neutral-400 focus:ring-2 focus:ring-neutral-400 focus:border-black dark:focus:border-white outline-none"
+        aria-label="Search"
+        aria-expanded={open}
+        aria-autocomplete="list"
+      />
+      <svg
+        className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        viewBox="0 0 24 24"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+
+      {open && (
+        <div
+          ref={listRef}
+          className="absolute top-full left-0 right-0 mt-1 py-1 bg-white dark:bg-neutral-900 border border-black dark:border-white rounded-sm shadow-lg z-50 max-h-80 overflow-y-auto"
+          role="listbox"
+        >
+          {loading ? (
+            <div className="px-4 py-3 text-sm text-neutral-500">Searching...</div>
+          ) : totalItems === 0 ? (
+            <div className="px-4 py-3 text-sm text-neutral-500">No results found</div>
+          ) : (
+            <>
+              {employees.length > 0 && (
+                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
+                  Employees
+                </div>
+              )}
+              {employees.map((emp, i) => (
+                <button
+                  key={emp.id}
+                  type="button"
+                  role="option"
+                  aria-selected={focusedIndex === i}
+                  className={`
+                    w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors
+                    ${focusedIndex === i ? "bg-neutral-100 dark:bg-neutral-800" : "hover:bg-neutral-50 dark:hover:bg-neutral-800/50"}
+                  `}
+                  onClick={handleSelectEmployee}
+                >
+                  <span className="font-medium text-neutral-900 dark:text-neutral-100">
+                    {emp.firstName} {emp.lastName}
+                  </span>
+                  <span className="text-neutral-500 text-xs">{emp.employeeNumber}</span>
+                </button>
+              ))}
+              {sites.length > 0 && (
+                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 border-t border-neutral-200 dark:border-neutral-700 mt-1 pt-1">
+                  Sites
+                </div>
+              )}
+              {sites.map((site, i) => (
+                <button
+                  key={site.id}
+                  type="button"
+                  role="option"
+                  aria-selected={focusedIndex === employees.length + i}
+                  className={`
+                    w-full text-left px-4 py-2.5 text-sm flex flex-col gap-0.5 transition-colors
+                    ${focusedIndex === employees.length + i ? "bg-neutral-100 dark:bg-neutral-800" : "hover:bg-neutral-50 dark:hover:bg-neutral-800/50"}
+                  `}
+                  onClick={() => handleSelectSite(site.id)}
+                >
+                  <span className="font-medium text-neutral-900 dark:text-neutral-100">{site.name}</span>
+                  {site.location && (
+                    <span className="text-neutral-500 text-xs truncate">{site.location}</span>
+                  )}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
+import { SearchDropdown } from "@/components/search-dropdown";
 import { clsx } from "clsx";
 
 const navItems = [
@@ -82,16 +83,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 bg-white dark:bg-neutral-900 border-b border-black dark:border-white flex items-center justify-between px-6 shrink-0">
           <div className="flex items-center gap-4">
-            <div className="relative">
-              <input
-                type="search"
-                placeholder="Search..."
-                className="w-72 pl-10 pr-4 py-2 rounded-sm border border-black dark:border-white bg-white dark:bg-neutral-900 text-sm placeholder-neutral-400 focus:ring-2 focus:ring-neutral-400 focus:border-black dark:focus:border-white outline-none"
-              />
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
+            <SearchDropdown />
           </div>
           <div className="flex items-center gap-4">
             <button className="p-2 rounded-sm border border-transparent text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-300 transition-colors">

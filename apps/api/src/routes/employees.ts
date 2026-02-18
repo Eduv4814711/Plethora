@@ -118,11 +118,22 @@ export async function employeesRoutes(app: FastifyInstance) {
     const offset = Number(q.offset) || 0;
     const status = q.status as EmployeeStatus | undefined;
     const employeeType = q.employeeType;
+    const searchQuery = (q.q ?? q.search ?? "").trim();
 
     const where = {
       companyId: user.companyId,
       ...(status ? { status } : {}),
       ...(employeeType ? { employeeType } : {}),
+      ...(searchQuery.length >= 2
+        ? {
+            OR: [
+              { firstName: { contains: searchQuery, mode: "insensitive" as const } },
+              { lastName: { contains: searchQuery, mode: "insensitive" as const } },
+              { employeeNumber: { contains: searchQuery, mode: "insensitive" as const } },
+              { idNumber: { contains: searchQuery, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
     };
 
     const [employees, total] = await Promise.all([

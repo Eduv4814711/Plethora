@@ -24,6 +24,7 @@ import { dashboardRoutes } from "./routes/dashboard.js";
 import { auditRoutes } from "./routes/audit.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { uploadsRoutes } from "./routes/uploads.js";
+import { searchRoutes } from "./routes/search.js";
 
 const app = Fastify({ logger: true });
 
@@ -64,6 +65,7 @@ app.register(dashboardRoutes, { prefix: "/dashboard" });
 app.register(auditRoutes, { prefix: "/audit" });
 app.register(settingsRoutes, { prefix: "/settings" });
 app.register(uploadsRoutes, { prefix: "/uploads" });
+app.register(searchRoutes, { prefix: "/search" });
 
 const port = Number(process.env.PORT) || 3001;
 const host = process.env.HOST ?? "0.0.0.0";

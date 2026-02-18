@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 
@@ -73,6 +75,8 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
 
 export default function EmployeesPage() {
   const { token, user } = useAuth();
+  const searchParams = useSearchParams();
+  const searchQuery = searchParams.get("q") ?? "";
   const defaultCompanyName = (user as { company?: { name: string } } | null)?.company?.name ?? "";
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,7 +88,10 @@ export default function EmployeesPage() {
 
   const fetchEmployees = () => {
     if (!token) return;
-    const url = statusFilter === "all" ? "/employees" : `/employees?status=${statusFilter}`;
+    const params = new URLSearchParams();
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    if (searchQuery.trim().length >= 2) params.set("q", searchQuery.trim());
+    const url = `/employees${params.toString() ? `?${params}` : ""}`;
     authFetch(url, token)
       .then((r) => r.json())
       .then((d) => setEmployees(d.data || []));
@@ -94,7 +101,7 @@ export default function EmployeesPage() {
     if (!token) return;
     fetchEmployees();
     setLoading(false);
-  }, [token, statusFilter]);
+  }, [token, statusFilter, searchQuery]);
 
   if (loading) {
     return (
@@ -116,6 +123,12 @@ export default function EmployeesPage() {
           <p className="text-[10px] uppercase tracking-widest text-neutral-500 dark:text-neutral-400 mt-1">
             Manage your workforce
           </p>
+          {searchQuery.trim().length >= 2 && (
+            <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-2">
+              Filtered by &quot;{searchQuery}&quot;{" "}
+              <Link href="/employees" className="underline hover:no-underline">Clear</Link>
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <select
