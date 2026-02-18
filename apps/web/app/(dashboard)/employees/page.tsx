@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
+import { DateInput } from "@/components/date-input";
 
 interface Employee {
   id: string;
@@ -16,6 +17,7 @@ interface Employee {
   status: string;
   hourlyRate?: number | null;
   monthlySalary?: number | null;
+  gradeId?: string | null;
   currentSite: string | null;
   currentPost: string | null;
   employeeType?: string | null;
@@ -335,6 +337,37 @@ function parseSAIdNumber(id: string): { dateOfBirth?: string; gender?: "M" | "F"
   return { dateOfBirth, gender };
 }
 
+function PayGradeSelect({
+  token,
+  value,
+  onChange,
+  className = "input-modern",
+}: {
+  token: string;
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+}) {
+  const [grades, setGrades] = useState<{ id: string; name: string; hourlyRate: string }[]>([]);
+  useEffect(() => {
+    authFetch("/payroll/pay-grades", token)
+      .then((r) => r.json())
+      .then((d) => setGrades(d.data || []))
+      .catch(console.error);
+  }, [token]);
+
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={className}>
+      <option value="">Pay grade (optional)</option>
+      {grades.map((g) => (
+        <option key={g.id} value={g.id}>
+          {g.name} — R{Number(g.hourlyRate).toFixed(2)}/hr
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function EmployeeForm({
   token,
   defaultPlaceOfWork,
@@ -351,8 +384,8 @@ function EmployeeForm({
   const [idNumber, setIdNumber] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [hourlyRate, setHourlyRate] = useState("");
   const [monthlySalary, setMonthlySalary] = useState("");
+  const [gradeId, setGradeId] = useState("");
   const [status, setStatus] = useState("applicant");
   const [error, setError] = useState("");
 
@@ -408,8 +441,8 @@ function EmployeeForm({
         idNumber: idNumber || undefined,
         phone: phone || undefined,
         email: email || undefined,
-        hourlyRate: employeeType === "security" && hourlyRate ? parseFloat(hourlyRate) : undefined,
         monthlySalary: employeeType === "office" && monthlySalary ? parseFloat(monthlySalary) : undefined,
+        gradeId: employeeType === "security" && gradeId ? gradeId : undefined,
         status,
         employeeType,
         dateOfBirth: dateOfBirth || undefined,
@@ -466,61 +499,60 @@ function EmployeeForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="mb-8 p-6 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white max-h-[85vh] overflow-y-auto"
+      className="mb-6 p-4 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white max-h-[85vh] overflow-y-auto"
     >
-      <div className="mb-6 pb-4 border-b border-black dark:border-white">
-        <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 tracking-tight">New Employee</h3>
-        <p className="text-[10px] uppercase tracking-widest text-neutral-500 dark:text-neutral-400 mt-1">Add a new team member</p>
+      <div className="mb-4 pb-3 border-b border-black dark:border-white flex items-baseline justify-between gap-4">
+        <h3 className="text-base font-semibold text-neutral-900 dark:text-neutral-100 tracking-tight">New Employee</h3>
+        <span className="text-[10px] uppercase tracking-widest text-neutral-500 dark:text-neutral-400">Add team member</span>
       </div>
       {error && (
-        <div className="mb-6 p-4 text-sm text-neutral-900 dark:text-neutral-100 bg-neutral-50 dark:bg-neutral-800 border border-black dark:border-white rounded-sm">
+        <div className="mb-4 p-3 text-xs text-neutral-900 dark:text-neutral-100 bg-neutral-50 dark:bg-neutral-800 border border-black dark:border-white rounded-sm">
           {error}
         </div>
       )}
 
-      <div className="space-y-6">
-        <section className="p-5 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
-          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-1">Staff type</h4>
-          <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">Who are you onboarding?</p>
-          <div className="flex flex-wrap gap-6">
-            <label className="flex items-center gap-2.5 cursor-pointer">
+      <div className="space-y-4">
+        <section className="p-3 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
+          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-2">Staff type</h4>
+          <div className="flex gap-6">
+            <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="radio"
                 name="staffType"
                 value="office"
                 checked={employeeType === "office"}
                 onChange={() => setEmployeeType("office")}
-                className="w-4 h-4 border-2 border-black dark:border-white accent-neutral-900 dark:accent-white"
+                className="w-3.5 h-3.5 border-2 border-black dark:border-white accent-neutral-900 dark:accent-white"
               />
-              <span className="font-medium text-neutral-900 dark:text-neutral-100">Office Staff</span>
-              <span className="text-sm text-neutral-500 dark:text-neutral-400">(fixed monthly salary)</span>
+              <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100">Office</span>
+              <span className="text-xs text-neutral-500 dark:text-neutral-400">(salary)</span>
             </label>
-            <label className="flex items-center gap-2.5 cursor-pointer">
+            <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="radio"
                 name="staffType"
                 value="security"
                 checked={employeeType === "security"}
                 onChange={() => setEmployeeType("security")}
-                className="w-4 h-4 border-2 border-black dark:border-white accent-neutral-900 dark:accent-white"
+                className="w-3.5 h-3.5 border-2 border-black dark:border-white accent-neutral-900 dark:accent-white"
               />
-              <span className="font-medium text-neutral-900 dark:text-neutral-100">Guard</span>
-              <span className="text-sm text-neutral-500 dark:text-neutral-400">(hourly rate)</span>
+              <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100">Guard</span>
+              <span className="text-xs text-neutral-500 dark:text-neutral-400">(hourly)</span>
             </label>
           </div>
         </section>
 
-        <section className="p-5 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
-          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-4">Basic Information</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <section className="p-3 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
+          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-2">Basic</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
-              placeholder="Employee ID (optional – auto-generated if blank)"
+              placeholder="Employee ID (optional)"
               value={employeeNumber}
               onChange={(e) => setEmployeeNumber(e.target.value)}
-              className="input-modern"
-              title="Leave blank to auto-generate a unique ID (e.g. EMP-0001)"
+              className="input-compact"
+              title="Leave blank to auto-generate"
             />
-            <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-modern">
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-compact">
               <option value="applicant">Applicant</option>
               <option value="hired">Hired</option>
               <option value="training">Training</option>
@@ -528,8 +560,8 @@ function EmployeeForm({
               <option value="suspended">Suspended</option>
               <option value="offboarded">Offboarded</option>
             </select>
-            <input placeholder="First name *" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className="input-modern" />
-            <input placeholder="Last name *" value={lastName} onChange={(e) => setLastName(e.target.value)} required className="input-modern" />
+            <input placeholder="First name *" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className="input-compact" />
+            <input placeholder="Last name *" value={lastName} onChange={(e) => setLastName(e.target.value)} required className="input-compact" />
             <input
               placeholder="ID number (13-digit RSA ID)"
               value={idNumber}
@@ -542,11 +574,11 @@ function EmployeeForm({
                   if (parsed.gender) setGender(parsed.gender);
                 }
               }}
-              className="input-modern"
-              title="Enter 13-digit SA ID – date of birth and gender will auto-fill"
+              className="input-compact"
+              title="13-digit SA ID – DOB & gender auto-fill"
             />
-            <input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="input-modern" />
-            <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-modern" />
+            <input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="input-compact" />
+            <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-compact" />
             {employeeType === "office" ? (
               <input
                 type="number"
@@ -555,110 +587,102 @@ function EmployeeForm({
                 placeholder="Monthly salary (R)"
                 value={monthlySalary}
                 onChange={(e) => setMonthlySalary(e.target.value)}
-                className="input-modern"
+                className="input-compact"
               />
             ) : (
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="Hourly rate (R)"
-                value={hourlyRate}
-                onChange={(e) => setHourlyRate(e.target.value)}
-                className="input-modern"
-              />
+              <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} className="input-compact" />
             )}
           </div>
         </section>
 
-        <section className="p-5 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
-          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-4">Labour Law (BCEA) – Office Staff</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400">Date of birth</label>
-              <input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="input-modern" aria-label="Date of birth" />
+        <section className="p-3 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
+          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-2">Labour Law (BCEA)</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400">DOB</label>
+              <DateInput value={dateOfBirth} onChange={setDateOfBirth} ariaLabel="Date of birth" pastOnly showToday={false} />
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1">
               <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400">Gender</label>
-              <select value={gender} onChange={(e) => setGender(e.target.value)} className="input-modern">
+              <select value={gender} onChange={(e) => setGender(e.target.value)} className="input-compact">
                 <option value="">Select gender</option>
                 <option value="M">Male</option>
                 <option value="F">Female</option>
               </select>
             </div>
-            <input placeholder="Physical address" value={physicalAddress} onChange={(e) => setPhysicalAddress(e.target.value)} className="input-modern sm:col-span-2" />
-            <input placeholder="Postal address (if different)" value={postalAddress} onChange={(e) => setPostalAddress(e.target.value)} className="input-modern" />
-            <input placeholder="Postal code" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className="input-modern" />
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400">Employment commencement date</label>
-              <input type="date" value={commencementDate} onChange={(e) => setCommencementDate(e.target.value)} className="input-modern" aria-label="Employment commencement date" />
+            <input placeholder="Physical address" value={physicalAddress} onChange={(e) => setPhysicalAddress(e.target.value)} className="input-compact sm:col-span-2" />
+            <input placeholder="Postal address" value={postalAddress} onChange={(e) => setPostalAddress(e.target.value)} className="input-compact" />
+            <input placeholder="Postal code" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className="input-compact" />
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400">Commencement</label>
+              <DateInput value={commencementDate} onChange={setCommencementDate} ariaLabel="Commencement" />
             </div>
-            <input placeholder="Occupation / Job title" value={occupation} onChange={(e) => setOccupation(e.target.value)} className="input-modern" />
-            <input placeholder="Place of work" value={placeOfWork} onChange={(e) => setPlaceOfWork(e.target.value)} className="input-modern" />
-            <input placeholder="Ordinary hours (e.g. 45 hrs/week)" value={ordinaryHours} onChange={(e) => setOrdinaryHours(e.target.value)} className="input-modern" />
-            <input placeholder="Ordinary days (e.g. Mon–Fri)" value={ordinaryDays} onChange={(e) => setOrdinaryDays(e.target.value)} className="input-modern" />
-            <input type="number" step="0.01" min="0" placeholder="Overtime rate (R)" value={overtimeRate} onChange={(e) => setOvertimeRate(e.target.value)} className="input-modern" />
-            <select value={payFrequency} onChange={(e) => setPayFrequency(e.target.value)} className="input-modern">
+            <input placeholder="Occupation" value={occupation} onChange={(e) => setOccupation(e.target.value)} className="input-compact" />
+            <input placeholder="Place of work" value={placeOfWork} onChange={(e) => setPlaceOfWork(e.target.value)} className="input-compact" />
+            <input placeholder="Ordinary hours" value={ordinaryHours} onChange={(e) => setOrdinaryHours(e.target.value)} className="input-compact" />
+            <input placeholder="Ordinary days" value={ordinaryDays} onChange={(e) => setOrdinaryDays(e.target.value)} className="input-compact" />
+            <input type="number" step="0.01" min="0" placeholder="Overtime rate (R)" value={overtimeRate} onChange={(e) => setOvertimeRate(e.target.value)} className="input-compact" />
+            <select value={payFrequency} onChange={(e) => setPayFrequency(e.target.value)} className="input-compact">
               <option value="">Pay frequency</option>
               <option value="weekly">Weekly</option>
               <option value="bi-weekly">Bi-weekly</option>
               <option value="monthly">Monthly</option>
             </select>
-            <input placeholder="Leave entitlement" value={leaveEntitlement} onChange={(e) => setLeaveEntitlement(e.target.value)} className="input-modern" />
-            <input placeholder="Notice period" value={noticePeriod} onChange={(e) => setNoticePeriod(e.target.value)} className="input-modern" />
-            <input placeholder="Previous service (for continuity)" value={previousService} onChange={(e) => setPreviousService(e.target.value)} className="input-modern sm:col-span-2" />
-            <input placeholder="Tax number (SARS)" value={taxNumber} onChange={(e) => setTaxNumber(e.target.value)} className="input-modern" />
-            <input placeholder="Bank name" value={bankName} onChange={(e) => setBankName(e.target.value)} className="input-modern" />
-            <input placeholder="Bank account number" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} className="input-modern" />
-            <input placeholder="Branch code" value={bankBranchCode} onChange={(e) => setBankBranchCode(e.target.value)} className="input-modern" />
+            <input placeholder="Leave entitlement" value={leaveEntitlement} onChange={(e) => setLeaveEntitlement(e.target.value)} className="input-compact" />
+            <input placeholder="Notice period" value={noticePeriod} onChange={(e) => setNoticePeriod(e.target.value)} className="input-compact" />
+            <input placeholder="Previous service" value={previousService} onChange={(e) => setPreviousService(e.target.value)} className="input-compact sm:col-span-2" />
+            <input placeholder="Tax number" value={taxNumber} onChange={(e) => setTaxNumber(e.target.value)} className="input-compact" />
+            <input placeholder="Bank name" value={bankName} onChange={(e) => setBankName(e.target.value)} className="input-compact" />
+            <input placeholder="Bank account number" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} className="input-compact" />
+            <input placeholder="Branch code" value={bankBranchCode} onChange={(e) => setBankBranchCode(e.target.value)} className="input-compact" />
           </div>
         </section>
 
-        <section className="p-5 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
-          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-4">PSIRA – Security Staff</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <section className="p-3 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
+          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-2">PSIRA</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-1">PSIRA number <span className="text-red-600 dark:text-red-400">*</span></label>
-              <input placeholder="PSIRA number" value={psiraNumber} onChange={(e) => setPsiraNumber(e.target.value)} className="input-modern" required={employeeType === "security"} />
+              <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-1">PSIRA <span className="text-red-600 dark:text-red-400">*</span></label>
+              <input placeholder="PSIRA number" value={psiraNumber} onChange={(e) => setPsiraNumber(e.target.value)} className="input-compact" required={employeeType === "security"} />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400">PSIRA registration expiry date</label>
-              <input type="date" value={psiraExpiryDate} onChange={(e) => setPsiraExpiryDate(e.target.value)} className="input-modern" aria-label="PSIRA registration expiry date" />
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400">PSIRA expiry</label>
+              <DateInput value={psiraExpiryDate} onChange={setPsiraExpiryDate} ariaLabel="PSIRA expiry" futureOnly />
             </div>
-            <select value={securityServiceType} onChange={(e) => setSecurityServiceType(e.target.value)} className="input-modern sm:col-span-2">
-              <option value="">Nature of security service</option>
+            <select value={securityServiceType} onChange={(e) => setSecurityServiceType(e.target.value)} className="input-compact sm:col-span-2">
+              <option value="">Security service type</option>
               <option value="guarding">Guarding / Patrolling</option>
               <option value="close_protection">Close protection / Bodyguard</option>
               <option value="reaction">Reaction / Response</option>
               <option value="control_room">Control room / Monitoring</option>
               <option value="other">Other</option>
             </select>
-            <input placeholder="Next of kin 1 – Name" value={nextOfKin1Name} onChange={(e) => setNextOfKin1Name(e.target.value)} className="input-modern" />
-            <input placeholder="Next of kin 1 – Phone" value={nextOfKin1Phone} onChange={(e) => setNextOfKin1Phone(e.target.value)} className="input-modern" />
-            <input placeholder="Next of kin 2 – Name" value={nextOfKin2Name} onChange={(e) => setNextOfKin2Name(e.target.value)} className="input-modern" />
-            <input placeholder="Next of kin 2 – Phone" value={nextOfKin2Phone} onChange={(e) => setNextOfKin2Phone(e.target.value)} className="input-modern" />
-            <input placeholder="Next of kin 3 – Name" value={nextOfKin3Name} onChange={(e) => setNextOfKin3Name(e.target.value)} className="input-modern" />
-            <input placeholder="Next of kin 3 – Phone" value={nextOfKin3Phone} onChange={(e) => setNextOfKin3Phone(e.target.value)} className="input-modern" />
-            <div className="sm:col-span-2 p-4 rounded-sm border border-black dark:border-white bg-white dark:bg-neutral-900 space-y-3">
-              <p className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-2">Declaration</p>
-              <label className="flex items-center gap-3 text-sm cursor-pointer">
-                <input type="checkbox" checked={residedOutsideSA === true} onChange={(e) => setResidedOutsideSA(e.target.checked ? true : "")} className="w-4 h-4 rounded-sm border-2 border-black dark:border-white accent-neutral-900 dark:accent-white" />
-                Resided outside SA for 1+ year in last 10 years
+            <input placeholder="Next of kin 1 – Name" value={nextOfKin1Name} onChange={(e) => setNextOfKin1Name(e.target.value)} className="input-compact" />
+            <input placeholder="Next of kin 1 – Phone" value={nextOfKin1Phone} onChange={(e) => setNextOfKin1Phone(e.target.value)} className="input-compact" />
+            <input placeholder="Next of kin 2 – Name" value={nextOfKin2Name} onChange={(e) => setNextOfKin2Name(e.target.value)} className="input-compact" />
+            <input placeholder="Next of kin 2 – Phone" value={nextOfKin2Phone} onChange={(e) => setNextOfKin2Phone(e.target.value)} className="input-compact" />
+            <input placeholder="Next of kin 3 – Name" value={nextOfKin3Name} onChange={(e) => setNextOfKin3Name(e.target.value)} className="input-compact" />
+            <input placeholder="Next of kin 3 – Phone" value={nextOfKin3Phone} onChange={(e) => setNextOfKin3Phone(e.target.value)} className="input-compact" />
+            <div className="sm:col-span-2 p-3 rounded-sm border border-black dark:border-white bg-white dark:bg-neutral-900 space-y-2">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-1">Declaration</p>
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="checkbox" checked={residedOutsideSA === true} onChange={(e) => setResidedOutsideSA(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-black dark:border-white accent-neutral-900 dark:accent-white" />
+                Resided outside SA 1+ year (last 10 years)
               </label>
-              <label className="flex items-center gap-3 text-sm cursor-pointer">
-                <input type="checkbox" checked={militaryPoliceService === true} onChange={(e) => setMilitaryPoliceService(e.target.checked ? true : "")} className="w-4 h-4 rounded-sm border-2 border-black dark:border-white accent-neutral-900 dark:accent-white" />
-                Military / Police / Intelligence service
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="checkbox" checked={militaryPoliceService === true} onChange={(e) => setMilitaryPoliceService(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-black dark:border-white accent-neutral-900 dark:accent-white" />
+                Military / Police / Intelligence
               </label>
-              <label className="flex items-center gap-3 text-sm cursor-pointer">
-                <input type="checkbox" checked={criminalInvestigation === true} onChange={(e) => setCriminalInvestigation(e.target.checked ? true : "")} className="w-4 h-4 rounded-sm border-2 border-black dark:border-white accent-neutral-900 dark:accent-white" />
-                Criminal investigation or proceedings pending
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="checkbox" checked={criminalInvestigation === true} onChange={(e) => setCriminalInvestigation(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-black dark:border-white accent-neutral-900 dark:accent-white" />
+                Criminal investigation pending
               </label>
-              <label className="flex items-center gap-3 text-sm cursor-pointer">
-                <input type="checkbox" checked={mentallyUnstable === true} onChange={(e) => setMentallyUnstable(e.target.checked ? true : "")} className="w-4 h-4 rounded-sm border-2 border-black dark:border-white accent-neutral-900 dark:accent-white" />
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="checkbox" checked={mentallyUnstable === true} onChange={(e) => setMentallyUnstable(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-black dark:border-white accent-neutral-900 dark:accent-white" />
                 Ever declared mentally unstable
               </label>
-              <label className="flex items-center gap-3 text-sm cursor-pointer">
-                <input type="checkbox" checked={trainingCompleted === true} onChange={(e) => setTrainingCompleted(e.target.checked ? true : "")} className="w-4 h-4 rounded-sm border-2 border-black dark:border-white accent-neutral-900 dark:accent-white" />
+              <label className="flex items-center gap-2 text-xs cursor-pointer">
+                <input type="checkbox" checked={trainingCompleted === true} onChange={(e) => setTrainingCompleted(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-black dark:border-white accent-neutral-900 dark:accent-white" />
                 Accredited training completed
               </label>
             </div>
@@ -666,8 +690,8 @@ function EmployeeForm({
         </section>
       </div>
 
-      <div className="mt-8 pt-6 border-t border-black dark:border-white">
-        <button type="submit" className="btn-primary">
+      <div className="mt-4 pt-4 border-t border-black dark:border-white">
+        <button type="submit" className="btn-primary text-sm py-2">
           Create Employee
         </button>
       </div>
@@ -695,8 +719,8 @@ function EditModal({
   const [idNumber, setIdNumber] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [hourlyRate, setHourlyRate] = useState("");
   const [monthlySalary, setMonthlySalary] = useState("");
+  const [gradeId, setGradeId] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -748,8 +772,8 @@ function EditModal({
         setIdNumber(emp.idNumber || "");
         setPhone(emp.phone || "");
         setEmail(emp.email || "");
-        setHourlyRate(emp.hourlyRate != null ? String(emp.hourlyRate) : "");
         setMonthlySalary(emp.monthlySalary != null ? String(emp.monthlySalary) : "");
+        setGradeId(emp.gradeId || "");
         setDateOfBirth(toDateStr(emp.dateOfBirth));
         setGender(emp.gender || "");
         setPhysicalAddress(emp.physicalAddress || "");
@@ -804,8 +828,9 @@ function EditModal({
         idNumber: idNumber || undefined,
         phone: phone || undefined,
         email: email || undefined,
-        hourlyRate: employeeType === "security" && hourlyRate ? parseFloat(hourlyRate) : employeeType === "office" ? null : undefined,
+        hourlyRate: employeeType === "office" ? null : undefined,
         monthlySalary: employeeType === "office" && monthlySalary ? parseFloat(monthlySalary) : employeeType === "security" ? null : undefined,
+        gradeId: employeeType === "security" && gradeId ? gradeId : null,
         employeeType,
         dateOfBirth: dateOfBirth || undefined,
         gender: gender || undefined,
@@ -955,15 +980,7 @@ function EditModal({
                     className="input-modern"
                   />
                 ) : (
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="Hourly rate (R)"
-                    value={hourlyRate}
-                    onChange={(e) => setHourlyRate(e.target.value)}
-                    className="input-modern"
-                  />
+                  <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} />
                 )}
               </div>
             </section>
@@ -973,7 +990,7 @@ function EditModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-sm font-medium text-neutral-600 dark:text-neutral-400">Date of birth</label>
-                  <input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="input-modern" aria-label="Date of birth" />
+                  <DateInput value={dateOfBirth} onChange={setDateOfBirth} className="input-modern" ariaLabel="Date of birth" pastOnly showToday={false} />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-sm font-medium text-neutral-600 dark:text-neutral-400">Gender</label>
@@ -988,7 +1005,7 @@ function EditModal({
                 <input placeholder="Postal code" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className="input-modern" />
                 <div className="flex flex-col gap-1">
                   <label className="text-sm font-medium text-neutral-600 dark:text-neutral-400">Employment commencement date</label>
-                  <input type="date" value={commencementDate} onChange={(e) => setCommencementDate(e.target.value)} className="input-modern" aria-label="Employment commencement date" />
+                  <DateInput value={commencementDate} onChange={setCommencementDate} className="input-modern" ariaLabel="Commencement" />
                 </div>
                 <input placeholder="Occupation" value={occupation} onChange={(e) => setOccupation(e.target.value)} className="input-modern" />
                 <input placeholder="Place of work" value={placeOfWork} onChange={(e) => setPlaceOfWork(e.target.value)} className="input-modern" />
@@ -1019,8 +1036,8 @@ function EditModal({
                   <input placeholder="PSIRA number" value={psiraNumber} onChange={(e) => setPsiraNumber(e.target.value)} className="input-modern" required={employeeType === "security"} />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-sm font-medium text-neutral-600 dark:text-neutral-400">PSIRA registration expiry date</label>
-                  <input type="date" value={psiraExpiryDate} onChange={(e) => setPsiraExpiryDate(e.target.value)} className="input-modern" aria-label="PSIRA registration expiry date" />
+                  <label className="text-sm font-medium text-neutral-600 dark:text-neutral-400">PSIRA expiry</label>
+                  <DateInput value={psiraExpiryDate} onChange={setPsiraExpiryDate} className="input-modern" ariaLabel="PSIRA expiry" futureOnly />
                 </div>
                 <select value={securityServiceType} onChange={(e) => setSecurityServiceType(e.target.value)} className="input-modern sm:col-span-2">
                   <option value="">Nature of security service</option>

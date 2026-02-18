@@ -37,6 +37,8 @@ model Company {
   payrollRuns      PayrollRun[]
   auditLogs        AuditLog[]
   payRules         PayRule[]
+  payGrades        PayGrade[]
+  earningsRules    EarningsRule[]
   deductionRules   DeductionRule[]
   publicHolidays   PublicHoliday[]
   timesheets       Timesheet[]
@@ -123,7 +125,9 @@ model Employee {
   mentallyUnstable Boolean?
   trainingCompleted Boolean?
 
+  gradeId            String?
   company            Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  grade              PayGrade?          @relation(fields: [gradeId], references: [id], onDelete: SetNull)
   shifts             Shift[]
   payrollItems       PayrollItem[]
   siteAssignments   SiteAssignment[]
@@ -134,6 +138,7 @@ model Employee {
 
   @@unique([companyId, employeeNumber])
   @@index([companyId])
+  @@index([gradeId])
   @@index([status])
   @@index([employeeType])
 }
@@ -319,6 +324,38 @@ model PayRule {
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, ruleType])
+  @@index([companyId])
+}
+
+model PayGrade {
+  id         String   @id @default(cuid())
+  companyId  String
+  name       String   // e.g. "Grade A", "Senior Guard"
+  hourlyRate Decimal  @db.Decimal(10, 2)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employees Employee[]
+
+  @@index([companyId])
+}
+
+model EarningsRule {
+  id         String   @id @default(cuid())
+  companyId String
+  name      String   // e.g. "Transport", "Uniform allowance"
+  type      String   // "fixed" | "percentage"
+  amount    Decimal? @db.Decimal(12, 2)
+  rate      Decimal? @db.Decimal(5, 2)
+  appliesTo String   @default("all") // "all" | "security" | "office"
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   @@index([companyId])
 }
 

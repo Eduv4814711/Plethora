@@ -44,6 +44,9 @@ export async function calculatePayroll(
   const payRules = await prisma.payRule.findMany({
     where: { companyId },
   });
+  const earningsRules = await prisma.earningsRule.findMany({
+    where: { companyId, isActive: true },
+  });
   const ruleMap = new Map(payRules.map((r) => [r.ruleType, Number(r.multiplier)]));
   const otMult = ruleMap.get("overtime") ?? DEFAULT_OT_MULTIPLIER;
   const sundayMult = ruleMap.get("sunday") ?? DEFAULT_SUNDAY_MULTIPLIER;
@@ -57,6 +60,7 @@ export async function calculatePayroll(
       companyId,
       status: { in: ["active", "training", "suspended"] },
     },
+    include: { grade: true },
   });
 
   const itemsToCreate: Array<{
@@ -76,7 +80,12 @@ export async function calculatePayroll(
   }> = [];
 
   for (const emp of employees) {
-    const hourlyRate = emp.hourlyRate != null ? Number(emp.hourlyRate) : 0;
+    const hourlyRate =
+      emp.grade != null
+        ? Number(emp.grade.hourlyRate)
+        : emp.hourlyRate != null
+          ? Number(emp.hourlyRate)
+          : 0;
     const monthlySalary = emp.monthlySalary != null ? Number(emp.monthlySalary) : 0;
 
     let hoursWorked = 0;
@@ -116,6 +125,29 @@ export async function calculatePayroll(
       if (sundayPay > 0) earningsLines.push({ name: "Sunday", amount: sundayPay });
       if (publicHolidayPay > 0) earningsLines.push({ name: "Public Holiday", amount: publicHolidayPay });
     }
+
+    const empType = emp.employeeType ?? "security";
+    const baseForPct = emp.employeeType === "office" ? grossPay : basePay;
+    for (const er of earningsRules) {
+      const applies =
+        er.appliesTo === "all" ||
+        (er.appliesTo === "security" && empType !== "office") ||
+        (er.appliesTo === "office" && empType === "office");
+      if (!applies) continue;
+
+      let amount = 0;
+      if (er.type === "fixed" && er.amount != null) {
+        amount = Number(er.amount);
+      } else if (er.type === "percentage" && er.rate != null && baseForPct > 0) {
+        amount = (Number(er.rate) / 100) * baseForPct;
+      }
+      if (amount > 0) {
+        amount = Math.round(amount * 100) / 100;
+        grossPay += amount;
+        earningsLines.push({ name: er.name, amount });
+      }
+    }
+    grossPay = Math.round(grossPay * 100) / 100;
 
     const { total: totalDeductions, lines: deductionLines } = await calculateDeductions(
       companyId,

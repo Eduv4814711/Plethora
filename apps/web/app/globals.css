@@ -39,7 +39,63 @@ body {
   .input-modern {
     @apply w-full px-4 py-2.5 rounded-sm border-2 border-black dark:border-white bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-neutral-400 focus:border-neutral-900 dark:focus:border-neutral-100 transition-colors outline-none;
   }
+  .input-compact {
+    @apply w-full px-3 py-2 text-sm rounded-sm border-2 border-black dark:border-white bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-neutral-400 focus:border-neutral-900 dark:focus:border-neutral-100 transition-colors outline-none;
+  }
   .card-wireframe {
     @apply border-2 border-black dark:border-white bg-white dark:bg-neutral-900 rounded-sm;
   }
 }
+
+/* Date picker – wireframe styling (arrow nav, centered label) */
+.rdp-root {
+  --rdp-accent-color: #0a0a0a;
+  --rdp-accent-background-color: #f5f5f5;
+  --rdp-day_button-border-radius: 2px;
+  --rdp-day_button-width: 36px;
+  --rdp-day_button-height: 36px;
+  --rdp-day-height: 38px;
+  --rdp-day-width: 38px;
+}
+.dark .rdp-root {
+  --rdp-accent-color: #fafafa;
+  --rdp-accent-background-color: #404040;
+}
+
+/* Header bar – subtle background, centered month/year */
+.rdp-root .rdp-month_caption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  margin-bottom: 0.5rem;
+  background: #f5f5f5;
+  border-radius: 2px;
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+.dark .rdp-root .rdp-month_caption {
+  background: #262626;
+}
+
+/* Nav arrows – wireframe boxes */
+.rdp-root .rdp-button_previous,
+.rdp-root .rdp-button_next {
+  border: 2px solid #0a0a0a;
+  border-radius: 2px;
+  background: white;
+}
+.dark .rdp-root .rdp-button_previous,
+.dark .rdp-root .rdp-button_next {
+  border-color: #fafafa;
+  background: #171717;
+}
+.rdp-root .rdp-button_previous:hover,
+.rdp-root .rdp-button_next:hover {
+  background: #f5f5f5;
+}
+.dark .rdp-root .rdp-button_previous:hover,
+.dark .rdp-root .rdp-button_next:hover {
+  background: #404040;
+}
+

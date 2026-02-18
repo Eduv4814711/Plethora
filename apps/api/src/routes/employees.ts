@@ -50,6 +50,7 @@ const createEmployeeSchema = z.object({
   status: z.enum(["applicant", "hired", "training", "active", "suspended", "offboarded"]).default("applicant"),
   hourlyRate: z.number().positive().optional(),
   monthlySalary: z.number().positive().optional(),
+  gradeId: z.string().optional().nullable(),
   employeeType: z.enum(["office", "security"]).default("security"),
   jobRole: optionalString,
   // Labour Law (BCEA)
@@ -103,6 +104,7 @@ const updateEmployeeSchema = createEmployeeSchema.partial().extend({
   status: z.enum(["applicant", "hired", "training", "active", "suspended", "offboarded"]).optional(),
   hourlyRate: z.number().positive().optional().nullable(),
   monthlySalary: z.number().positive().optional().nullable(),
+  gradeId: z.string().optional().nullable(),
 });
 
 const statusTransitionSchema = z.object({
@@ -215,6 +217,7 @@ export async function employeesRoutes(app: FastifyInstance) {
         status: d.status,
         hourlyRate: d.hourlyRate,
         monthlySalary: d.monthlySalary,
+        gradeId: d.gradeId ?? null,
         employeeType: d.employeeType ?? "security",
         jobRole: d.jobRole,
         dateOfBirth: d.dateOfBirth,
