@@ -116,7 +116,7 @@ export default function AttendancePage() {
               (s: ShiftForClockIn) =>
                 s.status === "assigned" &&
                 new Date(s.startTime).getTime() - 30 * 60 * 1000 <= now.getTime() &&
-                new Date(s.startTime).getTime() + 30 * 60 * 1000 >= now.getTime()
+                new Date(s.endTime).getTime() > now.getTime()
             );
             setShiftsForClockIn(shifts);
           })

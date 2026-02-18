@@ -10,11 +10,14 @@ export class AttendanceValidationError extends Error {
 
 const CLOCK_IN_WINDOW_MS = config.attendance.clockInWindowMinutes * 60 * 1000;
 
-export async function validateClockIn(shiftId: string): Promise<{
+export async function validateClockIn(
+  shiftId: string,
+  companyId: string
+): Promise<{
   shift: { id: string; startTime: Date; endTime: Date };
 }> {
-  const shift = await prisma.shift.findUnique({
-    where: { id: shiftId },
+  const shift = await prisma.shift.findFirst({
+    where: { id: shiftId, companyId },
   });
 
   if (!shift) {
@@ -37,17 +40,16 @@ export async function validateClockIn(shiftId: string): Promise<{
 
   const now = new Date();
   const windowStart = new Date(shift.startTime.getTime() - CLOCK_IN_WINDOW_MS);
-  const windowEnd = new Date(shift.startTime.getTime() + CLOCK_IN_WINDOW_MS);
 
   if (now < windowStart) {
     throw new AttendanceValidationError(
-      `Clock-in allowed from ${windowStart.toISOString()} (30 min before shift)`
+      `Clock-in allowed from ${windowStart.toISOString()} (${config.attendance.clockInWindowMinutes} min before shift)`
     );
   }
 
-  if (now > windowEnd) {
+  if (now > shift.endTime) {
     throw new AttendanceValidationError(
-      `Clock-in window ended at ${windowEnd.toISOString()}`
+      "Clock-in window ended. Cannot clock in after shift end time."
     );
   }
 

@@ -51,6 +51,7 @@ const createEmployeeSchema = z.object({
   hourlyRate: z.number().positive().optional(),
   monthlySalary: z.number().positive().optional(),
   employeeType: z.enum(["office", "security"]).default("security"),
+  jobRole: optionalString,
   // Labour Law (BCEA)
   dateOfBirth: optionalDate,
   gender: optionalString,
@@ -215,6 +216,7 @@ export async function employeesRoutes(app: FastifyInstance) {
         hourlyRate: d.hourlyRate,
         monthlySalary: d.monthlySalary,
         employeeType: d.employeeType ?? "security",
+        jobRole: d.jobRole,
         dateOfBirth: d.dateOfBirth,
         gender: d.gender,
         email: d.email,

@@ -14,5 +14,6 @@ export const config = {
   },
   attendance: {
     clockInWindowMinutes: 30,
+    lateClockInGraceMinutes: 120, // Allow up to 2 hours late
   },
 } as const;

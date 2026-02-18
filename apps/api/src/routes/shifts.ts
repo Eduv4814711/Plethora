@@ -223,11 +223,15 @@ export async function shiftsRoutes(app: FastifyInstance) {
     if (siteId) {
       where.post = { siteId };
     }
-    if (startDate) {
-      where.startTime = { gte: new Date(startDate) };
-    }
-    if (endDate) {
-      where.endTime = { lte: new Date(endDate) };
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      where.startTime = { lt: end };
+      where.endTime = { gt: start };
+    } else if (startDate) {
+      where.endTime = { gt: new Date(startDate) };
+    } else if (endDate) {
+      where.startTime = { lt: new Date(endDate) };
     }
 
     const [shifts, total] = await Promise.all([
@@ -650,6 +654,53 @@ export async function shiftsRoutes(app: FastifyInstance) {
     });
 
     return reply.send(shift);
+  });
+
+  app.post("/bulk-verify", { preHandler: verifyProtect }, async (request, reply) => {
+    const schema = z.object({ shiftIds: z.array(z.string().min(1)).min(1).max(100) });
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const companyId = request.user!.companyId;
+    let verified = 0;
+    const errors: string[] = [];
+
+    for (const id of parsed.data.shiftIds) {
+      const existing = await prisma.shift.findFirst({
+        where: { id, companyId },
+      });
+      if (!existing) {
+        errors.push(`${id}: Shift not found`);
+        continue;
+      }
+      if (!canTransitionShift(existing.status, "verified")) {
+        errors.push(`${id}: Cannot verify (status: ${existing.status})`);
+        continue;
+      }
+      await prisma.shift.update({
+        where: { id },
+        data: { status: "verified" },
+      });
+      verified++;
+    }
+
+    if (verified > 0) {
+      await createAuditLog({
+        userId: request.user!.sub,
+        companyId,
+        action: "shift.bulk_verify",
+        entityType: "shift",
+        entityId: undefined,
+        metadata: { shiftIds: parsed.data.shiftIds, verified },
+      });
+    }
+
+    return reply.send({ verified, errors: errors.length > 0 ? errors : undefined });
   });
 
   app.post("/:id/verify", { preHandler: verifyProtect }, async (request, reply) => {

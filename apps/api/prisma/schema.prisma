@@ -30,12 +30,16 @@ model Company {
   settings Json? // { currency, dateFormat, timezone, payrollPeriod, etc. }
   theme    Json? // { primaryColor, accentColor, mode: "light"|"dark"|"system" }
 
-  users        User[]
-  employees    Employee[]
-  sites        Site[]
-  shifts       Shift[]
-  payrollRuns  PayrollRun[]
-  auditLogs    AuditLog[]
+  users            User[]
+  employees        Employee[]
+  sites            Site[]
+  shifts           Shift[]
+  payrollRuns      PayrollRun[]
+  auditLogs        AuditLog[]
+  payRules         PayRule[]
+  deductionRules   DeductionRule[]
+  publicHolidays   PublicHoliday[]
+  timesheets       Timesheet[]
 }
 
 model User {
@@ -79,6 +83,7 @@ model Employee {
 
   // Employee type: office (Labour Law) vs security/guard (PSIRA)
   employeeType String @default("security") // "office" | "security"
+  jobRole      String? // e.g. "Security Officer", "HR Manager"
 
   // Labour Law (BCEA) - office staff
   dateOfBirth      DateTime?
@@ -118,11 +123,14 @@ model Employee {
   mentallyUnstable Boolean?
   trainingCompleted Boolean?
 
-  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  shifts          Shift[]
-  payrollItems    PayrollItem[]
-  siteAssignments SiteAssignment[]
-  postAssignments PostAssignment[]
+  company            Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  shifts             Shift[]
+  payrollItems       PayrollItem[]
+  siteAssignments   SiteAssignment[]
+  postAssignments   PostAssignment[]
+  timesheets         Timesheet[]
+  leaveRecords      LeaveRecord[]
+  employeeDeductions EmployeeDeduction[]
 
   @@unique([companyId, employeeNumber])
   @@index([companyId])
@@ -250,16 +258,18 @@ model Attendance {
 }
 
 model PayrollRun {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   companyId  String
   periodStart DateTime
   periodEnd   DateTime
   status     PayrollStatus
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  lockedAt   DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
-  company Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  items  PayrollItem[]
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  items      PayrollItem[]
+  timesheets Timesheet[]
 
   @@index([companyId])
   @@index([periodStart])
@@ -275,23 +285,146 @@ enum PayrollStatus {
 }
 
 model PayrollItem {
-  id           String   @id @default(cuid())
-  payrollRunId String
-  employeeId   String
-  hoursWorked  Decimal  @db.Decimal(10, 2)
-  overtimeHours Decimal @db.Decimal(10, 2)
-  basePay      Decimal  @db.Decimal(12, 2)
-  overtimePay  Decimal  @db.Decimal(12, 2)
-  deductions   Decimal  @db.Decimal(12, 2)
-  netPay       Decimal  @db.Decimal(12, 2)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  payrollRunId       String
+  employeeId         String
+  hoursWorked        Decimal  @db.Decimal(10, 2)
+  overtimeHours      Decimal  @db.Decimal(10, 2)
+  basePay            Decimal  @db.Decimal(12, 2)
+  overtimePay        Decimal  @db.Decimal(12, 2)
+  sundayPay          Decimal? @db.Decimal(12, 2)
+  publicHolidayPay   Decimal? @db.Decimal(12, 2)
+  grossPay           Decimal  @db.Decimal(12, 2) @default(0)
+  deductions         Decimal  @db.Decimal(12, 2)
+  netPay             Decimal  @db.Decimal(12, 2)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   payrollRun PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
   employee  Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  payslip   Payslip?
 
   @@index([payrollRunId])
   @@index([employeeId])
+}
+
+model PayRule {
+  id         String   @id @default(cuid())
+  companyId  String
+  ruleType   String   // "overtime" | "sunday" | "public_holiday"
+  multiplier Decimal  @db.Decimal(5, 2)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, ruleType])
+  @@index([companyId])
+}
+
+model DeductionRule {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  type        String   // "fixed" | "percentage"
+  amount      Decimal? @db.Decimal(12, 2)
+  rate        Decimal? @db.Decimal(5, 2)
+  appliesTo   String   @default("all") // "all" | "security" | "office"
+  employeeIds Json?
+  isOptional  Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employeeDeductions EmployeeDeduction[]
+
+  @@index([companyId])
+}
+
+model EmployeeDeduction {
+  id              String    @id @default(cuid())
+  employeeId      String
+  deductionRuleId String?
+  name            String
+  type            String    // "fixed" | "percentage"
+  amount          Decimal   @db.Decimal(12, 2)
+  rate            Decimal?  @db.Decimal(5, 2)
+  appliesFrom     DateTime  @default(now())
+  appliesTo       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  employee      Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  deductionRule DeductionRule? @relation(fields: [deductionRuleId], references: [id], onDelete: SetNull)
+
+  @@index([employeeId])
+  @@index([deductionRuleId])
+}
+
+model PublicHoliday {
+  id        String   @id @default(cuid())
+  companyId String
+  date      DateTime @db.Date
+  name      String?
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, date])
+  @@index([companyId])
+}
+
+model Timesheet {
+  id                   String    @id @default(cuid())
+  companyId            String
+  employeeId           String
+  payrollRunId         String?
+  periodStart          DateTime
+  periodEnd            DateTime
+  basicHours           Decimal   @db.Decimal(10, 2)
+  overtimeHours        Decimal   @db.Decimal(10, 2)
+  sundayHours         Decimal   @db.Decimal(10, 2) @default(0)
+  publicHolidayHours  Decimal   @db.Decimal(10, 2) @default(0)
+  leaveDays            Decimal   @db.Decimal(5, 2) @default(0)
+  source               String    @default("auto") // "auto" | "manual"
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee   Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  payrollRun PayrollRun? @relation(fields: [payrollRunId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, employeeId, periodStart])
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([payrollRunId])
+}
+
+model LeaveRecord {
+  id         String   @id @default(cuid())
+  employeeId String
+  date       DateTime @db.Date
+  type       String   // "annual" | "sick" | "unpaid"
+  hours      Decimal  @db.Decimal(5, 2) @default(8)
+  createdAt  DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, date])
+}
+
+model Payslip {
+  id                String   @id @default(cuid())
+  payrollItemId     String   @unique
+  earnings          Json     // [{ name, amount }]
+  deductions        Json     // [{ name, amount }]
+  grossPay          Decimal  @db.Decimal(12, 2)
+  totalDeductions   Decimal  @db.Decimal(12, 2)
+  netPay            Decimal  @db.Decimal(12, 2)
+  generatedAt       DateTime @default(now())
+
+  payrollItem PayrollItem @relation(fields: [payrollItemId], references: [id], onDelete: Cascade)
 }
 
 model AuditLog {

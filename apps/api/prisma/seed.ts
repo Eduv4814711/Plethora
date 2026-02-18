@@ -196,7 +196,93 @@ async function main() {
     created++;
   }
 
-  console.log("Seed completed: company, admin user, and employees created");
+  // Seed default PayRules (upsert - one per ruleType per company)
+  const payRuleTypes = [
+    { ruleType: "overtime", multiplier: 1.5 },
+    { ruleType: "sunday", multiplier: 2.0 },
+    { ruleType: "public_holiday", multiplier: 2.0 },
+  ];
+  for (const { ruleType, multiplier } of payRuleTypes) {
+    await prisma.payRule.upsert({
+      where: {
+        companyId_ruleType: { companyId: company.id, ruleType },
+      },
+      create: { companyId: company.id, ruleType, multiplier },
+      update: { multiplier },
+    });
+  }
+
+  // Seed default DeductionRules (UIF, PSIRA)
+  const uifExisting = await prisma.deductionRule.findFirst({
+    where: { companyId: company.id, name: "UIF" },
+  });
+  if (!uifExisting) {
+    await prisma.deductionRule.create({
+      data: {
+        companyId: company.id,
+        name: "UIF",
+        type: "percentage",
+        rate: 1,
+        appliesTo: "all",
+        isOptional: false,
+      },
+    });
+  }
+  const psiraExisting = await prisma.deductionRule.findFirst({
+    where: { companyId: company.id, name: "PSIRA" },
+  });
+  if (!psiraExisting) {
+    await prisma.deductionRule.create({
+      data: {
+        companyId: company.id,
+        name: "PSIRA",
+        type: "fixed",
+        amount: 75,
+        appliesTo: "security",
+        isOptional: false,
+      },
+    });
+  }
+
+  // Seed SA public holidays for 2025-2026
+  const saHolidays = [
+    { date: "2025-01-01", name: "New Year's Day" },
+    { date: "2025-03-21", name: "Human Rights Day" },
+    { date: "2025-04-18", name: "Good Friday" },
+    { date: "2025-04-21", name: "Family Day" },
+    { date: "2025-04-27", name: "Freedom Day" },
+    { date: "2025-05-01", name: "Workers' Day" },
+    { date: "2025-06-16", name: "Youth Day" },
+    { date: "2025-08-09", name: "Women's Day" },
+    { date: "2025-09-24", name: "Heritage Day" },
+    { date: "2025-12-16", name: "Day of Reconciliation" },
+    { date: "2025-12-25", name: "Christmas Day" },
+    { date: "2025-12-26", name: "Day of Goodwill" },
+    { date: "2026-01-01", name: "New Year's Day" },
+    { date: "2026-03-21", name: "Human Rights Day" },
+    { date: "2026-04-03", name: "Good Friday" },
+    { date: "2026-04-06", name: "Family Day" },
+    { date: "2026-04-27", name: "Freedom Day" },
+    { date: "2026-05-01", name: "Workers' Day" },
+    { date: "2026-06-16", name: "Youth Day" },
+    { date: "2026-08-09", name: "Women's Day" },
+    { date: "2026-09-24", name: "Heritage Day" },
+    { date: "2026-12-16", name: "Day of Reconciliation" },
+    { date: "2026-12-25", name: "Christmas Day" },
+    { date: "2026-12-26", name: "Day of Goodwill" },
+  ];
+  for (const h of saHolidays) {
+    const d = new Date(h.date);
+    await prisma.publicHoliday.upsert({
+      where: {
+        companyId_date: { companyId: company.id, date: d },
+      },
+      create: { companyId: company.id, date: d, name: h.name },
+      update: { name: h.name },
+    });
+  }
+
+  console.log("Seed completed: company, admin user, employees, pay rules, deduction rules, public holidays");
   console.log(`Created ${created} new employees (${SECURITY_GUARDS.length} guards, ${OFFICE_STAFF.length} office staff)`);
   console.log("Login: admin@quickbopha.com / admin123");
 }
