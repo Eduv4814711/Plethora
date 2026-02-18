@@ -50,9 +50,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             {settings?.logoUrl ? (
               <img src={settings.logoUrl} alt="" className="w-10 h-10 rounded-sm object-cover border border-black dark:border-white" />
             ) : (
-              <div className="w-10 h-10 rounded-sm border border-black dark:border-white flex items-center justify-center bg-white dark:bg-neutral-900">
-                <span className="text-sm font-bold text-neutral-900 dark:text-neutral-100">{companyName.charAt(0)}</span>
-              </div>
+              <img src="/plethora-logo.png" alt="Plethora" className="h-10 w-auto object-contain" />
             )}
             <span className="text-lg font-bold text-neutral-900 dark:text-neutral-100 tracking-tight truncate">
               {companyName}

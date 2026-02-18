@@ -536,53 +536,135 @@ function AttendanceRow({
   onSuccess: () => void;
   showClockOut: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const shiftStart = new Date(att.shift.startTime);
   const shiftEnd = new Date(att.shift.endTime);
   const shiftHours = Math.round(((shiftEnd.getTime() - shiftStart.getTime()) / (1000 * 60 * 60)) * 100) / 100;
 
   return (
-    <div className="p-4 bg-white dark:bg-neutral-800 rounded-sm border border-black dark:border-white flex items-center justify-between">
-      <div>
-        <span className="font-medium">
-          {att.shift.employee.firstName} {att.shift.employee.lastName}
-        </span>
-        <span className="text-neutral-500 mx-2">at</span>
-        <span>
-          {att.shift.post.site.name} - {att.shift.post.name}
-        </span>
-        <span className="ml-2 text-sm text-neutral-600 dark:text-neutral-400">
-          {att.clockIn
-            ? new Date(att.clockIn).toLocaleString()
-            : "Not clocked in"}
-          {att.clockOut && ` - ${new Date(att.clockOut).toLocaleString()}`}
-        </span>
-        <span className="ml-2 text-sm text-neutral-500 dark:text-neutral-500">
-          | Shift: {shiftHours}h
-        </span>
-        {(att.overtimeHours ?? 0) > 0 && (
-          <span className="ml-2 text-neutral-600 font-medium">
-            OT: {att.overtimeHours}h
+    <div className="bg-white dark:bg-neutral-800 rounded-sm border border-black dark:border-white overflow-hidden">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setExpanded((e) => !e)}
+        onKeyDown={(e) => e.key === "Enter" && setExpanded((ex) => !ex)}
+        className="p-4 flex items-center justify-between cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <svg
+            className={`w-4 h-4 text-neutral-500 transition-transform ${expanded ? "rotate-90" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+          <div>
+            <span className="font-medium">
+              {att.shift.employee.firstName} {att.shift.employee.lastName}
+            </span>
+            <span className="text-neutral-500 mx-2">at</span>
+            <span>
+              {att.shift.post.site.name} - {att.shift.post.name}
+            </span>
+            <span className="ml-2 text-sm text-neutral-600 dark:text-neutral-400">
+              {att.clockIn
+                ? new Date(att.clockIn).toLocaleString()
+                : "Not clocked in"}
+              {att.clockOut && ` - ${new Date(att.clockOut).toLocaleString()}`}
+            </span>
+            <span className="ml-2 text-sm text-neutral-500 dark:text-neutral-500">
+              | Shift: {shiftHours}h
+            </span>
+            {(att.overtimeHours ?? 0) > 0 && (
+              <span className="ml-2 text-neutral-600 font-medium">
+                OT: {att.overtimeHours}h
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          {showClockOut && att.clockIn && !att.clockOut && (
+            <ClockOutButton
+              attendanceId={att.id}
+              token={token}
+              onSuccess={onSuccess}
+            />
+          )}
+          <span
+            className={`px-2 py-0.5 rounded text-xs ${
+              att.status === "completed"
+                ? "border border-black dark:border-white bg-neutral-100 dark:bg-neutral-700/50 text-neutral-800 dark:text-neutral-200"
+                : "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300"
+            }`}
+          >
+            {att.status}
           </span>
-        )}
+        </div>
       </div>
-      <div className="flex items-center gap-2">
-        {showClockOut && att.clockIn && !att.clockOut && (
-          <ClockOutButton
-            attendanceId={att.id}
-            token={token}
-            onSuccess={onSuccess}
-          />
-        )}
-        <span
-          className={`px-2 py-0.5 rounded text-xs ${
-            att.status === "completed"
-              ? "border border-black dark:border-white bg-neutral-100 dark:bg-neutral-700/50 text-neutral-800 dark:text-neutral-200"
-              : "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300"
-          }`}
-        >
-          {att.status}
-        </span>
-      </div>
+      {expanded && (
+        <div className="px-4 pb-4 pt-0 border-t border-neutral-200 dark:border-neutral-700">
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                Employee
+              </p>
+              <p className="text-neutral-800 dark:text-neutral-200">
+                {att.shift.employee.firstName} {att.shift.employee.lastName}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                Location
+              </p>
+              <p className="text-neutral-800 dark:text-neutral-200">
+                {att.shift.post.site.name} — {att.shift.post.name}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                Scheduled shift
+              </p>
+              <p className="text-neutral-800 dark:text-neutral-200">
+                {format(shiftStart, "EEE, MMM d, yyyy · h:mm a")} — {format(shiftEnd, "h:mm a")}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                Clock in / out
+              </p>
+              <p className="text-neutral-800 dark:text-neutral-200">
+                {att.clockIn
+                  ? format(new Date(att.clockIn), "EEE, MMM d · h:mm a")
+                  : "—"}
+                {att.clockOut && (
+                  <>
+                    {" → "}
+                    {format(new Date(att.clockOut), "h:mm a")}
+                  </>
+                )}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                Hours
+              </p>
+              <p className="text-neutral-800 dark:text-neutral-200">
+                Shift: {shiftHours}h
+                {(att.overtimeHours ?? 0) > 0 && (
+                  <span className="ml-2 font-medium">Overtime: {att.overtimeHours}h</span>
+                )}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                Status
+              </p>
+              <p className="text-neutral-800 dark:text-neutral-200 capitalize">{att.status.replace(/_/g, " ")}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

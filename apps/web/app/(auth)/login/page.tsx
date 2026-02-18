@@ -38,12 +38,9 @@ function LoginForm() {
     <div className="w-full max-w-[420px] animate-fade-in">
       <div className="bg-white dark:bg-neutral-900 border border-black dark:border-white rounded-sm p-8 md:p-10">
         <div className="text-center mb-8 pb-8 border-b border-black dark:border-white">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-sm border-2 border-black dark:border-white mb-4">
-            <span className="text-xl font-bold text-neutral-900 dark:text-neutral-100">P</span>
+          <div className="inline-flex items-center justify-center mb-4">
+            <img src="/plethora-logo.png" alt="Plethora" className="h-14 w-auto object-contain" />
           </div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">
-            Plethora
-          </h1>
           <p className="text-[10px] uppercase tracking-widest text-neutral-500 dark:text-neutral-400 mt-2">
             Workforce & Payroll Management
           </p>
