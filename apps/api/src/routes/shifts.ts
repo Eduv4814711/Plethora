@@ -12,6 +12,7 @@ import {
   type BulkPattern,
 } from "../services/rostering.service.js";
 import { createAuditLog } from "../lib/audit.js";
+import { getCompanyTimezone, getShiftTimes } from "../lib/timezone.js";
 
 const createShiftSchema = z.object({
   employeeId: z.string().min(1),
@@ -130,6 +131,8 @@ async function handleBulkCreateSite(
     });
   }
 
+  const timeZone = await getCompanyTimezone(companyId);
+
   const deleted = await prisma.shift.deleteMany({
     where: {
       companyId,
@@ -146,21 +149,7 @@ async function handleBulkCreateSite(
 
   for (const { date, shiftType } of dualDates) {
     const post = shiftType === "day" ? dayPost : nightPost;
-    let shiftStart: Date;
-    let shiftEnd: Date;
-
-    if (shiftType === "night") {
-      shiftStart = new Date(date);
-      shiftStart.setHours(18, 0, 0, 0);
-      shiftEnd = new Date(date);
-      shiftEnd.setDate(shiftEnd.getDate() + 1);
-      shiftEnd.setHours(6, 0, 0, 0);
-    } else {
-      shiftStart = new Date(date);
-      shiftStart.setHours(6, 0, 0, 0);
-      shiftEnd = new Date(date);
-      shiftEnd.setHours(18, 0, 0, 0);
-    }
+    const { shiftStart, shiftEnd } = getShiftTimes(date, shiftType, timeZone);
 
     try {
       await validateShiftAssignment({
@@ -443,8 +432,9 @@ export async function shiftsRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Post not found" });
     }
 
-    const shiftType = post.shiftType ?? "day";
+    const shiftType = (post.shiftType ?? "day") as "day" | "night";
     const dates = computeDatesFromPattern(start, end, pattern as BulkPattern, customDays);
+    const timeZone = await getCompanyTimezone(companyId);
 
     const deleted = await prisma.shift.deleteMany({
       where: {
@@ -461,21 +451,7 @@ export async function shiftsRoutes(app: FastifyInstance) {
     const errors: string[] = [];
 
     for (const date of dates) {
-      let shiftStart: Date;
-      let shiftEnd: Date;
-
-      if (shiftType === "night") {
-        shiftStart = new Date(date);
-        shiftStart.setHours(18, 0, 0, 0);
-        shiftEnd = new Date(date);
-        shiftEnd.setDate(shiftEnd.getDate() + 1);
-        shiftEnd.setHours(6, 0, 0, 0);
-      } else {
-        shiftStart = new Date(date);
-        shiftStart.setHours(6, 0, 0, 0);
-        shiftEnd = new Date(date);
-        shiftEnd.setHours(18, 0, 0, 0);
-      }
+      const { shiftStart, shiftEnd } = getShiftTimes(date, shiftType, timeZone);
 
       try {
         await validateShiftAssignment({
