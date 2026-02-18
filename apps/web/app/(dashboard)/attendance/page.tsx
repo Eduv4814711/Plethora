@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from "date-fns";
@@ -62,8 +61,6 @@ function getDefaultDateRange() {
 
 export default function AttendancePage() {
   const { token } = useAuth();
-  const searchParams = useSearchParams();
-  const modeMissed = searchParams.get("mode") === "missed";
 
   const [attendances, setAttendances] = useState<Attendance[]>([]);
   const [missedShifts, setMissedShifts] = useState<MissedShift[]>([]);
@@ -89,47 +86,41 @@ export default function AttendancePage() {
     if (employeeId) params.set("employeeId", employeeId);
     if (siteId) params.set("siteId", siteId);
 
+    const missedParams = new URLSearchParams();
+    if (employeeId) missedParams.set("employeeId", employeeId);
+    if (siteId) missedParams.set("siteId", siteId);
+
+    const now = new Date();
+    const dayStart = new Date(now);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(now);
+    dayEnd.setHours(23, 59, 59, 999);
+
     const promises: Promise<unknown>[] = [
       authFetch(`/attendance?${params}`, token)
         .then((r) => r.json())
         .then((d) => setAttendances(d.data || [])),
+      authFetch(`/attendance/missed?${missedParams}`, token)
+        .then((r) => r.json())
+        .then((d) => setMissedShifts(d.data || [])),
+      authFetch(
+        `/shifts?startDate=${dayStart.toISOString()}&endDate=${dayEnd.toISOString()}`,
+        token
+      )
+        .then((r) => r.json())
+        .then((d) => {
+          const shifts = (d.data || []).filter(
+            (s: ShiftForClockIn) =>
+              s.status === "assigned" &&
+              new Date(s.startTime).getTime() - 30 * 60 * 1000 <= now.getTime() &&
+              new Date(s.endTime).getTime() > now.getTime()
+          );
+          setShiftsForClockIn(shifts);
+        }),
     ];
 
-    if (modeMissed) {
-      const missedParams = new URLSearchParams();
-      if (employeeId) missedParams.set("employeeId", employeeId);
-      if (siteId) missedParams.set("siteId", siteId);
-      promises.push(
-        authFetch(`/attendance/missed?${missedParams}`, token)
-          .then((r) => r.json())
-          .then((d) => setMissedShifts(d.data || []))
-      );
-    } else {
-      const now = new Date();
-      const dayStart = new Date(now);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(now);
-      dayEnd.setHours(23, 59, 59, 999);
-      promises.push(
-        authFetch(
-          `/shifts?startDate=${dayStart.toISOString()}&endDate=${dayEnd.toISOString()}`,
-          token
-        )
-          .then((r) => r.json())
-          .then((d) => {
-            const shifts = (d.data || []).filter(
-              (s: ShiftForClockIn) =>
-                s.status === "assigned" &&
-                new Date(s.startTime).getTime() - 30 * 60 * 1000 <= now.getTime() &&
-                new Date(s.endTime).getTime() > now.getTime()
-            );
-            setShiftsForClockIn(shifts);
-          })
-      );
-    }
-
     return Promise.all(promises);
-  }, [token, dateRange.start, dateRange.end, employeeId, siteId, modeMissed]);
+  }, [token, dateRange.start, dateRange.end, employeeId, siteId]);
 
   useEffect(() => {
     if (!token) return;
@@ -278,48 +269,6 @@ export default function AttendancePage() {
         </div>
       </div>
 
-      {modeMissed && missedShifts.length > 0 && (
-        <div className="mb-6 p-4 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-dashed border-black dark:border-white">
-          <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
-            Missed shifts (no clock-in)
-          </h3>
-          <div className="space-y-2">
-            {missedShifts.map((s) => (
-              <div
-                key={s.id}
-                className="p-3 bg-white dark:bg-neutral-800 rounded-sm border border-black dark:border-white flex items-center justify-between gap-4"
-              >
-                <span>
-                  {s.employee.firstName} {s.employee.lastName} at {s.post.site.name} - {s.post.name}
-                </span>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-neutral-600 dark:text-neutral-400">
-                    {format(new Date(s.startTime), "dd MMM HH:mm")} - {format(new Date(s.endTime), "dd MMM HH:mm")}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setReplacingShift(s);
-                      setReplaceError("");
-                      setAvailableRelievers([]);
-                      setReplacingLoading(true);
-                      authFetch(`/shifts/${s.id}/available-relievers`, token!)
-                        .then((r) => r.json())
-                        .then((d) => setAvailableRelievers(d.data || []))
-                        .catch(() => setAvailableRelievers([]))
-                        .finally(() => setReplacingLoading(false));
-                    }}
-                    className="px-3 py-1.5 text-sm font-medium border border-black dark:border-white bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-none"
-                  >
-                    Replace
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {replacingShift && (
         <ReplaceGuardModal
           shift={replacingShift}
@@ -340,13 +289,7 @@ export default function AttendancePage() {
         />
       )}
 
-      {modeMissed && missedShifts.length === 0 && !loading && (
-        <div className="mb-6 p-4 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-dashed border-black dark:border-white">
-          <p className="text-neutral-600 dark:text-neutral-400">No missed shifts found.</p>
-        </div>
-      )}
-
-      {!modeMissed && shiftsForClockIn.length > 0 && (
+      {shiftsForClockIn.length > 0 && (
         <div className="mb-6 p-4 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-black dark:border-white">
           <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
             Clock in / Clock out
@@ -422,6 +365,50 @@ export default function AttendancePage() {
       {attendances.length === 0 && !shiftsForClockIn.length && (
         <p className="text-neutral-500 py-8 text-center">No attendance records</p>
       )}
+
+      <div className="mt-8 mb-6 p-4 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-dashed border-black dark:border-white">
+        <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
+          Missed shifts (no clock-in)
+        </h3>
+        {missedShifts.length > 0 ? (
+          <div className="space-y-2">
+            {missedShifts.map((s) => (
+              <div
+                key={s.id}
+                className="p-3 bg-white dark:bg-neutral-800 rounded-sm border border-black dark:border-white flex items-center justify-between gap-4"
+              >
+                <span>
+                  {s.employee.firstName} {s.employee.lastName} at {s.post.site.name} - {s.post.name}
+                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-neutral-600 dark:text-neutral-400">
+                    {format(new Date(s.startTime), "dd MMM HH:mm")} - {format(new Date(s.endTime), "dd MMM HH:mm")}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReplacingShift(s);
+                      setReplaceError("");
+                      setAvailableRelievers([]);
+                      setReplacingLoading(true);
+                      authFetch(`/shifts/${s.id}/available-relievers`, token!)
+                        .then((r) => r.json())
+                        .then((d) => setAvailableRelievers(d.data || []))
+                        .catch(() => setAvailableRelievers([]))
+                        .finally(() => setReplacingLoading(false));
+                    }}
+                    className="px-3 py-1.5 text-sm font-medium border border-black dark:border-white bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-none"
+                  >
+                    Replace
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-neutral-600 dark:text-neutral-400">No missed shifts found.</p>
+        )}
+      </div>
     </div>
   );
 }

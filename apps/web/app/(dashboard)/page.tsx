@@ -127,7 +127,7 @@ export default function DashboardPage() {
                     <span className="w-1.5 h-1.5 border border-black dark:border-white" />
                     {a.type === "missed_shifts" ? (
                       <Link
-                        href="/attendance?mode=missed"
+                        href="/attendance"
                         className="underline underline-offset-2 hover:text-neutral-900 dark:hover:text-neutral-100"
                       >
                         {a.message} {a.count != null && `(${a.count})`}
