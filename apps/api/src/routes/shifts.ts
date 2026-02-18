@@ -507,6 +507,44 @@ export async function shiftsRoutes(app: FastifyInstance) {
     });
   });
 
+  app.get("/:id/available-relievers", { preHandler: protect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const user = request.user!;
+
+    const shift = await prisma.shift.findFirst({
+      where: { id, companyId: user.companyId },
+    });
+
+    if (!shift) {
+      return reply.code(404).send({ error: "Shift not found" });
+    }
+
+    const overlappingShifts = await prisma.shift.findMany({
+      where: {
+        companyId: user.companyId,
+        id: { not: id },
+        startTime: { lt: shift.endTime },
+        endTime: { gt: shift.startTime },
+      },
+      select: { employeeId: true },
+      distinct: ["employeeId"],
+    });
+    const busyEmployeeIds = new Set(overlappingShifts.map((s) => s.employeeId));
+    busyEmployeeIds.add(shift.employeeId);
+
+    const available = await prisma.employee.findMany({
+      where: {
+        companyId: user.companyId,
+        id: { notIn: Array.from(busyEmployeeIds) },
+        status: { in: ["active", "training", "hired"] },
+      },
+      select: { id: true, firstName: true, lastName: true },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    });
+
+    return reply.send({ data: available });
+  });
+
   app.get("/:id", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;

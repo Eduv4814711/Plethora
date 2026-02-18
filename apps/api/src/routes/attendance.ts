@@ -197,8 +197,8 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
     const now = new Date();
     const { hoursWorked, overtimeHours } = calculateHours(
-      attendance.clockIn,
       now,
+      attendance.shift.startTime,
       attendance.shift.endTime
     );
 
@@ -269,8 +269,8 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
     const now = new Date();
     const { hoursWorked, overtimeHours } = calculateHours(
-      attendance.clockIn!,
       now,
+      attendance.shift.startTime,
       attendance.shift.endTime
     );
 
@@ -411,8 +411,8 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
     if (newClockIn && newClockOut) {
       const { hoursWorked, overtimeHours } = calculateHours(
-        newClockIn,
         newClockOut,
+        attendance.shift.startTime,
         attendance.shift.endTime
       );
       updateData.hoursWorked = hoursWorked;

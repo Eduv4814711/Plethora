@@ -11,8 +11,8 @@ interface ShiftForClockIn {
   startTime: string;
   endTime: string;
   status: string;
-  employee: { firstName: string; lastName: string };
-  post: { name: string; site: { name: string } };
+  employee: { id: string; firstName: string; lastName: string };
+  post: { name: string; site: { id: string; name: string } };
 }
 
 interface Attendance {
@@ -75,6 +75,11 @@ export default function AttendancePage() {
   const [dateRange, setDateRange] = useState(getDefaultDateRange);
   const [employeeId, setEmployeeId] = useState<string>("");
   const [siteId, setSiteId] = useState<string>("");
+
+  const [replacingShift, setReplacingShift] = useState<MissedShift | null>(null);
+  const [availableRelievers, setAvailableRelievers] = useState<{ id: string; firstName: string; lastName: string }[]>([]);
+  const [replacingLoading, setReplacingLoading] = useState(false);
+  const [replaceError, setReplaceError] = useState("");
 
   const refresh = useCallback((): Promise<unknown> | void => {
     if (!token) return;
@@ -282,18 +287,57 @@ export default function AttendancePage() {
             {missedShifts.map((s) => (
               <div
                 key={s.id}
-                className="p-3 bg-white dark:bg-neutral-800 rounded-sm border border-black dark:border-white flex items-center justify-between"
+                className="p-3 bg-white dark:bg-neutral-800 rounded-sm border border-black dark:border-white flex items-center justify-between gap-4"
               >
                 <span>
                   {s.employee.firstName} {s.employee.lastName} at {s.post.site.name} - {s.post.name}
                 </span>
-                <span className="text-sm text-neutral-600 dark:text-neutral-400">
-                  {format(new Date(s.startTime), "dd MMM HH:mm")} - {format(new Date(s.endTime), "dd MMM HH:mm")}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-neutral-600 dark:text-neutral-400">
+                    {format(new Date(s.startTime), "dd MMM HH:mm")} - {format(new Date(s.endTime), "dd MMM HH:mm")}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReplacingShift(s);
+                      setReplaceError("");
+                      setAvailableRelievers([]);
+                      setReplacingLoading(true);
+                      authFetch(`/shifts/${s.id}/available-relievers`, token!)
+                        .then((r) => r.json())
+                        .then((d) => setAvailableRelievers(d.data || []))
+                        .catch(() => setAvailableRelievers([]))
+                        .finally(() => setReplacingLoading(false));
+                    }}
+                    className="px-3 py-1.5 text-sm font-medium border border-black dark:border-white bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-none"
+                  >
+                    Replace
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         </div>
+      )}
+
+      {replacingShift && (
+        <ReplaceGuardModal
+          shift={replacingShift}
+          availableRelievers={availableRelievers}
+          loading={replacingLoading}
+          error={replaceError}
+          token={token!}
+          onClose={() => {
+            setReplacingShift(null);
+            setReplaceError("");
+          }}
+          onSuccess={() => {
+            setReplacingShift(null);
+            setReplaceError("");
+            refresh();
+          }}
+          onError={(msg) => setReplaceError(msg)}
+        />
       )}
 
       {modeMissed && missedShifts.length === 0 && !loading && (
@@ -305,15 +349,29 @@ export default function AttendancePage() {
       {!modeMissed && shiftsForClockIn.length > 0 && (
         <div className="mb-6 p-4 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-black dark:border-white">
           <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
-            Clock in (within window)
+            Clock in / Clock out
           </h3>
+          <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+            Shifts within clock-in window. Clock in when the guard arrives, or mark absent to replace with another guard.
+          </p>
           <div className="space-y-2">
             {shiftsForClockIn.map((shift) => (
-              <ClockInButton
+              <ClockInRow
                 key={shift.id}
                 shift={shift}
                 token={token!}
                 onSuccess={refresh}
+                onMarkAbsent={() => {
+                  setReplacingShift(shift);
+                  setReplaceError("");
+                  setAvailableRelievers([]);
+                  setReplacingLoading(true);
+                  authFetch(`/shifts/${shift.id}/available-relievers`, token!)
+                    .then((r) => r.json())
+                    .then((d) => setAvailableRelievers(d.data || []))
+                    .catch(() => setAvailableRelievers([]))
+                    .finally(() => setReplacingLoading(false));
+                }}
               />
             ))}
           </div>
@@ -321,10 +379,13 @@ export default function AttendancePage() {
       )}
 
       {activeAttendances.length > 0 && (
-        <div className="mb-6">
-          <h3 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-500 dark:text-neutral-400 mb-2">
-            Active (clocked in — needs clock out)
+        <div className="mb-6 p-4 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-black dark:border-white">
+          <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
+            Clock out
           </h3>
+          <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+            Guards currently on shift. Clock them out when they finish.
+          </p>
           <div className="space-y-3">
             {activeAttendances.map((att) => (
               <AttendanceRow
@@ -365,6 +426,105 @@ export default function AttendancePage() {
   );
 }
 
+type ShiftForReplace = MissedShift | ShiftForClockIn;
+
+function ReplaceGuardModal({
+  shift,
+  availableRelievers,
+  loading,
+  error,
+  token,
+  onClose,
+  onSuccess,
+  onError,
+}: {
+  shift: ShiftForReplace;
+  availableRelievers: { id: string; firstName: string; lastName: string }[];
+  loading: boolean;
+  error: string;
+  token: string;
+  onClose: () => void;
+  onSuccess: () => void;
+  onError: (msg: string) => void;
+}) {
+  const [replacing, setReplacing] = useState(false);
+
+  const handleSelect = async (relieverId: string) => {
+    onError("");
+    setReplacing(true);
+    try {
+      const res = await authFetch(`/shifts/${shift.id}`, token, {
+        method: "PUT",
+        body: JSON.stringify({ employeeId: relieverId }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || data.error || "Replace failed");
+      }
+      onSuccess();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "Replace failed");
+    } finally {
+      setReplacing(false);
+    }
+  };
+
+  const guardName = `${shift.employee.firstName} ${shift.employee.lastName}`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white dark:bg-neutral-900 border border-black dark:border-white p-6 max-w-md w-full mx-4 shadow-lg">
+        <h3 className="text-lg font-semibold text-neutral-800 dark:text-neutral-200 mb-2">
+          Replace absent guard
+        </h3>
+        <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+          {guardName} is absent. Select an active guard to replace them for this shift.
+        </p>
+        {error && (
+          <div className="mb-4 p-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-sm">
+            {error}
+          </div>
+        )}
+        {loading ? (
+          <p className="text-neutral-600 dark:text-neutral-400 py-4">Loading available relievers...</p>
+        ) : availableRelievers.length === 0 ? (
+          <p className="text-neutral-600 dark:text-neutral-400 py-4">No available relievers for this shift.</p>
+        ) : (
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {availableRelievers.map((r) => (
+              <div
+                key={r.id}
+                className="flex items-center justify-between p-2 border border-black dark:border-white rounded-sm"
+              >
+                <span className="text-neutral-800 dark:text-neutral-200">
+                  {r.firstName} {r.lastName}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleSelect(r.id)}
+                  disabled={replacing}
+                  className="px-3 py-1 text-sm font-medium border border-black dark:border-white bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-50 rounded-none"
+                >
+                  {replacing ? "..." : "Select"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium border border-black dark:border-white bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-none"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AttendanceRow({
   att,
   token,
@@ -376,6 +536,10 @@ function AttendanceRow({
   onSuccess: () => void;
   showClockOut: boolean;
 }) {
+  const shiftStart = new Date(att.shift.startTime);
+  const shiftEnd = new Date(att.shift.endTime);
+  const shiftHours = Math.round(((shiftEnd.getTime() - shiftStart.getTime()) / (1000 * 60 * 60)) * 100) / 100;
+
   return (
     <div className="p-4 bg-white dark:bg-neutral-800 rounded-sm border border-black dark:border-white flex items-center justify-between">
       <div>
@@ -391,6 +555,9 @@ function AttendanceRow({
             ? new Date(att.clockIn).toLocaleString()
             : "Not clocked in"}
           {att.clockOut && ` - ${new Date(att.clockOut).toLocaleString()}`}
+        </span>
+        <span className="ml-2 text-sm text-neutral-500 dark:text-neutral-500">
+          | Shift: {shiftHours}h
         </span>
         {(att.overtimeHours ?? 0) > 0 && (
           <span className="ml-2 text-neutral-600 font-medium">
@@ -420,19 +587,21 @@ function AttendanceRow({
   );
 }
 
-function ClockInButton({
+function ClockInRow({
   shift,
   token,
   onSuccess,
+  onMarkAbsent,
 }: {
   shift: ShiftForClockIn;
   token: string;
   onSuccess: () => void;
+  onMarkAbsent: () => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = async () => {
+  const handleClockIn = async () => {
     setError("");
     setLoading(true);
     try {
@@ -453,19 +622,27 @@ function ClockInButton({
   };
 
   return (
-    <div className="flex items-center justify-between bg-white dark:bg-neutral-800 p-2 rounded">
-      <span>
+    <div className="flex items-center justify-between bg-white dark:bg-neutral-800 p-3 rounded-sm border border-black dark:border-white">
+      <span className="text-neutral-800 dark:text-neutral-200">
         {shift.employee.firstName} {shift.employee.lastName} at{" "}
         {shift.post.site.name} - {shift.post.name}
       </span>
-      <div>
-        {error && <span className="text-red-600 text-sm mr-2">{error}</span>}
+      <div className="flex items-center gap-2">
+        {error && <span className="text-red-600 dark:text-red-400 text-sm">{error}</span>}
         <button
-          onClick={handleSubmit}
+          onClick={handleClockIn}
           disabled={loading}
-          className="btn-primary text-sm disabled:opacity-50"
+          className="px-3 py-1.5 text-sm font-medium border-2 border-black dark:border-white bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-50 rounded-none"
         >
           {loading ? "..." : "Clock In"}
+        </button>
+        <button
+          type="button"
+          onClick={onMarkAbsent}
+          disabled={loading}
+          className="px-3 py-1.5 text-sm font-medium border-2 border-red-600 dark:border-red-500 bg-red-600 dark:bg-red-700 text-white hover:bg-red-700 dark:hover:bg-red-600 disabled:opacity-50 rounded-none"
+        >
+          Mark Absent
         </button>
       </div>
     </div>

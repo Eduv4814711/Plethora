@@ -57,12 +57,12 @@ export async function validateClockIn(
 }
 
 export function calculateHours(
-  clockIn: Date,
   clockOut: Date,
+  shiftStartTime: Date,
   shiftEndTime: Date
 ): { hoursWorked: number; overtimeHours: number } {
-  const totalMs = clockOut.getTime() - clockIn.getTime();
-  const totalHours = totalMs / (1000 * 60 * 60);
+  const shiftDurationMs = shiftEndTime.getTime() - shiftStartTime.getTime();
+  const shiftDurationHours = shiftDurationMs / (1000 * 60 * 60);
 
   const standardEnd = shiftEndTime.getTime();
   const clockOutMs = clockOut.getTime();
@@ -72,10 +72,8 @@ export function calculateHours(
     overtimeHours = (clockOutMs - standardEnd) / (1000 * 60 * 60);
   }
 
-  const regularHours = Math.max(0, totalHours - overtimeHours);
-
   return {
-    hoursWorked: Math.round(regularHours * 100) / 100,
+    hoursWorked: Math.round(shiftDurationHours * 100) / 100,
     overtimeHours: Math.round(overtimeHours * 100) / 100,
   };
 }
