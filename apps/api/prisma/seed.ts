@@ -125,8 +125,9 @@ async function main() {
 
   for (let i = 0; i < SECURITY_GUARDS.length; i++) {
     const g = SECURITY_GUARDS[i];
+    const employeeNumber = `EMP-${String(i + 1).padStart(4, "0")}`;
     const existing = await prisma.employee.findFirst({
-      where: { companyId: company.id, idNumber: g.idNumber },
+      where: { companyId: company.id, employeeNumber },
     });
     if (existing) continue;
 
@@ -136,7 +137,6 @@ async function main() {
     commencement.setMonth(commencement.getMonth() + i);
 
     const overtimeRate = g.hourlyRate * 1.5;
-    const employeeNumber = `EMP-${String(i + 1).padStart(4, "0")}`;
 
     await prisma.employee.create({
       data: {
@@ -167,8 +167,9 @@ async function main() {
 
   for (let i = 0; i < OFFICE_STAFF.length; i++) {
     const o = OFFICE_STAFF[i];
+    const employeeNumber = `EMP-${String(SECURITY_GUARDS.length + i + 1).padStart(4, "0")}`;
     const existing = await prisma.employee.findFirst({
-      where: { companyId: company.id, idNumber: o.idNumber },
+      where: { companyId: company.id, employeeNumber },
     });
     if (existing) continue;
 
@@ -176,8 +177,6 @@ async function main() {
     const gender = parseIdToGender(o.idNumber);
     const commencement = new Date(commencementBase);
     commencement.setMonth(commencement.getMonth() + SECURITY_GUARDS.length + i);
-
-    const employeeNumber = `EMP-${String(SECURITY_GUARDS.length + i + 1).padStart(4, "0")}`;
 
     await prisma.employee.create({
       data: {
