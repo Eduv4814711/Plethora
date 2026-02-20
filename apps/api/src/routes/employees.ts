@@ -144,6 +144,7 @@ export async function employeesRoutes(app: FastifyInstance) {
       prisma.employee.findMany({
         where,
         include: {
+          grade: { select: { name: true, hourlyRate: true } },
           shifts: {
             where: {
               startTime: { gte: new Date() },

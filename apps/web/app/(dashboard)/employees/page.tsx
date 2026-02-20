@@ -30,6 +30,7 @@ interface Employee {
   hourlyRate?: number | null;
   monthlySalary?: number | null;
   gradeId?: string | null;
+  grade?: { name: string; hourlyRate: number } | null;
   currentSite: string | null;
   currentPost: string | null;
   employeeType?: string | null;
@@ -249,8 +250,10 @@ export default function EmployeesPage() {
             {emp.employeeType === "office" && emp.monthlySalary != null && (
               <p className="mt-0.5 text-sm text-neutral-500 dark:text-neutral-400">R{emp.monthlySalary}/month</p>
             )}
-            {emp.employeeType !== "office" && emp.hourlyRate != null && (
-              <p className="mt-0.5 text-sm text-neutral-500 dark:text-neutral-400">R{emp.hourlyRate}/hr</p>
+            {emp.employeeType !== "office" && (emp.hourlyRate != null || emp.grade) && (
+              <p className="mt-0.5 text-sm text-neutral-500 dark:text-neutral-400">
+                {emp.grade ? `${emp.grade.name} (R${Number(emp.grade.hourlyRate).toFixed(2)}/hr)` : `R${emp.hourlyRate}/hr`}
+              </p>
             )}
             {(emp.currentSite || emp.currentPost) && (
               <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
