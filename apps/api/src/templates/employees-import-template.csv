@@ -1,0 +1,3 @@
+Company Name,Employee Number,First Name,Last Name,ID Number,Date of Birth,Gender,Phone,Email,Employee Type,Status,Job Role,Occupation,Commencement Date,Hourly Rate,Monthly Salary,PSIRA Number,Security Service Type
+Acme Security Pty Ltd,EMP-0001,John,Doe,9001015001087,1990-01-01,M,+27821234567,john.doe@example.com,security,active,Security Officer,Security Officer,2024-01-15,38.02,,1234001,guarding
+Acme Security Pty Ltd,EMP-0002,Jane,Smith,8503102008087,1990-03-10,F,+27891234590,jane.smith@example.com,office,active,HR Manager,HR Manager,2024-02-01,,32000,,

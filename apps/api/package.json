@@ -23,6 +23,7 @@
     "@fastify/static": "^7.0.4",
     "@prisma/client": "^5.22.0",
     "bcrypt": "^5.1.1",
+    "csv-parse": "^6.1.0",
     "date-fns": "^3.6.0",
     "date-fns-tz": "^3.2.0",
     "dotenv": "^17.2.4",

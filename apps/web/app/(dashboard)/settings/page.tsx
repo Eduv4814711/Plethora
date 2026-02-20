@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
 import { uploadLogo, listUsers, createUser, updateUser, deleteUser, type UserListItem, type UserRole } from "@/lib/api";
 import { clsx } from "clsx";
 
-type Tab = "profile" | "business" | "settings" | "users";
+type Tab = "profile" | "business" | "settings" | "users" | "migrate";
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Admin",
@@ -23,11 +24,12 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const tabs: { id: Tab; label: string; adminOnly?: boolean }[] = [
+  const tabs: { id: Tab; label: string; adminOnly?: boolean; href?: string }[] = [
     { id: "profile", label: "Profile" },
     { id: "business", label: "Business Details" },
     { id: "settings", label: "Business Settings" },
     { id: "users", label: "Users", adminOnly: true },
+    { id: "migrate", label: "Bulk Import", href: "/settings/migrate" },
   ];
 
   if (loading && !settings) {
@@ -59,20 +61,29 @@ export default function SettingsPage() {
       <div className="flex gap-1 mb-6 border-b border-black dark:border-white overflow-x-auto">
         {tabs
           .filter((t) => !t.adminOnly || isAdmin)
-          .map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={clsx(
-              "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors",
-              activeTab === tab.id
-                ? "bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border border-black dark:border-white border-b-transparent -mb-px"
-                : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
+          .map((tab) => {
+            const tabProps = {
+              key: tab.id,
+              className: clsx(
+                "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors",
+                activeTab === tab.id
+                  ? "bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border border-black dark:border-white border-b-transparent -mb-px"
+                  : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
+              ),
+            };
+            return tab.href ? (
+              <Link href={tab.href} {...tabProps}>
+                {tab.label}
+              </Link>
+            ) : (
+              <button
+                {...tabProps}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
       </div>
 
       <div className="bg-white dark:bg-neutral-800 rounded-sm border border-black dark:border-white p-6">

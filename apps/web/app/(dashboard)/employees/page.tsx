@@ -6,6 +6,18 @@ import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { DateInput } from "@/components/date-input";
+import { clsx } from "clsx";
+
+const SA_MAJOR_BANKS = [
+  "ABSA",
+  "Capitec",
+  "FNB",
+  "Investec",
+  "Nedbank",
+  "Standard Bank",
+  "African Bank",
+  "TymeBank",
+];
 
 interface Employee {
   id: string;
@@ -425,6 +437,7 @@ function EmployeeForm({
   const [criminalInvestigation, setCriminalInvestigation] = useState<boolean | "">("");
   const [mentallyUnstable, setMentallyUnstable] = useState<boolean | "">("");
   const [trainingCompleted, setTrainingCompleted] = useState<boolean | "">("");
+  const [activeTab, setActiveTab] = useState<"basic" | "labour" | "bank" | "psira">("basic");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -542,6 +555,25 @@ function EmployeeForm({
           </div>
         </section>
 
+        <div className="flex gap-1 border-b border-black dark:border-white overflow-x-auto">
+          {(["basic", "labour", "psira", "bank"] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className={clsx(
+                "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors -mb-px",
+                activeTab === tab
+                  ? "bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-black dark:border-white border-b-transparent"
+                  : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
+              )}
+            >
+              {tab === "basic" ? "Basic" : tab === "labour" ? "Labour Law (BCEA)" : tab === "bank" ? "Bank Details" : "PSIRA"}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === "basic" && (
         <section className="p-3 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
           <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-2">Basic</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -594,7 +626,9 @@ function EmployeeForm({
             )}
           </div>
         </section>
+        )}
 
+        {activeTab === "labour" && (
         <section className="p-3 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
           <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-2">Labour Law (BCEA)</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -631,13 +665,44 @@ function EmployeeForm({
             <input placeholder="Leave entitlement" value={leaveEntitlement} onChange={(e) => setLeaveEntitlement(e.target.value)} className="input-compact" />
             <input placeholder="Notice period" value={noticePeriod} onChange={(e) => setNoticePeriod(e.target.value)} className="input-compact" />
             <input placeholder="Previous service" value={previousService} onChange={(e) => setPreviousService(e.target.value)} className="input-compact sm:col-span-2" />
-            <input placeholder="Tax number" value={taxNumber} onChange={(e) => setTaxNumber(e.target.value)} className="input-compact" />
-            <input placeholder="Bank name" value={bankName} onChange={(e) => setBankName(e.target.value)} className="input-compact" />
-            <input placeholder="Bank account number" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} className="input-compact" />
-            <input placeholder="Branch code" value={bankBranchCode} onChange={(e) => setBankBranchCode(e.target.value)} className="input-compact" />
           </div>
         </section>
+        )}
 
+        {activeTab === "bank" && (
+        <section className="p-2 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
+          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-1.5">Bank Details</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input placeholder="Tax number" value={taxNumber} onChange={(e) => setTaxNumber(e.target.value)} className="input-compact py-1.5 text-sm" />
+            <div>
+              <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-0.5">Bank</label>
+              <select
+                value={SA_MAJOR_BANKS.includes(bankName) ? bankName : "Other"}
+                onChange={(e) => setBankName(e.target.value === "Other" ? "" : e.target.value)}
+                className="input-compact py-1.5 text-sm"
+              >
+                <option value="">Select bank</option>
+                {SA_MAJOR_BANKS.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            {!SA_MAJOR_BANKS.includes(bankName) && (
+              <input
+                placeholder="Bank name (if Other)"
+                value={bankName}
+                onChange={(e) => setBankName(e.target.value)}
+                className="input-compact py-1.5 text-sm sm:col-span-2"
+              />
+            )}
+            <input placeholder="Account number" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} className="input-compact py-1.5 text-sm" />
+            <input placeholder="Branch code" value={bankBranchCode} onChange={(e) => setBankBranchCode(e.target.value)} className="input-compact py-1.5 text-sm" />
+          </div>
+        </section>
+        )}
+
+        {activeTab === "psira" && (
         <section className="p-3 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
           <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-2">PSIRA</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -688,6 +753,7 @@ function EmployeeForm({
             </div>
           </div>
         </section>
+        )}
       </div>
 
       <div className="mt-4 pt-4 border-t border-black dark:border-white">
@@ -760,6 +826,7 @@ function EditModal({
   const [criminalInvestigation, setCriminalInvestigation] = useState<boolean | "">("");
   const [mentallyUnstable, setMentallyUnstable] = useState<boolean | "">("");
   const [trainingCompleted, setTrainingCompleted] = useState<boolean | "">("");
+  const [activeTab, setActiveTab] = useState<"basic" | "labour" | "bank" | "psira">("basic");
 
   useEffect(() => {
     authFetch(`/employees/${employeeId}`, token)
@@ -939,6 +1006,25 @@ function EditModal({
               </div>
             </section>
 
+            <div className="flex gap-1 border-b border-black dark:border-white overflow-x-auto">
+              {(["basic", "labour", "psira", "bank"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  className={clsx(
+                    "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors -mb-px",
+                    activeTab === tab
+                      ? "bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-black dark:border-white border-b-transparent"
+                      : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
+                  )}
+                >
+                  {tab === "basic" ? "Basic" : tab === "labour" ? "Labour Law (BCEA)" : tab === "bank" ? "Bank Details" : "PSIRA"}
+                </button>
+              ))}
+            </div>
+
+            {activeTab === "basic" && (
             <section>
               <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">Basic Information</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -984,7 +1070,9 @@ function EditModal({
                 )}
               </div>
             </section>
+            )}
 
+            {activeTab === "labour" && (
             <section>
               <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">Labour Law (BCEA)</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1021,13 +1109,44 @@ function EditModal({
                 <input placeholder="Leave entitlement" value={leaveEntitlement} onChange={(e) => setLeaveEntitlement(e.target.value)} className="input-modern" />
                 <input placeholder="Notice period" value={noticePeriod} onChange={(e) => setNoticePeriod(e.target.value)} className="input-modern" />
                 <input placeholder="Previous service" value={previousService} onChange={(e) => setPreviousService(e.target.value)} className="input-modern sm:col-span-2" />
-                <input placeholder="Tax number" value={taxNumber} onChange={(e) => setTaxNumber(e.target.value)} className="input-modern" />
-                <input placeholder="Bank name" value={bankName} onChange={(e) => setBankName(e.target.value)} className="input-modern" />
-                <input placeholder="Bank account number" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} className="input-modern" />
-                <input placeholder="Branch code" value={bankBranchCode} onChange={(e) => setBankBranchCode(e.target.value)} className="input-modern" />
               </div>
             </section>
+            )}
 
+            {activeTab === "bank" && (
+            <section className="p-2 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
+              <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-1.5">Bank Details</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input placeholder="Tax number" value={taxNumber} onChange={(e) => setTaxNumber(e.target.value)} className="input-modern py-2 text-sm" />
+                <div>
+                  <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-0.5">Bank</label>
+                  <select
+                    value={SA_MAJOR_BANKS.includes(bankName) ? bankName : "Other"}
+                    onChange={(e) => setBankName(e.target.value === "Other" ? "" : e.target.value)}
+                    className="input-modern py-2 text-sm"
+                  >
+                    <option value="">Select bank</option>
+                    {SA_MAJOR_BANKS.map((b) => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                {!SA_MAJOR_BANKS.includes(bankName) && (
+                  <input
+                    placeholder="Bank name (if Other)"
+                    value={bankName}
+                    onChange={(e) => setBankName(e.target.value)}
+                    className="input-modern py-2 text-sm sm:col-span-2"
+                  />
+                )}
+                <input placeholder="Account number" value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} className="input-modern py-2 text-sm" />
+                <input placeholder="Branch code" value={bankBranchCode} onChange={(e) => setBankBranchCode(e.target.value)} className="input-modern py-2 text-sm" />
+              </div>
+            </section>
+            )}
+
+            {activeTab === "psira" && (
             <section>
               <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">PSIRA – Security Staff</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1077,6 +1196,7 @@ function EditModal({
                 </div>
               </div>
             </section>
+            )}
 
             <div className="flex gap-3 pt-2">
               <button

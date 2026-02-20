@@ -279,3 +279,97 @@ export async function search(token: string, q: string): Promise<SearchResults> {
   if (!res.ok) return { employees: [], sites: [] };
   return res.json();
 }
+
+// Migration / bulk import
+export interface MigrationPreviewResponse {
+  companies: { validCount: number; valid: unknown[]; errors: { row: number; field: string; value: string; message: string }[] };
+  employees: { validCount: number; valid: unknown[]; errors: { row: number; field: string; value: string; message: string }[] };
+  sites: { validCount: number; valid: unknown[]; errors: { row: number; field: string; value: string; message: string }[] };
+}
+
+export interface MigrationImportResult {
+  companiesCreated: number;
+  employeesCreated: number;
+  sitesCreated: number;
+  errors: { entity: string; row?: number; message: string }[];
+}
+
+export async function downloadMigrationTemplate(
+  token: string,
+  type: "company" | "employees" | "sites"
+): Promise<void> {
+  const filename = type === "company" ? "company-import-template.csv" : type === "employees" ? "employees-import-template.csv" : "sites-import-template.csv";
+  const res = await fetch(`${API_BASE}/migrations/templates/${type}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to download template");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function migrationPreview(
+  token: string,
+  files: { companies?: File; employees?: File; sites?: File }
+): Promise<MigrationPreviewResponse> {
+  const formData = new FormData();
+  if (files.companies) formData.append("companies", files.companies);
+  if (files.employees) formData.append("employees", files.employees);
+  if (files.sites) formData.append("sites", files.sites);
+
+  const res = await fetch(`${API_BASE}/migrations/preview`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || "Preview failed");
+  }
+  return res.json();
+}
+
+export async function migrationImport(
+  token: string,
+  files: { employees?: File; sites?: File }
+): Promise<MigrationImportResult> {
+  const formData = new FormData();
+  if (files.employees) formData.append("employees", files.employees);
+  if (files.sites) formData.append("sites", files.sites);
+
+  const res = await fetch(`${API_BASE}/migrations/import`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || "Import failed");
+  }
+  return res.json();
+}
+
+export async function migrationAdminBulkCreate(
+  token: string,
+  files: { companies: File; employees?: File; sites?: File }
+): Promise<MigrationImportResult> {
+  const formData = new FormData();
+  formData.append("companies", files.companies);
+  if (files.employees) formData.append("employees", files.employees);
+  if (files.sites) formData.append("sites", files.sites);
+
+  const res = await fetch(`${API_BASE}/migrations/admin/bulk-create`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || "Bulk create failed");
+  }
+  return res.json();
+}
