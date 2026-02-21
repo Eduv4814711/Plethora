@@ -1,7 +1,7 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build and deploy Node.js app to Azure Web App - plethora-api
+name: Build and deploy Node.js app to Azure Web App - plethora-web
 
 on:
   push:
@@ -51,15 +51,15 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_C34D8FA762564E1496CAE37AC0689350 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_BB4AD794393E4F469E15B050F32ADA08 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_54C6BAC4FA3D4DA097BB7CE2F30DFAE4 }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_110D6D36F0E049E69A4D96BD329E3665 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_EB8C7026971B47CFB8B0E46D4A13EC0D }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_A3F1927E9A2243B1A455DDDD6C3E9E0E }}
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'plethora-api'
+          app-name: 'plethora-web'
           slot-name: 'Production'
           package: .
           
