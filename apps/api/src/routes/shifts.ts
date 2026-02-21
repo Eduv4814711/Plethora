@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { Post } from "@prisma/client";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
@@ -106,8 +107,8 @@ async function handleBulkCreateSite(
     return reply.code(404).send({ error: "Site not found" });
   }
 
-  const dayPost = site.posts.find((p) => (p.shiftType ?? "day") === "day");
-  const nightPost = site.posts.find((p) => p.shiftType === "night");
+  const dayPost = site.posts.find((p: Post) => (p.shiftType ?? "day") === "day");
+  const nightPost = site.posts.find((p: Post) => p.shiftType === "night");
 
   if (!dayPost) {
     return reply.code(400).send({
