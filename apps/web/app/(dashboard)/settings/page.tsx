@@ -998,9 +998,9 @@ function FactoryResetSection({
             This action cannot be undone.
           </p>
           <p className="text-sm text-red-700 dark:text-red-300">
-            Select which modules to reset. Each module will be permanently deleted. User accounts
-            are never deleted. Leave all unchecked and use &quot;Reset all&quot; to restore full
-            factory defaults.
+            Select which modules to reset. Contents are cleared (or restored to defaults where
+            applicable). The module stays; only its data is reset. User accounts are never affected.
+            Use &quot;Reset all&quot; to restore full factory defaults.
           </p>
         </div>
 

@@ -162,15 +162,15 @@ export async function updateSettings(
 }
 
 export const FACTORY_RESET_MODULES = [
-  { id: "employees", label: "Employees", description: "All employees, assignments, leave records, and deductions" },
-  { id: "sites", label: "Sites", description: "Sites, posts, and site/post assignments" },
-  { id: "shifts", label: "Shifts", description: "Shifts and attendance records" },
-  { id: "payroll", label: "Payroll", description: "Payroll runs, items, and payslips" },
-  { id: "timesheets", label: "Timesheets", description: "All timesheet records" },
-  { id: "payRules", label: "Pay Rules", description: "Pay grades, pay rules, earnings and deduction rules" },
-  { id: "publicHolidays", label: "Public Holidays", description: "Public holiday calendar" },
-  { id: "auditLogs", label: "Audit Logs", description: "Activity and audit history" },
-  { id: "companySettings", label: "Company Settings", description: "Company name, business details, and settings" },
+  { id: "employees", label: "Employees", description: "Clear all employees, assignments, leave records, and deductions" },
+  { id: "sites", label: "Sites", description: "Clear sites, posts, and site/post assignments" },
+  { id: "shifts", label: "Shifts", description: "Clear shifts and attendance records" },
+  { id: "payroll", label: "Payroll", description: "Clear payroll runs, items, and payslips" },
+  { id: "timesheets", label: "Timesheets", description: "Clear all timesheet records" },
+  { id: "payRules", label: "Pay Rules", description: "Reset to defaults: overtime, sunday, public holiday rates; UIF, PSIRA" },
+  { id: "publicHolidays", label: "Public Holidays", description: "Reset to SA public holidays (2025–2026)" },
+  { id: "auditLogs", label: "Audit Logs", description: "Clear activity and audit history" },
+  { id: "companySettings", label: "Company Settings", description: "Reset company name, business details, and settings to defaults" },
 ] as const;
 
 export type FactoryResetModuleId = (typeof FACTORY_RESET_MODULES)[number]["id"];

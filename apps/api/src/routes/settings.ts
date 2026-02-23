@@ -177,6 +177,44 @@ export async function settingsRoutes(app: FastifyInstance) {
       employeeIdPrefix: "EMP",
     };
 
+    const DEFAULT_PAY_RULES = [
+      { ruleType: "overtime", multiplier: 1.5 },
+      { ruleType: "sunday", multiplier: 2.0 },
+      { ruleType: "public_holiday", multiplier: 2.0 },
+    ];
+
+    const DEFAULT_DEDUCTION_RULES = [
+      { name: "UIF", type: "percentage" as const, rate: 1, appliesTo: "all" as const },
+      { name: "PSIRA", type: "fixed" as const, amount: 75, appliesTo: "security" as const },
+    ];
+
+    const SA_PUBLIC_HOLIDAYS = [
+      { date: "2025-01-01", name: "New Year's Day" },
+      { date: "2025-03-21", name: "Human Rights Day" },
+      { date: "2025-04-18", name: "Good Friday" },
+      { date: "2025-04-21", name: "Family Day" },
+      { date: "2025-04-27", name: "Freedom Day" },
+      { date: "2025-05-01", name: "Workers' Day" },
+      { date: "2025-06-16", name: "Youth Day" },
+      { date: "2025-08-09", name: "Women's Day" },
+      { date: "2025-09-24", name: "Heritage Day" },
+      { date: "2025-12-16", name: "Day of Reconciliation" },
+      { date: "2025-12-25", name: "Christmas Day" },
+      { date: "2025-12-26", name: "Day of Goodwill" },
+      { date: "2026-01-01", name: "New Year's Day" },
+      { date: "2026-03-21", name: "Human Rights Day" },
+      { date: "2026-04-03", name: "Good Friday" },
+      { date: "2026-04-06", name: "Family Day" },
+      { date: "2026-04-27", name: "Freedom Day" },
+      { date: "2026-05-01", name: "Workers' Day" },
+      { date: "2026-06-16", name: "Youth Day" },
+      { date: "2026-08-09", name: "Women's Day" },
+      { date: "2026-09-24", name: "Heritage Day" },
+      { date: "2026-12-16", name: "Day of Reconciliation" },
+      { date: "2026-12-25", name: "Christmas Day" },
+      { date: "2026-12-26", name: "Day of Goodwill" },
+    ];
+
     const runAll = !modules || modules.length === 0;
     const has = (m: (typeof FACTORY_RESET_MODULES)[number]) => runAll || modules!.includes(m);
 
@@ -274,18 +312,41 @@ export async function settingsRoutes(app: FastifyInstance) {
         await tx.employee.deleteMany({ where: { companyId } });
       }
 
-      // Pay rules: PayGrade, PayRule, EarningsRule, DeductionRule
+      // Pay rules: clear and restore to defaults
       if (has("payRules")) {
         await tx.employee.updateMany({ where: { companyId }, data: { gradeId: null } });
         await tx.payGrade.deleteMany({ where: { companyId } });
         await tx.payRule.deleteMany({ where: { companyId } });
         await tx.earningsRule.deleteMany({ where: { companyId } });
         await tx.deductionRule.deleteMany({ where: { companyId } });
+        for (const { ruleType, multiplier } of DEFAULT_PAY_RULES) {
+          await tx.payRule.create({
+            data: { companyId, ruleType, multiplier },
+          });
+        }
+        for (const dr of DEFAULT_DEDUCTION_RULES) {
+          await tx.deductionRule.create({
+            data: {
+              companyId,
+              name: dr.name,
+              type: dr.type,
+              rate: dr.type === "percentage" ? dr.rate : null,
+              amount: dr.type === "fixed" ? dr.amount : null,
+              appliesTo: dr.appliesTo,
+              isOptional: false,
+            },
+          });
+        }
       }
 
-      // Public holidays
+      // Public holidays: clear and restore to SA defaults
       if (has("publicHolidays")) {
         await tx.publicHoliday.deleteMany({ where: { companyId } });
+        for (const h of SA_PUBLIC_HOLIDAYS) {
+          await tx.publicHoliday.create({
+            data: { companyId, date: new Date(h.date), name: h.name },
+          });
+        }
       }
 
       // Audit logs
