@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
 import { SearchDropdown } from "@/components/search-dropdown";
+import { CompanySetupModal } from "@/components/company-setup-modal";
 import { clsx } from "clsx";
 
 const navItems = [
@@ -23,10 +24,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout, loading } = useAuth();
-  const { settings } = useSettings();
+  const { settings, loading: settingsLoading, needsSetup, update, refresh } = useSettings();
   const companyName = settings?.name ?? "Plethora";
 
-  if (loading) {
+  if (loading || settingsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-950">
         <div className="flex flex-col items-center gap-4">
@@ -40,6 +41,24 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   if (!user) {
     router.push("/login");
     return null;
+  }
+
+  if (needsSetup) {
+    return (
+      <CompanySetupModal
+        settings={settings}
+        onSave={async (data) => {
+          await update({
+            name: data.name,
+            businessDetails: data.businessDetails,
+            businessSettings: data.businessSettings,
+          });
+          await refresh();
+        }}
+        isAdmin={user.role === "admin"}
+        onLogout={logout}
+      />
+    );
   }
 
   return (

@@ -9,6 +9,7 @@ type SettingsState = {
   settings: CompanySettings | null;
   loading: boolean;
   error: string | null;
+  needsSetup: boolean;
   refresh: () => Promise<void>;
   update: (data: Parameters<typeof updateSettings>[1]) => Promise<void>;
 };
@@ -57,12 +58,15 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     setSettings(updated);
   };
 
+  const needsSetup = settings?.name === "My Company";
+
   return (
     <SettingsContext.Provider
       value={{
         settings,
         loading,
         error,
+        needsSetup,
         refresh: fetchSettings,
         update,
       }}

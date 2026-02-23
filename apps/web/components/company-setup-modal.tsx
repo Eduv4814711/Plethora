@@ -1,0 +1,427 @@
+"use client";
+
+import React, { useState, useEffect, useRef } from "react";
+import type { CompanySettings } from "@/lib/api";
+import { uploadLogo } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+
+type CompanySetupModalProps = {
+  settings: CompanySettings | null;
+  onSave: (data: {
+    name: string;
+    businessDetails: Record<string, string>;
+    businessSettings: {
+      currency: string;
+      dateFormat: string;
+      timezone: string;
+      payrollPeriod: "weekly" | "biweekly" | "monthly";
+      employeeIdPrefix: string;
+    };
+  }) => Promise<void>;
+  isAdmin: boolean;
+  onLogout: () => void;
+};
+
+export function CompanySetupModal({
+  settings,
+  onSave,
+  isAdmin,
+  onLogout,
+}: CompanySetupModalProps) {
+  const [form, setForm] = useState({
+    name: "",
+    legalName: "",
+    registrationNumber: "",
+    taxNumber: "",
+    address: "",
+    phone: "",
+    email: "",
+    website: "",
+    logoUrl: "",
+    fax: "",
+    psiraRegistration: "",
+    uifReference: "",
+    currency: "ZAR",
+    dateFormat: "DD/MM/YYYY",
+    timezone: "Africa/Johannesburg",
+    payrollPeriod: "monthly",
+    employeeIdPrefix: "EMP",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (settings) {
+      const s = settings.settings ?? {};
+      setForm({
+        name: settings.name ?? "",
+        legalName: settings.legalName ?? "",
+        registrationNumber: settings.registrationNumber ?? "",
+        taxNumber: settings.taxNumber ?? "",
+        address: settings.address ?? "",
+        phone: settings.phone ?? "",
+        email: settings.email ?? "",
+        website: settings.website ?? "",
+        logoUrl: settings.logoUrl ?? "",
+        fax: settings.fax ?? "",
+        psiraRegistration: settings.psiraRegistration ?? "",
+        uifReference: settings.uifReference ?? "",
+        currency: s.currency ?? "ZAR",
+        dateFormat: s.dateFormat ?? "DD/MM/YYYY",
+        timezone: s.timezone ?? "Africa/Johannesburg",
+        payrollPeriod: s.payrollPeriod ?? "monthly",
+        employeeIdPrefix: s.employeeIdPrefix ?? "EMP",
+      });
+    }
+  }, [settings]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAdmin) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const { name, legalName, registrationNumber, taxNumber, address, phone, email, website, logoUrl, fax, psiraRegistration, uifReference, currency, dateFormat, timezone, payrollPeriod, employeeIdPrefix } = form;
+      await onSave({
+        name,
+        businessDetails: {
+          legalName,
+          registrationNumber,
+          taxNumber,
+          address,
+          phone,
+          email,
+          website,
+          logoUrl,
+          fax,
+          psiraRegistration,
+          uifReference,
+        },
+        businessSettings: {
+          currency,
+          dateFormat,
+          timezone,
+          payrollPeriod: payrollPeriod as "weekly" | "biweekly" | "monthly",
+          employeeIdPrefix,
+        },
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isAdmin) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/80 p-4">
+        <div className="w-full max-w-md rounded-sm border border-black dark:border-white bg-white dark:bg-neutral-900 p-8 text-center">
+          <h2 className="text-xl font-bold text-neutral-900 dark:text-white mb-2">
+            Company Setup Required
+          </h2>
+          <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-6">
+            Company setup is required. Please contact your administrator to configure company details.
+          </p>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="btn-primary"
+          >
+            Logout
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/80 p-4 overflow-y-auto">
+      <div className="w-full max-w-2xl rounded-sm border border-black dark:border-white bg-white dark:bg-neutral-900 p-8 my-8">
+        <h2 className="text-xl font-bold text-neutral-900 dark:text-white mb-2">
+          Company Setup Required
+        </h2>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-6">
+          Please configure your company details to continue. This information is required for the system to function correctly.
+        </p>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Business Details</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Company Name *</label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  className="input-modern"
+                  placeholder="Quick Bopha Security"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Legal Name</label>
+                <input
+                  type="text"
+                  value={form.legalName}
+                  onChange={(e) => setForm((f) => ({ ...f, legalName: e.target.value }))}
+                  className="input-modern"
+                  placeholder="Quick Bopha Security (Pty) Ltd"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">PSIRA Registration</label>
+                  <input
+                    type="text"
+                    value={form.psiraRegistration}
+                    onChange={(e) => setForm((f) => ({ ...f, psiraRegistration: e.target.value }))}
+                    className="input-modern"
+                    placeholder="Company PSIRA number"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Company Registration</label>
+                  <input
+                    type="text"
+                    value={form.registrationNumber}
+                    onChange={(e) => setForm((f) => ({ ...f, registrationNumber: e.target.value }))}
+                    className="input-modern"
+                    placeholder="Registration number"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Tax Number</label>
+                  <input
+                    type="text"
+                    value={form.taxNumber}
+                    onChange={(e) => setForm((f) => ({ ...f, taxNumber: e.target.value }))}
+                    className="input-modern"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">UIF Reference</label>
+                  <input
+                    type="text"
+                    value={form.uifReference}
+                    onChange={(e) => setForm((f) => ({ ...f, uifReference: e.target.value }))}
+                    className="input-modern"
+                    placeholder="UIF reference number"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Telephone</label>
+                  <input
+                    type="text"
+                    value={form.phone}
+                    onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                    className="input-modern"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                    className="input-modern"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Address</label>
+                <textarea
+                  value={form.address}
+                  onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+                  className="input-modern min-h-[80px]"
+                  rows={3}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Website</label>
+                <input
+                  type="url"
+                  value={form.website}
+                  onChange={(e) => setForm((f) => ({ ...f, website: e.target.value }))}
+                  className="input-modern"
+                  placeholder="https://"
+                />
+              </div>
+              <LogoUploadInline
+                logoUrl={form.logoUrl}
+                onLogoChange={(url) => setForm((f) => ({ ...f, logoUrl: url }))}
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-neutral-200 dark:border-neutral-700 pt-6">
+            <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Business Settings</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Currency</label>
+                <select
+                  value={form.currency}
+                  onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
+                  className="input-modern"
+                >
+                  <option value="ZAR">ZAR (South African Rand)</option>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                  <option value="GBP">GBP</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Date Format</label>
+                <select
+                  value={form.dateFormat}
+                  onChange={(e) => setForm((f) => ({ ...f, dateFormat: e.target.value }))}
+                  className="input-modern"
+                >
+                  <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                  <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                  <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Timezone</label>
+                <input
+                  type="text"
+                  value={form.timezone}
+                  onChange={(e) => setForm((f) => ({ ...f, timezone: e.target.value }))}
+                  className="input-modern"
+                  placeholder="Africa/Johannesburg"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Payroll Period</label>
+                <select
+                  value={form.payrollPeriod}
+                  onChange={(e) => setForm((f) => ({ ...f, payrollPeriod: e.target.value }))}
+                  className="input-modern"
+                >
+                  <option value="weekly">Weekly</option>
+                  <option value="biweekly">Bi-weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Employee ID Prefix</label>
+                <input
+                  type="text"
+                  value={form.employeeIdPrefix}
+                  onChange={(e) => setForm((f) => ({ ...f, employeeIdPrefix: e.target.value.toUpperCase() }))}
+                  className="input-modern"
+                  placeholder="EMP"
+                  maxLength={20}
+                />
+              </div>
+            </div>
+          </div>
+
+          {error && (
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          )}
+
+          <button
+            type="submit"
+            disabled={saving}
+            className="btn-primary"
+          >
+            {saving ? "Saving..." : "Save & Continue"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function LogoUploadInline({
+  logoUrl,
+  onLogoChange,
+}: {
+  logoUrl: string;
+  onLogoChange: (url: string) => void;
+}) {
+  const { token } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !token) return;
+
+    const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+    if (!allowed.includes(file.type)) {
+      setUploadError("Please select a JPEG, PNG, GIF, or WebP image (max 2MB)");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setUploadError("Image must be under 2MB");
+      return;
+    }
+
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const { url } = await uploadLogo(token, file);
+      onLogoChange(url);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const previewUrl = logoUrl || undefined;
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">Logo</label>
+      <div className="flex flex-col sm:flex-row gap-4 items-start">
+        <div className="w-24 h-24 rounded-sm border-2 border-dashed border-black dark:border-white flex items-center justify-center overflow-hidden bg-neutral-50 dark:bg-neutral-800/50 shrink-0">
+          {previewUrl ? (
+            <img src={previewUrl} alt="Logo" className="w-full h-full object-contain" />
+          ) : (
+            <span className="text-3xl text-neutral-400 dark:text-neutral-500">?</span>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            onChange={handleFileChange}
+            disabled={uploading}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="btn-primary text-sm"
+          >
+            {uploading ? "Uploading..." : "Upload image"}
+          </button>
+          {logoUrl && (
+            <button
+              type="button"
+              onClick={() => onLogoChange("")}
+              disabled={uploading}
+              className="ml-2 px-3 py-2 text-sm font-medium text-neutral-600 dark:text-neutral-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-sm transition-colors"
+            >
+              Remove
+            </button>
+          )}
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-2">
+            JPEG, PNG, GIF or WebP. Max 2MB.
+          </p>
+          {uploadError && (
+            <p className="text-sm text-red-600 dark:text-red-400 mt-1">{uploadError}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
