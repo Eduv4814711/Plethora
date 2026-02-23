@@ -381,18 +381,27 @@ See [Bulk Import (Migration)](#12-bulk-import-migration).
 
 ### Factory Reset (Admin Only)
 
-**Warning:** This permanently deletes:
+**Warning:** This permanently deletes data. You can reset the entire system or choose specific modules.
 
-- All employees, sites, shifts, payroll runs, timesheets
-- Pay rules, pay grades, earnings and deduction rules
-- Public holidays and audit logs
+**Modules you can reset individually:**
 
-Company name and business settings are reset. User accounts are kept.
+- **Employees** – All employees, assignments, leave records, and deductions
+- **Sites** – Sites, posts, and site/post assignments
+- **Shifts** – Shifts and attendance records
+- **Payroll** – Payroll runs, items, and payslips
+- **Timesheets** – All timesheet records
+- **Pay Rules** – Pay grades, pay rules, earnings and deduction rules
+- **Public Holidays** – Public holiday calendar
+- **Audit Logs** – Activity and audit history
+- **Company Settings** – Company name, business details, and settings
+
+User accounts are never deleted.
 
 To reset:
 
-1. Type **FACTORY RESET** in the confirmation field.
-2. Click **Factory Reset**.
+1. Choose **Reset all modules** for a full factory reset, or select specific modules to reset.
+2. Type **FACTORY RESET** in the confirmation field.
+3. Click **Factory Reset**.
 
 ---
 

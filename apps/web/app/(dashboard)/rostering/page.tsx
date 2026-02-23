@@ -126,17 +126,11 @@ export default function RosteringPage() {
         employeeId,
       };
       if (selectedSiteId) body.siteId = selectedSiteId;
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6f3bcb'},body:JSON.stringify({sessionId:'6f3bcb',location:'rostering/page.tsx:handleResetPerson',message:'ResetPerson request',data:{body,employeeId,startDate:startDate.slice(0,10),endDate:endDate.slice(0,10),selectedSiteId,dateRange,viewOffset},hypothesisId:'H1,H2',timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       const res = await authFetch("/shifts/reset", token, {
         method: "POST",
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6f3bcb'},body:JSON.stringify({sessionId:'6f3bcb',location:'rostering/page.tsx:handleResetPerson:response',message:'ResetPerson response',data:{deleted:data?.deleted,ok:res.ok},hypothesisId:'H3',timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (!res.ok) throw new Error(data?.message || data?.error || "Failed to reset");
       await refresh();
       if (data.deleted > 0) {
@@ -163,17 +157,11 @@ export default function RosteringPage() {
         endDate: endDate.slice(0, 10),
       };
       if (selectedSiteId) body.siteId = selectedSiteId;
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6f3bcb'},body:JSON.stringify({sessionId:'6f3bcb',location:'rostering/page.tsx:handleResetAll',message:'ResetAll request',data:{body,startDate:startDate.slice(0,10),endDate:endDate.slice(0,10),selectedSiteId,dateRange,viewOffset},hypothesisId:'H1,H2',timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       const res = await authFetch("/shifts/reset", token, {
         method: "POST",
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6f3bcb'},body:JSON.stringify({sessionId:'6f3bcb',location:'rostering/page.tsx:handleResetAll:response',message:'ResetAll response',data:{deleted:data?.deleted,ok:res.ok},hypothesisId:'H3',timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (!res.ok) throw new Error(data?.message || data?.error || "Failed to reset");
       await refresh();
       if (data.deleted > 0) {

@@ -34,6 +34,25 @@ const updateSettingsSchema = z.object({
   businessSettings: businessSettingsSchema.optional(),
 });
 
+const FACTORY_RESET_MODULES = [
+  "employees",
+  "sites",
+  "shifts",
+  "payroll",
+  "timesheets",
+  "payRules",
+  "publicHolidays",
+  "auditLogs",
+  "companySettings",
+] as const;
+
+const factoryResetSchema = z.object({
+  modules: z
+    .array(z.enum(FACTORY_RESET_MODULES))
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
+});
+
 export async function settingsRoutes(app: FastifyInstance) {
   app.get("/", { preHandler: [authMiddleware] }, async (request, reply) => {
     const companyId = request.user!.companyId;
@@ -133,6 +152,15 @@ export async function settingsRoutes(app: FastifyInstance) {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
 
+    const parsed = factoryResetSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.flatten().fieldErrors,
+      });
+    }
+    const modules = parsed.data.modules;
+
     const company = await prisma.company.findUnique({
       where: { id: companyId },
       select: { id: true },
@@ -149,11 +177,10 @@ export async function settingsRoutes(app: FastifyInstance) {
       employeeIdPrefix: "EMP",
     };
 
-    await prisma.$transaction(async (tx) => {
-      // 1. Shift (cascades to Attendance)
-      await tx.shift.deleteMany({ where: { companyId } });
+    const runAll = !modules || modules.length === 0;
+    const has = (m: (typeof FACTORY_RESET_MODULES)[number]) => runAll || modules!.includes(m);
 
-      // 2. PostAssignment, SiteAssignment - need post/site/employee ids
+    await prisma.$transaction(async (tx) => {
       const posts = await tx.post.findMany({
         where: { site: { companyId } },
         select: { id: true },
@@ -170,57 +197,103 @@ export async function settingsRoutes(app: FastifyInstance) {
       });
       const employeeIds = employees.map((e) => e.id);
 
-      if (postIds.length > 0) {
-        await tx.postAssignment.deleteMany({ where: { postId: { in: postIds } } });
-      }
-      if (siteIds.length > 0) {
-        await tx.siteAssignment.deleteMany({ where: { siteId: { in: siteIds } } });
+      // Shifts (includes Attendance via cascade)
+      if (has("shifts")) {
+        await tx.shift.deleteMany({ where: { companyId } });
       }
 
-      // 3. Post
-      await tx.post.deleteMany({ where: { site: { companyId } } });
+      // Sites: PostAssignment, SiteAssignment, Shift, Post, Site
+      if (has("sites")) {
+        if (postIds.length > 0) {
+          await tx.postAssignment.deleteMany({ where: { postId: { in: postIds } } });
+          await tx.shift.deleteMany({ where: { postId: { in: postIds } } });
+        }
+        if (siteIds.length > 0) {
+          await tx.siteAssignment.deleteMany({ where: { siteId: { in: siteIds } } });
+        }
+        await tx.post.deleteMany({ where: { site: { companyId } } });
+        await tx.site.deleteMany({ where: { companyId } });
+      }
 
-      // 4. Payslip, PayrollItem, Timesheet
-      const payrollRuns = await tx.payrollRun.findMany({
-        where: { companyId },
-        select: { id: true },
-      });
-      const payrollRunIds = payrollRuns.map((r) => r.id);
-      if (payrollRunIds.length > 0) {
-        const payrollItems = await tx.payrollItem.findMany({
-          where: { payrollRunId: { in: payrollRunIds } },
+      // Payroll: Payslip, PayrollItem, PayrollRun
+      if (has("payroll")) {
+        const payrollRuns = await tx.payrollRun.findMany({
+          where: { companyId },
           select: { id: true },
         });
-        const payrollItemIds = payrollItems.map((i) => i.id);
-        if (payrollItemIds.length > 0) {
-          await tx.payslip.deleteMany({ where: { payrollItemId: { in: payrollItemIds } } });
+        const payrollRunIds = payrollRuns.map((r) => r.id);
+        if (payrollRunIds.length > 0) {
+          const payrollItems = await tx.payrollItem.findMany({
+            where: { payrollRunId: { in: payrollRunIds } },
+            select: { id: true },
+          });
+          const payrollItemIds = payrollItems.map((i) => i.id);
+          if (payrollItemIds.length > 0) {
+            await tx.payslip.deleteMany({ where: { payrollItemId: { in: payrollItemIds } } });
+          }
+          await tx.payrollItem.deleteMany({ where: { payrollRunId: { in: payrollRunIds } } });
         }
-        await tx.payrollItem.deleteMany({ where: { payrollRunId: { in: payrollRunIds } } });
-      }
-      await tx.timesheet.deleteMany({ where: { companyId } });
-      await tx.payrollRun.deleteMany({ where: { companyId } });
-
-      // 5. LeaveRecord, EmployeeDeduction
-      if (employeeIds.length > 0) {
-        await tx.leaveRecord.deleteMany({ where: { employeeId: { in: employeeIds } } });
-        await tx.employeeDeduction.deleteMany({ where: { employeeId: { in: employeeIds } } });
+        await tx.payrollRun.deleteMany({ where: { companyId } });
       }
 
-      // 6. Employee
-      await tx.employee.deleteMany({ where: { companyId } });
+      // Timesheets
+      if (has("timesheets")) {
+        await tx.timesheet.deleteMany({ where: { companyId } });
+      }
 
-      // 7. PayGrade, PayRule, EarningsRule, DeductionRule, PublicHoliday, Site
-      await tx.payGrade.deleteMany({ where: { companyId } });
-      await tx.payRule.deleteMany({ where: { companyId } });
-      await tx.earningsRule.deleteMany({ where: { companyId } });
-      await tx.deductionRule.deleteMany({ where: { companyId } });
-      await tx.publicHoliday.deleteMany({ where: { companyId } });
-      await tx.site.deleteMany({ where: { companyId } });
+      // Employees: PostAssignment, SiteAssignment, LeaveRecord, EmployeeDeduction, Shift, PayrollItem, Timesheet, Employee
+      if (has("employees")) {
+        if (postIds.length > 0) {
+          await tx.postAssignment.deleteMany({ where: { postId: { in: postIds } } });
+        }
+        if (siteIds.length > 0) {
+          await tx.siteAssignment.deleteMany({ where: { siteId: { in: siteIds } } });
+        }
+        await tx.shift.deleteMany({ where: { companyId } });
+        const payrollRuns = await tx.payrollRun.findMany({
+          where: { companyId },
+          select: { id: true },
+        });
+        const payrollRunIds = payrollRuns.map((r) => r.id);
+        if (payrollRunIds.length > 0) {
+          const payrollItems = await tx.payrollItem.findMany({
+            where: { payrollRunId: { in: payrollRunIds } },
+            select: { id: true },
+          });
+          const payrollItemIds = payrollItems.map((i) => i.id);
+          if (payrollItemIds.length > 0) {
+            await tx.payslip.deleteMany({ where: { payrollItemId: { in: payrollItemIds } } });
+          }
+          await tx.payrollItem.deleteMany({ where: { payrollRunId: { in: payrollRunIds } } });
+        }
+        await tx.timesheet.deleteMany({ where: { companyId } });
+        if (employeeIds.length > 0) {
+          await tx.leaveRecord.deleteMany({ where: { employeeId: { in: employeeIds } } });
+          await tx.employeeDeduction.deleteMany({ where: { employeeId: { in: employeeIds } } });
+        }
+        await tx.employee.deleteMany({ where: { companyId } });
+      }
 
-      // 8. AuditLog
-      await tx.auditLog.deleteMany({ where: { companyId } });
+      // Pay rules: PayGrade, PayRule, EarningsRule, DeductionRule
+      if (has("payRules")) {
+        await tx.employee.updateMany({ where: { companyId }, data: { gradeId: null } });
+        await tx.payGrade.deleteMany({ where: { companyId } });
+        await tx.payRule.deleteMany({ where: { companyId } });
+        await tx.earningsRule.deleteMany({ where: { companyId } });
+        await tx.deductionRule.deleteMany({ where: { companyId } });
+      }
 
-      // 9. Create audit log for factory reset
+      // Public holidays
+      if (has("publicHolidays")) {
+        await tx.publicHoliday.deleteMany({ where: { companyId } });
+      }
+
+      // Audit logs
+      if (has("auditLogs")) {
+        await tx.auditLog.deleteMany({ where: { companyId } });
+      }
+
+      // Audit log for this reset
       await tx.auditLog.create({
         data: {
           userId,
@@ -228,29 +301,32 @@ export async function settingsRoutes(app: FastifyInstance) {
           action: "settings.factory_reset",
           entityType: "company",
           entityId: companyId,
+          metadata: modules ? { modules } : undefined,
         },
       });
 
-      // 10. Update Company to defaults
-      await tx.company.update({
-        where: { id: companyId },
-        data: {
-          name: "My Company",
-          legalName: null,
-          registrationNumber: null,
-          taxNumber: null,
-          address: null,
-          phone: null,
-          email: null,
-          logoUrl: null,
-          website: null,
-          fax: null,
-          psiraRegistration: null,
-          uifReference: null,
-          settings: DEFAULT_SETTINGS,
-          theme: Prisma.JsonNull,
-        },
-      });
+      // Company settings
+      if (has("companySettings")) {
+        await tx.company.update({
+          where: { id: companyId },
+          data: {
+            name: "My Company",
+            legalName: null,
+            registrationNumber: null,
+            taxNumber: null,
+            address: null,
+            phone: null,
+            email: null,
+            logoUrl: null,
+            website: null,
+            fax: null,
+            psiraRegistration: null,
+            uifReference: null,
+            settings: DEFAULT_SETTINGS,
+            theme: Prisma.JsonNull,
+          },
+        });
+      }
     });
 
     const updated = await prisma.company.findUnique({

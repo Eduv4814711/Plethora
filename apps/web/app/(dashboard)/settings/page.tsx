@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
-import { uploadLogo, listUsers, createUser, updateUser, deleteUser, factoryReset, type UserListItem, type UserRole } from "@/lib/api";
+import { uploadLogo, listUsers, createUser, updateUser, deleteUser, factoryReset, FACTORY_RESET_MODULES, type UserListItem, type UserRole, type FactoryResetModuleId } from "@/lib/api";
 import { clsx } from "clsx";
 
 type Tab = "profile" | "business" | "settings" | "users" | "migrate" | "factory_reset";
@@ -945,18 +945,43 @@ function FactoryResetSection({
   const [resetting, setResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [resetAll, setResetAll] = useState(false);
+  const [selectedModules, setSelectedModules] = useState<Set<FactoryResetModuleId>>(new Set());
 
-  const canReset = confirmText === CONFIRM_PHRASE && !resetting;
+  const toggleModule = (id: FactoryResetModuleId) => {
+    setSelectedModules((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedModules(new Set(FACTORY_RESET_MODULES.map((m) => m.id)));
+  };
+
+  const deselectAll = () => {
+    setSelectedModules(new Set());
+  };
+
+  const modulesToReset: FactoryResetModuleId[] | undefined =
+    resetAll ? undefined : Array.from(selectedModules);
+  const hasSelection = resetAll || selectedModules.size > 0;
+  const canReset =
+    confirmText === CONFIRM_PHRASE && !resetting && hasSelection;
 
   const handleReset = async () => {
     if (!canReset) return;
     setResetting(true);
     setError(null);
     try {
-      await factoryReset(token);
+      await factoryReset(token, modulesToReset);
       await refresh();
       setSuccess(true);
       setConfirmText("");
+      setResetAll(false);
+      setSelectedModules(new Set());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Factory reset failed");
     } finally {
@@ -967,16 +992,84 @@ function FactoryResetSection({
   return (
     <div>
       <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Factory Reset</h3>
-      <div className="max-w-xl space-y-4">
+      <div className="max-w-2xl space-y-4">
         <div className="p-4 rounded-sm border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20">
           <p className="text-sm text-red-800 dark:text-red-200 font-medium mb-2">
             This action cannot be undone.
           </p>
           <p className="text-sm text-red-700 dark:text-red-300">
-            Factory reset will permanently delete all employees, sites, shifts, payroll runs, timesheets,
-            pay rules, pay grades, earnings and deduction rules, public holidays, and audit logs. Company
-            name and business settings will be reset to defaults. User accounts will be preserved.
+            Select which modules to reset. Each module will be permanently deleted. User accounts
+            are never deleted. Leave all unchecked and use &quot;Reset all&quot; to restore full
+            factory defaults.
           </p>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="reset-all"
+              checked={resetAll}
+              onChange={(e) => setResetAll(e.target.checked)}
+              disabled={resetting}
+              className="rounded border-neutral-300 dark:border-neutral-600"
+            />
+            <label
+              htmlFor="reset-all"
+              className="text-sm font-medium text-neutral-800 dark:text-neutral-200 cursor-pointer"
+            >
+              Reset all modules (full factory reset)
+            </label>
+          </div>
+
+          {!resetAll && (
+            <>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={selectAll}
+                  className="text-xs text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 underline"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={deselectAll}
+                  className="text-xs text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 underline"
+                >
+                  Deselect all
+                </button>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {FACTORY_RESET_MODULES.map((mod) => (
+                  <div
+                    key={mod.id}
+                    className="flex items-start gap-2 p-2 rounded-sm border border-neutral-200 dark:border-neutral-700"
+                  >
+                    <input
+                      type="checkbox"
+                      id={`mod-${mod.id}`}
+                      checked={selectedModules.has(mod.id)}
+                      onChange={() => toggleModule(mod.id)}
+                      disabled={resetting}
+                      className="mt-0.5 rounded border-neutral-300 dark:border-neutral-600"
+                    />
+                    <label
+                      htmlFor={`mod-${mod.id}`}
+                      className="text-sm cursor-pointer flex-1"
+                    >
+                      <span className="font-medium text-neutral-800 dark:text-neutral-200">
+                        {mod.label}
+                      </span>
+                      <span className="block text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                        {mod.description}
+                      </span>
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         <div>

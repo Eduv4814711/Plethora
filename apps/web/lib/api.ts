@@ -161,10 +161,28 @@ export async function updateSettings(
   return res.json();
 }
 
-export async function factoryReset(token: string): Promise<CompanySettings> {
+export const FACTORY_RESET_MODULES = [
+  { id: "employees", label: "Employees", description: "All employees, assignments, leave records, and deductions" },
+  { id: "sites", label: "Sites", description: "Sites, posts, and site/post assignments" },
+  { id: "shifts", label: "Shifts", description: "Shifts and attendance records" },
+  { id: "payroll", label: "Payroll", description: "Payroll runs, items, and payslips" },
+  { id: "timesheets", label: "Timesheets", description: "All timesheet records" },
+  { id: "payRules", label: "Pay Rules", description: "Pay grades, pay rules, earnings and deduction rules" },
+  { id: "publicHolidays", label: "Public Holidays", description: "Public holiday calendar" },
+  { id: "auditLogs", label: "Audit Logs", description: "Activity and audit history" },
+  { id: "companySettings", label: "Company Settings", description: "Company name, business details, and settings" },
+] as const;
+
+export type FactoryResetModuleId = (typeof FACTORY_RESET_MODULES)[number]["id"];
+
+export async function factoryReset(
+  token: string,
+  modules?: FactoryResetModuleId[]
+): Promise<CompanySettings> {
   const res = await fetch(`${API_BASE}/settings/factory-reset`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(modules && modules.length > 0 ? { modules } : {}),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

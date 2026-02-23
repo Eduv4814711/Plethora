@@ -355,19 +355,6 @@ export async function shiftsRoutes(app: FastifyInstance) {
       ...(siteId && { post: { siteId } }),
     };
 
-    // #region agent log
-    const countBefore = await prisma.shift.count({ where });
-    const allInRange = await prisma.shift.count({
-      where: {
-        companyId,
-        startTime: { lt: end },
-        endTime: { gt: start },
-        ...(siteId && { post: { siteId } }),
-      },
-    });
-    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6f3bcb'},body:JSON.stringify({sessionId:'6f3bcb',location:'shifts.ts:reset',message:'Reset pre-delete',data:{startDate,endDate,employeeId,siteId,countMatchingWhere:countBefore,countAllInRangeNoStatus:allInRange,startISO:start.toISOString(),endISO:end.toISOString()},hypothesisId:'H3,H4,H5',timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-
     const deleted = await prisma.shift.deleteMany({ where });
 
     if (deleted.count > 0) {
