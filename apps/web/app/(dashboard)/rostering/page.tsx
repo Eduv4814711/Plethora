@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
-import { format, addDays, addWeeks, addMonths, startOfWeek, startOfMonth, isSameDay, parseISO } from "date-fns";
+import { format, addDays, addWeeks, addMonths, startOfWeek, startOfMonth, isSameDay, parseISO, differenceInMonths } from "date-fns";
 
 type BulkPattern =
   | "all_days"
@@ -590,7 +590,23 @@ export default function RosteringPage() {
         <div className="flex justify-between items-center flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold text-neutral-800 dark:text-neutral-100">Rostering</h1>
-            {periodLabel && <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">{periodLabel}</p>}
+            {periodLabel && calendarDays.length > 0 && (
+              <input
+                type="month"
+                value={format(calendarDays[0], "yyyy-MM")}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) return;
+                  const targetDate = parseISO(`${val}-01`);
+                  const now = new Date();
+                  const offset = differenceInMonths(targetDate, startOfMonth(now));
+                  setDateRange("month");
+                  setViewOffset(offset);
+                }}
+                className="block mt-0.5 text-sm text-neutral-500 dark:text-neutral-400 bg-transparent border border-transparent rounded px-1 py-0.5 cursor-pointer hover:text-neutral-700 dark:hover:text-neutral-300 hover:border-neutral-300 dark:hover:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 focus:outline-none focus:ring-2 focus:ring-neutral-400 focus:border-transparent [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-60"
+                title="Click to select month"
+              />
+            )}
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center h-11 rounded-md border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800/30 overflow-hidden">
