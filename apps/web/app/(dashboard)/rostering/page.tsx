@@ -621,6 +621,20 @@ export default function RosteringPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDateRange("month");
+                  setViewOffset((o) => o + 1);
+                }}
+                className="h-full px-3 flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors text-neutral-600 dark:text-neutral-400 border-l border-neutral-200 dark:border-neutral-700"
+                aria-label="Next month"
+                title="Jump to next month"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                </svg>
+              </button>
             </div>
             <select
               value={dateRange}
