@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
-import { format, addDays, addWeeks, addMonths, startOfWeek, startOfMonth, isSameDay, parseISO, differenceInMonths } from "date-fns";
+import { format, addDays, addWeeks, addMonths, startOfWeek, startOfMonth, endOfMonth, isSameDay, parseISO, differenceInMonths } from "date-fns";
 
 type BulkPattern =
   | "all_days"
@@ -114,12 +114,12 @@ export default function RosteringPage() {
     if (!token) return;
     const emp = rosteredEmployees.find((e) => e.id === employeeId);
     const name = emp ? `${emp.firstName} ${emp.lastName}` : "this person";
-    if (!confirm(`Reset all rostered shifts for ${name} in the visible period?`)) return;
+    if (!confirm(`Reset all rostered shifts for ${name} in this month only?`)) return;
     setShowResetMenu(false);
     setResetting(true);
     setBulkError(null);
     try {
-      const { startDate, endDate } = getDateRangeParams();
+      const { startDate, endDate } = getMonthRangeForReset();
       const body: Record<string, unknown> = {
         startDate: startDate.slice(0, 10),
         endDate: endDate.slice(0, 10),
@@ -146,12 +146,12 @@ export default function RosteringPage() {
 
   const handleResetAll = async () => {
     if (!token) return;
-    if (!confirm("Reset the entire roster for the visible period? This will remove all created/assigned shifts.")) return;
+    if (!confirm("Reset the entire roster for this month only? This will remove all created/assigned shifts in the visible month.")) return;
     setShowResetMenu(false);
     setResetting(true);
     setBulkError(null);
     try {
-      const { startDate, endDate } = getDateRangeParams();
+      const { startDate, endDate } = getMonthRangeForReset();
       const body: Record<string, unknown> = {
         startDate: startDate.slice(0, 10),
         endDate: endDate.slice(0, 10),
@@ -253,6 +253,16 @@ export default function RosteringPage() {
       end.setMonth(end.getMonth() + 1);
       end.setMilliseconds(-1);
     }
+    end.setHours(23, 59, 59, 999);
+    return { startDate: start.toISOString(), endDate: end.toISOString() };
+  };
+
+  /** Returns the full month containing the visible period, for reset operations. */
+  const getMonthRangeForReset = () => {
+    const { startDate } = getDateRangeParams();
+    const start = startOfMonth(parseISO(startDate.slice(0, 10)));
+    const end = endOfMonth(start);
+    start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
     return { startDate: start.toISOString(), endDate: end.toISOString() };
   };
