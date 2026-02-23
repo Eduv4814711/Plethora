@@ -180,13 +180,11 @@ export default function AttendancePage() {
   };
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-neutral-800 dark:text-white mb-6">
-        Attendance
-      </h1>
+    <div className="animate-fade-in">
+      <h1 className="page-title mb-6">Attendance</h1>
 
-      <div className="mb-8 p-6 border border-gray-300 dark:border-gray-600 bg-white dark:bg-neutral-900 rounded-none">
-        <h3 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-500 dark:text-neutral-400 mb-4 pb-3 border-b border-dashed border-gray-300 dark:border-gray-600">
+      <div className="card-wireframe mb-8 p-6">
+        <h3 className="section-title mb-4 pb-3 border-b border-neutral-200 dark:border-neutral-700">
           Filters
         </h3>
         <div className="flex flex-wrap gap-6 items-end">
@@ -198,24 +196,24 @@ export default function AttendancePage() {
               <button
                 type="button"
                 onClick={goPrevMonth}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-transparent text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-800/50 focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 rounded-none"
+                className="btn-secondary text-sm"
               >
                 Prev
               </button>
-              <span className="text-sm font-medium min-w-[120px] px-3 py-2 border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-neutral-800/50 text-neutral-800 dark:text-neutral-200">
+              <span className="text-sm font-medium min-w-[120px] px-3 py-2 rounded-md border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-800 dark:text-neutral-200">
                 {format(dateRange.start, "MMM yyyy")}
               </span>
               <button
                 type="button"
                 onClick={goNextMonth}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-transparent text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-800/50 focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 rounded-none"
+                className="btn-secondary text-sm"
               >
                 Next
               </button>
               <button
                 type="button"
                 onClick={goCurrentMonth}
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-transparent text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-gray-50 dark:hover:bg-neutral-800/50 focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 rounded-none"
+                className="btn-secondary text-sm"
               >
                 This month
               </button>
@@ -228,7 +226,7 @@ export default function AttendancePage() {
             <select
               value={employeeId}
               onChange={(e) => setEmployeeId(e.target.value)}
-              className="w-full min-w-[180px] px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-neutral-900 text-sm text-neutral-800 dark:text-neutral-200 focus:ring-2 focus:ring-gray-400 focus:border-gray-500 dark:focus:border-gray-500 rounded-none outline-none"
+              className="input-modern w-full min-w-[180px]"
             >
               <option value="">All employees</option>
               {employees.map((e) => (
@@ -245,7 +243,7 @@ export default function AttendancePage() {
             <select
               value={siteId}
               onChange={(e) => setSiteId(e.target.value)}
-              className="w-full min-w-[180px] px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-neutral-900 text-sm text-neutral-800 dark:text-neutral-200 focus:ring-2 focus:ring-gray-400 focus:border-gray-500 dark:focus:border-gray-500 rounded-none outline-none"
+              className="input-modern w-full min-w-[180px]"
             >
               <option value="">All sites</option>
               {sites.map((s) => (
@@ -262,7 +260,7 @@ export default function AttendancePage() {
               const p = refresh();
               if (p) p.finally(() => setLoading(false));
             }}
-            className="px-4 py-2 border-2 border-gray-400 dark:border-gray-500 bg-transparent text-sm font-semibold text-neutral-800 dark:text-neutral-200 hover:bg-gray-50 dark:hover:bg-neutral-800/50 focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 rounded-none"
+            className="btn-primary"
           >
             Apply
           </button>
@@ -290,7 +288,7 @@ export default function AttendancePage() {
       )}
 
       {shiftsForClockIn.length > 0 && (
-        <div className="mb-6 p-4 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-black dark:border-white">
+        <div className="card-wireframe mb-6 p-4">
           <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
             Clock in / Clock out
           </h3>
@@ -322,7 +320,7 @@ export default function AttendancePage() {
       )}
 
       {activeAttendances.length > 0 && (
-        <div className="mb-6 p-4 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-black dark:border-white">
+        <div className="card-wireframe mb-6 p-4">
           <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
             Clock out
           </h3>
@@ -366,7 +364,7 @@ export default function AttendancePage() {
         <p className="text-neutral-500 py-8 text-center">No attendance records</p>
       )}
 
-      <div className="mt-8 mb-6 p-4 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-dashed border-black dark:border-white">
+      <div className="card-wireframe mt-8 mb-6 p-4">
         <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
           Missed shifts (no clock-in)
         </h3>
@@ -375,7 +373,7 @@ export default function AttendancePage() {
             {missedShifts.map((s) => (
               <div
                 key={s.id}
-                className="p-3 bg-white dark:bg-neutral-800 rounded-sm border border-black dark:border-white flex items-center justify-between gap-4"
+                className="card-wireframe p-3 flex items-center justify-between gap-4"
               >
                 <span>
                   {s.employee.firstName} {s.employee.lastName} at {s.post.site.name} - {s.post.name}
@@ -397,7 +395,7 @@ export default function AttendancePage() {
                         .catch(() => setAvailableRelievers([]))
                         .finally(() => setReplacingLoading(false));
                     }}
-                    className="px-3 py-1.5 text-sm font-medium border border-black dark:border-white bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-none"
+                    className="btn-secondary text-sm"
                   >
                     Replace
                   </button>
@@ -460,7 +458,7 @@ function ReplaceGuardModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white dark:bg-neutral-900 border border-black dark:border-white p-6 max-w-md w-full mx-4 shadow-lg">
+      <div className="card-wireframe p-6 max-w-md w-full mx-4 shadow-xl">
         <h3 className="text-lg font-semibold text-neutral-800 dark:text-neutral-200 mb-2">
           Replace absent guard
         </h3>
@@ -481,7 +479,7 @@ function ReplaceGuardModal({
             {availableRelievers.map((r) => (
               <div
                 key={r.id}
-                className="flex items-center justify-between p-2 border border-black dark:border-white rounded-sm"
+                className="flex items-center justify-between p-2 rounded-md border border-neutral-200 dark:border-neutral-700"
               >
                 <span className="text-neutral-800 dark:text-neutral-200">
                   {r.firstName} {r.lastName}
@@ -490,7 +488,7 @@ function ReplaceGuardModal({
                   type="button"
                   onClick={() => handleSelect(r.id)}
                   disabled={replacing}
-                  className="px-3 py-1 text-sm font-medium border border-black dark:border-white bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-50 rounded-none"
+                  className="btn-secondary text-sm disabled:opacity-50"
                 >
                   {replacing ? "..." : "Select"}
                 </button>
@@ -502,7 +500,7 @@ function ReplaceGuardModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium border border-black dark:border-white bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-none"
+            className="btn-secondary"
           >
             Cancel
           </button>
@@ -529,7 +527,7 @@ function AttendanceRow({
   const shiftHours = Math.round(((shiftEnd.getTime() - shiftStart.getTime()) / (1000 * 60 * 60)) * 100) / 100;
 
   return (
-    <div className="bg-white dark:bg-neutral-800 rounded-sm border border-black dark:border-white overflow-hidden">
+    <div className="card-wireframe overflow-hidden">
       <div
         role="button"
         tabIndex={0}
@@ -578,11 +576,11 @@ function AttendanceRow({
               onSuccess={onSuccess}
             />
           )}
-          <span
-            className={`px-2 py-0.5 rounded text-xs ${
-              att.status === "completed"
-                ? "border border-black dark:border-white bg-neutral-100 dark:bg-neutral-700/50 text-neutral-800 dark:text-neutral-200"
-                : "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300"
+            <span
+            className={`badge ${
+            att.status === "completed"
+                ? "badge-success"
+                : "badge-neutral"
             }`}
           >
             {att.status}
@@ -691,7 +689,7 @@ function ClockInRow({
   };
 
   return (
-    <div className="flex items-center justify-between bg-white dark:bg-neutral-800 p-3 rounded-sm border border-black dark:border-white">
+    <div className="card-wireframe flex items-center justify-between p-3">
       <span className="text-neutral-800 dark:text-neutral-200">
         {shift.employee.firstName} {shift.employee.lastName} at{" "}
         {shift.post.site.name} - {shift.post.name}
@@ -701,7 +699,7 @@ function ClockInRow({
         <button
           onClick={handleClockIn}
           disabled={loading}
-          className="px-3 py-1.5 text-sm font-medium border-2 border-black dark:border-white bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-50 rounded-none"
+          className="btn-secondary text-sm disabled:opacity-50"
         >
           {loading ? "..." : "Clock In"}
         </button>
@@ -709,7 +707,7 @@ function ClockInRow({
           type="button"
           onClick={onMarkAbsent}
           disabled={loading}
-          className="px-3 py-1.5 text-sm font-medium border-2 border-red-600 dark:border-red-500 bg-red-600 dark:bg-red-700 text-white hover:bg-red-700 dark:hover:bg-red-600 disabled:opacity-50 rounded-none"
+          className="btn-primary bg-red-600 dark:bg-red-600 border-red-600 dark:border-red-600 hover:bg-red-700 dark:hover:bg-red-700 disabled:opacity-50"
         >
           Mark Absent
         </button>

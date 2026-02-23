@@ -56,12 +56,10 @@ export default function AuditPage() {
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-neutral-800 dark:text-white mb-6">
-        Audit Logs
-      </h1>
+    <div className="animate-fade-in">
+      <h1 className="page-title mb-6">Audit Logs</h1>
 
-      <div className="bg-white dark:bg-neutral-800 rounded-sm border border-black dark:border-white overflow-hidden">
+      <div className="card-wireframe overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 dark:bg-neutral-700">
             <tr>
@@ -75,7 +73,7 @@ export default function AuditPage() {
             {logs.map((log) => (
               <tr
                 key={log.id}
-                className="border-t border-black dark:border-white"
+                className="border-t border-neutral-200 dark:border-neutral-700"
               >
                 <td className="px-4 py-2 text-neutral-600 dark:text-neutral-400">
                   {new Date(log.timestamp).toLocaleString()}

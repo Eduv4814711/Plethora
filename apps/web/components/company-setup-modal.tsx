@@ -117,7 +117,7 @@ export function CompanySetupModal({
   if (!isAdmin) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/80 p-4">
-        <div className="w-full max-w-md rounded-sm border border-black dark:border-white bg-white dark:bg-neutral-900 p-8 text-center">
+        <div className="card-wireframe w-full max-w-md p-8 text-center shadow-xl">
           <h2 className="text-xl font-bold text-neutral-900 dark:text-white mb-2">
             Company Setup Required
           </h2>
@@ -139,7 +139,7 @@ export function CompanySetupModal({
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950/80">
       <div className="flex-1 overflow-y-auto p-4 min-h-0">
-        <div className="max-w-2xl mx-auto my-4 sm:my-8 rounded-sm border border-black dark:border-white bg-white dark:bg-neutral-900 flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)]">
+        <div className="max-w-2xl mx-auto my-4 sm:my-8 card-wireframe flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)] shadow-xl">
           {/* Sticky header - always visible, includes Company Name */}
           <div className="shrink-0 p-6 pb-4 border-b border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded-t-sm">
             <h2 className="text-xl font-bold text-neutral-900 dark:text-white mb-2">
@@ -402,7 +402,7 @@ function LogoUploadInline({
     <div>
       <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">Logo</label>
       <div className="flex flex-col sm:flex-row gap-4 items-start">
-        <div className="w-24 h-24 rounded-sm border-2 border-dashed border-black dark:border-white flex items-center justify-center overflow-hidden bg-neutral-50 dark:bg-neutral-800/50 shrink-0">
+        <div className="w-24 h-24 rounded-lg border-2 border-dashed border-neutral-300 dark:border-neutral-600 flex items-center justify-center overflow-hidden bg-neutral-50 dark:bg-neutral-800/50 shrink-0">
           {previewUrl ? (
             <img src={previewUrl} alt="Logo" className="w-full h-full object-contain" />
           ) : (

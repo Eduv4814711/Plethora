@@ -96,12 +96,12 @@ export default function SitesPage() {
     return (
       <div className="animate-pulse space-y-6">
         <div className="flex justify-between items-center">
-          <div className="h-9 bg-neutral-200 dark:bg-neutral-700 rounded w-48" />
-          <div className="h-10 bg-neutral-200 dark:bg-neutral-700 rounded w-32" />
+          <div className="h-9 bg-neutral-200 dark:bg-neutral-700 rounded-md w-48" />
+          <div className="h-10 bg-neutral-200 dark:bg-neutral-700 rounded-md w-32" />
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-64 bg-neutral-200 dark:bg-neutral-700 rounded-sm" />
+            <div key={i} className="h-64 bg-neutral-100 dark:bg-neutral-800/50 rounded-lg" />
           ))}
         </div>
       </div>
@@ -109,12 +109,10 @@ export default function SitesPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">
-            Site Management
-          </h1>
+          <h1 className="page-title">Site Management</h1>
           <p className="text-neutral-500 dark:text-neutral-400 mt-1 text-sm">
             Register and manage company sites, contacts, and assigned guards
           </p>
@@ -158,8 +156,8 @@ export default function SitesPage() {
       </div>
 
       {sites.length === 0 && (
-        <div className="text-center py-16 px-6 rounded-sm border-2 border-dashed border-black dark:border-white bg-neutral-50/50 dark:bg-neutral-900/30">
-          <div className="w-16 h-16 mx-auto rounded-sm bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center mb-4">
+        <div className="card-wireframe text-center py-16 px-6">
+          <div className="w-16 h-16 mx-auto rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-4">
             <svg className="w-8 h-8 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
             </svg>
@@ -228,12 +226,12 @@ function SiteCard({
   return (
     <div
       onClick={() => router.push(`/sites/${site.id}`)}
-      className="group p-6 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white shadow-sm hover:shadow-lg hover:border-black dark:hover:border-white transition-all duration-200 cursor-pointer"
+      className="card-elevated group p-6 cursor-pointer"
     >
       <div className="flex justify-between items-start gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-sm bg-gradient-to-br from-neutral-500/20 to-neutral-600/20 flex items-center justify-center shrink-0">
+            <div className="w-12 h-12 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0">
               <svg className="w-6 h-6 text-neutral-600 dark:text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
@@ -309,7 +307,7 @@ function SiteCard({
       </div>
 
       {guards.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-black dark:border-white">
+        <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
           <h4 className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider mb-2">
             Assigned Guards
           </h4>
@@ -327,7 +325,7 @@ function SiteCard({
         </div>
       )}
 
-      <div className="mt-4 pt-4 border-t border-black dark:border-white">
+      <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
         <h4 className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider mb-2">
           Posts
         </h4>
@@ -439,7 +437,7 @@ function SiteForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="p-6 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white shadow-lg"
+      className="card-wireframe p-6 shadow-lg"
     >
       <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-6 flex items-center gap-2">
         <svg className="w-5 h-5 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -533,7 +531,7 @@ function SiteForm({
           <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">
             Assigned guards
           </label>
-          <div className="border border-black dark:border-white rounded-sm p-4 bg-neutral-50/50 dark:bg-neutral-800/30 max-h-40 overflow-y-auto">
+          <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg p-4 bg-neutral-50/50 dark:bg-neutral-800/30 max-h-40 overflow-y-auto">
             {guards.length === 0 ? (
               <p className="text-sm text-neutral-500">No active guards available</p>
             ) : (
@@ -563,7 +561,7 @@ function SiteForm({
         <button
           type="button"
           onClick={onCancel}
-          className="px-5 py-2.5 font-medium rounded-sm border border-black dark:border-white text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+          className="btn-secondary"
         >
           Cancel
         </button>
@@ -638,8 +636,8 @@ function EditSiteModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-neutral-900 rounded-sm shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-black dark:border-white">
-        <div className="p-6 border-b border-black dark:border-white shrink-0">
+      <div className="card-wireframe w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
+        <div className="p-6 border-b border-neutral-200 dark:border-neutral-700 shrink-0">
           <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Edit Site</h3>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">{site.name}</p>
         </div>
@@ -687,7 +685,7 @@ function EditSiteModal({
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">Assigned guards</label>
-              <div className="border border-black dark:border-white rounded-sm p-4 bg-neutral-50/50 dark:bg-neutral-800/30 max-h-40 overflow-y-auto">
+              <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg p-4 bg-neutral-50/50 dark:bg-neutral-800/30 max-h-40 overflow-y-auto">
                 {guards.length === 0 ? (
                   <p className="text-sm text-neutral-500">No active guards available</p>
                 ) : (
@@ -713,7 +711,7 @@ function EditSiteModal({
           </div>
 
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 py-2.5 font-medium rounded-sm border border-black dark:border-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
+            <button type="button" onClick={onClose} className="flex-1 btn-secondary">
               Cancel
             </button>
             <button type="submit" disabled={submitting} className="flex-1 btn-primary">
@@ -759,9 +757,9 @@ function DeleteConfirmModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-neutral-900 rounded-sm shadow-2xl w-full max-w-md border border-black dark:border-white">
+      <div className="card-wireframe w-full max-w-md shadow-xl">
         <div className="p-6">
-          <div className="w-12 h-12 rounded-sm bg-neutral-100 dark:bg-neutral-900/30 flex items-center justify-center mb-4">
+          <div className="w-12 h-12 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-4">
             <svg className="w-6 h-6 text-neutral-600 dark:text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
@@ -779,14 +777,14 @@ function DeleteConfirmModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 font-medium rounded-sm border border-black dark:border-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+              className="flex-1 btn-secondary"
             >
               Cancel
             </button>
             <button
               onClick={handleDelete}
               disabled={deleting}
-              className="flex-1 py-2.5 font-semibold rounded-sm bg-neutral-600 hover:bg-neutral-700 text-neutral-100 transition-colors disabled:opacity-50"
+              className="flex-1 btn-primary bg-neutral-600 dark:bg-neutral-600 border-neutral-600 dark:border-neutral-600 hover:bg-neutral-700 dark:hover:bg-neutral-700 disabled:opacity-50"
             >
               {deleting ? "Deleting..." : "Delete"}
             </button>

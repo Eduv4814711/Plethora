@@ -89,16 +89,16 @@ export default function PayrollPage() {
   }
 
   return (
-    <div>
+    <div className="animate-fade-in">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white tracking-tight">Payroll</h1>
+          <h1 className="page-title">Payroll</h1>
           <p className="text-neutral-500 dark:text-neutral-400 mt-1 text-sm">Manage payroll runs and payments</p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => setShowConfig(!showConfig)}
-            className="px-4 py-2 border-2 border-black dark:border-white bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white font-medium hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-sm"
+            className="btn-secondary"
           >
             {showConfig ? "Hide" : "Configuration"}
           </button>
@@ -122,16 +122,16 @@ export default function PayrollPage() {
         />
       )}
 
-      <div className="mb-8 p-5 bg-neutral-50 dark:bg-neutral-950/30 rounded-sm border border-black dark:border-white">
+      <div className="card-wireframe mb-8 p-5">
         <h3 className="font-semibold text-neutral-900 dark:text-white mb-4">Pipeline</h3>
         <div className="flex gap-2 flex-wrap mb-2">
-          <span className="px-3 py-1 rounded-sm bg-white dark:bg-neutral-800 border border-black dark:border-white text-sm font-medium">Attendance</span>
+          <span className="badge-neutral">Attendance</span>
           <span className="text-neutral-400">→</span>
-          <span className="px-3 py-1 rounded-sm bg-white dark:bg-neutral-800 border border-black dark:border-white text-sm font-medium">Calculation</span>
+          <span className="badge-warning">Calculation</span>
           <span className="text-neutral-400">→</span>
-          <span className="px-3 py-1 rounded-sm bg-white dark:bg-neutral-800 border border-black dark:border-white text-sm font-medium">Approval</span>
+          <span className="badge-neutral">Approval</span>
           <span className="text-neutral-400">→</span>
-          <span className="px-3 py-1 rounded-sm bg-white dark:bg-neutral-800 border border-black dark:border-white text-sm font-medium">Paid</span>
+          <span className="badge-success">Paid</span>
         </div>
         <p className="text-sm text-neutral-600 dark:text-neutral-400">
           Each payroll run progresses through these stages. Calculate first, then approve, then mark as paid.
@@ -186,7 +186,7 @@ function PayrollConfig({ token }: { token: string }) {
 
   if (loading) {
     return (
-      <div className="mb-6 p-4 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white animate-pulse">
+      <div className="card-wireframe mb-6 p-4 animate-pulse">
         <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-32 mb-3" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[1, 2, 3, 4].map((i) => (
@@ -198,7 +198,7 @@ function PayrollConfig({ token }: { token: string }) {
   }
 
   return (
-    <div className="mb-6 p-4 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white">
+    <div className="card-wireframe mb-6 p-4">
       <h2 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-4">Payroll Configuration</h2>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <PayGradesSection grades={grades} token={token} onRefresh={load} />
@@ -254,7 +254,7 @@ function PayGradesSection({
   };
 
   return (
-    <div className="p-3 rounded-sm border border-black dark:border-white bg-neutral-50/50 dark:bg-neutral-800/30">
+    <div className="p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800/30">
       <h3 className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Pay Grades</h3>
       <form onSubmit={handleAdd} className="flex gap-2 mb-3">
         <input
@@ -275,7 +275,7 @@ function PayGradesSection({
           className="w-20 px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900"
           required
         />
-        <button type="submit" disabled={saving} className="px-2 py-1.5 text-xs font-medium border border-black dark:border-white rounded hover:bg-neutral-100 dark:hover:bg-neutral-800">
+        <button type="submit" disabled={saving} className="btn-secondary text-xs py-1.5 px-2">
           {saving ? "…" : "Add"}
         </button>
       </form>
@@ -328,7 +328,7 @@ function PayRulesSection({
   };
 
   return (
-    <div className="p-3 rounded-sm border border-black dark:border-white bg-neutral-50/50 dark:bg-neutral-800/30">
+    <div className="p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800/30">
       <h3 className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Pay Rules</h3>
       <div className="space-y-2">
         {(["overtime", "sunday", "public_holiday"] as const).map((rt) => {
@@ -415,7 +415,7 @@ function EarningsRulesSection({
   };
 
   return (
-    <div className="p-3 rounded-sm border border-black dark:border-white bg-neutral-50/50 dark:bg-neutral-800/30">
+    <div className="p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800/30">
       <h3 className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Earnings</h3>
       <form onSubmit={handleAdd} className="flex gap-2 mb-3 flex-wrap">
         <input
@@ -440,7 +440,7 @@ function EarningsRulesSection({
           <option value="security">Sec</option>
           <option value="office">Off</option>
         </select>
-        <button type="submit" disabled={saving} className="px-2 py-1.5 text-xs font-medium border border-black dark:border-white rounded hover:bg-neutral-100 dark:hover:bg-neutral-800">{saving ? "…" : "Add"}</button>
+        <button type="submit" disabled={saving} className="btn-secondary text-xs py-1.5 px-2">{saving ? "…" : "Add"}</button>
       </form>
       <div className="space-y-1">
         {earnings.map((e) => (
@@ -503,7 +503,7 @@ function DeductionRulesSection({
   };
 
   return (
-    <div className="p-3 rounded-sm border border-black dark:border-white bg-neutral-50/50 dark:bg-neutral-800/30">
+    <div className="p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800/30">
       <h3 className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Deductions</h3>
       <form onSubmit={handleAdd} className="flex gap-2 mb-3 flex-wrap">
         <input
@@ -528,7 +528,7 @@ function DeductionRulesSection({
           <option value="security">Sec</option>
           <option value="office">Off</option>
         </select>
-        <button type="submit" disabled={saving} className="px-2 py-1.5 text-xs font-medium border border-black dark:border-white rounded hover:bg-neutral-100 dark:hover:bg-neutral-800">{saving ? "…" : "Add"}</button>
+        <button type="submit" disabled={saving} className="btn-secondary text-xs py-1.5 px-2">{saving ? "…" : "Add"}</button>
       </form>
       <div className="space-y-1">
         {deductions.map((d) => (
@@ -568,7 +568,7 @@ function PayrollRunForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="mb-8 p-6 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white ">
+    <form onSubmit={handleSubmit} className="card-wireframe mb-8 p-6">
       <h3 className="font-semibold text-neutral-900 dark:text-white mb-4">New Payroll Run</h3>
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -650,7 +650,7 @@ function PayrollRunCard({
   };
 
   return (
-    <div className="p-4 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white ">
+    <div className="card-wireframe p-4">
       <div className="flex justify-between items-center">
         <div>
           <span className="font-medium">
@@ -701,8 +701,8 @@ function PayrollRunCard({
           </button>
         </div>
       </div>
-      {showItems && (
-        <div className="mt-4 border-t border-black dark:border-white pt-4">
+        {showItems && (
+        <div className="mt-4 border-t border-neutral-200 dark:border-neutral-700 pt-4">
           {previewError && (
             <p className="text-red-600 dark:text-red-400 text-sm mb-2">{previewError}</p>
           )}

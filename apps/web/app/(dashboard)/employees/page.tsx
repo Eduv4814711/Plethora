@@ -71,12 +71,12 @@ interface Employee {
 }
 
 const statusColors: Record<string, string> = {
-  applicant: "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
-  hired: "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
-  training: "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
-  active: "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
-  suspended: "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
-  offboarded: "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-600 dark:text-neutral-400",
+  applicant: "badge-neutral",
+  hired: "badge-neutral",
+  training: "badge-warning",
+  active: "badge-success",
+  suspended: "badge-error",
+  offboarded: "badge-neutral opacity-75",
 };
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -122,20 +122,18 @@ export default function EmployeesPage() {
     return (
       <div className="animate-pulse grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {[1, 2, 3, 4, 5, 6].map((i) => (
-          <div key={i} className="h-44 border border-dashed border-black dark:border-white rounded-sm" />
+          <div key={i} className="h-44 bg-neutral-100 dark:bg-neutral-800/50 rounded-lg" />
         ))}
       </div>
     );
   }
 
   return (
-    <div>
+    <div className="animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">
-            Employees
-          </h1>
-          <p className="text-[10px] uppercase tracking-widest text-neutral-500 dark:text-neutral-400 mt-1">
+          <h1 className="page-title">Employees</h1>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
             Manage your workforce
           </p>
           {searchQuery.trim().length >= 2 && (
@@ -149,7 +147,7 @@ export default function EmployeesPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-11 min-w-[160px] pl-4 pr-9 py-2.5 text-sm font-medium rounded-sm border-2 border-black dark:border-white bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 outline-none cursor-pointer"
+            className="input-modern h-11 min-w-[160px] cursor-pointer"
           >
             <option value="all">All statuses</option>
             <option value="applicant">Applicant</option>
@@ -161,7 +159,7 @@ export default function EmployeesPage() {
           </select>
           <button
             onClick={() => setShowForm(!showForm)}
-            className="h-11 px-5 py-2.5 text-sm font-semibold rounded-sm border-2 border-black dark:border-white bg-transparent dark:bg-transparent text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 shrink-0"
+            className="btn-secondary h-11 shrink-0"
           >
             {showForm ? "Cancel" : "Add Employee"}
           </button>
@@ -209,7 +207,7 @@ export default function EmployeesPage() {
           <div
             key={emp.id}
             onClick={() => setExpandedId((prev) => (prev === emp.id ? null : emp.id))}
-            className={`p-5 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white hover:bg-neutral-50 dark:hover:bg-neutral-800/30 transition-colors cursor-pointer ${
+            className={`card-elevated p-5 cursor-pointer ${
               expandedId === emp.id ? "ring-2 ring-offset-2 ring-neutral-400 dark:ring-neutral-500" : ""
             }`}
           >
@@ -222,8 +220,8 @@ export default function EmployeesPage() {
                   ID: {emp.employeeNumber}
                 </p>
                 <span
-                  className={`inline-block mt-1 px-2.5 py-1 rounded-sm text-[10px] font-semibold uppercase tracking-wider ${
-                    statusColors[emp.status] || "border border-black dark:border-white text-neutral-700 dark:text-neutral-300"
+                  className={`inline-block mt-1 badge ${
+                    statusColors[emp.status] || "badge-neutral"
                   }`}
                 >
                   {emp.status}
@@ -262,7 +260,7 @@ export default function EmployeesPage() {
             )}
 
             {expandedId === emp.id && (
-              <div className="mt-4 pt-4 border-t border-black dark:border-white space-y-3 text-sm">
+              <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700 space-y-3 text-sm">
                 {emp.email && (
                   <p><span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Email</span><br />{emp.email}</p>
                 )}
@@ -299,14 +297,14 @@ export default function EmployeesPage() {
             <div className="mt-4 flex gap-3" onClick={(e) => e.stopPropagation()}>
               <button
                 onClick={() => setEditingId(emp.id)}
-                className="text-xs font-medium uppercase tracking-wider text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border-b border-black dark:border-white pb-0.5"
+                className="btn-ghost text-xs py-1"
               >
                 Edit
               </button>
               {emp.status !== "offboarded" && (
                 <button
                   onClick={() => setStatusChangeId(emp.id)}
-                  className="text-xs font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
+                  className="btn-ghost text-xs py-1"
                 >
                   Change Status
                 </button>
@@ -317,8 +315,8 @@ export default function EmployeesPage() {
       </div>
 
       {employees.length === 0 && (
-        <div className="text-center py-16 border border-dashed border-black dark:border-white rounded-sm">
-          <p className="text-sm font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">No employees yet</p>
+        <div className="card-wireframe text-center py-16">
+          <p className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">No employees yet</p>
           <p className="text-xs mt-1 text-neutral-400 dark:text-neutral-500">Add your first employee to get started</p>
         </div>
       )}
@@ -515,20 +513,20 @@ function EmployeeForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="mb-6 p-4 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white max-h-[85vh] overflow-y-auto"
+      className="card-wireframe mb-6 p-6 max-h-[85vh] overflow-y-auto"
     >
-      <div className="mb-4 pb-3 border-b border-black dark:border-white flex items-baseline justify-between gap-4">
+      <div className="mb-4 pb-3 border-b border-neutral-200 dark:border-neutral-700 flex items-baseline justify-between gap-4">
         <h3 className="text-base font-semibold text-neutral-900 dark:text-neutral-100 tracking-tight">New Employee</h3>
         <span className="text-[10px] uppercase tracking-widest text-neutral-500 dark:text-neutral-400">Add team member</span>
       </div>
       {error && (
-        <div className="mb-4 p-3 text-xs text-neutral-900 dark:text-neutral-100 bg-neutral-50 dark:bg-neutral-800 border border-black dark:border-white rounded-sm">
+        <div className="mb-4 p-3 text-sm text-red-800 dark:text-red-200 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
           {error}
         </div>
       )}
 
       <div className="space-y-4">
-        <section className="p-3 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
+        <section className="p-4 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
           <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-2">Staff type</h4>
           <div className="flex gap-6">
             <label className="flex items-center gap-2 cursor-pointer">
@@ -558,7 +556,7 @@ function EmployeeForm({
           </div>
         </section>
 
-        <div className="flex gap-1 border-b border-black dark:border-white overflow-x-auto">
+        <div className="flex gap-1 border-b border-neutral-200 dark:border-neutral-700 overflow-x-auto">
           {(["basic", "labour", "psira", "bank"] as const).map((tab) => (
             <button
               key={tab}
@@ -567,7 +565,7 @@ function EmployeeForm({
               className={clsx(
                 "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors -mb-px",
                 activeTab === tab
-                  ? "bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-black dark:border-white border-b-transparent"
+                  ? "bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-neutral-200 dark:border-neutral-700 border-b-transparent"
                   : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
               )}
             >
@@ -577,7 +575,7 @@ function EmployeeForm({
         </div>
 
         {activeTab === "basic" && (
-        <section className="p-3 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
+        <section className="p-4 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
           <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-2">Basic</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
@@ -632,7 +630,7 @@ function EmployeeForm({
         )}
 
         {activeTab === "labour" && (
-        <section className="p-3 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
+        <section className="p-4 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
           <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-2">Labour Law (BCEA)</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
@@ -673,7 +671,7 @@ function EmployeeForm({
         )}
 
         {activeTab === "bank" && (
-        <section className="p-2 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
+        <section className="p-4 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
           <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-1.5">Bank Details</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input placeholder="Tax number" value={taxNumber} onChange={(e) => setTaxNumber(e.target.value)} className="input-compact py-1.5 text-sm" />
@@ -706,7 +704,7 @@ function EmployeeForm({
         )}
 
         {activeTab === "psira" && (
-        <section className="p-3 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
+        <section className="p-4 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
           <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-2">PSIRA</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -731,7 +729,7 @@ function EmployeeForm({
             <input placeholder="Next of kin 2 – Phone" value={nextOfKin2Phone} onChange={(e) => setNextOfKin2Phone(e.target.value)} className="input-compact" />
             <input placeholder="Next of kin 3 – Name" value={nextOfKin3Name} onChange={(e) => setNextOfKin3Name(e.target.value)} className="input-compact" />
             <input placeholder="Next of kin 3 – Phone" value={nextOfKin3Phone} onChange={(e) => setNextOfKin3Phone(e.target.value)} className="input-compact" />
-            <div className="sm:col-span-2 p-3 rounded-sm border border-black dark:border-white bg-white dark:bg-neutral-900 space-y-2">
+            <div className="sm:col-span-2 p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 space-y-2">
               <p className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-1">Declaration</p>
               <label className="flex items-center gap-2 text-xs cursor-pointer">
                 <input type="checkbox" checked={residedOutsideSA === true} onChange={(e) => setResidedOutsideSA(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-black dark:border-white accent-neutral-900 dark:accent-white" />
@@ -759,7 +757,7 @@ function EmployeeForm({
         )}
       </div>
 
-      <div className="mt-4 pt-4 border-t border-black dark:border-white">
+      <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
         <button type="submit" className="btn-primary text-sm py-2">
           Create Employee
         </button>
@@ -955,13 +953,13 @@ function EditModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-neutral-900 rounded-sm  w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-black dark:border-white">
-        <div className="p-6 border-b border-black dark:border-white shrink-0 flex items-center justify-between">
+      <div className="card-wireframe w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
+        <div className="p-6 border-b border-neutral-200 dark:border-neutral-700 shrink-0 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Edit Employee</h3>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+            className="p-2 rounded-md text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
             aria-label="Close"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -974,12 +972,12 @@ function EditModal({
         ) : (
           <form onSubmit={handleSubmit} className="p-6 overflow-y-auto max-h-[calc(90vh-180px)] space-y-6">
             {error && (
-              <div className="p-3 text-sm text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 border border-black dark:border-white rounded-sm">
+              <div className="p-3 text-sm text-red-800 dark:text-red-200 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
                 {error}
               </div>
             )}
 
-            <section className="p-4 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
+            <section className="p-4 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
               <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">Staff type</h4>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -1009,7 +1007,7 @@ function EditModal({
               </div>
             </section>
 
-            <div className="flex gap-1 border-b border-black dark:border-white overflow-x-auto">
+            <div className="flex gap-1 border-b border-neutral-200 dark:border-neutral-700 overflow-x-auto">
               {(["basic", "labour", "psira", "bank"] as const).map((tab) => (
                 <button
                   key={tab}
@@ -1017,8 +1015,8 @@ function EditModal({
                   onClick={() => setActiveTab(tab)}
                   className={clsx(
                     "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors -mb-px",
-                    activeTab === tab
-                      ? "bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-black dark:border-white border-b-transparent"
+                      activeTab === tab
+                        ? "bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-neutral-200 dark:border-neutral-700 border-b-transparent"
                       : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
                   )}
                 >
@@ -1117,7 +1115,7 @@ function EditModal({
             )}
 
             {activeTab === "bank" && (
-            <section className="p-2 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-black dark:border-white">
+            <section className="p-4 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
               <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-1.5">Bank Details</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input placeholder="Tax number" value={taxNumber} onChange={(e) => setTaxNumber(e.target.value)} className="input-modern py-2 text-sm" />
@@ -1205,7 +1203,7 @@ function EditModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-2.5 font-medium rounded-sm border border-black dark:border-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                className="flex-1 btn-secondary"
               >
                 Cancel
               </button>
@@ -1233,7 +1231,7 @@ function EditModal({
                   }
                 }}
                 disabled={deleting}
-                className="flex-1 py-2.5 font-medium rounded-sm border-2 border-red-600 dark:border-red-500 bg-red-600 dark:bg-red-600 text-white hover:bg-red-700 dark:hover:bg-red-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                className="flex-1 btn-primary bg-red-600 dark:bg-red-600 border-red-600 dark:border-red-600 hover:bg-red-700 dark:hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {deleting ? "Deleting..." : "Delete"}
               </button>
@@ -1287,7 +1285,7 @@ function StatusModal({
   if (validNext.length === 0) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-        <div className="bg-white dark:bg-neutral-900 rounded-sm  w-full max-w-sm p-6 border border-black dark:border-white">
+        <div className="card-wireframe w-full max-w-sm p-6 shadow-xl">
           <p className="text-neutral-600 dark:text-neutral-400">No status transitions available for offboarded employees.</p>
           <button onClick={onClose} className="mt-4 btn-primary w-full">Close</button>
         </div>
@@ -1297,8 +1295,8 @@ function StatusModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-neutral-900 rounded-sm  w-full max-w-sm border border-black dark:border-white">
-        <div className="p-6 border-b border-black dark:border-white">
+      <div className="card-wireframe w-full max-w-sm shadow-xl">
+        <div className="p-6 border-b border-neutral-200 dark:border-neutral-700">
           <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Change Status</h3>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
             {employee.firstName} {employee.lastName}
@@ -1306,12 +1304,12 @@ function StatusModal({
         </div>
         <form onSubmit={handleSubmit} className="p-6">
           {error && (
-            <div className="mb-4 p-3 text-sm text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 border border-black dark:border-white rounded-sm">
+            <div className="mb-4 p-3 text-sm text-red-800 dark:text-red-200 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
               {error}
             </div>
           )}
           <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
-            Current: <span className={`font-semibold ${statusColors[employee.status]}`}>{employee.status}</span>
+            Current: <span className={`badge ${statusColors[employee.status]}`}>{employee.status}</span>
           </p>
           <select
             value={selectedStatus}
@@ -1330,7 +1328,7 @@ function StatusModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 font-medium rounded-sm border border-black dark:border-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+              className="flex-1 btn-secondary"
             >
               Cancel
             </button>

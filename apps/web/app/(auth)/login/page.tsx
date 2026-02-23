@@ -35,13 +35,13 @@ function LoginForm() {
   };
 
   return (
-    <div className="w-full max-w-[420px] animate-fade-in">
-      <div className="bg-white dark:bg-neutral-900 border border-black dark:border-white rounded-sm p-8 md:p-10">
-        <div className="text-center mb-8 pb-8 border-b border-black dark:border-white">
+    <div className="w-full animate-fade-in">
+      <div className="card-wireframe p-8 md:p-10 shadow-soft dark:shadow-soft-dark">
+        <div className="text-center mb-8 pb-8 border-b border-neutral-200 dark:border-neutral-700">
           <div className="inline-flex items-center justify-center mb-4">
             <img src="/plethora-logo.png" alt="Plethora" className="h-14 w-auto object-contain" />
           </div>
-          <p className="text-[10px] uppercase tracking-widest text-neutral-500 dark:text-neutral-400 mt-2">
+          <p className="text-xs font-medium uppercase tracking-widest text-neutral-500 dark:text-neutral-400 mt-2">
             Workforce & Payroll Management
           </p>
         </div>
@@ -50,7 +50,7 @@ function LoginForm() {
           <div>
             <label
               htmlFor="email"
-              className="block text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-2"
+              className="block text-xs font-semibold uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-2"
             >
               Email
             </label>
@@ -68,7 +68,7 @@ function LoginForm() {
           <div>
             <label
               htmlFor="password"
-              className="block text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-2"
+              className="block text-xs font-semibold uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-2"
             >
               Password
             </label>
@@ -83,7 +83,7 @@ function LoginForm() {
           </div>
 
           {error && (
-            <div className="p-3 text-sm text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 border border-black dark:border-white rounded-sm">
+            <div className="p-4 text-sm text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-md">
               {error}
             </div>
           )}
@@ -91,13 +91,13 @@ function LoginForm() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-3 px-4 font-semibold rounded-sm border border-black dark:border-white bg-transparent dark:bg-transparent text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 outline-none"
+            className="btn-primary w-full py-3"
           >
             {submitting ? "Signing in..." : "Sign in"}
           </button>
         </form>
       </div>
-      <p className="text-center text-[10px] uppercase tracking-widest text-neutral-400 dark:text-neutral-500 mt-6">
+      <p className="text-center text-xs uppercase tracking-widest text-neutral-400 dark:text-neutral-500 mt-6">
         Quick Bopha Security
       </p>
     </div>

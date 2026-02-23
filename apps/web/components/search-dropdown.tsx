@@ -123,7 +123,7 @@ export function SearchDropdown() {
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => debouncedQuery.length >= 2 && setOpen(true)}
         onKeyDown={handleKeyDown}
-        className="w-72 pl-10 pr-4 py-2 rounded-sm border border-black dark:border-white bg-white dark:bg-neutral-900 text-sm placeholder-neutral-400 focus:ring-2 focus:ring-neutral-400 focus:border-black dark:focus:border-white outline-none"
+        className="w-72 pl-10 pr-4 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-sm placeholder-neutral-400 focus:ring-2 focus:ring-neutral-400 focus:border-neutral-900 dark:focus:border-neutral-100 outline-none transition-all"
         aria-label="Search"
         aria-expanded={open}
         aria-autocomplete="list"
@@ -141,7 +141,7 @@ export function SearchDropdown() {
       {open && (
         <div
           ref={listRef}
-          className="absolute top-full left-0 right-0 mt-1 py-1 bg-white dark:bg-neutral-900 border border-black dark:border-white rounded-sm shadow-lg z-50 max-h-80 overflow-y-auto"
+          className="absolute top-full left-0 right-0 mt-1 py-1 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto"
           role="listbox"
         >
           {loading ? (

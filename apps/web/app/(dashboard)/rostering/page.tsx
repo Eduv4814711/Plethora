@@ -426,8 +426,8 @@ export default function RosteringPage() {
 
   return (
     <div className="flex h-[calc(100vh-8rem)] min-h-[500px] w-full">
-      <aside className="w-64 shrink-0 border border-black dark:border-white bg-white dark:bg-neutral-900 flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-black dark:border-white shrink-0">
+      <aside className="w-64 shrink-0 card-wireframe flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-neutral-200 dark:border-neutral-700 shrink-0">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-3">
             Drag guard to post
           </h3>
@@ -505,7 +505,7 @@ export default function RosteringPage() {
                     }}
                     className={`min-h-[56px] p-3 rounded-sm border-2 border-dashed flex items-center justify-center text-sm font-medium transition-colors ${
                       dragOverSiteId === selectedSiteId
-                        ? "border-black dark:border-white bg-neutral-100 dark:bg-neutral-800"
+                        ? "border-neutral-500 dark:border-neutral-400 bg-neutral-100 dark:bg-neutral-800"
                         : "border-neutral-300 dark:border-neutral-600 text-neutral-600 dark:text-neutral-400"
                     }`}
                   >
@@ -563,7 +563,7 @@ export default function RosteringPage() {
                         e.dataTransfer.effectAllowed = "move";
                       }}
                       onDragEnd={() => setDraggedGuard(null)}
-                      className={`px-3 py-2 rounded-sm border border-black dark:border-white text-sm cursor-grab active:cursor-grabbing ${
+                      className={`px-3 py-2 rounded-md border border-neutral-200 dark:border-neutral-700 text-sm cursor-grab active:cursor-grabbing ${
                         draggedGuard?.id === g.id ? "opacity-50" : "bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                       }`}
                     >
@@ -579,7 +579,7 @@ export default function RosteringPage() {
           )}
         </div>
         {bulkError && (
-          <div className="p-3 border-t border-black dark:border-white bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-xs">
+          <div className="p-3 border-t border-neutral-200 dark:border-neutral-700 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-xs">
             {bulkError}
           </div>
         )}
@@ -593,7 +593,7 @@ export default function RosteringPage() {
             {periodLabel && <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">{periodLabel}</p>}
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center h-11 rounded-sm border-2 border-black dark:border-white bg-neutral-50/50 dark:bg-neutral-800/30 overflow-hidden">
+            <div className="flex items-center h-11 rounded-md border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800/30 overflow-hidden">
               <button
                 type="button"
                 onClick={() => setViewOffset((o) => o - 1)}
@@ -607,7 +607,7 @@ export default function RosteringPage() {
               <button
                 type="button"
                 onClick={() => setViewOffset(0)}
-                className="h-full px-4 text-sm font-medium border-x border-black dark:border-white hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors text-neutral-700 dark:text-neutral-300"
+                className="h-full px-4 text-sm font-medium border-x border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors text-neutral-700 dark:text-neutral-300"
               >
                 Today
               </button>
@@ -625,14 +625,14 @@ export default function RosteringPage() {
             <select
               value={dateRange}
               onChange={(e) => { setDateRange(e.target.value as "week" | "month"); setViewOffset(0); }}
-              className="h-11 min-w-[100px] pl-4 pr-9 py-2.5 text-sm font-medium rounded-sm border-2 border-black dark:border-white bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 outline-none cursor-pointer"
+              className="input-modern h-11 min-w-[100px] cursor-pointer"
             >
               <option value="week">Week</option>
               <option value="month">Month</option>
             </select>
             <button
               onClick={() => { setSelectedDayForShift(null); setShowForm(!showForm); }}
-              className="h-11 px-5 py-2.5 text-sm font-semibold rounded-sm border-2 border-black dark:border-white bg-transparent dark:bg-transparent text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 flex items-center gap-2 shrink-0"
+              className="btn-secondary h-11 flex items-center gap-2 shrink-0"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -657,7 +657,7 @@ export default function RosteringPage() {
                     aria-hidden
                     onClick={() => setShowPdfMenu(false)}
                   />
-                  <div className="absolute right-0 top-full mt-1 z-20 min-w-[260px] py-1 rounded-sm border-2 border-black dark:border-white bg-white dark:bg-neutral-900 shadow-lg">
+                  <div className="absolute right-0 top-full mt-1 z-20 min-w-[260px] py-1 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-lg">
                     <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
                       Full roster
                     </div>
@@ -713,7 +713,7 @@ export default function RosteringPage() {
                 type="button"
                 onClick={() => { setShowPdfMenu(false); setShowResetMenu((v) => !v); }}
                 disabled={resetting}
-                className="h-11 px-5 py-2.5 text-sm font-semibold rounded-sm border-2 border-black dark:border-white bg-transparent dark:bg-transparent text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="btn-secondary h-11 flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -727,7 +727,7 @@ export default function RosteringPage() {
                     aria-hidden
                     onClick={() => setShowResetMenu(false)}
                   />
-                  <div className="absolute right-0 top-full mt-1 z-20 min-w-[200px] py-1 rounded-sm border-2 border-black dark:border-white bg-white dark:bg-neutral-900 shadow-lg">
+                  <div className="absolute right-0 top-full mt-1 z-20 min-w-[200px] py-1 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-lg">
                     <button
                       type="button"
                       onClick={handleResetAll}
@@ -778,15 +778,15 @@ export default function RosteringPage() {
       </div>
 
       <div className="flex-1 min-h-0 px-6 pb-6 flex flex-col overflow-hidden">
-        <div className="flex-1 min-h-0 rounded-sm bg-white dark:bg-neutral-900 relative border border-black dark:border-white overflow-y-auto overflow-x-hidden">
+        <div className="flex-1 min-h-0 rounded-lg card-wireframe relative overflow-y-auto overflow-x-hidden">
           <div className="grid min-h-full w-full" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((wd, i) => (
               <div
                 key={wd}
                 className={`shrink-0 py-4 px-4 text-center text-[11px] font-semibold uppercase tracking-[0.08em] border-b flex items-center justify-center ${
                   i >= 5
-                    ? "text-neutral-400 dark:text-neutral-500 bg-neutral-50/80 dark:bg-neutral-800/30 border-black dark:border-white"
-                    : "text-neutral-600 dark:text-neutral-400 bg-gradient-to-b from-neutral-50 to-neutral-100/50 dark:from-neutral-800/60 dark:to-neutral-800/30 border-black dark:border-white"
+                    ? "text-neutral-400 dark:text-neutral-500 bg-neutral-50/80 dark:bg-neutral-800/30 border-neutral-200 dark:border-neutral-700"
+                    : "text-neutral-600 dark:text-neutral-400 bg-gradient-to-b from-neutral-50 to-neutral-100/50 dark:from-neutral-800/60 dark:to-neutral-800/30 border-neutral-200 dark:border-neutral-700"
                 }`}
               >
                 {wd}
@@ -797,7 +797,7 @@ export default function RosteringPage() {
                 return (
                   <div
                     key={`empty-${idx}`}
-                    className="min-h-[100px] bg-neutral-50/40 dark:bg-neutral-800/10 border-b border-r border-black dark:border-white"
+                    className="min-h-[100px] bg-neutral-50/40 dark:bg-neutral-800/10 border-b border-r border-neutral-200 dark:border-neutral-700"
                   />
                 );
               }
@@ -808,7 +808,7 @@ export default function RosteringPage() {
               return (
                 <div
                   key={key}
-                  className={`flex flex-col min-h-0 border-b border-r border-black dark:border-white last:border-r-0 transition-colors ${
+                  className={`flex flex-col min-h-0 border-b border-r border-neutral-200 dark:border-neutral-700 last:border-r-0 transition-colors ${
                     isToday
                       ? "bg-neutral-50/50 dark:bg-neutral-950/30"
                       : isWeekend
@@ -835,7 +835,7 @@ export default function RosteringPage() {
                     className="flex-1 px-3 py-2.5 space-y-2 overflow-y-auto min-h-0 cursor-pointer group"
                   >
                     {dayShifts.length === 0 ? (
-                      <div className="flex-1 min-h-[60px] flex items-center justify-center rounded-sm border-2 border-dashed border-black dark:border-white group-hover:border-black dark:group-hover:border-white group-hover:bg-neutral-50/30 dark:group-hover:bg-neutral-950/20 transition-all duration-200">
+                      <div className="flex-1 min-h-[60px] flex items-center justify-center rounded-md border-2 border-dashed border-neutral-300 dark:border-neutral-600 group-hover:border-neutral-500 dark:group-hover:border-neutral-400 group-hover:bg-neutral-50/30 dark:group-hover:bg-neutral-950/20 transition-all duration-200">
                         <span className="text-neutral-400 dark:text-neutral-500 group-hover:text-neutral-500 dark:group-hover:text-neutral-400 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -969,7 +969,7 @@ function ShiftForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="p-4 bg-white dark:bg-neutral-900 rounded-sm border border-black dark:border-white"
+      className="card-wireframe p-4"
     >
       <h3 className="font-medium mb-4 text-neutral-900 dark:text-neutral-100">New Shift</h3>
       {error && (

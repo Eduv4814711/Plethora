@@ -4,10 +4,8 @@ import Link from "next/link";
 
 export default function ReportsPage() {
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-neutral-800 dark:text-white mb-6">
-        Reports
-      </h1>
+    <div className="animate-fade-in">
+      <h1 className="page-title mb-6">Reports</h1>
       <p className="text-neutral-600 dark:text-neutral-400 mb-4">
         Reports module coming soon. For now, use the following modules:
       </p>

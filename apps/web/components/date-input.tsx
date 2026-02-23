@@ -175,7 +175,7 @@ export function DateInput({
         <button
           type="button"
           onClick={() => setIsOpen((o) => !o)}
-          className={`shrink-0 px-2.5 rounded-sm border-2 border-black dark:border-white bg-white dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 ${className.includes("input-compact") ? "py-2" : "py-2.5"}`}
+          className={`shrink-0 px-2.5 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 ${className.includes("input-compact") ? "py-2" : "py-2.5"}`}
           aria-label="Open calendar"
           disabled={disabled}
         >
@@ -192,7 +192,7 @@ export function DateInput({
         <div
           role="dialog"
           aria-label="Choose date"
-          className="absolute left-0 top-full z-50 mt-1 p-3 min-w-[300px] rounded-sm border-2 border-black dark:border-white bg-white dark:bg-neutral-900 shadow-lg"
+          className="absolute left-0 top-full z-50 mt-1 p-3 min-w-[300px] rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-lg"
         >
           <div className="rdp-root [--rdp-accent-color:theme(colors.neutral.900)] dark:[--rdp-accent-color:theme(colors.neutral.100)] [--rdp-accent-background-color:theme(colors.neutral.100)] dark:[--rdp-accent-background-color:theme(colors.neutral.800)]">
             <DayPicker
@@ -216,7 +216,7 @@ export function DateInput({
               <select
                 value={getMonth(month)}
                 onChange={handleGoToMonth}
-                className="flex-1 min-w-0 px-2 py-1 text-xs rounded-sm border-2 border-black dark:border-white bg-white dark:bg-neutral-900"
+                className="flex-1 min-w-0 px-2 py-1 text-xs rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900"
                 aria-label="Jump to month"
               >
                 {MONTH_NAMES.map((name, i) => (
@@ -228,7 +228,7 @@ export function DateInput({
               <select
                 value={getYear(month)}
                 onChange={handleGoToYear}
-                className="flex-1 min-w-0 px-2 py-1 text-xs rounded-sm border-2 border-black dark:border-white bg-white dark:bg-neutral-900"
+                className="flex-1 min-w-0 px-2 py-1 text-xs rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900"
                 aria-label="Jump to year"
               >
                 {years.map((y) => (
@@ -242,7 +242,7 @@ export function DateInput({
               <button
                 type="button"
                 onClick={handleToday}
-                className="flex-1 min-w-[4rem] py-1.5 text-xs font-medium rounded-sm border-2 border-black dark:border-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                className="flex-1 min-w-[4rem] py-1.5 text-xs font-medium rounded-md border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
               >
                 Today
               </button>
@@ -251,7 +251,7 @@ export function DateInput({
               <button
                 type="button"
                 onClick={handleYesterday}
-                className="flex-1 min-w-[4rem] py-1.5 text-xs font-medium rounded-sm border-2 border-black dark:border-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                className="flex-1 min-w-[4rem] py-1.5 text-xs font-medium rounded-md border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
               >
                 Yesterday
               </button>
@@ -260,7 +260,7 @@ export function DateInput({
               <button
                 type="button"
                 onClick={handleNextMonth}
-                className="flex-1 min-w-[4rem] py-1.5 text-xs font-medium rounded-sm border-2 border-black dark:border-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                className="flex-1 min-w-[4rem] py-1.5 text-xs font-medium rounded-md border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
               >
                 Next month
               </button>
@@ -268,7 +268,7 @@ export function DateInput({
             <button
               type="button"
               onClick={handleClear}
-              className="flex-1 min-w-[4rem] py-1.5 text-xs font-medium rounded-sm border-2 border-black dark:border-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+              className="flex-1 min-w-[4rem] py-1.5 text-xs font-medium rounded-md border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
             >
               Clear
             </button>
