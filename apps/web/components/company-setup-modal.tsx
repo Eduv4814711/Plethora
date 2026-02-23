@@ -50,6 +50,8 @@ export function CompanySetupModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const nameInvalid = !form.name.trim() || form.name.trim() === "My Company";
+
   useEffect(() => {
     if (settings) {
       const s = settings.settings ?? {};
@@ -135,30 +137,41 @@ export function CompanySetupModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/80 p-4 overflow-y-auto">
-      <div className="w-full max-w-2xl rounded-sm border border-black dark:border-white bg-white dark:bg-neutral-900 p-8 my-8">
-        <h2 className="text-xl font-bold text-neutral-900 dark:text-white mb-2">
-          Company Setup Required
-        </h2>
-        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-6">
-          Please configure your company details to continue. This information is required for the system to function correctly.
-        </p>
+    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950/80">
+      <div className="flex-1 overflow-y-auto p-4 min-h-0">
+        <div className="max-w-2xl mx-auto my-4 sm:my-8 rounded-sm border border-black dark:border-white bg-white dark:bg-neutral-900 flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)]">
+          {/* Sticky header - always visible, includes Company Name */}
+          <div className="shrink-0 p-6 pb-4 border-b border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded-t-sm">
+            <h2 className="text-xl font-bold text-neutral-900 dark:text-white mb-2">
+              Company Setup Required
+            </h2>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
+              Enter your company name below, then fill in the rest. This information is required for the system to function correctly.
+            </p>
+            <div className="p-4 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Company Name *</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                className="input-modern"
+                placeholder="Enter your company name (e.g. Quick Bopha Security)"
+                required
+              />
+              {nameInvalid && (
+                <p className="text-sm text-amber-600 dark:text-amber-400 mt-1">
+                  Change from &quot;My Company&quot; to your actual company name to enable Save.
+                </p>
+              )}
+            </div>
+          </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Scrollable form body */}
+          <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
           <div>
             <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Business Details</h3>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Company Name *</label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  className="input-modern"
-                  placeholder="Quick Bopha Security"
-                  required
-                />
-              </div>
               <div>
                 <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Legal Name</label>
                 <input
@@ -317,19 +330,28 @@ export function CompanySetupModal({
               </div>
             </div>
           </div>
+          </div>
 
-          {error && (
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-          )}
-
-          <button
-            type="submit"
-            disabled={saving}
-            className="btn-primary"
-          >
-            {saving ? "Saving..." : "Save & Continue"}
-          </button>
+          {/* Sticky footer - always visible */}
+          <div className="shrink-0 p-6 pt-4 border-t border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded-b-sm">
+            {error && (
+              <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>
+            )}
+            {nameInvalid && (
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-3">
+                Save is disabled until you change the Company Name above.
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={saving || nameInvalid}
+              className="btn-primary w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {saving ? "Saving..." : "Save & Continue"}
+            </button>
+          </div>
         </form>
+        </div>
       </div>
     </div>
   );
