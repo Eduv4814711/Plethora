@@ -4,10 +4,10 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
-import { uploadLogo, listUsers, createUser, updateUser, deleteUser, type UserListItem, type UserRole } from "@/lib/api";
+import { uploadLogo, listUsers, createUser, updateUser, deleteUser, factoryReset, type UserListItem, type UserRole } from "@/lib/api";
 import { clsx } from "clsx";
 
-type Tab = "profile" | "business" | "settings" | "users" | "migrate";
+type Tab = "profile" | "business" | "settings" | "users" | "migrate" | "factory_reset";
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Admin",
@@ -18,7 +18,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
 
 export default function SettingsPage() {
   const { user, token } = useAuth();
-  const { settings, loading, update, error } = useSettings();
+  const { settings, loading, update, refresh, error } = useSettings();
   const isAdmin = user?.role === "admin";
   const [activeTab, setActiveTab] = useState<Tab>("profile");
   const [saving, setSaving] = useState(false);
@@ -30,6 +30,7 @@ export default function SettingsPage() {
     { id: "settings", label: "Business Settings" },
     { id: "users", label: "Users", adminOnly: true },
     { id: "migrate", label: "Bulk Import", href: "/settings/migrate" },
+    { id: "factory_reset", label: "Factory Reset", adminOnly: true },
   ];
 
   if (loading && !settings) {
@@ -131,6 +132,9 @@ export default function SettingsPage() {
         )}
         {activeTab === "users" && isAdmin && token && (
           <UsersSection token={token} currentUserId={user?.id} />
+        )}
+        {activeTab === "factory_reset" && isAdmin && token && (
+          <FactoryResetSection token={token} refresh={refresh} />
         )}
       </div>
     </div>
@@ -925,6 +929,90 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  );
+}
+
+const CONFIRM_PHRASE = "FACTORY RESET";
+
+function FactoryResetSection({
+  token,
+  refresh,
+}: {
+  token: string;
+  refresh: () => Promise<void>;
+}) {
+  const [confirmText, setConfirmText] = useState("");
+  const [resetting, setResetting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const canReset = confirmText === CONFIRM_PHRASE && !resetting;
+
+  const handleReset = async () => {
+    if (!canReset) return;
+    setResetting(true);
+    setError(null);
+    try {
+      await factoryReset(token);
+      await refresh();
+      setSuccess(true);
+      setConfirmText("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Factory reset failed");
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  return (
+    <div>
+      <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Factory Reset</h3>
+      <div className="max-w-xl space-y-4">
+        <div className="p-4 rounded-sm border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20">
+          <p className="text-sm text-red-800 dark:text-red-200 font-medium mb-2">
+            This action cannot be undone.
+          </p>
+          <p className="text-sm text-red-700 dark:text-red-300">
+            Factory reset will permanently delete all employees, sites, shifts, payroll runs, timesheets,
+            pay rules, pay grades, earnings and deduction rules, public holidays, and audit logs. Company
+            name and business settings will be reset to defaults. User accounts will be preserved.
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            Type <strong>{CONFIRM_PHRASE}</strong> to confirm
+          </label>
+          <input
+            type="text"
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
+            className="input-modern font-mono"
+            placeholder={CONFIRM_PHRASE}
+            disabled={resetting}
+          />
+        </div>
+
+        {error && (
+          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        )}
+
+        {success && (
+          <p className="text-sm text-green-600 dark:text-green-400">
+            Factory reset completed successfully.
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={handleReset}
+          disabled={!canReset}
+          className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-neutral-400 disabled:cursor-not-allowed rounded-sm transition-colors"
+        >
+          {resetting ? "Resetting..." : "Factory Reset"}
+        </button>
       </div>
     </div>
   );

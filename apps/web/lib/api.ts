@@ -161,6 +161,18 @@ export async function updateSettings(
   return res.json();
 }
 
+export async function factoryReset(token: string): Promise<CompanySettings> {
+  const res = await fetch(`${API_BASE}/settings/factory-reset`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || "Factory reset failed");
+  }
+  return res.json();
+}
+
 export async function uploadLogo(token: string, file: File): Promise<{ url: string }> {
   const formData = new FormData();
   formData.append("file", file);

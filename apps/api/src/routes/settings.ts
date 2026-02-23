@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
@@ -126,5 +127,152 @@ export async function settingsRoutes(app: FastifyInstance) {
     });
 
     return reply.send(company);
+  });
+
+  app.post("/factory-reset", { preHandler: [authMiddleware, requireAdmin()] }, async (request, reply) => {
+    const companyId = request.user!.companyId;
+    const userId = request.user!.sub;
+
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true },
+    });
+    if (!company) {
+      return reply.code(404).send({ error: "Company not found" });
+    }
+
+    const DEFAULT_SETTINGS = {
+      currency: "ZAR",
+      dateFormat: "DD/MM/YYYY",
+      timezone: "Africa/Johannesburg",
+      payrollPeriod: "monthly" as const,
+      employeeIdPrefix: "EMP",
+    };
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Shift (cascades to Attendance)
+      await tx.shift.deleteMany({ where: { companyId } });
+
+      // 2. PostAssignment, SiteAssignment - need post/site/employee ids
+      const posts = await tx.post.findMany({
+        where: { site: { companyId } },
+        select: { id: true },
+      });
+      const postIds = posts.map((p) => p.id);
+      const sites = await tx.site.findMany({
+        where: { companyId },
+        select: { id: true },
+      });
+      const siteIds = sites.map((s) => s.id);
+      const employees = await tx.employee.findMany({
+        where: { companyId },
+        select: { id: true },
+      });
+      const employeeIds = employees.map((e) => e.id);
+
+      if (postIds.length > 0) {
+        await tx.postAssignment.deleteMany({ where: { postId: { in: postIds } } });
+      }
+      if (siteIds.length > 0) {
+        await tx.siteAssignment.deleteMany({ where: { siteId: { in: siteIds } } });
+      }
+
+      // 3. Post
+      await tx.post.deleteMany({ where: { site: { companyId } } });
+
+      // 4. Payslip, PayrollItem, Timesheet
+      const payrollRuns = await tx.payrollRun.findMany({
+        where: { companyId },
+        select: { id: true },
+      });
+      const payrollRunIds = payrollRuns.map((r) => r.id);
+      if (payrollRunIds.length > 0) {
+        const payrollItems = await tx.payrollItem.findMany({
+          where: { payrollRunId: { in: payrollRunIds } },
+          select: { id: true },
+        });
+        const payrollItemIds = payrollItems.map((i) => i.id);
+        if (payrollItemIds.length > 0) {
+          await tx.payslip.deleteMany({ where: { payrollItemId: { in: payrollItemIds } } });
+        }
+        await tx.payrollItem.deleteMany({ where: { payrollRunId: { in: payrollRunIds } } });
+      }
+      await tx.timesheet.deleteMany({ where: { companyId } });
+      await tx.payrollRun.deleteMany({ where: { companyId } });
+
+      // 5. LeaveRecord, EmployeeDeduction
+      if (employeeIds.length > 0) {
+        await tx.leaveRecord.deleteMany({ where: { employeeId: { in: employeeIds } } });
+        await tx.employeeDeduction.deleteMany({ where: { employeeId: { in: employeeIds } } });
+      }
+
+      // 6. Employee
+      await tx.employee.deleteMany({ where: { companyId } });
+
+      // 7. PayGrade, PayRule, EarningsRule, DeductionRule, PublicHoliday, Site
+      await tx.payGrade.deleteMany({ where: { companyId } });
+      await tx.payRule.deleteMany({ where: { companyId } });
+      await tx.earningsRule.deleteMany({ where: { companyId } });
+      await tx.deductionRule.deleteMany({ where: { companyId } });
+      await tx.publicHoliday.deleteMany({ where: { companyId } });
+      await tx.site.deleteMany({ where: { companyId } });
+
+      // 8. AuditLog
+      await tx.auditLog.deleteMany({ where: { companyId } });
+
+      // 9. Create audit log for factory reset
+      await tx.auditLog.create({
+        data: {
+          userId,
+          companyId,
+          action: "settings.factory_reset",
+          entityType: "company",
+          entityId: companyId,
+        },
+      });
+
+      // 10. Update Company to defaults
+      await tx.company.update({
+        where: { id: companyId },
+        data: {
+          name: "My Company",
+          legalName: null,
+          registrationNumber: null,
+          taxNumber: null,
+          address: null,
+          phone: null,
+          email: null,
+          logoUrl: null,
+          website: null,
+          fax: null,
+          psiraRegistration: null,
+          uifReference: null,
+          settings: DEFAULT_SETTINGS,
+          theme: Prisma.JsonNull,
+        },
+      });
+    });
+
+    const updated = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: {
+        id: true,
+        name: true,
+        legalName: true,
+        registrationNumber: true,
+        taxNumber: true,
+        address: true,
+        phone: true,
+        email: true,
+        logoUrl: true,
+        website: true,
+        fax: true,
+        psiraRegistration: true,
+        uifReference: true,
+        settings: true,
+      },
+    });
+
+    return reply.send(updated);
   });
 }
