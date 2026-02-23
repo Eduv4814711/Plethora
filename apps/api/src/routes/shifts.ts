@@ -335,10 +335,9 @@ export async function shiftsRoutes(app: FastifyInstance) {
     const companyId = request.user!.companyId;
     const { startDate, endDate, employeeId, siteId } = parsed.data;
 
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
+    // Use UTC boundaries so reset works consistently regardless of server timezone
+    const start = new Date(`${startDate.slice(0, 10)}T00:00:00.000Z`);
+    const end = new Date(`${endDate.slice(0, 10)}T23:59:59.999Z`);
 
     if (start > end) {
       return reply.code(400).send({

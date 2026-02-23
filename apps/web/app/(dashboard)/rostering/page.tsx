@@ -269,11 +269,13 @@ export default function RosteringPage() {
     return { startDate: start.toISOString(), endDate: end.toISOString() };
   };
 
-  /** Returns the full month containing the visible period, for reset operations. */
+  /** Returns the full month(s) spanning the visible period, for reset operations.
+   * Uses startOfMonth(visibleStart) to endOfMonth(visibleEnd) so both week and month
+   * views reset all shifts in the displayed range. */
   const getMonthRangeForReset = () => {
-    const { startDate } = getDateRangeParams();
+    const { startDate, endDate } = getDateRangeParams();
     const start = startOfMonth(parseISO(startDate.slice(0, 10)));
-    const end = endOfMonth(start);
+    const end = endOfMonth(parseISO(endDate.slice(0, 10)));
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
     return { startDate: start.toISOString(), endDate: end.toISOString() };
