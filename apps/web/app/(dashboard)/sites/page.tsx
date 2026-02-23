@@ -21,6 +21,16 @@ const SHIFT_LABELS: Record<string, string> = {
   night: "Night (18–6)",
 };
 
+const CONTRACT_AGREEMENT_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "Select contract type" },
+  { value: "Fixed term", label: "Fixed term" },
+  { value: "Month-to-month", label: "Month-to-month" },
+  { value: "Annual", label: "Annual" },
+  { value: "Open-ended", label: "Open-ended" },
+  { value: "Per site agreement", label: "Per site agreement" },
+  { value: "other", label: "Other" },
+];
+
 interface PostAssignedGuard {
   id: string;
   employee: { id: string; firstName: string; lastName: string; status: string; phone: string | null };
@@ -392,7 +402,8 @@ function SiteForm({
   const [physicalAddress, setPhysicalAddress] = useState("");
   const [contactPersonName, setContactPersonName] = useState("");
   const [contactPersonPhone, setContactPersonPhone] = useState("");
-  const [contractOrServiceAgreement, setContractOrServiceAgreement] = useState("");
+  const [contractAgreementType, setContractAgreementType] = useState("");
+  const [contractAgreementCustom, setContractAgreementCustom] = useState("");
   const [serviceType, setServiceType] = useState("");
   const [assignedGuardIds, setAssignedGuardIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -417,7 +428,7 @@ function SiteForm({
           physicalAddress: physicalAddress || undefined,
           contactPersonName: contactPersonName || undefined,
           contactPersonPhone: contactPersonPhone || undefined,
-          contractOrServiceAgreement: contractOrServiceAgreement || undefined,
+          contractOrServiceAgreement: contractAgreementType === "other" ? (contractAgreementCustom || undefined) : (contractAgreementType || undefined),
           serviceType: serviceType || undefined,
           assignedGuardIds: assignedGuardIds.length ? assignedGuardIds : undefined,
         }),
@@ -519,12 +530,23 @@ function SiteForm({
 
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">Contract / service agreement</label>
-          <input
-            placeholder="Contract reference or description"
-            value={contractOrServiceAgreement}
-            onChange={(e) => setContractOrServiceAgreement(e.target.value)}
+          <select
+            value={contractAgreementType}
+            onChange={(e) => setContractAgreementType(e.target.value)}
             className="input-modern"
-          />
+          >
+            {CONTRACT_AGREEMENT_OPTIONS.map((opt) => (
+              <option key={opt.value || "empty"} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          {contractAgreementType === "other" && (
+            <input
+              placeholder="Enter contract reference or description"
+              value={contractAgreementCustom}
+              onChange={(e) => setContractAgreementCustom(e.target.value)}
+              className="input-modern mt-2"
+            />
+          )}
         </div>
 
         <div className="md:col-span-2">
@@ -590,7 +612,10 @@ function EditSiteModal({
   const [physicalAddress, setPhysicalAddress] = useState(site.physicalAddress ?? "");
   const [contactPersonName, setContactPersonName] = useState(site.contactPersonName ?? "");
   const [contactPersonPhone, setContactPersonPhone] = useState(site.contactPersonPhone ?? "");
-  const [contractOrServiceAgreement, setContractOrServiceAgreement] = useState(site.contractOrServiceAgreement ?? "");
+  const existingContract = site.contractOrServiceAgreement ?? "";
+  const isContractInOptions = CONTRACT_AGREEMENT_OPTIONS.some((o) => o.value && o.value !== "other" && o.value === existingContract);
+  const [contractAgreementType, setContractAgreementType] = useState(isContractInOptions ? existingContract : (existingContract ? "other" : ""));
+  const [contractAgreementCustom, setContractAgreementCustom] = useState(existingContract && !isContractInOptions ? existingContract : "");
   const [serviceType, setServiceType] = useState(site.serviceType ?? "");
   const [assignedGuardIds, setAssignedGuardIds] = useState<string[]>(
     site.assignedGuards?.map((a) => a.employee.id) ?? []
@@ -617,7 +642,7 @@ function EditSiteModal({
           physicalAddress: physicalAddress || undefined,
           contactPersonName: contactPersonName || undefined,
           contactPersonPhone: contactPersonPhone || undefined,
-          contractOrServiceAgreement: contractOrServiceAgreement || undefined,
+          contractOrServiceAgreement: contractAgreementType === "other" ? (contractAgreementCustom || undefined) : (contractAgreementType || undefined),
           serviceType: serviceType || undefined,
           assignedGuardIds,
         }),
@@ -681,7 +706,19 @@ function EditSiteModal({
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">Contract / service agreement</label>
-              <input value={contractOrServiceAgreement} onChange={(e) => setContractOrServiceAgreement(e.target.value)} className="input-modern" />
+              <select value={contractAgreementType} onChange={(e) => setContractAgreementType(e.target.value)} className="input-modern">
+                {CONTRACT_AGREEMENT_OPTIONS.map((opt) => (
+                  <option key={opt.value || "empty"} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              {contractAgreementType === "other" && (
+                <input
+                  placeholder="Enter contract reference or description"
+                  value={contractAgreementCustom}
+                  onChange={(e) => setContractAgreementCustom(e.target.value)}
+                  className="input-modern mt-2"
+                />
+              )}
             </div>
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">Assigned guards</label>
