@@ -2,23 +2,13 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
 import { SearchDropdown } from "@/components/search-dropdown";
 import { CompanySetupModal } from "@/components/company-setup-modal";
+import { NAV_ITEMS, canAccessRoute } from "@/lib/permissions";
 import { clsx } from "clsx";
-
-const navItems = [
-  { href: "/", label: "Dashboard" },
-  { href: "/employees", label: "Employees" },
-  { href: "/sites", label: "Sites" },
-  { href: "/rostering", label: "Rostering" },
-  { href: "/attendance", label: "Attendance" },
-  { href: "/payroll", label: "Payroll" },
-  { href: "/reports", label: "Reports" },
-  { href: "/audit", label: "Audit" },
-  { href: "/settings", label: "Settings" },
-];
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -61,6 +51,23 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // Filter nav to only modules this role can access
+  const navItems = NAV_ITEMS.filter((item) => {
+    if (item.roles.length === 0) return true;
+    return item.roles.includes(user.role as "admin" | "operations_manager" | "hr_payroll" | "supervisor");
+  });
+
+  // Redirect if user navigated to a route they don't have access to
+  useEffect(() => {
+    if (!user || !pathname) return;
+    if (!canAccessRoute(pathname, user.role)) {
+      router.replace("/");
+    }
+  }, [pathname, user, router]);
+
+  // Don't render page content if user lacks access (prevents flash before redirect)
+  const hasAccess = canAccessRoute(pathname, user.role);
+
   return (
     <div className="min-h-screen flex bg-neutral-100 dark:bg-neutral-950">
       <aside className="w-64 bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 flex flex-col shrink-0 shadow-sm">
@@ -80,20 +87,23 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <div className="text-xs font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 px-4 py-2 mb-1">
             Navigation
           </div>
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={clsx(
-                "flex items-center px-4 py-2.5 text-sm font-medium rounded-md transition-all duration-150",
-                pathname === item.href
-                  ? "bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900"
-                  : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800/50 hover:text-neutral-900 dark:hover:text-neutral-100"
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const isActive = item.href === "/" ? pathname === "/" : pathname === item.href || pathname.startsWith(item.href + "/");
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={clsx(
+                  "flex items-center px-4 py-2.5 text-sm font-medium rounded-md transition-all duration-150",
+                  isActive
+                    ? "bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900"
+                    : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800/50 hover:text-neutral-900 dark:hover:text-neutral-100"
+                )}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
       </aside>
 
@@ -126,7 +136,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 p-6 overflow-auto">{children}</main>
+        <main className="flex-1 p-6 overflow-auto">{hasAccess ? children : null}</main>
       </div>
     </div>
   );
