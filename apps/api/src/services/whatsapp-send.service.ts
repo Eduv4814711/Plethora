@@ -48,7 +48,7 @@ export async function sendDocument(
   const uploadUrl = `${GRAPH_URL}/${config.whatsapp.apiVersion}/${phoneNumberId}/media`;
 
   const formData = new FormData();
-  const blob = new Blob([pdfBuffer], { type: "application/pdf" });
+  const blob = new Blob([new Uint8Array(pdfBuffer)], { type: "application/pdf" });
   formData.append("file", blob, filename);
   formData.append("type", "application/pdf");
 
