@@ -14,6 +14,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   operations_manager: "Operations Manager",
   hr_payroll: "HR & Payroll",
   supervisor: "Supervisor",
+  controller: "Controller",
 };
 
 export default function SettingsPage() {

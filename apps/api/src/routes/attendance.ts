@@ -45,7 +45,7 @@ async function getOrCreateManualPost(companyId: string): Promise<{ postId: strin
 }
 
 export async function attendanceRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"])];
+  const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"])];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

@@ -71,6 +71,7 @@ enum UserRole {
   operations_manager
   hr_payroll
   supervisor
+  controller
 }
 
 model Employee {

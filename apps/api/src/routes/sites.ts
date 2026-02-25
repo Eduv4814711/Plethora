@@ -61,8 +61,8 @@ const assignGuardSchema = z.object({
 });
 
 export async function sitesRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin", "operations_manager", "supervisor"])];
-  const adminOnly = [authMiddleware, requireRole(["admin"])];
+  const protect = [authMiddleware, requireRole(["admin", "operations_manager", "supervisor", "controller"])];
+  const manageSites = [authMiddleware, requireRole(["admin", "operations_manager", "supervisor", "controller"])];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
@@ -115,7 +115,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     return reply.send({ data: sites, total, limit, offset });
   });
 
-  app.post("/", { preHandler: adminOnly }, async (request, reply) => {
+  app.post("/", { preHandler: manageSites }, async (request, reply) => {
     const parsed = createSiteSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -248,7 +248,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     return reply.send(site);
   });
 
-  app.put("/:id", { preHandler: adminOnly }, async (request, reply) => {
+  app.put("/:id", { preHandler: manageSites }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const parsed = updateSiteSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -339,7 +339,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     return reply.send(siteWithAssigned);
   });
 
-  app.delete("/:id", { preHandler: adminOnly }, async (request, reply) => {
+  app.delete("/:id", { preHandler: manageSites }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const companyId = request.user!.companyId;
 

@@ -4,7 +4,7 @@ import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 
 export async function searchRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"])];
+  const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"])];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

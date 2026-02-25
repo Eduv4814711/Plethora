@@ -83,7 +83,7 @@ export default function SitesPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingSite, setEditingSite] = useState<Site | null>(null);
   const [deletingSite, setDeletingSite] = useState<Site | null>(null);
-  const isAdmin = (user as { role?: string })?.role === "admin";
+  const canManageSites = ["admin", "operations_manager", "supervisor", "controller"].includes((user as { role?: string })?.role ?? "");
 
   const refresh = () => {
     if (!token) return;
@@ -127,7 +127,7 @@ export default function SitesPage() {
             Register and manage company sites, contacts, and assigned guards
           </p>
         </div>
-        {isAdmin && (
+        {canManageSites && (
           <button
             onClick={() => setShowCreateForm(!showCreateForm)}
             className="btn-primary flex items-center gap-2 shrink-0"
@@ -140,7 +140,7 @@ export default function SitesPage() {
         )}
       </div>
 
-      {showCreateForm && isAdmin && (
+      {showCreateForm && canManageSites && (
         <SiteForm
           token={token!}
           onSuccess={() => {
@@ -157,7 +157,7 @@ export default function SitesPage() {
             key={site.id}
             site={site}
             token={token!}
-            isAdmin={isAdmin}
+            canManageSites={canManageSites}
             onEdit={() => setEditingSite(site)}
             onDelete={() => setDeletingSite(site)}
             onRefresh={refresh}
@@ -176,7 +176,7 @@ export default function SitesPage() {
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1 max-w-sm mx-auto">
             Register your first site to start managing locations, contacts, and guard assignments.
           </p>
-          {isAdmin && (
+          {canManageSites && (
             <button
               onClick={() => setShowCreateForm(true)}
               className="mt-6 btn-primary"
@@ -217,14 +217,14 @@ export default function SitesPage() {
 function SiteCard({
   site,
   token,
-  isAdmin,
+  canManageSites,
   onEdit,
   onDelete,
   onRefresh,
 }: {
   site: Site;
   token: string;
-  isAdmin: boolean;
+  canManageSites: boolean;
   onEdit: () => void;
   onDelete: () => void;
   onRefresh: () => void;
@@ -292,7 +292,7 @@ function SiteCard({
           )}
         </div>
 
-        {isAdmin && (
+        {canManageSites && (
           <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={(e) => { e.stopPropagation(); onEdit(); }}
@@ -360,7 +360,7 @@ function SiteCard({
             </li>
           ))}
         </ul>
-        {isAdmin && (
+        {canManageSites && (
           <div onClick={(e) => e.stopPropagation()}>
             <PostForm siteId={site.id} token={token} onSuccess={onRefresh} />
           </div>

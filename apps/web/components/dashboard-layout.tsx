@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
 import { SearchDropdown } from "@/components/search-dropdown";
 import { CompanySetupModal } from "@/components/company-setup-modal";
-import { NAV_ITEMS, canAccessRoute } from "@/lib/permissions";
+import { NAV_ITEMS, canAccessRoute, getDefaultRouteForRole } from "@/lib/permissions";
 import { clsx } from "clsx";
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -54,14 +54,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   // Filter nav to only modules this role can access
   const navItems = NAV_ITEMS.filter((item) => {
     if (item.roles.length === 0) return true;
-    return item.roles.includes(user.role as "admin" | "operations_manager" | "hr_payroll" | "supervisor");
+    return item.roles.includes(user.role as "admin" | "operations_manager" | "hr_payroll" | "supervisor" | "controller");
   });
 
   // Redirect if user navigated to a route they don't have access to
   useEffect(() => {
     if (!user || !pathname) return;
     if (!canAccessRoute(pathname, user.role)) {
-      router.replace("/");
+      router.replace(getDefaultRouteForRole(user.role));
     }
   }, [pathname, user, router]);
 

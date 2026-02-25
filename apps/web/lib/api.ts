@@ -222,7 +222,7 @@ export function authFetch(url: string, token: string, init?: RequestInit) {
 }
 
 // User management (admin only)
-export type UserRole = "admin" | "operations_manager" | "hr_payroll" | "supervisor";
+export type UserRole = "admin" | "operations_manager" | "hr_payroll" | "supervisor" | "controller";
 
 export interface UserListItem {
   id: string;

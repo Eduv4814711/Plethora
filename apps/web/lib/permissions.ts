@@ -10,19 +10,29 @@ export interface NavItem {
 /**
  * Navigation items with role-based access.
  * Matches API route protection: each module is visible only to roles that can use its APIs.
+ * Controller role: only Rostering, Attendance, and Sites are visible.
  */
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Dashboard", roles: [] },
+  { href: "/", label: "Dashboard", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
   { href: "/employees", label: "Employees", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
-  { href: "/sites", label: "Sites", roles: ["admin", "operations_manager", "supervisor"] },
-  { href: "/rostering", label: "Rostering", roles: ["admin", "operations_manager", "supervisor"] },
-  { href: "/attendance", label: "Attendance", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
+  { href: "/sites", label: "Sites", roles: ["admin", "operations_manager", "supervisor", "controller"] },
+  { href: "/rostering", label: "Rostering", roles: ["admin", "operations_manager", "supervisor", "controller"] },
+  { href: "/attendance", label: "Attendance", roles: ["admin", "operations_manager", "hr_payroll", "supervisor", "controller"] },
   { href: "/payroll", label: "Payroll", roles: ["admin", "operations_manager", "hr_payroll"] },
   { href: "/payroll/leave-requests", label: "Leave Requests", roles: ["admin", "operations_manager", "hr_payroll"] },
   { href: "/reports", label: "Reports", roles: ["admin", "operations_manager", "hr_payroll"] },
   { href: "/audit", label: "Audit", roles: ["admin"] },
-  { href: "/settings", label: "Settings", roles: [] },
+  { href: "/settings", label: "Settings", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
 ];
+
+/**
+ * Default route for a role when they don't have access to the requested path.
+ * Controller only has access to Rostering, Attendance, Sites - redirect to Rostering.
+ */
+export function getDefaultRouteForRole(role: string): string {
+  if (role === "controller") return "/rostering";
+  return "/";
+}
 
 /**
  * Check if a user role can access a route.

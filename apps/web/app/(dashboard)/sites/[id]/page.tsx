@@ -97,7 +97,7 @@ export default function SiteDetailPage() {
   const [editingShift, setEditingShift] = useState<Shift | null>(null);
   const [deletingShift, setDeletingShift] = useState<Shift | null>(null);
   const [employeesForShifts, setEmployeesForShifts] = useState<Guard[]>([]);
-  const canManage = ["admin", "operations_manager", "hr_payroll", "supervisor"].includes((user as { role?: string })?.role ?? "");
+  const canManage = ["admin", "operations_manager", "hr_payroll", "supervisor", "controller"].includes((user as { role?: string })?.role ?? "");
 
   const getDateRangeParams = () => {
     const now = new Date();
