@@ -121,4 +121,28 @@ export async function deductionRulesRoutes(app: FastifyInstance) {
 
     return reply.send(rule);
   });
+
+  app.delete("/:id", { preHandler: protect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const companyId = request.user!.companyId;
+
+    const existing = await prisma.deductionRule.findFirst({
+      where: { id, companyId },
+    });
+    if (!existing) {
+      return reply.code(404).send({ error: "Deduction rule not found" });
+    }
+
+    await prisma.deductionRule.delete({ where: { id } });
+
+    await createAuditLog({
+      userId: request.user!.sub,
+      companyId,
+      action: "deduction_rule.delete",
+      entityType: "deduction_rule",
+      entityId: id,
+    });
+
+    return reply.send({ success: true });
+  });
 }

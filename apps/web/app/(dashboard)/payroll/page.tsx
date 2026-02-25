@@ -246,10 +246,12 @@ function PayGradesSection({
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this pay grade?")) return;
     try {
-      await authFetch(`/payroll/pay-grades/${id}`, token, { method: "DELETE" });
-      onRefresh();
+      const res = await authFetch(`/payroll/pay-grades/${id}`, token, { method: "DELETE" });
+      if (res.ok) onRefresh();
+      else alert("Failed to delete. It may be in use.");
     } catch (err) {
       console.error(err);
+      alert("Failed to delete.");
     }
   };
 
@@ -350,7 +352,7 @@ function PayRulesSection({
                     if (!isNaN(v) && v >= 0 && v <= 10) handleSave(rt, v);
                   }}
                 />
-                <span className="text-neutral-400 text-xs">×</span>
+                <span className="text-neutral-400 text-xs cursor-default select-none" title="multiplier (edit value to change)">×</span>
               </div>
             </div>
           );
@@ -407,10 +409,12 @@ function EarningsRulesSection({
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this earnings rule?")) return;
     try {
-      await authFetch(`/payroll/earnings-rules/${id}`, token, { method: "DELETE" });
-      onRefresh();
+      const res = await authFetch(`/payroll/earnings-rules/${id}`, token, { method: "DELETE" });
+      if (res.ok) onRefresh();
+      else alert("Failed to delete. It may be in use.");
     } catch (err) {
       console.error(err);
+      alert("Failed to delete.");
     }
   };
 
@@ -502,6 +506,18 @@ function DeductionRulesSection({
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this deduction rule?")) return;
+    try {
+      const res = await authFetch(`/payroll/deduction-rules/${id}`, token, { method: "DELETE" });
+      if (res.ok) onRefresh();
+      else alert("Failed to delete. It may be in use.");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete.");
+    }
+  };
+
   return (
     <div className="p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800/30">
       <h3 className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Deductions</h3>
@@ -534,8 +550,9 @@ function DeductionRulesSection({
         {deductions.map((d) => (
           <div key={d.id} className="flex items-center justify-between py-1.5 px-2 text-sm rounded hover:bg-neutral-100/80 dark:hover:bg-neutral-700/50">
             <span>{d.name}</span>
-            <span className="text-neutral-500 dark:text-neutral-400">
+            <span className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400">
               {d.type === "fixed" ? `R${Number(d.amount || 0).toFixed(2)}` : `${Number(d.rate || 0)}%`}
+              <button type="button" onClick={() => handleDelete(d.id)} className="text-red-500 hover:text-red-600 text-xs" title="Delete">×</button>
             </span>
           </div>
         ))}
