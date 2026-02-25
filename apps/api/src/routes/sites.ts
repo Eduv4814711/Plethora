@@ -61,7 +61,7 @@ const assignGuardSchema = z.object({
 });
 
 export async function sitesRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"])];
+  const protect = [authMiddleware, requireRole(["admin", "operations_manager", "supervisor"])];
   const adminOnly = [authMiddleware, requireRole(["admin"])];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {

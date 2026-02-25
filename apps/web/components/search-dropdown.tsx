@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { canAccessRoute } from "@/lib/permissions";
 import { search, type SearchResults } from "@/lib/api";
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -22,7 +23,8 @@ export function SearchDropdown() {
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const showSites = user ? canAccessRoute("/sites", user.role) : false;
   const router = useRouter();
   const debouncedQuery = useDebounce(query, 300);
 
@@ -62,7 +64,8 @@ export function SearchDropdown() {
   }, []);
 
   const employees = results?.employees ?? [];
-  const sites = results?.sites ?? [];
+  const sitesRaw = results?.sites ?? [];
+  const sites = showSites ? sitesRaw : [];
   const totalItems = employees.length + sites.length;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -118,7 +121,7 @@ export function SearchDropdown() {
     <div ref={containerRef} className="relative">
       <input
         type="search"
-        placeholder="Search employees, sites..."
+        placeholder={showSites ? "Search employees, sites..." : "Search employees..."}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => debouncedQuery.length >= 2 && setOpen(true)}
