@@ -14,6 +14,36 @@ const clockInSchema = z.object({
   shiftId: z.string().min(1),
 });
 
+const manualAttendanceSchema = z.object({
+  employeeId: z.string().min(1),
+  clockIn: z.string().datetime(),
+  clockOut: z.string().datetime(),
+});
+
+async function getOrCreateManualPost(companyId: string): Promise<{ postId: string }> {
+  let site = await prisma.site.findFirst({
+    where: { companyId, name: "Manual" },
+    include: { posts: true },
+  });
+  if (!site) {
+    site = await prisma.site.create({
+      data: {
+        companyId,
+        name: "Manual",
+        location: "Manual attendance entries",
+      },
+      include: { posts: true },
+    });
+  }
+  let post = site.posts.find((p) => p.name === "Manual");
+  if (!post) {
+    post = await prisma.post.create({
+      data: { siteId: site.id, name: "Manual" },
+    });
+  }
+  return { postId: post.id };
+}
+
 export async function attendanceRoutes(app: FastifyInstance) {
   const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"])];
 
@@ -307,6 +337,82 @@ export async function attendanceRoutes(app: FastifyInstance) {
     });
 
     return reply.send(updated);
+  });
+
+  app.post("/manual", { preHandler: protect }, async (request, reply) => {
+    const parsed = manualAttendanceSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const user = request.user!;
+    const companyId = user.companyId;
+    const { employeeId, clockIn: clockInStr, clockOut: clockOutStr } = parsed.data;
+
+    const clockIn = new Date(clockInStr);
+    const clockOut = new Date(clockOutStr);
+
+    if (clockOut <= clockIn) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "clockOut must be after clockIn",
+      });
+    }
+
+    const employee = await prisma.employee.findFirst({
+      where: { id: employeeId, companyId },
+    });
+    if (!employee) {
+      return reply.code(404).send({ error: "Employee not found" });
+    }
+
+    const { postId } = await getOrCreateManualPost(companyId);
+
+    const { hoursWorked, overtimeHours } = calculateHours(clockOut, clockIn, clockOut);
+
+    const shift = await prisma.shift.create({
+      data: {
+        companyId,
+        employeeId,
+        postId,
+        startTime: clockIn,
+        endTime: clockOut,
+        status: "completed",
+      },
+    });
+
+    const attendance = await prisma.attendance.create({
+      data: {
+        shiftId: shift.id,
+        clockIn,
+        clockOut,
+        hoursWorked,
+        overtimeHours,
+        status: "completed",
+      },
+      include: {
+        shift: {
+          include: {
+            employee: { select: { id: true, firstName: true, lastName: true } },
+            post: { include: { site: true } },
+          },
+        },
+      },
+    });
+
+    await createAuditLog({
+      userId: user.sub,
+      companyId,
+      action: "attendance.manual",
+      entityType: "attendance",
+      entityId: attendance.id,
+      metadata: { shiftId: shift.id, employeeId, source: "manual" },
+    });
+
+    return reply.code(201).send(attendance);
   });
 
   app.get("/:id", { preHandler: protect }, async (request, reply) => {

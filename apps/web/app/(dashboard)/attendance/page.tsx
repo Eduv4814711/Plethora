@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from "date-fns";
+import { DateInput } from "@/components/date-input";
 
 interface ShiftForClockIn {
   id: string;
@@ -267,6 +268,12 @@ export default function AttendancePage() {
         </div>
       </div>
 
+      <ManualEntryForm
+        employees={employees}
+        token={token!}
+        onSuccess={refresh}
+      />
+
       {replacingShift && (
         <ReplaceGuardModal
           shift={replacingShift}
@@ -407,6 +414,130 @@ export default function AttendancePage() {
           <p className="text-neutral-600 dark:text-neutral-400">No missed shifts found.</p>
         )}
       </div>
+    </div>
+  );
+}
+
+function ManualEntryForm({
+  employees,
+  token,
+  onSuccess,
+}: {
+  employees: EmployeeOption[];
+  token: string;
+  onSuccess: () => void;
+}) {
+  const [employeeId, setEmployeeId] = useState("");
+  const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [clockInTime, setClockInTime] = useState("08:00");
+  const [clockOutTime, setClockOutTime] = useState("17:00");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!employeeId) {
+      setError("Select an employee");
+      return;
+    }
+    setSaving(true);
+    try {
+      const clockIn = new Date(`${date}T${clockInTime}`);
+      const clockOut = new Date(`${date}T${clockOutTime}`);
+      if (clockOut <= clockIn) {
+        setError("Clock-out must be after clock-in");
+        setSaving(false);
+        return;
+      }
+      const res = await authFetch("/attendance/manual", token, {
+        method: "POST",
+        body: JSON.stringify({
+          employeeId,
+          clockIn: clockIn.toISOString(),
+          clockOut: clockOut.toISOString(),
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || data.error || "Failed to add manual attendance");
+      }
+      setEmployeeId("");
+      setClockInTime("08:00");
+      setClockOutTime("17:00");
+      setDate(format(new Date(), "yyyy-MM-dd"));
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="card-wireframe mb-6 p-4">
+      <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
+        Manual entry
+      </h3>
+      <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+        Add clock-in and clock-out for employees who were not rostered.
+      </p>
+      <form onSubmit={handleSubmit} className="flex flex-wrap gap-4 items-end">
+        <div className="space-y-1">
+          <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+            Employee
+          </label>
+          <select
+            value={employeeId}
+            onChange={(e) => setEmployeeId(e.target.value)}
+            className="input-modern w-full min-w-[180px]"
+            required
+          >
+            <option value="">Select employee</option>
+            {employees.map((emp) => (
+              <option key={emp.id} value={emp.id}>
+                {emp.firstName} {emp.lastName}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+            Date
+          </label>
+          <DateInput value={date} onChange={setDate} className="input-modern" showToday />
+        </div>
+        <div className="space-y-1">
+          <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+            Clock-in
+          </label>
+          <input
+            type="time"
+            value={clockInTime}
+            onChange={(e) => setClockInTime(e.target.value)}
+            className="input-modern w-28"
+            required
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+            Clock-out
+          </label>
+          <input
+            type="time"
+            value={clockOutTime}
+            onChange={(e) => setClockOutTime(e.target.value)}
+            className="input-modern w-28"
+            required
+          />
+        </div>
+        <button type="submit" disabled={saving} className="btn-primary">
+          {saving ? "Adding…" : "Add"}
+        </button>
+      </form>
+      {error && (
+        <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>
+      )}
     </div>
   );
 }
