@@ -72,15 +72,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen flex bg-neutral-100 dark:bg-neutral-950">
       <aside className="w-64 bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 flex flex-col shrink-0 shadow-sm">
         <div className="p-5 border-b border-neutral-200 dark:border-neutral-800">
-          <Link href="/" className="flex items-center gap-3 group">
+          <Link href="/" className="flex items-center justify-center group">
             {settings?.logoUrl ? (
               <img src={settings.logoUrl} alt="" className="w-10 h-10 rounded-lg object-cover border border-neutral-200 dark:border-neutral-700" />
             ) : (
               <img src="/plethora-logo.png" alt="Plethora" className="h-10 w-auto object-contain" />
             )}
-            <span className="text-lg font-bold text-neutral-900 dark:text-neutral-100 tracking-tight truncate group-hover:text-neutral-600 dark:group-hover:text-neutral-400 transition-colors">
-              {companyName}
-            </span>
           </Link>
         </div>
         <nav className="flex-1 p-4 space-y-0.5 overflow-y-auto">
@@ -108,11 +105,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between px-6 shrink-0 shadow-sm">
+        <header className="relative h-16 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between px-6 shrink-0 shadow-sm">
           <div className="flex items-center gap-4 flex-1 max-w-xl">
             <SearchDropdown />
           </div>
-          <div className="flex items-center gap-3">
+          <div className="absolute left-1/2 -translate-x-1/2 text-lg font-bold text-neutral-900 dark:text-neutral-100 tracking-tight uppercase">
+            {companyName}
+          </div>
+          <div className="flex items-center gap-3 flex-1 justify-end">
             <button className="p-2.5 rounded-md text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 dark:hover:text-neutral-300 transition-colors" title="Notifications">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
