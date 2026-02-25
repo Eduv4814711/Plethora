@@ -13,7 +13,18 @@ export const config = {
     multiplier: 1.5,
   },
   attendance: {
-    clockInWindowMinutes: 30,
+    clockInWindowMinutes: Number(process.env.CLOCK_IN_WINDOW_MINUTES) || 15,
     lateClockInGraceMinutes: 120, // Allow up to 2 hours late
+  },
+  whatsapp: {
+    enabled: !!(
+      process.env.WHATSAPP_PHONE_NUMBER_ID &&
+      process.env.WHATSAPP_ACCESS_TOKEN &&
+      process.env.WHATSAPP_VERIFY_TOKEN
+    ),
+    phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID ?? "",
+    accessToken: process.env.WHATSAPP_ACCESS_TOKEN ?? "",
+    verifyToken: process.env.WHATSAPP_VERIFY_TOKEN ?? "",
+    apiVersion: process.env.WHATSAPP_API_VERSION ?? "v21.0",
   },
 } as const;

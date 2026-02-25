@@ -27,12 +27,14 @@ import { deductionRulesRoutes } from "./routes/deduction-rules.js";
 import { publicHolidaysRoutes } from "./routes/public-holidays.js";
 import { timesheetsRoutes } from "./routes/timesheets.js";
 import { leaveRecordsRoutes } from "./routes/leave-records.js";
+import { leaveRequestsRoutes } from "./routes/leave-requests.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { auditRoutes } from "./routes/audit.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { uploadsRoutes } from "./routes/uploads.js";
 import { searchRoutes } from "./routes/search.js";
 import { migrationsRoutes } from "./routes/migrations.js";
+import { whatsappWebhookRoutes } from "./routes/whatsapp-webhook.js";
 
 const app = Fastify({ logger: true });
 
@@ -61,6 +63,7 @@ await app.register(fastifyStatic, {
 
 app.get("/health", async () => ({ status: "ok" }));
 
+app.register(whatsappWebhookRoutes);
 app.register(authRoutes, { prefix: "/auth" });
 app.register(usersRoutes, { prefix: "/users" });
 app.register(companiesRoutes, { prefix: "/companies" });
@@ -76,6 +79,7 @@ app.register(deductionRulesRoutes, { prefix: "/payroll/deduction-rules" });
 app.register(publicHolidaysRoutes, { prefix: "/payroll/public-holidays" });
 app.register(timesheetsRoutes, { prefix: "/payroll/timesheets" });
 app.register(leaveRecordsRoutes, { prefix: "/payroll/leave-records" });
+app.register(leaveRequestsRoutes, { prefix: "/payroll/leave-requests" });
 app.register(dashboardRoutes, { prefix: "/dashboard" });
 app.register(auditRoutes, { prefix: "/audit" });
 app.register(settingsRoutes, { prefix: "/settings" });

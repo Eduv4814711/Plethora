@@ -138,6 +138,7 @@ model Employee {
   postAssignments   PostAssignment[]
   timesheets         Timesheet[]
   leaveRecords      LeaveRecord[]
+  leaveRequests     LeaveRequest[]
   employeeDeductions EmployeeDeduction[]
 
   @@unique([companyId, employeeNumber])
@@ -453,6 +454,24 @@ model LeaveRecord {
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([employeeId, date])
+}
+
+model LeaveRequest {
+  id         String    @id @default(cuid())
+  employeeId String
+  date       DateTime  @db.Date
+  type       String    // "annual" | "sick" | "unpaid"
+  hours      Decimal   @db.Decimal(5, 2) @default(8)
+  status     String    @default("pending") // "pending" | "approved" | "rejected"
+  reason     String?
+  reviewedBy String?
+  reviewedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([status])
 }
 
 model Payslip {
