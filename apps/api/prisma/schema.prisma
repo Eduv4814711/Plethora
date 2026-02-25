@@ -41,6 +41,7 @@ model Company {
   auditLogs        AuditLog[]
   payRules         PayRule[]
   payGrades        PayGrade[]
+  employeeGroups   EmployeeGroup[]
   earningsRules    EarningsRule[]
   deductionRules   DeductionRule[]
   publicHolidays   PublicHoliday[]
@@ -130,8 +131,10 @@ model Employee {
   trainingCompleted Boolean?
 
   gradeId            String?
+  groupId            String?
   company            Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   grade              PayGrade?          @relation(fields: [gradeId], references: [id], onDelete: SetNull)
+  group              EmployeeGroup?     @relation(fields: [groupId], references: [id], onDelete: SetNull)
   shifts             Shift[]
   payrollItems       PayrollItem[]
   siteAssignments   SiteAssignment[]
@@ -144,6 +147,7 @@ model Employee {
   @@unique([companyId, employeeNumber])
   @@index([companyId])
   @@index([gradeId])
+  @@index([groupId])
   @@index([status])
   @@index([employeeType])
 }
@@ -340,6 +344,21 @@ model PayGrade {
   sortOrder  Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employees Employee[]
+
+  @@index([companyId])
+}
+
+model EmployeeGroup {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  description String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   employees Employee[]

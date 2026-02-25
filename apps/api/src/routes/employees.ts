@@ -42,7 +42,7 @@ async function generateNextEmployeeNumber(companyId: string, prefix: string = "E
 }
 
 const createEmployeeSchema = z.object({
-  employeeNumber: z.string().min(1).max(50).optional(), // Optional: auto-generated if not provided
+  employeeNumber: z.string().min(1).max(50),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
   idNumber: optionalString,
@@ -51,6 +51,7 @@ const createEmployeeSchema = z.object({
   hourlyRate: z.number().positive().optional(),
   monthlySalary: z.number().positive().optional(),
   gradeId: z.string().optional().nullable(),
+  groupId: z.string().optional().nullable(),
   employeeType: z.enum(["office", "security"]).default("security"),
   jobRole: optionalString,
   // Labour Law (BCEA)
@@ -96,6 +97,12 @@ const createEmployeeSchemaWithRefine = createEmployeeSchema.superRefine((data, c
   if (data.employeeType === "security" && (!data.psiraNumber || !String(data.psiraNumber).trim())) {
     ctx.addIssue({ code: "custom", path: ["psiraNumber"], message: "PSIRA number is required for security guards" });
   }
+  if (data.employeeType === "security" && (!data.gradeId || !String(data.gradeId).trim())) {
+    ctx.addIssue({ code: "custom", path: ["gradeId"], message: "Pay grade is required for security guards" });
+  }
+  if (!data.groupId || !String(data.groupId).trim()) {
+    ctx.addIssue({ code: "custom", path: ["groupId"], message: "Group is required for all employees" });
+  }
 });
 
 const updateEmployeeSchema = createEmployeeSchema.partial().extend({
@@ -106,6 +113,7 @@ const updateEmployeeSchema = createEmployeeSchema.partial().extend({
   hourlyRate: z.number().positive().optional().nullable(),
   monthlySalary: z.number().positive().optional().nullable(),
   gradeId: z.string().optional().nullable(),
+  groupId: z.string().optional().nullable(),
 });
 
 const statusTransitionSchema = z.object({
@@ -122,12 +130,14 @@ export async function employeesRoutes(app: FastifyInstance) {
     const offset = Number(q.offset) || 0;
     const status = q.status as EmployeeStatus | undefined;
     const employeeType = q.employeeType;
+    const groupId = q.groupId;
     const searchQuery = (q.q ?? q.search ?? "").trim();
 
     const where = {
       companyId: user.companyId,
       ...(status ? { status } : {}),
       ...(employeeType ? { employeeType } : {}),
+      ...(groupId ? { groupId } : {}),
       ...(searchQuery.length >= 2
         ? {
             OR: [
@@ -145,6 +155,7 @@ export async function employeesRoutes(app: FastifyInstance) {
         where,
         include: {
           grade: { select: { name: true, hourlyRate: true } },
+          group: { select: { id: true, name: true } },
           shifts: {
             where: {
               startTime: { gte: new Date() },
@@ -186,26 +197,15 @@ export async function employeesRoutes(app: FastifyInstance) {
     const companyId = request.user!.companyId;
 
     const d = parsed.data;
-    let employeeNumber: string;
-    if (d.employeeNumber?.trim()) {
-      const existing = await prisma.employee.findFirst({
-        where: { companyId, employeeNumber: d.employeeNumber.trim() },
+    const employeeNumber = d.employeeNumber.trim();
+    const existing = await prisma.employee.findFirst({
+      where: { companyId, employeeNumber },
+    });
+    if (existing) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: { employeeNumber: ["Employee ID already exists. Each employee must have a unique employee ID."] },
       });
-      if (existing) {
-        return reply.code(400).send({
-          error: "Validation error",
-          message: { employeeNumber: ["Employee ID already exists. Each employee must have a unique employee ID."] },
-        });
-      }
-      employeeNumber = d.employeeNumber.trim();
-    } else {
-      const company = await prisma.company.findUnique({
-        where: { id: companyId },
-        select: { settings: true },
-      });
-      const settings = (company?.settings as Record<string, unknown>) ?? {};
-      const prefix = ((settings.employeeIdPrefix as string) ?? "EMP").trim() || "EMP";
-      employeeNumber = await generateNextEmployeeNumber(companyId, prefix);
     }
 
     const employee = await prisma.employee.create({
@@ -220,6 +220,7 @@ export async function employeesRoutes(app: FastifyInstance) {
         hourlyRate: d.hourlyRate,
         monthlySalary: d.monthlySalary,
         gradeId: d.gradeId ?? null,
+        groupId: d.groupId ?? null,
         employeeType: d.employeeType ?? "security",
         jobRole: d.jobRole,
         dateOfBirth: d.dateOfBirth,
@@ -277,6 +278,10 @@ export async function employeesRoutes(app: FastifyInstance) {
 
     const employee = await prisma.employee.findFirst({
       where: { id, companyId: user.companyId },
+      include: {
+        grade: { select: { name: true, hourlyRate: true } },
+        group: { select: { id: true, name: true } },
+      },
     });
 
     if (!employee) {
@@ -312,6 +317,20 @@ export async function employeesRoutes(app: FastifyInstance) {
       return reply.code(400).send({
         error: "Validation error",
         message: { psiraNumber: ["PSIRA number is required for security guards"] },
+      });
+    }
+    const effectiveGradeId = updateData.gradeId !== undefined ? updateData.gradeId : existing.gradeId;
+    if (effectiveType === "security" && (!effectiveGradeId || !String(effectiveGradeId).trim())) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: { gradeId: ["Pay grade is required for security guards"] },
+      });
+    }
+    const effectiveGroupId = updateData.groupId !== undefined ? updateData.groupId : existing.groupId;
+    if (!effectiveGroupId || !String(effectiveGroupId).trim()) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: { groupId: ["Group is required for all employees"] },
       });
     }
     if (updateData.employeeNumber !== undefined) {

@@ -31,6 +31,8 @@ interface Employee {
   monthlySalary?: number | null;
   gradeId?: string | null;
   grade?: { name: string; hourlyRate: number } | null;
+  groupId?: string | null;
+  group?: { id: string; name: string } | null;
   currentSite: string | null;
   currentPost: string | null;
   employeeType?: string | null;
@@ -94,9 +96,12 @@ export default function EmployeesPage() {
   const searchQuery = searchParams.get("q") ?? "";
   const defaultCompanyName = (user as { company?: { name: string } } | null)?.company?.name ?? "";
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showManageGroups, setShowManageGroups] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [groupFilter, setGroupFilter] = useState<string>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [statusChangeId, setStatusChangeId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -105,6 +110,7 @@ export default function EmployeesPage() {
     if (!token) return;
     const params = new URLSearchParams();
     if (statusFilter !== "all") params.set("status", statusFilter);
+    if (groupFilter !== "all") params.set("groupId", groupFilter);
     if (searchQuery.trim().length >= 2) params.set("q", searchQuery.trim());
     const url = `/employees${params.toString() ? `?${params}` : ""}`;
     authFetch(url, token)
@@ -112,11 +118,20 @@ export default function EmployeesPage() {
       .then((d) => setEmployees(d.data || []));
   };
 
+  const fetchGroups = () => {
+    if (!token) return;
+    authFetch("/employee-groups", token)
+      .then((r) => r.json())
+      .then((d) => setGroups(d.data || []))
+      .catch(console.error);
+  };
+
   useEffect(() => {
     if (!token) return;
     fetchEmployees();
+    fetchGroups();
     setLoading(false);
-  }, [token, statusFilter, searchQuery]);
+  }, [token, statusFilter, groupFilter, searchQuery]);
 
   if (loading) {
     return (
@@ -130,7 +145,7 @@ export default function EmployeesPage() {
 
   return (
     <div className="animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
         <div>
           <h1 className="page-title">Employees</h1>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
@@ -144,10 +159,28 @@ export default function EmployeesPage() {
           )}
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowManageGroups(!showManageGroups)}
+            className="btn-ghost h-11 shrink-0"
+          >
+            {showManageGroups ? "Hide Groups" : "Manage Groups"}
+          </button>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="btn-secondary h-11 shrink-0"
+          >
+            {showForm ? "Cancel" : "Add Employee"}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-nowrap items-center gap-3 mb-8 p-4 rounded-lg bg-neutral-50 dark:bg-neutral-800/30 border border-neutral-200 dark:border-neutral-700">
+        <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400 shrink-0">Filters:</span>
+        <div className="flex items-center gap-3 shrink-0">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="input-modern h-11 min-w-[160px] cursor-pointer"
+            className="input-modern h-11 w-40 cursor-pointer"
           >
             <option value="all">All statuses</option>
             <option value="applicant">Applicant</option>
@@ -157,12 +190,16 @@ export default function EmployeesPage() {
             <option value="suspended">Suspended</option>
             <option value="offboarded">Offboarded</option>
           </select>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="btn-secondary h-11 shrink-0"
+          <select
+            value={groupFilter}
+            onChange={(e) => setGroupFilter(e.target.value)}
+            className="input-modern h-11 w-40 cursor-pointer"
           >
-            {showForm ? "Cancel" : "Add Employee"}
-          </button>
+            <option value="all">All groups</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>{g.name}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -202,6 +239,17 @@ export default function EmployeesPage() {
         />
       )}
 
+      {showManageGroups && (
+        <ManageGroupsSection
+          groups={groups}
+          token={token!}
+          onRefresh={() => {
+            fetchGroups();
+            fetchEmployees();
+          }}
+        />
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {employees.map((emp) => (
           <div
@@ -234,6 +282,11 @@ export default function EmployeesPage() {
             {emp.employeeType && (
               <span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
                 {emp.employeeType === "office" ? "Office Staff" : "Guard"}
+              </span>
+            )}
+            {emp.group && (
+              <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded bg-neutral-200 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-400">
+                {emp.group.name}
               </span>
             )}
             {emp.idNumber && (
@@ -355,11 +408,13 @@ function PayGradeSelect({
   value,
   onChange,
   className = "input-modern",
+  required = false,
 }: {
   token: string;
   value: string;
   onChange: (v: string) => void;
   className?: string;
+  required?: boolean;
 }) {
   const [grades, setGrades] = useState<{ id: string; name: string; hourlyRate: string }[]>([]);
   useEffect(() => {
@@ -370,14 +425,136 @@ function PayGradeSelect({
   }, [token]);
 
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className={className}>
-      <option value="">Pay grade (optional)</option>
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={className} required={required}>
+      <option value="">{required ? "Select pay grade *" : "Pay grade (optional)"}</option>
       {grades.map((g) => (
         <option key={g.id} value={g.id}>
           {g.name} — R{Number(g.hourlyRate).toFixed(2)}/hr
         </option>
       ))}
     </select>
+  );
+}
+
+function GroupSelect({
+  token,
+  value,
+  onChange,
+  className = "input-modern",
+  required = false,
+}: {
+  token: string;
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+  required?: boolean;
+}) {
+  const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    authFetch("/employee-groups", token)
+      .then((r) => r.json())
+      .then((d) => setGroups(d.data || []))
+      .catch(console.error);
+  }, [token]);
+
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={className} required={required}>
+      <option value="">{required ? "Select group *" : "Group (optional)"}</option>
+      {groups.map((g) => (
+        <option key={g.id} value={g.id}>{g.name}</option>
+      ))}
+    </select>
+  );
+}
+
+function ManageGroupsSection({
+  groups,
+  token,
+  onRefresh,
+}: {
+  groups: { id: string; name: string }[];
+  token: string;
+  onRefresh: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      const res = await authFetch("/employee-groups", token, {
+        method: "POST",
+        body: JSON.stringify({ name: name.trim(), description: description.trim() || undefined }),
+      });
+      if (res.ok) {
+        setName("");
+        setDescription("");
+        onRefresh();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        const msg =
+          data?.message?.name?.[0] ??
+          (typeof data?.message === "string" ? data.message : null) ??
+          data?.error ??
+          `Failed to add group (${res.status})`;
+        alert(msg);
+      }
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : "Failed to add group");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this group? Employees in this group will be unassigned.")) return;
+    try {
+      const res = await authFetch(`/employee-groups/${id}`, token, { method: "DELETE" });
+      if (res.ok) onRefresh();
+      else alert("Failed to delete.");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete.");
+    }
+  };
+
+  return (
+    <div className="card-wireframe mb-6 p-4">
+      <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-4">Manage Groups</h3>
+      <form onSubmit={handleAdd} className="flex flex-wrap gap-2 mb-4">
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Group name"
+          className="flex-1 min-w-[140px] px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900 input-modern"
+          required
+        />
+        <input
+          type="text"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Description (optional)"
+          className="flex-1 min-w-[140px] px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900 input-modern"
+        />
+        <button type="submit" disabled={saving} className="btn-secondary text-xs py-1.5 px-3">
+          {saving ? "…" : "Add Group"}
+        </button>
+      </form>
+      <div className="space-y-1">
+        {groups.map((g) => (
+          <div key={g.id} className="flex items-center justify-between py-1.5 px-2 text-sm rounded hover:bg-neutral-100/80 dark:hover:bg-neutral-700/50">
+            <span>{g.name}</span>
+            <button type="button" onClick={() => handleDelete(g.id)} className="text-red-500 hover:text-red-600 text-xs">×</button>
+          </div>
+        ))}
+        {groups.length === 0 && <p className="text-neutral-400 text-xs py-1">No groups yet. Add one above.</p>}
+      </div>
+    </div>
   );
 }
 
@@ -399,6 +576,7 @@ function EmployeeForm({
   const [email, setEmail] = useState("");
   const [monthlySalary, setMonthlySalary] = useState("");
   const [gradeId, setGradeId] = useState("");
+  const [groupId, setGroupId] = useState("");
   const [status, setStatus] = useState("applicant");
   const [error, setError] = useState("");
 
@@ -443,20 +621,33 @@ function EmployeeForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    if (!employeeNumber.trim()) {
+      setError("Employee ID is required.");
+      return;
+    }
     if (employeeType === "security" && !psiraNumber.trim()) {
       setError("PSIRA number is required for security guards.");
       return;
     }
+    if (employeeType === "security" && !gradeId) {
+      setError("Pay grade is required for security guards.");
+      return;
+    }
+    if (!groupId) {
+      setError("Group is required for all employees.");
+      return;
+    }
     try {
       const payload: Record<string, unknown> = {
-        employeeNumber: employeeNumber.trim() || undefined,
+        employeeNumber: employeeNumber.trim(),
         firstName,
         lastName,
         idNumber: idNumber || undefined,
         phone: phone || undefined,
         email: email || undefined,
         monthlySalary: employeeType === "office" && monthlySalary ? parseFloat(monthlySalary) : undefined,
-        gradeId: employeeType === "security" && gradeId ? gradeId : undefined,
+        gradeId: employeeType === "security" ? gradeId : undefined,
+        groupId,
         status,
         employeeType,
         dateOfBirth: dateOfBirth || undefined,
@@ -501,7 +692,7 @@ function EmployeeForm({
       });
       if (!res.ok) {
         const data = await res.json();
-        const msg = data?.message?.psiraNumber?.[0] ?? data?.message?.employeeNumber?.[0] ?? (typeof data?.message === "string" ? data.message : null) ?? "Failed to create";
+        const msg = data?.message?.psiraNumber?.[0] ?? data?.message?.gradeId?.[0] ?? data?.message?.groupId?.[0] ?? data?.message?.employeeNumber?.[0] ?? (typeof data?.message === "string" ? data.message : null) ?? "Failed to create";
         throw new Error(msg);
       }
       onSuccess();
@@ -579,11 +770,11 @@ function EmployeeForm({
           <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-2">Basic</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
-              placeholder="Employee ID (optional)"
+              placeholder="Employee ID *"
               value={employeeNumber}
               onChange={(e) => setEmployeeNumber(e.target.value)}
               className="input-compact"
-              title="Leave blank to auto-generate"
+              required
             />
             <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-compact">
               <option value="applicant">Applicant</option>
@@ -623,8 +814,9 @@ function EmployeeForm({
                 className="input-compact"
               />
             ) : (
-              <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} className="input-compact" />
+              <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} className="input-compact" required />
             )}
+            <GroupSelect token={token} value={groupId} onChange={setGroupId} className="input-compact" required />
           </div>
         </section>
         )}
@@ -788,6 +980,7 @@ function EditModal({
   const [email, setEmail] = useState("");
   const [monthlySalary, setMonthlySalary] = useState("");
   const [gradeId, setGradeId] = useState("");
+  const [groupId, setGroupId] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -842,6 +1035,7 @@ function EditModal({
         setEmail(emp.email || "");
         setMonthlySalary(emp.monthlySalary != null ? String(emp.monthlySalary) : "");
         setGradeId(emp.gradeId || "");
+        setGroupId(emp.groupId || "");
         setDateOfBirth(toDateStr(emp.dateOfBirth));
         setGender(emp.gender || "");
         setPhysicalAddress(emp.physicalAddress || "");
@@ -887,6 +1081,14 @@ function EditModal({
       setError("PSIRA number is required for security guards.");
       return;
     }
+    if (employeeType === "security" && !gradeId) {
+      setError("Pay grade is required for security guards.");
+      return;
+    }
+    if (!groupId) {
+      setError("Group is required for all employees.");
+      return;
+    }
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {
@@ -898,7 +1100,8 @@ function EditModal({
         email: email || undefined,
         hourlyRate: employeeType === "office" ? null : undefined,
         monthlySalary: employeeType === "office" && monthlySalary ? parseFloat(monthlySalary) : employeeType === "security" ? null : undefined,
-        gradeId: employeeType === "security" && gradeId ? gradeId : null,
+        gradeId: employeeType === "security" ? gradeId : null,
+        groupId,
         employeeType,
         dateOfBirth: dateOfBirth || undefined,
         gender: gender || undefined,
@@ -940,7 +1143,7 @@ function EditModal({
       });
       if (!res.ok) {
         const data = await res.json();
-        const msg = data?.message?.psiraNumber?.[0] ?? data?.message?.employeeNumber?.[0] ?? data?.message ?? "Failed to update";
+        const msg = data?.message?.psiraNumber?.[0] ?? data?.message?.gradeId?.[0] ?? data?.message?.groupId?.[0] ?? data?.message?.employeeNumber?.[0] ?? data?.message ?? "Failed to update";
         throw new Error(typeof msg === "string" ? msg : "Failed to update");
       }
       onSuccess();
@@ -1067,8 +1270,9 @@ function EditModal({
                     className="input-modern"
                   />
                 ) : (
-                  <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} />
+                  <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} required />
                 )}
+                <GroupSelect token={token} value={groupId} onChange={setGroupId} required />
               </div>
             </section>
             )}
