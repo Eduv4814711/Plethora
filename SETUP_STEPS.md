@@ -18,11 +18,10 @@ psql -U postgres -c "CREATE DATABASE plethora;"
 
 Update `apps/api/.env` if your credentials differ from `postgres`/`postgres`.
 
-### 2. Apply Schema and Seed
+### 2. Apply Schema
 
 ```bash
 npm run db:push
-npm run db:seed
 ```
 
 ### 3. Start the Application
@@ -42,5 +41,4 @@ Web: http://localhost:3000
 ### 4. Login
 
 - URL: http://localhost:3000  
-- Email: `admin@quickbopha.com`  
-- Password: `admin123`
+- Create an admin user via Settings → Users, then log in with your credentials.

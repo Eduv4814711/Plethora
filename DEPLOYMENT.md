@@ -35,7 +35,7 @@ This guide covers deploying Plethora to Railway. All components (web, API, datab
 3. Open the API service **Settings**:
    - **Root Directory**: `apps/api`
    - **Build Command**: `npx prisma generate && npm run build`
-   - **Start Command**: `npx prisma db push --accept-data-loss && npx prisma db seed && node dist/index.js`
+   - **Start Command**: `npx prisma db push --accept-data-loss && node dist/index.js`
    - **Watch Paths**: `apps/api/**` (optional, for faster rebuilds)
 4. Go to **Variables** and add:
 
@@ -76,7 +76,7 @@ This guide covers deploying Plethora to Railway. All components (web, API, datab
 ## Phase 5: Verify Deployment
 
 1. Open the web app domain. You should see the Plethora login page.
-2. Default login: `admin@quickbopha.com` / `admin123` (from seed).
+2. Create an admin user via Settings → Users (or your preferred setup method).
 3. Check API health: `https://your-api.up.railway.app/health` should return `{"status":"ok"}`.
 
 ---

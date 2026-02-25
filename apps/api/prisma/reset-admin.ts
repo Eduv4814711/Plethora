@@ -24,7 +24,7 @@ async function main() {
   });
 
   if (!user) {
-    console.error("Admin user not found. Run: npm run db:seed");
+    console.error("Admin user not found. Create an admin user through the app first.");
     process.exit(1);
   }
 
