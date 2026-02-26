@@ -181,6 +181,9 @@ function PayrollConfig({ token }: { token: string }) {
 
   const load = useCallback(() => {
     const groupId = selectedGroupId;
+    const payGradesUrl = groupId
+      ? `/payroll/pay-grades?groupId=${encodeURIComponent(groupId)}`
+      : "/payroll/pay-grades";
     const payRulesUrl = groupId
       ? `/payroll/groups/${groupId}/pay-rules`
       : "/payroll/pay-rules";
@@ -192,7 +195,7 @@ function PayrollConfig({ token }: { token: string }) {
       : "/payroll/deduction-rules";
 
     Promise.all([
-      authFetch("/payroll/pay-grades", token).then((r) => r.json()),
+      authFetch(payGradesUrl, token).then((r) => r.json()),
       authFetch(payRulesUrl, token).then((r) => r.json()),
       authFetch(earningsUrl, token).then((r) => r.json()),
       authFetch(deductionsUrl, token).then((r) => r.json()),
@@ -257,7 +260,7 @@ function PayrollConfig({ token }: { token: string }) {
         )}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <PayGradesSection grades={grades} token={token} onRefresh={load} />
+        <PayGradesSection grades={grades} token={token} onRefresh={load} groupId={selectedGroupId} />
         <PayRulesSection
           payRules={payRules}
           token={token}
@@ -285,10 +288,12 @@ function PayGradesSection({
   grades,
   token,
   onRefresh,
+  groupId,
 }: {
   grades: PayGrade[];
   token: string;
   onRefresh: () => void;
+  groupId?: string | null;
 }) {
   const [name, setName] = useState("");
   const [hourlyRate, setHourlyRate] = useState("");
@@ -298,9 +303,11 @@ function PayGradesSection({
     e.preventDefault();
     setSaving(true);
     try {
+      const body: Record<string, unknown> = { name: name.trim(), hourlyRate: parseFloat(hourlyRate) };
+      if (groupId) body.groupId = groupId;
       const res = await authFetch("/payroll/pay-grades", token, {
         method: "POST",
-        body: JSON.stringify({ name: name.trim(), hourlyRate: parseFloat(hourlyRate) }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         setName("");

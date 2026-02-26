@@ -407,22 +407,27 @@ function PayGradeSelect({
   token,
   value,
   onChange,
+  groupId,
   className = "input-modern",
   required = false,
 }: {
   token: string;
   value: string;
   onChange: (v: string) => void;
+  groupId?: string | null;
   className?: string;
   required?: boolean;
 }) {
   const [grades, setGrades] = useState<{ id: string; name: string; hourlyRate: string }[]>([]);
   useEffect(() => {
-    authFetch("/payroll/pay-grades", token)
+    const url = groupId && groupId.trim()
+      ? `/payroll/pay-grades?groupId=${encodeURIComponent(groupId)}`
+      : "/payroll/pay-grades";
+    authFetch(url, token)
       .then((r) => r.json())
       .then((d) => setGrades(d.data || []))
       .catch(console.error);
-  }, [token]);
+  }, [token, groupId]);
 
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} className={className} required={required}>
@@ -824,7 +829,7 @@ function EmployeeForm({
                 className="input-compact"
               />
             ) : (
-              <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} className="input-compact" required />
+              <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} groupId={groupId} className="input-compact" required />
             )}
             <GroupSelect token={token} value={groupId} onChange={setGroupId} className="input-compact" required />
           </div>
@@ -1280,7 +1285,7 @@ function EditModal({
                     className="input-modern"
                   />
                 ) : (
-                  <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} required />
+                  <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} groupId={groupId} required />
                 )}
                 <GroupSelect token={token} value={groupId} onChange={setGroupId} required />
               </div>

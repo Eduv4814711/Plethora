@@ -344,16 +344,19 @@ model PayRule {
 model PayGrade {
   id         String   @id @default(cuid())
   companyId  String
+  groupId    String?  // null = company default; set = group-specific
   name       String   // e.g. "Grade A", "Senior Guard"
   hourlyRate Decimal  @db.Decimal(10, 2)
   sortOrder  Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  group   EmployeeGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
   employees Employee[]
 
   @@index([companyId])
+  @@index([groupId])
 }
 
 model EmployeeGroup {
@@ -367,6 +370,7 @@ model EmployeeGroup {
 
   company           Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   employees         Employee[]
+  payGrades         PayGrade[]
   groupPayRules     GroupPayRule[]
   groupEarningsRules GroupEarningsRule[]
   groupDeductionRules GroupDeductionRule[]

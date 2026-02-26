@@ -9,6 +9,7 @@ const createPayGradeSchema = z.object({
   name: z.string().min(1),
   hourlyRate: z.number().positive(),
   sortOrder: z.number().int().min(0).optional(),
+  groupId: z.string().optional().nullable(),
 });
 
 const updatePayGradeSchema = createPayGradeSchema.partial();
@@ -18,8 +19,17 @@ export async function payGradesRoutes(app: FastifyInstance) {
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
+    const q = request.query as { groupId?: string };
+    const where: { companyId: string; groupId?: null | { equals: string } } = {
+      companyId: user.companyId,
+    };
+    if (q.groupId) {
+      where.groupId = { equals: q.groupId };
+    } else {
+      where.groupId = null;
+    }
     const grades = await prisma.payGrade.findMany({
-      where: { companyId: user.companyId },
+      where,
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     });
     return reply.send({ data: grades });
@@ -35,9 +45,19 @@ export async function payGradesRoutes(app: FastifyInstance) {
     }
 
     const companyId = request.user!.companyId;
+    const groupId = parsed.data.groupId ?? null;
+    if (groupId) {
+      const group = await prisma.employeeGroup.findFirst({
+        where: { id: groupId, companyId },
+      });
+      if (!group) {
+        return reply.code(404).send({ error: "Employee group not found" });
+      }
+    }
     const grade = await prisma.payGrade.create({
       data: {
         companyId,
+        groupId,
         name: parsed.data.name,
         hourlyRate: parsed.data.hourlyRate,
         sortOrder: parsed.data.sortOrder ?? 0,
