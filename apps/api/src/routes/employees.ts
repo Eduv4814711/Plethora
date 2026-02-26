@@ -35,7 +35,9 @@ async function generateNextEmployeeNumber(companyId: string, prefix: string = "E
   });
   let maxNum = 0;
   for (const e of employees) {
-    const m = e.employeeNumber.match(pattern);
+    const num = e?.employeeNumber;
+    if (num == null || typeof num !== "string") continue;
+    const m = num.match(pattern);
     if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
   }
   return `${safePrefix}-${String(maxNum + 1).padStart(4, "0")}`;
@@ -270,6 +272,25 @@ export async function employeesRoutes(app: FastifyInstance) {
     });
 
     return reply.code(201).send(employee);
+  });
+
+  app.get("/next-number", { preHandler: protect }, async (request, reply) => {
+    const user = request.user!;
+    const companyId = user.companyId;
+    const q = request.query as Record<string, string | undefined>;
+    let prefix = q.prefix?.trim();
+
+    if (!prefix) {
+      const company = await prisma.company.findUnique({
+        where: { id: companyId },
+        select: { settings: true },
+      });
+      const settings = (company?.settings as { employeeIdPrefix?: string } | null) ?? {};
+      prefix = settings.employeeIdPrefix ?? "EMP";
+    }
+
+    const nextNumber = await generateNextEmployeeNumber(companyId, prefix);
+    return reply.send({ employeeNumber: nextNumber });
   });
 
   app.get("/:id", { preHandler: protect }, async (request, reply) => {

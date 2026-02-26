@@ -16,33 +16,10 @@ const clockInSchema = z.object({
 
 const manualAttendanceSchema = z.object({
   employeeId: z.string().min(1),
+  postId: z.string().min(1),
   clockIn: z.string().datetime(),
   clockOut: z.string().datetime(),
 });
-
-async function getOrCreateManualPost(companyId: string): Promise<{ postId: string }> {
-  let site = await prisma.site.findFirst({
-    where: { companyId, name: "Manual" },
-    include: { posts: true },
-  });
-  if (!site) {
-    site = await prisma.site.create({
-      data: {
-        companyId,
-        name: "Manual",
-        location: "Manual attendance entries",
-      },
-      include: { posts: true },
-    });
-  }
-  let post = site.posts.find((p) => p.name === "Manual");
-  if (!post) {
-    post = await prisma.post.create({
-      data: { siteId: site.id, name: "Manual" },
-    });
-  }
-  return { postId: post.id };
-}
 
 export async function attendanceRoutes(app: FastifyInstance) {
   const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"])];
@@ -350,7 +327,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
     const user = request.user!;
     const companyId = user.companyId;
-    const { employeeId, clockIn: clockInStr, clockOut: clockOutStr } = parsed.data;
+    const { employeeId, postId, clockIn: clockInStr, clockOut: clockOutStr } = parsed.data;
 
     const clockIn = new Date(clockInStr);
     const clockOut = new Date(clockOutStr);
@@ -369,7 +346,16 @@ export async function attendanceRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Employee not found" });
     }
 
-    const { postId } = await getOrCreateManualPost(companyId);
+    const post = await prisma.post.findFirst({
+      where: { id: postId, site: { companyId } },
+      include: { site: true },
+    });
+    if (!post) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "Invalid site or post. Select a valid site and post.",
+      });
+    }
 
     const { hoursWorked, overtimeHours } = calculateHours(clockOut, clockIn, clockOut);
 
@@ -402,6 +388,8 @@ export async function attendanceRoutes(app: FastifyInstance) {
         },
       },
     });
+
+    await prisma.$executeRaw`UPDATE "Attendance" SET source = 'manual' WHERE id = ${attendance.id}`;
 
     await createAuditLog({
       userId: user.sub,

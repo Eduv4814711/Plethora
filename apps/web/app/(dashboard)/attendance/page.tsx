@@ -5,6 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from "date-fns";
 import { DateInput } from "@/components/date-input";
+import { clsx } from "clsx";
 
 interface ShiftForClockIn {
   id: string;
@@ -23,6 +24,7 @@ interface Attendance {
   hoursWorked: number | null;
   overtimeHours: number | null;
   status: string;
+  source?: string;
   shift: {
     employee: { id: string; firstName: string; lastName: string };
     post: { name: string; site: { id: string; name: string } };
@@ -41,6 +43,10 @@ interface EmployeeOption {
 interface SiteOption {
   id: string;
   name: string;
+}
+
+interface SiteWithPosts extends SiteOption {
+  posts?: { id: string; name: string }[];
 }
 
 interface MissedShift {
@@ -78,6 +84,7 @@ export default function AttendancePage() {
   const [availableRelievers, setAvailableRelievers] = useState<{ id: string; firstName: string; lastName: string }[]>([]);
   const [replacingLoading, setReplacingLoading] = useState(false);
   const [replaceError, setReplaceError] = useState("");
+  const [activeTab, setActiveTab] = useState<"clock" | "manual">("clock");
 
   const refresh = useCallback((): Promise<unknown> | void => {
     if (!token) return;
@@ -149,7 +156,7 @@ export default function AttendancePage() {
       (a) => a.clockOut != null || a.status === "completed"
     );
     const manual = attendances.filter(
-      (a) => a.shift?.post?.site?.name === "Manual"
+      (a) => a.source === "manual" || a.shift?.post?.site?.name === "Manual"
     );
     return { activeAttendances: active, completedAttendances: completed, manualEntries: manual };
   }, [attendances]);
@@ -271,34 +278,23 @@ export default function AttendancePage() {
         </div>
       </div>
 
-      <ManualEntryForm
-        employees={employees}
-        token={token!}
-        onSuccess={refresh}
-      />
-
-      {manualEntries.length > 0 && (
-        <div className="card-wireframe mb-6 p-4">
-          <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
-            Recorder manual entries
-          </h3>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
-            Attendance records added manually (not from clock-in/clock-out).
-          </p>
-          <div className="space-y-2">
-            {manualEntries.map((att) => (
-              <AttendanceRow
-                key={att.id}
-                att={att}
-                token={token!}
-                onSuccess={refresh}
-                showClockOut={false}
-                isManualEntry
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="flex gap-1 border-b border-neutral-200 dark:border-neutral-700 mb-6">
+        {(["clock", "manual"] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setActiveTab(tab)}
+            className={clsx(
+              "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors -mb-px",
+              activeTab === tab
+                ? "bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-neutral-200 dark:border-neutral-700 border-b-transparent"
+                : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 border border-transparent"
+            )}
+          >
+            {tab === "clock" ? "Clock in / out" : "Manual attendance"}
+          </button>
+        ))}
+      </div>
 
       {replacingShift && (
         <ReplaceGuardModal
@@ -320,17 +316,19 @@ export default function AttendancePage() {
         />
       )}
 
-      {shiftsForClockIn.length > 0 && (
-        <div className="card-wireframe mb-6 p-4">
-          <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
-            Clock in / Clock out
-          </h3>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
-            Shifts within clock-in window. Clock in when the guard arrives, or mark absent to replace with another guard.
-          </p>
-          <div className="space-y-2">
-            {shiftsForClockIn.map((shift) => (
-              <ClockInRow
+      {activeTab === "clock" && (
+        <>
+          {shiftsForClockIn.length > 0 && (
+            <div className="card-wireframe mb-6 p-4">
+              <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
+                Clock in / Clock out
+              </h3>
+              <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+                Shifts within clock-in window. Clock in when the guard arrives, or mark absent to replace with another guard.
+              </p>
+              <div className="space-y-2">
+                {shiftsForClockIn.map((shift) => (
+                  <ClockInRow
                 key={shift.id}
                 shift={shift}
                 token={token!}
@@ -346,121 +344,164 @@ export default function AttendancePage() {
                     .catch(() => setAvailableRelievers([]))
                     .finally(() => setReplacingLoading(false));
                 }}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {activeAttendances.length > 0 && (
-        <div className="card-wireframe mb-6 p-4">
-          <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
-            Clock out
-          </h3>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
-            Guards currently on shift. Clock them out when they finish.
-          </p>
-          <div className="space-y-3">
-            {activeAttendances.map((att) => (
-              <AttendanceRow
-                key={att.id}
-                att={att}
-                token={token!}
-                onSuccess={refresh}
-                showClockOut
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-3">
-        <h3 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-500 dark:text-neutral-400 mb-2">
-          Completed
-        </h3>
-        {completedAttendances.filter((a) => a.shift?.post?.site?.name !== "Manual").length > 0 ? (
-          completedAttendances
-            .filter((a) => a.shift?.post?.site?.name !== "Manual")
-            .map((att) => (
-              <AttendanceRow
-                key={att.id}
-                att={att}
-                token={token!}
-                onSuccess={refresh}
-                showClockOut={false}
-              />
-            ))
-        ) : (
-          <p className="text-neutral-500 text-sm py-2">No completed records</p>
-        )}
-      </div>
-
-      {attendances.length === 0 && !shiftsForClockIn.length && (
-        <p className="text-neutral-500 py-8 text-center">No attendance records</p>
-      )}
-
-      <div className="card-wireframe mt-8 mb-6 p-4">
-        <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
-          Missed shifts (no clock-in)
-        </h3>
-        {missedShifts.length > 0 ? (
-          <div className="space-y-2">
-            {missedShifts.map((s) => (
-              <div
-                key={s.id}
-                className="card-wireframe p-3 flex items-center justify-between gap-4"
-              >
-                <span>
-                  {s.employee.firstName} {s.employee.lastName} at {s.post.site.name} - {s.post.name}
-                </span>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-neutral-600 dark:text-neutral-400">
-                    {format(new Date(s.startTime), "dd MMM HH:mm")} - {format(new Date(s.endTime), "dd MMM HH:mm")}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setReplacingShift(s);
-                      setReplaceError("");
-                      setAvailableRelievers([]);
-                      setReplacingLoading(true);
-                      authFetch(`/shifts/${s.id}/available-relievers`, token!)
-                        .then((r) => r.json())
-                        .then((d) => setAvailableRelievers(d.data || []))
-                        .catch(() => setAvailableRelievers([]))
-                        .finally(() => setReplacingLoading(false));
-                    }}
-                    className="btn-secondary text-sm"
-                  >
-                    Replace
-                  </button>
-                </div>
+                  />
+                ))}
               </div>
-            ))}
+            </div>
+          )}
+
+          {activeAttendances.length > 0 && (
+            <div className="card-wireframe mb-6 p-4">
+              <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
+                Clock out
+              </h3>
+              <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+                Guards currently on shift. Clock them out when they finish.
+              </p>
+              <div className="space-y-3">
+                {activeAttendances.map((att) => (
+                  <AttendanceRow
+                    key={att.id}
+                    att={att}
+                    token={token!}
+                    onSuccess={refresh}
+                    showClockOut
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <h3 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-500 dark:text-neutral-400 mb-2">
+              Completed
+            </h3>
+        {completedAttendances.filter((a) => a.source !== "manual" && a.shift?.post?.site?.name !== "Manual").length > 0 ? (
+          completedAttendances
+            .filter((a) => a.source !== "manual" && a.shift?.post?.site?.name !== "Manual")
+                .map((att) => (
+                  <AttendanceRow
+                    key={att.id}
+                    att={att}
+                    token={token!}
+                    onSuccess={refresh}
+                    showClockOut={false}
+                  />
+                ))
+            ) : (
+              <p className="text-neutral-500 text-sm py-2">No completed records</p>
+            )}
           </div>
-        ) : (
-          <p className="text-neutral-600 dark:text-neutral-400">No missed shifts found.</p>
-        )}
-      </div>
+
+          {attendances.length === 0 && !shiftsForClockIn.length && (
+            <p className="text-neutral-500 py-8 text-center">No attendance records</p>
+          )}
+
+          <div className="card-wireframe mt-8 mb-6 p-4">
+            <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
+              Missed shifts (no clock-in)
+            </h3>
+            {missedShifts.length > 0 ? (
+              <div className="space-y-2">
+                {missedShifts.map((s) => (
+                  <div
+                    key={s.id}
+                    className="card-wireframe p-3 flex items-center justify-between gap-4"
+                  >
+                    <span>
+                      {s.employee.firstName} {s.employee.lastName} at {s.post.site.name} - {s.post.name}
+                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-neutral-600 dark:text-neutral-400">
+                        {format(new Date(s.startTime), "dd MMM HH:mm")} - {format(new Date(s.endTime), "dd MMM HH:mm")}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReplacingShift(s);
+                          setReplaceError("");
+                          setAvailableRelievers([]);
+                          setReplacingLoading(true);
+                          authFetch(`/shifts/${s.id}/available-relievers`, token!)
+                            .then((r) => r.json())
+                            .then((d) => setAvailableRelievers(d.data || []))
+                            .catch(() => setAvailableRelievers([]))
+                            .finally(() => setReplacingLoading(false));
+                        }}
+                        className="btn-secondary text-sm"
+                      >
+                        Replace
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-neutral-600 dark:text-neutral-400">No missed shifts found.</p>
+            )}
+          </div>
+        </>
+      )}
+
+      {activeTab === "manual" && (
+        <>
+          <ManualEntryForm
+            employees={employees}
+            sites={sites as SiteWithPosts[]}
+            token={token!}
+            onSuccess={refresh}
+          />
+          <div className="card-wireframe mb-6 p-4">
+            <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
+              Recorder manual entries
+            </h3>
+            <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+              Attendance records added manually (not from clock-in/clock-out).
+            </p>
+            {manualEntries.length > 0 ? (
+              <div className="space-y-2">
+                {manualEntries.map((att) => (
+                  <AttendanceRow
+                    key={att.id}
+                    att={att}
+                    token={token!}
+                    onSuccess={refresh}
+                    showClockOut={false}
+                    isManualEntry
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-neutral-500 text-sm py-2">No manual entries yet. Add one above.</p>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
 function ManualEntryForm({
   employees,
+  sites,
   token,
   onSuccess,
 }: {
   employees: EmployeeOption[];
+  sites: SiteWithPosts[];
   token: string;
   onSuccess: () => void;
 }) {
   const [employeeId, setEmployeeId] = useState("");
+  const [siteId, setSiteId] = useState("");
+  const [postId, setPostId] = useState("");
   const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
-  const [clockInTime, setClockInTime] = useState("08:00");
-  const [clockOutTime, setClockOutTime] = useState("17:00");
+  const [shiftType, setShiftType] = useState<"day" | "night" | "">("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const selectedSite = sites.find((s) => s.id === siteId);
+  const posts = selectedSite?.posts ?? [];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -469,19 +510,37 @@ function ManualEntryForm({
       setError("Select an employee");
       return;
     }
+    if (!siteId) {
+      setError("Select a site");
+      return;
+    }
+    if (!postId) {
+      setError("Select a post");
+      return;
+    }
+    if (!shiftType) {
+      setError("Select Day or Night shift");
+      return;
+    }
     setSaving(true);
     try {
-      const clockIn = new Date(`${date}T${clockInTime}`);
-      const clockOut = new Date(`${date}T${clockOutTime}`);
-      if (clockOut <= clockIn) {
-        setError("Clock-out must be after clock-in");
-        setSaving(false);
-        return;
-      }
+      const clockIn =
+        shiftType === "day"
+          ? new Date(`${date}T06:00`)
+          : new Date(`${date}T18:00`);
+      const clockOut =
+        shiftType === "day"
+          ? new Date(`${date}T18:00`)
+          : (() => {
+              const [y, m, d] = date.split("-").map(Number);
+              const nextDay = new Date(y, m - 1, d + 1);
+              return new Date(`${format(nextDay, "yyyy-MM-dd")}T06:00`);
+            })();
       const res = await authFetch("/attendance/manual", token, {
         method: "POST",
         body: JSON.stringify({
           employeeId,
+          postId,
           clockIn: clockIn.toISOString(),
           clockOut: clockOut.toISOString(),
         }),
@@ -491,8 +550,9 @@ function ManualEntryForm({
         throw new Error(data.message || data.error || "Failed to add manual attendance");
       }
       setEmployeeId("");
-      setClockInTime("08:00");
-      setClockOutTime("17:00");
+      setSiteId("");
+      setPostId("");
+      setShiftType("");
       setDate(format(new Date(), "yyyy-MM-dd"));
       onSuccess();
     } catch (err) {
@@ -531,33 +591,82 @@ function ManualEntryForm({
         </div>
         <div className="space-y-1">
           <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+            Site *
+          </label>
+          <select
+            value={siteId}
+            onChange={(e) => {
+              setSiteId(e.target.value);
+              setPostId("");
+            }}
+            className="input-modern w-full min-w-[180px]"
+            required
+          >
+            <option value="">Select site</option>
+            {sites.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+            Post *
+          </label>
+          <select
+            value={postId}
+            onChange={(e) => setPostId(e.target.value)}
+            className="input-modern w-full min-w-[180px]"
+            required
+            disabled={!siteId}
+          >
+            <option value="">
+              {siteId && posts.length === 0 ? "No posts at this site" : "Select post"}
+            </option>
+            {posts.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
             Date
           </label>
           <DateInput value={date} onChange={setDate} className="input-modern" showToday />
         </div>
         <div className="space-y-1">
           <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-            Clock-in
+            Shift
           </label>
-          <input
-            type="time"
-            value={clockInTime}
-            onChange={(e) => setClockInTime(e.target.value)}
-            className="input-modern w-28"
-            required
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-            Clock-out
-          </label>
-          <input
-            type="time"
-            value={clockOutTime}
-            onChange={(e) => setClockOutTime(e.target.value)}
-            className="input-modern w-28"
-            required
-          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setShiftType("day")}
+              className={clsx(
+                "px-4 py-2.5 rounded-md text-sm font-medium transition-colors",
+                shiftType === "day"
+                  ? "bg-amber-500 text-white border-2 border-amber-500"
+                  : "bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-2 border-neutral-200 dark:border-neutral-700 hover:border-amber-400"
+              )}
+            >
+              Day
+            </button>
+            <button
+              type="button"
+              onClick={() => setShiftType("night")}
+              className={clsx(
+                "px-4 py-2.5 rounded-md text-sm font-medium transition-colors",
+                shiftType === "night"
+                  ? "bg-slate-700 text-white border-2 border-slate-700 dark:bg-slate-600"
+                  : "bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-2 border-neutral-200 dark:border-neutral-700 hover:border-slate-500"
+              )}
+            >
+              Night
+            </button>
+          </div>
         </div>
         <button type="submit" disabled={saving} className="btn-primary">
           {saving ? "Adding…" : "Add"}
@@ -737,7 +846,7 @@ function AttendanceRow({
               onSuccess={onSuccess}
             />
           )}
-          {(isManualEntry || att.shift?.post?.site?.name === "Manual") && (
+          {(isManualEntry || att.source === "manual" || att.shift?.post?.site?.name === "Manual") && (
             <span className="badge bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-700">
               Manual
             </span>

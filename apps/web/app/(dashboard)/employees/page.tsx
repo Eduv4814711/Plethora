@@ -618,6 +618,16 @@ function EmployeeForm({
   const [trainingCompleted, setTrainingCompleted] = useState<boolean | "">("");
   const [activeTab, setActiveTab] = useState<"basic" | "labour" | "bank" | "psira">("basic");
 
+  useEffect(() => {
+    if (!token) return;
+    authFetch("/employees/next-number", token)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.employeeNumber) setEmployeeNumber(d.employeeNumber);
+      })
+      .catch(() => {});
+  }, [token]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");

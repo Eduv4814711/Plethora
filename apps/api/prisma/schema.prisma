@@ -264,6 +264,7 @@ model Attendance {
   hoursWorked Decimal? @db.Decimal(10, 2)
   overtimeHours Decimal? @db.Decimal(10, 2)
   status     String   @default("pending")
+  source     String   @default("clock_in") // "clock_in" | "manual"
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
