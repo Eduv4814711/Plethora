@@ -141,14 +141,17 @@ export default function AttendancePage() {
     if (p) p.finally(() => setLoading(false));
   }, [token, refresh]);
 
-  const { activeAttendances, completedAttendances } = useMemo(() => {
+  const { activeAttendances, completedAttendances, manualEntries } = useMemo(() => {
     const active = attendances.filter(
       (a) => a.clockIn && !a.clockOut && a.status === "clocked_in"
     );
     const completed = attendances.filter(
       (a) => a.clockOut != null || a.status === "completed"
     );
-    return { activeAttendances: active, completedAttendances: completed };
+    const manual = attendances.filter(
+      (a) => a.shift?.post?.site?.name === "Manual"
+    );
+    return { activeAttendances: active, completedAttendances: completed, manualEntries: manual };
   }, [attendances]);
 
   if (loading) {
@@ -274,6 +277,29 @@ export default function AttendancePage() {
         onSuccess={refresh}
       />
 
+      {manualEntries.length > 0 && (
+        <div className="card-wireframe mb-6 p-4">
+          <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
+            Recorder manual entries
+          </h3>
+          <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+            Attendance records added manually (not from clock-in/clock-out).
+          </p>
+          <div className="space-y-2">
+            {manualEntries.map((att) => (
+              <AttendanceRow
+                key={att.id}
+                att={att}
+                token={token!}
+                onSuccess={refresh}
+                showClockOut={false}
+                isManualEntry
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {replacingShift && (
         <ReplaceGuardModal
           shift={replacingShift}
@@ -352,16 +378,18 @@ export default function AttendancePage() {
         <h3 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-500 dark:text-neutral-400 mb-2">
           Completed
         </h3>
-        {completedAttendances.length > 0 ? (
-          completedAttendances.map((att) => (
-            <AttendanceRow
-              key={att.id}
-              att={att}
-              token={token!}
-              onSuccess={refresh}
-              showClockOut={false}
-            />
-          ))
+        {completedAttendances.filter((a) => a.shift?.post?.site?.name !== "Manual").length > 0 ? (
+          completedAttendances
+            .filter((a) => a.shift?.post?.site?.name !== "Manual")
+            .map((att) => (
+              <AttendanceRow
+                key={att.id}
+                att={att}
+                token={token!}
+                onSuccess={refresh}
+                showClockOut={false}
+              />
+            ))
         ) : (
           <p className="text-neutral-500 text-sm py-2">No completed records</p>
         )}
@@ -646,11 +674,13 @@ function AttendanceRow({
   token,
   onSuccess,
   showClockOut,
+  isManualEntry = false,
 }: {
   att: Attendance;
   token: string;
   onSuccess: () => void;
   showClockOut: boolean;
+  isManualEntry?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const shiftStart = new Date(att.shift.startTime);
@@ -699,7 +729,7 @@ function AttendanceRow({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
           {showClockOut && att.clockIn && !att.clockOut && (
             <ClockOutButton
               attendanceId={att.id}
@@ -707,9 +737,14 @@ function AttendanceRow({
               onSuccess={onSuccess}
             />
           )}
-            <span
+          {(isManualEntry || att.shift?.post?.site?.name === "Manual") && (
+            <span className="badge bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-700">
+              Manual
+            </span>
+          )}
+          <span
             className={`badge ${
-            att.status === "completed"
+              att.status === "completed"
                 ? "badge-success"
                 : "badge-neutral"
             }`}
