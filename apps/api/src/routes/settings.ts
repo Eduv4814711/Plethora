@@ -317,6 +317,9 @@ export async function settingsRoutes(app: FastifyInstance) {
         await tx.employee.updateMany({ where: { companyId }, data: { gradeId: null } });
         await tx.payGrade.deleteMany({ where: { companyId } });
         await tx.payRule.deleteMany({ where: { companyId } });
+        await tx.groupPayRule.deleteMany({ where: { companyId } });
+        await tx.groupEarningsRule.deleteMany({ where: { companyId } });
+        await tx.groupDeductionRule.deleteMany({ where: { companyId } });
         await tx.earningsRule.deleteMany({ where: { companyId } });
         await tx.deductionRule.deleteMany({ where: { companyId } });
         for (const { ruleType, multiplier } of DEFAULT_PAY_RULES) {

@@ -42,6 +42,9 @@ model Company {
   payRules         PayRule[]
   payGrades        PayGrade[]
   employeeGroups   EmployeeGroup[]
+  groupPayRules    GroupPayRule[]
+  groupEarningsRules GroupEarningsRule[]
+  groupDeductionRules GroupDeductionRule[]
   earningsRules    EarningsRule[]
   deductionRules   DeductionRule[]
   publicHolidays   PublicHoliday[]
@@ -362,10 +365,72 @@ model EmployeeGroup {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employees Employee[]
+  company           Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employees         Employee[]
+  groupPayRules     GroupPayRule[]
+  groupEarningsRules GroupEarningsRule[]
+  groupDeductionRules GroupDeductionRule[]
 
   @@index([companyId])
+}
+
+model GroupPayRule {
+  id         String   @id @default(cuid())
+  companyId  String
+  groupId    String
+  ruleType   String   // "overtime" | "sunday" | "public_holiday"
+  multiplier Decimal  @db.Decimal(5, 2)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  group   EmployeeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, ruleType])
+  @@index([companyId])
+  @@index([groupId])
+}
+
+model GroupEarningsRule {
+  id         String   @id @default(cuid())
+  companyId  String
+  groupId    String
+  name       String   // e.g. "Transport", "Uniform allowance"
+  type       String   // "fixed" | "percentage"
+  amount     Decimal? @db.Decimal(12, 2)
+  rate       Decimal? @db.Decimal(5, 2)
+  appliesTo  String   @default("all") // "all" | "security" | "office"
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  group   EmployeeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([groupId])
+}
+
+model GroupDeductionRule {
+  id          String   @id @default(cuid())
+  companyId   String
+  groupId     String
+  name        String
+  type        String   // "fixed" | "percentage"
+  amount      Decimal? @db.Decimal(12, 2)
+  rate        Decimal? @db.Decimal(5, 2)
+  appliesTo   String   @default("all") // "all" | "security" | "office"
+  employeeIds Json?
+  isOptional  Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  group   EmployeeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([groupId])
 }
 
 model EarningsRule {

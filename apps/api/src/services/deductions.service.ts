@@ -1,5 +1,5 @@
 import { prisma } from "../lib/prisma.js";
-import type { Employee, DeductionRule } from "@prisma/client";
+import type { Employee } from "@prisma/client";
 
 export interface DeductionLine {
   name: string;
@@ -8,7 +8,7 @@ export interface DeductionLine {
 
 /**
  * Calculate total deductions for an employee given gross pay and period.
- * Includes: DeductionRules (fixed + percentage) + EmployeeDeductions
+ * Includes: DeductionRules (or GroupDeductionRules when groupId provided) + EmployeeDeductions
  */
 export async function calculateDeductions(
   companyId: string,
@@ -16,24 +16,40 @@ export async function calculateDeductions(
   employee: Pick<Employee, "employeeType">,
   grossPay: number,
   periodStart: Date,
-  periodEnd: Date
+  periodEnd: Date,
+  groupId?: string
 ): Promise<{ total: number; lines: DeductionLine[] }> {
   const lines: DeductionLine[] = [];
   let total = 0;
 
-  const rules = await prisma.deductionRule.findMany({
-    where: {
-      companyId,
-      isActive: true,
-      OR: [
-        { appliesTo: "all" },
-        { appliesTo: employee.employeeType },
-      ],
-    },
-  });
+  const empType = employee.employeeType ?? "security";
+  const appliesFilter = [
+    { appliesTo: "all" as const },
+    { appliesTo: empType },
+  ];
+
+  const rules = groupId
+    ? await prisma.groupDeductionRule.findMany({
+        where: {
+          companyId,
+          groupId,
+          isActive: true,
+          OR: appliesFilter,
+        },
+      })
+    : await prisma.deductionRule.findMany({
+        where: {
+          companyId,
+          isActive: true,
+          OR: appliesFilter,
+        },
+      });
 
   for (const rule of rules) {
     if (rule.isOptional) {
+      if (groupId) {
+        continue;
+      }
       const optedIn = await prisma.employeeDeduction.findFirst({
         where: {
           employeeId,

@@ -41,27 +41,50 @@ export async function calculatePayroll(
   const periodStart = run.periodStart;
   const periodEnd = run.periodEnd;
 
-  const payRules = await prisma.payRule.findMany({
-    where: { companyId },
-  });
-  const earningsRules = await prisma.earningsRule.findMany({
-    where: { companyId, isActive: true },
-  });
-  const ruleMap = new Map(payRules.map((r) => [r.ruleType, Number(r.multiplier)]));
-  const otMult = ruleMap.get("overtime") ?? DEFAULT_OT_MULTIPLIER;
-  const sundayMult = ruleMap.get("sunday") ?? DEFAULT_SUNDAY_MULTIPLIER;
-  const phMult = ruleMap.get("public_holiday") ?? DEFAULT_PUBLIC_HOLIDAY_MULTIPLIER;
+  const [companyPayRules, companyEarningsRules, aggregates, employees] = await Promise.all([
+    prisma.payRule.findMany({ where: { companyId } }),
+    prisma.earningsRule.findMany({ where: { companyId, isActive: true } }),
+    aggregateTimesheets(companyId, periodStart, periodEnd),
+    prisma.employee.findMany({
+      where: {
+        companyId,
+        status: { in: ["active", "training", "suspended"] },
+      },
+      include: { grade: true },
+    }),
+  ]);
 
-  const aggregates = await aggregateTimesheets(companyId, periodStart, periodEnd);
+  const groupIds = [...new Set(employees.map((e) => e.groupId).filter(Boolean))] as string[];
+  const [groupPayRulesList, groupEarningsRulesList] = await Promise.all([
+    groupIds.length > 0
+      ? prisma.groupPayRule.findMany({
+          where: { groupId: { in: groupIds }, companyId },
+        })
+      : [],
+    groupIds.length > 0
+      ? prisma.groupEarningsRule.findMany({
+          where: { groupId: { in: groupIds }, companyId, isActive: true },
+        })
+      : [],
+  ]);
+
+  const groupPayRulesByGroup = new Map<string, Map<string, number>>();
+  for (const r of groupPayRulesList) {
+    if (!groupPayRulesByGroup.has(r.groupId)) {
+      groupPayRulesByGroup.set(r.groupId, new Map());
+    }
+    groupPayRulesByGroup.get(r.groupId)!.set(r.ruleType, Number(r.multiplier));
+  }
+
+  const groupEarningsByGroup = new Map<string, typeof groupEarningsRulesList>();
+  for (const r of groupEarningsRulesList) {
+    const list = groupEarningsByGroup.get(r.groupId) ?? [];
+    list.push(r);
+    groupEarningsByGroup.set(r.groupId, list);
+  }
+
+  const companyRuleMap = new Map(companyPayRules.map((r) => [r.ruleType, Number(r.multiplier)]));
   const aggMap = new Map(aggregates.map((a) => [a.employeeId, a]));
-
-  const employees = await prisma.employee.findMany({
-    where: {
-      companyId,
-      status: { in: ["active", "training", "suspended"] },
-    },
-    include: { grade: true },
-  });
 
   const itemsToCreate: Array<{
     employeeId: string;
@@ -80,6 +103,19 @@ export async function calculatePayroll(
   }> = [];
 
   for (const emp of employees) {
+    const payRuleMap =
+      emp.groupId != null
+        ? groupPayRulesByGroup.get(emp.groupId) ?? companyRuleMap
+        : companyRuleMap;
+    const otMult = payRuleMap.get("overtime") ?? DEFAULT_OT_MULTIPLIER;
+    const sundayMult = payRuleMap.get("sunday") ?? DEFAULT_SUNDAY_MULTIPLIER;
+    const phMult = payRuleMap.get("public_holiday") ?? DEFAULT_PUBLIC_HOLIDAY_MULTIPLIER;
+
+    const earningsRules =
+      emp.groupId != null
+        ? groupEarningsByGroup.get(emp.groupId) ?? companyEarningsRules
+        : companyEarningsRules;
+
     const hourlyRate =
       emp.grade != null
         ? Number(emp.grade.hourlyRate)
@@ -155,7 +191,8 @@ export async function calculatePayroll(
       { employeeType: emp.employeeType },
       grossPay,
       periodStart,
-      periodEnd
+      periodEnd,
+      emp.groupId ?? undefined
     );
 
     const netPay = Math.round((grossPay - totalDeductions) * 100) / 100;

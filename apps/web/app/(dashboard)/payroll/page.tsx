@@ -45,6 +45,13 @@ interface DeductionRule {
   isOptional: boolean;
 }
 
+interface EmployeeGroup {
+  id: string;
+  name: string;
+  description: string | null;
+  sortOrder: number;
+}
+
 const statusColors: Record<string, string> = {
   draft: "bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300",
   calculated: "bg-neutral-100 dark:bg-neutral-900/30 text-neutral-700 dark:text-neutral-400",
@@ -157,18 +164,38 @@ export default function PayrollPage() {
 }
 
 function PayrollConfig({ token }: { token: string }) {
+  const [groups, setGroups] = useState<EmployeeGroup[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [grades, setGrades] = useState<PayGrade[]>([]);
   const [payRules, setPayRules] = useState<PayRule[]>([]);
   const [earnings, setEarnings] = useState<EarningsRule[]>([]);
   const [deductions, setDeductions] = useState<DeductionRule[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const loadGroups = useCallback(() => {
+    authFetch("/employee-groups", token)
+      .then((r) => r.json())
+      .then((d) => setGroups(d.data || []))
+      .catch(console.error);
+  }, [token]);
+
   const load = useCallback(() => {
+    const groupId = selectedGroupId;
+    const payRulesUrl = groupId
+      ? `/payroll/groups/${groupId}/pay-rules`
+      : "/payroll/pay-rules";
+    const earningsUrl = groupId
+      ? `/payroll/groups/${groupId}/earnings-rules`
+      : "/payroll/earnings-rules";
+    const deductionsUrl = groupId
+      ? `/payroll/groups/${groupId}/deduction-rules`
+      : "/payroll/deduction-rules";
+
     Promise.all([
       authFetch("/payroll/pay-grades", token).then((r) => r.json()),
-      authFetch("/payroll/pay-rules", token).then((r) => r.json()),
-      authFetch("/payroll/earnings-rules", token).then((r) => r.json()),
-      authFetch("/payroll/deduction-rules", token).then((r) => r.json()),
+      authFetch(payRulesUrl, token).then((r) => r.json()),
+      authFetch(earningsUrl, token).then((r) => r.json()),
+      authFetch(deductionsUrl, token).then((r) => r.json()),
     ])
       .then(([g, r, e, d]) => {
         setGrades(g.data || []);
@@ -178,9 +205,14 @@ function PayrollConfig({ token }: { token: string }) {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [token]);
+  }, [token, selectedGroupId]);
 
   useEffect(() => {
+    loadGroups();
+  }, [loadGroups]);
+
+  useEffect(() => {
+    setLoading(true);
     load();
   }, [load]);
 
@@ -197,14 +229,53 @@ function PayrollConfig({ token }: { token: string }) {
     );
   }
 
+  const selectedGroup = selectedGroupId
+    ? groups.find((g) => g.id === selectedGroupId)
+    : null;
+
   return (
     <div className="card-wireframe mb-6 p-4">
       <h2 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-4">Payroll Configuration</h2>
+      <div className="mb-4">
+        <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">Configure rules for</label>
+        <select
+          value={selectedGroupId ?? ""}
+          onChange={(e) => setSelectedGroupId(e.target.value || null)}
+          className="px-3 py-2 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900 min-w-[200px]"
+        >
+          <option value="">Company default (ungrouped employees)</option>
+          {groups.map((g) => (
+            <option key={g.id} value={g.id}>
+              Group: {g.name}
+            </option>
+          ))}
+        </select>
+        {selectedGroup && (
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+            Rules for employees in &quot;{selectedGroup.name}&quot;
+          </p>
+        )}
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <PayGradesSection grades={grades} token={token} onRefresh={load} />
-        <PayRulesSection payRules={payRules} token={token} onRefresh={load} />
-        <EarningsRulesSection earnings={earnings} token={token} onRefresh={load} />
-        <DeductionRulesSection deductions={deductions} token={token} onRefresh={load} />
+        <PayRulesSection
+          payRules={payRules}
+          token={token}
+          onRefresh={load}
+          groupId={selectedGroupId}
+        />
+        <EarningsRulesSection
+          earnings={earnings}
+          token={token}
+          onRefresh={load}
+          groupId={selectedGroupId}
+        />
+        <DeductionRulesSection
+          deductions={deductions}
+          token={token}
+          onRefresh={load}
+          groupId={selectedGroupId}
+        />
       </div>
     </div>
   );
@@ -301,10 +372,12 @@ function PayRulesSection({
   payRules,
   token,
   onRefresh,
+  groupId,
 }: {
   payRules: PayRule[];
   token: string;
   onRefresh: () => void;
+  groupId?: string | null;
 }) {
   const ruleLabels: Record<string, string> = {
     overtime: "Overtime multiplier",
@@ -319,7 +392,10 @@ function PayRulesSection({
 
   const handleSave = async (ruleType: string, multiplier: number) => {
     try {
-      await authFetch("/payroll/pay-rules", token, {
+      const url = groupId
+        ? `/payroll/groups/${groupId}/pay-rules`
+        : "/payroll/pay-rules";
+      await authFetch(url, token, {
         method: "PUT",
         body: JSON.stringify({ ruleType, multiplier }),
       });
@@ -366,10 +442,12 @@ function EarningsRulesSection({
   earnings,
   token,
   onRefresh,
+  groupId,
 }: {
   earnings: EarningsRule[];
   token: string;
   onRefresh: () => void;
+  groupId?: string | null;
 }) {
   const [name, setName] = useState("");
   const [type, setType] = useState<"fixed" | "percentage">("fixed");
@@ -377,6 +455,10 @@ function EarningsRulesSection({
   const [rate, setRate] = useState("");
   const [appliesTo, setAppliesTo] = useState("all");
   const [saving, setSaving] = useState(false);
+
+  const baseUrl = groupId
+    ? `/payroll/groups/${groupId}/earnings-rules`
+    : "/payroll/earnings-rules";
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -389,7 +471,7 @@ function EarningsRulesSection({
       };
       if (type === "fixed") body.amount = parseFloat(amount);
       else body.rate = parseFloat(rate);
-      const res = await authFetch("/payroll/earnings-rules", token, {
+      const res = await authFetch(baseUrl, token, {
         method: "POST",
         body: JSON.stringify(body),
       });
@@ -409,7 +491,7 @@ function EarningsRulesSection({
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this earnings rule?")) return;
     try {
-      const res = await authFetch(`/payroll/earnings-rules/${id}`, token, { method: "DELETE" });
+      const res = await authFetch(`${baseUrl}/${id}`, token, { method: "DELETE" });
       if (res.ok) onRefresh();
       else alert("Failed to delete. It may be in use.");
     } catch (err) {
@@ -466,10 +548,12 @@ function DeductionRulesSection({
   deductions,
   token,
   onRefresh,
+  groupId,
 }: {
   deductions: DeductionRule[];
   token: string;
   onRefresh: () => void;
+  groupId?: string | null;
 }) {
   const [name, setName] = useState("");
   const [type, setType] = useState<"fixed" | "percentage">("fixed");
@@ -477,6 +561,10 @@ function DeductionRulesSection({
   const [rate, setRate] = useState("");
   const [appliesTo, setAppliesTo] = useState("all");
   const [saving, setSaving] = useState(false);
+
+  const baseUrl = groupId
+    ? `/payroll/groups/${groupId}/deduction-rules`
+    : "/payroll/deduction-rules";
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -489,7 +577,7 @@ function DeductionRulesSection({
       };
       if (type === "fixed") body.amount = parseFloat(amount);
       else body.rate = parseFloat(rate);
-      const res = await authFetch("/payroll/deduction-rules", token, {
+      const res = await authFetch(baseUrl, token, {
         method: "POST",
         body: JSON.stringify(body),
       });
@@ -509,7 +597,7 @@ function DeductionRulesSection({
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this deduction rule?")) return;
     try {
-      const res = await authFetch(`/payroll/deduction-rules/${id}`, token, { method: "DELETE" });
+      const res = await authFetch(`${baseUrl}/${id}`, token, { method: "DELETE" });
       if (res.ok) onRefresh();
       else alert("Failed to delete. It may be in use.");
     } catch (err) {
