@@ -341,23 +341,14 @@ function SiteCard({
         </h4>
         <ul className="space-y-1.5">
           {site.posts.map((post) => (
-            <li
+            <PostRow
               key={post.id}
-              className="text-sm text-neutral-700 dark:text-neutral-300 flex items-center gap-2"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-neutral-400" />
-              {post.name}
-              {post.shiftType && (
-                <span className="text-neutral-500 text-xs">
-                  ({SHIFT_LABELS[post.shiftType] ?? post.shiftType})
-                </span>
-              )}
-              {post.assignedGuards?.length ? (
-                <span className="text-xs text-neutral-600 dark:text-neutral-400">
-                  {post.assignedGuards.length} guard{post.assignedGuards.length !== 1 ? "s" : ""}
-                </span>
-              ) : null}
-            </li>
+              post={post}
+              siteId={site.id}
+              token={token}
+              canManage={canManageSites}
+              onSuccess={onRefresh}
+            />
           ))}
         </ul>
         {canManageSites && (
@@ -829,6 +820,107 @@ function DeleteConfirmModal({
         </div>
       </div>
     </div>
+  );
+}
+
+function PostRow({
+  post,
+  siteId,
+  token,
+  canManage,
+  onSuccess,
+}: {
+  post: Post;
+  siteId: string;
+  token: string;
+  canManage: boolean;
+  onSuccess: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(post.name);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === post.name) {
+      setEditing(false);
+      setName(post.name);
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await authFetch(`/sites/${siteId}/posts/${post.id}`, token, {
+        method: "PUT",
+        body: JSON.stringify({ name: trimmed }),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+      setEditing(false);
+      onSuccess();
+    } catch {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <li
+      className="text-sm text-neutral-700 dark:text-neutral-300 flex items-center gap-2 group/post"
+      onClick={(e) => editing && e.stopPropagation()}
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 shrink-0" />
+      {editing ? (
+        <div className="flex items-center gap-2 flex-1 min-w-0" onClick={(e) => e.stopPropagation()}>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSave()}
+            autoFocus
+            className="input-modern py-1.5 text-sm flex-1 min-w-0"
+          />
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="px-2 py-1 text-xs font-medium bg-neutral-600 text-white rounded hover:bg-neutral-700 disabled:opacity-50"
+          >
+            {saving ? "…" : "Save"}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setEditing(false); setName(post.name); }}
+            disabled={saving}
+            className="px-2 py-1 text-xs font-medium border border-neutral-300 dark:border-neutral-600 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <>
+          <span className="flex-1 min-w-0">{post.name}</span>
+          {post.shiftType && (
+            <span className="text-neutral-500 text-xs shrink-0">
+              ({SHIFT_LABELS[post.shiftType] ?? post.shiftType})
+            </span>
+          )}
+          {post.assignedGuards?.length ? (
+            <span className="text-xs text-neutral-600 dark:text-neutral-400 shrink-0">
+              {post.assignedGuards.length} guard{post.assignedGuards.length !== 1 ? "s" : ""}
+            </span>
+          ) : null}
+          {canManage && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+              className="p-1 rounded text-neutral-500 hover:text-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800 opacity-0 group-hover/post:opacity-100 transition-opacity shrink-0"
+              title="Edit post name"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+          )}
+        </>
+      )}
+    </li>
   );
 }
 
