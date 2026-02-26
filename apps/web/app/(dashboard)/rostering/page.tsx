@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
-import { format, addDays, addWeeks, addMonths, startOfWeek, startOfMonth, endOfMonth, isSameDay, parseISO, differenceInMonths } from "date-fns";
+import { format, addDays, addWeeks, addMonths, startOfWeek, startOfMonth, endOfMonth, isSameDay, parseISO, differenceInMonths, startOfDay } from "date-fns";
 
 type BulkPattern =
   | "all_days"
@@ -18,6 +18,7 @@ type BulkPattern =
 
 import { CustomPatternBuilder } from "./CustomPatternBuilder";
 import type { CustomBlock } from "./CustomPatternBuilder";
+import { DateInput } from "@/components/date-input";
 import { generateFullRosterPDF, generateGuardRosterPDF } from "@/lib/roster-pdf";
 
 const PATTERN_LABELS: Record<BulkPattern, string> = {
@@ -97,6 +98,11 @@ export default function RosteringPage() {
   const [showResetMenu, setShowResetMenu] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [showPdfMenu, setShowPdfMenu] = useState(false);
+  const [showPdfPeriodModal, setShowPdfPeriodModal] = useState(false);
+  const [pdfAction, setPdfAction] = useState<"preview" | "download">("preview");
+  const [pdfEmployeeId, setPdfEmployeeId] = useState<string | undefined>(undefined);
+  const [pdfPeriodStart, setPdfPeriodStart] = useState("");
+  const [pdfPeriodEnd, setPdfPeriodEnd] = useState("");
 
   const rosteredEmployees = useMemo(() => {
     const seen = new Set<string>();
@@ -182,38 +188,88 @@ export default function RosteringPage() {
     return emp ? `${emp.firstName} ${emp.lastName}` : "Guard";
   };
 
-  const handlePdfPreview = (employeeId?: string) => {
-    const period = periodLabel || "";
-    const generatedBy = user?.name ?? undefined;
-    const blob = employeeId
-      ? generateGuardRosterPDF(shifts.filter((s) => s.employee.id === employeeId), getGuardName(employeeId), period, generatedBy)
-      : generateFullRosterPDF(shifts, calendarDays, period, generatedBy);
-    const url = URL.createObjectURL(blob);
-    const win = window.open(url, "_blank");
-    if (!win) {
-      handlePdfDownload(employeeId);
+  const openPdfPeriodModal = (action: "preview" | "download", employeeId?: string) => {
+    setPdfAction(action);
+    setPdfEmployeeId(employeeId);
+    if (calendarDays.length > 0) {
+      setPdfPeriodStart(format(calendarDays[0], "yyyy-MM-dd"));
+      setPdfPeriodEnd(format(calendarDays[calendarDays.length - 1], "yyyy-MM-dd"));
     } else {
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const now = new Date();
+      const start = startOfWeek(now, { weekStartsOn: 1 });
+      const end = addDays(start, 6);
+      setPdfPeriodStart(format(start, "yyyy-MM-dd"));
+      setPdfPeriodEnd(format(end, "yyyy-MM-dd"));
     }
     setShowPdfMenu(false);
+    setShowPdfPeriodModal(true);
   };
 
-  const handlePdfDownload = (employeeId?: string) => {
-    const period = periodLabel || "roster";
+  const handlePdfConfirm = async () => {
+    if (!token || !pdfPeriodStart || !pdfPeriodEnd) return;
+    const start = startOfDay(parseISO(pdfPeriodStart));
+    const end = new Date(parseISO(pdfPeriodEnd));
+    end.setHours(23, 59, 59, 999);
+    if (end < start) return;
+    const startDate = start.toISOString();
+    const endDate = end.toISOString();
+
+    const shiftsRes = await authFetch(`/shifts?startDate=${startDate}&endDate=${endDate}`, token);
+    const shiftsData = await shiftsRes.json();
+    const periodShifts: Shift[] = shiftsData.data || [];
+
+    const pdfCalendarDays: Date[] = [];
+    let d = new Date(start);
+    while (d <= end) {
+      pdfCalendarDays.push(new Date(d));
+      d = addDays(d, 1);
+    }
+    const periodLabel =
+      pdfCalendarDays.length > 0
+        ? format(pdfCalendarDays[0], "d MMM") + " – " + format(pdfCalendarDays[pdfCalendarDays.length - 1], "d MMM yyyy")
+        : pdfPeriodStart;
     const generatedBy = user?.name ?? undefined;
-    const filename = employeeId
-      ? `roster-${safeFilename(getGuardName(employeeId))}-${safeFilename(period)}.pdf`
-      : `roster-${safeFilename(period)}.pdf`;
-    const blob = employeeId
-      ? generateGuardRosterPDF(shifts.filter((s) => s.employee.id === employeeId), getGuardName(employeeId), periodLabel || "", generatedBy)
-      : generateFullRosterPDF(shifts, calendarDays, periodLabel || "", generatedBy);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-    setShowPdfMenu(false);
+
+    if (pdfAction === "preview") {
+      const blob = pdfEmployeeId
+        ? generateGuardRosterPDF(
+            periodShifts.filter((s) => s.employee.id === pdfEmployeeId),
+            getGuardName(pdfEmployeeId),
+            periodLabel,
+            generatedBy
+          )
+        : generateFullRosterPDF(periodShifts, pdfCalendarDays, periodLabel, generatedBy);
+      const url = URL.createObjectURL(blob);
+      const win = window.open(url, "_blank");
+      if (!win) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = pdfEmployeeId
+          ? `roster-${safeFilename(getGuardName(pdfEmployeeId))}-${safeFilename(periodLabel)}.pdf`
+          : `roster-${safeFilename(periodLabel)}.pdf`;
+        a.click();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } else {
+      const filename = pdfEmployeeId
+        ? `roster-${safeFilename(getGuardName(pdfEmployeeId))}-${safeFilename(periodLabel)}.pdf`
+        : `roster-${safeFilename(periodLabel)}.pdf`;
+      const blob = pdfEmployeeId
+        ? generateGuardRosterPDF(
+            periodShifts.filter((s) => s.employee.id === pdfEmployeeId),
+            getGuardName(pdfEmployeeId),
+            periodLabel,
+            generatedBy
+          )
+        : generateFullRosterPDF(periodShifts, pdfCalendarDays, periodLabel, generatedBy);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+    setShowPdfPeriodModal(false);
   };
 
   const handleRemoveShift = async (shift: Shift) => {
@@ -705,14 +761,14 @@ export default function RosteringPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => handlePdfPreview()}
+                      onClick={() => openPdfPeriodModal("preview")}
                       className="w-full px-4 py-2 text-left text-sm text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                     >
                       Preview
                     </button>
                     <button
                       type="button"
-                      onClick={() => handlePdfDownload()}
+                      onClick={() => openPdfPeriodModal("download")}
                       className="w-full px-4 py-2 text-left text-sm text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                     >
                       Download
@@ -727,14 +783,14 @@ export default function RosteringPage() {
                           <div key={e.id} className="flex gap-1">
                             <button
                               type="button"
-                              onClick={() => handlePdfPreview(e.id)}
+                              onClick={() => openPdfPeriodModal("preview", e.id)}
                               className="flex-1 px-4 py-2 text-left text-sm text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                             >
                               Preview
                             </button>
                             <button
                               type="button"
-                              onClick={() => handlePdfDownload(e.id)}
+                              onClick={() => openPdfPeriodModal("download", e.id)}
                               className="flex-1 px-4 py-2 text-left text-sm text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                             >
                               Download
@@ -801,6 +857,62 @@ export default function RosteringPage() {
             </div>
           </div>
         </div>
+
+        {showPdfPeriodModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="card-wireframe w-full max-w-sm shadow-xl">
+              <div className="p-6">
+                <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-2">
+                  Choose time period
+                </h3>
+                <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+                  Select the start and end dates for the roster schedule. Periods can span across months.
+                </p>
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">
+                      Start date
+                    </label>
+                    <DateInput
+                      value={pdfPeriodStart}
+                      onChange={setPdfPeriodStart}
+                      className="input-modern w-full"
+                      showToday
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">
+                      End date
+                    </label>
+                    <DateInput
+                      value={pdfPeriodEnd}
+                      onChange={setPdfPeriodEnd}
+                      className="input-modern w-full"
+                      showToday
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowPdfPeriodModal(false)}
+                    className="flex-1 btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePdfConfirm}
+                    disabled={!pdfPeriodStart || !pdfPeriodEnd || parseISO(pdfPeriodEnd) < parseISO(pdfPeriodStart)}
+                    className="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {pdfAction === "preview" ? "Preview" : "Download"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {showForm && (
           <div className="mt-4">
