@@ -15,7 +15,11 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
-export function SearchDropdown() {
+interface SearchDropdownProps {
+  onClose?: () => void;
+}
+
+export function SearchDropdown({ onClose }: SearchDropdownProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResults | null>(null);
   const [loading, setLoading] = useState(false);
@@ -70,7 +74,10 @@ export function SearchDropdown() {
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!open || totalItems === 0) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        setOpen(false);
+        onClose?.();
+      }
       return;
     }
     if (e.key === "ArrowDown") {
@@ -86,15 +93,18 @@ export function SearchDropdown() {
         router.push(debouncedQuery ? `/employees?q=${encodeURIComponent(debouncedQuery)}` : "/employees");
         setOpen(false);
         setQuery("");
+        onClose?.();
       } else {
         const site = sites[idx - employees.length];
         router.push(`/sites/${site.id}`);
         setOpen(false);
         setQuery("");
+        onClose?.();
       }
     } else if (e.key === "Escape") {
       setOpen(false);
       setFocusedIndex(-1);
+      onClose?.();
     }
   };
 
@@ -109,12 +119,14 @@ export function SearchDropdown() {
     router.push(debouncedQuery ? `/employees?q=${encodeURIComponent(debouncedQuery)}` : "/employees");
     setOpen(false);
     setQuery("");
+    onClose?.();
   };
 
   const handleSelectSite = (id: string) => {
     router.push(`/sites/${id}`);
     setOpen(false);
     setQuery("");
+    onClose?.();
   };
 
   return (

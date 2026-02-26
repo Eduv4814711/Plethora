@@ -14,7 +14,7 @@ export interface NavItem {
  */
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
-  { href: "/employees", label: "Employees", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
+  { href: "/employees", label: "Team", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
   { href: "/sites", label: "Sites", roles: ["admin", "operations_manager", "supervisor", "controller"] },
   { href: "/rostering", label: "Rostering", roles: ["admin", "operations_manager", "supervisor", "controller"] },
   { href: "/attendance", label: "Attendance", roles: ["admin", "operations_manager", "hr_payroll", "supervisor", "controller"] },
@@ -24,6 +24,12 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/audit", label: "Audit", roles: ["admin"] },
   { href: "/settings", label: "Settings", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
 ];
+
+/** Main nav links shown in the horizontal bar (first 6 items). */
+export const MAIN_NAV_HREFS = ["/", "/employees", "/sites", "/rostering", "/attendance", "/payroll"];
+
+/** Nav items shown in the "More" dropdown (remaining items). */
+export const MORE_NAV_HREFS = ["/payroll/leave-requests", "/reports", "/audit", "/settings"];
 
 /**
  * Default route for a role when they don't have access to the requested path.
