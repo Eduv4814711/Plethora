@@ -405,11 +405,17 @@ function PayRulesSection({
     }
   };
 
+  const ruleTypesToShow = groupId
+    ? (["overtime", "sunday", "public_holiday"] as const).filter((rt) =>
+        payRules.some((r) => r.ruleType === rt)
+      )
+    : (["overtime", "sunday", "public_holiday"] as const);
+
   return (
     <div className="p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800/30">
       <h3 className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Pay Rules</h3>
       <div className="space-y-2">
-        {(["overtime", "sunday", "public_holiday"] as const).map((rt) => {
+        {ruleTypesToShow.map((rt) => {
           const rule = payRules.find((r) => r.ruleType === rt);
           const mult = rule ? Number(rule.multiplier) : defaultMult[rt];
           return (
@@ -433,7 +439,125 @@ function PayRulesSection({
             </div>
           );
         })}
+        {groupId && ruleTypesToShow.length === 0 && (
+          <p className="text-neutral-500 dark:text-neutral-400 text-xs py-1">
+            No pay rules configured for this group.
+          </p>
+        )}
+        {groupId && ruleTypesToShow.length < 3 && (
+          <AddPayRuleRow
+            existingTypes={ruleTypesToShow}
+            onRefresh={onRefresh}
+            token={token}
+            groupId={groupId}
+          />
+        )}
       </div>
+    </div>
+  );
+}
+
+function AddPayRuleRow({
+  existingTypes,
+  onRefresh,
+  token,
+  groupId,
+}: {
+  existingTypes: readonly string[];
+  onRefresh: () => void;
+  token: string;
+  groupId: string;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [ruleType, setRuleType] = useState<string>("");
+  const [multiplier, setMultiplier] = useState("1.5");
+
+  const ruleLabels: Record<string, string> = {
+    overtime: "Overtime",
+    sunday: "Sunday",
+    public_holiday: "Public holiday",
+  };
+  const defaultMult: Record<string, number> = {
+    overtime: 1.5,
+    sunday: 2.0,
+    public_holiday: 2.0,
+  };
+  const available = (["overtime", "sunday", "public_holiday"] as const).filter(
+    (rt) => !existingTypes.includes(rt)
+  );
+
+  const handleAdd = async () => {
+    if (!ruleType || available.length === 0) return;
+    try {
+      await authFetch(`/payroll/groups/${groupId}/pay-rules`, token, {
+        method: "PUT",
+        body: JSON.stringify({ ruleType, multiplier: parseFloat(multiplier) }),
+      });
+      setAdding(false);
+      setRuleType("");
+      setMultiplier("1.5");
+      onRefresh();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  if (available.length === 0) return null;
+
+  if (!adding) {
+    return (
+      <button
+        type="button"
+        onClick={() => setAdding(true)}
+        className="text-xs text-amber-600 dark:text-amber-400 hover:underline"
+      >
+        + Add {ruleLabels[available[0]]} rule
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2 items-center pt-2 border-t border-neutral-200 dark:border-neutral-700">
+      <select
+        value={ruleType}
+        onChange={(e) => {
+          setRuleType(e.target.value);
+          setMultiplier(String(defaultMult[e.target.value as keyof typeof defaultMult] ?? 1.5));
+        }}
+        className="px-2 py-1 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900"
+      >
+        <option value="">Select rule type</option>
+        {available.map((rt) => (
+          <option key={rt} value={rt}>
+            {ruleLabels[rt]}
+          </option>
+        ))}
+      </select>
+      <input
+        type="number"
+        step="0.1"
+        min="0"
+        max="10"
+        value={multiplier}
+        onChange={(e) => setMultiplier(e.target.value)}
+        placeholder="×"
+        className="w-14 px-2 py-1 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900"
+      />
+      <button
+        type="button"
+        onClick={handleAdd}
+        disabled={!ruleType}
+        className="btn-secondary text-xs py-1 px-2"
+      >
+        Add
+      </button>
+      <button
+        type="button"
+        onClick={() => setAdding(false)}
+        className="text-xs text-neutral-500 hover:underline"
+      >
+        Cancel
+      </button>
     </div>
   );
 }
