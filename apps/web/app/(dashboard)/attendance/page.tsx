@@ -46,7 +46,7 @@ interface SiteOption {
 }
 
 interface SiteWithPosts extends SiteOption {
-  posts?: { id: string; name: string }[];
+  posts?: { id: string; name: string; shiftType?: string | null }[];
 }
 
 interface MissedShift {
@@ -496,12 +496,13 @@ function ManualEntryForm({
   const [siteId, setSiteId] = useState("");
   const [postId, setPostId] = useState("");
   const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
-  const [shiftType, setShiftType] = useState<"day" | "night" | "">("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const selectedSite = sites.find((s) => s.id === siteId);
   const posts = selectedSite?.posts ?? [];
+  const selectedPost = posts.find((p) => p.id === postId);
+  const shiftType = (selectedPost?.shiftType ?? "day") === "night" ? "night" : "day";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -516,10 +517,6 @@ function ManualEntryForm({
     }
     if (!postId) {
       setError("Select a post");
-      return;
-    }
-    if (!shiftType) {
-      setError("Select Day or Night shift");
       return;
     }
     setSaving(true);
@@ -552,7 +549,6 @@ function ManualEntryForm({
       setEmployeeId("");
       setSiteId("");
       setPostId("");
-      setShiftType("");
       setDate(format(new Date(), "yyyy-MM-dd"));
       onSuccess();
     } catch (err) {
@@ -636,37 +632,6 @@ function ManualEntryForm({
             Date
           </label>
           <DateInput value={date} onChange={setDate} className="input-modern" showToday />
-        </div>
-        <div className="space-y-1">
-          <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-            Shift
-          </label>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setShiftType("day")}
-              className={clsx(
-                "px-4 py-2.5 rounded-md text-sm font-medium transition-colors",
-                shiftType === "day"
-                  ? "bg-amber-500 text-white border-2 border-amber-500"
-                  : "bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-2 border-neutral-200 dark:border-neutral-700 hover:border-amber-400"
-              )}
-            >
-              Day
-            </button>
-            <button
-              type="button"
-              onClick={() => setShiftType("night")}
-              className={clsx(
-                "px-4 py-2.5 rounded-md text-sm font-medium transition-colors",
-                shiftType === "night"
-                  ? "bg-slate-700 text-white border-2 border-slate-700 dark:bg-slate-600"
-                  : "bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border-2 border-neutral-200 dark:border-neutral-700 hover:border-slate-500"
-              )}
-            >
-              Night
-            </button>
-          </div>
         </div>
         <button type="submit" disabled={saving} className="btn-primary">
           {saving ? "Adding…" : "Add"}
