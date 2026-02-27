@@ -162,7 +162,7 @@ export async function updateSettings(
 }
 
 export const FACTORY_RESET_MODULES = [
-  { id: "employees", label: "Employees", description: "Clear all employees, assignments, leave records, and deductions" },
+  { id: "employees", label: "Team", description: "Clear all team members, assignments, leave records, and deductions" },
   { id: "sites", label: "Sites", description: "Clear sites, posts, and site/post assignments" },
   { id: "shifts", label: "Shifts", description: "Clear shifts and attendance records" },
   { id: "payroll", label: "Payroll", description: "Clear payroll runs, items, and payslips" },

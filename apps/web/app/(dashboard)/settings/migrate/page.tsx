@@ -58,8 +58,8 @@ export default function MigratePage() {
     if (!hasFiles) {
       setPreviewError(
         isAdmin
-          ? "Upload companies.csv and/or employees.csv, sites.csv"
-          : "Upload at least employees.csv or sites.csv"
+          ? "Upload companies.csv and/or team (employees.csv), sites.csv"
+          : "Upload at least team (employees.csv) or sites.csv"
       );
       return;
     }
@@ -130,8 +130,8 @@ export default function MigratePage() {
       </h1>
       <p className="text-neutral-600 dark:text-neutral-400 mb-6">
         {isAdmin
-          ? "Upload CSV files to create multiple companies with employees and sites. Download templates, validate, then import."
-          : "Upload CSV files to import employees and sites into your company. Download templates, validate, then import."}
+          ? "Upload CSV files to create multiple companies with team and sites. Download templates, validate, then import."
+          : "Upload CSV files to import team and sites into your company. Download templates, validate, then import."}
       </p>
 
       {templateError && (
@@ -160,7 +160,7 @@ export default function MigratePage() {
               onClick={() => handleDownloadTemplate("employees")}
               className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-black dark:border-white hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors"
             >
-              Download employees.csv
+              Download team template (employees.csv)
             </button>
             <button
               type="button"
@@ -186,7 +186,7 @@ export default function MigratePage() {
               />
             )}
             <FileInput
-              label="Employees"
+              label="Team"
               accept=".csv"
               file={employeesFile}
               onChange={setEmployeesFile}
@@ -199,7 +199,7 @@ export default function MigratePage() {
             />
           </div>
           <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
-            Max 5MB per file. Max 1000 employees, 200 sites per import.
+            Max 5MB per file. Max 1000 team members, 200 sites per import.
           </p>
         </section>
 
@@ -250,7 +250,7 @@ export default function MigratePage() {
                   )}
                 </span>
                 <span className="text-neutral-600 dark:text-neutral-400">
-                  Employees: {preview.employees.validCount} valid
+                  Team: {preview.employees.validCount} valid
                   {preview.employees.errors.length > 0 && (
                     <span className="text-red-600 dark:text-red-400 ml-1">
                       ({preview.employees.errors.length} errors)
@@ -280,7 +280,7 @@ export default function MigratePage() {
                     <tbody>
                       {[
                         ...preview.companies.errors.map((e) => ({ ...e, entity: "Company" })),
-                        ...preview.employees.errors.map((e) => ({ ...e, entity: "Employee" })),
+                        ...preview.employees.errors.map((e) => ({ ...e, entity: "Team member" })),
                         ...preview.sites.errors.map((e) => ({ ...e, entity: "Site" })),
                       ].map((e, i) => (
                         <tr key={i} className="border-t border-black dark:border-white">
@@ -303,7 +303,7 @@ export default function MigratePage() {
                 {importResult.companiesCreated > 0 && (
                   <li>Companies created: {importResult.companiesCreated}</li>
                 )}
-                <li>Employees created: {importResult.employeesCreated}</li>
+                <li>Team members created: {importResult.employeesCreated}</li>
                 <li>Sites created: {importResult.sitesCreated}</li>
               </ul>
               {importResult.errors.length > 0 && (

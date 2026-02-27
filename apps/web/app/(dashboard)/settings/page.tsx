@@ -560,7 +560,7 @@ function BusinessSettingsSection({
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Employee ID Prefix</label>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Team Member ID Prefix</label>
           <input
             type="text"
             value={form.employeeIdPrefix}
@@ -571,7 +571,7 @@ function BusinessSettingsSection({
             disabled={readOnly}
           />
           <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-            Prefix for auto-generated employee IDs (e.g. EMP-0001, STAFF-0001)
+            Prefix for auto-generated team member IDs (e.g. EMP-0001, STAFF-0001)
           </p>
         </div>
         {saveError && (

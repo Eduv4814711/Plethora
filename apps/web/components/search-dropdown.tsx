@@ -133,7 +133,7 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
     <div ref={containerRef} className="relative">
       <input
         type="search"
-        placeholder={showSites ? "Search employees, sites..." : "Search employees..."}
+        placeholder={showSites ? "Search team, sites..." : "Search team..."}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => debouncedQuery.length >= 2 && setOpen(true)}
@@ -167,7 +167,7 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
             <>
               {employees.length > 0 && (
                 <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
-                  Employees
+                  Team
                 </div>
               )}
               {employees.map((emp, i) => (

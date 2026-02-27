@@ -318,7 +318,7 @@ export function CompanySetupModal({
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Employee ID Prefix</label>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Team Member ID Prefix</label>
                 <input
                   type="text"
                   value={form.employeeIdPrefix}

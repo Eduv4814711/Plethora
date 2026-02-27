@@ -239,7 +239,7 @@ export default function AttendancePage() {
               onChange={(e) => setEmployeeId(e.target.value)}
               className="input-modern w-full min-w-[180px]"
             >
-              <option value="">All employees</option>
+              <option value="">All team</option>
               {employees.map((e) => (
                 <option key={e.id} value={e.id}>
                   {e.firstName} {e.lastName}
@@ -564,7 +564,7 @@ function ManualEntryForm({
         Manual entry
       </h3>
       <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
-        Add clock-in and clock-out for employees who were not rostered.
+        Add clock-in and clock-out for team members who were not rostered.
       </p>
       <form onSubmit={handleSubmit} className="flex flex-wrap gap-4 items-end">
         <div className="space-y-1">

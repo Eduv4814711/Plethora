@@ -246,7 +246,7 @@ function PayrollConfig({ token }: { token: string }) {
           onChange={(e) => setSelectedGroupId(e.target.value || null)}
           className="px-3 py-2 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900 min-w-[200px]"
         >
-          <option value="">Company default (ungrouped employees)</option>
+          <option value="">Company default (ungrouped team members)</option>
           {groups.map((g) => (
             <option key={g.id} value={g.id}>
               Group: {g.name}
@@ -255,7 +255,7 @@ function PayrollConfig({ token }: { token: string }) {
         </select>
         {selectedGroup && (
           <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-            Rules for employees in &quot;{selectedGroup.name}&quot;
+            Rules for team members in &quot;{selectedGroup.name}&quot;
           </p>
         )}
       </div>
@@ -946,7 +946,7 @@ function PayrollRunCard({
             <table className="w-full text-sm">
               <thead>
                 <tr>
-                  <th className="text-left">Employee</th>
+                  <th className="text-left">Team Member</th>
                   <th className="text-right">Net Pay</th>
                   <th className="text-right w-32">Actions</th>
                 </tr>

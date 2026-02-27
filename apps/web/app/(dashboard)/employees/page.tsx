@@ -147,7 +147,7 @@ export default function EmployeesPage() {
     <div className="animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
         <div>
-          <h1 className="page-title">Employees</h1>
+          <h1 className="page-title">Team</h1>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
             Manage your workforce
           </p>
@@ -169,7 +169,7 @@ export default function EmployeesPage() {
             onClick={() => setShowForm(!showForm)}
             className="btn-secondary h-11 shrink-0"
           >
-            {showForm ? "Cancel" : "Add Employee"}
+            {showForm ? "Cancel" : "Add Team Member"}
           </button>
         </div>
       </div>
@@ -369,8 +369,8 @@ export default function EmployeesPage() {
 
       {employees.length === 0 && (
         <div className="card-wireframe text-center py-16">
-          <p className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">No employees yet</p>
-          <p className="text-xs mt-1 text-neutral-400 dark:text-neutral-500">Add your first employee to get started</p>
+          <p className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">No team members yet</p>
+          <p className="text-xs mt-1 text-neutral-400 dark:text-neutral-500">Add your first team member to get started</p>
         </div>
       )}
     </div>
@@ -516,7 +516,7 @@ function ManageGroupsSection({
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this group? Employees in this group will be unassigned.")) return;
+    if (!confirm("Delete this group? Team members in this group will be unassigned.")) return;
     try {
       const res = await authFetch(`/employee-groups/${id}`, token, { method: "DELETE" });
       if (res.ok) onRefresh();
@@ -637,7 +637,7 @@ function EmployeeForm({
     e.preventDefault();
     setError("");
     if (!employeeNumber.trim()) {
-      setError("Employee ID is required.");
+      setError("Team member ID is required.");
       return;
     }
     if (employeeType === "security" && !psiraNumber.trim()) {
@@ -649,7 +649,7 @@ function EmployeeForm({
       return;
     }
     if (!groupId) {
-      setError("Group is required for all employees.");
+      setError("Group is required for all team members.");
       return;
     }
     try {
@@ -722,7 +722,7 @@ function EmployeeForm({
       className="card-wireframe mb-6 p-6 max-h-[85vh] overflow-y-auto"
     >
       <div className="mb-4 pb-3 border-b border-neutral-200 dark:border-neutral-700 flex items-baseline justify-between gap-4">
-        <h3 className="text-base font-semibold text-neutral-900 dark:text-neutral-100 tracking-tight">New Employee</h3>
+        <h3 className="text-base font-semibold text-neutral-900 dark:text-neutral-100 tracking-tight">New Team Member</h3>
         <span className="text-[10px] uppercase tracking-widest text-neutral-500 dark:text-neutral-400">Add team member</span>
       </div>
       {error && (
@@ -785,7 +785,7 @@ function EmployeeForm({
           <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400 mb-2">Basic</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
-              placeholder="Employee ID *"
+              placeholder="Team Member ID *"
               value={employeeNumber}
               onChange={(e) => setEmployeeNumber(e.target.value)}
               className="input-compact"
@@ -966,7 +966,7 @@ function EmployeeForm({
 
       <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
         <button type="submit" className="btn-primary text-sm py-2">
-          Create Employee
+          Create Team Member
         </button>
       </div>
     </form>
@@ -1085,7 +1085,7 @@ function EditModal({
         setMentallyUnstable(emp.mentallyUnstable ?? "");
         setTrainingCompleted(emp.trainingCompleted ?? "");
       })
-      .catch(() => setError("Failed to load employee"))
+      .catch(() => setError("Failed to load team member"))
       .finally(() => setLoading(false));
   }, [employeeId, token]);
 
@@ -1101,7 +1101,7 @@ function EditModal({
       return;
     }
     if (!groupId) {
-      setError("Group is required for all employees.");
+      setError("Group is required for all team members.");
       return;
     }
     setSaving(true);
@@ -1163,7 +1163,7 @@ function EditModal({
       }
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update employee");
+      setError(err instanceof Error ? err.message : "Failed to update team member");
     } finally {
       setSaving(false);
     }
@@ -1173,7 +1173,7 @@ function EditModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="card-wireframe w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
         <div className="p-6 border-b border-neutral-200 dark:border-neutral-700 shrink-0 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Edit Employee</h3>
+          <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Edit Team Member</h3>
           <button
             type="button"
             onClick={onClose}
@@ -1248,12 +1248,12 @@ function EditModal({
               <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">Basic Information</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <input
-                  placeholder="Employee ID *"
+                  placeholder="Team Member ID *"
                   value={employeeNumber}
                   onChange={(e) => setEmployeeNumber(e.target.value)}
                   required
                   className="input-modern"
-                  title="Unique employee ID – must not match any other employee"
+                  title="Unique ID – must not match any other team member"
                 />
                 <input placeholder="First name *" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className="input-modern" />
                 <input placeholder="Last name *" value={lastName} onChange={(e) => setLastName(e.target.value)} required className="input-modern" />
@@ -1444,7 +1444,7 @@ function EditModal({
                     onSuccess();
                     onClose();
                   } catch (err) {
-                    setError(err instanceof Error ? err.message : "Failed to delete employee");
+                    setError(err instanceof Error ? err.message : "Failed to delete team member");
                   } finally {
                     setDeleting(false);
                   }
@@ -1505,7 +1505,7 @@ function StatusModal({
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
         <div className="card-wireframe w-full max-w-sm p-6 shadow-xl">
-          <p className="text-neutral-600 dark:text-neutral-400">No status transitions available for offboarded employees.</p>
+          <p className="text-neutral-600 dark:text-neutral-400">No status transitions available for offboarded team members.</p>
           <button onClick={onClose} className="mt-4 btn-primary w-full">Close</button>
         </div>
       </div>

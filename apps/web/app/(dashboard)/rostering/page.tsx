@@ -1138,7 +1138,7 @@ function ShiftForm({
           required
           className="input-modern"
         >
-          <option value="">Select employee</option>
+          <option value="">Select team member</option>
           {activeEmployees.map((e) => (
             <option key={e.id} value={e.id}>
               {e.firstName} {e.lastName}

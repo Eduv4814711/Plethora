@@ -241,15 +241,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     {user.role.replace(/_/g, " ")}
                   </p>
                 </div>
-                {canAccessSettings && (
-                  <Link
-                    href="/settings"
-                    onClick={() => setProfileOpen(false)}
-                    className="block px-4 py-2 text-sm text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100"
-                  >
-                    Settings
-                  </Link>
-                )}
                 <button
                   onClick={() => {
                     setProfileOpen(false);
