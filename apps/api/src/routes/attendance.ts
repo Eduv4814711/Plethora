@@ -9,6 +9,10 @@ import {
 } from "../services/attendance.service.js";
 import { AttendanceValidationError } from "../services/attendance.service.js";
 import { createAuditLog } from "../lib/audit.js";
+import {
+  extractTimesheetFromImage,
+  validateTimesheetImage,
+} from "../services/timesheet-ocr.service.js";
 
 const clockInSchema = z.object({
   shiftId: z.string().min(1),
@@ -401,6 +405,139 @@ export async function attendanceRoutes(app: FastifyInstance) {
     });
 
     return reply.code(201).send(attendance);
+  });
+
+  const timesheetImportSchema = z.object({
+    employeeId: z.string().min(1),
+    postId: z.string().min(1),
+    entries: z.array(
+      z.object({
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        clockIn: z.string(),
+        clockOut: z.string(),
+      })
+    ),
+  });
+
+  app.post("/timesheet/extract", { preHandler: protect }, async (request, reply) => {
+    const user = request.user!;
+    const data = await request.file({ limits: { fileSize: 5 * 1024 * 1024 } });
+
+    if (!data) {
+      return reply.code(400).send({
+        error: "No file",
+        message: "Please upload a timesheet image (PNG, JPEG, or TIFF)",
+      });
+    }
+
+    const buffer = await data.toBuffer();
+    const validation = validateTimesheetImage(data.mimetype, buffer.length);
+    if (!validation.ok) {
+      return reply.code(400).send({ error: "Invalid file", message: validation.error });
+    }
+
+    try {
+      const result = await extractTimesheetFromImage(buffer, user.companyId);
+      return reply.send(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return reply.code(400).send({ error: "Extraction failed", message: msg });
+    }
+  });
+
+  app.post("/timesheet/import", { preHandler: protect }, async (request, reply) => {
+    const parsed = timesheetImportSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const user = request.user!;
+    const companyId = user.companyId;
+    const { employeeId, postId, entries } = parsed.data;
+
+    const employee = await prisma.employee.findFirst({
+      where: { id: employeeId, companyId },
+    });
+    if (!employee) {
+      return reply.code(404).send({ error: "Employee not found" });
+    }
+
+    const post = await prisma.post.findFirst({
+      where: { id: postId, site: { companyId } },
+      include: { site: true },
+    });
+    if (!post) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "Invalid site or post. Select a valid post.",
+      });
+    }
+
+    const created: string[] = [];
+    const errors: { date: string; message: string }[] = [];
+
+    for (const entry of entries) {
+      const [hIn, mIn] = entry.clockIn.split(":").map(Number);
+      const [hOut, mOut] = entry.clockOut.split(":").map(Number);
+      const clockIn = new Date(`${entry.date}T${String(hIn).padStart(2, "0")}:${String(mIn ?? 0).padStart(2, "0")}:00`);
+      let clockOut: Date;
+      if (hOut < hIn || (hOut === hIn && (mOut ?? 0) < (mIn ?? 0))) {
+        const [y, m, d] = entry.date.split("-").map(Number);
+        const nextDay = new Date(y, m - 1, d + 1);
+        clockOut = new Date(nextDay.getFullYear(), nextDay.getMonth(), nextDay.getDate(), hOut ?? 0, mOut ?? 0, 0, 0);
+      } else {
+        clockOut = new Date(`${entry.date}T${String(hOut).padStart(2, "0")}:${String(mOut ?? 0).padStart(2, "0")}:00`);
+      }
+
+      if (clockOut <= clockIn) {
+        errors.push({ date: entry.date, message: "clockOut must be after clockIn" });
+        continue;
+      }
+
+      try {
+        const { hoursWorked, overtimeHours } = calculateHours(clockOut, clockIn, clockOut);
+        const shift = await prisma.shift.create({
+          data: {
+            companyId,
+            employeeId,
+            postId,
+            startTime: clockIn,
+            endTime: clockOut,
+            status: "completed",
+          },
+        });
+        const attendance = await prisma.attendance.create({
+          data: {
+            shiftId: shift.id,
+            clockIn,
+            clockOut,
+            hoursWorked,
+            overtimeHours,
+            status: "completed",
+          },
+        });
+        await prisma.$executeRaw`UPDATE "Attendance" SET source = 'manual' WHERE id = ${attendance.id}`;
+        created.push(attendance.id);
+        await createAuditLog({
+          userId: user.sub,
+          companyId,
+          action: "attendance.manual",
+          entityType: "attendance",
+          entityId: attendance.id,
+          metadata: { shiftId: shift.id, employeeId, source: "manual", fromTimesheetImport: true },
+        });
+      } catch (err) {
+        errors.push({
+          date: entry.date,
+          message: err instanceof Error ? err.message : "Failed to create",
+        });
+      }
+    }
+
+    return reply.send({ created: created.length, errors });
   });
 
   app.get("/:id", { preHandler: protect }, async (request, reply) => {

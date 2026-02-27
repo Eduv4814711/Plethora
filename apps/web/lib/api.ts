@@ -302,6 +302,87 @@ export interface SearchResults {
   sites: SearchSite[];
 }
 
+// Timesheet image extraction and import
+export interface TimesheetEntry {
+  date: string;
+  startTime: string;
+  endTime: string;
+  hoursWorked?: number;
+  isOvernight?: boolean;
+  needsReview?: boolean;
+}
+
+export interface ExtractedTimesheet {
+  employeeName?: string;
+  employeeNumber?: string;
+  siteName?: string;
+  identityNumber?: string;
+  periodStart?: string;
+  periodEnd?: string;
+  year?: string;
+  entries: TimesheetEntry[];
+  rawText?: string;
+}
+
+export interface MatchedEmployee {
+  id: string;
+  firstName: string;
+  lastName: string;
+  employeeNumber: string | null;
+}
+
+export interface MatchedSite {
+  id: string;
+  name: string;
+  posts: { id: string; name: string }[];
+}
+
+export interface TimesheetExtractResult {
+  extracted: ExtractedTimesheet;
+  matchedEmployee: MatchedEmployee | null;
+  matchedSite: MatchedSite | null;
+}
+
+export async function extractTimesheetFromImage(
+  token: string,
+  file: File
+): Promise<TimesheetExtractResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_BASE}/attendance/timesheet/extract`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || "Extraction failed");
+  }
+  return res.json();
+}
+
+export async function importTimesheetEntries(
+  token: string,
+  data: {
+    employeeId: string;
+    postId: string;
+    entries: { date: string; clockIn: string; clockOut: string }[];
+  }
+): Promise<{ created: number; errors: { date: string; message: string }[] }> {
+  const res = await authFetch("/attendance/timesheet/import", token, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || "Import failed");
+  }
+  return res.json();
+}
+
 export async function search(token: string, q: string): Promise<SearchResults> {
   const trimmed = q.trim();
   if (trimmed.length < 2) return { employees: [], sites: [] };
