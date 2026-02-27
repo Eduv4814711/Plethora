@@ -66,6 +66,66 @@
       border: 1px solid #111;
       margin-top: 5px;
     }
+    .payslip-header-table {
+      width: 100%;
+      margin-bottom: 8px;
+      border: 1px solid #111;
+    }
+    .payslip-header-table th,
+    .payslip-header-table td {
+      border: 1px solid #111;
+      padding: 4px 8px;
+      font-size: 10px;
+      vertical-align: middle;
+      color: #111;
+    }
+    .payslip-header-table th {
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      width: 38%;
+    }
+    .payslip-header-table td {
+      width: 62%;
+    }
+    .payslip-header-table .header-col {
+      width: 50%;
+      vertical-align: top;
+    }
+    .payslip-header-table .header-col:first-child {
+      border-right: 1px solid #111;
+    }
+    .payslip-header-table .section-label {
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 11px;
+      padding: 6px 8px;
+      background: #f5f5f5;
+      border-bottom: 1px solid #111;
+    }
+    .payslip-header-table .inner-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: transparent;
+    }
+    .payslip-header-table .inner-table th,
+    .payslip-header-table .inner-table td {
+      border: none;
+      border-bottom: 1px solid #ddd;
+      padding: 3px 8px;
+      font-size: 10px;
+      vertical-align: middle;
+      color: #111;
+    }
+    .payslip-header-table .inner-table th {
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      width: 40%;
+    }
+    .payslip-header-table .inner-table td {
+      width: 60%;
+    }
     .header-site { font-size: 11px; font-weight: 600; }
     .label-cell { font-weight: 600; width: 35%; }
     .value-cell { width: 65%; }
@@ -86,10 +146,10 @@
         padding: 0;
         page-break-inside: avoid;
       }
-      table, .section-heading, .nett-pay-box, .bank-section {
+      table, .section-heading, .nett-pay-box, .bank-section, .payslip-header-table {
         page-break-inside: avoid;
       }
-      th, td {
+      th, td, .payslip-header-table, .payslip-header-table th, .payslip-header-table td {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
@@ -98,92 +158,45 @@
 </head>
 <body>
   <div class="page">
-    <!-- SECTION 1 — HEADER -->
-    <table style="margin-bottom: 5px;">
+    <!-- TOP SECTION — COMPANY DETAILS (LEFT) | EMPLOYEE DETAILS (RIGHT) -->
+    <table class="payslip-header-table">
       <tr>
-        <th class="label-cell">Employer Name</th>
-        <td class="value-cell" id="employerName">-</td>
-        <th class="label-cell">Employee Name</th>
-        <td class="value-cell" id="employeeName">-</td>
-      </tr>
-      <tr>
-        <th class="label-cell">Date Engaged</th>
-        <td class="value-cell" id="dateEngaged">-</td>
-        <th class="label-cell">Employee Number</th>
-        <td class="value-cell" id="employeeNumber">-</td>
-      </tr>
-      <tr>
-        <th class="label-cell">Job Title</th>
-        <td class="value-cell" id="jobTitle">-</td>
-        <th class="label-cell">Pay Date</th>
-        <td class="value-cell" id="payDate">-</td>
-      </tr>
-      <tr>
-        <th class="label-cell" colspan="2">Site Name</th>
-        <td class="value-cell header-site" colspan="2" id="siteName">-</td>
+        <td class="header-col">
+          <div class="section-label">Company Details</div>
+          <table class="inner-table">
+            <tr><th>NAME</th><td id="companyName">-</td></tr>
+            <tr><th>ADDRESS</th><td id="companyAddress">-</td></tr>
+            <tr><th>Company Registration</th><td id="companyRegistration">-</td></tr>
+            <tr><th>PSIRA Registration</th><td id="psiraRegistration">-</td></tr>
+            <tr><th>TAX Number</th><td id="taxNumber">-</td></tr>
+            <tr><th>UIF Reference</th><td id="uifReference">-</td></tr>
+            <tr><th>Telephone</th><td id="telephone">-</td></tr>
+            <tr><th>Email</th><td id="email">-</td></tr>
+          </table>
+        </td>
+        <td class="header-col">
+          <div class="section-label">Employee Details</div>
+          <table class="inner-table">
+            <tr><th>Employee ID</th><td id="employeeNumber">-</td></tr>
+            <tr><th>Name</th><td id="employeeName">-</td></tr>
+            <tr><th>PSIRA Number</th><td id="psiraNumber">-</td></tr>
+            <tr><th>Job Title</th><td id="jobTitle">-</td></tr>
+            <tr><th>Identity Number</th><td id="identityNumber">-</td></tr>
+            <tr><th>Date Engaged</th><td id="dateEngaged">-</td></tr>
+            <tr><th>DOB</th><td id="dateOfBirth">-</td></tr>
+            <tr><th>JOB GRADE</th><td id="jobGrade">-</td></tr>
+            <tr><th>MARITAL STATUS</th><td id="maritalStatus">-</td></tr>
+            <tr><th>Gender</th><td id="gender">-</td></tr>
+          </table>
+        </td>
       </tr>
     </table>
 
-    <!-- SECTION 2 — COMPANY DETAILS -->
-    <div class="section-heading">Company Details</div>
-    <div class="two-col">
-      <div>
-        <table>
-          <tr><th class="label-cell">Company Name</th><td class="value-cell" id="companyName">-</td></tr>
-          <tr><th class="label-cell">Address</th><td class="value-cell" id="companyAddress">-</td></tr>
-        </table>
-      </div>
-      <div>
-        <table>
-          <tr><th class="label-cell">PSIRA Registration</th><td class="value-cell" id="psiraRegistration">-</td></tr>
-          <tr><th class="label-cell">Company Registration</th><td class="value-cell" id="companyRegistration">-</td></tr>
-          <tr><th class="label-cell">Tax Number</th><td class="value-cell" id="taxNumber">-</td></tr>
-          <tr><th class="label-cell">UIF Reference</th><td class="value-cell" id="uifReference">-</td></tr>
-          <tr><th class="label-cell">Telephone</th><td class="value-cell" id="telephone">-</td></tr>
-          <tr><th class="label-cell">Fax</th><td class="value-cell" id="fax">-</td></tr>
-          <tr><th class="label-cell">Email</th><td class="value-cell" id="email">-</td></tr>
-        </table>
-      </div>
-    </div>
-
-    <!-- SECTION 3 — EMPLOYEE DETAILS -->
-    <div class="section-heading">Employee Details</div>
+    <!-- Site name (if applicable) -->
     <table style="margin-bottom: 5px;">
       <tr>
-        <th class="label-cell">Employer Name</th>
-        <td class="value-cell" id="empEmployerName">-</td>
-        <th class="label-cell">PSIRA Number</th>
-        <td class="value-cell" id="empPsiraNumber">-</td>
-      </tr>
-      <tr>
-        <th class="label-cell">Employee Name</th>
-        <td class="value-cell" id="empEmployeeName">-</td>
-        <th class="label-cell">Date Engaged</th>
-        <td class="value-cell" id="empDateEngaged">-</td>
-      </tr>
-      <tr>
-        <th class="label-cell">Employee Number</th>
-        <td class="value-cell" id="empEmployeeNumber">-</td>
-        <th class="label-cell">Job Title</th>
-        <td class="value-cell" id="empJobTitle">-</td>
-      </tr>
-      <tr>
-        <th class="label-cell">Pay Date</th>
-        <td class="value-cell" id="empPayDate">-</td>
-        <th class="label-cell">Identity Number</th>
-        <td class="value-cell" id="identityNumber">-</td>
-      </tr>
-      <tr>
-        <th class="label-cell">Date of Birth</th>
-        <td class="value-cell" id="dateOfBirth">-</td>
-        <th class="label-cell">Marital Status</th>
-        <td class="value-cell" id="maritalStatus">-</td>
-      </tr>
-      <tr>
-        <th class="label-cell">Gender</th>
-        <td class="value-cell" id="gender">-</td>
-        <th class="label-cell">Job Grade</th>
-        <td class="value-cell" id="jobGrade">-</td>
+        <th class="label-cell">Site Name</th>
+        <td class="value-cell header-site" id="siteName">-</td>
       </tr>
     </table>
 
@@ -278,36 +291,27 @@
       const fmt = (n) => (n == null || n === '' ? '-' : n);
       const curr = (n) => (typeof n === 'number' ? n.toFixed(2) : (n != null ? String(n) : '0.00'));
 
-      document.getElementById('employerName').textContent = fmt(data.employerName);
-      document.getElementById('employeeName').textContent = fmt(data.employeeName);
-      document.getElementById('dateEngaged').textContent = fmt(data.dateEngaged);
-      document.getElementById('employeeNumber').textContent = fmt(data.employeeNumber);
-      document.getElementById('jobTitle').textContent = fmt(data.jobTitle);
-      document.getElementById('payDate').textContent = fmt(data.payDate);
-      document.getElementById('siteName').textContent = fmt(data.siteName);
-
       document.getElementById('companyName').textContent = fmt(data.companyName);
       document.getElementById('companyAddress').textContent = fmt(data.companyAddress);
-      document.getElementById('psiraRegistration').textContent = fmt(data.psiraRegistration);
       document.getElementById('companyRegistration').textContent = fmt(data.companyRegistration);
+      document.getElementById('psiraRegistration').textContent = fmt(data.psiraRegistration);
       document.getElementById('taxNumber').textContent = fmt(data.taxNumber);
       document.getElementById('uifReference').textContent = fmt(data.uifReference);
       document.getElementById('telephone').textContent = fmt(data.telephone);
-      document.getElementById('fax').textContent = fmt(data.fax);
       document.getElementById('email').textContent = fmt(data.email);
 
-      document.getElementById('empEmployerName').textContent = fmt(data.employerName);
-      document.getElementById('empPsiraNumber').textContent = fmt(data.psiraNumber);
-      document.getElementById('empEmployeeName').textContent = fmt(data.employeeName);
-      document.getElementById('empDateEngaged').textContent = fmt(data.dateEngaged);
-      document.getElementById('empEmployeeNumber').textContent = fmt(data.employeeNumber);
-      document.getElementById('empJobTitle').textContent = fmt(data.jobTitle);
-      document.getElementById('empPayDate').textContent = fmt(data.payDate);
+      document.getElementById('employeeNumber').textContent = fmt(data.employeeNumber);
+      document.getElementById('employeeName').textContent = fmt(data.employeeName);
+      document.getElementById('psiraNumber').textContent = fmt(data.psiraNumber);
+      document.getElementById('jobTitle').textContent = fmt(data.jobTitle);
       document.getElementById('identityNumber').textContent = fmt(data.identityNumber);
+      document.getElementById('dateEngaged').textContent = fmt(data.dateEngaged);
       document.getElementById('dateOfBirth').textContent = fmt(data.dateOfBirth);
+      document.getElementById('jobGrade').textContent = fmt(data.jobGrade);
       document.getElementById('maritalStatus').textContent = fmt(data.maritalStatus);
       document.getElementById('gender').textContent = fmt(data.gender);
-      document.getElementById('jobGrade').textContent = fmt(data.jobGrade);
+
+      document.getElementById('siteName').textContent = fmt(data.siteName);
 
       const earnings = data.earnings || [];
       const deductions = data.deductions || [];
