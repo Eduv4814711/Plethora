@@ -453,29 +453,116 @@ export default function AttendancePage() {
           />
           <div className="card-wireframe mb-6 p-4">
             <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
-              Recorder manual entries
+              Recorded manual entries
             </h3>
             <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
-              Attendance records added manually (not from clock-in/clock-out).
+              Attendance records added manually (not from clock-in/clock-out). Click a guard to expand and view their shifts.
             </p>
             {manualEntries.length > 0 ? (
-              <div className="space-y-2">
-                {manualEntries.map((att) => (
-                  <AttendanceRow
-                    key={att.id}
-                    att={att}
-                    token={token!}
-                    onSuccess={refresh}
-                    showClockOut={false}
-                    isManualEntry
-                  />
-                ))}
-              </div>
+              <ManualEntriesByGuard
+                manualEntries={manualEntries}
+                token={token!}
+                onSuccess={refresh}
+              />
             ) : (
               <p className="text-neutral-500 text-sm py-2">No manual entries yet. Add one above.</p>
             )}
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+function ManualEntriesByGuard({
+  manualEntries,
+  token,
+  onSuccess,
+}: {
+  manualEntries: Attendance[];
+  token: string;
+  onSuccess: () => void;
+}) {
+  const groupedByGuard = useMemo(() => {
+    const map = new Map<string, Attendance[]>();
+    for (const att of manualEntries) {
+      const empId = att.shift?.employee?.id ?? "unknown";
+      if (!map.has(empId)) map.set(empId, []);
+      map.get(empId)!.push(att);
+    }
+    return Array.from(map.entries()).map(([empId, entries]) => ({
+      employeeId: empId,
+      employeeName: `${entries[0].shift.employee.firstName} ${entries[0].shift.employee.lastName}`,
+      entries: entries.sort(
+        (a, b) => new Date(a.shift.startTime).getTime() - new Date(b.shift.startTime).getTime()
+      ),
+    }));
+  }, [manualEntries]);
+
+  return (
+    <div className="space-y-2">
+      {groupedByGuard.map((group) => (
+        <ManualEntriesGuardGroup
+          key={group.employeeId}
+          group={group}
+          token={token}
+          onSuccess={onSuccess}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ManualEntriesGuardGroup({
+  group,
+  token,
+  onSuccess,
+}: {
+  group: { employeeId: string; employeeName: string; entries: Attendance[] };
+  token: string;
+  onSuccess: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="card-wireframe overflow-hidden">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setExpanded((e) => !e)}
+        onKeyDown={(e) => e.key === "Enter" && setExpanded((ex) => !ex)}
+        className="p-4 flex items-center justify-between cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <svg
+            className={`w-4 h-4 text-neutral-500 transition-transform ${expanded ? "rotate-90" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+          <span className="font-medium">{group.employeeName}</span>
+          <span className="text-sm text-neutral-500 dark:text-neutral-400">
+            ({group.entries.length} shift{group.entries.length !== 1 ? "s" : ""})
+          </span>
+        </div>
+      </div>
+      {expanded && (
+        <div className="border-t border-neutral-200 dark:border-neutral-700">
+          <div className="p-3 space-y-2 bg-neutral-50/50 dark:bg-neutral-900/30">
+            {group.entries.map((att) => (
+              <AttendanceRow
+                key={att.id}
+                att={att}
+                token={token}
+                onSuccess={onSuccess}
+                showClockOut={false}
+                isManualEntry
+              />
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
