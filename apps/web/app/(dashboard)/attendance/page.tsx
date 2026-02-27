@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from "date-fns";
@@ -85,6 +85,8 @@ export default function AttendancePage() {
   const [replacingLoading, setReplacingLoading] = useState(false);
   const [replaceError, setReplaceError] = useState("");
   const [activeTab, setActiveTab] = useState<"clock" | "manual">("clock");
+  const [preselectedEmployeeId, setPreselectedEmployeeId] = useState<string>("");
+  const manualFormRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback((): Promise<unknown> | void => {
     if (!token) return;
@@ -445,24 +447,32 @@ export default function AttendancePage() {
 
       {activeTab === "manual" && (
         <>
-          <ManualEntryForm
-            employees={employees}
-            sites={sites as SiteWithPosts[]}
-            token={token!}
-            onSuccess={refresh}
-          />
+          <div ref={manualFormRef}>
+            <ManualEntryForm
+              employees={employees}
+              sites={sites as SiteWithPosts[]}
+              token={token!}
+              onSuccess={refresh}
+              preselectedEmployeeId={preselectedEmployeeId}
+              onPreselectHandled={() => setPreselectedEmployeeId("")}
+            />
+          </div>
           <div className="card-wireframe mb-6 p-4">
             <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
               Recorded manual entries
             </h3>
             <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
-              Attendance records added manually (not from clock-in/clock-out). Click a guard to expand and view their shifts.
+              Attendance records added manually (not from clock-in/clock-out). Click a guard to expand and view their shifts. Click &quot;Add another&quot; to quickly add another entry for that guard.
             </p>
             {manualEntries.length > 0 ? (
               <ManualEntriesByGuard
                 manualEntries={manualEntries}
                 token={token!}
                 onSuccess={refresh}
+                onAddAnother={(employeeId) => {
+                  setPreselectedEmployeeId(employeeId);
+                  manualFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
               />
             ) : (
               <p className="text-neutral-500 text-sm py-2">No manual entries yet. Add one above.</p>
@@ -478,10 +488,12 @@ function ManualEntriesByGuard({
   manualEntries,
   token,
   onSuccess,
+  onAddAnother,
 }: {
   manualEntries: Attendance[];
   token: string;
   onSuccess: () => void;
+  onAddAnother: (employeeId: string) => void;
 }) {
   const groupedByGuard = useMemo(() => {
     const map = new Map<string, Attendance[]>();
@@ -507,6 +519,7 @@ function ManualEntriesByGuard({
           group={group}
           token={token}
           onSuccess={onSuccess}
+          onAddAnother={onAddAnother}
         />
       ))}
     </div>
@@ -517,10 +530,12 @@ function ManualEntriesGuardGroup({
   group,
   token,
   onSuccess,
+  onAddAnother,
 }: {
   group: { employeeId: string; employeeName: string; entries: Attendance[] };
   token: string;
   onSuccess: () => void;
+  onAddAnother: (employeeId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -533,20 +548,39 @@ function ManualEntriesGuardGroup({
         onKeyDown={(e) => e.key === "Enter" && setExpanded((ex) => !ex)}
         className="p-4 flex items-center justify-between cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors"
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
           <svg
-            className={`w-4 h-4 text-neutral-500 transition-transform ${expanded ? "rotate-90" : ""}`}
+            className={`w-4 h-4 text-neutral-500 transition-transform shrink-0 ${expanded ? "rotate-90" : ""}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
-          <span className="font-medium">{group.employeeName}</span>
-          <span className="text-sm text-neutral-500 dark:text-neutral-400">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAddAnother(group.employeeId);
+            }}
+            className="font-medium text-left hover:underline underline-offset-2 text-neutral-900 dark:text-neutral-100"
+          >
+            {group.employeeName}
+          </button>
+          <span className="text-sm text-neutral-500 dark:text-neutral-400 shrink-0">
             ({group.entries.length} shift{group.entries.length !== 1 ? "s" : ""})
           </span>
         </div>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onAddAnother(group.employeeId);
+          }}
+          className="text-sm font-medium text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 underline underline-offset-2 shrink-0"
+        >
+          Add another
+        </button>
       </div>
       {expanded && (
         <div className="border-t border-neutral-200 dark:border-neutral-700">
@@ -573,11 +607,15 @@ function ManualEntryForm({
   sites,
   token,
   onSuccess,
+  preselectedEmployeeId,
+  onPreselectHandled,
 }: {
   employees: EmployeeOption[];
   sites: SiteWithPosts[];
   token: string;
   onSuccess: () => void;
+  preselectedEmployeeId?: string;
+  onPreselectHandled?: () => void;
 }) {
   const [employeeId, setEmployeeId] = useState("");
   const [siteId, setSiteId] = useState("");
@@ -585,6 +623,13 @@ function ManualEntryForm({
   const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (preselectedEmployeeId && employees.some((e) => e.id === preselectedEmployeeId)) {
+      setEmployeeId(preselectedEmployeeId);
+      onPreselectHandled?.();
+    }
+  }, [preselectedEmployeeId, employees, onPreselectHandled]);
 
   const selectedSite = sites.find((s) => s.id === siteId);
   const posts = selectedSite?.posts ?? [];
