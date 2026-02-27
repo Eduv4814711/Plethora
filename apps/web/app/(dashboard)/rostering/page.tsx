@@ -552,7 +552,7 @@ export default function RosteringPage() {
               {isDualPattern ? (
                 <div>
                   <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">
-                    Drag a guard onto the site. Pattern applies from {format(parseISO(periodStart), "d MMM")} to {format(parseISO(periodEnd), "d MMM yyyy")}.
+                    Drag a guard onto the site. Pattern fills the chosen range: {format(parseISO(periodStart), "d MMM")} to {format(parseISO(periodEnd), "d MMM yyyy")}.
                   </p>
                   <div
                     onDragOver={(e) => {
@@ -582,7 +582,7 @@ export default function RosteringPage() {
               ) : (
                 <div>
                   <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">
-                    Drag a guard onto a post. Pattern applies from {format(parseISO(periodStart), "d MMM")} to {format(parseISO(periodEnd), "d MMM yyyy")}.
+                    Drag a guard onto a post. Pattern fills the chosen range: {format(parseISO(periodStart), "d MMM")} to {format(parseISO(periodEnd), "d MMM yyyy")}.
                   </p>
                   <div className="space-y-2">
                     {postsForSelectedSite.map((post) => (

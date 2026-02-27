@@ -66,7 +66,7 @@ export function CustomPatternBuilder({ blocks, onChange, periodStart, periodEnd 
     <div className="mt-2 space-y-3">
       {periodStart && periodEnd && (
         <p className="text-[11px] text-neutral-500 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-800/50 rounded px-2 py-1.5 border border-neutral-200 dark:border-neutral-700">
-          Pattern starts from <strong>{format(parseISO(periodStart), "d MMM yyyy")}</strong> and repeats across the roster period. Order of blocks below = order in calendar.
+          Pattern runs from <strong>{format(parseISO(periodStart), "d MMM yyyy")}</strong> to <strong>{format(parseISO(periodEnd), "d MMM yyyy")}</strong> — the full chosen date range. First block applies to the start date, then repeats to the end.
         </p>
       )}
       <div className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">Blocks (order matters)</div>
