@@ -108,6 +108,108 @@ export async function attendanceRoutes(app: FastifyInstance) {
     return reply.send({ data: missedShifts, total, limit, offset });
   });
 
+  const recordMissedShiftSchema = z.object({
+    clockIn: z.string().datetime().optional(),
+    clockOut: z.string().datetime().optional(),
+  });
+
+  app.post("/missed/:shiftId/record", { preHandler: protect }, async (request, reply) => {
+    const { shiftId } = request.params as { shiftId: string };
+    const parsed = recordMissedShiftSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const user = request.user!;
+    const companyId = user.companyId;
+
+    const shift = await prisma.shift.findFirst({
+      where: { id: shiftId, companyId },
+    });
+
+    if (!shift) {
+      return reply.code(404).send({ error: "Shift not found" });
+    }
+
+    if (shift.status !== "assigned" && shift.status !== "created") {
+      return reply.code(400).send({
+        error: "Invalid shift",
+        message: "Only assigned or created shifts can be recorded as missed.",
+      });
+    }
+
+    const existingAttendance = await prisma.attendance.findFirst({
+      where: { shiftId, clockIn: { not: null } },
+    });
+
+    if (existingAttendance) {
+      return reply.code(400).send({
+        error: "Already recorded",
+        message: "This shift already has attendance recorded.",
+      });
+    }
+
+    const clockIn = parsed.data.clockIn
+      ? new Date(parsed.data.clockIn)
+      : new Date(shift.startTime);
+    const clockOut = parsed.data.clockOut
+      ? new Date(parsed.data.clockOut)
+      : new Date(shift.endTime);
+
+    if (clockOut <= clockIn) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "clockOut must be after clockIn",
+      });
+    }
+
+    const { hoursWorked, overtimeHours } = calculateHours(
+      clockOut,
+      clockIn,
+      shift.endTime
+    );
+
+    const attendance = await prisma.attendance.create({
+      data: {
+        shiftId,
+        clockIn,
+        clockOut,
+        hoursWorked,
+        overtimeHours,
+        status: "completed",
+      },
+      include: {
+        shift: {
+          include: {
+            employee: { select: { id: true, firstName: true, lastName: true } },
+            post: { include: { site: true } },
+          },
+        },
+      },
+    });
+
+    await prisma.shift.update({
+      where: { id: shiftId },
+      data: { status: "completed" },
+    });
+
+    await prisma.$executeRaw`UPDATE "Attendance" SET source = 'manual' WHERE id = ${attendance.id}`;
+
+    await createAuditLog({
+      userId: user.sub,
+      companyId,
+      action: "attendance.manual",
+      entityType: "attendance",
+      entityId: attendance.id,
+      metadata: { shiftId, source: "missed_shift_record" },
+    });
+
+    return reply.code(201).send(attendance);
+  });
+
   app.post("/clock-in", { preHandler: protect }, async (request, reply) => {
     const parsed = clockInSchema.safeParse(request.body);
     if (!parsed.success) {

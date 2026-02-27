@@ -84,6 +84,8 @@ export default function AttendancePage() {
   const [availableRelievers, setAvailableRelievers] = useState<{ id: string; firstName: string; lastName: string }[]>([]);
   const [replacingLoading, setReplacingLoading] = useState(false);
   const [replaceError, setReplaceError] = useState("");
+  const [recordingShiftId, setRecordingShiftId] = useState<string | null>(null);
+  const [recordError, setRecordError] = useState("");
   const [activeTab, setActiveTab] = useState<"clock" | "manual">("clock");
   const [preselectedEmployeeId, setPreselectedEmployeeId] = useState<string>("");
   const manualFormRef = useRef<HTMLDivElement>(null);
@@ -403,6 +405,14 @@ export default function AttendancePage() {
             <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
               Missed shifts (no clock-in)
             </h3>
+            <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
+              Record attendance for shifts that were worked but not clocked in. Uses shift start/end times by default.
+            </p>
+            {recordError && (
+              <div className="mb-3 p-2 rounded bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm">
+                {recordError}
+              </div>
+            )}
             {missedShifts.length > 0 ? (
               <div className="space-y-2">
                 {missedShifts.map((s) => (
@@ -417,6 +427,31 @@ export default function AttendancePage() {
                       <span className="text-sm text-neutral-600 dark:text-neutral-400">
                         {format(new Date(s.startTime), "dd MMM HH:mm")} - {format(new Date(s.endTime), "dd MMM HH:mm")}
                       </span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setRecordError("");
+                          setRecordingShiftId(s.id);
+                          try {
+                            const res = await authFetch(`/attendance/missed/${s.id}/record`, token!, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({}),
+                            });
+                            const data = await res.json();
+                            if (!res.ok) throw new Error(data.message || data.error || "Failed to record");
+                            refresh();
+                          } catch (err) {
+                            setRecordError(err instanceof Error ? err.message : "Failed to record attendance");
+                          } finally {
+                            setRecordingShiftId(null);
+                          }
+                        }}
+                        disabled={recordingShiftId !== null}
+                        className="btn-primary text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {recordingShiftId === s.id ? "Recording…" : "Record attendance"}
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
