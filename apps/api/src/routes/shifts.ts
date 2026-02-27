@@ -123,7 +123,48 @@ async function handleBulkCreateSite(
     });
   }
 
+  // #region agent log
+  if (pattern === "custom_builder") {
+    await fetch("http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "04b8f7" },
+      body: JSON.stringify({
+        sessionId: "04b8f7",
+        location: "shifts.ts:handleBulkCreateSite",
+        message: "API received custom_builder",
+        data: {
+          hypothesisId: "H2",
+          customBlocks: customBlocks ? JSON.parse(JSON.stringify(customBlocks)) : null,
+          start: start.toISOString(),
+          end: end.toISOString(),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
+
   const dualDates = computeDatesFromPatternDual(start, end, pattern, customBlocks);
+
+  // #region agent log
+  if (pattern === "custom_builder") {
+    await fetch("http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "04b8f7" },
+      body: JSON.stringify({
+        sessionId: "04b8f7",
+        location: "shifts.ts:handleBulkCreateSite",
+        message: "API dualDates computed",
+        data: {
+          hypothesisId: "H3",
+          dualDatesCount: dualDates.length,
+          dualDatesSample: dualDates.slice(0, 15).map((x) => ({ date: x.date.toISOString().slice(0, 10), shiftType: x.shiftType })),
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
 
   if (pattern === "custom_builder" && dualDates.length === 0) {
     return reply.code(400).send({
@@ -193,6 +234,27 @@ async function handleBulkCreateSite(
       metadata: { employeeId, siteId, created, pattern },
     });
   }
+
+  // #region agent log
+  if (pattern === "custom_builder") {
+    await fetch("http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "04b8f7" },
+      body: JSON.stringify({
+        sessionId: "04b8f7",
+        location: "shifts.ts:handleBulkCreateSite",
+        message: "API bulk create result",
+        data: {
+          hypothesisId: "H4",
+          created,
+          skipped: dualDates.length - created,
+          errors: errors,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
 
   return reply.code(201).send({
     deleted: deleted.count,

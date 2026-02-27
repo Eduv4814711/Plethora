@@ -398,6 +398,27 @@ export default function RosteringPage() {
       pattern,
     };
     if (pattern === "custom_builder") body.customBlocks = customBlocks;
+    // #region agent log
+    if (pattern === "custom_builder") {
+      fetch("http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "04b8f7" },
+        body: JSON.stringify({
+          sessionId: "04b8f7",
+          location: "rostering/page.tsx:handleBulkDropOnSite",
+          message: "Frontend bulk drop custom_builder",
+          data: {
+            hypothesisId: "H1",
+            customBlocks: JSON.parse(JSON.stringify(customBlocks)),
+            pattern,
+            startDate: startDate.slice(0, 10),
+            endDate: endDate.slice(0, 10),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+    }
+    // #endregion
     try {
       const res = await authFetch("/shifts/bulk", token, {
         method: "POST",
