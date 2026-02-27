@@ -124,7 +124,7 @@ export default function RosteringPage() {
     if (!token) return;
     const emp = rosteredEmployees.find((e) => e.id === employeeId);
     const name = emp ? `${emp.firstName} ${emp.lastName}` : "this person";
-    if (!confirm(`Reset all rostered shifts for ${name} in this month only?`)) return;
+    if (!confirm(`Reset all rostered shifts for ${name} in this period only?`)) return;
     setShowResetMenu(false);
     setResetting(true);
     setBulkError(null);
@@ -156,7 +156,7 @@ export default function RosteringPage() {
 
   const handleResetAll = async () => {
     if (!token) return;
-    if (!confirm("Reset the entire roster for this month only? This will remove all created/assigned shifts in the visible month.")) return;
+    if (!confirm("Reset the entire roster for this period only? This will remove all created/assigned shifts in the visible period.")) return;
     setShowResetMenu(false);
     setResetting(true);
     setBulkError(null);
@@ -398,27 +398,6 @@ export default function RosteringPage() {
       pattern,
     };
     if (pattern === "custom_builder") body.customBlocks = customBlocks;
-    // #region agent log
-    if (pattern === "custom_builder") {
-      fetch("http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "04b8f7" },
-        body: JSON.stringify({
-          sessionId: "04b8f7",
-          location: "rostering/page.tsx:handleBulkDropOnSite",
-          message: "Frontend bulk drop custom_builder",
-          data: {
-            hypothesisId: "H1",
-            customBlocks: JSON.parse(JSON.stringify(customBlocks)),
-            pattern,
-            startDate: startDate.slice(0, 10),
-            endDate: endDate.slice(0, 10),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-    }
-    // #endregion
     try {
       const res = await authFetch("/shifts/bulk", token, {
         method: "POST",
@@ -482,70 +461,99 @@ export default function RosteringPage() {
 
   return (
     <div className="flex h-[calc(100vh-8rem)] min-h-[500px] w-full">
-      <aside className="w-64 shrink-0 card-wireframe flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-neutral-200 dark:border-neutral-700 shrink-0">
-          <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-3">
-            Rostering for <span className="font-semibold text-neutral-800 dark:text-neutral-200">{periodLabel || "—"}</span>
-          </p>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-3">
-            Drag guard to post
-          </h3>
-          <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">Site</label>
-          <select
-            value={selectedSiteId}
-            onChange={(e) => setSelectedSiteId(e.target.value)}
-            className="input-modern py-2 text-sm w-full mb-3"
-          >
-            <option value="">Select site</option>
-            {sites.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-          <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">Pattern</label>
-          <select
-            value={pattern}
-            onChange={(e) => setPattern(e.target.value as BulkPattern)}
-            className="input-modern py-2 text-sm w-full"
-          >
-            {(Object.keys(PATTERN_LABELS) as BulkPattern[]).map((p) => (
-              <option key={p} value={p}>
-                {PATTERN_LABELS[p]}
-              </option>
-            ))}
-          </select>
-          {pattern === "custom" && (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, i) => (
-                <label key={day} className="flex items-center gap-1 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={customDays.includes(i)}
-                    onChange={(e) =>
-                      setCustomDays((prev) =>
-                        e.target.checked ? [...prev, i] : prev.filter((d) => d !== i)
-                      )
-                    }
-                    className="rounded"
-                  />
-                  {day}
-                </label>
+      <aside className="w-72 shrink-0 card-wireframe flex flex-col overflow-hidden border-r border-neutral-200 dark:border-neutral-700">
+        <div className="p-4 border-b border-neutral-200 dark:border-neutral-700 shrink-0 space-y-4">
+          <div>
+            <h2 className="text-sm font-bold text-neutral-800 dark:text-neutral-100 uppercase tracking-wider mb-1">
+              Roster period
+            </h2>
+            <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-200">
+              {periodLabel || "—"}
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowPeriodModal(true)}
+              className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 underline"
+            >
+              Change period
+            </button>
+          </div>
+
+          <div className="border-t border-neutral-200 dark:border-neutral-700 pt-4">
+            <h3 className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider mb-2">
+              Step 1: Site
+            </h3>
+            <select
+              value={selectedSiteId}
+              onChange={(e) => setSelectedSiteId(e.target.value)}
+              className="input-modern py-2.5 text-sm w-full"
+            >
+              <option value="">Select site</option>
+              {sites.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
               ))}
-            </div>
-          )}
-          {pattern === "custom_builder" && (
-            <CustomPatternBuilder blocks={customBlocks} onChange={setCustomBlocks} />
-          )}
+            </select>
+          </div>
+
+          <div className="border-t border-neutral-200 dark:border-neutral-700 pt-4">
+            <h3 className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider mb-2">
+              Step 2: Pattern
+            </h3>
+            <select
+              value={pattern}
+              onChange={(e) => setPattern(e.target.value as BulkPattern)}
+              className="input-modern py-2.5 text-sm w-full"
+            >
+              {(Object.keys(PATTERN_LABELS) as BulkPattern[]).map((p) => (
+                <option key={p} value={p}>
+                  {PATTERN_LABELS[p]}
+                </option>
+              ))}
+            </select>
+            {pattern === "custom" && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, i) => (
+                  <label key={day} className="flex items-center gap-1 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={customDays.includes(i)}
+                      onChange={(e) =>
+                        setCustomDays((prev) =>
+                          e.target.checked ? [...prev, i] : prev.filter((d) => d !== i)
+                        )
+                      }
+                      className="rounded"
+                    />
+                    {day}
+                  </label>
+                ))}
+              </div>
+            )}
+            {pattern === "custom_builder" && (
+              <CustomPatternBuilder
+                blocks={customBlocks}
+                onChange={setCustomBlocks}
+                periodStart={periodStart}
+                periodEnd={periodEnd}
+              />
+            )}
+          </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {selectedSiteId && (
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 border-t border-neutral-200 dark:border-neutral-700">
+          {selectedSiteId ? (
             <>
+              <div>
+                <h3 className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider mb-2">
+                  Step 3: Assign guard
+                </h3>
+              </div>
               {isDualPattern ? (
                 <div>
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
-                    Drop guard on site
-                  </h4>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">
+                    Drag a guard onto the site. Pattern applies from {format(parseISO(periodStart), "d MMM")} to {format(parseISO(periodEnd), "d MMM yyyy")}.
+                  </p>
                   <div
                     onDragOver={(e) => {
                       e.preventDefault();
@@ -573,9 +581,9 @@ export default function RosteringPage() {
                 </div>
               ) : (
                 <div>
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
-                    Posts (drop zone)
-                  </h4>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">
+                    Drag a guard onto a post. Pattern applies from {format(parseISO(periodStart), "d MMM")} to {format(parseISO(periodEnd), "d MMM yyyy")}.
+                  </p>
                   <div className="space-y-2">
                     {postsForSelectedSite.map((post) => (
                       <div
@@ -635,6 +643,12 @@ export default function RosteringPage() {
                 </div>
               </div>
             </>
+          ) : (
+            <div className="py-8 text-center">
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                Select a site in Step 1 to assign guards.
+              </p>
+            </div>
           )}
         </div>
         {bulkError && (
@@ -645,20 +659,20 @@ export default function RosteringPage() {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-      <div className="shrink-0 p-6 pb-4">
+      <div className="shrink-0 px-6 py-4 border-b border-neutral-200 dark:border-neutral-700 bg-neutral-50/30 dark:bg-neutral-900/30">
         <div className="flex justify-between items-center flex-wrap gap-3">
-          <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold text-neutral-800 dark:text-neutral-100">Rostering</h1>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">Roster period:</span>
+          <div className="flex items-center gap-6">
+            <h1 className="text-xl font-bold text-neutral-800 dark:text-neutral-100">Rostering</h1>
+            <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-900">
+              <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Period</span>
               <button
                 type="button"
                 onClick={() => setShowPeriodModal(true)}
-                className="h-11 px-4 py-2 text-left text-base font-semibold text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-600 rounded-md hover:bg-neutral-200 dark:hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-neutral-400 flex items-center gap-2"
+                className="font-semibold text-neutral-800 dark:text-neutral-200 hover:text-neutral-600 dark:hover:text-neutral-300 flex items-center gap-1.5"
                 title="Choose time period to roster"
               >
-                <span className="text-neutral-800 dark:text-neutral-200">{periodLabel || "Select period"}</span>
-                <svg className="w-4 h-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {periodLabel || "Select period"}
+                <svg className="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
               </button>
@@ -995,7 +1009,7 @@ export default function RosteringPage() {
       </div>
 
       <div className="flex-1 min-h-0 px-6 pb-6 flex flex-col overflow-hidden">
-        <div className="flex-1 min-h-0 rounded-lg card-wireframe relative overflow-y-auto overflow-x-hidden">
+        <div className="flex-1 min-h-0 rounded-lg card-wireframe border border-neutral-200 dark:border-neutral-700 relative overflow-y-auto overflow-x-hidden">
           <div className="grid min-h-full w-full" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((wd, i) => (
               <div

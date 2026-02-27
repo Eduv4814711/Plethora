@@ -143,26 +143,7 @@ export function computeDatesFromPatternDual(
   if (pattern === "custom_builder" && customBlocks && customBlocks.length > 0) {
     const hasWork = customBlocks.some((b) => b.type === "day" || b.type === "night");
     if (!hasWork) return result;
-    const blocksResult = iterateBlocks(d, end, customBlocks);
-    result.push(...blocksResult);
-    // #region agent log
-    fetch("http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "04b8f7" },
-      body: JSON.stringify({
-        sessionId: "04b8f7",
-        location: "rostering.service.ts:computeDatesFromPatternDual",
-        message: "iterateBlocks result",
-        data: {
-          hypothesisId: "H3",
-          customBlocks: JSON.parse(JSON.stringify(customBlocks)),
-          resultCount: blocksResult.length,
-          resultSample: blocksResult.slice(0, 12).map((x) => ({ date: x.date.toISOString().slice(0, 10), shiftType: x.shiftType })),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
+    result.push(...iterateBlocks(d, end, customBlocks));
     return result;
   }
 
