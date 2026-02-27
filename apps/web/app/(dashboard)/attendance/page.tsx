@@ -70,6 +70,7 @@ export default function AttendancePage() {
   const { token } = useAuth();
 
   const [attendances, setAttendances] = useState<Attendance[]>([]);
+  const [manualEntries, setManualEntries] = useState<Attendance[]>([]);
   const [missedShifts, setMissedShifts] = useState<MissedShift[]>([]);
   const [shiftsForClockIn, setShiftsForClockIn] = useState<ShiftForClockIn[]>([]);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
@@ -112,6 +113,9 @@ export default function AttendancePage() {
       authFetch(`/attendance?${params}`, token)
         .then((r) => r.json())
         .then((d) => setAttendances(d.data || [])),
+      authFetch(`/attendance?source=manual&limit=500`, token)
+        .then((r) => r.json())
+        .then((d) => setManualEntries(d.data || [])),
       authFetch(`/attendance/missed?${missedParams}`, token)
         .then((r) => r.json())
         .then((d) => setMissedShifts(d.data || [])),
@@ -152,17 +156,14 @@ export default function AttendancePage() {
     if (p) p.finally(() => setLoading(false));
   }, [token, refresh]);
 
-  const { activeAttendances, completedAttendances, manualEntries } = useMemo(() => {
+  const { activeAttendances, completedAttendances } = useMemo(() => {
     const active = attendances.filter(
       (a) => a.clockIn && !a.clockOut && a.status === "clocked_in"
     );
     const completed = attendances.filter(
       (a) => a.clockOut != null || a.status === "completed"
     );
-    const manual = attendances.filter(
-      (a) => a.source === "manual" || a.shift?.post?.site?.name === "Manual"
-    );
-    return { activeAttendances: active, completedAttendances: completed, manualEntries: manual };
+    return { activeAttendances: active, completedAttendances: completed };
   }, [attendances]);
 
   if (loading) {

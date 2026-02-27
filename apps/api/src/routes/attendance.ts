@@ -30,7 +30,8 @@ export async function attendanceRoutes(app: FastifyInstance) {
     const employeeId = q.employeeId;
     const startDate = q.startDate;
     const endDate = q.endDate;
-    const limit = Math.min(Number(q.limit) || 50, 100);
+    const source = q.source;
+    const limit = Math.min(Number(q.limit) || 50, source === "manual" ? 500 : 100);
     const offset = Number(q.offset) || 0;
 
     const siteId = q.siteId;
@@ -51,6 +52,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
     const where: Record<string, unknown> = { shift: shiftWhere };
     if (shiftId) where.shiftId = shiftId;
+    if (source === "manual") where.source = "manual";
 
     const [attendances, total] = await Promise.all([
       prisma.attendance.findMany({
