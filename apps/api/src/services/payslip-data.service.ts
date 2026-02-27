@@ -60,7 +60,10 @@ export function buildPayslipTemplateData(input: PayslipDataInput): PayslipTempla
     : undefined;
 
   const jobTitle = emp.jobRole ?? emp.occupation ?? undefined;
-  const jobGrade = (emp as Employee & { grade?: { name: string } | null }).grade?.name ?? undefined;
+  const grade = (emp as Employee & { grade?: { name: string; hourlyRate: unknown } | null }).grade;
+  const jobGrade = grade?.name ?? undefined;
+  const hourlyRate = grade?.hourlyRate != null ? Number(grade.hourlyRate) : emp.hourlyRate != null ? Number(emp.hourlyRate) : undefined;
+  const jobGradeRate = hourlyRate != null ? `R ${hourlyRate.toFixed(2)}/hr` : undefined;
 
   return {
     employerName: company.name,
@@ -85,6 +88,7 @@ export function buildPayslipTemplateData(input: PayslipDataInput): PayslipTempla
     maritalStatus: emp.maritalStatus ?? undefined,
     gender: emp.gender ?? undefined,
     jobGrade,
+    jobGradeRate,
     earnings,
     deductions,
     grossPay,

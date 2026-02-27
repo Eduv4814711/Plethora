@@ -29,6 +29,7 @@ export interface PayslipTemplateData {
   maritalStatus?: string;
   gender?: string;
   jobGrade?: string;
+  jobGradeRate?: string;
   earnings?: Array<{ name: string; amount: number }>;
   deductions?: Array<{ name: string; amount: number }>;
   grossPay?: number;
