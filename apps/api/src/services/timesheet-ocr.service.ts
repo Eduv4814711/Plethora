@@ -119,11 +119,19 @@ function parseTime(s: string): { hours: number; minutes: number } | null {
 }
 
 function parseDate(s: string): string | null {
-  const m = s.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-  if (!m) return null;
-  const y = parseInt(m[1], 10);
-  const mo = parseInt(m[2], 10);
-  const d = parseInt(m[3], 10);
+  let y: number, mo: number, d: number;
+  const iso = s.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (iso) {
+    y = parseInt(iso[1], 10);
+    mo = parseInt(iso[2], 10);
+    d = parseInt(iso[3], 10);
+  } else {
+    const dmy = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (!dmy) return null;
+    d = parseInt(dmy[1], 10);
+    mo = parseInt(dmy[2], 10);
+    y = parseInt(dmy[3], 10);
+  }
   if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
     return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
   }
@@ -189,14 +197,17 @@ function parseTesseractOutput(text: string): ExtractedTimesheet {
 
   const isLabel = (s: string) => /(name|employee|site|identity|year|number|address|period)\s*:/i.test(s);
 
+  const looksLikeName = (s: string) => /^[a-zA-Z\s\-']+$/.test(s) && s.length >= 3 && s.length <= 50;
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const lower = line.toLowerCase();
     const nextLine = lines[i + 1]?.trim() ?? "";
     if (lower.includes("name") && lower.includes("surname") && lower.includes("employee")) {
       const m = line.match(/:\s*(.+)$/);
-      if (m && m[1].trim().length > 1) extracted.employeeName = m[1].trim();
-      else if (nextLine && !isLabel(nextLine) && nextLine.length > 2 && nextLine.length < 50) extracted.employeeName = nextLine;
+      const val = m?.[1]?.trim();
+      if (val && looksLikeName(val)) extracted.employeeName = val;
+      else if (nextLine && !isLabel(nextLine) && looksLikeName(nextLine)) extracted.employeeName = nextLine;
     } else if (lower.includes("employee") && lower.includes("number") && !lower.includes("identity")) {
       const m = line.match(/:\s*(.+)$/);
       if (m && m[1].trim()) extracted.employeeNumber = m[1].trim();
@@ -229,26 +240,51 @@ function parseTesseractOutput(text: string): ExtractedTimesheet {
     }
   };
 
+  const rowRegex = /(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\s+\w{2,9}\s+(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})/g;
+  const flexRegex = /(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})[^\d]*(\d{1,2}:\d{2})[^\d]*(\d{1,2}:\d{2})/g;
+
+  const toIsoDate = (dateStr: string): string => {
+    const parsed = parseDate(dateStr);
+    if (parsed) return parsed;
+    const year = extracted.year ? parseInt(extracted.year, 10) : new Date().getFullYear();
+    return parseDate(`${year}/${dateStr}`) ?? dateStr;
+  };
+
   for (const line of lines) {
-    const rowRegex = /(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\s+\w{2,3}\s+(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})/g;
     const matches = [...line.matchAll(rowRegex)];
     for (const m of matches) {
       const hoursMatch = line.match(/(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})\s+(\d+(?:\.\d+)?)/);
       const hours = hoursMatch ? parseFloat(hoursMatch[3]) : undefined;
-      tryAddEntry(m[1], m[2], m[3], hours);
+      tryAddEntry(toIsoDate(m[1]), m[2], m[3], hours);
     }
   }
 
   if (extracted.entries.length === 0) {
-    const flexRegex = /(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})[^\d]*(\d{1,2}:\d{2})[^\d]*(\d{1,2}:\d{2})/g;
     for (const line of lines) {
       const matches = [...line.matchAll(flexRegex)];
       for (const m of matches) {
         const hoursMatch = line.match(/(\d{1,2}:\d{2})[^\d]*(\d{1,2}:\d{2})[^\d]*(\d+(?:\.\d+)?)/);
         const hours = hoursMatch ? parseFloat(hoursMatch[3]) : undefined;
-        tryAddEntry(m[1], m[2], m[3], hours);
+        tryAddEntry(toIsoDate(m[1]), m[2], m[3], hours);
       }
     }
+  }
+
+  if (extracted.entries.length === 0) {
+    const flattened = text.replace(/\r?\n/g, " ").replace(/\s+/g, " ");
+    const flatMatches = [...flattened.matchAll(rowRegex)];
+    for (const m of flatMatches) {
+      const chunk = flattened.slice(Math.max(0, m.index! - 20), m.index! + m[0].length + 30);
+      const hoursMatch = chunk.match(/(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})\s+(\d+(?:\.\d+)?)/);
+      const hours = hoursMatch ? parseFloat(hoursMatch[3]) : undefined;
+      tryAddEntry(toIsoDate(m[1]), m[2], m[3], hours);
+    }
+  }
+
+  if (extracted.entries.length === 0) {
+    const flattened = text.replace(/\r?\n/g, " ").replace(/\s+/g, " ");
+    const flatFlex = [...flattened.matchAll(flexRegex)];
+    for (const m of flatFlex) tryAddEntry(toIsoDate(m[1]), m[2], m[3]);
   }
 
   extracted.entries.sort((a, b) => a.date.localeCompare(b.date));

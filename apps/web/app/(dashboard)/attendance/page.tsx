@@ -665,6 +665,14 @@ function TimesheetUploadSection({
             {extractResult.extracted.siteName && (
               <p className="text-sm"><span className="font-medium text-neutral-500 dark:text-neutral-400">Site:</span> {extractResult.extracted.siteName}</p>
             )}
+            {extractResult.extracted.entries.length === 0 && extractResult.extracted.rawText && (
+              <details className="text-xs text-neutral-500 dark:text-neutral-400">
+                <summary className="cursor-pointer hover:text-neutral-700 dark:hover:text-neutral-300">View raw OCR output (for debugging)</summary>
+                <pre className="mt-2 p-2 bg-neutral-100 dark:bg-neutral-800 rounded overflow-auto max-h-32 whitespace-pre-wrap break-words">
+                  {extractResult.extracted.rawText}
+                </pre>
+              </details>
+            )}
             <div className="flex flex-wrap gap-4 items-end">
               <div className="space-y-1">
                 <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Employee *</label>
