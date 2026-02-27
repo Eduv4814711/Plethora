@@ -5,6 +5,22 @@ import { prisma } from "./prisma.js";
 const DEFAULT_TIMEZONE = "Africa/Johannesburg";
 
 /**
+ * Parse a date string (yyyy-MM-dd) as UTC midnight. Avoids server timezone affecting the calendar date.
+ */
+export function parseDateOnly(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
+}
+
+/**
+ * Parse a date string (yyyy-MM-dd) as end of day UTC. For use as end date in ranges.
+ */
+export function parseDateOnlyEnd(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999));
+}
+
+/**
  * Get the company's timezone from settings. Falls back to Africa/Johannesburg.
  */
 export async function getCompanyTimezone(companyId: string): Promise<string> {
@@ -20,6 +36,7 @@ export async function getCompanyTimezone(companyId: string): Promise<string> {
 /**
  * Create a Date in UTC that represents the given local time in the company timezone.
  * e.g. localTimeInZone(2026-02-01, 6, 0, 'Africa/Johannesburg') => 04:00 UTC (6am SA = UTC+2)
+ * Uses UTC date components to avoid server timezone affecting the calendar date.
  */
 export function localTimeInZone(
   date: Date,
@@ -27,8 +44,11 @@ export function localTimeInZone(
   minute: number,
   timeZone: string
 ): Date {
-  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate(), hour, minute, 0, 0);
-  return fromZonedTime(d, timeZone);
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth();
+  const d = date.getUTCDate();
+  const dUtc = new Date(Date.UTC(y, m, d, hour, minute, 0, 0));
+  return fromZonedTime(dUtc, timeZone);
 }
 
 /**

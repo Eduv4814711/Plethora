@@ -13,7 +13,7 @@ import {
   type BulkPattern,
 } from "../services/rostering.service.js";
 import { createAuditLog } from "../lib/audit.js";
-import { getCompanyTimezone, getShiftTimes } from "../lib/timezone.js";
+import { getCompanyTimezone, getShiftTimes, parseDateOnly, parseDateOnlyEnd } from "../lib/timezone.js";
 
 const createShiftSchema = z.object({
   employeeId: z.string().min(1),
@@ -383,10 +383,8 @@ export async function shiftsRoutes(app: FastifyInstance) {
     const companyId = request.user!.companyId;
     const { employeeId, postId, siteId, startDate, endDate, pattern, customDays, customBlocks } = parsed.data;
 
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
+    const start = parseDateOnly(startDate.slice(0, 10));
+    const end = parseDateOnlyEnd(endDate.slice(0, 10));
 
     if (start > end) {
       return reply.code(400).send({

@@ -291,7 +291,7 @@ export default function RosteringPage() {
     const start = startOfDay(parseISO(periodStart));
     const end = new Date(parseISO(periodEnd));
     end.setHours(23, 59, 59, 999);
-    return { startDate: start.toISOString(), endDate: end.toISOString() };
+    return { startDate: format(start, "yyyy-MM-dd"), endDate: format(end, "yyyy-MM-dd") };
   };
 
   const setPeriodToMonth = (date: Date) => {

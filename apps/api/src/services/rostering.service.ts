@@ -125,10 +125,8 @@ export function computeDatesFromPatternDual(
   customBlocks?: CustomBlock[]
 ): DualPatternResult {
   const result: DualPatternResult = [];
-  let d = new Date(startDate);
-  d.setHours(0, 0, 0, 0);
-  const end = new Date(endDate);
-  end.setHours(23, 59, 59, 999);
+  const d = new Date(startDate.getTime());
+  const end = new Date(endDate.getTime());
 
   if (pattern === "3_on_3_off") {
     const blocks: CustomBlock[] = [
