@@ -1,3 +1,4 @@
+import { createWorker } from "tesseract.js";
 import OpenAI from "openai";
 import { prisma } from "../lib/prisma.js";
 
@@ -131,7 +132,7 @@ function parseDate(s: string): string | null {
 
 function isOffOrEmpty(s: string): boolean {
   const t = s.toLowerCase().trim();
-  return !t || t === "off" || t === "-" || t === "—";
+  return !t || t === "off" || t === "-" || t === "—" || t === "077";
 }
 
 function normalizeEntry(entry: {
@@ -180,6 +181,96 @@ function normalizeEntry(entry: {
   };
 }
 
+function parseTesseractOutput(text: string): ExtractedTimesheet {
+  const extracted: ExtractedTimesheet = { entries: [] };
+  extracted.rawText = text;
+
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+
+  const isLabel = (s: string) => /(name|employee|site|identity|year|number|address|period)\s*:/i.test(s);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lower = line.toLowerCase();
+    const nextLine = lines[i + 1]?.trim() ?? "";
+    if (lower.includes("name") && lower.includes("surname") && lower.includes("employee")) {
+      const m = line.match(/:\s*(.+)$/);
+      if (m && m[1].trim().length > 1) extracted.employeeName = m[1].trim();
+      else if (nextLine && !isLabel(nextLine) && nextLine.length > 2 && nextLine.length < 50) extracted.employeeName = nextLine;
+    } else if (lower.includes("employee") && lower.includes("number") && !lower.includes("identity")) {
+      const m = line.match(/:\s*(.+)$/);
+      if (m && m[1].trim()) extracted.employeeNumber = m[1].trim();
+      else if (nextLine && /^[A-Z0-9\s\-]+$/i.test(nextLine) && nextLine.length <= 20 && !isLabel(nextLine)) extracted.employeeNumber = nextLine;
+    } else if (lower.includes("site") && lower.includes("name")) {
+      const m = line.match(/:\s*(.+)$/);
+      if (m && m[1].trim()) extracted.siteName = m[1].trim();
+      else if (nextLine && !isLabel(nextLine) && nextLine.length > 2) extracted.siteName = nextLine;
+    } else if (lower.includes("identity") && lower.includes("number")) {
+      const m = line.match(/:\s*(\d+)$/);
+      if (m) extracted.identityNumber = m[1].trim();
+      else if (nextLine && /^\d{13}$/.test(nextLine.replace(/\s/g, ""))) extracted.identityNumber = nextLine.replace(/\s/g, "");
+    } else if (lower.includes("year") && /\d{4}/.test(line)) {
+      const m = line.match(/(\d{4})/);
+      if (m) extracted.year = m[1];
+    }
+  }
+
+  const seen = new Set<string>();
+
+  const tryAddEntry = (dateStr: string, startStr: string, finishStr: string, hoursWorked?: number) => {
+    if (isOffOrEmpty(startStr) || isOffOrEmpty(finishStr)) return;
+    const normalized = normalizeEntry({ date: dateStr, startTime: startStr, endTime: finishStr, hoursWorked });
+    if (normalized) {
+      const key = `${normalized.date}-${normalized.startTime}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        extracted.entries.push(normalized);
+      }
+    }
+  };
+
+  for (const line of lines) {
+    const rowRegex = /(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})\s+\w{2,3}\s+(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})/g;
+    const matches = [...line.matchAll(rowRegex)];
+    for (const m of matches) {
+      const hoursMatch = line.match(/(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})\s+(\d+(?:\.\d+)?)/);
+      const hours = hoursMatch ? parseFloat(hoursMatch[3]) : undefined;
+      tryAddEntry(m[1], m[2], m[3], hours);
+    }
+  }
+
+  if (extracted.entries.length === 0) {
+    const flexRegex = /(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})[^\d]*(\d{1,2}:\d{2})[^\d]*(\d{1,2}:\d{2})/g;
+    for (const line of lines) {
+      const matches = [...line.matchAll(flexRegex)];
+      for (const m of matches) {
+        const hoursMatch = line.match(/(\d{1,2}:\d{2})[^\d]*(\d{1,2}:\d{2})[^\d]*(\d+(?:\.\d+)?)/);
+        const hours = hoursMatch ? parseFloat(hoursMatch[3]) : undefined;
+        tryAddEntry(m[1], m[2], m[3], hours);
+      }
+    }
+  }
+
+  extracted.entries.sort((a, b) => a.date.localeCompare(b.date));
+  const dates = extracted.entries.map((e) => e.date).filter(Boolean);
+  if (dates.length > 0) {
+    extracted.periodStart = dates[0];
+    extracted.periodEnd = dates[dates.length - 1];
+  }
+
+  return extracted;
+}
+
+async function extractWithTesseract(imageBuffer: Buffer): Promise<ExtractedTimesheet> {
+  const worker = await createWorker("eng", 1, { logger: () => {} });
+  try {
+    const { data } = await worker.recognize(imageBuffer);
+    return parseTesseractOutput(data.text || "");
+  } finally {
+    await worker.terminate();
+  }
+}
+
 const EXTRACT_PROMPT = `You are extracting data from an attendance register or timesheet image. The image may contain handwritten or printed text.
 
 Extract the following and return ONLY valid JSON (no markdown, no code blocks):
@@ -210,19 +301,10 @@ Rules:
 - Return an empty entries array [] if no valid rows are found.
 - Do not include any text before or after the JSON.`;
 
-export async function extractTimesheetFromImage(
-  imageBuffer: Buffer,
-  companyId: string
-): Promise<TimesheetExtractResult> {
-  if (imageBuffer.length > MAX_FILE_SIZE) {
-    throw new Error("File too large. Maximum size is 5MB.");
-  }
-
+async function extractWithOpenAI(imageBuffer: Buffer): Promise<ExtractedTimesheet> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error(
-      "OpenAI API is not configured. Set OPENAI_API_KEY in your environment."
-    );
+    throw new Error("OpenAI API is not configured. Set OPENAI_API_KEY in your environment.");
   }
 
   const client = new OpenAI({ apiKey });
@@ -250,15 +332,29 @@ export async function extractTimesheetFromImage(
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("api_key") || msg.includes("invalid_api_key") || msg.includes("Incorrect API key")) {
+    if (msg.includes("429") || msg.includes("quota") || msg.includes("exceeded")) {
       throw new Error(
-        "OpenAI API is not configured. Set OPENAI_API_KEY in your environment."
+        "OpenAI quota exceeded. Add billing credits at platform.openai.com or set TIMESHEET_OCR_PROVIDER=tesseract in .env to use free OCR."
       );
+    }
+    if (msg.includes("api_key") || msg.includes("invalid_api_key") || msg.includes("Incorrect API key")) {
+      throw new Error("OpenAI API is not configured. Set OPENAI_API_KEY in your environment.");
     }
     throw new Error(`OCR failed: ${msg}. Try a clearer image with good lighting.`);
   }
 
-  const content = response.choices[0]?.message?.content?.trim();
+  const rawContent = response.choices[0]?.message?.content;
+  let content = "";
+  if (typeof rawContent === "string") {
+    content = rawContent.trim();
+  } else if (Array.isArray(rawContent)) {
+    const parts = rawContent as Array<{ type?: string; text?: string }>;
+    content = parts
+      .filter((p) => p?.type === "text" && p.text)
+      .map((p) => p.text!)
+      .join("")
+      .trim();
+  }
   if (!content) {
     throw new Error("No response from OCR. Try a clearer image.");
   }
@@ -303,6 +399,37 @@ export async function extractTimesheetFromImage(
   if (dates.length > 0) {
     extracted.periodStart = dates[0];
     extracted.periodEnd = dates[dates.length - 1];
+  }
+
+  return extracted;
+}
+
+function getOcrProvider(): "tesseract" | "openai" {
+  const provider = process.env.TIMESHEET_OCR_PROVIDER?.toLowerCase();
+  if (provider === "openai" && process.env.OPENAI_API_KEY) return "openai";
+  return "tesseract";
+}
+
+export async function extractTimesheetFromImage(
+  imageBuffer: Buffer,
+  companyId: string
+): Promise<TimesheetExtractResult> {
+  if (imageBuffer.length > MAX_FILE_SIZE) {
+    throw new Error("File too large. Maximum size is 5MB.");
+  }
+
+  const provider = getOcrProvider();
+  let extracted: ExtractedTimesheet;
+
+  if (provider === "openai") {
+    extracted = await extractWithOpenAI(imageBuffer);
+  } else {
+    try {
+      extracted = await extractWithTesseract(imageBuffer);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`OCR failed: ${msg}. Try a clearer image or set TIMESHEET_OCR_PROVIDER=openai with OPENAI_API_KEY for better accuracy.`);
+    }
   }
 
   const matchedEmployee = await matchEmployee(

@@ -624,6 +624,10 @@ function TimesheetUploadSection({
         <p className="text-sm text-green-600 dark:text-green-400 mb-4">{successMessage}</p>
       )}
 
+      {error && !extractResult && (
+        <p className="text-sm text-red-600 dark:text-red-400 mb-4">{error}</p>
+      )}
+
       {!extractResult ? (
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}

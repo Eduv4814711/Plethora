@@ -441,6 +441,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
       return reply.send(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      console.error("[timesheet/extract]", err);
       return reply.code(400).send({ error: "Extraction failed", message: msg });
     }
   });

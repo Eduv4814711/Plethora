@@ -350,17 +350,46 @@ export async function extractTimesheetFromImage(
   const formData = new FormData();
   formData.append("file", file);
 
-  const res = await fetch(`${API_BASE}/attendance/timesheet/extract`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-    body: formData,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 min for OpenAI Vision
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || err.error || "Extraction failed");
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/attendance/timesheet/extract`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err instanceof Error) {
+      if (err.name === "AbortError") {
+        throw new Error("Extraction timed out. The image may be too large or complex. Try a smaller or clearer image.");
+      }
+      throw new Error(err.message || "Extraction failed");
+    }
+    throw new Error("Extraction failed");
   }
-  return res.json();
+  clearTimeout(timeoutId);
+
+  const text = await res.text();
+  if (!res.ok) {
+    let msg = "Extraction failed";
+    try {
+      const err = JSON.parse(text);
+      msg = err.message || err.error || msg;
+    } catch {
+      if (text) msg = text;
+      else msg = `Extraction failed (${res.status})`;
+    }
+    throw new Error(msg);
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("Invalid response from server");
+  }
 }
 
 export async function importTimesheetEntries(
