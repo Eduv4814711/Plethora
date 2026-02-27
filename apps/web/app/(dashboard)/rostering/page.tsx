@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
-import { format, addDays, addWeeks, addMonths, startOfWeek, startOfMonth, endOfMonth, isSameDay, parseISO, differenceInMonths, startOfDay } from "date-fns";
+import { format, addDays, startOfMonth, endOfMonth, isSameDay, parseISO, startOfDay } from "date-fns";
 
 type BulkPattern =
   | "all_days"
@@ -78,8 +78,12 @@ export default function RosteringPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [selectedDayForShift, setSelectedDayForShift] = useState<Date | null>(null);
-  const [dateRange, setDateRange] = useState<"week" | "month">("week");
-  const [viewOffset, setViewOffset] = useState(0);
+  const now = new Date();
+  const thisMonthStart = startOfMonth(now);
+  const thisMonthEnd = endOfMonth(now);
+  const [periodStart, setPeriodStart] = useState(() => format(thisMonthStart, "yyyy-MM-dd"));
+  const [periodEnd, setPeriodEnd] = useState(() => format(thisMonthEnd, "yyyy-MM-dd"));
+  const [showPeriodModal, setShowPeriodModal] = useState(false);
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
   const [pattern, setPattern] = useState<BulkPattern>("3_on_3_off");
   const [customDays, setCustomDays] = useState<number[]>([1, 2, 3, 4, 5]);
@@ -191,16 +195,8 @@ export default function RosteringPage() {
   const openPdfPeriodModal = (action: "preview" | "download", employeeId?: string) => {
     setPdfAction(action);
     setPdfEmployeeId(employeeId);
-    if (calendarDays.length > 0) {
-      setPdfPeriodStart(format(calendarDays[0], "yyyy-MM-dd"));
-      setPdfPeriodEnd(format(calendarDays[calendarDays.length - 1], "yyyy-MM-dd"));
-    } else {
-      const now = new Date();
-      const start = startOfWeek(now, { weekStartsOn: 1 });
-      const end = addDays(start, 6);
-      setPdfPeriodStart(format(start, "yyyy-MM-dd"));
-      setPdfPeriodEnd(format(end, "yyyy-MM-dd"));
-    }
+    setPdfPeriodStart(periodStart);
+    setPdfPeriodEnd(periodEnd);
     setShowPdfMenu(false);
     setShowPdfPeriodModal(true);
   };
@@ -292,69 +288,40 @@ export default function RosteringPage() {
   };
 
   const getDateRangeParams = () => {
-    const now = new Date();
-    let start: Date;
-    if (dateRange === "week") {
-      start = startOfWeek(now, { weekStartsOn: 1 });
-      start = addWeeks(start, viewOffset);
-    } else {
-      start = startOfMonth(now);
-      start = addMonths(start, viewOffset);
-    }
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-    if (dateRange === "week") {
-      end.setDate(end.getDate() + 6);
-    } else {
-      end.setMonth(end.getMonth() + 1);
-      end.setMilliseconds(-1);
-    }
+    const start = startOfDay(parseISO(periodStart));
+    const end = new Date(parseISO(periodEnd));
     end.setHours(23, 59, 59, 999);
     return { startDate: start.toISOString(), endDate: end.toISOString() };
   };
 
-  /** Returns the full month(s) spanning the visible period, for reset operations.
-   * Uses startOfMonth(visibleStart) to endOfMonth(visibleEnd) so both week and month
-   * views reset all shifts in the displayed range. */
-  const getMonthRangeForReset = () => {
-    const { startDate, endDate } = getDateRangeParams();
-    const start = startOfMonth(parseISO(startDate.slice(0, 10)));
-    const end = endOfMonth(parseISO(endDate.slice(0, 10)));
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-    return { startDate: start.toISOString(), endDate: end.toISOString() };
+  const setPeriodToMonth = (date: Date) => {
+    const start = startOfMonth(date);
+    const end = endOfMonth(date);
+    setPeriodStart(format(start, "yyyy-MM-dd"));
+    setPeriodEnd(format(end, "yyyy-MM-dd"));
   };
+
+  const getMonthRangeForReset = () => getDateRangeParams();
 
   const { calendarDays, displayCells } = useMemo(() => {
-    const now = new Date();
-    let start: Date;
-    if (dateRange === "week") {
-      start = startOfWeek(now, { weekStartsOn: 1 });
-      start = addWeeks(start, viewOffset);
-    } else {
-      start = startOfMonth(now);
-      start = addMonths(start, viewOffset);
-    }
-    const end = dateRange === "week" ? addDays(start, 6) : addDays(addMonths(start, 1), -1);
+    const start = startOfDay(parseISO(periodStart));
+    const end = new Date(parseISO(periodEnd));
     const days: Date[] = [];
     let d = new Date(start);
     while (d <= end) {
       days.push(new Date(d));
       d = addDays(d, 1);
     }
-    if (dateRange === "month" && days.length > 0) {
-      const firstDay = days[0].getDay();
-      const startPad = (firstDay - 1 + 7) % 7;
-      const endPad = (7 - ((startPad + days.length) % 7)) % 7;
-      const cells: (Date | null)[] = [
-        ...Array(startPad).fill(null),
-        ...days,
-        ...Array(endPad).fill(null),
-      ];
-      return { calendarDays: days, displayCells: cells };
-    }
-    return { calendarDays: days, displayCells: days as (Date | null)[] };
-  }, [dateRange, viewOffset]);
+    const firstDay = days[0]?.getDay() ?? 1;
+    const startPad = (firstDay - 1 + 7) % 7;
+    const endPad = (7 - ((startPad + days.length) % 7)) % 7;
+    const cells: (Date | null)[] = [
+      ...Array(startPad).fill(null),
+      ...days,
+      ...Array(endPad).fill(null),
+    ];
+    return { calendarDays: days, displayCells: cells };
+  }, [periodStart, periodEnd]);
 
   const shiftsByDay = useMemo(() => {
     const map = new Map<string, Shift[]>();
@@ -474,7 +441,7 @@ export default function RosteringPage() {
 
   useEffect(() => {
     if (token) refresh();
-  }, [token, dateRange, viewOffset]);
+  }, [token, periodStart, periodEnd]);
 
   if (loading) {
     return (
@@ -487,15 +454,18 @@ export default function RosteringPage() {
 
   const periodLabel =
     calendarDays.length > 0
-      ? dateRange === "week"
-        ? format(calendarDays[0], "d MMM") + " - " + format(calendarDays[calendarDays.length - 1], "d MMM yyyy")
-        : format(calendarDays[0], "MMMM yyyy")
+      ? calendarDays.length === 1
+        ? format(calendarDays[0], "d MMM yyyy")
+        : format(calendarDays[0], "d MMM") + " – " + format(calendarDays[calendarDays.length - 1], "d MMM yyyy")
       : "";
 
   return (
     <div className="flex h-[calc(100vh-8rem)] min-h-[500px] w-full">
       <aside className="w-64 shrink-0 card-wireframe flex flex-col overflow-hidden">
         <div className="p-4 border-b border-neutral-200 dark:border-neutral-700 shrink-0">
+          <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-3">
+            Rostering for <span className="font-semibold text-neutral-800 dark:text-neutral-200">{periodLabel || "—"}</span>
+          </p>
           <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-3">
             Drag guard to post
           </h3>
@@ -656,33 +626,38 @@ export default function RosteringPage() {
       <div className="flex-1 flex flex-col min-w-0">
       <div className="shrink-0 p-6 pb-4">
         <div className="flex justify-between items-center flex-wrap gap-3">
-          <div>
+          <div className="flex items-center gap-4">
             <h1 className="text-2xl font-bold text-neutral-800 dark:text-neutral-100">Rostering</h1>
-            {periodLabel && calendarDays.length > 0 && (
-              <input
-                type="month"
-                value={format(calendarDays[0], "yyyy-MM")}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (!val) return;
-                  const targetDate = parseISO(`${val}-01`);
-                  const now = new Date();
-                  const offset = differenceInMonths(targetDate, startOfMonth(now));
-                  setDateRange("month");
-                  setViewOffset(offset);
-                }}
-                className="block mt-0.5 text-sm text-neutral-500 dark:text-neutral-400 bg-transparent border border-transparent rounded px-1 py-0.5 cursor-pointer hover:text-neutral-700 dark:hover:text-neutral-300 hover:border-neutral-300 dark:hover:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 focus:outline-none focus:ring-2 focus:ring-neutral-400 focus:border-transparent [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-60"
-                title="Click to select month"
-              />
-            )}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">Roster period:</span>
+              <button
+                type="button"
+                onClick={() => setShowPeriodModal(true)}
+                className="h-11 px-4 py-2 text-left text-base font-semibold text-neutral-900 dark:text-neutral-100 bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-600 rounded-md hover:bg-neutral-200 dark:hover:bg-neutral-700 focus:outline-none focus:ring-2 focus:ring-neutral-400 flex items-center gap-2"
+                title="Choose time period to roster"
+              >
+                <span className="text-neutral-800 dark:text-neutral-200">{periodLabel || "Select period"}</span>
+                <svg className="w-4 h-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </button>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center h-11 rounded-md border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800/30 overflow-hidden">
               <button
                 type="button"
-                onClick={() => setViewOffset((o) => o - 1)}
+                onClick={() => {
+                  const start = parseISO(periodStart);
+                  const end = parseISO(periodEnd);
+                  const days = Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+                  const newStart = addDays(start, -days);
+                  const newEnd = addDays(end, -days);
+                  setPeriodStart(format(newStart, "yyyy-MM-dd"));
+                  setPeriodEnd(format(newEnd, "yyyy-MM-dd"));
+                }}
                 className="h-full px-3 flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors text-neutral-600 dark:text-neutral-400"
-                aria-label="Previous"
+                aria-label="Previous period"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -690,44 +665,37 @@ export default function RosteringPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setViewOffset(0)}
+                onClick={() => setPeriodToMonth(new Date())}
                 className="h-full px-4 text-sm font-medium border-x border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors text-neutral-700 dark:text-neutral-300"
               >
-                Today
+                This month
               </button>
               <button
                 type="button"
-                onClick={() => setViewOffset((o) => o + 1)}
+                onClick={() => setPeriodToMonth(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1))}
+                className="h-full px-3 text-sm font-medium border-r border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors text-neutral-700 dark:text-neutral-300"
+              >
+                Next month
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const start = parseISO(periodStart);
+                  const end = parseISO(periodEnd);
+                  const days = Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+                  const newStart = addDays(start, days);
+                  const newEnd = addDays(end, days);
+                  setPeriodStart(format(newStart, "yyyy-MM-dd"));
+                  setPeriodEnd(format(newEnd, "yyyy-MM-dd"));
+                }}
                 className="h-full px-3 flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors text-neutral-600 dark:text-neutral-400"
-                aria-label="Next"
+                aria-label="Next period"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setDateRange("month");
-                  setViewOffset((o) => o + 1);
-                }}
-                className="h-full px-3 flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors text-neutral-600 dark:text-neutral-400 border-l border-neutral-200 dark:border-neutral-700"
-                aria-label="Next month"
-                title="Jump to next month"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-                </svg>
-              </button>
             </div>
-            <select
-              value={dateRange}
-              onChange={(e) => { setDateRange(e.target.value as "week" | "month"); setViewOffset(0); }}
-              className="input-modern h-11 min-w-[100px] cursor-pointer"
-            >
-              <option value="week">Week</option>
-              <option value="month">Month</option>
-            </select>
             <button
               onClick={() => { setSelectedDayForShift(null); setShowForm(!showForm); }}
               className="btn-secondary h-11 flex items-center gap-2 shrink-0"
@@ -858,12 +826,86 @@ export default function RosteringPage() {
           </div>
         </div>
 
+        {showPeriodModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="card-wireframe w-full max-w-sm shadow-xl">
+              <div className="p-6">
+                <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-2">
+                  Choose roster period
+                </h3>
+                <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+                  Select the start and end dates for the period you want to roster. All rostering happens within this period.
+                </p>
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">
+                      Start date
+                    </label>
+                    <DateInput
+                      value={periodStart}
+                      onChange={setPeriodStart}
+                      className="input-modern w-full"
+                      showToday
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">
+                      End date
+                    </label>
+                    <DateInput
+                      value={periodEnd}
+                      onChange={setPeriodEnd}
+                      className="input-modern w-full"
+                      showToday
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2 mb-4">
+                  <button
+                    type="button"
+                    onClick={() => setPeriodToMonth(new Date())}
+                    className="flex-1 py-2 text-sm font-medium rounded-md border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                  >
+                    This month
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPeriodToMonth(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1))}
+                    className="flex-1 py-2 text-sm font-medium rounded-md border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                  >
+                    Next month
+                  </button>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowPeriodModal(false)}
+                    className="flex-1 btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (parseISO(periodEnd) >= parseISO(periodStart)) setShowPeriodModal(false);
+                    }}
+                    disabled={!periodStart || !periodEnd || parseISO(periodEnd) < parseISO(periodStart)}
+                    className="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {showPdfPeriodModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="card-wireframe w-full max-w-sm shadow-xl">
               <div className="p-6">
                 <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-2">
-                  Choose time period
+                  Choose time period for PDF
                 </h3>
                 <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
                   Select the start and end dates for the roster schedule. Periods can span across months.
@@ -920,7 +962,7 @@ export default function RosteringPage() {
               token={token!}
               employees={employees}
               sites={sites}
-              defaultDate={selectedDayForShift ?? undefined}
+              defaultDate={selectedDayForShift ?? parseISO(periodStart)}
               onSuccess={() => {
                 setShowForm(false);
                 setSelectedDayForShift(null);
