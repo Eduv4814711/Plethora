@@ -165,6 +165,7 @@ export const FACTORY_RESET_MODULES = [
   { id: "employees", label: "Team", description: "Clear all team members, assignments, leave records, and deductions" },
   { id: "sites", label: "Sites", description: "Clear sites, posts, and site/post assignments" },
   { id: "shifts", label: "Shifts", description: "Clear shifts and attendance records" },
+  { id: "attendance", label: "Attendance", description: "Clear clock-in/out records only (shifts remain). Optionally for one person." },
   { id: "payroll", label: "Payroll", description: "Clear payroll runs, items, and payslips" },
   { id: "timesheets", label: "Timesheets", description: "Clear all timesheet records" },
   { id: "payRules", label: "Pay Rules", description: "Reset to defaults: overtime, sunday, public holiday rates; UIF, PSIRA" },
@@ -177,12 +178,15 @@ export type FactoryResetModuleId = (typeof FACTORY_RESET_MODULES)[number]["id"];
 
 export async function factoryReset(
   token: string,
-  modules?: FactoryResetModuleId[]
+  modules?: FactoryResetModuleId[],
+  options?: { attendanceEmployeeId?: string }
 ): Promise<CompanySettings> {
+  const body: Record<string, unknown> = modules && modules.length > 0 ? { modules } : {};
+  if (options?.attendanceEmployeeId) body.attendanceEmployeeId = options.attendanceEmployeeId;
   const res = await fetch(`${API_BASE}/settings/factory-reset`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify(modules && modules.length > 0 ? { modules } : {}),
+    body: JSON.stringify(Object.keys(body).length > 0 ? body : {}),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

@@ -38,6 +38,7 @@ const FACTORY_RESET_MODULES = [
   "employees",
   "sites",
   "shifts",
+  "attendance",
   "payroll",
   "timesheets",
   "payRules",
@@ -51,6 +52,7 @@ const factoryResetSchema = z.object({
     .array(z.enum(FACTORY_RESET_MODULES))
     .optional()
     .transform((v) => (v && v.length > 0 ? v : undefined)),
+  attendanceEmployeeId: z.string().min(1).optional(),
 });
 
 export async function settingsRoutes(app: FastifyInstance) {
@@ -160,6 +162,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       });
     }
     const modules = parsed.data.modules;
+    const attendanceEmployeeId = parsed.data.attendanceEmployeeId;
 
     const company = await prisma.company.findUnique({
       where: { id: companyId },
@@ -218,6 +221,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     const runAll = !modules || modules.length === 0;
     const has = (m: (typeof FACTORY_RESET_MODULES)[number]) => runAll || modules!.includes(m);
 
+    try {
     await prisma.$transaction(async (tx) => {
       const posts = await tx.post.findMany({
         where: { site: { companyId } },
@@ -238,6 +242,38 @@ export async function settingsRoutes(app: FastifyInstance) {
       // Shifts (includes Attendance via cascade)
       if (has("shifts")) {
         await tx.shift.deleteMany({ where: { companyId } });
+      }
+
+      // Attendance only (clears clock-in/out records; shifts remain)
+      if (has("attendance")) {
+        if (attendanceEmployeeId) {
+          const employee = await tx.employee.findFirst({
+            where: { id: attendanceEmployeeId, companyId },
+          });
+          if (!employee) {
+            throw new Error("Employee not found");
+          }
+          const shiftIds = await tx.shift.findMany({
+            where: { companyId, employeeId: attendanceEmployeeId },
+            select: { id: true },
+          });
+          const ids = shiftIds.map((s) => s.id);
+          if (ids.length > 0) {
+            await tx.attendance.deleteMany({ where: { shiftId: { in: ids } } });
+            await tx.shift.updateMany({
+              where: { id: { in: ids } },
+              data: { status: "assigned" },
+            });
+          }
+        } else {
+          await tx.attendance.deleteMany({
+            where: { shift: { companyId } },
+          });
+          await tx.shift.updateMany({
+            where: { companyId, status: { in: ["active", "completed", "verified"] } },
+            data: { status: "assigned" },
+          });
+        }
       }
 
       // Sites: PostAssignment, SiteAssignment, Shift, Post, Site
@@ -392,6 +428,10 @@ export async function settingsRoutes(app: FastifyInstance) {
         });
       }
     });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Factory reset failed";
+      return reply.code(400).send({ error: "Factory reset failed", message: msg });
+    }
 
     const updated = await prisma.company.findUnique({
       where: { id: companyId },

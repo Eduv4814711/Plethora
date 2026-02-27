@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
-import { uploadLogo, listUsers, createUser, updateUser, deleteUser, factoryReset, FACTORY_RESET_MODULES, type UserListItem, type UserRole, type FactoryResetModuleId } from "@/lib/api";
+import { uploadLogo, listUsers, createUser, updateUser, deleteUser, factoryReset, FACTORY_RESET_MODULES, authFetch, type UserListItem, type UserRole, type FactoryResetModuleId } from "@/lib/api";
 import { clsx } from "clsx";
 
 type Tab = "profile" | "business" | "settings" | "users" | "migrate" | "factory_reset";
@@ -935,6 +935,12 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
 
 const CONFIRM_PHRASE = "FACTORY RESET";
 
+interface EmployeeOption {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
 function FactoryResetSection({
   token,
   refresh,
@@ -948,6 +954,8 @@ function FactoryResetSection({
   const [success, setSuccess] = useState(false);
   const [resetAll, setResetAll] = useState(false);
   const [selectedModules, setSelectedModules] = useState<Set<FactoryResetModuleId>>(new Set());
+  const [attendanceEmployeeId, setAttendanceEmployeeId] = useState<string>("");
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
 
   const toggleModule = (id: FactoryResetModuleId) => {
     setSelectedModules((prev) => {
@@ -964,7 +972,20 @@ function FactoryResetSection({
 
   const deselectAll = () => {
     setSelectedModules(new Set());
+    setAttendanceEmployeeId("");
   };
+
+  useEffect(() => {
+    if (selectedModules.has("attendance") && token) {
+      authFetch("/employees?limit=500", token)
+        .then((r) => r.json())
+        .then((d) => setEmployees(d.data || []))
+        .catch(() => setEmployees([]));
+    } else {
+      setEmployees([]);
+      setAttendanceEmployeeId("");
+    }
+  }, [selectedModules, token]);
 
   const modulesToReset: FactoryResetModuleId[] | undefined =
     resetAll ? undefined : Array.from(selectedModules);
@@ -977,12 +998,17 @@ function FactoryResetSection({
     setResetting(true);
     setError(null);
     try {
-      await factoryReset(token, modulesToReset);
+      const options =
+        selectedModules.has("attendance") && attendanceEmployeeId
+          ? { attendanceEmployeeId }
+          : undefined;
+      await factoryReset(token, modulesToReset, options);
       await refresh();
       setSuccess(true);
       setConfirmText("");
       setResetAll(false);
       setSelectedModules(new Set());
+      setAttendanceEmployeeId("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Factory reset failed");
     } finally {
@@ -1045,7 +1071,10 @@ function FactoryResetSection({
                 {FACTORY_RESET_MODULES.map((mod) => (
                   <div
                     key={mod.id}
-                    className="flex items-start gap-2 p-2 rounded-sm border border-neutral-200 dark:border-neutral-700"
+                    className={clsx(
+                      "flex items-start gap-2 p-2 rounded-sm border border-neutral-200 dark:border-neutral-700",
+                      mod.id === "attendance" && "sm:col-span-2"
+                    )}
                   >
                     <input
                       type="checkbox"
@@ -1055,17 +1084,42 @@ function FactoryResetSection({
                       disabled={resetting}
                       className="mt-0.5 rounded border-neutral-300 dark:border-neutral-600"
                     />
-                    <label
-                      htmlFor={`mod-${mod.id}`}
-                      className="text-sm cursor-pointer flex-1"
-                    >
-                      <span className="font-medium text-neutral-800 dark:text-neutral-200">
-                        {mod.label}
-                      </span>
-                      <span className="block text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-                        {mod.description}
-                      </span>
-                    </label>
+                    <div className="flex-1 min-w-0">
+                      <label
+                        htmlFor={`mod-${mod.id}`}
+                        className="text-sm cursor-pointer block"
+                      >
+                        <span className="font-medium text-neutral-800 dark:text-neutral-200">
+                          {mod.label}
+                        </span>
+                        <span className="block text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                          {mod.description}
+                        </span>
+                      </label>
+                      {mod.id === "attendance" && selectedModules.has("attendance") && (
+                        <div className="mt-2">
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+                            Reset for person (optional)
+                          </label>
+                          <select
+                            value={attendanceEmployeeId}
+                            onChange={(e) => setAttendanceEmployeeId(e.target.value)}
+                            disabled={resetting}
+                            className="input-modern py-1.5 text-sm w-full max-w-xs"
+                          >
+                            <option value="">All people</option>
+                            {employees.map((e) => (
+                              <option key={e.id} value={e.id}>
+                                {e.firstName} {e.lastName}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                            Leave as &quot;All people&quot; to reset everyone&apos;s attendance.
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
