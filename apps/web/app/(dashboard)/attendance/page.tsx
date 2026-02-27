@@ -668,6 +668,9 @@ function TimesheetUploadSection({
             {extractResult.extracted.entries.length === 0 && extractResult.extracted.rawText && (
               <details className="text-xs text-neutral-500 dark:text-neutral-400">
                 <summary className="cursor-pointer hover:text-neutral-700 dark:hover:text-neutral-300">View raw OCR output (for debugging)</summary>
+                <p className="mt-2 text-amber-600 dark:text-amber-400">
+                  No table rows were found. Try a higher-resolution scan or photo with good lighting. For better handwriting recognition, set TIMESHEET_OCR_PROVIDER=openai with OPENAI_API_KEY in your API .env.
+                </p>
                 <pre className="mt-2 p-2 bg-neutral-100 dark:bg-neutral-800 rounded overflow-auto max-h-32 whitespace-pre-wrap break-words">
                   {extractResult.extracted.rawText}
                 </pre>

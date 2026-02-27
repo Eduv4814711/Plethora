@@ -1,4 +1,5 @@
 import { createWorker } from "tesseract.js";
+import sharp from "sharp";
 import OpenAI from "openai";
 import { prisma } from "../lib/prisma.js";
 
@@ -297,10 +298,31 @@ function parseTesseractOutput(text: string): ExtractedTimesheet {
   return extracted;
 }
 
+async function preprocessImageForOcr(buffer: Buffer): Promise<Buffer> {
+  try {
+    const image = sharp(buffer);
+    const meta = await image.metadata();
+    const width = meta.width ?? 800;
+    const scale = width < 1200 ? 1200 / width : 1.5;
+    const newWidth = Math.round(width * scale);
+
+    const processed = await image
+      .resize(newWidth, undefined, { fit: "inside" })
+      .grayscale()
+      .normalize()
+      .png()
+      .toBuffer();
+    return processed;
+  } catch {
+    return buffer;
+  }
+}
+
 async function extractWithTesseract(imageBuffer: Buffer): Promise<ExtractedTimesheet> {
+  const processedBuffer = await preprocessImageForOcr(imageBuffer);
   const worker = await createWorker("eng", 1, { logger: () => {} });
   try {
-    const { data } = await worker.recognize(imageBuffer);
+    const { data } = await worker.recognize(processedBuffer);
     return parseTesseractOutput(data.text || "");
   } finally {
     await worker.terminate();
