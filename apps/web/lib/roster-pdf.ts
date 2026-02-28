@@ -235,12 +235,14 @@ export function generateFullRosterPDF(
 /**
  * Generate a PDF blob for a single guard's roster.
  * Uses a calendar grid layout: Mon–Sun columns, each cell shows that guard's shifts for that day.
+ * @param calendarDays - Full period to display (pass from page so off-days show as empty cells)
  */
 export function generateGuardRosterPDF(
   shifts: RosterShift[],
   employeeName: string,
   periodLabel: string,
-  generatedBy?: string
+  generatedBy?: string,
+  calendarDays?: Date[]
 ): Blob {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -261,30 +263,29 @@ export function generateGuardRosterPDF(
     (a, b) => parseISO(a.startTime).getTime() - parseISO(b.startTime).getTime()
   );
 
-  if (sortedShifts.length === 0) {
+  if (sortedShifts.length === 0 && !calendarDays?.length) {
     doc.setFontSize(10);
     doc.text("No shifts scheduled for this period.", marginLeft, 40);
   } else {
-    const calendarDays: Date[] = [];
-    const seen = new Set<string>();
-    for (const s of sortedShifts) {
-      const key = format(parseISO(s.startTime), "yyyy-MM-dd");
-      if (!seen.has(key)) {
-        seen.add(key);
-        calendarDays.push(parseISO(s.startTime));
-      }
-    }
-    calendarDays.sort((a, b) => a.getTime() - b.getTime());
-
-    // Build full date range from min to max
-    const minDate = calendarDays[0]!;
-    const maxDate = calendarDays[calendarDays.length - 1]!;
-    const fullCalendarDays: Date[] = [];
-    let d = new Date(minDate);
-    while (d <= maxDate) {
-      fullCalendarDays.push(new Date(d));
-      d = addDays(d, 1);
-    }
+    // Use provided calendar days (full period) or infer from shifts
+    const fullCalendarDays =
+      calendarDays && calendarDays.length > 0
+        ? calendarDays
+        : (() => {
+            const minDate = sortedShifts[0]
+              ? parseISO(sortedShifts[0].startTime)
+              : new Date();
+            const maxDate = sortedShifts[sortedShifts.length - 1]
+              ? parseISO(sortedShifts[sortedShifts.length - 1].startTime)
+              : new Date();
+            const days: Date[] = [];
+            let d = new Date(minDate);
+            while (d <= maxDate) {
+              days.push(new Date(d));
+              d = addDays(d, 1);
+            }
+            return days;
+          })();
 
     const displayCells = buildDisplayCells(fullCalendarDays);
     const shiftsByDay = getShiftsByDay(sortedShifts, fullCalendarDays);
@@ -293,7 +294,8 @@ export function generateGuardRosterPDF(
       const end = parseISO(s.endTime);
       const type = (s.post.shiftType ?? "day").charAt(0).toUpperCase();
       return [
-        `${s.post.site.name} – ${s.post.name}`,
+        `${s.post.site.name} –`,
+        s.post.name,
         `${type} ${format(start, "HH:mm")}-${format(end, "HH:mm")}`,
       ];
     };

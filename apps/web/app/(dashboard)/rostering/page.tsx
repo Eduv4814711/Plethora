@@ -232,7 +232,8 @@ export default function RosteringPage() {
             periodShifts.filter((s) => s.employee.id === pdfEmployeeId),
             getGuardName(pdfEmployeeId),
             periodLabel,
-            generatedBy
+            generatedBy,
+            pdfCalendarDays
           )
         : generateFullRosterPDF(periodShifts, pdfCalendarDays, periodLabel, generatedBy);
       const url = URL.createObjectURL(blob);
@@ -255,7 +256,8 @@ export default function RosteringPage() {
             periodShifts.filter((s) => s.employee.id === pdfEmployeeId),
             getGuardName(pdfEmployeeId),
             periodLabel,
-            generatedBy
+            generatedBy,
+            pdfCalendarDays
           )
         : generateFullRosterPDF(periodShifts, pdfCalendarDays, periodLabel, generatedBy);
       const url = URL.createObjectURL(blob);
