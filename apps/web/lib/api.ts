@@ -212,17 +212,32 @@ export async function uploadLogo(token: string, file: File): Promise<{ url: stri
   return res.json();
 }
 
-export function authFetch(url: string, token: string, init?: RequestInit) {
-  const hasBody = init?.body !== undefined && init?.body !== null && init?.body !== "";
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${token}`,
-    ...(hasBody ? { "Content-Type": "application/json" } : {}),
-    ...(init?.headers as Record<string, string> | undefined),
+/** Callback for refreshing token on 401. Set by AuthProvider. */
+let tokenRefreshCallback: (() => Promise<string | null>) | null = null;
+
+export function registerTokenRefreshCallback(cb: () => Promise<string | null>) {
+  tokenRefreshCallback = cb;
+}
+
+export async function authFetch(url: string, token: string, init?: RequestInit): Promise<Response> {
+  const doFetch = (t: string) => {
+    const hasBody = init?.body !== undefined && init?.body !== null && init?.body !== "";
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${t}`,
+      ...(hasBody ? { "Content-Type": "application/json" } : {}),
+      ...(init?.headers as Record<string, string> | undefined),
+    };
+    return fetch(`${API_BASE}${url}`, { ...init, headers });
   };
-  return fetch(`${API_BASE}${url}`, {
-    ...init,
-    headers,
-  });
+
+  let res = await doFetch(token);
+  if (res.status === 401 && tokenRefreshCallback) {
+    const newToken = await tokenRefreshCallback();
+    if (newToken) {
+      res = await doFetch(newToken);
+    }
+  }
+  return res;
 }
 
 // User management (admin only)
