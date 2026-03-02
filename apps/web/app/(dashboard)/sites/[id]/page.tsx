@@ -1,7 +1,7 @@
 "use client";
 
 // #region agent log
-const DEPLOY_VERSION = "2025-03-02-site-detail-v1";
+const DEPLOY_VER = "2025-03-02-v2";
 // #endregion
 
 import { useEffect, useState } from "react";
@@ -105,9 +105,9 @@ export default function SiteDetailPage() {
       headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "0ccf20" },
       body: JSON.stringify({
         sessionId: "0ccf20",
-        location: "sites/[id]/page.tsx:SiteDetailPage",
-        message: "Site detail page mounted",
-        data: { deployVersion: DEPLOY_VERSION, siteId, hasScheduledShiftsSection: false },
+        location: "sites/[id]/page.tsx",
+        message: "Site detail mounted",
+        data: { deployVer: DEPLOY_VER, siteId, origin: typeof window !== "undefined" ? window.location.origin : "ssr" },
         timestamp: Date.now(),
         hypothesisId: "H1",
       }),
@@ -186,7 +186,15 @@ export default function SiteDetailPage() {
   const unassignedGuards = getUnassignedGuards();
 
   return (
-    <div className="space-y-8 animate-fade-in" data-deploy-version={DEPLOY_VERSION}>
+    <div className="space-y-8 animate-fade-in relative">
+      {/* #region agent log - visible deploy version for verification */}
+      <div
+        className="fixed bottom-4 right-4 z-50 px-3 py-1.5 rounded-lg bg-amber-500/90 text-amber-950 text-xs font-mono font-bold shadow-lg"
+        title="Remove after deploy verification"
+      >
+        Build: {DEPLOY_VER}
+      </div>
+      {/* #endregion */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-4">
           <Link
@@ -201,7 +209,7 @@ export default function SiteDetailPage() {
           <div>
             <h1 className="page-title">{site.name}</h1>
             <p className="text-neutral-500 dark:text-neutral-400 mt-0.5 text-sm">
-              Manage posts, assign guards, and schedule shifts
+              Manage posts and assign guards
             </p>
           </div>
         </div>
