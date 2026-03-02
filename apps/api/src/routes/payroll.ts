@@ -348,6 +348,60 @@ export async function payrollRoutes(app: FastifyInstance) {
       .send(csv);
   });
 
+  app.get("/runs/:id/export/fnb", { preHandler: protect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const user = request.user!;
+
+    const run = await prisma.payrollRun.findFirst({
+      where: { id, companyId: user.companyId },
+      include: {
+        items: {
+          include: {
+            employee: {
+              select: {
+                firstName: true,
+                lastName: true,
+                employeeNumber: true,
+                bankAccountNumber: true,
+                bankBranchCode: true,
+              },
+            },
+          },
+          orderBy: { employee: { lastName: "asc" } },
+        },
+      },
+    });
+    if (!run) return reply.code(404).send({ error: "Payroll run not found" });
+
+    const periodLabel = format(run.periodStart, "yyyy-MM");
+    const ownRef = `Payroll ${periodLabel}`.slice(0, 15);
+
+    const rows: string[][] = [
+      ["Recipient Name", "Recipient Account", "Account Type", "Branch Code", "Amount", "Own Reference", "Recipient Reference"],
+    ];
+
+    for (const item of run.items) {
+      const acc = item.employee.bankAccountNumber?.trim();
+      if (!acc) continue;
+
+      const recipientName = `${item.employee.firstName} ${item.employee.lastName}`.trim();
+      const recipientAccount = acc.slice(0, 20);
+      const accountType = "1";
+      const branchCode = (item.employee.bankBranchCode?.trim() || "632005").slice(0, 6);
+      const amount = Number(item.netPay).toFixed(2);
+      const recipientRef = (item.employee.employeeNumber || "Salary").slice(0, 20);
+
+      rows.push([recipientName, recipientAccount, accountType, branchCode, amount, ownRef, recipientRef]);
+    }
+
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const filename = `payroll-fnb-${periodLabel}.csv`;
+    return reply
+      .header("Content-Type", "text/csv")
+      .header("Content-Disposition", `attachment; filename="${filename}"`)
+      .send(csv);
+  });
+
   app.get("/employees/:employeeId/deductions", { preHandler: protect }, async (request, reply) => {
     const { employeeId } = request.params as { employeeId: string };
     const user = request.user!;

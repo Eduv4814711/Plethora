@@ -840,6 +840,7 @@ function PayrollRunCard({
   const [showItems, setShowItems] = useState(false);
   const [previewingId, setPreviewingId] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [downloadingFnb, setDownloadingFnb] = useState(false);
 
   const fetchItems = () => {
     authFetch(`/payroll/runs/${run.id}/items`, token)
@@ -884,6 +885,27 @@ function PayrollRunCard({
       setPreviewingId(null);
     }
   };
+
+  const handleDownloadFnbCsv = async () => {
+    setDownloadingFnb(true);
+    try {
+      const res = await authFetch(`/payroll/runs/${run.id}/export/fnb`, token);
+      if (!res.ok) throw new Error("Failed to download FNB CSV");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `payroll-fnb-${format(new Date(run.periodStart), "yyyy-MM")}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to download FNB CSV");
+    } finally {
+      setDownloadingFnb(false);
+    }
+  };
+
+  const canExportFnb = ["calculated", "approved", "paid"].includes(run.status);
 
   return (
     <div className="card-wireframe p-4">
@@ -935,6 +957,15 @@ function PayrollRunCard({
           >
             {showItems ? "Hide" : "View"} Items
           </button>
+          {canExportFnb && (
+            <button
+              onClick={handleDownloadFnbCsv}
+              disabled={downloadingFnb}
+              className="btn-secondary text-sm disabled:opacity-50"
+            >
+              {downloadingFnb ? "Downloading…" : "Download FNB CSV"}
+            </button>
+          )}
         </div>
       </div>
         {showItems && (
