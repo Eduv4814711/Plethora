@@ -151,17 +151,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-
-      <div className="flex flex-wrap gap-3">
-        {canAccessRostering && (
-          <Link href="/rostering" className="btn-primary">
-            Rostering
-          </Link>
-        )}
-        <Link href="/payroll" className="btn-secondary">
-          Payroll
-        </Link>
-      </div>
     </div>
   );
 }
