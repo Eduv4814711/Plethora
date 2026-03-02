@@ -102,7 +102,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col bg-neutral-100 dark:bg-neutral-950">
-      <header className="h-16 bg-stone-50 dark:bg-neutral-900 border-t border-neutral-200 dark:border-neutral-800 flex items-center justify-between px-6 shrink-0">
+      <header className="h-20 bg-stone-50 dark:bg-neutral-900 border-t border-neutral-200 dark:border-neutral-800 flex items-center justify-between px-6 shrink-0">
         {/* Left: Logo + branding */}
         <Link href="/" className="flex items-center gap-3 shrink-0">
           {settings?.logoUrl ? (
@@ -112,7 +112,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               className="w-10 h-10 rounded-lg object-cover border border-neutral-200 dark:border-neutral-700"
             />
           ) : (
-            <img src="/plethora-logo.svg" alt="Plethora" className="h-10 w-auto object-contain" />
+            <img src="/plethora-logo.svg" alt="Plethora" className="h-20 w-auto object-contain" />
           )}
           <div className="flex flex-col">
             <span className="text-base font-semibold text-neutral-900 dark:text-neutral-100 tracking-tight">

@@ -39,7 +39,7 @@ function LoginForm() {
       <div className="card-wireframe p-8 md:p-10 shadow-soft dark:shadow-soft-dark">
         <div className="text-center mb-8 pb-8 border-b border-neutral-200 dark:border-neutral-700">
           <div className="inline-flex items-center justify-center mb-4">
-            <img src="/plethora-logo.svg" alt="Plethora" className="h-14 w-auto object-contain" />
+            <img src="/plethora-logo.svg" alt="Plethora" className="h-20 w-auto object-contain" />
           </div>
           <p className="text-xs font-medium uppercase tracking-widest text-neutral-500 dark:text-neutral-400 mt-2">
             Workforce & Payroll Management
