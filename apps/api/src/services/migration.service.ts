@@ -579,6 +579,14 @@ function formatDate(d: Date | null | undefined): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Safely format Prisma Decimal or number to string for CSV (hourly rate, monthly salary) */
+function formatDecimal(val: unknown): string {
+  if (val === null || val === undefined) return "";
+  if (typeof val === "number" && !Number.isNaN(val)) return String(val);
+  if (typeof val === "object" && val !== null && "toString" in val) return String(val);
+  return String(val);
+}
+
 export async function exportEmployeesToCsv(companyId: string, companyName: string): Promise<string> {
   const employees = await prisma.employee.findMany({
     where: { companyId },
@@ -623,8 +631,8 @@ export async function exportEmployeesToCsv(companyId: string, companyName: strin
     csvEscape(e.jobRole),
     csvEscape(e.occupation),
     csvEscape(formatDate(e.commencementDate)),
-    csvEscape(e.hourlyRate?.toString()),
-    csvEscape(e.monthlySalary?.toString()),
+    csvEscape(formatDecimal(e.hourlyRate)),
+    csvEscape(formatDecimal(e.monthlySalary)),
     csvEscape(e.psiraNumber),
     csvEscape(e.securityServiceType),
   ]);
