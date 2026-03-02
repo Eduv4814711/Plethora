@@ -8,6 +8,8 @@ import {
   migrationPreview,
   migrationImport,
   migrationAdminBulkCreate,
+  exportEmployees,
+  exportSites,
   type MigrationPreviewResponse,
   type MigrationImportResult,
 } from "@/lib/api";
@@ -30,6 +32,10 @@ export default function MigratePage() {
 
   const [templateError, setTemplateError] = useState<string | null>(null);
 
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportEmployeesLoading, setExportEmployeesLoading] = useState(false);
+  const [exportSitesLoading, setExportSitesLoading] = useState(false);
+
   const hasFiles = !!(employeesFile || sitesFile || (isAdmin && companiesFile));
 
   const canImport =
@@ -44,6 +50,7 @@ export default function MigratePage() {
     async (type: "company" | "employees" | "sites") => {
       if (!token) return;
       setTemplateError(null);
+      setExportError(null);
       try {
         await downloadMigrationTemplate(token, type);
       } catch (err) {
@@ -109,6 +116,34 @@ export default function MigratePage() {
     }
   }, [token, canImport, isAdmin, companiesFile, employeesFile, sitesFile]);
 
+  const handleExportEmployees = useCallback(async () => {
+    if (!token) return;
+    setExportError(null);
+    setTemplateError(null);
+    setExportEmployeesLoading(true);
+    try {
+      await exportEmployees(token);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setExportEmployeesLoading(false);
+    }
+  }, [token]);
+
+  const handleExportSites = useCallback(async () => {
+    if (!token) return;
+    setExportError(null);
+    setTemplateError(null);
+    setExportSitesLoading(true);
+    try {
+      await exportSites(token);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setExportSitesLoading(false);
+    }
+  }, [token]);
+
   const totalErrors =
     (preview?.companies.errors.length ?? 0) +
     (preview?.employees.errors.length ?? 0) +
@@ -126,21 +161,48 @@ export default function MigratePage() {
       </div>
 
       <h1 className="text-2xl font-bold text-neutral-800 dark:text-white mb-2">
-        Bulk Import / Migration
+        Bulk Import / Export
       </h1>
       <p className="text-neutral-600 dark:text-neutral-400 mb-6">
         {isAdmin
-          ? "Upload CSV files to create multiple companies with team and sites. Download templates, validate, then import."
-          : "Upload CSV files to import team and sites into your company. Download templates, validate, then import."}
+          ? "Export team and sites to CSV, or upload CSV files to create multiple companies with team and sites. Download templates, validate, then import."
+          : "Export team and sites to CSV, or upload CSV files to import team and sites into your company. Download templates, validate, then import."}
       </p>
 
-      {templateError && (
+      {(templateError || exportError) && (
         <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-sm border border-red-200 dark:border-red-800/50">
-          {templateError}
+          {templateError || exportError}
         </div>
       )}
 
       <div className="space-y-6">
+        <section className="bg-white dark:bg-neutral-800 rounded-sm border border-black dark:border-white p-6">
+          <h2 className="text-lg font-semibold text-neutral-800 dark:text-white mb-4">
+            Export
+          </h2>
+          <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+            Download your team members and sites as CSV files. Exported files match the import format for round-trip compatibility.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={handleExportEmployees}
+              disabled={exportEmployeesLoading}
+              className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-black dark:border-white hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {exportEmployeesLoading ? "Exporting..." : "Export team members (employees.csv)"}
+            </button>
+            <button
+              type="button"
+              onClick={handleExportSites}
+              disabled={exportSitesLoading}
+              className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-black dark:border-white hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {exportSitesLoading ? "Exporting..." : "Export sites (sites.csv)"}
+            </button>
+          </div>
+        </section>
+
         <section className="bg-white dark:bg-neutral-800 rounded-sm border border-black dark:border-white p-6">
           <h2 className="text-lg font-semibold text-neutral-800 dark:text-white mb-4">
             Step 1: Download templates

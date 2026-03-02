@@ -559,3 +559,107 @@ export async function executeSelfImport(
 export function checkFileSize(buffer: Buffer, maxBytes: number = MAX_FILE_SIZE): boolean {
   return buffer.length <= maxBytes;
 }
+
+// --- Export to CSV ---
+
+function csvEscape(val: string | number | null | undefined): string {
+  if (val === null || val === undefined) return "";
+  const s = String(val);
+  if (s.includes(",") || s.includes('"') || s.includes("\n") || s.includes("\r")) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+function formatDate(d: Date | null | undefined): string {
+  if (!d) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export async function exportEmployeesToCsv(companyId: string, companyName: string): Promise<string> {
+  const employees = await prisma.employee.findMany({
+    where: { companyId },
+    include: { grade: { select: { name: true } }, group: { select: { name: true } } },
+    orderBy: { employeeNumber: "asc" },
+    take: MAX_EMPLOYEES,
+  });
+
+  const headers = [
+    "Company Name",
+    "Employee Number",
+    "First Name",
+    "Last Name",
+    "ID Number",
+    "Date of Birth",
+    "Gender",
+    "Phone",
+    "Email",
+    "Employee Type",
+    "Status",
+    "Job Role",
+    "Occupation",
+    "Commencement Date",
+    "Hourly Rate",
+    "Monthly Salary",
+    "PSIRA Number",
+    "Security Service Type",
+  ];
+
+  const rows = employees.map((e) => [
+    csvEscape(companyName),
+    csvEscape(e.employeeNumber),
+    csvEscape(e.firstName),
+    csvEscape(e.lastName),
+    csvEscape(e.idNumber),
+    csvEscape(formatDate(e.dateOfBirth)),
+    csvEscape(e.gender),
+    csvEscape(e.phone),
+    csvEscape(e.email),
+    csvEscape(e.employeeType),
+    csvEscape(e.status),
+    csvEscape(e.jobRole),
+    csvEscape(e.occupation),
+    csvEscape(formatDate(e.commencementDate)),
+    csvEscape(e.hourlyRate?.toString()),
+    csvEscape(e.monthlySalary?.toString()),
+    csvEscape(e.psiraNumber),
+    csvEscape(e.securityServiceType),
+  ]);
+
+  return [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+}
+
+export async function exportSitesToCsv(companyId: string, companyName: string): Promise<string> {
+  const sites = await prisma.site.findMany({
+    where: { companyId },
+    orderBy: { name: "asc" },
+    take: MAX_SITES,
+  });
+
+  const headers = [
+    "Company Name",
+    "Site Name",
+    "Location",
+    "Physical Address",
+    "Contact Person Name",
+    "Contact Person Phone",
+    "Contract or Service Agreement",
+    "Service Type",
+  ];
+
+  const rows = sites.map((s) => [
+    csvEscape(companyName),
+    csvEscape(s.name),
+    csvEscape(s.location),
+    csvEscape(s.physicalAddress),
+    csvEscape(s.contactPersonName),
+    csvEscape(s.contactPersonPhone),
+    csvEscape(s.contractOrServiceAgreement),
+    csvEscape(s.serviceType),
+  ]);
+
+  return [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+}

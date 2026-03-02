@@ -12,10 +12,13 @@ import {
   executeCompanyImport,
   executeSelfImport,
   checkFileSize,
+  exportEmployeesToCsv,
+  exportSitesToCsv,
   type ValidatedCompany,
   type ValidatedEmployee,
   type ValidatedSite,
 } from "../services/migration.service.js";
+import { prisma } from "../lib/prisma.js";
 
 const TEMPLATES_DIR = join(process.cwd(), "src", "templates");
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -71,6 +74,36 @@ export async function migrationsRoutes(app: FastifyInstance) {
       request.log.error(err);
       return reply.code(500).send({ error: "Template not found" });
     }
+  });
+
+  // GET /migrations/export/employees - Download employees as CSV
+  app.get("/export/employees", { preHandler: protect }, async (request, reply) => {
+    const companyId = request.user!.companyId;
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { name: true },
+    });
+    const companyName = company?.name ?? "Company";
+    const csv = await exportEmployeesToCsv(companyId, companyName);
+    return reply
+      .header("Content-Type", "text/csv")
+      .header("Content-Disposition", 'attachment; filename="employees-export.csv"')
+      .send(csv);
+  });
+
+  // GET /migrations/export/sites - Download sites as CSV
+  app.get("/export/sites", { preHandler: protect }, async (request, reply) => {
+    const companyId = request.user!.companyId;
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { name: true },
+    });
+    const companyName = company?.name ?? "Company";
+    const csv = await exportSitesToCsv(companyId, companyName);
+    return reply
+      .header("Content-Type", "text/csv")
+      .header("Content-Disposition", 'attachment; filename="sites-export.csv"')
+      .send(csv);
   });
 
   // POST /migrations/preview - Validate upload, return preview + errors (no DB write)

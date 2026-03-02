@@ -30,7 +30,7 @@ export default function SettingsPage() {
     { id: "business", label: "Business Details" },
     { id: "settings", label: "Business Settings" },
     { id: "users", label: "Users", adminOnly: true },
-    { id: "migrate", label: "Bulk Import", href: "/settings/migrate" },
+    { id: "migrate", label: "Bulk Import/Export", href: "/settings/migrate" },
     { id: "factory_reset", label: "Factory Reset", adminOnly: true },
   ];
 

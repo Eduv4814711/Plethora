@@ -348,15 +348,43 @@ export async function downloadMigrationTemplate(
   type: "company" | "employees" | "sites"
 ): Promise<void> {
   const filename = type === "company" ? "company-import-template.csv" : type === "employees" ? "employees-import-template.csv" : "sites-import-template.csv";
-  const res = await fetch(`${API_BASE}/migrations/templates/${type}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await authFetch(`/migrations/templates/${type}`, token);
   if (!res.ok) throw new Error("Failed to download template");
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function exportEmployees(token: string): Promise<void> {
+  const res = await authFetch("/migrations/export/employees", token);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || "Export failed");
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "employees-export.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export async function exportSites(token: string): Promise<void> {
+  const res = await authFetch("/migrations/export/sites", token);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || "Export failed");
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "sites-export.csv";
   a.click();
   URL.revokeObjectURL(url);
 }
