@@ -973,6 +973,20 @@ function PayrollRunCard({
           {previewError && (
             <p className="text-red-600 dark:text-red-400 text-sm mb-2">{previewError}</p>
           )}
+          {canExportFnb && items.length > 0 && (
+            <div className="mb-4 flex items-center gap-2">
+              <button
+                onClick={handleDownloadFnbCsv}
+                disabled={downloadingFnb}
+                className="btn-primary text-sm disabled:opacity-50"
+              >
+                {downloadingFnb ? "Downloading…" : "Download FNB CSV for Bulk Payment"}
+              </button>
+              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                Upload to FNB Online Banking for bulk salary payments
+              </span>
+            </div>
+          )}
           {items.length > 0 ? (
             <table className="w-full text-sm">
               <thead>
