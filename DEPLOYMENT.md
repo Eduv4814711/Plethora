@@ -103,3 +103,9 @@ This guide covers deploying Plethora to Railway. All components (web, API, datab
 - **Database connection**: Use Railway's variable reference to link the PostgreSQL service, e.g. `${{Postgres.DATABASE_URL}}`. Replace `Postgres` with your database service name.
 - **Build fails**: Check that Root Directory is set correctly (`apps/api` or `apps/web`).
 - **Prisma errors**: Ensure the build command includes `npx prisma generate` before `npm run build`.
+- **Deployments not updating** (code changes pushed but live site shows old version):
+  1. **Force a fresh build**: In the Web service → **Variables**, add `NO_CACHE=1` (temporary). Redeploy. Remove it after a successful deploy if you want faster builds.
+  2. **Watch Paths**: Clear the Watch Paths field so any repo change triggers a deploy, or ensure it matches your Root Directory (e.g. `apps/web/**`).
+  3. **Branch**: Confirm **Settings** → **Source** is set to the branch you push to (e.g. `main`).
+  4. **Manual redeploy**: In **Deployments**, click **⋮** on the latest deployment → **Redeploy**.
+  5. **Browser cache**: Hard refresh (Ctrl+Shift+R) or open incognito when checking the live site.

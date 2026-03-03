@@ -1,9 +1,5 @@
 "use client";
 
-// #region agent log
-const DEPLOY_VER = "2025-03-02-v2";
-// #endregion
-
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -98,23 +94,6 @@ export default function SiteDetailPage() {
     setLoading(false);
   }, [token, siteId]);
 
-  // #region agent log
-  useEffect(() => {
-    fetch("http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "0ccf20" },
-      body: JSON.stringify({
-        sessionId: "0ccf20",
-        location: "sites/[id]/page.tsx",
-        message: "Site detail mounted",
-        data: { deployVer: DEPLOY_VER, siteId, origin: typeof window !== "undefined" ? window.location.origin : "ssr" },
-        timestamp: Date.now(),
-        hypothesisId: "H1",
-      }),
-    }).catch(() => {});
-  }, [siteId]);
-  // #endregion
-
   const getGuardsInPost = (postId: string): Guard[] => {
     const post = site?.posts.find((p) => p.id === postId);
     return post?.assignedGuards?.map((a) => a.employee) ?? [];
@@ -186,15 +165,7 @@ export default function SiteDetailPage() {
   const unassignedGuards = getUnassignedGuards();
 
   return (
-    <div className="space-y-8 animate-fade-in relative">
-      {/* #region agent log - visible deploy version for verification */}
-      <div
-        className="fixed bottom-4 right-4 z-50 px-3 py-1.5 rounded-lg bg-amber-500/90 text-amber-950 text-xs font-mono font-bold shadow-lg"
-        title="Remove after deploy verification"
-      >
-        Build: {DEPLOY_VER}
-      </div>
-      {/* #endregion */}
+    <div className="space-y-8 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-4">
           <Link
