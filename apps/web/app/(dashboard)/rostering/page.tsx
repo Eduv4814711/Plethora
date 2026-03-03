@@ -210,7 +210,7 @@ export default function RosteringPage() {
     const startDate = start.toISOString();
     const endDate = end.toISOString();
 
-    const shiftsRes = await authFetch(`/shifts?startDate=${startDate}&endDate=${endDate}`, token);
+    const shiftsRes = await authFetch(`/shifts?startDate=${startDate}&endDate=${endDate}&limit=5000`, token);
     const shiftsData = await shiftsRes.json();
     const periodShifts: Shift[] = shiftsData.data || [];
 
@@ -421,7 +421,7 @@ export default function RosteringPage() {
     if (!token) return Promise.resolve();
     const { startDate, endDate } = getDateRangeParams();
     return Promise.all([
-      authFetch(`/shifts?startDate=${startDate}&endDate=${endDate}`, token).then((r) => r.json()),
+      authFetch(`/shifts?startDate=${startDate}&endDate=${endDate}&limit=5000`, token).then((r) => r.json()),
       authFetch("/employees?limit=100", token).then((r) => r.json()),
       authFetch("/sites?limit=100", token).then((r) => r.json()),
     ])

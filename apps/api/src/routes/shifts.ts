@@ -213,7 +213,7 @@ export async function shiftsRoutes(app: FastifyInstance) {
     const siteId = q.siteId;
     const startDate = q.startDate;
     const endDate = q.endDate;
-    const limit = Math.min(Number(q.limit) || 50, 100);
+    const limit = Math.min(Number(q.limit) || 50, 5000);
     const offset = Number(q.offset) || 0;
 
     const where: Record<string, unknown> = {
