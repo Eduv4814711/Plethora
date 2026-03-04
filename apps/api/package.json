@@ -26,6 +26,8 @@
     "fastify": "^4.28.1",
     "fastify-plugin": "^4.5.1",
     "jsonwebtoken": "^9.0.2",
+    "imapflow": "^1.0.165",
+    "mailparser": "^3.6.6",
     "nodemailer": "^6.9.16",
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",

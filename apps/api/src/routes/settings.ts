@@ -41,6 +41,9 @@ const emailConfigSchema = z.object({
   password: z.string().optional(),
   from: z.string().optional(),
   enabled: z.boolean().optional(),
+  imapHost: z.string().optional(),
+  imapPort: z.number().min(1).max(65535).optional(),
+  imapSecure: z.boolean().optional(),
 });
 
 const emailTemplateSchema = z.object({
@@ -206,6 +209,9 @@ export async function settingsRoutes(app: FastifyInstance) {
         if (incoming.user !== undefined) cfg.user = incoming.user;
         if (incoming.from !== undefined) cfg.from = incoming.from;
         if (incoming.enabled !== undefined) cfg.enabled = incoming.enabled;
+        if (incoming.imapHost !== undefined) cfg.imapHost = incoming.imapHost;
+        if (incoming.imapPort !== undefined) cfg.imapPort = incoming.imapPort;
+        if (incoming.imapSecure !== undefined) cfg.imapSecure = incoming.imapSecure;
         if (incoming.password !== undefined && incoming.password !== "" && incoming.password !== "********") {
           cfg.password = encryptPasswordForStorage(incoming.password);
         }

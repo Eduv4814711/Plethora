@@ -3,7 +3,7 @@ import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
-import { sendEmail } from "../services/email.service.js";
+import { sendEmail, fetchInboxEmails } from "../services/email.service.js";
 
 const sendEmailSchema = z.object({
   to: z.union([z.string().email(), z.array(z.string().email())]),
@@ -13,6 +13,23 @@ const sendEmailSchema = z.object({
 
 export async function emailsRoutes(app: FastifyInstance) {
   const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll"])];
+
+  app.get("/inbox", { preHandler: protect }, async (request, reply) => {
+    const user = request.user!;
+    const q = request.query as Record<string, string | undefined>;
+    const limit = Math.min(Number(q.limit) || 50, 100);
+
+    try {
+      const emails = await fetchInboxEmails(user.companyId, limit);
+      return reply.send({ data: emails });
+    } catch (err) {
+      request.log.error(err, "Inbox fetch failed");
+      return reply.code(500).send({
+        error: "Inbox fetch failed",
+        message: err instanceof Error ? err.message : "Could not fetch inbox. Check IMAP settings in Settings > Email.",
+      });
+    }
+  });
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

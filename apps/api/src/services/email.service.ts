@@ -1,6 +1,9 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "crypto";
 import nodemailer from "nodemailer";
 import type { Transporter } from "nodemailer";
+import { ImapFlow } from "imapflow";
+// @ts-expect-error mailparser has no types
+import { simpleParser } from "mailparser";
 import { prisma } from "../lib/prisma.js";
 import { fetchPayslipData, buildPayslipTemplateData } from "./payslip-data.service.js";
 import { generatePayslipPDFFromTemplate } from "./payslip-pdf.service.js";
@@ -100,6 +103,145 @@ export function getEmailConfigForApi(companyId: string): Promise<Omit<EmailConfi
   return getEmailConfig(companyId).then((c) =>
     c ? { ...c, password: c.password ? "********" : "" } : null
   );
+}
+
+export interface ImapConfig {
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  password: string;
+}
+
+export async function getImapConfig(companyId: string): Promise<ImapConfig | null> {
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { settings: true },
+  });
+  const settings = (company?.settings as Record<string, unknown>) ?? {};
+  const cfg = settings.emailConfig as Record<string, unknown> | undefined;
+  if (!cfg || !cfg.user) return null;
+  const password = typeof cfg.password === "string" ? decryptPassword(cfg.password) : "";
+  if (!password) return null;
+
+  const imapHost = cfg.imapHost as string | undefined;
+  const smtpHost = cfg.host as string | undefined;
+  const host = imapHost || (smtpHost ? smtpHost.replace(/^smtp\./i, "imap.") : null);
+  if (!host) return null;
+
+  return {
+    host,
+    port: Number(cfg.imapPort || 993),
+    secure: cfg.imapSecure !== false,
+    user: String(cfg.user),
+    password,
+  };
+}
+
+export interface InboxEmail {
+  id: string;
+  uid: number;
+  from: string;
+  to: string;
+  subject: string;
+  date: string;
+  body: string;
+  seen: boolean;
+}
+
+export async function fetchInboxEmails(
+  companyId: string,
+  limit: number = 50
+): Promise<InboxEmail[]> {
+  const imapConfig = await getImapConfig(companyId);
+  if (!imapConfig) return [];
+
+  const client = new ImapFlow({
+    host: imapConfig.host,
+    port: imapConfig.port,
+    secure: imapConfig.secure,
+    auth: {
+      user: imapConfig.user,
+      pass: imapConfig.password,
+    },
+    logger: false,
+  });
+
+  const results: InboxEmail[] = [];
+
+  try {
+    await client.connect();
+    const lock = await client.getMailboxLock("INBOX");
+    try {
+      const mailbox = client.mailbox;
+      const exists = mailbox && typeof mailbox === "object" && "exists" in mailbox ? mailbox.exists : 0;
+      if (exists === 0) return [];
+
+      const range = `*:-${Math.min(limit, 100)}`;
+      const messages = await client.fetchAll(range, {
+        envelope: true,
+        source: true,
+        uid: true,
+        flags: true,
+      });
+
+      for (const msg of messages) {
+        let body = "(No content)";
+        if (msg.source) {
+          try {
+            const parsed = await simpleParser(msg.source);
+            body = parsed.text || parsed.html?.replace(/<[^>]+>/g, "") || "(No content)";
+            body = body.slice(0, 5000);
+          } catch {
+            body = extractTextBody(msg.source);
+          }
+        }
+        const seen = msg.flags?.has("\\Seen") ?? false;
+        results.push({
+          id: msg.uid.toString(),
+          uid: msg.uid,
+          from: formatAddress(msg.envelope?.from),
+          to: formatAddress(msg.envelope?.to),
+          subject: msg.envelope?.subject ?? "(No subject)",
+          date: msg.envelope?.date ? new Date(msg.envelope.date).toISOString() : "",
+          body,
+          seen,
+        });
+      }
+    } finally {
+      lock.release();
+    }
+  } catch (err) {
+    console.error("[Email] IMAP fetch failed:", err);
+    throw err;
+  } finally {
+    await client.logout();
+  }
+
+  return results.reverse();
+}
+
+function formatAddress(addr: Array<{ address?: string; name?: string }> | undefined): string {
+  if (!addr || addr.length === 0) return "";
+  const a = addr[0];
+  return a?.address || a?.name || "";
+}
+
+function extractTextBody(source: Buffer | string | undefined): string {
+  if (!source) return "";
+  const str = typeof source === "string" ? source : source.toString("utf8");
+  const parts = str.split(/\r?\n\r?\n/);
+  if (parts.length < 2) return str.slice(0, 2000);
+  const body = parts.slice(1).join("\n\n");
+  const decoded = body.replace(/=\?([^?]+)\?([BQ])\?([^?]*)\?=/gi, (_, charset, enc, val) => {
+    try {
+      if (enc.toUpperCase() === "B") return Buffer.from(val, "base64").toString(charset || "utf8");
+      return val;
+    } catch {
+      return val;
+    }
+  });
+  return decoded.replace(/<[^>]+>/g, "").slice(0, 5000);
 }
 
 function getEmailTemplates(companyId: string): Promise<EmailTemplatesConfig | null> {

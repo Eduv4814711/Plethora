@@ -109,6 +109,9 @@ export interface CompanySettings {
       password?: string;
       from?: string;
       enabled?: boolean;
+      imapHost?: string;
+      imapPort?: number;
+      imapSecure?: boolean;
     };
     emailTemplates?: {
       payslipOnApproval?: { enabled?: boolean; subject?: string; body?: string };
@@ -167,6 +170,9 @@ export async function updateSettings(
       password: string;
       from: string;
       enabled: boolean;
+      imapHost: string;
+      imapPort: number;
+      imapSecure: boolean;
     }>;
     emailTemplates?: Partial<{
       payslipOnApproval: { enabled?: boolean; subject?: string; body?: string };
@@ -199,6 +205,33 @@ export interface EmailLogItem {
   sentAt: string;
   status: string;
   sentBy?: { name: string } | null;
+}
+
+export interface InboxEmailItem {
+  id: string;
+  uid: number;
+  from: string;
+  to: string;
+  subject: string;
+  date: string;
+  body: string;
+  seen: boolean;
+}
+
+export async function listInboxEmails(
+  token: string,
+  params?: { limit?: number }
+): Promise<{ data: InboxEmailItem[] }> {
+  const q = new URLSearchParams();
+  if (params?.limit) q.set("limit", String(params.limit));
+  const res = await fetch(`${API_BASE}/emails/inbox?${q}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || "Failed to fetch inbox");
+  }
+  return res.json();
 }
 
 export async function listEmails(

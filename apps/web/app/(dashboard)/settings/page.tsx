@@ -656,6 +656,9 @@ function EmailSection({
     password: "",
     from: "",
     enabled: false,
+    imapHost: "",
+    imapPort: 993,
+    imapSecure: true,
   });
   const [tplForm, setTplForm] = useState({
     payslipEnabled: false,
@@ -685,6 +688,9 @@ function EmailSection({
       password: String(emailConfig.password ?? ""),
       from: String(emailConfig.from ?? ""),
       enabled: Boolean(emailConfig.enabled),
+      imapHost: String(emailConfig.imapHost ?? ""),
+      imapPort: Number(emailConfig.imapPort ?? 993),
+      imapSecure: emailConfig.imapSecure !== false,
     });
     setTplForm({
       payslipEnabled: Boolean(payslip.enabled),
@@ -718,6 +724,9 @@ function EmailSection({
         password: form.password || undefined,
         from: form.from || form.user,
         enabled: form.enabled,
+        imapHost: form.imapHost || undefined,
+        imapPort: form.imapPort,
+        imapSecure: form.imapSecure,
       },
       emailTemplates: {
         payslipOnApproval: {
@@ -767,20 +776,21 @@ function EmailSection({
       </p>
       <form onSubmit={handleSubmit} className="space-y-8 max-w-2xl">
         <div>
-          <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-4">SMTP Configuration</h4>
+          <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-4">Outgoing Server (SMTP)</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Host</label>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Outgoing Server</label>
               <input
                 type="text"
                 value={form.host}
                 onChange={(e) => setForm((f) => ({ ...f, host: e.target.value }))}
                 className="input-modern"
-                placeholder="smtp.gmail.com"
+                placeholder="mail.example.com"
               />
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">e.g. mail.quickbophasecurity.co.za, smtp.gmail.com</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Port</label>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">SMTP Port</label>
               <input
                 type="number"
                 value={form.port}
@@ -789,16 +799,18 @@ function EmailSection({
                 min={1}
                 max={65535}
               />
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">465 (SSL), 587 (TLS)</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">User</label>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Username</label>
               <input
                 type="text"
                 value={form.user}
                 onChange={(e) => setForm((f) => ({ ...f, user: e.target.value }))}
                 className="input-modern"
-                placeholder="noreply@company.com"
+                placeholder="your.email@company.com"
               />
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">Usually your full email address</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Password</label>
@@ -843,6 +855,49 @@ function EmailSection({
               <label htmlFor="email-secure" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
                 Use TLS (secure)
               </label>
+            </div>
+          </div>
+          <div className="mt-6 pt-6 border-t border-neutral-200 dark:border-neutral-700">
+            <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-4">Incoming Server (IMAP)</h4>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4">
+              For viewing incoming emails. Often the same as outgoing server (e.g. mail.quickbophasecurity.co.za). Leave blank to use outgoing server.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Incoming Server</label>
+                <input
+                  type="text"
+                  value={form.imapHost}
+                  onChange={(e) => setForm((f) => ({ ...f, imapHost: e.target.value }))}
+                  className="input-modern"
+                  placeholder="mail.example.com"
+                />
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">e.g. mail.quickbophasecurity.co.za</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">IMAP Port</label>
+                <input
+                  type="number"
+                  value={form.imapPort}
+                  onChange={(e) => setForm((f) => ({ ...f, imapPort: parseInt(e.target.value, 10) || 993 }))}
+                  className="input-modern"
+                  min={1}
+                  max={65535}
+                />
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">993 (SSL)</p>
+              </div>
+              <div className="sm:col-span-2 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="imap-secure"
+                  checked={form.imapSecure}
+                  onChange={(e) => setForm((f) => ({ ...f, imapSecure: e.target.checked }))}
+                  className="rounded border-neutral-300 dark:border-neutral-600"
+                />
+                <label htmlFor="imap-secure" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                  Use TLS for IMAP
+                </label>
+              </div>
             </div>
           </div>
           <div className="mt-4 flex items-center gap-2">

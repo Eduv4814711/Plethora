@@ -3,30 +3,40 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { listEmails, sendManualEmail, authFetch, type EmailLogItem } from "@/lib/api";
+import { listEmails, listInboxEmails, sendManualEmail, authFetch, type EmailLogItem, type InboxEmailItem } from "@/lib/api";
 import { format } from "date-fns";
 import { clsx } from "clsx";
 
-type Tab = "sent" | "compose";
+type Tab = "inbox" | "sent" | "compose";
 
 export default function EmailPage() {
   const { token } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("sent");
   const [emails, setEmails] = useState<EmailLogItem[]>([]);
   const [total, setTotal] = useState(0);
+  const [inboxEmails, setInboxEmails] = useState<InboxEmailItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [inboxExpandedId, setInboxExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!token || activeTab !== "sent") return;
-    setLoading(true);
-    listEmails(token, { limit: 50 })
-      .then((r) => {
-        setEmails(r.data);
-        setTotal(r.total);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    if (!token) return;
+    if (activeTab === "sent") {
+      setLoading(true);
+      listEmails(token, { limit: 50 })
+        .then((r) => {
+          setEmails(r.data);
+          setTotal(r.total);
+        })
+        .catch(console.error)
+        .finally(() => setLoading(false));
+    } else if (activeTab === "inbox") {
+      setLoading(true);
+      listInboxEmails(token, { limit: 50 })
+        .then((r) => setInboxEmails(r.data))
+        .catch(console.error)
+        .finally(() => setLoading(false));
+    }
   }, [token, activeTab]);
 
   return (
@@ -52,6 +62,17 @@ export default function EmailPage() {
 
       <div className="flex gap-1 mb-6 border-b border-neutral-200 dark:border-neutral-700">
         <button
+          onClick={() => setActiveTab("inbox")}
+          className={clsx(
+            "px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors",
+            activeTab === "inbox"
+              ? "bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-neutral-200 dark:border-neutral-700 border-b-transparent -mb-px"
+              : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
+          )}
+        >
+          Inbox
+        </button>
+        <button
           onClick={() => setActiveTab("sent")}
           className={clsx(
             "px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors",
@@ -76,6 +97,15 @@ export default function EmailPage() {
       </div>
 
       <div className="card-wireframe p-6">
+        {activeTab === "inbox" && (
+          <InboxTab
+            emails={inboxEmails}
+            loading={loading}
+            expandedId={inboxExpandedId}
+            onExpand={setInboxExpandedId}
+            onRefresh={() => activeTab === "inbox" && token && listInboxEmails(token).then((r) => setInboxEmails(r.data))}
+          />
+        )}
         {activeTab === "sent" && (
           <SentTab
             emails={emails}
@@ -95,6 +125,91 @@ export default function EmailPage() {
             }}
           />
         )}
+      </div>
+    </div>
+  );
+}
+
+function InboxTab({
+  emails,
+  loading,
+  expandedId,
+  onExpand,
+  onRefresh,
+}: {
+  emails: InboxEmailItem[];
+  loading: boolean;
+  expandedId: string | null;
+  onExpand: (id: string | null) => void;
+  onRefresh: () => void;
+}) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[200px]">
+        <div className="w-10 h-10 rounded-lg bg-neutral-200 dark:bg-neutral-700 animate-pulse" />
+      </div>
+    );
+  }
+
+  if (emails.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-neutral-500 dark:text-neutral-400">No incoming emails or inbox not configured.</p>
+        <p className="text-sm text-neutral-400 dark:text-neutral-500 mt-1">
+          Configure IMAP in Settings &gt; Email (IMAP host, e.g. imap.gmail.com). If SMTP host is smtp.gmail.com, IMAP will default to imap.gmail.com.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-sm text-neutral-600 dark:text-neutral-400">{emails.length} email{emails.length !== 1 ? "s" : ""}</span>
+        <button onClick={onRefresh} className="text-sm text-neutral-600 dark:text-neutral-400 hover:underline">
+          Refresh
+        </button>
+      </div>
+      <div className="space-y-2">
+        {emails.map((e) => (
+          <div
+            key={e.id}
+            className={clsx(
+              "rounded-lg border overflow-hidden",
+              !e.seen ? "border-neutral-300 dark:border-neutral-600 bg-neutral-50/50 dark:bg-neutral-800/30" : "border-neutral-200 dark:border-neutral-700"
+            )}
+          >
+            <button
+              onClick={() => onExpand(expandedId === e.id ? null : e.id)}
+              className="w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors"
+            >
+              <div className="flex-1 min-w-0">
+                <p className={clsx("truncate", !e.seen && "font-semibold text-neutral-900 dark:text-white")}>{e.subject}</p>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400 truncate">
+                  From: {e.from}
+                </p>
+                <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">
+                  {e.date ? format(new Date(e.date), "d MMM yyyy, HH:mm") : ""}
+                </p>
+              </div>
+              <svg
+                className={clsx("w-5 h-5 text-neutral-400 shrink-0 transition-transform", expandedId === e.id && "rotate-180")}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {expandedId === e.id && (
+              <div className="px-4 py-3 border-t border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50">
+                <pre className="text-sm text-neutral-700 dark:text-neutral-300 whitespace-pre-wrap font-sans">
+                  {e.body}
+                </pre>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
