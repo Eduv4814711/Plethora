@@ -5,10 +5,12 @@ import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 
+const SA_LEAVE_TYPES = ["annual", "sick", "family_responsibility", "maternity", "parental", "unpaid"] as const;
+
 const createLeaveRecordSchema = z.object({
   employeeId: z.string().min(1),
   date: z.string(),
-  type: z.enum(["annual", "sick", "unpaid"]),
+  type: z.enum(SA_LEAVE_TYPES),
   hours: z.number().min(0).max(24).default(8),
 });
 

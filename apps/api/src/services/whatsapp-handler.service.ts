@@ -56,6 +56,7 @@ const HELP_TEXT = `*Plethora - Commands*
 • *clock out* / *out* - Clock out
 • *payslip* - Request your latest payslip
 • *leave YYYY-MM-DD type* - Apply for leave (e.g. leave 2025-03-15 annual)
+  Types: annual, sick, family, maternity, parental, unpaid
 • *help* - Show this menu`;
 
 export async function processIncomingMessage(
@@ -105,7 +106,7 @@ export async function processIncomingMessage(
     if (cmd === "apply leave") {
       return {
         reply:
-          "Format: leave YYYY-MM-DD type\nExample: leave 2025-03-15 annual\nTypes: annual, sick, unpaid",
+          "Format: leave YYYY-MM-DD type\nExample: leave 2025-03-15 annual\nTypes: annual, sick, family, maternity, parental, unpaid",
       };
     }
     return handleLeave(employee, cmd);
@@ -321,19 +322,29 @@ async function handlePayslip(
   };
 }
 
+const LEAVE_TYPE_ALIASES: Record<string, string> = {
+  annual: "annual",
+  sick: "sick",
+  family: "family_responsibility",
+  family_responsibility: "family_responsibility",
+  maternity: "maternity",
+  parental: "parental",
+  unpaid: "unpaid",
+};
+
 async function handleLeave(
   employee: EmployeeWithCompany,
   cmd: string
 ): Promise<{ reply: string }> {
-  const match = cmd.match(/leave\s+(\d{4}-\d{2}-\d{2})\s+(annual|sick|unpaid)(?:\s+(.+))?/i);
+  const match = cmd.match(/leave\s+(\d{4}-\d{2}-\d{2})\s+(\w+)(?:\s+(.+))?/i);
   if (!match) {
     return {
       reply:
-        "Format: leave YYYY-MM-DD type\nExample: leave 2025-03-15 annual\nTypes: annual, sick, unpaid",
+        "Format: leave YYYY-MM-DD type\nExample: leave 2025-03-15 annual\nTypes: annual, sick, family, maternity, parental, unpaid",
     };
   }
 
-  const [, dateStr, type, reason] = match;
+  const [, dateStr, typeInput, reason] = match;
   const date = new Date(dateStr);
   date.setHours(0, 0, 0, 0);
 
@@ -345,16 +356,16 @@ async function handleLeave(
     return { reply: "Cannot apply for leave in the past." };
   }
 
-  const validTypes = ["annual", "sick", "unpaid"];
-  if (!validTypes.includes(type.toLowerCase())) {
-    return { reply: "Leave type must be: annual, sick, or unpaid." };
+  const type = LEAVE_TYPE_ALIASES[typeInput.toLowerCase()];
+  if (!type) {
+    return { reply: "Leave type must be: annual, sick, family, maternity, parental, or unpaid." };
   }
 
   const record = await prisma.leaveRequest.create({
     data: {
       employeeId: employee.id,
       date,
-      type: type.toLowerCase(),
+      type,
       hours: 8,
       reason: reason?.trim() || null,
       status: "pending",
@@ -369,8 +380,9 @@ async function handleLeave(
     metadata: { source: "whatsapp", from: employee.phone },
   });
 
+  const typeLabel = typeInput.charAt(0).toUpperCase() + typeInput.slice(1).replace(/_/g, " ");
   return {
-    reply: `Leave request submitted for ${format(date, "d MMM yyyy")} (${type}). HR will review shortly.`,
+    reply: `Leave request submitted for ${format(date, "d MMM yyyy")} (${typeLabel}). HR will review shortly.`,
   };
 }
 
