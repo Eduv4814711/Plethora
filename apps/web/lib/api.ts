@@ -101,24 +101,6 @@ export interface CompanySettings {
     timezone?: string;
     payrollPeriod?: "weekly" | "biweekly" | "monthly";
     employeeIdPrefix?: string;
-    emailConfig?: {
-      host?: string;
-      port?: number;
-      secure?: boolean;
-      user?: string;
-      password?: string;
-      from?: string;
-      enabled?: boolean;
-      imapHost?: string;
-      imapPort?: number;
-      imapSecure?: boolean;
-    };
-    emailTemplates?: {
-      payslipOnApproval?: { enabled?: boolean; subject?: string; body?: string };
-      leaveRequestSubmitted?: { enabled?: boolean; subject?: string; body?: string; notifyEmails?: string[] };
-      leaveRequestApproved?: { enabled?: boolean; subject?: string; body?: string };
-      leaveRequestRejected?: { enabled?: boolean; subject?: string; body?: string };
-    };
   } | null;
 }
 
@@ -162,24 +144,6 @@ export async function updateSettings(
       payrollPeriod: "weekly" | "biweekly" | "monthly";
       employeeIdPrefix: string;
     }>;
-    emailConfig?: Partial<{
-      host: string;
-      port: number;
-      secure: boolean;
-      user: string;
-      password: string;
-      from: string;
-      enabled: boolean;
-      imapHost: string;
-      imapPort: number;
-      imapSecure: boolean;
-    }>;
-    emailTemplates?: Partial<{
-      payslipOnApproval: { enabled?: boolean; subject?: string; body?: string };
-      leaveRequestSubmitted: { enabled?: boolean; subject?: string; body?: string; notifyEmails?: string[] };
-      leaveRequestApproved: { enabled?: boolean; subject?: string; body?: string };
-      leaveRequestRejected: { enabled?: boolean; subject?: string; body?: string };
-    }>;
   }>
 ): Promise<CompanySettings> {
   const res = await fetch(`${API_BASE}/settings`, {
@@ -195,90 +159,6 @@ export async function updateSettings(
     throw new Error(err.message || "Failed to update settings");
   }
   return res.json();
-}
-
-export interface EmailLogItem {
-  id: string;
-  to: string;
-  subject: string;
-  body: string;
-  sentAt: string;
-  status: string;
-  sentBy?: { name: string } | null;
-}
-
-export interface InboxEmailItem {
-  id: string;
-  uid: number;
-  from: string;
-  to: string;
-  subject: string;
-  date: string;
-  body: string;
-  seen: boolean;
-}
-
-export async function listInboxEmails(
-  token: string,
-  params?: { limit?: number }
-): Promise<{ data: InboxEmailItem[] }> {
-  const q = new URLSearchParams();
-  if (params?.limit) q.set("limit", String(params.limit));
-  const res = await fetch(`${API_BASE}/emails/inbox?${q}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || err.error || "Failed to fetch inbox");
-  }
-  return res.json();
-}
-
-export async function listEmails(
-  token: string,
-  params?: { limit?: number; offset?: number }
-): Promise<{ data: EmailLogItem[]; total: number }> {
-  const q = new URLSearchParams();
-  if (params?.limit) q.set("limit", String(params.limit));
-  if (params?.offset) q.set("offset", String(params.offset));
-  const res = await fetch(`${API_BASE}/emails?${q}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error("Failed to fetch emails");
-  return res.json();
-}
-
-export async function sendManualEmail(
-  token: string,
-  data: { to: string | string[]; subject: string; body: string }
-): Promise<void> {
-  const res = await fetch(`${API_BASE}/emails/send`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || err.error || "Failed to send email");
-  }
-}
-
-export async function sendTestEmail(token: string, to: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/settings/email/test`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ to }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || err.error || "Failed to send test email");
-  }
 }
 
 export const FACTORY_RESET_MODULES = [

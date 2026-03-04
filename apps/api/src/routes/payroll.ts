@@ -10,7 +10,6 @@ import {
 import { PayrollServiceError } from "../services/payroll.service.js";
 import { fetchPayslipData, buildPayslipTemplateData } from "../services/payslip-data.service.js";
 import { generatePayslipPDFFromTemplate } from "../services/payslip-pdf.service.js";
-import { sendPayslipEmail } from "../services/email.service.js";
 import { createAuditLog } from "../lib/audit.js";
 import { format } from "date-fns";
 
@@ -183,19 +182,6 @@ export async function payrollRoutes(app: FastifyInstance) {
       entityType: "payroll_run",
       entityId: id,
     });
-
-    const items = await prisma.payrollItem.findMany({
-      where: { payrollRunId: id },
-      include: { employee: { select: { id: true, email: true } } },
-    });
-    for (const item of items) {
-      const email = item.employee.email?.trim();
-      if (email) {
-        sendPayslipEmail(user.companyId, id, item.id, email).catch((err) =>
-          request.log.error(err, "Payslip email send failed")
-        );
-      }
-    }
 
     return reply.send(updated);
   });

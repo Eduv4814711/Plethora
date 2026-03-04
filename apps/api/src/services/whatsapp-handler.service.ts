@@ -4,7 +4,6 @@ import { validateClockIn, calculateHours, AttendanceValidationError } from "./at
 import { fetchPayslipData, buildPayslipTemplateData } from "./payslip-data.service.js";
 import { generatePayslipPDFFromTemplate } from "./payslip-pdf.service.js";
 import { sendText, sendDocument } from "./whatsapp-send.service.js";
-import { sendLeaveNotification } from "./email.service.js";
 import { createAuditLog } from "../lib/audit.js";
 import { format } from "date-fns";
 
@@ -381,15 +380,8 @@ async function handleLeave(
     metadata: { source: "whatsapp", from: employee.phone },
   });
 
-  const employeeName = `${employee.firstName} ${employee.lastName}`.trim();
-  const leaveType = typeInput.charAt(0).toUpperCase() + typeInput.slice(1).replace(/_/g, " ");
   const leaveDate = format(date, "d MMM yyyy");
-  sendLeaveNotification(employee.companyId, "submitted", {
-    employeeName,
-    leaveType,
-    leaveDate,
-  }).catch(() => {});
-
+  const leaveType = type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, " ");
   return {
     reply: `Leave request submitted for ${leaveDate} (${leaveType}). HR will review shortly.`,
   };

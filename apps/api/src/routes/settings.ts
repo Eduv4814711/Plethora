@@ -5,13 +5,6 @@ import { authMiddleware } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
-import {
-  getEmailConfig,
-  sendEmail,
-  encryptPasswordForStorage,
-  getEmailErrorMessage,
-} from "../services/email.service.js";
-
 const businessDetailsSchema = z.object({
   legalName: z.string().optional(),
   registrationNumber: z.string().optional(),
@@ -34,43 +27,10 @@ const businessSettingsSchema = z.object({
   employeeIdPrefix: z.string().max(20).optional(),
 });
 
-const emailConfigSchema = z.object({
-  host: z.string().min(1).optional(),
-  port: z.number().min(1).max(65535).optional(),
-  secure: z.boolean().optional(),
-  user: z.string().optional(),
-  password: z.string().optional(),
-  from: z.string().optional(),
-  enabled: z.boolean().optional(),
-  imapHost: z.string().optional(),
-  imapPort: z.number().min(1).max(65535).optional(),
-  imapSecure: z.boolean().optional(),
-});
-
-const emailTemplateSchema = z.object({
-  enabled: z.boolean().optional(),
-  subject: z.string().optional(),
-  body: z.string().optional(),
-  notifyEmails: z.array(z.string().email()).optional(),
-});
-
-const emailTemplatesSchema = z.object({
-  payslipOnApproval: emailTemplateSchema.optional(),
-  leaveRequestSubmitted: emailTemplateSchema.optional(),
-  leaveRequestApproved: emailTemplateSchema.optional(),
-  leaveRequestRejected: emailTemplateSchema.optional(),
-});
-
 const updateSettingsSchema = z.object({
   name: z.string().min(1).optional(),
   businessDetails: businessDetailsSchema.optional(),
   businessSettings: businessSettingsSchema.optional(),
-  emailConfig: emailConfigSchema.optional(),
-  emailTemplates: emailTemplatesSchema.optional(),
-});
-
-const emailTestSchema = z.object({
-  to: z.string().email(),
 });
 
 const FACTORY_RESET_MODULES = [
@@ -122,51 +82,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Company not found" });
     }
 
-    const settings = company.settings as Record<string, unknown> | null;
-    if (settings?.emailConfig && typeof settings.emailConfig === "object") {
-      const cfg = settings.emailConfig as Record<string, unknown>;
-      settings.emailConfig = { ...cfg, password: cfg.password ? "********" : "" };
-    }
-
     return reply.send(company);
-  });
-
-  app.post("/email/test", { preHandler: [authMiddleware, requireAdmin()] }, async (request, reply) => {
-    const companyId = request.user!.companyId;
-    const parsed = emailTestSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({
-        error: "Validation error",
-        message: parsed.error.flatten().fieldErrors,
-      });
-    }
-    const config = await getEmailConfig(companyId);
-    if (!config || !config.enabled || !config.password) {
-      return reply.code(400).send({
-        error: "Email not configured",
-        message: "Configure SMTP in Settings > Email and ensure it is enabled.",
-      });
-    }
-    try {
-      const ok = await sendEmail(companyId, {
-        to: parsed.data.to,
-        subject: "Plethora – Test Email",
-        body: "This is a test email from your Plethora email configuration. If you received this, your SMTP settings are working correctly.",
-      });
-      if (!ok) {
-        return reply.code(500).send({
-          error: "Send failed",
-          message: "Could not send test email. Check your SMTP settings and try again.",
-        });
-      }
-      return reply.send({ success: true, message: "Test email sent" });
-    } catch (err) {
-      const message = getEmailErrorMessage(err);
-      return reply.code(500).send({
-        error: "Send failed",
-        message,
-      });
-    }
   });
 
   app.put("/", { preHandler: [authMiddleware, requireAdmin()] }, async (request, reply) => {
@@ -198,45 +114,13 @@ export async function settingsRoutes(app: FastifyInstance) {
       if (d.psiraRegistration !== undefined) updateData.psiraRegistration = d.psiraRegistration || null;
       if (d.uifReference !== undefined) updateData.uifReference = d.uifReference || null;
     }
-    if (data.businessSettings !== undefined || data.emailConfig !== undefined || data.emailTemplates !== undefined) {
+    if (data.businessSettings !== undefined) {
       const companyBefore = await prisma.company.findUnique({
         where: { id: companyId },
         select: { settings: true },
       });
       const currentSettings = { ...((companyBefore?.settings as Record<string, unknown>) ?? {}) };
-
-      if (data.businessSettings !== undefined) {
-        Object.assign(currentSettings, data.businessSettings);
-      }
-
-      if (data.emailConfig !== undefined) {
-        const cfg = { ...(currentSettings.emailConfig as Record<string, unknown>) } as Record<string, unknown>;
-        const incoming = data.emailConfig;
-        if (incoming.host !== undefined) cfg.host = incoming.host;
-        if (incoming.port !== undefined) cfg.port = incoming.port;
-        if (incoming.secure !== undefined) cfg.secure = incoming.secure;
-        if (incoming.user !== undefined) cfg.user = incoming.user;
-        if (incoming.from !== undefined) cfg.from = incoming.from;
-        if (incoming.enabled !== undefined) cfg.enabled = incoming.enabled;
-        if (incoming.imapHost !== undefined) cfg.imapHost = incoming.imapHost;
-        if (incoming.imapPort !== undefined) cfg.imapPort = incoming.imapPort;
-        if (incoming.imapSecure !== undefined) cfg.imapSecure = incoming.imapSecure;
-        if (incoming.password !== undefined && incoming.password !== "" && incoming.password !== "********") {
-          cfg.password = encryptPasswordForStorage(incoming.password);
-        }
-        currentSettings.emailConfig = cfg;
-      }
-
-      if (data.emailTemplates !== undefined) {
-        const tpl = { ...(currentSettings.emailTemplates as Record<string, unknown>) } as Record<string, unknown>;
-        const incoming = data.emailTemplates;
-        if (incoming.payslipOnApproval !== undefined) tpl.payslipOnApproval = incoming.payslipOnApproval;
-        if (incoming.leaveRequestSubmitted !== undefined) tpl.leaveRequestSubmitted = incoming.leaveRequestSubmitted;
-        if (incoming.leaveRequestApproved !== undefined) tpl.leaveRequestApproved = incoming.leaveRequestApproved;
-        if (incoming.leaveRequestRejected !== undefined) tpl.leaveRequestRejected = incoming.leaveRequestRejected;
-        currentSettings.emailTemplates = tpl;
-      }
-
+      Object.assign(currentSettings, data.businessSettings);
       updateData.settings = currentSettings;
     }
 

@@ -21,7 +21,6 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/payroll", label: "Payroll", roles: ["admin", "operations_manager", "hr_payroll"] },
   { href: "/reports", label: "Reports", roles: ["admin", "operations_manager", "hr_payroll"] },
   { href: "/audit", label: "Audit", roles: ["admin"] },
-  { href: "/email", label: "Email", roles: ["admin", "operations_manager", "hr_payroll"] },
   { href: "/settings", label: "Settings", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
 ];
 
@@ -29,7 +28,7 @@ export const NAV_ITEMS: NavItem[] = [
 export const MAIN_NAV_HREFS = ["/", "/employees", "/sites", "/rostering", "/attendance", "/payroll"];
 
 /** Nav items shown in the "More" dropdown (remaining items). */
-export const MORE_NAV_HREFS = ["/reports", "/audit", "/email"];
+export const MORE_NAV_HREFS = ["/reports", "/audit"];
 
 /**
  * Default route for a role when they don't have access to the requested path.

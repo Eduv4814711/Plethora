@@ -1,6 +1,4 @@
-import { format } from "date-fns";
 import { prisma } from "../lib/prisma.js";
-import { sendLeaveNotification } from "./email.service.js";
 
 export class LeaveRequestError extends Error {
   constructor(message: string) {
@@ -49,15 +47,7 @@ export async function approveLeaveRequest(
     }),
   ]);
 
-  const employeeName = `${req.employee.firstName} ${req.employee.lastName}`.trim();
-  const leaveType = req.type.charAt(0).toUpperCase() + req.type.slice(1).replace(/_/g, " ");
-  const leaveDate = format(req.date, "d MMM yyyy");
-  sendLeaveNotification(companyId, "approved", {
-    employeeName,
-    employeeEmail: req.employee.email ?? undefined,
-    leaveType,
-    leaveDate,
-  }).catch(() => {});
+  // Leave approved – notification removed (email module disabled)
 }
 
 export async function rejectLeaveRequest(
@@ -87,13 +77,5 @@ export async function rejectLeaveRequest(
     },
   });
 
-  const employeeName = `${req.employee.firstName} ${req.employee.lastName}`.trim();
-  const leaveType = req.type.charAt(0).toUpperCase() + req.type.slice(1).replace(/_/g, " ");
-  const leaveDate = format(req.date, "d MMM yyyy");
-  sendLeaveNotification(companyId, "rejected", {
-    employeeName,
-    employeeEmail: req.employee.email ?? undefined,
-    leaveType,
-    leaveDate,
-  }).catch(() => {});
+  // Leave rejected – notification removed (email module disabled)
 }
