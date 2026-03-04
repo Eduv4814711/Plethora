@@ -49,6 +49,7 @@ model Company {
   deductionRules   DeductionRule[]
   publicHolidays   PublicHoliday[]
   timesheets       Timesheet[]
+  emailLogs        EmailLog[]
 }
 
 model User {
@@ -63,6 +64,7 @@ model User {
 
   company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   auditLogs  AuditLog[]
+  emailLogs  EmailLog[]
 
   @@unique([companyId, email])
   @@index([companyId])
@@ -594,4 +596,21 @@ model AuditLog {
   @@index([entityType])
   @@index([entityId])
   @@index([timestamp])
+}
+
+model EmailLog {
+  id         String   @id @default(cuid())
+  companyId  String
+  sentById   String?
+  to         String   // comma-separated if multiple
+  subject    String
+  body       String   @db.Text
+  sentAt     DateTime @default(now())
+  status     String   @default("sent") // "sent" | "failed"
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sentBy  User?   @relation(fields: [sentById], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([sentAt])
 }
