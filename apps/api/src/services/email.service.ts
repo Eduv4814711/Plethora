@@ -255,13 +255,18 @@ function getEmailTemplates(companyId: string): Promise<EmailTemplatesConfig | nu
 }
 
 function createTransporter(config: EmailConfig): Transporter {
+  const port = config.port;
+  const useSecure = config.secure || port === 465;
   return nodemailer.createTransport({
     host: config.host,
-    port: config.port,
-    secure: config.secure,
+    port,
+    secure: useSecure,
     auth: {
       user: config.user,
       pass: config.password,
+    },
+    tls: {
+      rejectUnauthorized: true,
     },
   });
 }
@@ -285,7 +290,7 @@ export async function sendEmail(
   try {
     const transporter = createTransporter(config);
     await transporter.sendMail({
-      from: config.from,
+      from: config.from || config.user,
       to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
       subject: options.subject,
       text: options.body,
@@ -298,8 +303,24 @@ export async function sendEmail(
     return true;
   } catch (err) {
     console.error("[Email] Send failed:", err);
-    return false;
+    throw err;
   }
+}
+
+/** Returns a user-friendly error message for email send failures. */
+export function getEmailErrorMessage(err: unknown): string {
+  if (!err) return "Unknown error";
+  const msg = err instanceof Error ? err.message : String(err);
+  if (msg.includes("Invalid login") || msg.includes("Authentication failed") || msg.includes("535") || msg.includes("534")) {
+    return "Authentication failed. Check your username and password.";
+  }
+  if (msg.includes("ECONNREFUSED") || msg.includes("ENOTFOUND") || msg.includes("ETIMEDOUT")) {
+    return "Connection failed. Check server address, port, and that your hosting provider allows outbound SMTP (ports 465/587).";
+  }
+  if (msg.includes("self-signed certificate") || msg.includes("UNABLE_TO_VERIFY_LEAF_SIGNATURE")) {
+    return "Certificate verification failed. Your server may use a self-signed certificate.";
+  }
+  return msg.slice(0, 200);
 }
 
 function replacePlaceholders(text: string, data: Record<string, string | undefined>): string {

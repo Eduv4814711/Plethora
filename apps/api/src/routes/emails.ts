@@ -3,7 +3,7 @@ import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
-import { sendEmail, fetchInboxEmails } from "../services/email.service.js";
+import { sendEmail, fetchInboxEmails, getEmailErrorMessage } from "../services/email.service.js";
 
 const sendEmailSchema = z.object({
   to: z.union([z.string().email(), z.array(z.string().email())]),
@@ -68,11 +68,30 @@ export async function emailsRoutes(app: FastifyInstance) {
     const toList = Array.isArray(to) ? to : [to];
     const toStr = toList.join(", ");
 
-    const ok = await sendEmail(user.companyId, {
-      to: toList,
-      subject,
-      body,
-    });
+    let ok = false;
+    try {
+      ok = await sendEmail(user.companyId, {
+        to: toList,
+        subject,
+        body,
+      });
+    } catch (err) {
+      await prisma.emailLog.create({
+        data: {
+          companyId: user.companyId,
+          sentById: user.sub,
+          to: toStr,
+          subject,
+          body,
+          status: "failed",
+        },
+      });
+      const message = getEmailErrorMessage(err);
+      return reply.code(500).send({
+        error: "Send failed",
+        message,
+      });
+    }
 
     await prisma.emailLog.create({
       data: {
@@ -81,16 +100,9 @@ export async function emailsRoutes(app: FastifyInstance) {
         to: toStr,
         subject,
         body,
-        status: ok ? "sent" : "failed",
+        status: "sent",
       },
     });
-
-    if (!ok) {
-      return reply.code(500).send({
-        error: "Send failed",
-        message: "Could not send email. Check your SMTP configuration in Settings > Email.",
-      });
-    }
 
     return reply.send({ success: true, message: "Email sent" });
   });

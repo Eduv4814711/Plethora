@@ -9,6 +9,7 @@ import {
   getEmailConfig,
   sendEmail,
   encryptPasswordForStorage,
+  getEmailErrorMessage,
 } from "../services/email.service.js";
 
 const businessDetailsSchema = z.object({
@@ -146,18 +147,26 @@ export async function settingsRoutes(app: FastifyInstance) {
         message: "Configure SMTP in Settings > Email and ensure it is enabled.",
       });
     }
-    const ok = await sendEmail(companyId, {
-      to: parsed.data.to,
-      subject: "Plethora – Test Email",
-      body: "This is a test email from your Plethora email configuration. If you received this, your SMTP settings are working correctly.",
-    });
-    if (!ok) {
+    try {
+      const ok = await sendEmail(companyId, {
+        to: parsed.data.to,
+        subject: "Plethora – Test Email",
+        body: "This is a test email from your Plethora email configuration. If you received this, your SMTP settings are working correctly.",
+      });
+      if (!ok) {
+        return reply.code(500).send({
+          error: "Send failed",
+          message: "Could not send test email. Check your SMTP settings and try again.",
+        });
+      }
+      return reply.send({ success: true, message: "Test email sent" });
+    } catch (err) {
+      const message = getEmailErrorMessage(err);
       return reply.code(500).send({
         error: "Send failed",
-        message: "Could not send test email. Check your SMTP settings and try again.",
+        message,
       });
     }
-    return reply.send({ success: true, message: "Test email sent" });
   });
 
   app.put("/", { preHandler: [authMiddleware, requireAdmin()] }, async (request, reply) => {
