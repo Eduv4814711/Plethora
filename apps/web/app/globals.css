@@ -5,29 +5,20 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
 :root {
-  --foreground: #0a0a0a;
-  --background: #f5f5f5;
-  --card: #ffffff;
-  --card-border: #171717;
-  --muted: #525252;
-  --radius: 4px;
+  --bg-canvas: #E9EEF6;
+  --bg-content: #FFFFFF;
+  --bg-accent: #E0EFFF;
+  --text-primary: #000000;
+  --border-thin: 1px solid #000000;
+  --border-thick: 3px solid #000000;
+  --radius: 10px;
   --transition: 150ms ease;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground: #fafafa;
-    --background: #0a0a0a;
-    --card: #171717;
-    --card-border: #404040;
-    --muted: #a3a3a3;
-  }
 }
 
 body {
   font-family: 'IBM Plex Sans', system-ui, sans-serif;
-  color: var(--foreground);
-  background: var(--background);
+  color: var(--text-primary);
+  background: var(--bg-canvas);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -38,104 +29,98 @@ html {
 }
 
 @layer utilities {
-  /* Primary: filled for emphasis, clear affordance */
+  /* Wireframe buttons – black borders, no shadows */
   .btn-primary {
-    @apply px-5 py-2.5 font-semibold rounded-md border-2 border-neutral-900 dark:border-neutral-100 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 hover:bg-neutral-800 dark:hover:bg-neutral-200 active:scale-[0.98] transition-all duration-150 outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
+    @apply px-5 py-2.5 font-semibold rounded-[10px] border-[3px] border-black bg-black text-white hover:bg-neutral-800 active:scale-[0.98] transition-all duration-150 outline-none focus:border-black disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
   }
   .btn-secondary {
-    @apply px-5 py-2.5 font-medium rounded-md border-2 border-neutral-300 dark:border-neutral-600 bg-transparent text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800/50 hover:border-neutral-400 dark:hover:border-neutral-500 active:scale-[0.98] transition-all duration-150 outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900;
+    @apply px-5 py-2.5 font-medium rounded-[10px] border-[3px] border-black bg-white text-black hover:bg-neutral-100 active:scale-[0.98] transition-all duration-150 outline-none focus:border-black;
   }
   .btn-ghost {
-    @apply px-4 py-2 font-medium rounded-md text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800/50 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors duration-150 outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2;
+    @apply px-4 py-2 font-medium rounded-[10px] text-black border border-transparent hover:border-black hover:bg-neutral-100 transition-colors duration-150 outline-none;
   }
   .input-modern {
-    @apply w-full px-4 py-2.5 rounded-md border-2 border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-neutral-400 focus:border-neutral-900 dark:focus:border-neutral-100 transition-all duration-150 outline-none;
+    @apply w-full px-4 py-2.5 rounded-[10px] border-2 border-black bg-white text-black placeholder-neutral-500 focus:border-black transition-all duration-150 outline-none;
   }
   select.input-modern {
     @apply leading-relaxed;
     padding-block: 0.5rem;
   }
   .input-compact {
-    @apply w-full px-3 py-2 text-sm rounded-md border-2 border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 focus:ring-2 focus:ring-neutral-400 focus:border-neutral-900 dark:focus:border-neutral-100 transition-all duration-150 outline-none;
+    @apply w-full px-3 py-2 text-sm rounded-[10px] border-2 border-black bg-white text-black placeholder-neutral-500 focus:border-black transition-all duration-150 outline-none;
   }
   .card-wireframe {
-    @apply border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded-lg shadow-sm;
+    @apply border-2 border-black bg-white rounded-[10px];
   }
   .card-elevated {
-    @apply border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200;
+    @apply border-[3px] border-black bg-white rounded-[10px];
   }
   .page-title {
-    @apply text-2xl font-bold text-neutral-900 dark:text-white tracking-tight;
+    @apply text-2xl font-bold text-black tracking-tight;
   }
   .section-title {
-    @apply text-sm font-semibold text-neutral-800 dark:text-neutral-200 uppercase tracking-wider;
+    @apply text-sm font-semibold text-black uppercase tracking-wider;
   }
   .badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium;
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium border border-black bg-white text-black;
   }
   .badge-neutral {
-    @apply badge bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700;
+    @apply badge bg-neutral-100 border-black text-black;
   }
   .badge-success {
-    @apply badge bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800;
+    @apply badge bg-neutral-100 border-black text-black;
   }
   .badge-warning {
-    @apply badge bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800;
+    @apply badge bg-neutral-100 border-black text-black;
   }
   .badge-error {
-    @apply badge bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800;
+    @apply badge bg-neutral-100 border-black text-black;
+  }
+  .border-wireframe-thin {
+    border-width: 1px;
+    border-color: #000000;
+  }
+  .border-wireframe-thick {
+    border-width: 3px;
+    border-color: #000000;
+  }
+  .bg-wireframe-accent {
+    background-color: #E0EFFF;
   }
 }
 
-/* Date picker – wireframe styling (arrow nav, centered label) */
+/* Date picker – wireframe styling */
 .rdp-root {
-  --rdp-accent-color: #0a0a0a;
-  --rdp-accent-background-color: #f5f5f5;
-  --rdp-day_button-border-radius: 6px;
+  --rdp-accent-color: #000000;
+  --rdp-accent-background-color: #E0EFFF;
+  --rdp-day_button-border-radius: 8px;
   --rdp-day_button-width: 36px;
   --rdp-day_button-height: 36px;
   --rdp-day-height: 38px;
   --rdp-day-width: 38px;
 }
-.dark .rdp-root {
-  --rdp-accent-color: #fafafa;
-  --rdp-accent-background-color: #404040;
-}
 
-/* Header bar – subtle background, centered month/year */
 .rdp-root .rdp-month_caption {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0.5rem;
   margin-bottom: 0.5rem;
-  background: #f5f5f5;
-  border-radius: 6px;
+  background: #E0EFFF;
+  border: 1px solid #000000;
+  border-radius: 8px;
   font-weight: 600;
   font-size: 0.9375rem;
 }
-.dark .rdp-root .rdp-month_caption {
-  background: #262626;
-}
 
-/* Nav arrows – wireframe boxes */
 .rdp-root .rdp-button_previous,
 .rdp-root .rdp-button_next {
-  border: 2px solid #e5e5e5;
-  border-radius: 6px;
+  border: 2px solid #000000;
+  border-radius: 8px;
   background: white;
 }
-.dark .rdp-root .rdp-button_previous,
-.dark .rdp-root .rdp-button_next {
-  border-color: #404040;
-  background: #171717;
-}
+
 .rdp-root .rdp-button_previous:hover,
 .rdp-root .rdp-button_next:hover {
-  background: #f5f5f5;
+  background: #E0EFFF;
 }
-.dark .rdp-root .rdp-button_previous:hover,
-.dark .rdp-root .rdp-button_next:hover {
-  background: #262626;
-}
-

@@ -37,12 +37,12 @@ function LoginForm() {
 
   return (
     <div className="w-full animate-fade-in">
-      <div className="card-wireframe p-8 md:p-10 shadow-soft dark:shadow-soft-dark">
-        <div className="text-center mb-8 pb-8 border-b border-neutral-200 dark:border-neutral-700">
+      <div className="card-elevated p-10 md:p-12">
+        <div className="text-center mb-8 pb-8 border-b-2 border-black">
           <div className="inline-flex items-center justify-center mb-4">
-            <img src="/plethora-logo.svg" alt="Plethora" className="h-20 w-auto object-contain" />
+            <img src="/plethora-logo.svg" alt="Plethora" className="h-[7.5rem] w-auto object-contain" />
           </div>
-          <p className="text-xs font-medium uppercase tracking-widest text-neutral-500 dark:text-neutral-400 mt-2">
+          <p className="text-xs font-medium uppercase tracking-widest text-black mt-2">
             Workforce & Payroll Management
           </p>
         </div>
@@ -51,7 +51,7 @@ function LoginForm() {
           <div>
             <label
               htmlFor="email"
-              className="block text-xs font-semibold uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-2"
+              className="block text-xs font-semibold uppercase tracking-wider text-black mb-2"
             >
               Email
             </label>
@@ -69,7 +69,7 @@ function LoginForm() {
           <div>
             <label
               htmlFor="password"
-              className="block text-xs font-semibold uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-2"
+              className="block text-xs font-semibold uppercase tracking-wider text-black mb-2"
             >
               Password
             </label>
@@ -85,7 +85,7 @@ function LoginForm() {
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-black hover:bg-neutral-100 border border-transparent hover:border-black transition-colors"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? (
@@ -103,8 +103,13 @@ function LoginForm() {
           </div>
 
           {error && (
-            <div className="p-4 text-sm text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-md">
-              {error}
+            <div className="p-4 text-sm text-black bg-white border-2 border-black rounded-[10px] space-y-2">
+              <p>{error}</p>
+              {(error === "Login failed" || error.includes("connect") || error.includes("server") || error.includes("404")) && (
+                <p className="text-xs mt-2">
+                  Run <code className="bg-neutral-100 px-1 rounded">npm run dev:all</code> (or <code className="bg-neutral-100 px-1 rounded">npm run dev:api</code> in a separate terminal). Web must be on port 3000, API on 3001. First-time setup: <code className="bg-neutral-100 px-1 rounded">npm run db:push</code> and <code className="bg-neutral-100 px-1 rounded">npm run db:seed</code>.
+                </p>
+              )}
             </div>
           )}
 
@@ -117,7 +122,7 @@ function LoginForm() {
           </button>
         </form>
       </div>
-      <p className="text-center text-xs uppercase tracking-widest text-neutral-400 dark:text-neutral-500 mt-6">
+      <p className="text-center text-xs uppercase tracking-widest text-black mt-6">
         Quick Bopha Security
       </p>
     </div>

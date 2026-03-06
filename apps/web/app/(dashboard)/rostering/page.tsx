@@ -63,11 +63,11 @@ interface Site {
 }
 
 const statusColors: Record<string, string> = {
-  created: "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-700 dark:text-neutral-300",
-  assigned: "border border-black dark:border-white bg-neutral-100 dark:bg-neutral-700/50 text-neutral-800 dark:text-neutral-200",
-  active: "border border-black dark:border-white bg-neutral-200 dark:bg-neutral-600/50 text-neutral-900 dark:text-neutral-100",
-  completed: "border border-black dark:border-white bg-neutral-50 dark:bg-neutral-800/50 text-neutral-600 dark:text-neutral-400",
-  verified: "border border-black dark:border-white bg-neutral-200 dark:bg-neutral-600/50 text-neutral-900 dark:text-neutral-100",
+  created: "border-2 border-black bg-wireframe-accent text-black",
+  assigned: "border-2 border-black bg-neutral-100 text-black",
+  active: "border-2 border-black bg-white text-black",
+  completed: "border-2 border-black bg-neutral-100 text-black",
+  verified: "border-2 border-black bg-white text-black",
 };
 
 export default function RosteringPage() {

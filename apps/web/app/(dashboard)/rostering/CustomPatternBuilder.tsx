@@ -65,11 +65,11 @@ export function CustomPatternBuilder({ blocks, onChange, periodStart, periodEnd 
   return (
     <div className="mt-2 space-y-3">
       {periodStart && periodEnd && (
-        <p className="text-[11px] text-neutral-500 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-800/50 rounded px-2 py-1.5 border border-neutral-200 dark:border-neutral-700">
+        <p className="text-[11px] text-black bg-wireframe-accent rounded-[10px] px-2 py-1.5 border-2 border-black">
           Pattern runs from <strong>{format(parseISO(periodStart), "d MMM yyyy")}</strong> to <strong>{format(parseISO(periodEnd), "d MMM yyyy")}</strong> — the full chosen date range. First block applies to the start date, then repeats to the end.
         </p>
       )}
-      <div className="text-xs font-semibold text-neutral-600 dark:text-neutral-400">Blocks (order matters)</div>
+      <div className="text-xs font-semibold text-black">Blocks (order matters)</div>
       {blocks.map((block, idx) => (
         <div key={idx} className="flex gap-2 items-center">
           <div className="flex flex-col gap-0.5">
@@ -77,7 +77,7 @@ export function CustomPatternBuilder({ blocks, onChange, periodStart, periodEnd 
               type="button"
               onClick={() => moveBlock(idx, "up")}
               disabled={idx === 0}
-              className="p-0.5 text-neutral-400 hover:text-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="p-0.5 text-black hover:text-black disabled:opacity-30 disabled:cursor-not-allowed"
               aria-label="Move up"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -88,7 +88,7 @@ export function CustomPatternBuilder({ blocks, onChange, periodStart, periodEnd 
               type="button"
               onClick={() => moveBlock(idx, "down")}
               disabled={idx === blocks.length - 1}
-              className="p-0.5 text-neutral-400 hover:text-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed"
+              className="p-0.5 text-black hover:text-black disabled:opacity-30 disabled:cursor-not-allowed"
               aria-label="Move down"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -99,7 +99,7 @@ export function CustomPatternBuilder({ blocks, onChange, periodStart, periodEnd 
           <select
             value={block.type}
             onChange={(e) => updateBlock(idx, { type: e.target.value as CustomBlock["type"] })}
-            className="flex-1 py-1.5 px-2 text-xs rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900"
+            className="flex-1 py-1.5 px-2 text-xs rounded-[10px] border-2 border-black bg-white"
           >
             {(Object.keys(BLOCK_LABELS) as CustomBlock["type"][]).map((t) => (
               <option key={t} value={t}>
@@ -113,7 +113,7 @@ export function CustomPatternBuilder({ blocks, onChange, periodStart, periodEnd 
             max={14}
             value={block.count}
             onChange={(e) => updateBlock(idx, { count: Math.max(1, Math.min(14, parseInt(e.target.value, 10) || 1)) })}
-            className="w-12 py-1.5 px-2 text-xs rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900"
+            className="w-12 py-1.5 px-2 text-xs rounded-[10px] border-2 border-black bg-white"
           />
           <button
             type="button"
@@ -131,17 +131,17 @@ export function CustomPatternBuilder({ blocks, onChange, periodStart, periodEnd 
       <button
         type="button"
         onClick={addBlock}
-        className="text-xs font-medium text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-200 flex items-center gap-1"
+        className="text-xs font-medium text-black hover:text-black flex items-center gap-1"
       >
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
         </svg>
         Add block
       </button>
-      <div className="text-[10px] text-neutral-500 dark:text-neutral-500 pt-1 font-mono bg-neutral-100 dark:bg-neutral-800/50 rounded px-2 py-1.5">
-        <span className="font-medium text-neutral-600 dark:text-neutral-400">Preview:</span> {previewBlocks(blocks)}
+      <div className="text-[10px] text-black pt-1 font-mono bg-wireframe-accent rounded-[10px] px-2 py-1.5 border-2 border-black">
+        <span className="font-medium text-black">Preview:</span> {previewBlocks(blocks)}
       </div>
-      <p className="text-[10px] text-neutral-400 dark:text-neutral-500">
+      <p className="text-[10px] text-black">
         O = Off, D = Day shift, N = Night shift
       </p>
     </div>

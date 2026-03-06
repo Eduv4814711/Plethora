@@ -138,13 +138,13 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => debouncedQuery.length >= 2 && setOpen(true)}
         onKeyDown={handleKeyDown}
-        className="w-72 pl-10 pr-4 py-2 rounded-md border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-sm placeholder-neutral-400 focus:ring-2 focus:ring-neutral-400 focus:border-neutral-900 dark:focus:border-neutral-100 outline-none transition-all"
+        className="w-72 pl-10 pr-4 py-2 rounded-[10px] border-2 border-black bg-white text-sm placeholder-neutral-500 focus:border-black outline-none transition-all"
         aria-label="Search"
         aria-expanded={open}
         aria-autocomplete="list"
       />
       <svg
-        className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400"
+        className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black"
         fill="none"
         stroke="currentColor"
         strokeWidth={1.5}
@@ -156,17 +156,17 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
       {open && (
         <div
           ref={listRef}
-          className="absolute top-full left-0 right-0 mt-1 py-1 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto"
+          className="absolute top-full left-0 right-0 mt-1 py-1 bg-white border-[3px] border-black rounded-[10px] z-50 max-h-80 overflow-y-auto"
           role="listbox"
         >
           {loading ? (
-            <div className="px-4 py-3 text-sm text-neutral-500">Searching...</div>
+            <div className="px-4 py-3 text-sm text-black">Searching...</div>
           ) : totalItems === 0 ? (
-            <div className="px-4 py-3 text-sm text-neutral-500">No results found</div>
+            <div className="px-4 py-3 text-sm text-black">No results found</div>
           ) : (
             <>
               {employees.length > 0 && (
-                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
+                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-black bg-wireframe-accent border-b-2 border-black">
                   Team
                 </div>
               )}
@@ -178,18 +178,18 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
                   aria-selected={focusedIndex === i}
                   className={`
                     w-full text-left px-4 py-2.5 text-sm flex items-center gap-3 transition-colors
-                    ${focusedIndex === i ? "bg-neutral-100 dark:bg-neutral-800" : "hover:bg-neutral-50 dark:hover:bg-neutral-800/50"}
+                    ${focusedIndex === i ? "bg-neutral-100" : "hover:bg-neutral-100"}
                   `}
                   onClick={handleSelectEmployee}
                 >
-                  <span className="font-medium text-neutral-900 dark:text-neutral-100">
+                  <span className="font-medium text-black">
                     {emp.firstName} {emp.lastName}
                   </span>
-                  <span className="text-neutral-500 text-xs">{emp.employeeNumber}</span>
+                  <span className="text-black text-xs">{emp.employeeNumber}</span>
                 </button>
               ))}
               {sites.length > 0 && (
-                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 border-t border-neutral-200 dark:border-neutral-700 mt-1 pt-1">
+                <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-black bg-wireframe-accent border-t-2 border-black mt-1 pt-1">
                   Sites
                 </div>
               )}
@@ -201,13 +201,13 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
                   aria-selected={focusedIndex === employees.length + i}
                   className={`
                     w-full text-left px-4 py-2.5 text-sm flex flex-col gap-0.5 transition-colors
-                    ${focusedIndex === employees.length + i ? "bg-neutral-100 dark:bg-neutral-800" : "hover:bg-neutral-50 dark:hover:bg-neutral-800/50"}
+                    ${focusedIndex === employees.length + i ? "bg-neutral-100" : "hover:bg-neutral-100"}
                   `}
                   onClick={() => handleSelectSite(site.id)}
                 >
-                  <span className="font-medium text-neutral-900 dark:text-neutral-100">{site.name}</span>
+                  <span className="font-medium text-black">{site.name}</span>
                   {site.location && (
-                    <span className="text-neutral-500 text-xs truncate">{site.location}</span>
+                    <span className="text-black text-xs truncate">{site.location}</span>
                   )}
                 </button>
               ))}

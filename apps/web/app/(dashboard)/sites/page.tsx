@@ -106,12 +106,12 @@ export default function SitesPage() {
     return (
       <div className="animate-pulse space-y-6">
         <div className="flex justify-between items-center">
-          <div className="h-9 bg-neutral-200 dark:bg-neutral-700 rounded-md w-48" />
-          <div className="h-10 bg-neutral-200 dark:bg-neutral-700 rounded-md w-32" />
+          <div className="h-9 bg-white border-2 border-black rounded-[10px] w-48" />
+          <div className="h-10 bg-white border-2 border-black rounded-[10px] w-32" />
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-64 bg-neutral-100 dark:bg-neutral-800/50 rounded-lg" />
+            <div key={i} className="h-64 bg-white border-[3px] border-black rounded-[10px]" />
           ))}
         </div>
       </div>
@@ -123,7 +123,7 @@ export default function SitesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="page-title">Site Management</h1>
-          <p className="text-neutral-500 dark:text-neutral-400 mt-1 text-sm">
+          <p className="text-black mt-1 text-sm">
             Register and manage company sites, contacts, and assigned guards
           </p>
         </div>

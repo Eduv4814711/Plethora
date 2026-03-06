@@ -22,7 +22,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, logout, loading } = useAuth();
   const { settings, loading: settingsLoading, needsSetup, update, refresh } = useSettings();
   const companyName = settings?.name ?? "Plethora";
-  const tagline = "Workforce & Payroll";
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -52,10 +51,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   if (loading || settingsLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-neutral-100 dark:bg-neutral-950">
+      <div className="min-h-screen flex items-center justify-center bg-wireframe-bg">
         <div className="flex flex-col items-center gap-4 animate-fade-in">
-          <div className="w-10 h-10 rounded-lg bg-neutral-200 dark:bg-neutral-800 animate-pulse" />
-          <span className="text-xs font-medium uppercase tracking-wider text-neutral-500">Loading</span>
+          <div className="w-10 h-10 rounded-[10px] border-2 border-black bg-white animate-pulse" />
+          <span className="text-xs font-medium uppercase tracking-wider text-black">Loading</span>
         </div>
       </div>
     );
@@ -101,24 +100,23 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
 
   return (
-    <div className="min-h-screen flex flex-col bg-neutral-100 dark:bg-neutral-950">
-      <header className="h-20 bg-stone-50 dark:bg-neutral-900 border-t border-neutral-200 dark:border-neutral-800 flex items-center justify-between px-6 shrink-0">
+    <div className="min-h-screen flex flex-col bg-wireframe-bg">
+      <header className="h-[7.5rem] bg-yellow-100 border-[3px] border-black rounded-lg flex items-center justify-between px-6 shrink-0">
         {/* Left: Logo + branding */}
         <Link href="/" className="flex items-center gap-3 shrink-0">
           {settings?.logoUrl ? (
             <img
               src={settings.logoUrl}
               alt=""
-              className="w-10 h-10 rounded-lg object-cover border border-neutral-200 dark:border-neutral-700"
+              className="w-10 h-10 rounded-[10px] object-cover border-2 border-black"
             />
           ) : (
-            <img src="/plethora-logo.svg" alt="Plethora" className="h-20 w-auto object-contain" />
+            <img src="/plethora-logo.svg" alt="Plethora" className="h-[7.5rem] w-auto object-contain" />
           )}
           <div className="flex flex-col">
-            <span className="text-base font-semibold text-neutral-900 dark:text-neutral-100 tracking-tight">
+            <span className="text-base font-bold text-black tracking-tight uppercase">
               {companyName}
             </span>
-            <span className="text-xs text-neutral-500 dark:text-neutral-400">{tagline}</span>
           </div>
         </Link>
 
@@ -129,10 +127,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               key={item.href}
               href={item.href}
               className={clsx(
-                "text-sm font-medium uppercase tracking-wide transition-colors",
+                "text-sm font-bold uppercase tracking-wide transition-colors",
                 isActive(item.href)
-                  ? "text-neutral-900 dark:text-neutral-100 font-semibold"
-                  : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
+                  ? "text-black underline underline-offset-4"
+                  : "text-black hover:underline underline-offset-4"
               )}
             >
               {item.label.toUpperCase()}
@@ -143,16 +141,16 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <button
                 onClick={() => setMoreOpen((o) => !o)}
                 className={clsx(
-                  "text-sm font-medium uppercase tracking-wide transition-colors",
+                  "text-sm font-bold uppercase tracking-wide transition-colors",
                   moreNavItems.some((i) => isActive(i.href))
-                    ? "text-neutral-900 dark:text-neutral-100 font-semibold"
-                    : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
+                    ? "text-black underline underline-offset-4"
+                    : "text-black hover:underline underline-offset-4"
                 )}
               >
                 MORE
               </button>
               {moreOpen && (
-                <div className="absolute top-full right-0 mt-1 py-1 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg z-50 min-w-[180px]">
+                <div className="absolute top-full right-0 mt-1 py-1 bg-white border-[3px] border-black rounded-[10px] z-50 min-w-[180px]">
                   {moreNavItems.map((item) => (
                     <Link
                       key={item.href}
@@ -161,8 +159,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       className={clsx(
                         "block px-4 py-2.5 text-sm transition-colors",
                         isActive(item.href)
-                          ? "bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 font-medium"
-                          : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 hover:text-neutral-900 dark:hover:text-neutral-100"
+                          ? "bg-wireframe-accent text-black font-medium"
+                          : "text-black hover:bg-neutral-100"
                       )}
                     >
                       {item.label}
@@ -182,7 +180,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <SearchDropdown onClose={() => setSearchOpen(false)} />
                 <button
                   onClick={() => setSearchOpen(false)}
-                  className="p-1.5 rounded-md text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                  className="p-1.5 rounded-[10px] text-black hover:bg-neutral-100 border-2 border-black transition-colors"
                   aria-label="Close search"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -193,11 +191,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             ) : (
               <button
                 onClick={() => setSearchOpen(true)}
-                className="p-2.5 rounded-md text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                className="p-2.5 rounded-[10px] text-black hover:bg-neutral-100 border-2 border-transparent hover:border-black transition-colors"
                 title="Search"
                 aria-label="Search"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </button>
@@ -207,11 +205,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           {canAccessSettings && (
             <Link
               href="/settings"
-              className="p-2.5 rounded-md text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+              className="p-2.5 rounded-[10px] text-black hover:bg-neutral-100 border-2 border-transparent hover:border-black transition-colors"
               title="Settings"
               aria-label="Settings"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -225,7 +223,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <div ref={profileRef} className="relative">
             <button
               onClick={() => setProfileOpen((o) => !o)}
-              className="flex items-center justify-center w-9 h-9 rounded-full border-2 border-neutral-300 dark:border-neutral-600 text-neutral-600 dark:text-neutral-400 hover:border-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors"
+              className="flex items-center justify-center w-9 h-9 rounded-full border-[3px] border-black text-black hover:bg-neutral-100 transition-colors"
               title="Profile"
               aria-label="Profile"
             >
@@ -234,10 +232,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </svg>
             </button>
             {profileOpen && (
-              <div className="absolute right-0 top-full mt-1 py-2 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg z-50 min-w-[200px]">
-                <div className="px-4 py-2 border-b border-neutral-200 dark:border-neutral-700">
-                  <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">{user.name}</p>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 capitalize">
+              <div className="absolute right-0 top-full mt-1 py-2 bg-white border-[3px] border-black rounded-[10px] z-50 min-w-[200px]">
+                <div className="px-4 py-2 border-b-2 border-black">
+                  <p className="text-sm font-semibold text-black">{user.name}</p>
+                  <p className="text-xs text-black capitalize">
                     {user.role.replace(/_/g, " ")}
                   </p>
                 </div>
@@ -246,7 +244,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     setProfileOpen(false);
                     logout();
                   }}
-                  className="w-full text-left px-4 py-2 text-sm text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100"
+                  className="w-full text-left px-4 py-2 text-sm text-black hover:bg-neutral-100"
                 >
                   Logout
                 </button>
@@ -256,7 +254,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="flex-1 p-6 overflow-auto bg-white dark:bg-neutral-950">{hasAccess ? children : null}</main>
+      <main className="flex-1 p-6 overflow-auto bg-wireframe-bg">{hasAccess ? children : null}</main>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: "class",
   content: [
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -11,6 +12,14 @@ const config: Config = {
       fontFamily: {
         sans: ["IBM Plex Sans", "system-ui", "sans-serif"],
         mono: ["IBM Plex Mono", "monospace"],
+      },
+      colors: {
+        "wireframe-bg": "#E9EEF6",
+        "wireframe-accent": "#E0EFFF",
+      },
+      borderWidth: {
+        "wireframe-thin": "1px",
+        "wireframe-thick": "3px",
       },
       animation: {
         "fade-in": "fadeIn 0.3s ease-out",
@@ -25,10 +34,6 @@ const config: Config = {
           "0%": { opacity: "0", transform: "translateY(8px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
-      },
-      boxShadow: {
-        "soft": "0 2px 8px -2px rgba(0,0,0,0.08), 0 4px 16px -4px rgba(0,0,0,0.06)",
-        "soft-dark": "0 2px 8px -2px rgba(0,0,0,0.3), 0 4px 16px -4px rgba(0,0,0,0.2)",
       },
     },
   },

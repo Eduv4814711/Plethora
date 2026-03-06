@@ -116,12 +116,12 @@ export function CompanySetupModal({
 
   if (!isAdmin) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/80 p-4">
-        <div className="card-wireframe w-full max-w-md p-8 text-center shadow-xl">
-          <h2 className="text-xl font-bold text-neutral-900 dark:text-white mb-2">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4">
+        <div className="card-elevated w-full max-w-md p-8 text-center">
+          <h2 className="text-xl font-bold text-black mb-2">
             Company Setup Required
           </h2>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-6">
+          <p className="text-sm text-black mb-6">
             Company setup is required. Please contact your administrator to configure company details.
           </p>
           <button
@@ -137,19 +137,19 @@ export function CompanySetupModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950/80">
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/20">
       <div className="flex-1 overflow-y-auto p-4 min-h-0">
-        <div className="max-w-2xl mx-auto my-4 sm:my-8 card-wireframe flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)] shadow-xl">
-          {/* Sticky header - always visible, includes Company Name */}
-          <div className="shrink-0 p-6 pb-4 border-b border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded-t-sm">
-            <h2 className="text-xl font-bold text-neutral-900 dark:text-white mb-2">
+        <div className="max-w-2xl mx-auto my-4 sm:my-8 card-elevated flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)]">
+          {/* Sticky header - light blue accent */}
+          <div className="shrink-0 p-6 pb-4 border-b-2 border-black bg-wireframe-accent rounded-t-[10px]">
+            <h2 className="text-xl font-bold text-black mb-2">
               Company Setup Required
             </h2>
-            <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
+            <p className="text-sm text-black mb-4">
               Enter your company name below, then fill in the rest. This information is required for the system to function correctly.
             </p>
-            <div className="p-4 rounded-sm bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Company Name *</label>
+            <div className="p-4 rounded-[10px] bg-white border-2 border-black">
+              <label className="block text-sm font-medium text-black mb-1">Company Name *</label>
               <input
                 type="text"
                 value={form.name}
@@ -159,7 +159,7 @@ export function CompanySetupModal({
                 required
               />
               {nameInvalid && (
-                <p className="text-sm text-amber-600 dark:text-amber-400 mt-1">
+                <p className="text-sm text-black mt-1">
                   Change from &quot;My Company&quot; to your actual company name to enable Save.
                 </p>
               )}
@@ -170,10 +170,10 @@ export function CompanySetupModal({
           <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
           <div>
-            <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Business Details</h3>
+            <h3 className="font-semibold text-black mb-4">Business Details</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Legal Name</label>
+                <label className="block text-sm font-medium text-black mb-1">Legal Name</label>
                 <input
                   type="text"
                   value={form.legalName}
@@ -184,7 +184,7 @@ export function CompanySetupModal({
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">PSIRA Registration</label>
+                  <label className="block text-sm font-medium text-black mb-1">PSIRA Registration</label>
                   <input
                     type="text"
                     value={form.psiraRegistration}
@@ -194,7 +194,7 @@ export function CompanySetupModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Company Registration</label>
+                  <label className="block text-sm font-medium text-black mb-1">Company Registration</label>
                   <input
                     type="text"
                     value={form.registrationNumber}
@@ -204,7 +204,7 @@ export function CompanySetupModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Tax Number</label>
+                  <label className="block text-sm font-medium text-black mb-1">Tax Number</label>
                   <input
                     type="text"
                     value={form.taxNumber}
@@ -213,7 +213,7 @@ export function CompanySetupModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">UIF Reference</label>
+                  <label className="block text-sm font-medium text-black mb-1">UIF Reference</label>
                   <input
                     type="text"
                     value={form.uifReference}
@@ -223,7 +223,7 @@ export function CompanySetupModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Telephone</label>
+                  <label className="block text-sm font-medium text-black mb-1">Telephone</label>
                   <input
                     type="text"
                     value={form.phone}
@@ -232,7 +232,7 @@ export function CompanySetupModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Email</label>
+                  <label className="block text-sm font-medium text-black mb-1">Email</label>
                   <input
                     type="email"
                     value={form.email}
@@ -242,7 +242,7 @@ export function CompanySetupModal({
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Address</label>
+                <label className="block text-sm font-medium text-black mb-1">Address</label>
                 <textarea
                   value={form.address}
                   onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
@@ -251,7 +251,7 @@ export function CompanySetupModal({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Website</label>
+                <label className="block text-sm font-medium text-black mb-1">Website</label>
                 <input
                   type="url"
                   value={form.website}
@@ -267,11 +267,11 @@ export function CompanySetupModal({
             </div>
           </div>
 
-          <div className="border-t border-neutral-200 dark:border-neutral-700 pt-6">
-            <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Business Settings</h3>
+          <div className="border-t-2 border-black pt-6">
+            <h3 className="font-semibold text-black mb-4">Business Settings</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Currency</label>
+                <label className="block text-sm font-medium text-black mb-1">Currency</label>
                 <select
                   value={form.currency}
                   onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
@@ -284,7 +284,7 @@ export function CompanySetupModal({
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Date Format</label>
+                <label className="block text-sm font-medium text-black mb-1">Date Format</label>
                 <select
                   value={form.dateFormat}
                   onChange={(e) => setForm((f) => ({ ...f, dateFormat: e.target.value }))}
@@ -296,7 +296,7 @@ export function CompanySetupModal({
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Timezone</label>
+                <label className="block text-sm font-medium text-black mb-1">Timezone</label>
                 <input
                   type="text"
                   value={form.timezone}
@@ -306,7 +306,7 @@ export function CompanySetupModal({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Payroll Period</label>
+                <label className="block text-sm font-medium text-black mb-1">Payroll Period</label>
                 <select
                   value={form.payrollPeriod}
                   onChange={(e) => setForm((f) => ({ ...f, payrollPeriod: e.target.value }))}
@@ -318,7 +318,7 @@ export function CompanySetupModal({
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Team Member ID Prefix</label>
+                <label className="block text-sm font-medium text-black mb-1">Team Member ID Prefix</label>
                 <input
                   type="text"
                   value={form.employeeIdPrefix}
@@ -332,13 +332,13 @@ export function CompanySetupModal({
           </div>
           </div>
 
-          {/* Sticky footer - always visible */}
-          <div className="shrink-0 p-6 pt-4 border-t border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 rounded-b-sm">
+          {/* Sticky footer */}
+          <div className="shrink-0 p-6 pt-4 border-t-2 border-black bg-white rounded-b-[10px]">
             {error && (
-              <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>
+              <p className="text-sm text-black mb-3">{error}</p>
             )}
             {nameInvalid && (
-              <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-3">
+              <p className="text-sm text-black mb-3">
                 Save is disabled until you change the Company Name above.
               </p>
             )}
@@ -400,13 +400,13 @@ function LogoUploadInline({
 
   return (
     <div>
-      <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">Logo</label>
+      <label className="block text-sm font-medium text-black mb-2">Logo</label>
       <div className="flex flex-col sm:flex-row gap-4 items-start">
-        <div className="w-24 h-24 rounded-lg border-2 border-dashed border-neutral-300 dark:border-neutral-600 flex items-center justify-center overflow-hidden bg-neutral-50 dark:bg-neutral-800/50 shrink-0">
+        <div className="w-24 h-24 rounded-[10px] border-2 border-black flex items-center justify-center overflow-hidden bg-white shrink-0">
           {previewUrl ? (
             <img src={previewUrl} alt="Logo" className="w-full h-full object-contain" />
           ) : (
-            <span className="text-3xl text-neutral-400 dark:text-neutral-500">?</span>
+            <span className="text-3xl text-black">?</span>
           )}
         </div>
         <div className="flex-1 min-w-0">
@@ -431,16 +431,16 @@ function LogoUploadInline({
               type="button"
               onClick={() => onLogoChange("")}
               disabled={uploading}
-              className="ml-2 px-3 py-2 text-sm font-medium text-neutral-600 dark:text-neutral-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-sm transition-colors"
+              className="ml-2 px-3 py-2 text-sm font-medium text-black hover:bg-neutral-100 border-2 border-transparent hover:border-black rounded-[10px] transition-colors"
             >
               Remove
             </button>
           )}
-          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-2">
+          <p className="text-xs text-black mt-2">
             JPEG, PNG, GIF or WebP. Max 2MB.
           </p>
           {uploadError && (
-            <p className="text-sm text-red-600 dark:text-red-400 mt-1">{uploadError}</p>
+            <p className="text-sm text-black mt-1">{uploadError}</p>
           )}
         </div>
       </div>

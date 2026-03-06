@@ -55,7 +55,8 @@ export async function login(
       err?.message ||
       err?.error ||
       (res.status === 401 ? "Invalid email or password" : "Login failed");
-    throw new Error(message);
+    const statusHint = res.status === 404 ? " (API route not found – check API is on port 3001)" : res.status === 502 ? " (API unreachable)" : "";
+    throw new Error(message + statusHint);
   }
   try {
     const data = await res.json();
