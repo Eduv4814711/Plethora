@@ -41,10 +41,12 @@ html {
   }
   .input-modern {
     @apply w-full px-4 py-2.5 rounded-[10px] border-2 border-black bg-white text-black placeholder-neutral-500 focus:border-black transition-all duration-150 outline-none;
+    font-family: inherit;
   }
   select.input-modern {
     @apply leading-relaxed;
     padding-block: 0.5rem;
+    font-family: inherit;
   }
   .input-compact {
     @apply w-full px-3 py-2 text-sm rounded-[10px] border-2 border-black bg-white text-black placeholder-neutral-500 focus:border-black transition-all duration-150 outline-none;
