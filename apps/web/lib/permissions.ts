@@ -10,12 +10,12 @@ export interface NavItem {
 /**
  * Navigation items with role-based access.
  * Matches API route protection: each module is visible only to roles that can use its APIs.
- * Controller role: only Rostering, Attendance, and Sites are visible.
+ * Controller role: only Rostering and Attendance are visible.
  */
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
   { href: "/employees", label: "Team", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
-  { href: "/sites", label: "Sites", roles: ["admin", "operations_manager", "supervisor", "controller"] },
+  { href: "/sites", label: "Sites", roles: ["admin", "operations_manager", "supervisor"] },
   { href: "/rostering", label: "Rostering", roles: ["admin", "operations_manager", "supervisor", "controller"] },
   { href: "/attendance", label: "Attendance", roles: ["admin", "operations_manager", "hr_payroll", "supervisor", "controller"] },
   { href: "/payroll", label: "Payroll", roles: ["admin", "operations_manager", "hr_payroll"] },
@@ -32,7 +32,7 @@ export const MORE_NAV_HREFS = ["/reports", "/audit"];
 
 /**
  * Default route for a role when they don't have access to the requested path.
- * Controller only has access to Rostering, Attendance, Sites - redirect to Rostering.
+ * Controller only has access to Rostering and Attendance - redirect to Rostering.
  */
 export function getDefaultRouteForRole(role: string): string {
   if (role === "controller") return "/rostering";

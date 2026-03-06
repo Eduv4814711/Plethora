@@ -71,7 +71,7 @@ export default function SiteDetailPage() {
   const [draggedGuard, setDraggedGuard] = useState<{ guard: Guard; source: "pool" | string } | null>(null);
   const [dragOverPost, setDragOverPost] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const canManage = ["admin", "operations_manager", "hr_payroll", "supervisor", "controller"].includes((user as { role?: string })?.role ?? "");
+  const canManage = ["admin", "operations_manager", "hr_payroll", "supervisor"].includes((user as { role?: string })?.role ?? "");
 
   const refresh = () => {
     if (!token || !siteId) return;

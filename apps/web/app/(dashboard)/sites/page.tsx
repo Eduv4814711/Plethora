@@ -83,7 +83,7 @@ export default function SitesPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingSite, setEditingSite] = useState<Site | null>(null);
   const [deletingSite, setDeletingSite] = useState<Site | null>(null);
-  const canManageSites = ["admin", "operations_manager", "supervisor", "controller"].includes((user as { role?: string })?.role ?? "");
+  const canManageSites = ["admin", "operations_manager", "supervisor"].includes((user as { role?: string })?.role ?? "");
 
   const refresh = () => {
     if (!token) return;
