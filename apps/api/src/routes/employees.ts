@@ -124,8 +124,9 @@ const statusTransitionSchema = z.object({
 
 export async function employeesRoutes(app: FastifyInstance) {
   const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"])];
+  const readProtect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"])];
 
-  app.get("/", { preHandler: protect }, async (request, reply) => {
+  app.get("/", { preHandler: readProtect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as Record<string, string | undefined>;
     const limit = Math.min(Number(q.limit) || 20, 100);
@@ -293,7 +294,7 @@ export async function employeesRoutes(app: FastifyInstance) {
     return reply.send({ employeeNumber: nextNumber });
   });
 
-  app.get("/:id", { preHandler: protect }, async (request, reply) => {
+  app.get("/:id", { preHandler: readProtect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
 
