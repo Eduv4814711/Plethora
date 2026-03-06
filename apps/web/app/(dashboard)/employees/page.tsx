@@ -268,105 +268,98 @@ export default function EmployeesPage() {
               expandedId === emp.id ? "ring-2 ring-offset-2 ring-black" : ""
             }`}
           >
-            <div className="flex justify-between items-start">
+            {/* Top: Name, ID, Guard/Group, Status badge */}
+            <div className="flex justify-between items-start gap-3">
               <div>
-                <h3 className="font-semibold text-neutral-900">
+                <h3 className="text-lg font-bold text-black uppercase tracking-tight">
                   {emp.firstName} {emp.lastName}
                 </h3>
-                <p className="text-[10px] uppercase tracking-wider text-neutral-500 mt-0.5">
+                <p className="text-xs uppercase tracking-wider text-black mt-1">
                   ID: {emp.employeeNumber}
                 </p>
-                <span
-                  className={`inline-block mt-1 badge ${
-                    statusColors[emp.status] || "badge-neutral"
-                  }`}
-                >
-                  {emp.status}
-                </span>
+                <p className="text-xs uppercase tracking-wider text-black mt-0.5">
+                  {(emp.employeeType === "office" ? "Office" : "Guard")}: {emp.group?.name ?? "—"}
+                </p>
               </div>
-              <span className="text-[10px] uppercase tracking-wider text-neutral-400">
-                {expandedId === emp.id ? "−" : "+"}
+              <span
+                className={`shrink-0 px-3 py-1 rounded-[10px] text-xs font-bold uppercase border-2 border-black ${
+                  emp.status === "active" ? "bg-[#FFD400] text-black" : "bg-neutral-100 text-black"
+                }`}
+              >
+                {emp.status}
               </span>
             </div>
-            {emp.employeeType && (
-              <span className="text-[10px] uppercase tracking-wider text-neutral-500">
-                {emp.employeeType === "office" ? "Office Staff" : "Guard"}
-              </span>
-            )}
-            {emp.group && (
-              <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded bg-neutral-100 border border-black text-black">
-                {emp.group.name}
-              </span>
-            )}
-            {emp.idNumber && (
-              <p className="mt-2 text-sm text-neutral-500">ID: {emp.idNumber}</p>
-            )}
-            {emp.psiraNumber && (
-              <p className="mt-0.5 text-sm text-neutral-500">PSIRA: {emp.psiraNumber}</p>
-            )}
-            {emp.phone && (
-              <p className="mt-0.5 text-sm text-neutral-500">{emp.phone}</p>
-            )}
-            {emp.employeeType === "office" && emp.monthlySalary != null && (
-              <p className="mt-0.5 text-sm text-neutral-500">R{emp.monthlySalary}/month</p>
-            )}
-            {emp.employeeType !== "office" && (emp.hourlyRate != null || emp.grade) && (
-              <p className="mt-0.5 text-sm text-neutral-500">
-                {emp.grade ? `${emp.grade.name} (R${Number(emp.grade.hourlyRate).toFixed(2)}/hr)` : `R${emp.hourlyRate}/hr`}
-              </p>
-            )}
-            {(emp.currentSite || emp.currentPost) && (
-              <p className="mt-2 text-sm text-neutral-600">
-                {[emp.currentSite, emp.currentPost].filter(Boolean).join(" - ")}
-              </p>
-            )}
+
+            {/* Yellow info block */}
+            <div className="mt-4 p-4 rounded-[10px] bg-[#FFD400] border-2 border-black">
+              <div className="space-y-1.5 text-xs uppercase tracking-wider text-black font-medium">
+                {emp.idNumber && <p>ID: {emp.idNumber}</p>}
+                {emp.psiraNumber && <p>PSIRA: {emp.psiraNumber}</p>}
+                {emp.phone && <p>PHONE: {emp.phone}</p>}
+                {(emp.grade || emp.hourlyRate != null || emp.monthlySalary != null) && (
+                  <p>
+                    GRADE: {emp.grade
+                      ? `${emp.grade.name} (${Number(emp.grade.hourlyRate).toFixed(2)}/HR)`
+                      : emp.employeeType === "office" && emp.monthlySalary != null
+                        ? `R${emp.monthlySalary}/MONTH`
+                        : emp.hourlyRate != null
+                          ? `R${Number(emp.hourlyRate).toFixed(2)}/HR`
+                          : "—"}
+                  </p>
+                )}
+                {!emp.idNumber && !emp.psiraNumber && !emp.phone && !emp.grade && emp.hourlyRate == null && emp.monthlySalary == null && (
+                  <p className="text-black/70">No details</p>
+                )}
+              </div>
+            </div>
 
             {expandedId === emp.id && (
               <div className="mt-4 pt-4 border-t-2 border-black space-y-3 text-sm">
                 {emp.email && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500">Email</span><br />{emp.email}</p>
+                  <p><span className="text-[10px] uppercase tracking-wider text-black">Email</span><br />{emp.email}</p>
                 )}
                 {emp.dateOfBirth && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500">DOB</span><br />{toDateStr(emp.dateOfBirth)}</p>
+                  <p><span className="text-[10px] uppercase tracking-wider text-black">DOB</span><br />{toDateStr(emp.dateOfBirth)}</p>
                 )}
                 {emp.gender && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500">Gender</span><br />{emp.gender === "M" ? "Male" : "Female"}</p>
+                  <p><span className="text-[10px] uppercase tracking-wider text-black">Gender</span><br />{emp.gender === "M" ? "Male" : "Female"}</p>
                 )}
                 {emp.physicalAddress && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500">Address</span><br />{emp.physicalAddress}{emp.postalCode ? ` ${emp.postalCode}` : ""}</p>
+                  <p><span className="text-[10px] uppercase tracking-wider text-black">Address</span><br />{emp.physicalAddress}{emp.postalCode ? ` ${emp.postalCode}` : ""}</p>
                 )}
                 {emp.commencementDate && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500">Started</span><br />{toDateStr(emp.commencementDate)}</p>
+                  <p><span className="text-[10px] uppercase tracking-wider text-black">Started</span><br />{toDateStr(emp.commencementDate)}</p>
                 )}
                 {(emp.bankName || emp.bankAccountNumber) && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500">Bank</span><br />{emp.bankName || "—"}{emp.bankAccountNumber ? ` •••• ${String(emp.bankAccountNumber).slice(-4)}` : ""}</p>
+                  <p><span className="text-[10px] uppercase tracking-wider text-black">Bank</span><br />{emp.bankName || "—"}{emp.bankAccountNumber ? ` •••• ${String(emp.bankAccountNumber).slice(-4)}` : ""}</p>
                 )}
                 {(emp.nextOfKin1Name || emp.nextOfKin1Phone) && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500">Next of kin</span><br />{emp.nextOfKin1Name || "—"} {emp.nextOfKin1Phone ? `• ${emp.nextOfKin1Phone}` : ""}</p>
+                  <p><span className="text-[10px] uppercase tracking-wider text-black">Next of kin</span><br />{emp.nextOfKin1Name || "—"} {emp.nextOfKin1Phone ? `• ${emp.nextOfKin1Phone}` : ""}</p>
                 )}
                 {emp.psiraExpiryDate && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500">PSIRA expiry</span><br />{toDateStr(emp.psiraExpiryDate)}</p>
+                  <p><span className="text-[10px] uppercase tracking-wider text-black">PSIRA expiry</span><br />{toDateStr(emp.psiraExpiryDate)}</p>
                 )}
                 {emp.occupation && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500">Occupation</span><br />{emp.occupation}</p>
+                  <p><span className="text-[10px] uppercase tracking-wider text-black">Occupation</span><br />{emp.occupation}</p>
                 )}
                 {emp.placeOfWork && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-neutral-500">Place of work</span><br />{emp.placeOfWork}</p>
+                  <p><span className="text-[10px] uppercase tracking-wider text-black">Place of work</span><br />{emp.placeOfWork}</p>
                 )}
               </div>
             )}
 
-            <div className="mt-4 flex gap-3" onClick={(e) => e.stopPropagation()}>
+            {/* Bottom: Edit, Change Status */}
+            <div className="mt-4 flex justify-end gap-4" onClick={(e) => e.stopPropagation()}>
               <button
                 onClick={() => setEditingId(emp.id)}
-                className="btn-ghost text-xs py-1"
+                className="text-xs font-medium uppercase tracking-wider text-black hover:underline"
               >
                 Edit
               </button>
               {emp.status !== "offboarded" && (
                 <button
                   onClick={() => setStatusChangeId(emp.id)}
-                  className="btn-ghost text-xs py-1"
+                  className="text-xs font-medium uppercase tracking-wider text-black hover:underline"
                 >
                   Change Status
                 </button>
