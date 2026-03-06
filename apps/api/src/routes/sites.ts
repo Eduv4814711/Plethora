@@ -62,9 +62,10 @@ const assignGuardSchema = z.object({
 
 export async function sitesRoutes(app: FastifyInstance) {
   const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"])];
+  const readProtect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"])];
   const manageSites = [authMiddleware, requireRole(["admin", "operations_manager", "supervisor"])];
 
-  app.get("/", { preHandler: protect }, async (request, reply) => {
+  app.get("/", { preHandler: readProtect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as Record<string, string | undefined>;
     const limit = Math.min(Number(q.limit) || 50, 100);
@@ -201,7 +202,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     return reply.code(201).send(siteWithAssigned);
   });
 
-  app.get("/:id", { preHandler: protect }, async (request, reply) => {
+  app.get("/:id", { preHandler: readProtect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
 
@@ -376,7 +377,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     return reply.code(204).send();
   });
 
-  app.get("/:siteId/posts", { preHandler: protect }, async (request, reply) => {
+  app.get("/:siteId/posts", { preHandler: readProtect }, async (request, reply) => {
     const { siteId } = request.params as { siteId: string };
     const user = request.user!;
 
