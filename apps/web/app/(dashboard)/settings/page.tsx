@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
-import { uploadLogo, listUsers, createUser, updateUser, deleteUser, factoryReset, FACTORY_RESET_MODULES, authFetch, type UserListItem, type UserRole, type FactoryResetModuleId } from "@/lib/api";
+import { listUsers, createUser, updateUser, deleteUser, factoryReset, FACTORY_RESET_MODULES, authFetch, type UserListItem, type UserRole, type FactoryResetModuleId } from "@/lib/api";
 import { clsx } from "clsx";
 
 type Tab = "profile" | "business" | "settings" | "users" | "migrate" | "factory_reset";
@@ -19,15 +19,16 @@ const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 export default function SettingsPage() {
-  const { user, token } = useAuth();
+  const { user, token, logout } = useAuth();
   const { settings, loading, update, refresh, error } = useSettings();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab") as Tab | null;
   const isAdmin = user?.role === "admin";
-  const [activeTab, setActiveTab] = useState<Tab>(tabParam && ["profile", "business", "settings", "users", "migrate", "factory_reset"].includes(tabParam) ? tabParam : "profile");
+  const tabIds: Tab[] = ["profile", "business", "settings", "users", "migrate", "factory_reset"];
+  const [activeTab, setActiveTab] = useState<Tab>(tabParam && tabIds.includes(tabParam) ? tabParam : "profile");
 
   useEffect(() => {
-    if (tabParam && ["profile", "business", "settings", "users", "migrate", "factory_reset"].includes(tabParam)) {
+    if (tabParam && tabIds.includes(tabParam)) {
       setActiveTab(tabParam as Tab);
     }
   }, [tabParam]);
@@ -142,105 +143,8 @@ export default function SettingsPage() {
           <UsersSection token={token} currentUserId={user?.id} />
         )}
         {activeTab === "factory_reset" && isAdmin && token && (
-          <FactoryResetSection token={token} refresh={refresh} />
+          <FactoryResetSection token={token} refresh={refresh} logout={logout} />
         )}
-      </div>
-    </div>
-  );
-}
-
-function LogoUpload({
-  logoUrl,
-  onLogoChange,
-  readOnly,
-}: {
-  logoUrl: string;
-  onLogoChange: (url: string) => void;
-  readOnly?: boolean;
-}) {
-  const { token } = useAuth();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !token || readOnly) return;
-
-    const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-    if (!allowed.includes(file.type)) {
-      setUploadError("Please select a JPEG, PNG, GIF, or WebP image (max 2MB)");
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      setUploadError("Image must be under 2MB");
-      return;
-    }
-
-    setUploadError(null);
-    setUploading(true);
-    try {
-      const { url } = await uploadLogo(token, file);
-      onLogoChange(url);
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploading(false);
-      e.target.value = "";
-    }
-  };
-
-  const previewUrl = logoUrl || undefined;
-
-  return (
-    <div>
-      <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">Logo</label>
-      <div className="flex flex-col sm:flex-row gap-4 items-start">
-        <div className="w-24 h-24 rounded-lg border-2 border-dashed border-neutral-300 dark:border-neutral-600 flex items-center justify-center overflow-hidden bg-neutral-50 dark:bg-neutral-800/50 shrink-0">
-          {previewUrl ? (
-            <img src={previewUrl} alt="Logo" className="w-full h-full object-contain" />
-          ) : (
-            <span className="text-3xl text-neutral-400 dark:text-neutral-500">?</span>
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          {!readOnly && (
-            <>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/gif,image/webp"
-                onChange={handleFileChange}
-                disabled={uploading}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="btn-primary text-sm"
-              >
-                {uploading ? "Uploading..." : "Upload image"}
-              </button>
-              {logoUrl && (
-                <button
-                  type="button"
-                  onClick={() => onLogoChange("")}
-                  disabled={uploading}
-                  className="ml-2 px-3 py-2 text-sm font-medium text-neutral-600 dark:text-neutral-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-sm transition-colors"
-                >
-                  Remove
-                </button>
-              )}
-            </>
-          )}
-          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-2">
-            JPEG, PNG, GIF or WebP. Max 2MB.
-          </p>
-          {uploadError && (
-            <p className="text-sm text-red-600 dark:text-red-400 mt-1">{uploadError}</p>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -290,7 +194,6 @@ function BusinessDetailsSection({
     phone: "",
     email: "",
     website: "",
-    logoUrl: "",
     fax: "",
     psiraRegistration: "",
     uifReference: "",
@@ -307,7 +210,6 @@ function BusinessDetailsSection({
         phone: settings.phone ?? "",
         email: settings.email ?? "",
         website: settings.website ?? "",
-        logoUrl: settings.logoUrl ?? "",
         fax: settings.fax ?? "",
         psiraRegistration: settings.psiraRegistration ?? "",
         uifReference: settings.uifReference ?? "",
@@ -452,11 +354,6 @@ function BusinessDetailsSection({
             readOnly={readOnly}
           />
         </div>
-        <LogoUpload
-          logoUrl={form.logoUrl}
-          onLogoChange={(url) => setForm((f) => ({ ...f, logoUrl: url }))}
-          readOnly={readOnly}
-        />
         {saveError && (
           <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>
         )}
@@ -953,10 +850,13 @@ interface EmployeeOption {
 function FactoryResetSection({
   token,
   refresh,
+  logout,
 }: {
   token: string;
   refresh: () => Promise<void>;
+  logout: () => void;
 }) {
+  const router = useRouter();
   const [confirmText, setConfirmText] = useState("");
   const [resetting, setResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1007,11 +907,18 @@ function FactoryResetSection({
     setResetting(true);
     setError(null);
     try {
+      const isFullReset = resetAll;
       const options =
         selectedModules.has("attendance") && attendanceEmployeeId
           ? { attendanceEmployeeId }
           : undefined;
       await factoryReset(token, modulesToReset, options);
+      if (isFullReset) {
+        logout();
+        router.push("/register?next=/settings");
+        return;
+      }
+
       await refresh();
       setSuccess(true);
       setConfirmText("");
@@ -1034,9 +941,9 @@ function FactoryResetSection({
             This action cannot be undone.
           </p>
           <p className="text-sm text-red-700 dark:text-red-300">
-            Select which modules to reset. Contents are cleared (or restored to defaults where
-            applicable). The module stays; only its data is reset. User accounts are never affected.
-            Use &quot;Reset all&quot; to restore full factory defaults.
+            Select which modules to reset. Module resets clear or restore data only for the selected
+            modules. If you choose &quot;Reset all modules&quot;, the system permanently deletes this
+            company, all users, and all company data.
           </p>
         </div>
 

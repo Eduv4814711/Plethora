@@ -62,33 +62,44 @@ export async function usersRoutes(app: FastifyInstance) {
     const companyId = request.user!.companyId;
     const passwordHash = await hashPassword(parsed.data.password);
 
-    const user = await prisma.user.create({
-      data: {
+    try {
+      const user = await prisma.user.create({
+        data: {
+          companyId,
+          name: parsed.data.name,
+          email: parsed.data.email.toLowerCase(),
+          passwordHash,
+          role: parsed.data.role,
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          companyId: true,
+          createdAt: true,
+        },
+      });
+
+      await createAuditLog({
+        userId: request.user!.sub,
         companyId,
-        name: parsed.data.name,
-        email: parsed.data.email.toLowerCase(),
-        passwordHash,
-        role: parsed.data.role,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        companyId: true,
-        createdAt: true,
-      },
-    });
+        action: "user.create",
+        entityType: "user",
+        entityId: user.id,
+      });
 
-    await createAuditLog({
-      userId: request.user!.sub,
-      companyId,
-      action: "user.create",
-      entityType: "user",
-      entityId: user.id,
-    });
-
-    return reply.code(201).send(user);
+      return reply.code(201).send(user);
+    } catch (err: unknown) {
+      const prismaErr = err as { code?: string };
+      if (prismaErr.code === "P2002") {
+        return reply.code(409).send({
+          error: "Email already registered",
+          message: "This email is already in use. Use a different email.",
+        });
+      }
+      throw err;
+    }
   });
 
   app.get("/:id", { preHandler: protect }, async (request, reply) => {

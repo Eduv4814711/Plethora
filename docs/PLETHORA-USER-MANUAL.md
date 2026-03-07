@@ -381,7 +381,7 @@ See [Bulk Import (Migration)](#12-bulk-import-migration).
 
 ### Factory Reset (Admin Only)
 
-**Warning:** This resets module contents. The module stays; only its data is cleared or restored to defaults.
+**Warning:** Module resets clear selected module data only. A full **Reset all modules** permanently deletes the current company, all users, and all company data.
 
 **Modules you can reset individually:**
 
@@ -395,7 +395,7 @@ See [Bulk Import (Migration)](#12-bulk-import-migration).
 - **Audit Logs** – Clear activity and audit history
 - **Company Settings** – Reset company name, business details, and settings to defaults
 
-User accounts are never affected.
+User accounts are affected only by full **Reset all modules**. Partial module resets do not delete users or the company.
 
 To reset:
 

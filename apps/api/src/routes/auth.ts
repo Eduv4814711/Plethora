@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { login, refreshAccessToken } from "../services/auth.service.js";
+import { login, refreshAccessToken, hashPassword, issueTokensForUser } from "../services/auth.service.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 
@@ -10,7 +10,68 @@ const loginSchema = z.object({
   companyId: z.string().optional(),
 });
 
+const onboardSchema = z.object({
+  company: z.object({
+    name: z.string().min(1, "Company name is required"),
+  }),
+  admin: z.object({
+    name: z.string().min(1, "Admin name is required"),
+    email: z.string().email("Valid admin email is required"),
+    password: z.string().min(8, "Admin password must be at least 8 characters"),
+  }),
+});
+
 export async function authRoutes(app: FastifyInstance) {
+  app.post("/onboard", async (request, reply) => {
+    const parsed = onboardSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const { company: companyInput, admin: adminInput } = parsed.data;
+    const passwordHash = await hashPassword(adminInput.password);
+
+    try {
+      const { adminUser } = await prisma.$transaction(async (tx) => {
+        const company = await tx.company.create({
+          data: { name: companyInput.name },
+        });
+
+        const adminUser = await tx.user.create({
+          data: {
+            companyId: company.id,
+            name: adminInput.name,
+            email: adminInput.email.toLowerCase(),
+            passwordHash,
+            role: "admin",
+          },
+          select: { id: true, name: true, email: true, role: true, companyId: true },
+        });
+
+        return { company, adminUser };
+      });
+
+      const result = issueTokensForUser(adminUser);
+      return reply.code(201).send(result);
+    } catch (err: unknown) {
+      const prismaErr = err as { code?: string };
+      if (prismaErr.code === "P2002") {
+        return reply.code(409).send({
+          error: "Email already registered",
+          message: "This email is already in use. Please sign in or use a different email.",
+        });
+      }
+      request.log.error(err);
+      return reply.code(500).send({
+        error: "Onboarding failed",
+        message: err instanceof Error ? err.message : "An error occurred during signup",
+      });
+    }
+  });
+
   app.post("/login", async (request, reply) => {
     // #region agent log
     fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.ts:login:entry',message:'Login request received',data:{bodyKeys:Object.keys((request.body as object)||{})},hypothesisId:'H4,H5',timestamp:Date.now()})}).catch(()=>{});

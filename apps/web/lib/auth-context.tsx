@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { AuthUser } from "./api";
+import type { LoginResponse } from "./api";
 import { getMe, login as apiLogin, refreshToken, registerTokenRefreshCallback } from "./api";
 
 type AuthState = {
@@ -13,6 +14,7 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState & {
   login: (email: string, password: string) => Promise<void>;
+  loginWithResponse: (data: LoginResponse) => void;
   logout: () => void;
   setError: (err: string | null) => void;
 } | null>(null);
@@ -117,6 +119,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     scheduleProactiveRefresh();
   };
 
+  const loginWithResponse = (data: LoginResponse) => {
+    setError(null);
+    localStorage.setItem(TOKEN_KEY, data.accessToken);
+    localStorage.setItem(REFRESH_KEY, data.refreshToken);
+    setUser(data.user);
+    setToken(data.accessToken);
+    scheduleProactiveRefresh();
+  };
+
   const logout = () => {
     if (refreshTimerRef.current) {
       clearTimeout(refreshTimerRef.current);
@@ -136,6 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         error,
         login,
+        loginWithResponse,
         logout,
         setError,
       }}

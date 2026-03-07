@@ -9,7 +9,6 @@ import {
   parseAndValidateCompanies,
   parseAndValidateEmployees,
   parseAndValidateSites,
-  executeCompanyImport,
   executeSelfImport,
   checkFileSize,
   exportEmployeesToCsv,
@@ -204,72 +203,11 @@ export async function migrationsRoutes(app: FastifyInstance) {
     return reply.send(result);
   });
 
-  // POST /migrations/admin/bulk-create - Admin: create multiple companies + employees + sites
-  app.post("/admin/bulk-create", { preHandler: adminProtect }, async (request, reply) => {
-    const filesCollected = await collectMultipartFiles(request, ["companies", "employees", "sites"]);
-
-    if (!filesCollected.companies) {
-      return reply.code(400).send({
-        error: "Missing file",
-        message: "companies.csv is required for admin bulk create",
-      });
-    }
-
-    if (!checkFileSize(filesCollected.companies, MAX_FILE_BYTES)) {
-      return reply.code(400).send({ error: "File too large", message: "companies.csv must be under 5MB" });
-    }
-
-    const companies = parseAndValidateCompanies(filesCollected.companies);
-    if (companies.errors.length > 0) {
-      return reply.code(400).send({
-        error: "Validation failed",
-        message: "Fix company errors before importing",
-        errors: companies.errors,
-      });
-    }
-
-    let employees = { valid: [] as ValidatedEmployee[], errors: [] as { row: number; field: string; value: string; message: string }[] };
-    let sites = { valid: [] as ValidatedSite[], errors: [] as { row: number; field: string; value: string; message: string }[] };
-
-    if (filesCollected.employees) {
-      if (!checkFileSize(filesCollected.employees, MAX_FILE_BYTES)) {
-        return reply.code(400).send({ error: "File too large", message: "employees.csv must be under 5MB" });
-      }
-      employees = parseAndValidateEmployees(filesCollected.employees, { requireCompanyName: true });
-    }
-
-    if (filesCollected.sites) {
-      if (!checkFileSize(filesCollected.sites, MAX_FILE_BYTES)) {
-        return reply.code(400).send({ error: "File too large", message: "sites.csv must be under 5MB" });
-      }
-      sites = parseAndValidateSites(filesCollected.sites, { requireCompanyName: true });
-    }
-
-    if (employees.errors.length > 0 || sites.errors.length > 0) {
-      return reply.code(400).send({
-        error: "Validation failed",
-        message: "Fix errors before importing",
-        employees: { errors: employees.errors },
-        sites: { errors: sites.errors },
-      });
-    }
-
-    const companyNameToId = new Map<string, string>();
-    const result = await executeCompanyImport(companies.valid, employees.valid, sites.valid, companyNameToId);
-
-    await createAuditLog({
-      userId: request.user!.sub,
-      companyId: request.user!.companyId,
-      action: "migration.admin_bulk_create",
-      entityType: "migration",
-      metadata: {
-        companiesCreated: result.companiesCreated,
-        employeesCreated: result.employeesCreated,
-        sitesCreated: result.sitesCreated,
-        errors: result.errors,
-      },
+  // POST /migrations/admin/bulk-create - Disabled: no platform admin; new companies via POST /auth/onboard only
+  app.post("/admin/bulk-create", { preHandler: adminProtect }, async (_request, reply) => {
+    return reply.code(403).send({
+      error: "Forbidden",
+      message: "Creating multiple companies is not available. New companies sign up via the Register page.",
     });
-
-    return reply.send(result);
   });
 }

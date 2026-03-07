@@ -55,7 +55,7 @@ model User {
   id           String   @id @default(cuid())
   companyId    String
   name         String
-  email        String
+  email        String   @unique
   passwordHash String
   role         UserRole
   createdAt    DateTime @default(now())
@@ -64,9 +64,7 @@ model User {
   company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   auditLogs  AuditLog[]
 
-  @@unique([companyId, email])
   @@index([companyId])
-  @@index([email])
 }
 
 enum UserRole {

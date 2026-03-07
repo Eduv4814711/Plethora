@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
+import { unlink } from "node:fs/promises";
+import { basename, join } from "node:path";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
@@ -53,6 +55,52 @@ const factoryResetSchema = z.object({
     .transform((v) => (v && v.length > 0 ? v : undefined)),
   attendanceEmployeeId: z.string().min(1).optional(),
 });
+
+const COMPANY_LOGO_EXTENSIONS = ["jpeg", "jpg", "png", "gif", "webp"] as const;
+const SAFE_FILENAME_RE = /^[A-Za-z0-9._-]+$/;
+
+function isErrnoException(err: unknown): err is NodeJS.ErrnoException {
+  return typeof err === "object" && err !== null && "code" in err;
+}
+
+function buildKnownCompanyLogoFilenames(companyId: string, logoUrl?: string | null): string[] {
+  const filenames = new Set<string>();
+
+  if (logoUrl) {
+    const withoutQuery = logoUrl.split("?")[0]?.split("#")[0] ?? logoUrl;
+    const extracted = basename(withoutQuery);
+    if (extracted && SAFE_FILENAME_RE.test(extracted)) {
+      filenames.add(extracted);
+    }
+  }
+
+  for (const ext of COMPANY_LOGO_EXTENSIONS) {
+    filenames.add(`company-${companyId}.${ext}`);
+  }
+
+  return Array.from(filenames);
+}
+
+async function cleanupKnownCompanyLogoFiles(
+  companyId: string,
+  logoUrl: string | null | undefined,
+  log: FastifyInstance["log"]
+) {
+  const uploadDir = join(process.cwd(), "uploads", "logos");
+  const filenames = buildKnownCompanyLogoFilenames(companyId, logoUrl);
+
+  for (const filename of filenames) {
+    const filepath = join(uploadDir, filename);
+    try {
+      await unlink(filepath);
+    } catch (err) {
+      if (isErrnoException(err) && err.code === "ENOENT") {
+        continue;
+      }
+      log.error({ err, filepath, companyId }, "Failed logo cleanup after full factory reset");
+    }
+  }
+}
 
 export async function settingsRoutes(app: FastifyInstance) {
   app.get("/", { preHandler: [authMiddleware] }, async (request, reply) => {
@@ -172,10 +220,27 @@ export async function settingsRoutes(app: FastifyInstance) {
 
     const company = await prisma.company.findUnique({
       where: { id: companyId },
-      select: { id: true },
+      select: { id: true, logoUrl: true },
     });
     if (!company) {
       return reply.code(404).send({ error: "Company not found" });
+    }
+
+    const selectedModules = modules ?? [];
+    const runAll = selectedModules.length === 0;
+
+    if (runAll) {
+      try {
+        await prisma.$transaction(async (tx) => {
+          await tx.company.delete({ where: { id: companyId } });
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Factory reset failed";
+        return reply.code(400).send({ error: "Factory reset failed", message: msg });
+      }
+
+      await cleanupKnownCompanyLogoFiles(companyId, company.logoUrl, request.log);
+      return reply.send({ companyDeleted: true });
     }
 
     const DEFAULT_SETTINGS = {
@@ -224,8 +289,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       { date: "2026-12-26", name: "Day of Goodwill" },
     ];
 
-    const runAll = !modules || modules.length === 0;
-    const has = (m: (typeof FACTORY_RESET_MODULES)[number]) => runAll || modules!.includes(m);
+    const has = (m: (typeof FACTORY_RESET_MODULES)[number]) => selectedModules.includes(m);
 
     try {
     await prisma.$transaction(async (tx) => {
@@ -407,7 +471,7 @@ export async function settingsRoutes(app: FastifyInstance) {
           action: "settings.factory_reset",
           entityType: "company",
           entityId: companyId,
-          metadata: modules ? { modules } : undefined,
+          metadata: { modules: selectedModules },
         },
       });
 

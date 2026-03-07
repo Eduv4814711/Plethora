@@ -77,6 +77,51 @@ export async function login(input: LoginInput): Promise<AuthResult | null> {
   };
 }
 
+export interface UserForTokens {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  companyId: string;
+}
+
+export function issueTokensForUser(user: UserForTokens): AuthResult {
+  const payload = {
+    sub: user.id,
+    email: user.email,
+    companyId: user.companyId,
+    role: user.role,
+  };
+
+  const accessToken = jwt.sign(
+    payload,
+    config.jwt.accessSecret,
+    { expiresIn: config.jwt.accessExpiry }
+  );
+
+  const refreshToken = jwt.sign(
+    { ...payload, type: "refresh" },
+    config.jwt.refreshSecret,
+    { expiresIn: config.jwt.refreshExpiry }
+  );
+
+  const decoded = jwt.decode(accessToken) as { exp?: number };
+  const expiresIn = decoded?.exp ? decoded.exp - Math.floor(Date.now() / 1000) : 900;
+
+  return {
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      companyId: user.companyId,
+    },
+    accessToken,
+    refreshToken,
+    expiresIn,
+  };
+}
+
 export async function refreshAccessToken(refreshToken: string): Promise<AuthResult | null> {
   try {
     const decoded = jwt.verify(refreshToken, config.jwt.refreshSecret) as {

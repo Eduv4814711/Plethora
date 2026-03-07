@@ -8,6 +8,7 @@
     "start": "node dist/index.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
+    "db:check-email-unique": "tsx prisma/check-duplicate-emails.ts",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio"

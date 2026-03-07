@@ -72,6 +72,28 @@ export async function login(
   }
 }
 
+export interface OnboardPayload {
+  company: { name: string };
+  admin: { name: string; email: string; password: string };
+}
+
+export async function onboardCompany(payload: OnboardPayload): Promise<LoginResponse> {
+  const res = await fetch(`${API_BASE}/auth/onboard`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const message =
+      err?.message ||
+      err?.error ||
+      (res.status === 409 ? "This email is already registered. Sign in or use a different email." : "Sign-up failed");
+    throw new Error(message);
+  }
+  return res.json();
+}
+
 export async function refreshToken(refreshToken: string): Promise<LoginResponse> {
   const res = await fetch(`${API_BASE}/auth/refresh`, {
     method: "POST",
@@ -176,12 +198,13 @@ export const FACTORY_RESET_MODULES = [
 ] as const;
 
 export type FactoryResetModuleId = (typeof FACTORY_RESET_MODULES)[number]["id"];
+export type FactoryResetResponse = CompanySettings | { companyDeleted: true };
 
 export async function factoryReset(
   token: string,
   modules?: FactoryResetModuleId[],
   options?: { attendanceEmployeeId?: string }
-): Promise<CompanySettings> {
+): Promise<FactoryResetResponse> {
   const body: Record<string, unknown> = modules && modules.length > 0 ? { modules } : {};
   if (options?.attendanceEmployeeId) body.attendanceEmployeeId = options.attendanceEmployeeId;
   const res = await fetch(`${API_BASE}/settings/factory-reset`, {
@@ -300,6 +323,53 @@ export async function deleteUser(token: string, id: string): Promise<void> {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || "Failed to delete user");
   }
+}
+
+// Companies (multi-tenant registration)
+export interface CompanyListItem {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCompanyPayload {
+  name: string;
+  admin: { name: string; email: string; password: string };
+}
+
+export interface CreateCompanyResponse extends CompanyListItem {
+  adminUser: { id: string; name: string; email: string; role: string };
+}
+
+export async function listCompanies(token: string): Promise<{ data: CompanyListItem[]; total: number; limit: number; offset: number }> {
+  const res = await authFetch("/companies", token);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || "Failed to fetch companies");
+  }
+  return res.json();
+}
+
+export async function createCompany(token: string, payload: CreateCompanyPayload): Promise<CreateCompanyResponse> {
+  const res = await authFetch("/companies", token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const msg = err?.message ?? err?.error ?? "Failed to create company";
+    const messageStr =
+      typeof msg === "string"
+        ? msg
+        : typeof msg === "object" && msg !== null
+          ? Object.entries(msg)
+              .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+              .join("; ")
+          : "Failed to create company";
+    throw new Error(messageStr);
+  }
+  return res.json();
 }
 
 // Global search

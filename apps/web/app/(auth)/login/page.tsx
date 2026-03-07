@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 
@@ -120,6 +121,13 @@ function LoginForm() {
           >
             {submitting ? "Signing in..." : "Sign in"}
           </button>
+
+          <p className="text-center text-sm text-black mt-6">
+            New to Plethora?{" "}
+            <Link href="/register" className="font-semibold underline hover:no-underline">
+              Create a company
+            </Link>
+          </p>
         </form>
       </div>
       <p className="text-center text-xs uppercase tracking-widest text-black mt-6">
