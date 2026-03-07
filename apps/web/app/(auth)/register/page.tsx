@@ -1,12 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { onboardCompany } from "@/lib/api";
 
-function RegisterForm() {
+function RegisterFallback() {
+  return (
+    <div className="w-full animate-fade-in">
+      <div className="card-elevated p-10 md:p-12">
+        <div className="h-6 w-48 bg-neutral-200 rounded mb-4 animate-pulse" />
+        <div className="space-y-4">
+          <div className="h-11 bg-neutral-200 rounded animate-pulse" />
+          <div className="h-11 bg-neutral-200 rounded animate-pulse" />
+          <div className="h-11 bg-neutral-200 rounded animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RegisterFormContent() {
   const { user, loginWithResponse, error, setError } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -238,5 +253,9 @@ function RegisterForm() {
 }
 
 export default function RegisterPage() {
-  return <RegisterForm />;
+  return (
+    <Suspense fallback={<RegisterFallback />}>
+      <RegisterFormContent />
+    </Suspense>
+  );
 }
