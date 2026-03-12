@@ -51,7 +51,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   if (loading || settingsLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-wireframe-bg">
+      <div className="min-h-screen flex items-center justify-center bg-[#FAF9F6]">
         <div className="flex flex-col items-center gap-4 animate-fade-in">
           <div className="w-10 h-10 rounded-[10px] border-2 border-black bg-white animate-pulse" />
           <span className="text-xs font-medium uppercase tracking-wider text-black">Loading</span>
@@ -100,37 +100,27 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
 
   return (
-    <div className="min-h-screen flex flex-col bg-wireframe-bg">
-      <header className="h-[7.5rem] bg-yellow-100 border-[3px] border-black rounded-lg flex items-center justify-between px-6 shrink-0">
-        {/* Left: Logo + branding */}
-        <Link href="/" className="flex items-center gap-3 shrink-0">
-          {settings?.logoUrl ? (
-            <img
-              src={settings.logoUrl}
-              alt=""
-              className="w-10 h-10 rounded-[10px] object-cover border-2 border-black"
-            />
-          ) : (
-            <img src="/plethora-logo.svg" alt="Plethora" className="h-[7.5rem] w-auto object-contain" />
-          )}
-          <div className="flex flex-col">
-            <span className="text-base font-bold text-black tracking-tight uppercase">
-              {companyName}
-            </span>
-          </div>
+    <div className="min-h-screen flex flex-col bg-white">
+      <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between pl-4 pr-8 shrink-0">
+        {/* Top-left: Logo */}
+        <Link href="/" className="flex items-center shrink-0">
+          <img src="/plethora-logo.svg" alt="Plethora" className="h-20 w-auto object-contain" />
         </Link>
 
         {/* Center: Main nav links */}
-        <nav className="flex items-center gap-6">
+        <nav className="flex flex-1 items-center justify-center gap-12">
+          <span className="text-sm font-bold uppercase tracking-wider text-black">
+            {companyName}
+          </span>
           {mainNavItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               className={clsx(
-                "text-sm font-bold uppercase tracking-wide transition-colors",
+                "text-sm font-bold uppercase tracking-wider transition-colors",
                 isActive(item.href)
-                  ? "text-black underline underline-offset-4"
-                  : "text-black hover:underline underline-offset-4"
+                  ? "text-black"
+                  : "text-black hover:opacity-70"
               )}
             >
               {item.label.toUpperCase()}
@@ -150,7 +140,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 MORE
               </button>
               {moreOpen && (
-                <div className="absolute top-full right-0 mt-1 py-1 bg-white border-[3px] border-black rounded-[10px] z-50 min-w-[180px]">
+                <div className="absolute top-full right-0 mt-2 py-1 bg-white border border-black z-50 min-w-[180px]">
                   {moreNavItems.map((item) => (
                     <Link
                       key={item.href}
@@ -180,7 +170,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <SearchDropdown onClose={() => setSearchOpen(false)} />
                 <button
                   onClick={() => setSearchOpen(false)}
-                  className="p-1.5 rounded-[10px] text-black hover:bg-neutral-100 border-2 border-black transition-colors"
+                  className="p-1.5 text-black hover:opacity-70 transition-colors"
                   aria-label="Close search"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -191,7 +181,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             ) : (
               <button
                 onClick={() => setSearchOpen(true)}
-                className="p-2.5 rounded-[10px] text-black hover:bg-neutral-100 border-2 border-transparent hover:border-black transition-colors"
+                className="p-2 text-black hover:opacity-70 transition-colors"
                 title="Search"
                 aria-label="Search"
               >
@@ -205,7 +195,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           {canAccessSettings && (
             <Link
               href="/settings"
-              className="p-2.5 rounded-[10px] text-black hover:bg-neutral-100 border-2 border-transparent hover:border-black transition-colors"
+              className="p-2 text-black hover:opacity-70 transition-colors"
               title="Settings"
               aria-label="Settings"
             >
@@ -223,7 +213,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <div ref={profileRef} className="relative">
             <button
               onClick={() => setProfileOpen((o) => !o)}
-              className="flex items-center justify-center w-9 h-9 rounded-full border-[3px] border-black text-black hover:bg-neutral-100 transition-colors"
+              className="p-2 text-black hover:opacity-70 transition-colors"
               title="Profile"
               aria-label="Profile"
             >
@@ -232,9 +222,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </svg>
             </button>
             {profileOpen && (
-              <div className="absolute right-0 top-full mt-1 py-2 bg-white border-[3px] border-black rounded-[10px] z-50 min-w-[200px]">
-                <div className="px-4 py-2 border-b-2 border-black">
-                  <p className="text-sm font-semibold text-black">{user.name}</p>
+              <div className="absolute right-0 top-full mt-2 py-2 bg-white border border-black z-50 min-w-[200px]">
+                <div className="px-4 py-2 border-b border-black">
+                  <p className="text-sm font-bold text-black">{user.name}</p>
                   <p className="text-xs text-black capitalize">
                     {user.role.replace(/_/g, " ")}
                   </p>
@@ -254,7 +244,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="flex-1 p-6 overflow-auto bg-wireframe-bg">{hasAccess ? children : null}</main>
+      <main className="flex-1 p-8 overflow-auto bg-[#FAF9F6]">{hasAccess ? children : null}</main>
     </div>
   );
 }

@@ -73,15 +73,9 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.post("/login", async (request, reply) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.ts:login:entry',message:'Login request received',data:{bodyKeys:Object.keys((request.body as object)||{})},hypothesisId:'H4,H5',timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     try {
       const parsed = loginSchema.safeParse(request.body);
       if (!parsed.success) {
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.ts:login:validationFail',message:'Validation failed',data:{errors:parsed.error.flatten().fieldErrors},hypothesisId:'H2',timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         return reply.code(400).send({
           error: "Validation error",
           message: parsed.error.flatten().fieldErrors,
@@ -89,9 +83,6 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       const result = await login(parsed.data);
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.ts:login:result',message:'Login service result',data:{hasResult:!!result,email:parsed.data.email},hypothesisId:'H2',timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (!result) {
         return reply.code(401).send({
           error: "Invalid credentials",
@@ -101,9 +92,6 @@ export async function authRoutes(app: FastifyInstance) {
 
       return reply.send(result);
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth.ts:login:catch',message:'Login error',data:{errMsg:err instanceof Error?err.message:String(err)},hypothesisId:'H3',timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       request.log.error(err);
       return reply.code(500).send({
         error: "Login failed",

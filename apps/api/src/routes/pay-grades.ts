@@ -36,14 +36,8 @@ export async function payGradesRoutes(app: FastifyInstance) {
   });
 
   app.post("/", { preHandler: protect }, async (request, reply) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b3473e'},body:JSON.stringify({sessionId:'b3473e',location:'pay-grades.ts:POST:entry',message:'Pay grade create reached',data:{userRole:request.user?.role,companyId:request.user?.companyId},hypothesisId:'H1,H4,H5',timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     const parsed = createPayGradeSchema.safeParse(request.body);
     if (!parsed.success) {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b3473e'},body:JSON.stringify({sessionId:'b3473e',location:'pay-grades.ts:POST:validationFail',message:'Validation failed',data:{errors:parsed.error.flatten().fieldErrors},hypothesisId:'H4',timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       return reply.code(400).send({
         error: "Validation error",
         message: parsed.error.flatten().fieldErrors,
@@ -57,9 +51,6 @@ export async function payGradesRoutes(app: FastifyInstance) {
         where: { id: groupId, companyId },
       });
       if (!group) {
-        // #region agent log
-        fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b3473e'},body:JSON.stringify({sessionId:'b3473e',location:'pay-grades.ts:POST:groupNotFound',message:'Group not found',data:{groupId},hypothesisId:'H4',timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         return reply.code(404).send({ error: "Employee group not found" });
       }
     }
@@ -81,9 +72,6 @@ export async function payGradesRoutes(app: FastifyInstance) {
       entityId: grade.id,
     });
 
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'b3473e'},body:JSON.stringify({sessionId:'b3473e',location:'pay-grades.ts:POST:success',message:'Pay grade created',data:{gradeId:grade.id},hypothesisId:'H5',timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     return reply.code(201).send(grade);
   });
 

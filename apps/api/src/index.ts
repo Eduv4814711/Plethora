@@ -5,6 +5,7 @@ import { mkdir } from "fs/promises";
 config();
 
 await mkdir(join(process.cwd(), "uploads", "logos"), { recursive: true });
+await mkdir(join(process.cwd(), "uploads", "tasks"), { recursive: true });
 
 import Fastify from "fastify";
 import cors from "@fastify/cors";
@@ -40,6 +41,11 @@ import { searchRoutes } from "./routes/search.js";
 import { migrationsRoutes } from "./routes/migrations.js";
 import { reportsRoutes } from "./routes/reports.js";
 import { whatsappWebhookRoutes } from "./routes/whatsapp-webhook.js";
+import { taskProjectsRoutes } from "./routes/task-projects.js";
+import { tasksRoutes } from "./routes/tasks.js";
+import { taskCommentsRoutes } from "./routes/task-comments.js";
+import { taskAttachmentsRoutes } from "./routes/task-attachments.js";
+import { taskRemindersRoutes } from "./routes/task-reminders.js";
 
 const app = Fastify({ logger: true });
 
@@ -58,7 +64,7 @@ await app.register(rateLimit, {
 });
 
 await app.register(multipart, {
-  limits: { fileSize: 2 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 },
 });
 
 await app.register(fastifyStatic, {
@@ -96,6 +102,11 @@ app.register(uploadsRoutes, { prefix: "/uploads" });
 app.register(searchRoutes, { prefix: "/search" });
 app.register(migrationsRoutes, { prefix: "/migrations" });
 app.register(reportsRoutes, { prefix: "/reports" });
+app.register(taskProjectsRoutes, { prefix: "/task-projects" });
+app.register(tasksRoutes, { prefix: "/tasks" });
+app.register(taskCommentsRoutes, { prefix: "/task-comments" });
+app.register(taskAttachmentsRoutes, { prefix: "/task-attachments" });
+app.register(taskRemindersRoutes, { prefix: "/task-reminders" });
 
 const port = Number(process.env.PORT) || 3001;
 const host = process.env.HOST ?? "0.0.0.0";

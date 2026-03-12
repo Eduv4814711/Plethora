@@ -14,8 +14,8 @@ const config: Config = {
         mono: ["IBM Plex Mono", "monospace"],
       },
       colors: {
-        "wireframe-bg": "#E9EEF6",
-        "wireframe-accent": "#E0EFFF",
+        "wireframe-bg": "#FAF9F6", // Cream
+        "wireframe-accent": "#D1D5DB", // Gray (Tailwind gray-300)
       },
       borderWidth: {
         "wireframe-thin": "1px",

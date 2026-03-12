@@ -1,0 +1,268 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useAuth } from "@/lib/auth-context";
+import {
+  listTasks,
+  listTaskProjects,
+  createTask,
+  type Task,
+  type TaskProject,
+  type TaskStatus,
+  type TaskPriority,
+} from "@/lib/api";
+import { AssigneePicker } from "@/components/assignee-picker";
+
+const STATUS_LABELS: Record<TaskStatus, string> = {
+  todo: "To Do",
+  in_progress: "In Progress",
+  done: "Done",
+};
+
+const PRIORITY_LABELS: Record<TaskPriority, string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  urgent: "Urgent",
+};
+
+const PRIORITY_COLORS: Record<TaskPriority, string> = {
+  low: "bg-gray-200 text-gray-700",
+  medium: "bg-blue-100 text-blue-800",
+  high: "bg-orange-100 text-orange-800",
+  urgent: "bg-red-100 text-red-800",
+};
+
+function TaskCard({ task }: { task: Task }) {
+  const dueStr = task.dueDate ? new Date(task.dueDate).toLocaleDateString() : null;
+  const isOverdue = task.dueDate && task.status !== "done" && new Date(task.dueDate) < new Date();
+
+  return (
+    <Link
+      href={`/tasks/${task.id}`}
+      className="block bg-gray-100 border border-gray-300 rounded-lg p-4 hover:border-gray-400 transition-colors"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="font-semibold text-black truncate flex-1">{task.title}</h3>
+        <span
+          className={`shrink-0 px-2 py-0.5 text-xs font-medium rounded ${PRIORITY_COLORS[task.priority]}`}
+        >
+          {PRIORITY_LABELS[task.priority]}
+        </span>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2 text-sm text-gray-600">
+        <span>{STATUS_LABELS[task.status]}</span>
+        {task.project && (
+          <span className="text-gray-500">• {task.project.name}</span>
+        )}
+        {task.assigneeDisplayName && (
+          <span className="text-gray-500">• {task.assigneeDisplayName}</span>
+        )}
+      </div>
+      {dueStr && (
+        <p className={`mt-1 text-xs ${isOverdue ? "text-red-600 font-medium" : "text-gray-500"}`}>
+          Due {dueStr}
+        </p>
+      )}
+    </Link>
+  );
+}
+
+export default function TasksPage() {
+  const { token, user } = useAuth();
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [projects, setProjects] = useState<TaskProject[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [projectFilter, setProjectFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [formTitle, setFormTitle] = useState("");
+  const [formProjectId, setFormProjectId] = useState<string>("");
+  const [formPriority, setFormPriority] = useState<TaskPriority>("medium");
+  const [formAssignee, setFormAssignee] = useState<{ type: "user" | "employee" | null; id: string | null }>({
+    type: null,
+    id: null,
+  });
+  const [formError, setFormError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const refresh = () => {
+    if (!token) return;
+    const params: { projectId?: string; status?: TaskStatus } = {};
+    if (projectFilter !== "all") params.projectId = projectFilter;
+    if (statusFilter !== "all") params.status = statusFilter as TaskStatus;
+
+    listTasks(token, { ...params, limit: 100 })
+      .then((r) => {
+        setTasks(r.data);
+        setTotal(r.total);
+      })
+      .catch(console.error);
+
+    listTaskProjects(token)
+      .then((r) => setProjects(r.data))
+      .catch(console.error);
+  };
+
+  useEffect(() => {
+    if (!token) return;
+    refresh();
+    setLoading(false);
+  }, [token, projectFilter, statusFilter]);
+
+  const handleCreateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !formTitle.trim()) {
+      setFormError("Title is required");
+      return;
+    }
+    setSubmitting(true);
+    setFormError("");
+    try {
+      await createTask(token, {
+        title: formTitle.trim(),
+        projectId: formProjectId || null,
+        priority: formPriority,
+        assigneeType: formAssignee.type,
+        assigneeId: formAssignee.id,
+      });
+      setFormTitle("");
+      setFormProjectId("");
+      setFormPriority("medium");
+      setFormAssignee({ type: null, id: null });
+      setShowForm(false);
+      refresh();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to create task");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="animate-pulse space-y-6">
+        <div className="h-9 w-48 bg-gray-200 rounded-lg" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="h-32 bg-gray-200 rounded-lg" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="animate-fade-in max-w-6xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h1 className="text-2xl font-bold text-black">Tasks</h1>
+        <div className="flex items-center gap-3">
+          <select
+            value={projectFilter}
+            onChange={(e) => setProjectFilter(e.target.value)}
+            className="input-compact w-auto"
+          >
+            <option value="all">All Projects</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="input-compact w-auto"
+          >
+            <option value="all">All Statuses</option>
+            <option value="todo">To Do</option>
+            <option value="in_progress">In Progress</option>
+            <option value="done">Done</option>
+          </select>
+          <Link
+            href="/tasks/projects"
+            className="btn-secondary text-sm py-2"
+          >
+            Projects
+          </Link>
+          <button onClick={() => setShowForm(true)} className="btn-primary text-sm py-2">
+            New Task
+          </button>
+        </div>
+      </div>
+
+      {showForm && (
+        <div className="mb-6 bg-gray-100 border border-gray-300 rounded-lg p-4">
+          <h2 className="font-bold text-black mb-3">Create Task</h2>
+          <form onSubmit={handleCreateTask} className="space-y-3">
+            <input
+              type="text"
+              value={formTitle}
+              onChange={(e) => setFormTitle(e.target.value)}
+              placeholder="Task title"
+              className="input-modern"
+              autoFocus
+            />
+            <div className="flex flex-wrap gap-3">
+              <select
+                value={formProjectId}
+                onChange={(e) => setFormProjectId(e.target.value)}
+                className="input-compact w-auto"
+              >
+                <option value="">No project</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={formPriority}
+                onChange={(e) => setFormPriority(e.target.value as TaskPriority)}
+                className="input-compact w-auto"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+              <div className="w-48">
+                <AssigneePicker value={formAssignee} onChange={setFormAssignee} />
+              </div>
+            </div>
+            {formError && <p className="text-sm text-red-600">{formError}</p>}
+            <div className="flex gap-2">
+              <button type="submit" disabled={submitting} className="btn-primary">
+                Create
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForm(false);
+                  setFormError("");
+                }}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {tasks.map((task) => (
+          <TaskCard key={task.id} task={task} />
+        ))}
+      </div>
+
+      {tasks.length === 0 && (
+        <div className="text-center py-12 text-gray-500">
+          No tasks yet. Create one to get started.
+        </div>
+      )}
+    </div>
+  );
+}

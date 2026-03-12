@@ -22,9 +22,6 @@ export async function login(
   companyId?: string
 ): Promise<LoginResponse> {
   const url = `${API_BASE}/auth/login`;
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:login:beforeFetch',message:'Login attempt',data:{url,emailLen:email?.length,hasPassword:!!password},hypothesisId:'H1,H4,H5',timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   let res: Response;
   try {
     res = await fetch(url, {
@@ -33,9 +30,6 @@ export async function login(
       body: JSON.stringify({ email, password, companyId }),
     });
   } catch (fetchErr) {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:login:fetchCatch',message:'Fetch failed',data:{errMsg:fetchErr instanceof Error?fetchErr.message:String(fetchErr)},hypothesisId:'H1',timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     const msg = fetchErr instanceof Error ? fetchErr.message : "Network error";
     throw new Error(
       msg.includes("fetch") || msg.includes("Failed") || msg.includes("Network")
@@ -43,14 +37,8 @@ export async function login(
         : msg
     );
   }
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:login:afterFetch',message:'Response received',data:{status:res.status,ok:res.ok},hypothesisId:'H2,H3,H4,H5',timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:login:resNotOk',message:'Error response body',data:{status:res.status,errKeys:Object.keys(err),message:err?.message},hypothesisId:'H2,H3',timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     const message =
       err?.message ||
       err?.error ||
@@ -60,14 +48,8 @@ export async function login(
   }
   try {
     const data = await res.json();
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:login:parseSuccess',message:'Login success',data:{hasUser:!!data?.user},hypothesisId:'H5',timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     return data;
   } catch (parseErr) {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/f56a901b-0402-4f99-950f-9d91bcf073da',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:login:parseCatch',message:'JSON parse failed',data:{errMsg:parseErr instanceof Error?parseErr.message:String(parseErr)},hypothesisId:'H4,H5',timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     throw new Error("Invalid response from server");
   }
 }
@@ -246,9 +228,10 @@ export function registerTokenRefreshCallback(cb: () => Promise<string | null>) {
 export async function authFetch(url: string, token: string, init?: RequestInit): Promise<Response> {
   const doFetch = (t: string) => {
     const hasBody = init?.body !== undefined && init?.body !== null && init?.body !== "";
+    const isFormData = init?.body instanceof FormData;
     const headers: Record<string, string> = {
       Authorization: `Bearer ${t}`,
-      ...(hasBody ? { "Content-Type": "application/json" } : {}),
+      ...(hasBody && !isFormData ? { "Content-Type": "application/json" } : {}),
       ...(init?.headers as Record<string, string> | undefined),
     };
     return fetch(`${API_BASE}${url}`, { ...init, headers });
@@ -520,4 +503,316 @@ export async function migrationAdminBulkCreate(
     throw new Error(err.message || err.error || "Bulk create failed");
   }
   return res.json();
+}
+
+// Task Manager
+export type TaskStatus = "todo" | "in_progress" | "done";
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
+
+export interface TaskProject {
+  id: string;
+  name: string;
+  description?: string | null;
+  color?: string | null;
+  sortOrder: number;
+  _count?: { tasks: number };
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  description?: string | null;
+  projectId?: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  dueDate?: string | null;
+  completedAt?: string | null;
+  assigneeType?: string | null;
+  assigneeId?: string | null;
+  assigneeDisplayName?: string | null;
+  recurrenceRule?: Record<string, unknown> | null;
+  project?: { id: string; name: string; color?: string | null } | null;
+  createdBy?: { id: string; name: string; email: string };
+  comments?: TaskComment[];
+  attachments?: TaskAttachment[];
+  reminders?: TaskReminder[];
+}
+
+export interface TaskComment {
+  id: string;
+  body: string;
+  userId: string;
+  createdAt: string;
+  user?: { id: string; name: string; email: string };
+}
+
+export interface TaskAttachment {
+  id: string;
+  taskId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  url: string;
+}
+
+export interface TaskReminder {
+  id: string;
+  taskId: string;
+  remindAt: string;
+  sentAt?: string | null;
+}
+
+export async function listTaskProjects(token: string): Promise<{ data: TaskProject[] }> {
+  const res = await authFetch("/task-projects", token);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to fetch projects");
+  }
+  return res.json();
+}
+
+export async function createTaskProject(
+  token: string,
+  data: { name: string; description?: string; color?: string; sortOrder?: number }
+): Promise<TaskProject> {
+  const res = await authFetch("/task-projects", token, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to create project");
+  }
+  return res.json();
+}
+
+export async function getTaskProject(token: string, id: string): Promise<TaskProject & { tasks: Task[] }> {
+  const res = await authFetch(`/task-projects/${id}`, token);
+  if (!res.ok) {
+    if (res.status === 404) throw new Error("Project not found");
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to fetch project");
+  }
+  return res.json();
+}
+
+export async function updateTaskProject(
+  token: string,
+  id: string,
+  data: Partial<{ name: string; description: string | null; color: string | null; sortOrder: number }>
+): Promise<TaskProject> {
+  const res = await authFetch(`/task-projects/${id}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to update project");
+  }
+  return res.json();
+}
+
+export async function deleteTaskProject(token: string, id: string): Promise<void> {
+  const res = await authFetch(`/task-projects/${id}`, token, { method: "DELETE" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to delete project");
+  }
+}
+
+export interface AssigneeOption {
+  id: string;
+  type: "user" | "employee";
+  displayName: string;
+  subtitle: string;
+}
+
+export async function listTaskAssignees(
+  token: string
+): Promise<{ users: AssigneeOption[]; employees: AssigneeOption[] }> {
+  const res = await authFetch("/tasks/assignees", token);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to fetch assignees");
+  }
+  return res.json();
+}
+
+export async function listTasks(
+  token: string,
+  params?: { projectId?: string; status?: TaskStatus; assigneeId?: string; limit?: number; offset?: number }
+): Promise<{ data: Task[]; total: number; limit: number; offset: number }> {
+  const q = new URLSearchParams();
+  if (params?.projectId) q.set("projectId", params.projectId);
+  if (params?.status) q.set("status", params.status);
+  if (params?.assigneeId) q.set("assigneeId", params.assigneeId);
+  if (params?.limit) q.set("limit", String(params.limit));
+  if (params?.offset) q.set("offset", String(params.offset));
+  const res = await authFetch(`/tasks?${q.toString()}`, token);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to fetch tasks");
+  }
+  return res.json();
+}
+
+export async function createTask(
+  token: string,
+  data: {
+    title: string;
+    description?: string;
+    projectId?: string | null;
+    status?: TaskStatus;
+    priority?: TaskPriority;
+    dueDate?: string | null;
+    assigneeType?: "employee" | "user" | null;
+    assigneeId?: string | null;
+    recurrenceRule?: Record<string, unknown> | null;
+  }
+): Promise<Task> {
+  const res = await authFetch("/tasks", token, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const msg = err?.message ?? "Failed to create task";
+    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+  }
+  return res.json();
+}
+
+export async function getTask(token: string, id: string): Promise<Task> {
+  const res = await authFetch(`/tasks/${id}`, token);
+  if (!res.ok) {
+    if (res.status === 404) throw new Error("Task not found");
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to fetch task");
+  }
+  return res.json();
+}
+
+export async function updateTask(
+  token: string,
+  id: string,
+  data: Partial<{
+    title: string;
+    description: string | null;
+    projectId: string | null;
+    status: TaskStatus;
+    priority: TaskPriority;
+    dueDate: string | null;
+    assigneeType: "employee" | "user" | null;
+    assigneeId: string | null;
+    recurrenceRule: Record<string, unknown> | null;
+  }>
+): Promise<Task> {
+  const res = await authFetch(`/tasks/${id}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to update task");
+  }
+  return res.json();
+}
+
+export async function deleteTask(token: string, id: string): Promise<void> {
+  const res = await authFetch(`/tasks/${id}`, token, { method: "DELETE" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to delete task");
+  }
+}
+
+export async function completeTask(token: string, id: string): Promise<Task> {
+  const res = await authFetch(`/tasks/${id}/complete`, token, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to complete task");
+  }
+  return res.json();
+}
+
+export async function reopenTask(token: string, id: string): Promise<Task> {
+  const res = await authFetch(`/tasks/${id}/reopen`, token, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to reopen task");
+  }
+  return res.json();
+}
+
+export async function listTaskComments(token: string, taskId: string): Promise<{ data: TaskComment[] }> {
+  const res = await authFetch(`/task-comments/tasks/${taskId}/comments`, token);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to fetch comments");
+  }
+  return res.json();
+}
+
+export async function addTaskComment(token: string, taskId: string, body: string): Promise<TaskComment> {
+  const res = await authFetch(`/task-comments/tasks/${taskId}/comments`, token, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to add comment");
+  }
+  return res.json();
+}
+
+export async function uploadTaskAttachment(token: string, taskId: string, file: File): Promise<TaskAttachment> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await authFetch(`/task-attachments/tasks/${taskId}/attachments`, token, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Upload failed");
+  }
+  return res.json();
+}
+
+export async function deleteTaskAttachment(token: string, id: string): Promise<void> {
+  const res = await authFetch(`/task-attachments/attachments/${id}`, token, { method: "DELETE" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to delete attachment");
+  }
+}
+
+export async function addTaskReminder(token: string, taskId: string, remindAt: string): Promise<TaskReminder> {
+  const res = await authFetch(`/task-reminders/tasks/${taskId}/reminders`, token, {
+    method: "POST",
+    body: JSON.stringify({ remindAt }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to add reminder");
+  }
+  return res.json();
+}
+
+export async function listUpcomingReminders(token: string): Promise<{ data: (TaskReminder & { task: { id: string; title: string; dueDate?: string | null } })[] }> {
+  const res = await authFetch("/task-reminders/reminders/upcoming", token);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to fetch reminders");
+  }
+  return res.json();
+}
+
+export async function deleteTaskReminder(token: string, id: string): Promise<void> {
+  const res = await authFetch(`/task-reminders/reminders/${id}`, token, { method: "DELETE" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || "Failed to delete reminder");
+  }
 }

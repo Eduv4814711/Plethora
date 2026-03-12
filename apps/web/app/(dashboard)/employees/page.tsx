@@ -668,8 +668,6 @@ function EmployeeForm({
         status,
         employeeType,
         dateOfBirth: dateOfBirth || undefined,
-        // #region agent log
-        // #endregion
         gender: gender || undefined,
         physicalAddress: physicalAddress || undefined,
         postalAddress: postalAddress || undefined,

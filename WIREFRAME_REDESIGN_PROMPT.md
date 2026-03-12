@@ -1,6 +1,6 @@
 # Wireframe-Inspired Frontend Redesign — Agent Prompt
 
-Copy everything below this line and paste it into a Cursor agent to begin the redesign.
+Copy everything below this line and paste it into your coding assistant to begin the redesign.
 
 ---
 

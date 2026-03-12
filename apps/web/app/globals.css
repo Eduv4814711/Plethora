@@ -5,9 +5,9 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
 :root {
-  --bg-canvas: #E9EEF6;
+  --bg-canvas: #FAF9F6;
   --bg-content: #FFFFFF;
-  --bg-accent: #E0EFFF;
+  --bg-accent: #D1D5DB;
   --text-primary: #000000;
   --border-thin: 1px solid #000000;
   --border-thick: 3px solid #000000;
@@ -87,15 +87,22 @@ html {
     border-color: #000000;
   }
   .bg-wireframe-accent {
-    background-color: #E0EFFF;
+    background-color: var(--bg-accent);
+  }
+  .bg-wireframe-grid {
+    background-color: var(--bg-canvas);
+    background-image: 
+      linear-gradient(to right, rgba(0, 0, 0, 0.08) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(0, 0, 0, 0.08) 1px, transparent 1px);
+    background-size: 40px 40px;
   }
 }
 
 /* Date picker – wireframe styling */
 .rdp-root {
   --rdp-accent-color: #000000;
-  --rdp-accent-background-color: #E0EFFF;
-  --rdp-day_button-border-radius: 8px;
+  --rdp-accent-background-color: var(--bg-accent);
+  --rdp-day_button-border-radius: 0px;
   --rdp-day_button-width: 36px;
   --rdp-day_button-height: 36px;
   --rdp-day-height: 38px;
@@ -108,9 +115,9 @@ html {
   justify-content: center;
   padding: 0.5rem;
   margin-bottom: 0.5rem;
-  background: #E0EFFF;
+  background: var(--bg-accent);
   border: 1px solid #000000;
-  border-radius: 8px;
+  border-radius: 0px;
   font-weight: 600;
   font-size: 0.9375rem;
 }
@@ -118,11 +125,11 @@ html {
 .rdp-root .rdp-button_previous,
 .rdp-root .rdp-button_next {
   border: 2px solid #000000;
-  border-radius: 8px;
+  border-radius: 0px;
   background: white;
 }
 
 .rdp-root .rdp-button_previous:hover,
 .rdp-root .rdp-button_next:hover {
-  background: #E0EFFF;
+  background: var(--bg-accent);
 }

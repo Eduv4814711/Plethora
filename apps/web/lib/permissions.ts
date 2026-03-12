@@ -19,13 +19,14 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/rostering", label: "Rostering", roles: ["admin", "operations_manager", "supervisor", "controller"] },
   { href: "/attendance", label: "Attendance", roles: ["admin", "operations_manager", "hr_payroll", "supervisor", "controller"] },
   { href: "/payroll", label: "Payroll", roles: ["admin", "operations_manager", "hr_payroll"] },
+  { href: "/tasks", label: "Tasks", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
   { href: "/reports", label: "Reports", roles: ["admin", "operations_manager", "hr_payroll"] },
   { href: "/audit", label: "Audit", roles: ["admin"] },
   { href: "/settings", label: "Settings", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
 ];
 
 /** Main nav links shown in the horizontal bar (first 6 items). */
-export const MAIN_NAV_HREFS = ["/", "/employees", "/sites", "/rostering", "/attendance", "/payroll"];
+export const MAIN_NAV_HREFS = ["/", "/employees", "/sites", "/rostering", "/attendance", "/payroll", "/tasks"];
 
 /** Nav items shown in the "More" dropdown (remaining items). */
 export const MORE_NAV_HREFS = ["/reports", "/audit"];
