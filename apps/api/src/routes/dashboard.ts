@@ -36,7 +36,10 @@ export async function dashboardRoutes(app: FastifyInstance) {
       })
     );
 
-    const [guardsOnDuty, activeSitesCount, payrollStatus, missedShifts, pendingApprovals, employeesByStatus] =
+    const months = 4;
+    const reportStart = startOfMonth(subMonths(now, months - 1));
+
+    const [guardsOnDuty, activeSitesCount, payrollStatus, missedShifts, pendingApprovals, employeesByStatus, shiftsByStatus] =
       await Promise.all([
         prisma.shift.count({
           where: {
@@ -83,6 +86,14 @@ export async function dashboardRoutes(app: FastifyInstance) {
           where: { companyId },
           _count: { id: true },
         }),
+        prisma.shift.groupBy({
+          by: ["status"],
+          where: {
+            companyId,
+            startTime: { gte: reportStart },
+          },
+          _count: { id: true },
+        }),
       ]);
 
     const payrollByStatus = payrollStatus.reduce(
@@ -108,8 +119,6 @@ export async function dashboardRoutes(app: FastifyInstance) {
     const todayEnd = new Date(todayStart);
     todayEnd.setHours(23, 59, 59, 999);
 
-    const months = 4;
-    const reportStart = startOfMonth(subMonths(now, months - 1));
     const shiftsByMonth = await prisma.$queryRaw<
       { month: string; count: bigint }[]
     >(Prisma.sql`
@@ -164,6 +173,11 @@ export async function dashboardRoutes(app: FastifyInstance) {
       value: e._count.id,
     }));
 
+    const shiftsByStatusData = shiftsByStatus.map((s) => ({
+      name: s.status.charAt(0).toUpperCase() + s.status.slice(1),
+      value: s._count.id,
+    }));
+
     return reply.send({
       guardsOnDuty,
       guardsOnDutyByDay,
@@ -173,6 +187,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
       taskStats: { overdue: tasksOverdue, dueToday: tasksDueToday },
       shiftsOverTime,
       employeesByStatus: employeesByStatusData,
+      shiftsByStatus: shiftsByStatusData,
     });
   });
 }

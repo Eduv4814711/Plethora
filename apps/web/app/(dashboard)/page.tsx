@@ -27,23 +27,20 @@ interface DashboardData {
   taskStats?: { overdue: number; dueToday: number };
   shiftsOverTime?: { name: string; value: number }[];
   employeesByStatus?: { name: string; value: number }[];
+  shiftsByStatus?: { name: string; value: number }[];
 }
 
 const defaultGuardsByDay = [
-  { name: "Mon", value: 30 },
-  { name: "Tue", value: 32 },
-  { name: "Wed", value: 28 },
-  { name: "Thu", value: 35 },
-  { name: "Fri", value: 38 },
-  { name: "Sat", value: 42 },
-  { name: "Sun", value: 25 },
+  { name: "Mon", value: 0 },
+  { name: "Tue", value: 0 },
+  { name: "Wed", value: 0 },
+  { name: "Thu", value: 0 },
+  { name: "Fri", value: 0 },
+  { name: "Sat", value: 0 },
+  { name: "Sun", value: 0 },
 ];
 
-const rosteredData = [
-  { name: "Item 1", value: 52.5 },
-  { name: "Item 2", value: 29.5 },
-  { name: "Item 3", value: 18 },
-];
+const defaultRosteredData = [{ name: "No data", value: 1 }];
 
 const defaultStatusData = [{ name: "No data", value: 1 }];
 
@@ -114,7 +111,7 @@ export default function DashboardPage() {
 
             <DashboardCard title="Active Sites">
               <div className="flex items-center justify-center h-full">
-                <span className="text-7xl font-bold text-black">{data?.activeSitesCount ?? 69}</span>
+                <span className="text-7xl font-bold text-black">{data?.activeSitesCount ?? 0}</span>
               </div>
             </DashboardCard>
 
@@ -123,7 +120,10 @@ export default function DashboardPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={rosteredData}
+                      data={(() => {
+                        const raw = data?.shiftsByStatus ?? [];
+                        return raw.some((d) => d.value > 0) ? raw : defaultRosteredData;
+                      })()}
                       cx="50%"
                       cy="50%"
                       innerRadius={0}
@@ -132,9 +132,13 @@ export default function DashboardPage() {
                       dataKey="value"
                       label={({ name, value }) => `${name} ${value}`}
                     >
-                      {rosteredData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                      ))}
+                      {(() => {
+                        const raw = data?.shiftsByStatus ?? [];
+                        const chartData = raw.some((d) => d.value > 0) ? raw : defaultRosteredData;
+                        return chartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        ));
+                      })()}
                     </Pie>
                   </PieChart>
                 </ResponsiveContainer>
