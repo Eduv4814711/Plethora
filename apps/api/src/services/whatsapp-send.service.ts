@@ -1,4 +1,3 @@
-import FormData from "form-data";
 import { config } from "../lib/config.js";
 
 const GRAPH_URL = "https://graph.facebook.com";
@@ -48,27 +47,51 @@ export async function sendDocument(
   const phoneNumberId = config.whatsapp.phoneNumberId;
   const uploadUrl = `${GRAPH_URL}/${config.whatsapp.apiVersion}/${phoneNumberId}/media`;
 
+  // #region agent log
+  fetch("http://127.0.0.1:7244/ingest/88a7285e-a4b7-491f-ab73-2cd80dfe89c9", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8a22f4" },
+    body: JSON.stringify({
+      sessionId: "8a22f4",
+      location: "whatsapp-send.service.ts:sendDocument",
+      message: "Before upload",
+      data: { pdfBufferLen: pdfBuffer.length, filename },
+      timestamp: Date.now(),
+      hypothesisId: "H1",
+    }),
+  }).catch(() => {});
+  // #endregion
+
   const form = new FormData();
   form.append("messaging_product", "whatsapp");
   form.append("type", "application/pdf");
-  form.append("file", pdfBuffer, {
-    filename,
-    contentType: "application/pdf",
-  });
+  form.append("file", new Blob([pdfBuffer], { type: "application/pdf" }), filename);
 
   const uploadRes = await fetch(uploadUrl, {
     method: "POST",
     headers: {
-      ...form.getHeaders(),
       Authorization: `Bearer ${config.whatsapp.accessToken}`,
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    body: form as any,
+    body: form,
   });
 
   if (!uploadRes.ok) {
     const err = await uploadRes.text();
     console.error("[WhatsApp] Media upload failed:", uploadRes.status, err);
+    // #region agent log
+    fetch("http://127.0.0.1:7244/ingest/88a7285e-a4b7-491f-ab73-2cd80dfe89c9", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8a22f4" },
+      body: JSON.stringify({
+        sessionId: "8a22f4",
+        location: "whatsapp-send.service.ts:uploadFailed",
+        message: "Upload failed",
+        data: { status: uploadRes.status, err: err.slice(0, 200) },
+        timestamp: Date.now(),
+        hypothesisId: "H1",
+      }),
+    }).catch(() => {});
+    // #endregion
     return false;
   }
 
@@ -78,6 +101,22 @@ export async function sendDocument(
     console.error("[WhatsApp] No media ID in upload response:", JSON.stringify(uploadJson));
     return false;
   }
+
+  // #region agent log
+  fetch("http://127.0.0.1:7244/ingest/88a7285e-a4b7-491f-ab73-2cd80dfe89c9", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "8a22f4" },
+    body: JSON.stringify({
+      sessionId: "8a22f4",
+      location: "whatsapp-send.service.ts:uploadSuccess",
+      message: "Upload succeeded",
+      data: { mediaId },
+      timestamp: Date.now(),
+      hypothesisId: "H4",
+      runId: "post-fix",
+    }),
+  }).catch(() => {});
+  // #endregion
 
   const messagesUrl = `${GRAPH_URL}/${config.whatsapp.apiVersion}/${phoneNumberId}/messages`;
   const body = {
