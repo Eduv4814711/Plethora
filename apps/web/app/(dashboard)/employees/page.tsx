@@ -137,7 +137,7 @@ export default function EmployeesPage() {
     return (
       <div className="animate-pulse grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {[1, 2, 3, 4, 5, 6].map((i) => (
-          <div key={i} className="h-44 bg-white border-[3px] border-black rounded-[10px]" />
+          <div key={i} className="h-44 bg-white border-2 border-security-navy-200 rounded-[10px]" />
         ))}
       </div>
     );
@@ -183,7 +183,7 @@ export default function EmployeesPage() {
         </div>
       </div>
 
-      <div className="flex flex-nowrap items-center gap-3 mb-8 p-4 rounded-[10px] bg-wireframe-accent border-2 border-black">
+      <div className="flex flex-nowrap items-center gap-3 mb-8 p-4 rounded-[10px] bg-wireframe-accent border-2 border-security-navy-200">
         <span className="text-sm font-medium text-black shrink-0">Filters:</span>
         <div className="flex items-center gap-3 shrink-0">
           <select
@@ -282,7 +282,7 @@ export default function EmployeesPage() {
                 </p>
               </div>
               <span
-                className={`shrink-0 px-3 py-1 rounded-[10px] text-xs font-bold uppercase border-2 border-black ${
+                className={`shrink-0 px-3 py-1 rounded-[10px] text-xs font-bold uppercase border-2 border-security-navy-200 ${
                   emp.status === "active" ? "bg-[#FFD400] text-black" : "bg-neutral-100 text-black"
                 }`}
               >
@@ -291,7 +291,7 @@ export default function EmployeesPage() {
             </div>
 
             {/* Yellow info block */}
-            <div className="mt-4 p-4 rounded-[10px] bg-[#FFD400] border-2 border-black">
+            <div className="mt-4 p-4 rounded-[10px] bg-[#FFD400] border-2 border-security-navy-200">
               <div className="space-y-1.5 text-xs uppercase tracking-wider text-black font-medium">
                 {emp.idNumber && <p>ID: {emp.idNumber}</p>}
                 {emp.psiraNumber && <p>PSIRA: {emp.psiraNumber}</p>}
@@ -314,7 +314,7 @@ export default function EmployeesPage() {
             </div>
 
             {expandedId === emp.id && (
-              <div className="mt-4 pt-4 border-t-2 border-black space-y-3 text-sm">
+              <div className="mt-4 pt-4 border-t-2 border-security-navy-200 space-y-3 text-sm">
                 {emp.email && (
                   <p><span className="text-[10px] uppercase tracking-wider text-black">Email</span><br />{emp.email}</p>
                 )}
@@ -538,7 +538,7 @@ function ManageGroupsSection({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Group name"
-          className="flex-1 min-w-[140px] px-2 py-1.5 text-sm border-2 border-black rounded-[10px] bg-white input-modern"
+          className="flex-1 min-w-[140px] px-2 py-1.5 text-sm border-2 border-security-navy-200 rounded-[10px] bg-white input-modern"
           required
         />
         <input
@@ -546,7 +546,7 @@ function ManageGroupsSection({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Description (optional)"
-          className="flex-1 min-w-[140px] px-2 py-1.5 text-sm border-2 border-black rounded-[10px] bg-white input-modern"
+          className="flex-1 min-w-[140px] px-2 py-1.5 text-sm border-2 border-security-navy-200 rounded-[10px] bg-white input-modern"
         />
         <button type="submit" disabled={saving} className="btn-secondary text-xs py-1.5 px-3">
           {saving ? "…" : "Add Group"}
@@ -721,7 +721,7 @@ function EmployeeForm({
       onSubmit={handleSubmit}
       className="card-wireframe mb-6 p-6 max-h-[85vh] overflow-y-auto"
     >
-      <div className="mb-4 pb-3 border-b-2 border-black flex items-baseline justify-between gap-4">
+      <div className="mb-4 pb-3 border-b-2 border-security-navy-200 flex items-baseline justify-between gap-4">
         <h3 className="text-base font-semibold text-neutral-900 tracking-tight">New Team Member</h3>
         <span className="text-[10px] uppercase tracking-widest text-neutral-500">Add team member</span>
       </div>
@@ -732,7 +732,7 @@ function EmployeeForm({
       )}
 
       <div className="space-y-4">
-        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-black">
+        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-security-navy-200">
           <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 mb-2">Staff type</h4>
           <div className="flex gap-6">
             <label className="flex items-center gap-2 cursor-pointer">
@@ -742,7 +742,7 @@ function EmployeeForm({
                 value="office"
                 checked={employeeType === "office"}
                 onChange={() => setEmployeeType("office")}
-                className="w-3.5 h-3.5 border-2 border-black accent-neutral-900"
+                className="w-3.5 h-3.5 border-2 border-security-navy-200 accent-neutral-900"
               />
               <span className="text-sm font-medium text-neutral-900">Office</span>
               <span className="text-xs text-neutral-500">(salary)</span>
@@ -754,7 +754,7 @@ function EmployeeForm({
                 value="security"
                 checked={employeeType === "security"}
                 onChange={() => setEmployeeType("security")}
-                className="w-3.5 h-3.5 border-2 border-black accent-neutral-900"
+                className="w-3.5 h-3.5 border-2 border-security-navy-200 accent-neutral-900"
               />
               <span className="text-sm font-medium text-neutral-900">Guard</span>
               <span className="text-xs text-neutral-500">(hourly)</span>
@@ -762,7 +762,7 @@ function EmployeeForm({
           </div>
         </section>
 
-        <div className="flex gap-1 border-b-2 border-black overflow-x-auto">
+        <div className="flex gap-1 border-b-2 border-security-navy-200 overflow-x-auto">
           {(["basic", "labour", "psira", "bank"] as const).map((tab) => (
             <button
               key={tab}
@@ -771,7 +771,7 @@ function EmployeeForm({
               className={clsx(
                 "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors -mb-px",
                 activeTab === tab
-                  ? "bg-white text-neutral-800 border-2 border-black border-b-transparent"
+                  ? "bg-white text-neutral-800 border-2 border-security-navy-200 border-b-transparent"
                   : "text-neutral-600 hover:text-neutral-900"
               )}
             >
@@ -781,7 +781,7 @@ function EmployeeForm({
         </div>
 
         {activeTab === "basic" && (
-        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-black">
+        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-security-navy-200">
           <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 mb-2">Basic</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
@@ -837,7 +837,7 @@ function EmployeeForm({
         )}
 
         {activeTab === "labour" && (
-        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-black">
+        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-security-navy-200">
           <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 mb-2">Labour Law (BCEA)</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
@@ -878,7 +878,7 @@ function EmployeeForm({
         )}
 
         {activeTab === "bank" && (
-        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-black">
+        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-security-navy-200">
           <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 mb-1.5">Bank Details</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input placeholder="Tax number" value={taxNumber} onChange={(e) => setTaxNumber(e.target.value)} className="input-compact py-1.5 text-sm" />
@@ -911,7 +911,7 @@ function EmployeeForm({
         )}
 
         {activeTab === "psira" && (
-        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-black">
+        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-security-navy-200">
           <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 mb-2">PSIRA</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -936,26 +936,26 @@ function EmployeeForm({
             <input placeholder="Next of kin 2 – Phone" value={nextOfKin2Phone} onChange={(e) => setNextOfKin2Phone(e.target.value)} className="input-compact" />
             <input placeholder="Next of kin 3 – Name" value={nextOfKin3Name} onChange={(e) => setNextOfKin3Name(e.target.value)} className="input-compact" />
             <input placeholder="Next of kin 3 – Phone" value={nextOfKin3Phone} onChange={(e) => setNextOfKin3Phone(e.target.value)} className="input-compact" />
-            <div className="sm:col-span-2 p-4 rounded-lg border-2 border-black bg-white space-y-2">
+            <div className="sm:col-span-2 p-4 rounded-lg border-2 border-security-navy-200 bg-white space-y-2">
               <p className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 mb-1">Declaration</p>
               <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input type="checkbox" checked={residedOutsideSA === true} onChange={(e) => setResidedOutsideSA(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-black accent-neutral-900" />
+                <input type="checkbox" checked={residedOutsideSA === true} onChange={(e) => setResidedOutsideSA(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-security-navy-200 accent-neutral-900" />
                 Resided outside SA 1+ year (last 10 years)
               </label>
               <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input type="checkbox" checked={militaryPoliceService === true} onChange={(e) => setMilitaryPoliceService(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-black accent-neutral-900" />
+                <input type="checkbox" checked={militaryPoliceService === true} onChange={(e) => setMilitaryPoliceService(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-security-navy-200 accent-neutral-900" />
                 Military / Police / Intelligence
               </label>
               <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input type="checkbox" checked={criminalInvestigation === true} onChange={(e) => setCriminalInvestigation(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-black accent-neutral-900" />
+                <input type="checkbox" checked={criminalInvestigation === true} onChange={(e) => setCriminalInvestigation(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-security-navy-200 accent-neutral-900" />
                 Criminal investigation pending
               </label>
               <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input type="checkbox" checked={mentallyUnstable === true} onChange={(e) => setMentallyUnstable(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-black accent-neutral-900" />
+                <input type="checkbox" checked={mentallyUnstable === true} onChange={(e) => setMentallyUnstable(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-security-navy-200 accent-neutral-900" />
                 Ever declared mentally unstable
               </label>
               <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input type="checkbox" checked={trainingCompleted === true} onChange={(e) => setTrainingCompleted(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-black accent-neutral-900" />
+                <input type="checkbox" checked={trainingCompleted === true} onChange={(e) => setTrainingCompleted(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-security-navy-200 accent-neutral-900" />
                 Accredited training completed
               </label>
             </div>
@@ -964,7 +964,7 @@ function EmployeeForm({
         )}
       </div>
 
-      <div className="mt-4 pt-4 border-t-2 border-black">
+      <div className="mt-4 pt-4 border-t-2 border-security-navy-200">
         <button type="submit" className="btn-primary text-sm py-2">
           Create Team Member
         </button>
@@ -1172,12 +1172,12 @@ function EditModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="card-elevated w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="p-6 border-b-2 border-black shrink-0 flex items-center justify-between">
+        <div className="p-6 border-b-2 border-security-navy-200 shrink-0 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-neutral-900">Edit Team Member</h3>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-[10px] text-black hover:bg-neutral-100 border-2 border-transparent hover:border-black transition-colors"
+            className="p-2 rounded-[10px] text-black hover:bg-neutral-100 border-2 border-transparent hover:border-security-navy-300 transition-colors"
             aria-label="Close"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1195,7 +1195,7 @@ function EditModal({
               </div>
             )}
 
-            <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-black">
+            <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-security-navy-200">
               <h4 className="text-sm font-semibold text-neutral-700 mb-3">Staff type</h4>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -1225,7 +1225,7 @@ function EditModal({
               </div>
             </section>
 
-            <div className="flex gap-1 border-b-2 border-black overflow-x-auto">
+            <div className="flex gap-1 border-b-2 border-security-navy-200 overflow-x-auto">
               {(["basic", "labour", "psira", "bank"] as const).map((tab) => (
                 <button
                   key={tab}
@@ -1234,7 +1234,7 @@ function EditModal({
                   className={clsx(
                     "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors -mb-px",
                       activeTab === tab
-                        ? "bg-white text-neutral-800 border-2 border-black border-b-transparent"
+                        ? "bg-white text-neutral-800 border-2 border-security-navy-200 border-b-transparent"
                       : "text-neutral-600 hover:text-neutral-900"
                   )}
                 >
@@ -1334,7 +1334,7 @@ function EditModal({
             )}
 
             {activeTab === "bank" && (
-            <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-black">
+            <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-security-navy-200">
               <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 mb-1.5">Bank Details</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input placeholder="Tax number" value={taxNumber} onChange={(e) => setTaxNumber(e.target.value)} className="input-modern py-2 text-sm" />
@@ -1450,7 +1450,7 @@ function EditModal({
                   }
                 }}
                 disabled={deleting}
-                className="flex-1 btn-primary bg-black border-black hover:bg-neutral-800 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="flex-1 btn-primary bg-black border-security-navy-200 hover:bg-neutral-800 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {deleting ? "Deleting..." : "Delete"}
               </button>
@@ -1515,7 +1515,7 @@ function StatusModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="card-wireframe w-full max-w-sm shadow-xl">
-        <div className="p-6 border-b-2 border-black">
+        <div className="p-6 border-b-2 border-security-navy-200">
           <h3 className="text-lg font-semibold text-neutral-900">Change Status</h3>
           <p className="text-sm text-neutral-500 mt-1">
             {employee.firstName} {employee.lastName}

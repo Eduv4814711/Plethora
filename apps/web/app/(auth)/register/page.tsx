@@ -10,11 +10,11 @@ function RegisterFallback() {
   return (
     <div className="w-full animate-fade-in">
       <div className="card-elevated p-10 md:p-12">
-        <div className="h-6 w-48 bg-neutral-200 rounded mb-4 animate-pulse" />
+        <div className="h-6 w-48 bg-security-navy-200 rounded-security mb-4 animate-pulse" />
         <div className="space-y-4">
-          <div className="h-11 bg-neutral-200 rounded animate-pulse" />
-          <div className="h-11 bg-neutral-200 rounded animate-pulse" />
-          <div className="h-11 bg-neutral-200 rounded animate-pulse" />
+          <div className="h-11 bg-security-navy-200 rounded-security animate-pulse" />
+          <div className="h-11 bg-security-navy-200 rounded-security animate-pulse" />
+          <div className="h-11 bg-security-navy-200 rounded-security animate-pulse" />
         </div>
       </div>
     </div>
@@ -101,12 +101,12 @@ function RegisterFormContent() {
   return (
     <div className="w-full animate-fade-in">
       <div className="card-elevated p-10 md:p-12">
-        <div className="text-center mb-8 pb-8 border-b-2 border-black">
+        <div className="text-center mb-8 pb-8 border-b-2 border-security-navy-200">
           <div className="inline-flex items-center justify-center mb-4">
             <img src="/plethora-logo.svg" alt="Plethora" className="h-[7.5rem] w-auto object-contain" />
           </div>
-          <p className="text-xs font-medium uppercase tracking-widest text-black mt-2">
-            Register your company
+          <p className="text-xs font-semibold uppercase tracking-widest text-security-navy-500 mt-2">
+            Register your security company
           </p>
         </div>
 
@@ -114,7 +114,7 @@ function RegisterFormContent() {
           <div>
             <label
               htmlFor="companyName"
-              className="block text-xs font-semibold uppercase tracking-wider text-black mb-2"
+              className="label-text block mb-2"
             >
               Company name
             </label>
@@ -130,14 +130,14 @@ function RegisterFormContent() {
           </div>
 
           <div className="pt-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-black mb-3">
+            <p className="label-text mb-3">
               Admin user for this company
             </p>
             <div className="space-y-4">
               <div>
                 <label
                   htmlFor="adminName"
-                  className="block text-xs font-semibold uppercase tracking-wider text-black mb-2"
+                  className="label-text block mb-2"
                 >
                   Your name
                 </label>
@@ -154,7 +154,7 @@ function RegisterFormContent() {
               <div>
                 <label
                   htmlFor="adminEmail"
-                  className="block text-xs font-semibold uppercase tracking-wider text-black mb-2"
+                  className="label-text block mb-2"
                 >
                   Email
                 </label>
@@ -171,7 +171,7 @@ function RegisterFormContent() {
               <div>
                 <label
                   htmlFor="password"
-                  className="block text-xs font-semibold uppercase tracking-wider text-black mb-2"
+                  className="label-text block mb-2"
                 >
                   Password
                 </label>
@@ -189,7 +189,7 @@ function RegisterFormContent() {
                   <button
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-black hover:bg-neutral-100 border border-transparent hover:border-black transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-security text-security-navy-600 hover:bg-security-navy-50 border border-transparent hover:border-security-navy-300 transition-colors"
                     aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? (
@@ -208,7 +208,7 @@ function RegisterFormContent() {
               <div>
                 <label
                   htmlFor="confirmPassword"
-                  className="block text-xs font-semibold uppercase tracking-wider text-black mb-2"
+                  className="label-text block mb-2"
                 >
                   Confirm password
                 </label>
@@ -227,7 +227,7 @@ function RegisterFormContent() {
           </div>
 
           {error && (
-            <div className="p-4 text-sm text-black bg-white border-2 border-black rounded-[10px]">
+            <div className="p-4 text-sm text-security-navy bg-security-amber-50 border-2 border-security-amber-200 rounded-security">
               {error}
             </div>
           )}
@@ -241,9 +241,9 @@ function RegisterFormContent() {
           </button>
         </form>
 
-        <p className="text-center text-sm text-black mt-6">
+        <p className="text-center text-sm text-security-navy-600 mt-6">
           Already have an account?{" "}
-          <Link href="/login" className="font-semibold underline hover:no-underline">
+          <Link href="/login" className="font-semibold text-security-navy hover:underline">
             Sign in
           </Link>
         </p>

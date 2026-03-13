@@ -106,12 +106,12 @@ export default function SitesPage() {
     return (
       <div className="animate-pulse space-y-6">
         <div className="flex justify-between items-center">
-          <div className="h-9 bg-white border-2 border-black rounded-[10px] w-48" />
-          <div className="h-10 bg-white border-2 border-black rounded-[10px] w-32" />
+          <div className="h-9 bg-white border-2 border-security-navy-200 rounded-[10px] w-48" />
+          <div className="h-10 bg-white border-2 border-security-navy-200 rounded-[10px] w-32" />
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-64 bg-white border-[3px] border-black rounded-[10px]" />
+            <div key={i} className="h-64 bg-white border-2 border-security-navy-200 rounded-[10px]" />
           ))}
         </div>
       </div>
@@ -555,7 +555,7 @@ function SiteForm({
                       type="checkbox"
                       checked={assignedGuardIds.includes(g.id)}
                       onChange={() => toggleGuard(g.id)}
-                      className="w-4 h-4 rounded border-black dark:border-white text-neutral-600 focus:ring-neutral-500"
+                      className="w-4 h-4 rounded border-security-navy-200 dark:border-neutral-600 text-neutral-600 focus:ring-neutral-500"
                     />
                     <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
                       {g.firstName} {g.lastName}
@@ -724,7 +724,7 @@ function EditSiteModal({
                           type="checkbox"
                           checked={assignedGuardIds.includes(g.id)}
                           onChange={() => toggleGuard(g.id)}
-                          className="w-4 h-4 rounded border-black dark:border-white text-neutral-600 focus:ring-neutral-500"
+                          className="w-4 h-4 rounded border-security-navy-200 dark:border-neutral-600 text-neutral-600 focus:ring-neutral-500"
                         />
                         <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
                           {g.firstName} {g.lastName}
@@ -974,7 +974,7 @@ function PostForm({
           <button
             type="button"
             onClick={() => setShow(false)}
-            className="px-4 py-2 text-sm font-medium border border-black dark:border-white rounded-sm hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+            className="px-4 py-2 text-sm font-medium border border-security-navy-200 dark:border-neutral-600 rounded-sm hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
           >
             Cancel
           </button>

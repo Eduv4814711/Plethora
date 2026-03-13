@@ -39,12 +39,12 @@ function LoginForm() {
   return (
     <div className="w-full animate-fade-in">
       <div className="card-elevated p-10 md:p-12">
-        <div className="text-center mb-8 pb-8 border-b-2 border-black">
+        <div className="text-center mb-8 pb-8 border-b-2 border-security-navy-200">
           <div className="inline-flex items-center justify-center mb-4">
             <img src="/plethora-logo.svg" alt="Plethora" className="h-[7.5rem] w-auto object-contain" />
           </div>
-          <p className="text-xs font-medium uppercase tracking-widest text-black mt-2">
-            Workforce & Payroll Management
+          <p className="text-xs font-semibold uppercase tracking-widest text-security-navy-500 mt-2">
+            Workforce & Payroll Management for Security Companies
           </p>
         </div>
 
@@ -52,7 +52,7 @@ function LoginForm() {
           <div>
             <label
               htmlFor="email"
-              className="block text-xs font-semibold uppercase tracking-wider text-black mb-2"
+              className="label-text block mb-2"
             >
               Email
             </label>
@@ -70,7 +70,7 @@ function LoginForm() {
           <div>
             <label
               htmlFor="password"
-              className="block text-xs font-semibold uppercase tracking-wider text-black mb-2"
+              className="label-text block mb-2"
             >
               Password
             </label>
@@ -86,7 +86,7 @@ function LoginForm() {
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-black hover:bg-neutral-100 border border-transparent hover:border-black transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-security text-security-navy-600 hover:bg-security-navy-50 border border-transparent hover:border-security-navy-300 transition-colors"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? (
@@ -104,11 +104,11 @@ function LoginForm() {
           </div>
 
           {error && (
-            <div className="p-4 text-sm text-black bg-white border-2 border-black rounded-[10px] space-y-2">
-              <p>{error}</p>
+            <div className="p-4 text-sm text-security-navy bg-security-amber-50 border-2 border-security-amber-200 rounded-security space-y-2">
+              <p className="font-medium">{error}</p>
               {(error === "Login failed" || error.includes("connect") || error.includes("server") || error.includes("404")) && (
-                <p className="text-xs mt-2">
-                  Run <code className="bg-neutral-100 px-1 rounded">npm run dev:all</code> (or <code className="bg-neutral-100 px-1 rounded">npm run dev:api</code> in a separate terminal). Web must be on port 3000, API on 3001. First-time setup: <code className="bg-neutral-100 px-1 rounded">npm run db:push</code> and <code className="bg-neutral-100 px-1 rounded">npm run db:seed</code>.
+                <p className="text-xs mt-2 text-security-navy-600">
+                  Run <code className="bg-security-navy-100 px-1.5 py-0.5 rounded text-security-navy-700 font-mono">npm run dev:all</code> (or <code className="bg-security-navy-100 px-1.5 py-0.5 rounded text-security-navy-700 font-mono">npm run dev:api</code> in a separate terminal). Web on port 3000, API on 3001. First-time: <code className="bg-security-navy-100 px-1.5 py-0.5 rounded text-security-navy-700 font-mono">npm run db:push</code> and <code className="bg-security-navy-100 px-1.5 py-0.5 rounded text-security-navy-700 font-mono">npm run db:seed</code>.
                 </p>
               )}
             </div>
@@ -122,16 +122,16 @@ function LoginForm() {
             {submitting ? "Signing in..." : "Sign in"}
           </button>
 
-          <p className="text-center text-sm text-black mt-6">
+          <p className="text-center text-sm text-security-navy-600 mt-6">
             New to Plethora?{" "}
-            <Link href="/register" className="font-semibold underline hover:no-underline">
+            <Link href="/register" className="font-semibold text-security-navy hover:underline">
               Create a company
             </Link>
           </p>
         </form>
       </div>
-      <p className="text-center text-xs uppercase tracking-widest text-black mt-6">
-        Quick Bopha Security
+      <p className="text-center text-xs font-medium uppercase tracking-widest text-security-navy-400 mt-6">
+        Security Workforce Management
       </p>
     </div>
   );

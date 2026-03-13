@@ -3,14 +3,53 @@ import type { PayrollStatus } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { authMiddleware } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
-import { startOfMonth, subMonths, format } from "date-fns";
+import { startOfMonth, subMonths, format, startOfDay, endOfDay } from "date-fns";
+
+function parseDateRange(q: Record<string, string | undefined>): { start: Date; end: Date } {
+  const now = new Date();
+  const range = q.dateRange || "month";
+  const customStart = q.startDate ? new Date(q.startDate) : null;
+  const customEnd = q.endDate ? new Date(q.endDate) : null;
+
+  if (range === "custom" && customStart && customEnd && !Number.isNaN(customStart.getTime()) && !Number.isNaN(customEnd.getTime())) {
+    return { start: startOfDay(customStart), end: endOfDay(customEnd) };
+  }
+  if (range === "today") {
+    return { start: startOfDay(now), end: endOfDay(now) };
+  }
+  if (range === "week") {
+    const start = new Date(now);
+    start.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }
+  // month (default)
+  return {
+    start: startOfMonth(now),
+    end: endOfDay(now),
+  };
+}
 
 export async function dashboardRoutes(app: FastifyInstance) {
   app.get("/", { preHandler: [authMiddleware] }, async (request, reply) => {
     const user = request.user!;
     const companyId = user.companyId;
+    const q = request.query as Record<string, string | undefined>;
+    const siteIdsRaw = q.siteIds;
+    const siteIds: string[] | undefined = siteIdsRaw
+      ? siteIdsRaw.split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
 
     const now = new Date();
+    const { start: dateStart, end: dateEnd } = parseDateRange(q);
+
+    const shiftWhereBase = {
+      companyId,
+      ...(siteIds?.length ? { post: { siteId: { in: siteIds } } } : {}),
+    };
 
     // Get start of current week (Monday) and build day boundaries
     const startOfWeek = new Date(now);
@@ -26,7 +65,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
         dayEnd.setHours(23, 59, 59, 999);
         const count = await prisma.shift.count({
           where: {
-            companyId,
+            ...shiftWhereBase,
             status: { in: ["assigned", "active", "completed", "verified"] },
             startTime: { lte: dayEnd },
             endTime: { gte: dayStart },
@@ -39,11 +78,15 @@ export async function dashboardRoutes(app: FastifyInstance) {
     const months = 4;
     const reportStart = startOfMonth(subMonths(now, months - 1));
 
-    const [guardsOnDuty, activeSitesCount, payrollStatus, missedShifts, pendingApprovals, employeesByStatus, shiftsByStatus] =
+    const activeSitesWhere = siteIds?.length
+      ? { companyId, id: { in: siteIds } }
+      : { companyId };
+
+    const [guardsOnDuty, activeSitesCount, activeSitesLastMonth, payrollStatus, missedShifts, pendingApprovals, employeesByStatus, shiftsByStatus] =
       await Promise.all([
         prisma.shift.count({
           where: {
-            companyId,
+            ...shiftWhereBase,
             status: "active",
             startTime: { lte: now },
             endTime: { gte: now },
@@ -51,7 +94,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
         }),
         prisma.site.count({
           where: {
-            companyId,
+            ...activeSitesWhere,
             posts: {
               some: {
                 shifts: {
@@ -59,6 +102,24 @@ export async function dashboardRoutes(app: FastifyInstance) {
                     status: "active",
                     startTime: { lte: now },
                     endTime: { gte: now },
+                  },
+                },
+              },
+            },
+          },
+        }),
+        prisma.site.count({
+          where: {
+            ...activeSitesWhere,
+            posts: {
+              some: {
+                shifts: {
+                  some: {
+                    status: { in: ["assigned", "active", "completed", "verified"] },
+                    startTime: {
+                      gte: startOfMonth(subMonths(now, 1)),
+                      lte: endOfDay(subMonths(now, 1)),
+                    },
                   },
                 },
               },
@@ -89,7 +150,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
         prisma.shift.groupBy({
           by: ["status"],
           where: {
-            companyId,
+            ...shiftWhereBase,
             startTime: { gte: reportStart },
           },
           _count: { id: true },
@@ -119,9 +180,22 @@ export async function dashboardRoutes(app: FastifyInstance) {
     const todayEnd = new Date(todayStart);
     todayEnd.setHours(23, 59, 59, 999);
 
-    const shiftsByMonth = await prisma.$queryRaw<
-      { month: string; count: bigint }[]
-    >(Prisma.sql`
+    const shiftsByMonth = siteIds?.length
+      ? await prisma.$queryRaw<
+          { month: string; count: bigint }[]
+        >(Prisma.sql`
+      SELECT to_char(date_trunc('month', s."startTime")::date, 'YYYY-MM') as month, count(*)::bigint
+      FROM "Shift" s
+      JOIN "Post" p ON p.id = s."postId"
+      WHERE s."companyId" = ${companyId}
+        AND p."siteId" IN (${Prisma.join(siteIds)})
+        AND s."startTime" >= ${reportStart}
+      GROUP BY date_trunc('month', s."startTime")
+      ORDER BY month ASC
+    `)
+      : await prisma.$queryRaw<
+          { month: string; count: bigint }[]
+        >(Prisma.sql`
       SELECT to_char(date_trunc('month', "startTime")::date, 'YYYY-MM') as month, count(*)::bigint
       FROM "Shift"
       WHERE "companyId" = ${companyId}
@@ -144,7 +218,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
         value: count,
       }));
 
-    const [tasksOverdue, tasksDueToday] =
+    const [tasksOverdue, tasksDueToday, topPriorityTasks] =
       userId
         ? await Promise.all([
             prisma.task.count({
@@ -165,8 +239,19 @@ export async function dashboardRoutes(app: FastifyInstance) {
                 dueDate: { gte: todayStart, lte: todayEnd },
               },
             }),
+            prisma.task.findMany({
+              where: {
+                companyId,
+                assigneeType: "user",
+                assigneeId: userId,
+                status: { not: "done" },
+              },
+              select: { id: true, title: true, dueDate: true, priority: true },
+              orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+              take: 3,
+            }),
           ])
-        : [0, 0];
+        : [0, 0, [] as { id: string; title: string; dueDate: Date | null; priority: string }[]];
 
     const employeesByStatusData = employeesByStatus.map((e) => ({
       name: e.status.charAt(0).toUpperCase() + e.status.slice(1),
@@ -178,13 +263,22 @@ export async function dashboardRoutes(app: FastifyInstance) {
       value: s._count.id,
     }));
 
+    const activeSitesDelta = activeSitesCount - activeSitesLastMonth;
+
     return reply.send({
       guardsOnDuty,
       guardsOnDutyByDay,
       activeSitesCount,
+      activeSitesDelta,
       payrollStatus: payrollByStatus,
       alerts,
       taskStats: { overdue: tasksOverdue, dueToday: tasksDueToday },
+      topPriorityTasks: topPriorityTasks.map((t) => ({
+        id: t.id,
+        title: t.title,
+        dueDate: t.dueDate?.toISOString() ?? null,
+        priority: t.priority,
+      })),
       shiftsOverTime,
       employeesByStatus: employeesByStatusData,
       shiftsByStatus: shiftsByStatusData,

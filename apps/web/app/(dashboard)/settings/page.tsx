@@ -63,7 +63,7 @@ export default function SettingsPage() {
       )}
 
       {!isAdmin && activeTab !== "profile" && (
-        <div className="mb-4 p-3 text-sm text-neutral-700 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-black dark:border-white">
+        <div className="mb-4 p-3 text-sm text-neutral-700 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-security-navy-200 dark:border-neutral-600">
           Only administrators can edit business details and settings.
         </div>
       )}
@@ -96,7 +96,7 @@ export default function SettingsPage() {
           })}
       </div>
 
-      <div className="card-wireframe p-6">
+      <div className={clsx("card-wireframe p-6", activeTab === "profile" && "max-w-[50%]")}>
         {activeTab === "profile" && (
           <ProfileSection user={user} />
         )}
@@ -152,9 +152,9 @@ export default function SettingsPage() {
 
 function ProfileSection({ user }: { user: { name?: string; email?: string; role?: string } | null }) {
   return (
-    <div>
+    <div className="text-left">
       <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Profile</h3>
-      <dl className="space-y-3 text-sm">
+      <dl className="space-y-3 text-sm text-left">
         <div>
           <dt className="text-neutral-500 dark:text-neutral-400">Name</dt>
           <dd className="text-neutral-900 dark:text-white">{user?.name}</dd>
@@ -165,7 +165,7 @@ function ProfileSection({ user }: { user: { name?: string; email?: string; role?
         </div>
         <div>
           <dt className="text-neutral-500 dark:text-neutral-400">Role</dt>
-          <dd className="text-neutral-900 dark:text-white">{user?.role}</dd>
+          <dd className="text-neutral-900 dark:text-white capitalize">{user?.role}</dd>
         </div>
       </dl>
     </div>

@@ -4,8 +4,8 @@ import { AuthProvider } from "@/lib/auth-context";
 import { SettingsProvider } from "@/lib/settings-context";
 
 export const metadata: Metadata = {
-  title: "Plethora - Workforce & Payroll",
-  description: "Workforce operations and payroll management for Quick Bopha Security",
+  title: "Plethora - Security Workforce Management",
+  description: "Workforce operations, rostering, and payroll management for security companies",
 };
 
 export default function RootLayout({
