@@ -274,6 +274,21 @@ async function handleClockOut(
 async function handlePayslip(
   employee: EmployeeWithCompany
 ): Promise<{ reply: string; sendDocument?: { buffer: Buffer; filename: string } }> {
+  // #region agent log
+  fetch("http://127.0.0.1:7244/ingest/88a7285e-a4b7-491f-ab73-2cd80dfe89c9", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "1da64d" },
+    body: JSON.stringify({
+      sessionId: "1da64d",
+      location: "whatsapp-handler.service.ts:handlePayslip:entry",
+      message: "handlePayslip called",
+      data: { employeeId: employee.id, companyId: employee.companyId },
+      timestamp: Date.now(),
+      hypothesisId: "B",
+    }),
+  }).catch(() => {});
+  // #endregion
+
   const item = await prisma.payrollItem.findFirst({
     where: {
       employeeId: employee.id,
@@ -292,6 +307,41 @@ async function handlePayslip(
   });
 
   if (!item) {
+    // #region agent log
+    const [totalItems, itemsByStatus, itemsWithPayslip] = await Promise.all([
+      prisma.payrollItem.count({
+        where: { employeeId: employee.id, payrollRun: { companyId: employee.companyId } },
+      }),
+      prisma.payrollItem.findMany({
+        where: { employeeId: employee.id, payrollRun: { companyId: employee.companyId } },
+        select: { id: true, payrollRun: { select: { status: true, periodEnd: true } } },
+        take: 10,
+      }),
+      prisma.payrollItem.count({
+        where: {
+          employeeId: employee.id,
+          payrollRun: { companyId: employee.companyId },
+          payslip: { isNot: null },
+        },
+      }),
+    ]);
+    fetch("http://127.0.0.1:7244/ingest/88a7285e-a4b7-491f-ab73-2cd80dfe89c9", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "1da64d" },
+      body: JSON.stringify({
+        sessionId: "1da64d",
+        location: "whatsapp-handler.service.ts:handlePayslip:noItem",
+        message: "No item found - diagnostic",
+        data: {
+          totalItems,
+          itemsWithPayslip,
+          runStatuses: itemsByStatus.map((i) => i.payrollRun?.status),
+        },
+        timestamp: Date.now(),
+        hypothesisId: "A,C,D",
+      }),
+    }).catch(() => {});
+    // #endregion
     return { reply: "No payslip available. Contact HR." };
   }
 
