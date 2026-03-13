@@ -33,13 +33,13 @@ export function WhatsAppWidget({ contacts, onSend, compact = true }: WhatsAppWid
   const displayContacts = compact ? contacts.slice(0, 5) : contacts;
 
   return (
-    <div className="card-dashboard w-full p-5 flex flex-col border-neutral-200">
-      <h2 className="font-semibold text-sm text-black uppercase tracking-wider mb-3 flex items-center gap-2">
+    <div className="card-dashboard w-full p-5 flex flex-col border-neutral-200 overflow-hidden max-h-[min(420px,50vh)]">
+      <h2 className="font-semibold text-sm text-black uppercase tracking-wider mb-3 flex items-center gap-2 shrink-0">
         <span className="w-1 h-4 bg-black rounded-full" />
         WhatsApp
       </h2>
-      <p className="text-xs text-neutral-500 mb-3">Message team members directly</p>
-      <div className="space-y-2">
+      <p className="text-xs text-neutral-500 mb-3 shrink-0">Message team members directly</p>
+      <div className="space-y-2 overflow-y-auto min-h-0 flex-1">
         {displayContacts.length > 0 ? (
           displayContacts.map((contact) => (
             <div key={contact.id} className="rounded-security border border-neutral-200 bg-white overflow-hidden">
@@ -117,16 +117,16 @@ export function WhatsAppWidget({ contacts, onSend, compact = true }: WhatsAppWid
       {compact && contacts.length > 5 && (
         <Link
           href="/whatsapp"
-          className="mt-2 text-sm text-neutral-600 hover:text-black font-medium"
+          className="mt-2 text-sm text-neutral-600 hover:text-black font-medium shrink-0"
         >
           View all ({contacts.length}) →
         </Link>
       )}
       <Link
-        href="/employees"
-        className="mt-3 flex items-center justify-center gap-1 w-full px-5 py-2.5 font-medium rounded-security border-2 border-neutral-300 bg-white text-black hover:bg-neutral-50 text-sm transition-colors"
+        href="/whatsapp"
+        className="mt-3 flex items-center justify-center gap-1 w-full px-5 py-2.5 font-medium rounded-security border-2 border-neutral-300 bg-white text-black hover:bg-neutral-50 text-sm transition-colors shrink-0"
       >
-        Manage Team
+        WhatsApp
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 11a3 3 0 100-6 3 3 0 000 6z" />
