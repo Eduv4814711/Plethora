@@ -65,7 +65,7 @@ export async function sendDocument(
   const form = new FormData();
   form.append("messaging_product", "whatsapp");
   form.append("type", "application/pdf");
-  form.append("file", new Blob([pdfBuffer], { type: "application/pdf" }), filename);
+  form.append("file", new Blob([new Uint8Array(pdfBuffer)], { type: "application/pdf" }), filename);
 
   const uploadRes = await fetch(uploadUrl, {
     method: "POST",
