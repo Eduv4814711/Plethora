@@ -1,3 +1,4 @@
+import FormData from "form-data";
 import { config } from "../lib/config.js";
 
 const GRAPH_URL = "https://graph.facebook.com";
@@ -47,17 +48,22 @@ export async function sendDocument(
   const phoneNumberId = config.whatsapp.phoneNumberId;
   const uploadUrl = `${GRAPH_URL}/${config.whatsapp.apiVersion}/${phoneNumberId}/media`;
 
-  const formData = new FormData();
-  const blob = new Blob([new Uint8Array(pdfBuffer)], { type: "application/pdf" });
-  formData.append("file", blob, filename);
-  formData.append("type", "application/pdf");
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("type", "application/pdf");
+  form.append("file", pdfBuffer, {
+    filename,
+    contentType: "application/pdf",
+  });
 
   const uploadRes = await fetch(uploadUrl, {
     method: "POST",
     headers: {
+      ...form.getHeaders(),
       Authorization: `Bearer ${config.whatsapp.accessToken}`,
     },
-    body: formData,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    body: form as any,
   });
 
   if (!uploadRes.ok) {
@@ -69,7 +75,7 @@ export async function sendDocument(
   const uploadJson = (await uploadRes.json()) as { id?: string };
   const mediaId = uploadJson.id;
   if (!mediaId) {
-    console.error("[WhatsApp] No media ID in upload response");
+    console.error("[WhatsApp] No media ID in upload response:", JSON.stringify(uploadJson));
     return false;
   }
 
