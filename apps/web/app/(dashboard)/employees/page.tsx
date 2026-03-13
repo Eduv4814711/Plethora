@@ -283,7 +283,7 @@ export default function EmployeesPage() {
               </div>
               <span
                 className={`shrink-0 px-3 py-1 rounded-[10px] text-xs font-bold uppercase border-2 border-security-navy-200 ${
-                  emp.status === "active" ? "bg-[#FFD400] text-black" : "bg-neutral-100 text-black"
+                  emp.status === "active" ? "bg-neutral-200 text-black" : "bg-neutral-100 text-black"
                 }`}
               >
                 {emp.status}
@@ -291,7 +291,7 @@ export default function EmployeesPage() {
             </div>
 
             {/* Yellow info block */}
-            <div className="mt-4 p-4 rounded-[10px] bg-[#FFD400] border-2 border-security-navy-200">
+            <div className="mt-4 p-4 rounded-[10px] bg-neutral-200 border-2 border-security-navy-200">
               <div className="space-y-1.5 text-xs uppercase tracking-wider text-black font-medium">
                 {emp.idNumber && <p>ID: {emp.idNumber}</p>}
                 {emp.psiraNumber && <p>PSIRA: {emp.psiraNumber}</p>}
