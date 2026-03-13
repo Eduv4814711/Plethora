@@ -446,8 +446,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Right Sidebar - Tasks & WhatsApp */}
-        <div className="w-64 flex-shrink-0 flex flex-col gap-6">
+        {/* Right Sidebar - Tasks & WhatsApp (height matches top + bottom grid rows: h-64 + gap-6 + h-64) */}
+        <div className="w-64 flex-shrink-0 flex flex-col gap-6 h-[536px]">
           <div className="card-dashboard w-full p-5 flex flex-col border-neutral-200">
             <h2 className="font-semibold text-sm text-black uppercase tracking-wider mb-3 flex items-center gap-2">
               <span className="w-1 h-4 bg-black rounded-full" />
