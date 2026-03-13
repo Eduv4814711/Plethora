@@ -10,6 +10,17 @@ import { createAuditLog } from "../lib/audit.js";
 const optionalString = z.string().optional();
 const optionalNumber = z.number().optional();
 
+/**
+ * Normalize phone for storage so WhatsApp can match it.
+ * WhatsApp sends IDs like "27821234567". We store in the same format for reliable matching.
+ */
+function normalizePhoneForStorage(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("27") && digits.length === 11) return digits;
+  if (digits.startsWith("0") && digits.length === 10) return "27" + digits.slice(1);
+  return digits;
+}
+
 /** Reject dates with year outside 1900-2100 to avoid Prisma/database errors (e.g. year 202500) */
 function sanitizeDate(v: string | undefined): Date | undefined {
   if (!v) return undefined;
@@ -48,7 +59,7 @@ const createEmployeeSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
   idNumber: optionalString,
-  phone: optionalString,
+  phone: optionalString.transform((v) => (v && v.trim() ? normalizePhoneForStorage(v) : undefined)),
   status: z.enum(["applicant", "hired", "training", "active", "suspended", "offboarded"]).default("applicant"),
   hourlyRate: z.number().positive().optional(),
   monthlySalary: z.number().positive().optional(),
@@ -116,6 +127,13 @@ const updateEmployeeSchema = createEmployeeSchema.partial().extend({
   monthlySalary: z.number().positive().optional().nullable(),
   gradeId: z.string().optional().nullable(),
   groupId: z.string().optional().nullable(),
+  phone: z
+    .string()
+    .optional()
+    .transform((v) => {
+      if (v === undefined) return undefined;
+      return v.trim() === "" ? null : normalizePhoneForStorage(v);
+    }),
 });
 
 const statusTransitionSchema = z.object({

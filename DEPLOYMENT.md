@@ -81,6 +81,29 @@ This guide covers deploying Plethora to Railway. All components (web, API, datab
 
 ---
 
+## Phase 5.5: WhatsApp (Optional)
+
+To enable WhatsApp commands (clock in, clock out, payslip, leave, help):
+
+1. Add these variables to your **API** service:
+
+   | Variable | Value |
+   |----------|-------|
+   | WHATSAPP_PHONE_NUMBER_ID | Your Meta WhatsApp phone number ID |
+   | WHATSAPP_ACCESS_TOKEN | Permanent token from Meta (System User) |
+   | WHATSAPP_VERIFY_TOKEN | A secret string you choose (e.g. `plethora_wa_verify_xyz`) |
+   | WHATSAPP_API_VERSION | `v21.0` (optional) |
+
+2. In [Meta for Developers](https://developers.facebook.com/) → Your App → WhatsApp → Configuration → Webhook:
+   - **Callback URL**: `https://YOUR-API-URL/webhook` (use your Railway API domain)
+   - **Verify token**: Same as `WHATSAPP_VERIFY_TOKEN`
+3. Subscribe to the **messages** webhook field.
+4. Redeploy the API.
+
+See [docs/WHATSAPP_PRODUCTION.md](docs/WHATSAPP_PRODUCTION.md) for full details and permanent token setup.
+
+---
+
 ## Phase 6: Custom Domains (Optional)
 
 1. In each service (API and Web), go to **Settings** → **Networking** → **Custom Domain**.

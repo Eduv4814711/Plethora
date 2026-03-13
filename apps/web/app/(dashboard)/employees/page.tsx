@@ -660,7 +660,7 @@ function EmployeeForm({
         firstName,
         lastName,
         idNumber: idNumber || undefined,
-        phone: phone || undefined,
+        phone: phone.trim() === "" ? "" : phone.trim() || undefined,
         email: email || undefined,
         monthlySalary: employeeType === "office" && monthlySalary ? parseFloat(monthlySalary) : undefined,
         gradeId: employeeType === "security" ? gradeId : undefined,
@@ -816,7 +816,7 @@ function EmployeeForm({
               className="input-compact"
               title="13-digit SA ID – DOB & gender auto-fill"
             />
-            <input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="input-compact" />
+            <input placeholder="Phone (e.g. 0821234567 or +27821234567)" value={phone} onChange={(e) => setPhone(e.target.value)} className="input-compact" title="WhatsApp number for clock-in, payslip, etc." />
             <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-compact" />
             {employeeType === "office" ? (
               <input
@@ -1111,7 +1111,7 @@ function EditModal({
         firstName,
         lastName,
         idNumber: idNumber || undefined,
-        phone: phone || undefined,
+        phone: phone.trim() === "" ? "" : phone.trim() || undefined,
         email: email || undefined,
         hourlyRate: employeeType === "office" ? null : undefined,
         monthlySalary: employeeType === "office" && monthlySalary ? parseFloat(monthlySalary) : employeeType === "security" ? null : undefined,
@@ -1272,7 +1272,10 @@ function EditModal({
                   className="input-modern"
                   title="Enter 13-digit SA ID – date of birth and gender will auto-fill"
                 />
-                <input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="input-modern" />
+                <div>
+                  <input placeholder="Phone (e.g. 0821234567 or +27821234567)" value={phone} onChange={(e) => setPhone(e.target.value)} className="input-modern" title="WhatsApp number for clock-in, payslip, etc." />
+                  <p className="text-xs text-neutral-500 mt-0.5">Saved in WhatsApp-compatible format for clock-in, payslip, and leave commands.</p>
+                </div>
                 <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-modern" />
                 {employeeType === "office" ? (
                   <input
