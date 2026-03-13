@@ -383,6 +383,115 @@ export async function search(token: string, q: string): Promise<SearchResults> {
   return res.json();
 }
 
+// WhatsApp
+export interface WhatsAppContact {
+  id: string;
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+  whatsappUrl: string | null;
+}
+
+export interface WhatsAppMessage {
+  id: string;
+  employeeId: string;
+  direction: "inbound" | "outbound";
+  type: string;
+  text: string | null;
+  status: string | null;
+  sentByUserId: string | null;
+  createdAt: string;
+}
+
+export async function getWhatsAppContacts(
+  token: string,
+  params?: { limit?: number; offset?: number }
+): Promise<{ data: WhatsAppContact[]; total: number }> {
+  const q = new URLSearchParams();
+  if (params?.limit) q.set("limit", String(params.limit));
+  if (params?.offset) q.set("offset", String(params.offset));
+  const res = await authFetch(`/whatsapp/contacts?${q.toString()}`, token);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { error?: string }).error ?? "Failed to fetch contacts");
+  }
+  const json = await res.json();
+  return { data: json.data ?? [], total: json.total ?? 0 };
+}
+
+export async function getWhatsAppMessages(
+  token: string,
+  employeeId: string,
+  params?: { limit?: number; before?: string }
+): Promise<{ data: WhatsAppMessage[]; hasMore: boolean }> {
+  const q = new URLSearchParams({ employeeId });
+  if (params?.limit) q.set("limit", String(params.limit));
+  if (params?.before) q.set("before", params.before);
+  const res = await authFetch(`/whatsapp/messages?${q.toString()}`, token);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { error?: string }).error ?? "Failed to fetch messages");
+  }
+  const json = await res.json();
+  return { data: json.data ?? [], hasMore: json.hasMore ?? false };
+}
+
+export async function sendWhatsAppMessage(
+  token: string,
+  employeeId: string,
+  message: string
+): Promise<{ success: boolean; error?: string; requiresTemplate?: boolean }> {
+  const res = await authFetch("/whatsapp/send", token, {
+    method: "POST",
+    body: JSON.stringify({ employeeId, message }),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    success?: boolean;
+    error?: string;
+    requiresTemplate?: boolean;
+  };
+  if (!res.ok) {
+    return {
+      success: false,
+      error: data.error ?? "Failed to send message",
+      requiresTemplate: data.requiresTemplate,
+    };
+  }
+  return { success: data.success ?? true, error: data.error, requiresTemplate: data.requiresTemplate };
+}
+
+export async function sendWhatsAppTemplate(
+  token: string,
+  employeeId: string,
+  templateName: string,
+  options?: { languageCode?: string; components?: unknown[] }
+): Promise<{ success: boolean; error?: string }> {
+  const res = await authFetch("/whatsapp/send-template", token, {
+    method: "POST",
+    body: JSON.stringify({
+      employeeId,
+      templateName,
+      languageCode: options?.languageCode ?? "en",
+      components: options?.components,
+    }),
+  });
+  const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+  if (!res.ok) {
+    return { success: false, error: data.error ?? "Failed to send template" };
+  }
+  return { success: data.success ?? true, error: data.error };
+}
+
+export async function getWhatsAppTemplates(token: string): Promise<{ data: { name: string; language: string }[] }> {
+  const res = await authFetch("/whatsapp/templates", token);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { error?: string }).error ?? "Failed to fetch templates");
+  }
+  const json = await res.json();
+  return { data: json.data ?? [] };
+}
+
 // Migration / bulk import
 export interface MigrationPreviewResponse {
   companies: { validCount: number; valid: unknown[]; errors: { row: number; field: string; value: string; message: string }[] };

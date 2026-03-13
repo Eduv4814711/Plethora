@@ -51,6 +51,7 @@ model Company {
   timesheets       Timesheet[]
   taskProjects     TaskProject[]
   tasks            Task[]
+  whatsappMessages WhatsAppMessage[]
 }
 
 model User {
@@ -150,6 +151,7 @@ model Employee {
   leaveRecords      LeaveRecord[]
   leaveRequests     LeaveRequest[]
   employeeDeductions EmployeeDeduction[]
+  whatsappMessages   WhatsAppMessage[]
 
   @@unique([companyId, employeeNumber])
   @@index([companyId])
@@ -701,4 +703,23 @@ model TaskReminder {
 
   @@index([taskId])
   @@index([remindAt])
+}
+
+model WhatsAppMessage {
+  id                String   @id @default(cuid())
+  companyId         String
+  employeeId        String
+  whatsappMessageId String?
+  direction         String   // "inbound" | "outbound"
+  type              String   @default("text")
+  text              String?  @db.Text
+  status            String?
+  sentByUserId      String?
+  createdAt         DateTime @default(now())
+
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, employeeId, createdAt])
+  @@index([whatsappMessageId])
 }

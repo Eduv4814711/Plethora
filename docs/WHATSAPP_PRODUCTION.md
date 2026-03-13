@@ -48,7 +48,7 @@ On your API host (Railway, Render, etc.), add these variables:
      Example: `https://your-api.up.railway.app/webhook`
    - **Verify token**: Same value as `WHATSAPP_VERIFY_TOKEN` in your env
 4. Click **Verify and Save**.
-5. Subscribe to **messages** (and any other fields you need).
+5. Subscribe to **messages** (required for incoming messages and status updates).
 
 ---
 
@@ -74,6 +74,29 @@ The temporary token from Meta expires in 24 hours. For production, create a **pe
 
 ---
 
+## Template Messages (First Contact)
+
+When a team member has not messaged your business in the last 24 hours, you must use a **template message** to initiate contact. Templates must be created and approved in Meta Business Manager:
+
+1. Go to [Meta Business Suite](https://business.facebook.com) → **WhatsApp Manager** → **Message Templates**.
+2. Create a template (e.g. `hello_world` is pre-approved for testing).
+3. For custom templates, submit for approval. Once approved, the template name can be used in the dashboard.
+4. Optional: Set `WHATSAPP_TEMPLATES` env var (comma-separated names) to customize the list, or `WHATSAPP_WABA_ID` to fetch templates from Meta's API.
+
+---
+
+## Database: Message History
+
+The WhatsApp module stores conversation history in the `WhatsAppMessage` table. Run migrations after deploying:
+
+```bash
+npx prisma migrate deploy
+# or
+npx prisma db push
+```
+
+---
+
 ## Quick Reference
 
 | Item | Value |
@@ -81,6 +104,7 @@ The temporary token from Meta expires in 24 hours. For production, create a **pe
 | Webhook URL | `https://YOUR-API-URL/webhook` |
 | Verify token | Same as `WHATSAPP_VERIFY_TOKEN` |
 | Supported commands | `clock in`, `clock out`, `payslip`, `leave`, `help` |
+| Dashboard | `/whatsapp` - Message team members, view history |
 
 ---
 

@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { authFetch } from "@/lib/api";
+import { authFetch, getWhatsAppContacts, sendWhatsAppMessage } from "@/lib/api";
+import { WhatsAppWidget } from "@/components/whatsapp/whatsapp-widget";
 import { canAccessRoute } from "@/lib/permissions";
 import { format } from "date-fns";
 import {
@@ -83,8 +84,10 @@ export default function DashboardPage() {
   const [selectedSiteIds, setSelectedSiteIds] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<string>("month");
   const [siteFilterOpen, setSiteFilterOpen] = useState(false);
+  const [whatsappContacts, setWhatsappContacts] = useState<{ id: string; firstName: string; lastName: string; phone: string | null; whatsappUrl: string | null }[]>([]);
 
   const canSites = user ? canAccessRoute("/sites", user.role) : false;
+  const canWhatsApp = user ? canAccessRoute("/whatsapp", user.role) : false;
   const canPayroll = user ? canAccessRoute("/payroll", user.role) : false;
   const canRostering = user ? canAccessRoute("/rostering", user.role) : false;
 
@@ -114,6 +117,13 @@ export default function DashboardPage() {
       .catch(() => setSites([]));
   }, [token, canSites]);
 
+  useEffect(() => {
+    if (!token || !canWhatsApp) return;
+    getWhatsAppContacts(token, { limit: 10 })
+      .then((r) => setWhatsappContacts(r.data))
+      .catch(() => setWhatsappContacts([]));
+  }, [token, canWhatsApp]);
+
   const toggleSite = (id: string) => {
     setSelectedSiteIds((prev) =>
       prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
@@ -123,6 +133,11 @@ export default function DashboardPage() {
   const clearSiteFilter = () => {
     setSelectedSiteIds([]);
     setSiteFilterOpen(false);
+  };
+
+  const handleSendWhatsApp = async (employeeId: string, message: string) => {
+    if (!token) return { success: false, error: "Not authenticated" };
+    return sendWhatsAppMessage(token, employeeId, message);
   };
 
   const siteFilterRef = useRef<HTMLDivElement>(null);
@@ -431,8 +446,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Right Sidebar - Tasks Widget */}
-        <div className="w-64 flex-shrink-0">
+        {/* Right Sidebar - Tasks & WhatsApp */}
+        <div className="w-64 flex-shrink-0 flex flex-col gap-6">
           <div className="card-dashboard w-full p-5 flex flex-col border-neutral-200">
             <h2 className="font-semibold text-sm text-black uppercase tracking-wider mb-3 flex items-center gap-2">
               <span className="w-1 h-4 bg-black rounded-full" />
@@ -483,6 +498,15 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
+
+          {/* WhatsApp - Team member contacts */}
+          {canWhatsApp && (
+            <WhatsAppWidget
+              contacts={whatsappContacts}
+              onSend={handleSendWhatsApp}
+              compact
+            />
+          )}
         </div>
       </div>
     </div>

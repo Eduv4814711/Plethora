@@ -1,10 +1,10 @@
-import { prisma } from "../lib/prisma.js";
-import { config } from "../lib/config.js";
-import { validateClockIn, calculateHours, AttendanceValidationError } from "./attendance.service.js";
-import { fetchPayslipData, buildPayslipTemplateData } from "./payslip-data.service.js";
-import { generatePayslipPDFFromTemplate } from "./payslip-pdf.service.js";
-import { sendText, sendDocument } from "./whatsapp-send.service.js";
-import { createAuditLog } from "../lib/audit.js";
+import { prisma } from "../../lib/prisma.js";
+import { config } from "../../lib/config.js";
+import { validateClockIn, calculateHours, AttendanceValidationError } from "../../services/attendance.service.js";
+import { fetchPayslipData, buildPayslipTemplateData } from "../../services/payslip-data.service.js";
+import { generatePayslipPDFFromTemplate } from "../../services/payslip-pdf.service.js";
+import { sendText, sendDocument } from "./send.service.js";
+import { createAuditLog } from "../../lib/audit.js";
 import { format } from "date-fns";
 
 type EmployeeWithCompany = {

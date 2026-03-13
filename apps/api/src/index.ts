@@ -40,7 +40,7 @@ import { uploadsRoutes } from "./routes/uploads.js";
 import { searchRoutes } from "./routes/search.js";
 import { migrationsRoutes } from "./routes/migrations.js";
 import { reportsRoutes } from "./routes/reports.js";
-import { whatsappWebhookRoutes } from "./routes/whatsapp-webhook.js";
+import { registerWhatsApp } from "./whatsapp/index.js";
 import { taskProjectsRoutes } from "./routes/task-projects.js";
 import { tasksRoutes } from "./routes/tasks.js";
 import { taskCommentsRoutes } from "./routes/task-comments.js";
@@ -74,7 +74,7 @@ await app.register(fastifyStatic, {
 
 app.get("/health", async () => ({ status: "ok" }));
 
-app.register(whatsappWebhookRoutes);
+app.register(registerWhatsApp);
 app.register(authRoutes, { prefix: "/auth" });
 app.register(usersRoutes, { prefix: "/users" });
 app.register(companiesRoutes, { prefix: "/companies" });

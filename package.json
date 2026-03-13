@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "npm run dev:web",
     "dev:api": "npm run dev --workspace=api",
-    "dev:web": "npm run dev --workspace=web",
+    "clean:web": "node -e \"try{require('fs').rmSync('apps/web/.next',{recursive:true,force:true})}catch(e){}\"",
+    "dev:web": "npm run clean:web && npm run dev --workspace=web",
     "dev:all": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
     "build": "npm run build --workspaces",
     "db:generate": "npm run db:generate --workspace=api",
