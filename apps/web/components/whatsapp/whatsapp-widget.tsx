@@ -33,7 +33,7 @@ export function WhatsAppWidget({ contacts, onSend, compact = true }: WhatsAppWid
   const displayContacts = compact ? contacts.slice(0, 5) : contacts;
 
   return (
-    <div className="card-dashboard w-full p-5 flex flex-col border-neutral-200 overflow-hidden flex-1 min-h-0">
+    <div className="card-dashboard w-full p-5 flex flex-col border-neutral-200 overflow-hidden flex-1 min-h-0 h-[400px]">
       <h2 className="font-semibold text-sm text-black uppercase tracking-wider mb-3 flex items-center gap-2 shrink-0">
         <span className="w-1 h-4 bg-black rounded-full" />
         WhatsApp

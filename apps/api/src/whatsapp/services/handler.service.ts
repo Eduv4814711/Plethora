@@ -3,7 +3,7 @@ import { config } from "../../lib/config.js";
 import { validateClockIn, calculateHours, AttendanceValidationError } from "../../services/attendance.service.js";
 import { fetchPayslipData, buildPayslipTemplateData } from "../../services/payslip-data.service.js";
 import { generatePayslipPDFFromTemplate } from "../../services/payslip-pdf.service.js";
-import { sendText, sendDocument } from "./send.service.js";
+import { sendText, sendDocument, sendInteractiveList } from "./send.service.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { format } from "date-fns";
 
@@ -59,11 +59,34 @@ const HELP_TEXT = `*Plethora - Commands*
   Types: annual, sick, family, maternity, parental, unpaid
 • *help* - Show this menu`;
 
+const INTERACTIVE_ID_TO_CMD: Record<string, string> = {
+  clock_in: "clock in",
+  clock_out: "clock out",
+  payslip: "payslip",
+  leave: "apply leave",
+  help: "help",
+};
+
+const HELP_INTERACTIVE_ROWS = [
+  { id: "clock_in", title: "Clock In", description: "Clock in for your shift" },
+  { id: "clock_out", title: "Clock Out", description: "Clock out" },
+  { id: "payslip", title: "Payslip", description: "Request your latest payslip" },
+  { id: "leave", title: "Apply Leave", description: "Apply for leave" },
+  { id: "help", title: "Help", description: "Show this menu" },
+];
+
+type ProcessResult =
+  | { reply: string; sendDocument?: { buffer: Buffer; filename: string } }
+  | { sendInteractiveList: { body: string; buttonText: string; rows: typeof HELP_INTERACTIVE_ROWS } };
+
 export async function processIncomingMessage(
   from: string,
   text: string
-): Promise<{ reply: string; sendDocument?: { buffer: Buffer; filename: string } }> {
-  const cmd = text.trim().toLowerCase();
+): Promise<ProcessResult> {
+  let cmd = text.trim().toLowerCase();
+  if (INTERACTIVE_ID_TO_CMD[cmd]) {
+    cmd = INTERACTIVE_ID_TO_CMD[cmd];
+  }
   const employee = await findEmployeeByPhone(from);
 
   if (!employee) {
@@ -77,7 +100,13 @@ export async function processIncomingMessage(
   }
 
   if (cmd === "help" || cmd === "menu") {
-    return { reply: HELP_TEXT };
+    return {
+      sendInteractiveList: {
+        body: "What would you like to do? Tap the button below to choose an option.",
+        buttonText: "Choose an option",
+        rows: HELP_INTERACTIVE_ROWS,
+      },
+    };
   }
 
   if (
@@ -389,8 +418,13 @@ async function handleLeave(
 
 export async function processAndSend(from: string, text: string): Promise<void> {
   const result = await processIncomingMessage(from, text);
-  await sendText(from, result.reply);
-  if (result.sendDocument) {
-    await sendDocument(from, result.sendDocument.buffer, result.sendDocument.filename);
+  if ("sendInteractiveList" in result && result.sendInteractiveList) {
+    const { body, buttonText, rows } = result.sendInteractiveList;
+    await sendInteractiveList(from, body, buttonText, rows);
+  } else if ("reply" in result) {
+    await sendText(from, result.reply);
+    if (result.sendDocument) {
+      await sendDocument(from, result.sendDocument.buffer, result.sendDocument.filename);
+    }
   }
 }

@@ -130,6 +130,76 @@ export async function sendTemplate(
   return { success: true, messageId };
 }
 
+export async function sendInteractiveList(
+  to: string,
+  bodyText: string,
+  buttonText: string,
+  rows: { id: string; title: string; description?: string }[]
+): Promise<SendTextResult> {
+  if (!config.whatsapp.enabled) {
+    console.warn("[WhatsApp] Not configured, skipping send");
+    return { success: false, error: "WhatsApp is not configured" };
+  }
+
+  const url = `${GRAPH_URL}/${config.whatsapp.apiVersion}/${config.whatsapp.phoneNumberId}/messages`;
+  const body = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: to.replace(/\D/g, ""),
+    type: "interactive",
+    interactive: {
+      type: "list",
+      body: { text: bodyText },
+      action: {
+        button: buttonText,
+        sections: [
+          {
+            title: "Commands",
+            rows: rows.map((r) => ({
+              id: r.id,
+              title: r.title,
+              ...(r.description ? { description: r.description } : {}),
+            })),
+          },
+        ],
+      },
+    },
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.whatsapp.accessToken}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const resText = await res.text();
+
+  if (!res.ok) {
+    console.error("[WhatsApp] Interactive list send failed:", res.status, resText);
+    let userError = "Failed to send message";
+    try {
+      const errJson = JSON.parse(resText) as { error?: { message?: string } };
+      userError = errJson?.error?.message ?? resText;
+    } catch {
+      // ignore
+    }
+    return { success: false, error: userError };
+  }
+
+  let messageId: string | undefined;
+  try {
+    const json = JSON.parse(resText) as { messages?: [{ id?: string }] };
+    messageId = json?.messages?.[0]?.id;
+  } catch {
+    // ignore
+  }
+
+  return { success: true, messageId };
+}
+
 export async function sendDocument(
   to: string,
   pdfBuffer: Buffer,

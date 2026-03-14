@@ -15,6 +15,11 @@ interface WhatsAppIncomingMessage {
   timestamp: string;
   type: string;
   text?: { body: string };
+  interactive?: {
+    type: string;
+    button_reply?: { id: string; title: string };
+    list_reply?: { id: string; title: string; description?: string };
+  };
 }
 
 interface WhatsAppStatus {
@@ -75,10 +80,23 @@ export async function webhookRoutes(app: FastifyInstance) {
         // Handle incoming messages
         if (change.field === "messages" && value.messages) {
           for (const msg of value.messages) {
-            if (msg.type !== "text" || !msg.text?.body) continue;
+            let text: string | undefined;
+            let msgType = "text";
+
+            if (msg.type === "text" && msg.text?.body) {
+              text = msg.text.body;
+            } else if (msg.type === "interactive" && msg.interactive) {
+              const id =
+                msg.interactive.button_reply?.id ?? msg.interactive.list_reply?.id;
+              if (id) {
+                text = id;
+                msgType = "interactive";
+              }
+            }
+
+            if (!text) continue;
 
             const from = msg.from;
-            const text = msg.text.body;
 
             // Store inbound message before processing
             const employee = await findEmployeeByPhone(from);
@@ -89,7 +107,7 @@ export async function webhookRoutes(app: FastifyInstance) {
                   employeeId: employee.id,
                   whatsappMessageId: msg.id,
                   direction: "inbound",
-                  type: "text",
+                  type: msgType,
                   text,
                 },
               }).catch((err) => request.log.warn(err, "Failed to store inbound WhatsApp message"));
