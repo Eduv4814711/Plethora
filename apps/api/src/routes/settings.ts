@@ -19,6 +19,8 @@ const businessDetailsSchema = z.object({
   fax: z.string().optional(),
   psiraRegistration: z.string().optional(),
   uifReference: z.string().optional(),
+  payeReference: z.string().optional(),
+  sdlReference: z.string().optional(),
 });
 
 const businessSettingsSchema = z.object({
@@ -122,6 +124,10 @@ export async function settingsRoutes(app: FastifyInstance) {
         fax: true,
         psiraRegistration: true,
         uifReference: true,
+        payeReference: true,
+        sdlReference: true,
+        sdlLiableFrom: true,
+        monthlyPayrollTotals: true,
         settings: true,
       },
     });
@@ -161,6 +167,8 @@ export async function settingsRoutes(app: FastifyInstance) {
       if (d.fax !== undefined) updateData.fax = d.fax || null;
       if (d.psiraRegistration !== undefined) updateData.psiraRegistration = d.psiraRegistration || null;
       if (d.uifReference !== undefined) updateData.uifReference = d.uifReference || null;
+      if (d.payeReference !== undefined) updateData.payeReference = d.payeReference || null;
+      if (d.sdlReference !== undefined) updateData.sdlReference = d.sdlReference || null;
     }
     if (data.businessSettings !== undefined) {
       const companyBefore = await prisma.company.findUnique({
@@ -189,6 +197,10 @@ export async function settingsRoutes(app: FastifyInstance) {
         fax: true,
         psiraRegistration: true,
         uifReference: true,
+        payeReference: true,
+        sdlReference: true,
+        sdlLiableFrom: true,
+        monthlyPayrollTotals: true,
         settings: true,
       },
     });
@@ -258,7 +270,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     ];
 
     const DEFAULT_DEDUCTION_RULES = [
-      { name: "UIF", type: "percentage" as const, rate: 1, appliesTo: "all" as const },
+      // UIF is calculated by tax service (with R17,712 ceiling) - do not add as deduction rule
       { name: "PSIRA", type: "fixed" as const, amount: 75, appliesTo: "security" as const },
     ];
 
@@ -434,14 +446,15 @@ export async function settingsRoutes(app: FastifyInstance) {
           });
         }
         for (const dr of DEFAULT_DEDUCTION_RULES) {
+          const rule = dr as { name: string; type: string; amount?: number; rate?: number; appliesTo: string };
           await tx.deductionRule.create({
             data: {
               companyId,
-              name: dr.name,
-              type: dr.type,
-              rate: dr.type === "percentage" ? dr.rate : null,
-              amount: dr.type === "fixed" ? dr.amount : null,
-              appliesTo: dr.appliesTo,
+              name: rule.name,
+              type: rule.type,
+              rate: rule.rate ?? null,
+              amount: rule.amount ?? null,
+              appliesTo: rule.appliesTo,
               isOptional: false,
             },
           });
@@ -492,6 +505,10 @@ export async function settingsRoutes(app: FastifyInstance) {
             fax: null,
             psiraRegistration: null,
             uifReference: null,
+            payeReference: null,
+            sdlReference: null,
+            sdlLiableFrom: null,
+            monthlyPayrollTotals: Prisma.JsonNull,
             settings: DEFAULT_SETTINGS,
             theme: Prisma.JsonNull,
           },
@@ -519,6 +536,10 @@ export async function settingsRoutes(app: FastifyInstance) {
         fax: true,
         psiraRegistration: true,
         uifReference: true,
+        payeReference: true,
+        sdlReference: true,
+        sdlLiableFrom: true,
+        monthlyPayrollTotals: true,
         settings: true,
       },
     });

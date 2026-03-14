@@ -100,6 +100,10 @@ export interface CompanySettings {
   fax?: string | null;
   psiraRegistration?: string | null;
   uifReference?: string | null;
+  payeReference?: string | null;
+  sdlReference?: string | null;
+  sdlLiableFrom?: string | null;
+  monthlyPayrollTotals?: Record<string, number> | null;
   settings?: {
     currency?: string;
     dateFormat?: string;
@@ -141,6 +145,8 @@ export async function updateSettings(
       fax: string;
       psiraRegistration: string;
       uifReference: string;
+      payeReference: string;
+      sdlReference: string;
     }>;
     businessSettings: Partial<{
       currency: string;

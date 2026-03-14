@@ -28,6 +28,10 @@ model Company {
   fax                String?
   psiraRegistration  String?
   uifReference       String?
+  payeReference      String?   // PAYE ref starts with '7'
+  sdlReference       String?   // SDL ref starts with 'L'
+  sdlLiableFrom      DateTime? // When company first exceeded R500k payroll
+  monthlyPayrollTotals Json?   // { "YYYY-MM": total } for rolling 12-month SDL tracking
 
   // Business settings & theme (JSON for flexibility)
   settings Json? // { currency, dateFormat, timezone, payrollPeriod, etc. }
@@ -578,6 +582,13 @@ model Payslip {
   totalDeductions   Decimal  @db.Decimal(12, 2)
   netPay            Decimal  @db.Decimal(12, 2)
   generatedAt       DateTime @default(now())
+
+  // SARS tax fields
+  tax               Decimal? @db.Decimal(12, 2)  // PAYE
+  taxableEarnings   Decimal? @db.Decimal(12, 2)
+  uifEmployee      Decimal? @db.Decimal(12, 2)
+  uifEmployer      Decimal? @db.Decimal(12, 2)
+  sdl              Decimal? @db.Decimal(12, 2)
 
   payrollItem PayrollItem @relation(fields: [payrollItemId], references: [id], onDelete: Cascade)
 }

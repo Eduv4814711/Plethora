@@ -8,6 +8,9 @@ import {
   canTransitionPayrollStatus,
 } from "../services/payroll.service.js";
 import { PayrollServiceError } from "../services/payroll.service.js";
+import { updateSdlTrackingOnPayrollPaid } from "../services/sdl-tracking.service.js";
+import { buildEmp201Data, emp201ToCsv } from "../services/emp201.service.js";
+import { buildIrp5DataForTaxYear, irp5ToCsv } from "../services/irp5.service.js";
 import { fetchPayslipData, buildPayslipTemplateData } from "../services/payslip-data.service.js";
 import { generatePayslipPDFFromTemplate } from "../services/payslip-pdf.service.js";
 import { createAuditLog } from "../lib/audit.js";
@@ -210,6 +213,8 @@ export async function payrollRoutes(app: FastifyInstance) {
       data: { status: "paid" },
     });
 
+    await updateSdlTrackingOnPayrollPaid(user.companyId, id);
+
     await createAuditLog({
       userId: user.sub,
       companyId: user.companyId,
@@ -396,6 +401,63 @@ export async function payrollRoutes(app: FastifyInstance) {
 
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const filename = `payroll-fnb-${periodLabel}.csv`;
+    return reply
+      .header("Content-Type", "text/csv")
+      .header("Content-Disposition", `attachment; filename="${filename}"`)
+      .send(csv);
+  });
+
+  app.get("/emp201-export", { preHandler: protect }, async (request, reply) => {
+    const user = request.user!;
+    const q = request.query as { period?: string };
+    const period = q.period ?? format(new Date(), "yyyy-MM");
+    const [yearStr, monthStr] = period.split("-");
+    const year = parseInt(yearStr ?? "0", 10);
+    const month = parseInt(monthStr ?? "0", 10);
+    if (!year || !month || month < 1 || month > 12) {
+      return reply.code(400).send({
+        error: "Invalid period",
+        message: "Use period=YYYY-MM (e.g. 2025-03)",
+      });
+    }
+
+    const data = await buildEmp201Data(user.companyId, year, month);
+    if (!data) {
+      return reply.code(404).send({ error: "Company not found" });
+    }
+
+    const csv = emp201ToCsv(data);
+    const filename = `EMP201-${period}.csv`;
+    return reply
+      .header("Content-Type", "text/csv")
+      .header("Content-Disposition", `attachment; filename="${filename}"`)
+      .send(csv);
+  });
+
+  app.get("/irp5-export", { preHandler: protect }, async (request, reply) => {
+    const user = request.user!;
+    const q = request.query as { taxYear?: string };
+    const taxYear = parseInt(q.taxYear ?? String(new Date().getFullYear()), 10);
+    if (!taxYear || taxYear < 2020 || taxYear > 2030) {
+      return reply.code(400).send({
+        error: "Invalid tax year",
+        message: "Use taxYear=YYYY (e.g. 2025 for 2024/2025 tax year)",
+      });
+    }
+
+    const data = await buildIrp5DataForTaxYear(user.companyId, taxYear);
+    const company = await prisma.company.findUnique({
+      where: { id: user.companyId },
+      select: { payeReference: true, sdlReference: true, uifReference: true },
+    });
+
+    const csv = irp5ToCsv(
+      data,
+      company?.payeReference ?? null,
+      company?.sdlReference ?? null,
+      company?.uifReference ?? null
+    );
+    const filename = `IRP5-${taxYear}.csv`;
     return reply
       .header("Content-Type", "text/csv")
       .header("Content-Disposition", `attachment; filename="${filename}"`)

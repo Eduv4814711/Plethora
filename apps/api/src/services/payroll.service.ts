@@ -4,6 +4,12 @@ import { canTransitionPayroll } from "../lib/state-machines.js";
 import type { PayrollStatus } from "@prisma/client";
 import { aggregateTimesheets } from "./timesheet.service.js";
 import { calculateDeductions } from "./deductions.service.js";
+import {
+  calculatePAYE,
+  calculateUIF,
+  calculateSDL,
+  type PayPeriod,
+} from "./tax.service.js";
 
 export class PayrollServiceError extends Error {
   constructor(message: string) {
@@ -86,6 +92,14 @@ export async function calculatePayroll(
   const companyRuleMap = new Map(companyPayRules.map((r) => [r.ruleType, Number(r.multiplier)]));
   const aggMap = new Map(aggregates.map((a) => [a.employeeId, a]));
 
+  const company = await prisma.company.findUniqueOrThrow({
+    where: { id: companyId },
+    select: { settings: true, sdlLiableFrom: true },
+  });
+  const settings = (company.settings as Record<string, unknown>) ?? {};
+  const payPeriod = (settings.payrollPeriod as PayPeriod) ?? "monthly";
+  const isSdlLiable = company.sdlLiableFrom != null;
+
   const itemsToCreate: Array<{
     employeeId: string;
     employee: (typeof employees)[0];
@@ -100,6 +114,11 @@ export async function calculatePayroll(
     netPay: number;
     earningsLines: Array<{ name: string; amount: number }>;
     deductionLines: Array<{ name: string; amount: number }>;
+    tax: number;
+    taxableEarnings: number;
+    uifEmployee: number;
+    uifEmployer: number;
+    sdl: number;
   }> = [];
 
   for (const emp of employees) {
@@ -185,15 +204,26 @@ export async function calculatePayroll(
     }
     grossPay = Math.round(grossPay * 100) / 100;
 
-    const { total: totalDeductions, lines: deductionLines } = await calculateDeductions(
+    const taxableEarnings = grossPay;
+    const paye = calculatePAYE(taxableEarnings, payPeriod, emp);
+    const { employee: uifEmployee, employer: uifEmployer } = calculateUIF(grossPay);
+    const sdl = calculateSDL(grossPay, isSdlLiable);
+
+    const { total: otherDeductions, lines: otherDeductionLines } = await calculateDeductions(
       companyId,
       emp.id,
       { employeeType: emp.employeeType },
       grossPay,
       periodStart,
       periodEnd,
-      emp.groupId ?? undefined
+      emp.groupId ?? undefined,
+      ["UIF"]
     );
+
+    const deductionLines: Array<{ name: string; amount: number }> = [...otherDeductionLines];
+    if (paye > 0) deductionLines.push({ name: "PAYE", amount: paye });
+    if (uifEmployee > 0) deductionLines.push({ name: "UIF", amount: uifEmployee });
+    const totalDeductions = otherDeductions + paye + uifEmployee;
 
     const netPay = Math.round((grossPay - totalDeductions) * 100) / 100;
 
@@ -211,6 +241,11 @@ export async function calculatePayroll(
       netPay,
       earningsLines,
       deductionLines,
+      tax: paye,
+      taxableEarnings,
+      uifEmployee,
+      uifEmployer,
+      sdl,
     });
   }
 
@@ -252,6 +287,11 @@ export async function calculatePayroll(
           grossPay: item.grossPay,
           totalDeductions: item.deductions,
           netPay: item.netPay,
+          tax: item.tax,
+          taxableEarnings: item.taxableEarnings,
+          uifEmployee: item.uifEmployee,
+          uifEmployer: item.uifEmployer,
+          sdl: item.sdl,
         },
       });
     }

@@ -197,6 +197,8 @@ function BusinessDetailsSection({
     fax: "",
     psiraRegistration: "",
     uifReference: "",
+    payeReference: "",
+    sdlReference: "",
   });
 
   useEffect(() => {
@@ -213,6 +215,8 @@ function BusinessDetailsSection({
         fax: settings.fax ?? "",
         psiraRegistration: settings.psiraRegistration ?? "",
         uifReference: settings.uifReference ?? "",
+        payeReference: settings.payeReference ?? "",
+        sdlReference: settings.sdlReference ?? "",
       });
     }
   }, [settings]);
@@ -254,8 +258,13 @@ function BusinessDetailsSection({
         <div className="border-t border-neutral-200 dark:border-neutral-700 pt-6 mt-6">
           <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-4">Payslip & Compliance</h4>
           <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4">
-            These details appear on payslips and reports. Used for PSIRA, UIF, and tax compliance.
+            These details appear on payslips and reports. Used for PSIRA, UIF, PAYE, SDL, and tax compliance.
           </p>
+          {settings?.sdlLiableFrom && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mb-4">
+              SDL liable from {new Date(settings.sdlLiableFrom).toLocaleDateString()}. Add SDL reference when registering with SARS.
+            </p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">PSIRA Registration</label>
@@ -296,7 +305,29 @@ function BusinessDetailsSection({
                 value={form.uifReference}
                 onChange={(e) => setForm((f) => ({ ...f, uifReference: e.target.value }))}
                 className="input-modern"
-                placeholder="UIF reference number"
+                placeholder="UIF reference (starts with U)"
+                readOnly={readOnly}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">PAYE Reference</label>
+              <input
+                type="text"
+                value={form.payeReference}
+                onChange={(e) => setForm((f) => ({ ...f, payeReference: e.target.value }))}
+                className="input-modern"
+                placeholder="PAYE reference (starts with 7)"
+                readOnly={readOnly}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">SDL Reference</label>
+              <input
+                type="text"
+                value={form.sdlReference}
+                onChange={(e) => setForm((f) => ({ ...f, sdlReference: e.target.value }))}
+                className="input-modern"
+                placeholder="SDL reference (starts with L)"
                 readOnly={readOnly}
               />
             </div>

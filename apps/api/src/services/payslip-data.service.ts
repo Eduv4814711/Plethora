@@ -103,9 +103,12 @@ export function buildPayslipTemplateData(input: PayslipDataInput): PayslipTempla
     annualLeaveHours,
     sickLeaveHours,
     totalEmployeeContribution: totalDeductions, // Map deductions as employee contribution
-    totalCompanyContribution: 0,
-    taxableEarnings: grossPay,
-    tax: 0,
+    totalCompanyContribution:
+      (payslip?.uifEmployer != null ? Number(payslip.uifEmployer) : 0) +
+      (payslip?.sdl != null ? Number(payslip.sdl) : 0),
+    taxableEarnings:
+      payslip?.taxableEarnings != null ? Number(payslip.taxableEarnings) : grossPay,
+    tax: payslip?.tax != null ? Number(payslip.tax) : 0,
     additionalTax: 0,
     totalPerks: 0,
     accountHolder: `${emp.firstName} ${emp.lastName}`.trim(),

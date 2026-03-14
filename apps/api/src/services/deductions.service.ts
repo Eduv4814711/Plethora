@@ -9,6 +9,7 @@ export interface DeductionLine {
 /**
  * Calculate total deductions for an employee given gross pay and period.
  * Includes: DeductionRules (or GroupDeductionRules when groupId provided) + EmployeeDeductions
+ * @param excludeDeductionNames - Rule names to skip (e.g. ["UIF"] when tax service handles them)
  */
 export async function calculateDeductions(
   companyId: string,
@@ -17,7 +18,8 @@ export async function calculateDeductions(
   grossPay: number,
   periodStart: Date,
   periodEnd: Date,
-  groupId?: string
+  groupId?: string,
+  excludeDeductionNames?: string[]
 ): Promise<{ total: number; lines: DeductionLine[] }> {
   const lines: DeductionLine[] = [];
   let total = 0;
@@ -45,7 +47,13 @@ export async function calculateDeductions(
         },
       });
 
+  const excludeSet = excludeDeductionNames
+    ? new Set(excludeDeductionNames.map((n) => n.toLowerCase()))
+    : null;
+
   for (const rule of rules) {
+    if (excludeSet?.has(rule.name.toLowerCase())) continue;
+
     if (rule.isOptional) {
       if (groupId) {
         continue;

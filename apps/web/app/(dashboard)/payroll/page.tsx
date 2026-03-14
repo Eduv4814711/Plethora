@@ -1,11 +1,128 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { DateInput } from "@/components/date-input";
+
+function SarsExportsDropdown({ token }: { token: string }) {
+  const [open, setOpen] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [emp201Period, setEmp201Period] = useState(format(new Date(), "yyyy-MM"));
+  const [irp5Year, setIrp5Year] = useState(String(new Date().getFullYear()));
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, []);
+
+  const handleEmp201 = async () => {
+    setDownloading("emp201");
+    try {
+      const res = await authFetch(`/payroll/emp201-export?period=${emp201Period}`, token);
+      if (!res.ok) throw new Error("Failed to download");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `EMP201-${emp201Period}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setOpen(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to download EMP201");
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  const handleIrp5 = async () => {
+    setDownloading("irp5");
+    try {
+      const res = await authFetch(`/payroll/irp5-export?taxYear=${irp5Year}`, token);
+      if (!res.ok) throw new Error("Failed to download");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `IRP5-${irp5Year}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setOpen(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to download IRP5");
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="p-2.5 rounded-lg border-2 border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 hover:border-neutral-400 dark:hover:border-neutral-500 transition-all"
+        aria-label="SARS exports"
+      >
+        <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">SARS Exports</span>
+        <svg className="inline w-4 h-4 ml-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-1 w-72 p-3 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-600 rounded-lg shadow-lg z-10">
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-3">Export for SARS eFiling</p>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">EMP201 (monthly)</label>
+              <div className="flex gap-2">
+                <input
+                  type="month"
+                  value={emp201Period}
+                  onChange={(e) => setEmp201Period(e.target.value)}
+                  className="input-modern text-sm flex-1"
+                />
+                <button
+                  onClick={handleEmp201}
+                  disabled={downloading === "emp201"}
+                  className="btn-primary text-sm py-1.5 px-3 disabled:opacity-50"
+                >
+                  {downloading === "emp201" ? "…" : "Download"}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">IRP5 (tax year)</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min={2020}
+                  max={2030}
+                  value={irp5Year}
+                  onChange={(e) => setIrp5Year(e.target.value)}
+                  className="input-modern text-sm w-24"
+                />
+                <button
+                  onClick={handleIrp5}
+                  disabled={downloading === "irp5"}
+                  className="btn-primary text-sm py-1.5 px-3 disabled:opacity-50"
+                >
+                  {downloading === "irp5" ? "…" : "Download"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface PayrollRun {
   id: string;
@@ -63,10 +180,11 @@ export default function PayrollPage() {
           <h1 className="page-title">Payroll</h1>
           <p className="text-neutral-500 dark:text-neutral-400 mt-1 text-sm">Manage payroll runs and payments</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap items-center">
           <button onClick={() => setShowForm(!showForm)} className="btn-primary">
             {showForm ? "Cancel" : "New Payroll Run"}
           </button>
+          <SarsExportsDropdown token={token!} />
           <Link
             href="/payroll/configuration"
             className="p-2.5 rounded-lg border-2 border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 hover:border-neutral-400 dark:hover:border-neutral-500 transition-all"
