@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import {
   getWhatsAppContacts,
@@ -16,6 +17,7 @@ import { ConversationView } from "@/components/whatsapp/conversation-view";
 
 export default function WhatsAppPage() {
   const { token } = useAuth();
+  const searchParams = useSearchParams();
   const [contacts, setContacts] = useState<WhatsAppContact[]>([]);
   const [selectedContact, setSelectedContact] = useState<WhatsAppContact | null>(null);
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
@@ -59,6 +61,16 @@ export default function WhatsAppPage() {
   useEffect(() => {
     fetchContacts();
   }, [fetchContacts]);
+
+  const contactIdFromUrl = searchParams.get("contact");
+
+  useEffect(() => {
+    if (!contactIdFromUrl || loadingContacts || contacts.length === 0) return;
+    const contact = contacts.find((c) => c.id === contactIdFromUrl);
+    if (contact) {
+      setSelectedContact(contact);
+    }
+  }, [contactIdFromUrl, loadingContacts, contacts]);
 
   useEffect(() => {
     if (selectedContact) {

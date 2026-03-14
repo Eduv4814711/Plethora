@@ -2,14 +2,14 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch, getWhatsAppContacts, sendWhatsAppMessage } from "@/lib/api";
-import { WhatsAppWidget } from "@/components/whatsapp/whatsapp-widget";
 import { canAccessRoute } from "@/lib/permissions";
 import { format } from "date-fns";
 import {
-  LineChart,
-  Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -17,8 +17,8 @@ import {
   PieChart,
   Pie,
   Cell,
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
 } from "recharts";
 
 interface Site {
@@ -62,13 +62,13 @@ const defaultRosteredData = [{ name: "No data", value: 1 }];
 const defaultStatusData = [{ name: "No data", value: 1 }];
 
 const defaultShiftData = [
+  { name: "Dec", value: 0 },
   { name: "Jan", value: 0 },
   { name: "Feb", value: 0 },
   { name: "Mar", value: 0 },
-  { name: "Apr", value: 0 },
 ];
 
-const PIE_COLORS = ["#000000", "#404040", "#737373", "#a3a3a3"]; // Black and white grayscale
+const PIE_COLORS = ["#000000", "#404040", "#737373", "#a3a3a3", "#d4d4d4"];
 
 const DATE_RANGES = [
   { value: "today", label: "Today" },
@@ -78,6 +78,7 @@ const DATE_RANGES = [
 
 export default function DashboardPage() {
   const { token, user } = useAuth();
+  const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [sites, setSites] = useState<Site[]>([]);
@@ -154,25 +155,32 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="animate-pulse space-y-6">
-        <div className="h-9 w-48 bg-neutral-300 rounded-security-lg" />
-        <div className="grid grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-64 bg-white border border-neutral-200 rounded-security-lg shadow-security-card" />
+        <div className="h-9 w-48 bg-neutral-300 rounded" />
+        <div className="grid grid-cols-4 gap-6">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+            <div key={i} className="h-64 bg-white border border-neutral-200 rounded" />
           ))}
         </div>
       </div>
     );
   }
 
-  const DashboardCard = ({ title, children, className = "" }: { title?: string; children: React.ReactNode; className?: string }) => (
-    <div className={`card-dashboard flex flex-col p-5 relative border-neutral-200 ${className}`}>
+  const guardsByDay = data?.guardsOnDutyByDay ?? defaultGuardsByDay;
+  const employeesTotal = (data?.employeesByStatus ?? []).reduce((s, e) => s + e.value, 0) || 0;
+  const shiftsOverTimeData = data?.shiftsOverTime?.length ? data.shiftsOverTime : defaultShiftData;
+
+  const DashboardCard = ({ title, children, className = "", icons }: { title?: string; children: React.ReactNode; className?: string; icons?: React.ReactNode }) => (
+    <div className={`bg-white border border-neutral-200 rounded p-5 flex flex-col relative ${className}`}>
       {title && (
-        <h2 className="font-semibold text-sm text-black uppercase tracking-wider mb-4 flex items-center gap-2">
-          <span className="w-1 h-4 bg-black rounded-full" />
-          {title}
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-sm text-neutral-900 uppercase tracking-wider flex items-center gap-2">
+            <span className="w-1 h-4 bg-black rounded-full" />
+            {title}
+          </h2>
+          {icons}
+        </div>
       )}
-      <div className="flex-1 w-full h-full relative">{children}</div>
+      <div className="flex-1 w-full h-full relative min-h-0">{children}</div>
     </div>
   );
 
@@ -180,7 +188,7 @@ export default function DashboardPage() {
     <div className="animate-fade-in max-w-7xl mx-auto">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-black tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-bold text-neutral-900 tracking-tight">Dashboard</h1>
           <p className="text-sm text-neutral-500 mt-0.5">Overview of your workforce operations</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -189,7 +197,7 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={() => setSiteFilterOpen((o) => !o)}
-                className="flex items-center gap-2 min-w-[200px] px-4 py-2.5 rounded-security border-2 border-neutral-300 bg-white text-left text-sm text-black hover:border-neutral-400 hover:bg-neutral-50 transition-colors"
+                className="flex items-center gap-2 min-w-[200px] px-4 py-2.5 rounded border border-neutral-300 bg-white text-left text-sm text-neutral-900 hover:border-neutral-400 hover:bg-neutral-50 transition-colors"
               >
                 <span className="truncate">
                   {selectedSiteIds.length === 0
@@ -203,7 +211,7 @@ export default function DashboardPage() {
                 </svg>
               </button>
               {siteFilterOpen && (
-                <div className="absolute top-full left-0 mt-1 z-10 w-64 max-h-60 overflow-auto rounded-security-lg border border-neutral-300 bg-white shadow-security-elevated py-1">
+                <div className="absolute top-full left-0 mt-1 z-10 w-64 max-h-60 overflow-auto rounded border border-neutral-300 bg-white shadow-lg py-1">
                   {selectedSiteIds.length > 0 && (
                     <button
                       type="button"
@@ -218,11 +226,9 @@ export default function DashboardPage() {
                       key={s.id}
                       type="button"
                       onClick={() => toggleSite(s.id)}
-                      className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 ${selectedSiteIds.includes(s.id) ? "bg-neutral-100 text-black font-semibold" : "hover:bg-neutral-50 text-neutral-600"}`}
+                      className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 ${selectedSiteIds.includes(s.id) ? "bg-neutral-100 text-neutral-900 font-semibold" : "hover:bg-neutral-50 text-neutral-600"}`}
                     >
-                      {selectedSiteIds.includes(s.id) && (
-                        <span className="text-black">✓</span>
-                      )}
+                      {selectedSiteIds.includes(s.id) && <span className="text-neutral-900">✓</span>}
                       {s.name}
                     </button>
                   ))}
@@ -233,7 +239,7 @@ export default function DashboardPage() {
               )}
             </div>
           )}
-          <div className="flex rounded-security border-2 border-neutral-300 overflow-hidden">
+          <div className="flex rounded border border-neutral-300 overflow-hidden">
             {DATE_RANGES.map((r) => (
               <button
                 key={r.value}
@@ -248,266 +254,283 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="flex gap-6">
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col gap-6">
-          {/* Top Row */}
-          <div className="grid grid-cols-[1.5fr_1fr_1fr] gap-6 h-64">
-            <DashboardCard title="Guards On Duty">
+      <div className="grid grid-cols-4 gap-6">
+        {/* Row 1 */}
+        <DashboardCard title="Guards On Duty">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={guardsByDay} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#d4d4d4" />
+              <XAxis dataKey="name" tick={{ fill: "#525252", fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis domain={[0, "auto"]} tick={{ fill: "#525252", fontSize: 12 }} axisLine={false} tickLine={false} />
+              <Bar dataKey="value" fill="#000000" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </DashboardCard>
+
+        <DashboardCard title="Active Sites">
+          <div className="flex flex-col items-center justify-center h-full gap-2">
+            <span className="text-6xl font-bold text-neutral-900">{data?.activeSitesCount ?? 0}</span>
+            {typeof data?.activeSitesDelta === "number" && (
+              <p className="text-sm text-neutral-500">
+                {data.activeSitesDelta >= 0 ? "+" : ""}{data.activeSitesDelta} since last month
+              </p>
+            )}
+            {canSites && (
+              <Link
+                href="/sites"
+                className="mt-2 px-4 py-2 rounded border-2 border-black bg-black text-white text-sm font-semibold hover:bg-neutral-800 transition-colors"
+              >
+                Add Site +
+              </Link>
+            )}
+          </div>
+        </DashboardCard>
+
+        <DashboardCard title="Active Guards Rostered">
+          <div className="flex flex-col h-full">
+            <div className="flex-1 min-h-[120px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data?.guardsOnDutyByDay ?? defaultGuardsByDay} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <AreaChart data={shiftsOverTimeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#737373" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#737373" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#d4d4d4" />
                   <XAxis dataKey="name" tick={{ fill: "#525252", fontSize: 12 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: "#525252", fontSize: 12 }} axisLine={false} tickLine={false} />
-                  <Line type="monotone" dataKey="value" stroke="#000000" strokeWidth={2} dot={{ fill: "#000000", stroke: "#fafafa", strokeWidth: 2, r: 4 }} />
-                </LineChart>
+                  <Area type="monotone" dataKey="value" stroke="#737373" strokeWidth={2} fill="url(#areaFill)" />
+                </AreaChart>
               </ResponsiveContainer>
-            </DashboardCard>
-
-            <DashboardCard title="Active Sites">
-              <div className="flex flex-col items-center justify-center h-full gap-2">
-                <div className="flex items-center gap-2">
-                  <svg className="w-8 h-8 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  <span className="text-6xl font-bold text-black">{data?.activeSitesCount ?? 0}</span>
-                </div>
-                {typeof data?.activeSitesDelta === "number" && data.activeSitesDelta !== 0 && (
-                  <p className="text-sm text-neutral-500">
-                    {data.activeSitesDelta > 0 ? "+" : ""}{data.activeSitesDelta} since last month
-                  </p>
-                )}
-                {canSites && (
-                  <Link
-                    href="/sites"
-                    className="mt-2 px-4 py-2 rounded-security border-2 border-black bg-black text-white text-sm font-semibold hover:bg-neutral-800 transition-colors"
-                  >
-                    Add Site +
-                  </Link>
-                )}
-              </div>
-            </DashboardCard>
-
-            <DashboardCard title="Active Guards Rostered" className="flex flex-col">
-              <div className="flex-1 min-h-[120px] w-full relative">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={(() => {
-                        const raw = data?.shiftsByStatus ?? [];
-                        return raw.some((d) => d.value > 0) ? raw : defaultRosteredData;
-                      })()}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={0}
-                      outerRadius={70}
-                      fill="#8884d8"
-                      dataKey="value"
-                      label={({ name, value }) => `${name} ${value}`}
-                    >
-                      {(() => {
-                        const raw = data?.shiftsByStatus ?? [];
-                        const chartData = raw.some((d) => d.value > 0) ? raw : defaultRosteredData;
-                        return chartData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                        ));
-                      })()}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              {canRostering && (
-                <Link
-                  href="/rostering"
-                  className="mt-4 w-full py-2.5 rounded-security border-2 border-neutral-300 bg-white text-center text-sm font-medium text-neutral-600 hover:bg-neutral-50 hover:text-black hover:border-neutral-400 transition-colors shrink-0"
-                >
-                  View Schedule →
-                </Link>
-              )}
-            </DashboardCard>
+            </div>
+            {canRostering && (
+              <Link
+                href="/rostering"
+                className="mt-4 w-full py-2.5 rounded border-2 border-neutral-300 bg-white text-center text-sm font-medium text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:border-neutral-400 transition-colors shrink-0"
+              >
+                View Schedule -
+              </Link>
+            )}
           </div>
+        </DashboardCard>
 
-          {/* Bottom Row */}
-          <div className="grid grid-cols-[1fr_1.5fr_1fr] gap-6 h-64">
-            <DashboardCard title="TEAM MEMBER BY STATUS">
-              <div className="absolute inset-0 flex items-center justify-center pt-8">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={(() => {
-                        const raw = data?.employeesByStatus ?? [];
-                        return raw.some((d) => d.value > 0) ? raw : defaultStatusData;
-                      })()}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={0}
-                      outerRadius={70}
-                      fill="#8884d8"
-                      dataKey="value"
-                      label={({ name, value }) => `${name} ${value}`}
-                    >
-                      {(() => {
-                        const raw = data?.employeesByStatus ?? [];
-                        const chartData = raw.some((d) => d.value > 0) ? raw : defaultStatusData;
-                        return chartData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                        ));
-                      })()}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </DashboardCard>
+        <DashboardCard title="My Tasks">
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-neutral-600">Overdue</span>
+              <span className="font-semibold text-neutral-900">{data?.taskStats?.overdue ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-neutral-600">Due today</span>
+              <span className="font-semibold text-neutral-900">{data?.taskStats?.dueToday ?? 0}</span>
+            </div>
+          </div>
+          <Link
+            href="/tasks"
+            className="mt-4 flex items-center justify-center gap-1 w-full px-5 py-2.5 font-medium rounded border-2 border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-50 text-sm transition-colors"
+          >
+            View Tasks
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </Link>
+        </DashboardCard>
 
-            <DashboardCard title="SHIFT SCHEDULED OVER TIME">
+        {/* Row 2 */}
+        <DashboardCard title="Team Member By Status">
+          <div className="relative w-full h-full flex flex-col gap-3">
+            <div className="relative flex-1 min-h-[180px] flex items-center justify-center">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={data?.shiftsOverTime?.length ? data.shiftsOverTime : defaultShiftData}
-                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
-                  barSize={40}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#d4d4d4" />
-                  <XAxis dataKey="name" tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <Bar dataKey="value" fill="#000000" radius={[4, 4, 0, 0]} />
-                </BarChart>
+                <PieChart>
+                  <Pie
+                    data={(() => {
+                      const raw = data?.employeesByStatus ?? [];
+                      return raw.some((d) => d.value > 0) ? raw : defaultStatusData;
+                    })()}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={70}
+                    fill="#8884d8"
+                    dataKey="value"
+                    paddingAngle={2}
+                  >
+                    {(() => {
+                      const raw = data?.employeesByStatus ?? [];
+                      const chartData = raw.some((d) => d.value > 0) ? raw : defaultStatusData;
+                      return chartData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      ));
+                    })()}
+                  </Pie>
+                </PieChart>
               </ResponsiveContainer>
-            </DashboardCard>
-
-            <DashboardCard title="Payroll Status" className="flex flex-col gap-3 justify-center">
-              <div className="flex flex-col gap-3">
-                {canPayroll ? (
-                  <>
-                    <Link
-                      href="/payroll"
-                      className="flex items-center justify-between w-full bg-neutral-100 hover:bg-neutral-200 py-3 px-4 rounded-security border border-neutral-300 transition-colors"
-                    >
-                      <span className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-neutral-300 flex items-center justify-center text-black">
-                          <span className="text-xs font-bold">!</span>
-                        </span>
-                        <span className="font-semibold text-sm text-black">Draft</span>
-                      </span>
-                      <span className="font-bold text-black">{data?.payrollStatus?.draft ?? 0}</span>
-                    </Link>
-                    <Link
-                      href="/payroll"
-                      className="flex items-center justify-between w-full bg-neutral-100 hover:bg-neutral-200 py-3 px-4 rounded-security border border-neutral-300 transition-colors"
-                    >
-                      <span className="flex items-center gap-2">
-                        <svg className="w-5 h-5 text-neutral-500" fill="none" viewBox="0 0 24 24" aria-hidden>
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                        </svg>
-                        <span className="font-semibold text-sm text-black">Calc.</span>
-                      </span>
-                      <span className="font-bold text-black">{data?.payrollStatus?.calculated ?? 0}</span>
-                    </Link>
-                    <Link
-                      href="/payroll"
-                      className="flex items-center justify-between w-full bg-neutral-100 hover:bg-neutral-200 py-3 px-4 rounded-security border border-neutral-300 transition-colors"
-                    >
-                      <span className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-neutral-400 flex items-center justify-center text-white">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                        </span>
-                        <span className="font-semibold text-sm text-black">Paid</span>
-                      </span>
-                      <span className="font-bold text-black">{data?.payrollStatus?.paid ?? 0}</span>
-                    </Link>
-                    <Link
-                      href="/payroll"
-                      className="w-full py-3 px-4 text-center font-semibold text-sm bg-black hover:bg-neutral-800 text-white rounded-security transition-colors"
-                    >
-                      Generate Payrun
-                    </Link>
-                  </>
-                ) : (
-                  <div className="flex flex-col gap-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-neutral-600">Draft</span>
-                      <span className="font-bold text-black">{data?.payrollStatus?.draft ?? 0}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-neutral-600">Calc.</span>
-                      <span className="font-bold text-black">{data?.payrollStatus?.calculated ?? 0}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-neutral-600">Paid</span>
-                      <span className="font-bold text-black">{data?.payrollStatus?.paid ?? 0}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </DashboardCard>
-          </div>
-        </div>
-
-        {/* Right Sidebar - Tasks & WhatsApp (height matches top + bottom grid rows: h-64 + gap-6 + h-64) */}
-        <div className="w-64 flex-shrink-0 flex flex-col gap-6 h-[536px]">
-          <div className="card-dashboard w-full p-5 flex flex-col border-neutral-200">
-            <h2 className="font-semibold text-sm text-black uppercase tracking-wider mb-3 flex items-center gap-2">
-              <span className="w-1 h-4 bg-black rounded-full" />
-              My Tasks
-            </h2>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-neutral-600">Overdue</span>
-                <span className="font-semibold text-black">
-                  {data?.taskStats?.overdue ?? 0}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-600">Due today</span>
-                <span className="font-semibold text-black">
-                  {data?.taskStats?.dueToday ?? 0}
-                </span>
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <span className="text-2xl font-bold text-neutral-900">{employeesTotal || 0}</span>
               </div>
             </div>
-            <Link
-              href="/tasks"
-              className="mt-3 flex items-center justify-center gap-1 w-full px-5 py-2.5 font-medium rounded-security border-2 border-neutral-300 bg-white text-black hover:bg-neutral-50 text-sm transition-colors"
-            >
-              View Tasks
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-            </Link>
-            {(data?.topPriorityTasks?.length ?? 0) > 0 && (
-              <div className="mt-4 pt-4 border-t border-neutral-200">
-                <h3 className="font-semibold text-xs text-neutral-500 uppercase tracking-wider mb-2">Top 3 Priority Tasks</h3>
-                <ul className="space-y-2">
-                  {data!.topPriorityTasks!.map((t) => (
-                    <li key={t.id}>
-                      <Link
-                        href={`/tasks/${t.id}`}
-                        className="block text-sm text-black hover:text-neutral-600 transition-colors truncate"
-                        title={t.title}
-                      >
-                        {t.title.length > 28 ? `${t.title.slice(0, 28)}...` : t.title}
-                      </Link>
-                      <span className="text-xs text-neutral-500">
-                        Due {t.dueDate ? format(new Date(t.dueDate), "MMM d, yyyy") : "—"}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 justify-center border-t border-neutral-100 pt-3">
+              {(() => {
+                const raw = data?.employeesByStatus ?? [];
+                const chartData = raw.some((d) => d.value > 0) ? raw : defaultStatusData;
+                return chartData.map((item, index) => (
+                  <div key={item.name} className="flex items-center gap-1.5 text-xs">
+                    <span
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
+                    />
+                    <span className="text-neutral-600">{item.name}</span>
+                    <span className="text-neutral-400">({item.value})</span>
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+        </DashboardCard>
+
+        <DashboardCard title="Shift Scheduled Over Time">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={shiftsOverTimeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} barSize={40}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#d4d4d4" />
+              <XAxis dataKey="name" tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
+              <Bar dataKey="value" fill="#000000" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </DashboardCard>
+
+        <DashboardCard title="Payroll Status">
+          <div className="flex flex-col gap-3">
+            {canPayroll ? (
+              <>
+                <Link
+                  href="/payroll"
+                  className="flex items-center justify-between w-full bg-neutral-100 hover:bg-neutral-200 py-3 px-4 rounded border border-neutral-300 transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full border-2 border-neutral-400 flex items-center justify-center" />
+                    <span className="font-semibold text-sm text-neutral-900">Draft</span>
+                  </span>
+                  <span className="font-bold text-neutral-900">{data?.payrollStatus?.draft ?? 0}</span>
+                </Link>
+                <Link
+                  href="/payroll"
+                  className="flex items-center justify-between w-full bg-neutral-100 hover:bg-neutral-200 py-3 px-4 rounded border border-neutral-300 transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full border-2 border-neutral-400 flex items-center justify-center" />
+                    <span className="font-semibold text-sm text-neutral-900">Calc.</span>
+                  </span>
+                  <span className="font-bold text-neutral-900">{data?.payrollStatus?.calculated ?? 0}</span>
+                </Link>
+                <Link
+                  href="/payroll"
+                  className="flex items-center justify-between w-full bg-neutral-100 hover:bg-neutral-200 py-3 px-4 rounded border border-neutral-300 transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full border-2 border-neutral-900 bg-neutral-900 flex items-center justify-center">
+                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </span>
+                    <span className="font-semibold text-sm text-neutral-900">Paid</span>
+                  </span>
+                  <span className="font-bold text-neutral-900">{data?.payrollStatus?.paid ?? 0}</span>
+                </Link>
+                <Link
+                  href="/payroll"
+                  className="w-full py-3 px-4 text-center font-semibold text-sm bg-black hover:bg-neutral-800 text-white rounded transition-colors"
+                >
+                  Generate Payrun
+                </Link>
+              </>
+            ) : (
+              <div className="flex flex-col gap-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-neutral-600">Draft</span>
+                  <span className="font-bold text-neutral-900">{data?.payrollStatus?.draft ?? 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-neutral-600">Calc.</span>
+                  <span className="font-bold text-neutral-900">{data?.payrollStatus?.calculated ?? 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-neutral-600">Paid</span>
+                  <span className="font-bold text-neutral-900">{data?.payrollStatus?.paid ?? 0}</span>
+                </div>
               </div>
             )}
           </div>
+        </DashboardCard>
 
-          {/* WhatsApp - Team member contacts */}
-          {canWhatsApp && (
-            <WhatsAppWidget
-              contacts={whatsappContacts}
-              onSend={handleSendWhatsApp}
-              compact
-            />
-          )}
-        </div>
+        {canWhatsApp ? (
+          <DashboardCard title="WhatsApp">
+            <p className="text-xs text-neutral-500 mb-3">Message team members directly</p>
+            <div className="space-y-2 flex-1 min-h-0 overflow-hidden">
+              {whatsappContacts.length > 0 ? (
+                whatsappContacts.slice(0, 3).map((contact) => (
+                  <div
+                    key={contact.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push(`/whatsapp?contact=${contact.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        router.push(`/whatsapp?contact=${contact.id}`);
+                      }
+                    }}
+                    className="flex items-center gap-2 py-2 border-b border-neutral-100 last:border-0 cursor-pointer transition-colors hover:bg-neutral-50 rounded px-1 -mx-1"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-neutral-900 truncate">
+                        {contact.firstName?.charAt(0)}{contact.lastName?.charAt(0)} {contact.firstName}...
+                      </p>
+                      <p className="text-xs text-neutral-500 truncate">
+                        {contact.phone
+                          ? (() => {
+                              const digits = contact.phone!.replace(/\D/g, "");
+                              const national = digits.startsWith("27") ? "0" + digits.slice(2) : digits;
+                              return `${national.slice(0, 10)}${national.length > 10 ? "..." : ""}`;
+                            })()
+                          : "-"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <button className="p-1.5 rounded text-neutral-500 hover:bg-neutral-100" title="More">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-neutral-500 py-4">No contacts</p>
+              )}
+            </div>
+            {whatsappContacts.length > 3 && (
+              <Link href="/whatsapp" className="text-sm text-neutral-600 hover:text-neutral-900 mt-2 block">
+                View all ({whatsappContacts.length}) →
+              </Link>
+            )}
+            <Link
+              href="/whatsapp"
+              className="mt-3 flex items-center justify-center gap-1 w-full px-5 py-2.5 font-medium rounded border-2 border-neutral-300 bg-black text-white hover:bg-neutral-800 text-sm transition-colors"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+              </svg>
+              WhatsApp
+            </Link>
+          </DashboardCard>
+        ) : (
+          <DashboardCard title="WhatsApp">
+            <p className="text-xs text-neutral-500 mb-3">Message team members directly</p>
+            <p className="text-sm text-neutral-500 py-4">No access</p>
+          </DashboardCard>
+        )}
       </div>
     </div>
   );

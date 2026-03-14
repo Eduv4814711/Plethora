@@ -103,9 +103,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex flex-col bg-security-navy-50">
       {/* Professional navy header - security company aesthetic */}
-      <header className="h-14 bg-security-navy border-b border-security-navy-800 flex items-center justify-between px-6 shrink-0 shadow-security-elevated">
+      <header className="h-14 bg-black flex items-center justify-between px-6 shrink-0">
         <Link href="/" className="flex items-center shrink-0">
-          <img src="/plethora-logo.svg" alt="Plethora" className="h-10 w-auto object-contain brightness-0 invert opacity-95" />
+          <img src="/plethora-logo-header.svg" alt="Plethora" className="h-20 w-auto object-contain opacity-95" />
         </Link>
 
         <nav className="flex flex-1 items-center justify-center gap-8">
@@ -246,7 +246,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="flex-1 p-6 md:p-8 overflow-auto bg-security-navy-50">{hasAccess ? children : null}</main>
+      <main className="flex-1 p-6 md:p-8 overflow-auto bg-neutral-50">{hasAccess ? children : null}</main>
     </div>
   );
 }
