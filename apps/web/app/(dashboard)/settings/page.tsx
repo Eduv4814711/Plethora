@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
 import { listUsers, createUser, updateUser, deleteUser, factoryReset, FACTORY_RESET_MODULES, authFetch, type UserListItem, type UserRole, type FactoryResetModuleId } from "@/lib/api";
+import { DateInput } from "@/components/date-input";
 import { clsx } from "clsx";
 
 type Tab = "profile" | "business" | "settings" | "users" | "migrate" | "factory_reset";
@@ -895,6 +896,7 @@ function FactoryResetSection({
   const [resetAll, setResetAll] = useState(false);
   const [selectedModules, setSelectedModules] = useState<Set<FactoryResetModuleId>>(new Set());
   const [attendanceEmployeeId, setAttendanceEmployeeId] = useState<string>("");
+  const [attendanceFromDate, setAttendanceFromDate] = useState<string>("");
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
 
   const toggleModule = (id: FactoryResetModuleId) => {
@@ -913,6 +915,7 @@ function FactoryResetSection({
   const deselectAll = () => {
     setSelectedModules(new Set());
     setAttendanceEmployeeId("");
+    setAttendanceFromDate("");
   };
 
   useEffect(() => {
@@ -939,10 +942,12 @@ function FactoryResetSection({
     setError(null);
     try {
       const isFullReset = resetAll;
-      const options =
-        selectedModules.has("attendance") && attendanceEmployeeId
-          ? { attendanceEmployeeId }
-          : undefined;
+      const options = selectedModules.has("attendance")
+        ? {
+            ...(attendanceEmployeeId && { attendanceEmployeeId }),
+            ...(attendanceFromDate && { attendanceFromDate }),
+          }
+        : undefined;
       await factoryReset(token, modulesToReset, options);
       if (isFullReset) {
         logout();
@@ -956,6 +961,7 @@ function FactoryResetSection({
       setResetAll(false);
       setSelectedModules(new Set());
       setAttendanceEmployeeId("");
+      setAttendanceFromDate("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Factory reset failed");
     } finally {
@@ -1044,26 +1050,43 @@ function FactoryResetSection({
                         </span>
                       </label>
                       {mod.id === "attendance" && selectedModules.has("attendance") && (
-                        <div className="mt-2">
-                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
-                            Reset for person (optional)
-                          </label>
-                          <select
-                            value={attendanceEmployeeId}
-                            onChange={(e) => setAttendanceEmployeeId(e.target.value)}
-                            disabled={resetting}
-                            className="input-modern py-1.5 text-sm w-full max-w-xs"
-                          >
-                            <option value="">All people</option>
-                            {employees.map((e) => (
-                              <option key={e.id} value={e.id}>
-                                {e.firstName} {e.lastName}
-                              </option>
-                            ))}
-                          </select>
-                          <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
-                            Leave as &quot;All people&quot; to reset everyone&apos;s attendance.
-                          </p>
+                        <div className="mt-2 space-y-3">
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+                              Reset from date (optional)
+                            </label>
+                            <DateInput
+                              value={attendanceFromDate}
+                              onChange={setAttendanceFromDate}
+                              className="input-modern py-1.5 text-sm w-full max-w-xs"
+                              showToday
+                              disabled={resetting}
+                            />
+                            <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                              Leave empty to reset all attendance. Set a date to reset only from that date onwards.
+                            </p>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+                              Reset for person (optional)
+                            </label>
+                            <select
+                              value={attendanceEmployeeId}
+                              onChange={(e) => setAttendanceEmployeeId(e.target.value)}
+                              disabled={resetting}
+                              className="input-modern py-1.5 text-sm w-full max-w-xs"
+                            >
+                              <option value="">All people</option>
+                              {employees.map((e) => (
+                                <option key={e.id} value={e.id}>
+                                  {e.firstName} {e.lastName}
+                                </option>
+                              ))}
+                            </select>
+                            <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                              Leave as &quot;All people&quot; to reset everyone&apos;s attendance.
+                            </p>
+                          </div>
                         </div>
                       )}
                     </div>

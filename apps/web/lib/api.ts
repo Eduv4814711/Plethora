@@ -191,10 +191,11 @@ export type FactoryResetResponse = CompanySettings | { companyDeleted: true };
 export async function factoryReset(
   token: string,
   modules?: FactoryResetModuleId[],
-  options?: { attendanceEmployeeId?: string }
+  options?: { attendanceEmployeeId?: string; attendanceFromDate?: string }
 ): Promise<FactoryResetResponse> {
   const body: Record<string, unknown> = modules && modules.length > 0 ? { modules } : {};
   if (options?.attendanceEmployeeId) body.attendanceEmployeeId = options.attendanceEmployeeId;
+  if (options?.attendanceFromDate) body.attendanceFromDate = options.attendanceFromDate;
   const res = await fetch(`${API_BASE}/settings/factory-reset`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

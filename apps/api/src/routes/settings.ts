@@ -56,6 +56,7 @@ const factoryResetSchema = z.object({
     .optional()
     .transform((v) => (v && v.length > 0 ? v : undefined)),
   attendanceEmployeeId: z.string().min(1).optional(),
+  attendanceFromDate: z.string().optional().transform((v) => (v ? v : undefined)),
 });
 
 const COMPANY_LOGO_EXTENSIONS = ["jpeg", "jpg", "png", "gif", "webp"] as const;
@@ -229,6 +230,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     }
     const modules = parsed.data.modules;
     const attendanceEmployeeId = parsed.data.attendanceEmployeeId;
+    const attendanceFromDate = parsed.data.attendanceFromDate;
 
     const company = await prisma.company.findUnique({
       where: { id: companyId },
@@ -328,6 +330,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 
       // Attendance only (clears clock-in/out records; shifts remain)
       if (has("attendance")) {
+        const shiftWhere: Record<string, unknown> = { companyId };
         if (attendanceEmployeeId) {
           const employee = await tx.employee.findFirst({
             where: { id: attendanceEmployeeId, companyId },
@@ -335,24 +338,22 @@ export async function settingsRoutes(app: FastifyInstance) {
           if (!employee) {
             throw new Error("Employee not found");
           }
-          const shiftIds = await tx.shift.findMany({
-            where: { companyId, employeeId: attendanceEmployeeId },
-            select: { id: true },
-          });
-          const ids = shiftIds.map((s) => s.id);
-          if (ids.length > 0) {
-            await tx.attendance.deleteMany({ where: { shiftId: { in: ids } } });
-            await tx.shift.updateMany({
-              where: { id: { in: ids } },
-              data: { status: "assigned" },
-            });
-          }
-        } else {
-          await tx.attendance.deleteMany({
-            where: { shift: { companyId } },
-          });
+          shiftWhere.employeeId = attendanceEmployeeId;
+        }
+        if (attendanceFromDate) {
+          const fromDate = new Date(attendanceFromDate);
+          fromDate.setUTCHours(0, 0, 0, 0);
+          shiftWhere.startTime = { gte: fromDate };
+        }
+        const shiftsToReset = await tx.shift.findMany({
+          where: shiftWhere,
+          select: { id: true },
+        });
+        const shiftIds = shiftsToReset.map((s) => s.id);
+        if (shiftIds.length > 0) {
+          await tx.attendance.deleteMany({ where: { shiftId: { in: shiftIds } } });
           await tx.shift.updateMany({
-            where: { companyId, status: { in: ["active", "completed", "verified"] } },
+            where: { id: { in: shiftIds }, status: { in: ["active", "completed", "verified"] } },
             data: { status: "assigned" },
           });
         }
