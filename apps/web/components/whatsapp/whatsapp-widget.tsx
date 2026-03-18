@@ -35,7 +35,7 @@ export function WhatsAppWidget({ contacts, onSend, compact = true }: WhatsAppWid
   return (
     <div className="card-dashboard w-full p-5 flex flex-col border-neutral-200 overflow-hidden flex-1 min-h-0 h-[400px]">
       <h2 className="font-semibold text-sm text-black uppercase tracking-wider mb-3 flex items-center gap-2 shrink-0">
-        <span className="w-1 h-4 bg-black rounded-full" />
+        <span className="w-1 h-4 bg-security-navy-500 rounded-full" />
         WhatsApp
       </h2>
       <p className="text-xs text-neutral-500 mb-3 shrink-0">Message team members directly</p>
@@ -75,7 +75,7 @@ export function WhatsAppWidget({ contacts, onSend, compact = true }: WhatsAppWid
                       href={contact.whatsappUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-1.5 rounded-security text-neutral-500 hover:bg-neutral-100 hover:text-green-600 transition-colors"
+                      className="p-1.5 rounded-security text-neutral-500 hover:bg-neutral-100 hover:text-security-navy-600 transition-colors"
                       title="Open in WhatsApp"
                     >
                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -100,7 +100,7 @@ export function WhatsAppWidget({ contacts, onSend, compact = true }: WhatsAppWid
                     type="button"
                     onClick={() => handleSend(contact.id)}
                     disabled={!message.trim() || !!sending}
-                    className="mt-2 w-full py-2 text-sm font-medium rounded-security bg-black text-white hover:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="mt-2 w-full py-2 text-sm font-medium rounded-security bg-security-navy-700 text-white hover:bg-security-navy-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {sending === contact.id ? "Sending..." : "Send"}
                   </button>

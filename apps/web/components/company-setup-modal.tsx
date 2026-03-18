@@ -141,14 +141,14 @@ export function CompanySetupModal({
       <div className="flex-1 overflow-y-auto p-4 min-h-0">
         <div className="max-w-2xl mx-auto my-4 sm:my-8 card-elevated flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)]">
           {/* Sticky header - light blue accent */}
-          <div className="shrink-0 p-6 pb-4 border-b-2 border-security-navy-200 bg-wireframe-accent rounded-t-[10px]">
+          <div className="shrink-0 p-6 pb-4 border-b-2 border-neutral-200 bg-wireframe-accent rounded-t-[10px]">
             <h2 className="text-xl font-bold text-black mb-2">
               Company Setup Required
             </h2>
             <p className="text-sm text-black mb-4">
               Enter your company name below, then fill in the rest. This information is required for the system to function correctly.
             </p>
-            <div className="p-4 rounded-[10px] bg-white border-2 border-security-navy-200">
+            <div className="p-4 rounded-[10px] bg-white border-2 border-neutral-200">
               <label className="block text-sm font-medium text-black mb-1">Company Name *</label>
               <input
                 type="text"
@@ -267,7 +267,7 @@ export function CompanySetupModal({
             </div>
           </div>
 
-          <div className="border-t-2 border-security-navy-200 pt-6">
+          <div className="border-t-2 border-neutral-200 pt-6">
             <h3 className="font-semibold text-black mb-4">Business Settings</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -333,7 +333,7 @@ export function CompanySetupModal({
           </div>
 
           {/* Sticky footer */}
-          <div className="shrink-0 p-6 pt-4 border-t-2 border-security-navy-200 bg-white rounded-b-[10px]">
+          <div className="shrink-0 p-6 pt-4 border-t-2 border-neutral-200 bg-white rounded-b-[10px]">
             {error && (
               <p className="text-sm text-black mb-3">{error}</p>
             )}
@@ -402,7 +402,7 @@ function LogoUploadInline({
     <div>
       <label className="block text-sm font-medium text-black mb-2">Logo</label>
       <div className="flex flex-col sm:flex-row gap-4 items-start">
-        <div className="w-24 h-24 rounded-[10px] border-2 border-security-navy-200 flex items-center justify-center overflow-hidden bg-white shrink-0">
+        <div className="w-24 h-24 rounded-[10px] border-2 border-neutral-200 flex items-center justify-center overflow-hidden bg-white shrink-0">
           {previewUrl ? (
             <img src={previewUrl} alt="Logo" className="w-full h-full object-contain" />
           ) : (

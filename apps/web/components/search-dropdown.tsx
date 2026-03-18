@@ -156,7 +156,7 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
       {open && (
         <div
           ref={listRef}
-          className="absolute top-full left-0 right-0 mt-1 py-1 bg-white border-2 border-security-navy-200 rounded-security-lg shadow-security-elevated z-50 max-h-80 overflow-y-auto"
+          className="absolute top-full left-0 right-0 mt-1 py-1 bg-white border-2 border-neutral-200 rounded-security-lg shadow-security-elevated z-50 max-h-80 overflow-y-auto"
           role="listbox"
         >
           {loading ? (
@@ -166,7 +166,7 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
           ) : (
             <>
               {employees.length > 0 && (
-                <div className="px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-security-navy-500 bg-security-navy-50 border-b border-security-navy-200">
+                <div className="px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-security-navy-500 bg-security-navy-50 border-b border-neutral-200">
                   Team
                 </div>
               )}
@@ -189,7 +189,7 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
                 </button>
               ))}
               {sites.length > 0 && (
-                <div className="px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-security-navy-500 bg-security-navy-50 border-t border-security-navy-200 mt-1 pt-1">
+                <div className="px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-security-navy-500 bg-security-navy-50 border-t border-neutral-200 mt-1 pt-1">
                   Sites
                 </div>
               )}

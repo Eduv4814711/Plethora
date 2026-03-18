@@ -63,11 +63,11 @@ interface Site {
 }
 
 const statusColors: Record<string, string> = {
-  created: "border-2 border-security-navy-200 bg-wireframe-accent text-black",
-  assigned: "border-2 border-security-navy-200 bg-neutral-100 text-black",
-  active: "border-2 border-security-navy-200 bg-white text-black",
-  completed: "border-2 border-security-navy-200 bg-neutral-100 text-black",
-  verified: "border-2 border-security-navy-200 bg-white text-black",
+  created: "border-2 border-neutral-200 bg-wireframe-accent text-black",
+  assigned: "border-2 border-neutral-200 bg-neutral-100 text-black",
+  active: "border-2 border-neutral-200 bg-white text-black",
+  completed: "border-2 border-neutral-200 bg-neutral-100 text-black",
+  verified: "border-2 border-neutral-200 bg-white text-black",
 };
 
 export default function RosteringPage() {
@@ -605,7 +605,7 @@ export default function RosteringPage() {
                         }}
                         className={`min-h-[48px] p-3 rounded-sm border-2 border-dashed flex items-center justify-center text-sm font-medium transition-colors ${
                           dragOverPostId === post.id
-                            ? "border-security-navy-200 dark:border-neutral-600 bg-neutral-100 dark:bg-neutral-800"
+                            ? "border-neutral-300 dark:border-neutral-600 bg-neutral-100 dark:bg-neutral-800"
                             : "border-neutral-300 dark:border-neutral-600 text-neutral-600 dark:text-neutral-400"
                         }`}
                       >
@@ -744,7 +744,7 @@ export default function RosteringPage() {
               <button
                 type="button"
                 onClick={() => { setShowResetMenu(false); setShowPdfMenu((v) => !v); }}
-                className="h-11 px-5 py-2.5 text-sm font-semibold rounded-sm border-2 border-security-navy-200 dark:border-white bg-transparent dark:bg-transparent text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 flex items-center gap-2"
+                className="h-11 px-5 py-2.5 text-sm font-semibold rounded-sm border-2 border-neutral-200 dark:border-white bg-transparent dark:bg-transparent text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 flex items-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
@@ -1088,8 +1088,8 @@ export default function RosteringPage() {
                               : "hover:ring-2 hover:ring-rose-500/50 dark:hover:ring-rose-400/50"
                           } ${
                             s.post.shiftType === "night"
-                              ? "bg-gradient-to-br from-neutral-500/15 to-neutral-600/10 dark:from-neutral-500/20 dark:to-neutral-600/10 text-neutral-800 dark:text-neutral-200 border border-security-navy-200 dark:border-neutral-600"
-                              : "bg-gradient-to-br from-neutral-500/15 to-orange-500/10 dark:from-neutral-500/20 dark:to-orange-600/10 text-neutral-900 dark:text-neutral-100 border border-security-navy-200 dark:border-neutral-600"
+                              ? "bg-gradient-to-br from-neutral-500/15 to-neutral-600/10 dark:from-neutral-500/20 dark:to-neutral-600/10 text-neutral-800 dark:text-neutral-200 border border-neutral-200 dark:border-neutral-600"
+                              : "bg-gradient-to-br from-neutral-500/15 to-orange-500/10 dark:from-neutral-500/20 dark:to-orange-600/10 text-neutral-900 dark:text-neutral-100 border border-neutral-200 dark:border-neutral-600"
                           }`}
                           title="Click to remove from roster"
                         >
@@ -1118,11 +1118,11 @@ export default function RosteringPage() {
         </div>
         <div className="flex items-center gap-8 mt-4 pl-1">
           <span className="flex items-center gap-2.5 text-sm text-neutral-600 dark:text-neutral-400">
-            <span className="w-4 h-4 rounded-lg bg-gradient-to-br from-neutral-400/30 to-orange-500/20 dark:from-neutral-500/30 dark:to-orange-600/20 border border-security-navy-200 dark:border-neutral-600" />
+            <span className="w-4 h-4 rounded-lg bg-gradient-to-br from-neutral-400/30 to-orange-500/20 dark:from-neutral-500/30 dark:to-orange-600/20 border border-neutral-200 dark:border-neutral-600" />
             <span className="font-medium">Day shift</span>
           </span>
           <span className="flex items-center gap-2.5 text-sm text-neutral-600 dark:text-neutral-400">
-            <span className="w-4 h-4 rounded-lg bg-gradient-to-br from-neutral-400/30 to-neutral-600/20 dark:from-neutral-500/30 dark:to-neutral-600/20 border border-security-navy-200 dark:border-neutral-600" />
+            <span className="w-4 h-4 rounded-lg bg-gradient-to-br from-neutral-400/30 to-neutral-600/20 dark:from-neutral-500/30 dark:to-neutral-600/20 border border-neutral-200 dark:border-neutral-600" />
             <span className="font-medium">Night shift</span>
           </span>
         </div>

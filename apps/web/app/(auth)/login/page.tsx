@@ -39,7 +39,7 @@ function LoginForm() {
   return (
     <div className="w-full animate-fade-in">
       <div className="card-elevated p-10 md:p-12">
-        <div className="text-center mb-8 pb-8 border-b-2 border-security-navy-200">
+        <div className="text-center mb-8 pb-8 border-b-2 border-neutral-200">
           <div className="inline-flex items-center justify-center mb-4">
             <img src="/plethora-logo.svg" alt="Plethora" className="h-[7.5rem] w-auto object-contain" />
           </div>

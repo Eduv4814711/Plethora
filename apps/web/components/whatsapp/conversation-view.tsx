@@ -55,7 +55,7 @@ export function ConversationView({
           <div
             className={`max-w-[80%] rounded-security px-3 py-2 ${
               m.direction === "outbound"
-                ? "bg-black text-white"
+                ? "bg-security-navy-700 text-white"
                 : "bg-neutral-100 text-black"
             }`}
           >

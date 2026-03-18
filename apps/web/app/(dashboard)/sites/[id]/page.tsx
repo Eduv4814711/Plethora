@@ -534,7 +534,7 @@ function AddPostForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-5 bg-white dark:bg-neutral-900 rounded-sm border border-security-navy-200 dark:border-neutral-600">
+    <form onSubmit={handleSubmit} className="p-5 bg-white dark:bg-neutral-900 rounded-sm border border-neutral-200 dark:border-neutral-600">
       <h4 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-4">New Post</h4>
       {error && (
         <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-sm">

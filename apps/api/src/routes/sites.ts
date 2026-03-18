@@ -27,6 +27,7 @@ const createSiteSchema = z.object({
     .union([z.enum(SERVICE_TYPES), z.literal("")])
     .optional()
     .transform((v) => (v === "" ? undefined : v)),
+  monthlyRevenue: z.number().positive().optional(),
   assignedGuardIds: z.array(z.string()).optional(),
 });
 
@@ -41,6 +42,7 @@ const updateSiteSchema = z.object({
     .union([z.enum(SERVICE_TYPES), z.literal("")])
     .optional()
     .transform((v) => (v === "" ? undefined : v)),
+  monthlyRevenue: z.number().positive().optional().nullable(),
   assignedGuardIds: z.array(z.string()).optional(),
 });
 
@@ -138,6 +140,7 @@ export async function sitesRoutes(app: FastifyInstance) {
         contactPersonPhone: d.contactPersonPhone,
         contractOrServiceAgreement: d.contractOrServiceAgreement,
         serviceType: d.serviceType,
+        monthlyRevenue: d.monthlyRevenue,
       },
     });
 

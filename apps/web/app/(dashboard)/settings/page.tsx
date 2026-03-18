@@ -63,7 +63,7 @@ export default function SettingsPage() {
       )}
 
       {!isAdmin && activeTab !== "profile" && (
-        <div className="mb-4 p-3 text-sm text-neutral-700 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-security-navy-200 dark:border-neutral-600">
+        <div className="mb-4 p-3 text-sm text-neutral-700 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-neutral-200 dark:border-neutral-600">
           Only administrators can edit business details and settings.
         </div>
       )}
@@ -1093,7 +1093,7 @@ function FactoryResetSection({
         )}
 
         {success && (
-          <p className="text-sm text-green-600 dark:text-green-400">
+          <p className="text-sm text-security-navy-600 dark:text-security-navy-400">
             Factory reset completed successfully.
           </p>
         )}

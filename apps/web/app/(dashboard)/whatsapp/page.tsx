@@ -248,7 +248,7 @@ export default function WhatsAppPage() {
                         type="button"
                         onClick={handleSendTemplate}
                         disabled={!selectedTemplate || sending}
-                        className="px-4 py-2 bg-black text-white rounded-security text-sm font-medium disabled:opacity-50"
+                        className="px-4 py-2 bg-security-navy-700 text-white rounded-security text-sm font-medium disabled:opacity-50 hover:bg-security-navy-800 transition-colors"
                       >
                         {sending ? "Sending..." : "Send Template"}
                       </button>
@@ -275,7 +275,7 @@ export default function WhatsAppPage() {
                       type="button"
                       onClick={handleSendMessage}
                       disabled={!messageInput.trim() || sending}
-                      className="px-4 py-2 bg-black text-white rounded-security text-sm font-medium self-end disabled:opacity-50"
+                      className="px-4 py-2 bg-security-navy-700 text-white rounded-security text-sm font-medium self-end disabled:opacity-50 hover:bg-security-navy-800 transition-colors"
                     >
                       {sending ? "Sending..." : "Send"}
                     </button>

@@ -82,7 +82,7 @@ export function AssigneePicker({
               type="button"
               onClick={() => setTab("user")}
               className={`flex-1 px-3 py-2 text-sm font-medium ${
-                tab === "user" ? "bg-gray-100 text-black border-b-2 border-security-navy-200" : "text-gray-600"
+                tab === "user" ? "bg-gray-100 text-black border-b-2 border-neutral-200" : "text-gray-600"
               }`}
             >
               Users
@@ -91,7 +91,7 @@ export function AssigneePicker({
               type="button"
               onClick={() => setTab("employee")}
               className={`flex-1 px-3 py-2 text-sm font-medium ${
-                tab === "employee" ? "bg-gray-100 text-black border-b-2 border-security-navy-200" : "text-gray-600"
+                tab === "employee" ? "bg-gray-100 text-black border-b-2 border-neutral-200" : "text-gray-600"
               }`}
             >
               Employees

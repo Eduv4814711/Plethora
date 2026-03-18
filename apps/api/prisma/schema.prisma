@@ -184,6 +184,7 @@ model Site {
   contactPersonPhone     String?
   contractOrServiceAgreement String?  // Contract reference or description
   serviceType            String?  // guarding, access_control, patrols, etc.
+  monthlyRevenue         Decimal? @db.Decimal(12, 2)  // Optional - for labour % and profitability
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 

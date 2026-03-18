@@ -51,7 +51,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-security-navy-50">
         <div className="flex flex-col items-center gap-4 animate-fade-in">
-          <div className="w-12 h-12 rounded-security-lg bg-security-navy-100 border-2 border-security-navy-200 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-security-lg bg-security-navy-100 border-2 border-neutral-200 flex items-center justify-center">
             <svg className="w-6 h-6 text-security-navy-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
@@ -102,14 +102,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col bg-security-navy-50">
-      {/* Professional navy header - security company aesthetic */}
-      <header className="h-14 bg-black flex items-center justify-between px-6 shrink-0">
+      {/* Brand header – dark green */}
+      <header className="h-14 bg-security-navy-700 flex items-center justify-between px-6 shrink-0">
         <Link href="/" className="flex items-center shrink-0">
           <img src="/plethora-logo-header.svg" alt="Plethora" className="h-20 w-auto object-contain opacity-95" />
         </Link>
 
         <nav className="flex flex-1 items-center justify-center gap-8">
-          <span className="text-sm font-semibold text-security-navy-300 tracking-wide">
+          <span className="text-sm font-semibold text-white/90 tracking-wide">
             {companyName}
           </span>
           {mainNavItems.map((item) => (
@@ -120,7 +120,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 "text-sm font-medium tracking-wide transition-colors py-2 px-3 rounded-security",
                 isActive(item.href)
                   ? "text-white bg-security-navy-800"
-                  : "text-security-navy-300 hover:text-white hover:bg-security-navy-800/80"
+                  : "text-white/85 hover:text-white hover:bg-security-navy-800/80"
               )}
             >
               {item.label}
@@ -134,13 +134,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   "text-sm font-medium tracking-wide transition-colors py-2 px-3 rounded-security",
                   moreNavItems.some((i) => isActive(i.href))
                     ? "text-white bg-security-navy-800"
-                    : "text-security-navy-300 hover:text-white hover:bg-security-navy-800/80"
+                    : "text-white/85 hover:text-white hover:bg-security-navy-800/80"
                 )}
               >
                 More
               </button>
               {moreOpen && (
-                <div className="absolute top-full right-0 mt-1 py-1.5 bg-white border border-security-navy-200 rounded-security-lg shadow-security-elevated z-50 min-w-[200px]">
+                <div className="absolute top-full right-0 mt-1 py-1.5 bg-white border border-neutral-200 rounded-security-lg shadow-security-elevated z-50 min-w-[200px]">
                   {moreNavItems.map((item) => (
                     <Link
                       key={item.href}
@@ -169,7 +169,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <SearchDropdown onClose={() => setSearchOpen(false)} />
                 <button
                   onClick={() => setSearchOpen(false)}
-                  className="p-2 text-security-navy-300 hover:text-white hover:bg-security-navy-800 rounded-security transition-colors"
+                  className="p-2 text-white/85 hover:text-white hover:bg-security-navy-800 rounded-security transition-colors"
                   aria-label="Close search"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -180,7 +180,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             ) : (
               <button
                 onClick={() => setSearchOpen(true)}
-                className="p-2 text-security-navy-300 hover:text-white hover:bg-security-navy-800 rounded-security transition-colors"
+                className="p-2 text-white/85 hover:text-white hover:bg-security-navy-800 rounded-security transition-colors"
                 title="Search"
                 aria-label="Search"
               >
@@ -208,11 +208,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <div ref={profileRef} className="relative">
             <button
               onClick={() => setProfileOpen((o) => !o)}
-              className="flex items-center gap-2 p-2 pr-3 text-security-navy-300 hover:text-white hover:bg-security-navy-800 rounded-security transition-colors"
+              className="flex items-center gap-2 p-2 pr-3 text-white/85 hover:text-white hover:bg-security-navy-800 rounded-security transition-colors"
               title="Profile"
               aria-label="Profile"
             >
-              <div className="w-8 h-8 rounded-full bg-security-amber-500 flex items-center justify-center text-white font-semibold text-sm">
+              <div className="w-8 h-8 rounded-full bg-security-navy-400 flex items-center justify-center text-white font-semibold text-sm">
                 {user.name?.charAt(0)?.toUpperCase() ?? "U"}
               </div>
               <span className="text-sm font-medium max-w-[100px] truncate hidden sm:inline">{user.name}</span>
@@ -221,7 +221,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </svg>
             </button>
             {profileOpen && (
-              <div className="absolute right-0 top-full mt-1 py-2 bg-white border border-security-navy-200 rounded-security-lg shadow-security-elevated z-50 min-w-[220px]">
+              <div className="absolute right-0 top-full mt-1 py-2 bg-white border border-neutral-200 rounded-security-lg shadow-security-elevated z-50 min-w-[220px]">
                 <div className="px-4 py-3 border-b border-security-navy-100">
                   <p className="text-sm font-semibold text-security-navy">{user.name}</p>
                   <p className="text-xs text-security-navy-500 capitalize mt-0.5">

@@ -65,7 +65,7 @@ export function CustomPatternBuilder({ blocks, onChange, periodStart, periodEnd 
   return (
     <div className="mt-2 space-y-3">
       {periodStart && periodEnd && (
-        <p className="text-[11px] text-black bg-wireframe-accent rounded-[10px] px-2 py-1.5 border-2 border-security-navy-200">
+        <p className="text-[11px] text-black bg-wireframe-accent rounded-[10px] px-2 py-1.5 border-2 border-neutral-200">
           Pattern runs from <strong>{format(parseISO(periodStart), "d MMM yyyy")}</strong> to <strong>{format(parseISO(periodEnd), "d MMM yyyy")}</strong> — the full chosen date range. First block applies to the start date, then repeats to the end.
         </p>
       )}
@@ -99,7 +99,7 @@ export function CustomPatternBuilder({ blocks, onChange, periodStart, periodEnd 
           <select
             value={block.type}
             onChange={(e) => updateBlock(idx, { type: e.target.value as CustomBlock["type"] })}
-            className="flex-1 py-1.5 px-2 text-xs rounded-[10px] border-2 border-security-navy-200 bg-white"
+            className="flex-1 py-1.5 px-2 text-xs rounded-[10px] border-2 border-neutral-200 bg-white"
           >
             {(Object.keys(BLOCK_LABELS) as CustomBlock["type"][]).map((t) => (
               <option key={t} value={t}>
@@ -113,7 +113,7 @@ export function CustomPatternBuilder({ blocks, onChange, periodStart, periodEnd 
             max={14}
             value={block.count}
             onChange={(e) => updateBlock(idx, { count: Math.max(1, Math.min(14, parseInt(e.target.value, 10) || 1)) })}
-            className="w-12 py-1.5 px-2 text-xs rounded-[10px] border-2 border-security-navy-200 bg-white"
+            className="w-12 py-1.5 px-2 text-xs rounded-[10px] border-2 border-neutral-200 bg-white"
           />
           <button
             type="button"
@@ -138,7 +138,7 @@ export function CustomPatternBuilder({ blocks, onChange, periodStart, periodEnd 
         </svg>
         Add block
       </button>
-      <div className="text-[10px] text-black pt-1 font-mono bg-wireframe-accent rounded-[10px] px-2 py-1.5 border-2 border-security-navy-200">
+      <div className="text-[10px] text-black pt-1 font-mono bg-wireframe-accent rounded-[10px] px-2 py-1.5 border-2 border-neutral-200">
         <span className="font-medium text-black">Preview:</span> {previewBlocks(blocks)}
       </div>
       <p className="text-[10px] text-black">

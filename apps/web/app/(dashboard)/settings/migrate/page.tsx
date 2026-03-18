@@ -176,7 +176,7 @@ export default function MigratePage() {
       )}
 
       <div className="space-y-6">
-        <section className="bg-white dark:bg-neutral-800 rounded-sm border border-security-navy-200 dark:border-neutral-600 p-6">
+        <section className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-600 p-6">
           <h2 className="text-lg font-semibold text-neutral-800 dark:text-white mb-4">
             Export
           </h2>
@@ -188,7 +188,7 @@ export default function MigratePage() {
               type="button"
               onClick={handleExportEmployees}
               disabled={exportEmployeesLoading}
-              className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-security-navy-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {exportEmployeesLoading ? "Exporting..." : "Export team members (employees.csv)"}
             </button>
@@ -196,14 +196,14 @@ export default function MigratePage() {
               type="button"
               onClick={handleExportSites}
               disabled={exportSitesLoading}
-              className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-security-navy-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {exportSitesLoading ? "Exporting..." : "Export sites (sites.csv)"}
             </button>
           </div>
         </section>
 
-        <section className="bg-white dark:bg-neutral-800 rounded-sm border border-security-navy-200 dark:border-neutral-600 p-6">
+        <section className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-600 p-6">
           <h2 className="text-lg font-semibold text-neutral-800 dark:text-white mb-4">
             Step 1: Download templates
           </h2>
@@ -212,7 +212,7 @@ export default function MigratePage() {
               <button
                 type="button"
                 onClick={() => handleDownloadTemplate("company")}
-                className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-security-navy-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors"
+                className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors"
               >
                 Download companies.csv
               </button>
@@ -220,21 +220,21 @@ export default function MigratePage() {
             <button
               type="button"
               onClick={() => handleDownloadTemplate("employees")}
-              className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-security-navy-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors"
+              className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors"
             >
               Download team template (employees.csv)
             </button>
             <button
               type="button"
               onClick={() => handleDownloadTemplate("sites")}
-              className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-security-navy-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors"
+              className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors"
             >
               Download sites.csv
             </button>
           </div>
         </section>
 
-        <section className="bg-white dark:bg-neutral-800 rounded-sm border border-security-navy-200 dark:border-neutral-600 p-6">
+        <section className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-600 p-6">
           <h2 className="text-lg font-semibold text-neutral-800 dark:text-white mb-4">
             Step 2: Upload your CSV files
           </h2>
@@ -265,7 +265,7 @@ export default function MigratePage() {
           </p>
         </section>
 
-        <section className="bg-white dark:bg-neutral-800 rounded-sm border border-security-navy-200 dark:border-neutral-600 p-6">
+        <section className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-600 p-6">
           <h2 className="text-lg font-semibold text-neutral-800 dark:text-white mb-4">
             Step 3: Validate and import
           </h2>
@@ -274,7 +274,7 @@ export default function MigratePage() {
               type="button"
               onClick={handleValidate}
               disabled={!hasFiles || previewLoading}
-              className="px-4 py-2 text-sm font-medium bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 rounded-sm border border-security-navy-200 dark:border-neutral-600 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+              className="px-4 py-2 text-sm font-medium bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 rounded-sm border border-neutral-200 dark:border-neutral-600 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
             >
               {previewLoading ? "Validating..." : "Validate"}
             </button>
@@ -330,7 +330,7 @@ export default function MigratePage() {
               </div>
 
               {totalErrors > 0 && (
-                <div className="max-h-48 overflow-y-auto rounded-sm border border-security-navy-200 dark:border-neutral-600">
+                <div className="max-h-48 overflow-y-auto rounded-sm border border-neutral-200 dark:border-neutral-600">
                   <table className="w-full text-sm">
                     <thead className="bg-neutral-100 dark:bg-neutral-800 sticky top-0">
                       <tr>
@@ -345,7 +345,7 @@ export default function MigratePage() {
                         ...preview.employees.errors.map((e) => ({ ...e, entity: "Team member" })),
                         ...preview.sites.errors.map((e) => ({ ...e, entity: "Site" })),
                       ].map((e, i) => (
-                        <tr key={i} className="border-t border-security-navy-200 dark:border-neutral-600">
+                        <tr key={i} className="border-t border-neutral-200 dark:border-neutral-600">
                           <td className="px-3 py-2">{e.row}</td>
                           <td className="px-3 py-2">{e.entity}.{e.field}</td>
                           <td className="px-3 py-2 text-red-600 dark:text-red-400">{e.message}</td>
@@ -360,8 +360,8 @@ export default function MigratePage() {
 
           {importResult && (
             <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-sm border border-green-200 dark:border-green-800/50">
-              <h3 className="font-medium text-green-800 dark:text-green-200 mb-2">Import complete</h3>
-              <ul className="text-sm text-green-700 dark:text-green-300 space-y-1">
+              <h3 className="font-medium text-security-navy-800 dark:text-security-navy-200 mb-2">Import complete</h3>
+              <ul className="text-sm text-security-navy-700 dark:text-security-navy-300 space-y-1">
                 {importResult.companiesCreated > 0 && (
                   <li>Companies created: {importResult.companiesCreated}</li>
                 )}
