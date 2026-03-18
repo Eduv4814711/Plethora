@@ -81,7 +81,7 @@ export async function generatePayslipPDFFromTemplate(
     const pdfBuffer = await page.pdf({
       format: "A4",
       printBackground: true,
-      margin: { top: "10mm", right: "10mm", bottom: "10mm", left: "10mm" },
+      margin: { top: "10mm", right: "18mm", bottom: "10mm", left: "10mm" },
     });
 
     return Buffer.from(pdfBuffer);

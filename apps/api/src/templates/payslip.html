@@ -7,7 +7,7 @@
   <style>
     @page {
       size: A4 portrait;
-      margin: 10mm;
+      margin: 10mm 18mm 10mm 10mm; /* top right bottom left - extra right margin for mobile viewing */
     }
     * { box-sizing: border-box; }
     html, body {
@@ -19,8 +19,8 @@
       padding: 0;
     }
     .page {
-      width: 210mm;
-      padding: 6mm;
+      width: 100%;
+      padding: 6mm 10mm 6mm 6mm; /* extra right padding to prevent right-edge clipping on mobile */
       page-break-inside: avoid;
     }
     table { border-collapse: collapse; width: 100%; }
