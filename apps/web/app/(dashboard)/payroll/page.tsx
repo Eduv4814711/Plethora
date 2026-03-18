@@ -300,6 +300,9 @@ export default function PayrollPage() {
         />
       )}
 
+      {/* Payroll Intelligence - Reserve, Contract Labour, Employee Costs (at top) */}
+      <PayrollIntelligenceSection token={token!} runs={runs} onRefresh={refresh} />
+
       {/* Dashboard metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="card-wireframe p-4">
@@ -391,26 +394,6 @@ export default function PayrollPage() {
         </div>
       </div>
 
-      {/* Workflow pipeline */}
-      <div className="card-wireframe p-5 mb-8">
-        <h3 className="font-semibold text-security-navy mb-4">Payroll Workflow</h3>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="badge-neutral">1. Attendance</span>
-          <span className="text-security-navy-400">→</span>
-          <span className="badge-neutral">2. Create Run</span>
-          <span className="text-security-navy-400">→</span>
-          <span className="badge-warning">3. Calculate</span>
-          <span className="text-security-navy-400">→</span>
-          <span className="badge-neutral">4. Approve</span>
-          <span className="text-security-navy-400">→</span>
-          <span className="badge-success">5. Mark Paid</span>
-        </div>
-        <p className="text-sm text-security-navy-600 mt-3">Each run progresses through these stages. Calculate first, then approve, then mark as paid.</p>
-      </div>
-
-      {/* Payroll Intelligence - Reserve, Contract Labour, Employee Costs */}
-      <PayrollIntelligenceSection token={token!} runs={runs} onRefresh={refresh} />
-
       {/* Payroll runs */}
       <div className="space-y-4">
         {runs.map((run) => (
@@ -426,6 +409,23 @@ export default function PayrollPage() {
           </button>
         </div>
       )}
+
+      {/* Payroll Workflow - at bottom */}
+      <div className="card-wireframe p-5 mt-8">
+        <h3 className="font-semibold text-security-navy mb-4">Payroll Workflow</h3>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="badge-neutral">1. Attendance</span>
+          <span className="text-security-navy-400">→</span>
+          <span className="badge-neutral">2. Create Run</span>
+          <span className="text-security-navy-400">→</span>
+          <span className="badge-warning">3. Calculate</span>
+          <span className="text-security-navy-400">→</span>
+          <span className="badge-neutral">4. Approve</span>
+          <span className="text-security-navy-400">→</span>
+          <span className="badge-success">5. Mark Paid</span>
+        </div>
+        <p className="text-sm text-security-navy-600 mt-3">Each run progresses through these stages. Calculate first, then approve, then mark as paid.</p>
+      </div>
     </div>
   );
 }
