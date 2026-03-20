@@ -48,6 +48,9 @@ interface Site {
   contactPersonName: string | null;
   contactPersonPhone: string | null;
   serviceType: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  geofenceRadiusMeters?: number | null;
   posts: Post[];
   assignedGuards: { employee: { id: string; firstName: string; lastName: string; status: string; phone: string | null } }[];
 }
@@ -214,6 +217,13 @@ export default function SiteDetailPage() {
                 {SERVICE_TYPE_LABELS[site.serviceType] || site.serviceType}
               </span>
             )}
+            {site.geofenceRadiusMeters != null &&
+              site.latitude != null &&
+              site.longitude != null && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200 border border-amber-200/80 dark:border-amber-800/50">
+                  Geofence {site.geofenceRadiusMeters}m · WhatsApp requires location
+                </span>
+              )}
           </div>
         </div>
       )}

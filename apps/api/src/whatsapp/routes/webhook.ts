@@ -1,7 +1,11 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { config } from "../../lib/config.js";
 import { prisma } from "../../lib/prisma.js";
-import { processAndSend, findEmployeeByPhone } from "../services/handler.service.js";
+import {
+  processAndSend,
+  processLocationAndSend,
+  findEmployeeByPhone,
+} from "../services/handler.service.js";
 
 interface WhatsAppWebhookQuery {
   "hub.mode"?: string;
@@ -15,6 +19,7 @@ interface WhatsAppIncomingMessage {
   timestamp: string;
   type: string;
   text?: { body: string };
+  location?: { latitude: number; longitude: number };
   interactive?: {
     type: string;
     button_reply?: { id: string; title: string };
@@ -92,6 +97,25 @@ export async function webhookRoutes(app: FastifyInstance) {
                 text = id;
                 msgType = "interactive";
               }
+            } else if (msg.type === "location" && msg.location) {
+              const from = msg.from;
+              const employee = await findEmployeeByPhone(from);
+              if (employee) {
+                await prisma.whatsAppMessage.create({
+                  data: {
+                    companyId: employee.companyId,
+                    employeeId: employee.id,
+                    whatsappMessageId: msg.id,
+                    direction: "inbound",
+                    type: "location",
+                    text: `${msg.location.latitude},${msg.location.longitude}`,
+                  },
+                }).catch((err) => request.log.warn(err, "Failed to store inbound WhatsApp message"));
+              }
+              processLocationAndSend(from, msg.location.latitude, msg.location.longitude).catch(
+                (err) => request.log.error(err, "WhatsApp location processing failed")
+              );
+              continue;
             }
 
             if (!text) continue;

@@ -1,6 +1,12 @@
 import { prisma } from "../../lib/prisma.js";
 import { config } from "../../lib/config.js";
-import { validateClockIn, calculateHours, AttendanceValidationError } from "../../services/attendance.service.js";
+import {
+  validateClockIn,
+  calculateHours,
+  assertWithinSiteGeofence,
+  AttendanceValidationError,
+} from "../../services/attendance.service.js";
+import { siteHasGeofence } from "../../lib/geo.js";
 import { fetchPayslipData, buildPayslipTemplateData } from "../../services/payslip-data.service.js";
 import { generatePayslipPDFFromTemplate } from "../../services/payslip-pdf.service.js";
 import { generateRosterPDF } from "../../services/roster-pdf.service.js";
@@ -55,8 +61,8 @@ export async function findEmployeeByPhone(waId: string): Promise<EmployeeWithCom
 }
 
 const HELP_TEXT = `*Plethora - Commands*
-• *clock in* / *in* - Clock in for your shift
-• *clock out* / *out* - Clock out
+• *clock in* / *in* - Clock in for your shift (geofenced sites: then share your location when asked)
+• *clock out* / *out* - Clock out (same for geofenced sites)
 • *payslip* - Request your latest payslip
 • *roster* / *schedule* / *shifts* / *my shifts* - Upcoming shifts (PDF, mobile-friendly)
 • *leave YYYY-MM-DD type* - Apply for leave (e.g. leave 2025-03-15 annual)
@@ -83,6 +89,7 @@ const HELP_INTERACTIVE_ROWS = [
 
 const ROSTER_MAX_SHIFTS = 20;
 const ROSTER_HORIZON_DAYS = 45;
+const WHATSAPP_LOCATION_PENDING_MS = 10 * 60 * 1000;
 
 type ProcessResult =
   | { reply: string; sendDocument?: { buffer: Buffer; filename: string } }
@@ -124,7 +131,7 @@ export async function processIncomingMessage(
     cmd === "in" ||
     cmd === "clock in 1"
   ) {
-    return handleClockIn(employee);
+    return handleClockIn(employee, from);
   }
 
   if (
@@ -133,7 +140,7 @@ export async function processIncomingMessage(
     cmd === "out" ||
     cmd === "clock out 1"
   ) {
-    return handleClockOut(employee);
+    return handleClockOut(employee, from);
   }
 
   if (cmd.startsWith("payslip")) {
@@ -162,8 +169,72 @@ export async function processIncomingMessage(
   return { reply: `Unknown command. Send *help* for available commands.` };
 }
 
+async function completeWhatsAppClockOut(
+  attendanceId: string,
+  employee: EmployeeWithCompany,
+  clockOutCoords?: { lat: number; lng: number }
+): Promise<{ reply: string }> {
+  const attendance = await prisma.attendance.findFirst({
+    where: {
+      id: attendanceId,
+      shift: { employeeId: employee.id, companyId: employee.companyId },
+      clockIn: { not: null },
+      clockOut: null,
+      status: "clocked_in",
+    },
+    include: { shift: true },
+  });
+
+  if (!attendance) {
+    return { reply: "No active clock-in found." };
+  }
+
+  const now = new Date();
+  const { hoursWorked, overtimeHours } = calculateHours(
+    now,
+    attendance.shift.startTime,
+    attendance.shift.endTime
+  );
+
+  await prisma.attendance.update({
+    where: { id: attendance.id },
+    data: {
+      clockOut: now,
+      hoursWorked,
+      overtimeHours,
+      status: "completed",
+      clockOutLat: clockOutCoords?.lat,
+      clockOutLng: clockOutCoords?.lng,
+    },
+  });
+
+  await prisma.shift.update({
+    where: { id: attendance.shiftId },
+    data: { status: "completed" },
+  });
+
+  await createAuditLog({
+    companyId: employee.companyId,
+    action: "attendance.clock_out",
+    entityType: "attendance",
+    entityId: attendance.id,
+    metadata: {
+      source: "whatsapp",
+      from: employee.phone,
+      hoursWorked,
+      overtimeHours,
+    },
+  });
+
+  const timeZone = await getCompanyTimezone(employee.companyId);
+  return {
+    reply: `Clocked out at ${formatInTimeZone(now, timeZone, "HH:mm")}. Hours: ${hoursWorked}, Overtime: ${overtimeHours}h.`,
+  };
+}
+
 async function handleClockIn(
-  employee: EmployeeWithCompany
+  employee: EmployeeWithCompany,
+  fromWaId: string
 ): Promise<{ reply: string }> {
   const now = new Date();
   const dayStart = new Date(now);
@@ -212,6 +283,33 @@ async function handleClockIn(
     throw err;
   }
 
+  const site = shift.post?.site;
+  if (site && siteHasGeofence(site)) {
+    const expiresAt = new Date(Date.now() + WHATSAPP_LOCATION_PENDING_MS);
+    await prisma.whatsAppClockPending.upsert({
+      where: { waFrom: fromWaId },
+      create: {
+        waFrom: fromWaId,
+        employeeId: employee.id,
+        companyId: employee.companyId,
+        intent: "clock_in",
+        shiftId: shift.id,
+        expiresAt,
+      },
+      update: {
+        employeeId: employee.id,
+        companyId: employee.companyId,
+        intent: "clock_in",
+        shiftId: shift.id,
+        expiresAt,
+      },
+    });
+    return {
+      reply:
+        `This site requires your location. Tap 📎 → *Location* → *Send your current location* within 10 minutes to complete clock-in.`,
+    };
+  }
+
   const attendance = await prisma.attendance.create({
     data: {
       shiftId: shift.id,
@@ -248,7 +346,8 @@ async function handleClockIn(
 }
 
 async function handleClockOut(
-  employee: EmployeeWithCompany
+  employee: EmployeeWithCompany,
+  fromWaId: string
 ): Promise<{ reply: string }> {
   const attendance = await prisma.attendance.findFirst({
     where: {
@@ -257,7 +356,7 @@ async function handleClockOut(
       clockOut: null,
       status: "clocked_in",
     },
-    include: { shift: true },
+    include: { shift: { include: { post: { include: { site: true } } } } },
   });
 
   if (!attendance) {
@@ -279,45 +378,173 @@ async function handleClockOut(
     };
   }
 
-  const now = new Date();
-  const { hoursWorked, overtimeHours } = calculateHours(
-    now,
-    attendance.shift.startTime,
-    attendance.shift.endTime
-  );
+  const outSite = attendance.shift.post?.site;
+  if (outSite && siteHasGeofence(outSite)) {
+    const expiresAt = new Date(Date.now() + WHATSAPP_LOCATION_PENDING_MS);
+    await prisma.whatsAppClockPending.upsert({
+      where: { waFrom: fromWaId },
+      create: {
+        waFrom: fromWaId,
+        employeeId: employee.id,
+        companyId: employee.companyId,
+        intent: "clock_out",
+        shiftId: attendance.shiftId,
+        expiresAt,
+      },
+      update: {
+        employeeId: employee.id,
+        companyId: employee.companyId,
+        intent: "clock_out",
+        shiftId: attendance.shiftId,
+        expiresAt,
+      },
+    });
+    return {
+      reply:
+        `This site requires your location to clock out. Tap 📎 → *Location* → *Send your current location* within 10 minutes to complete clock-out.`,
+    };
+  }
 
-  await prisma.attendance.update({
-    where: { id: attendance.id },
-    data: {
-      clockOut: now,
-      hoursWorked,
-      overtimeHours,
-      status: "completed",
-    },
+  return completeWhatsAppClockOut(attendance.id, employee);
+}
+
+export async function processIncomingLocation(
+  from: string,
+  latitude: number,
+  longitude: number
+): Promise<ProcessResult> {
+  const employee = await findEmployeeByPhone(from);
+  if (!employee) {
+    return { reply: "Phone number not registered. Contact HR to update your details." };
+  }
+
+  const pending = await prisma.whatsAppClockPending.findUnique({
+    where: { waFrom: from },
   });
 
-  await prisma.shift.update({
-    where: { id: attendance.shiftId },
-    data: { status: "completed" },
-  });
+  if (!pending) {
+    return {
+      reply:
+        "Send *clock in* or *clock out* first. Sites with a geofence need your location after that command.",
+    };
+  }
 
-  await createAuditLog({
-    companyId: employee.companyId,
-    action: "attendance.clock_out",
-    entityType: "attendance",
-    entityId: attendance.id,
-    metadata: {
-      source: "whatsapp",
-      from: employee.phone,
-      hoursWorked,
-      overtimeHours,
-    },
-  });
+  if (pending.expiresAt.getTime() < Date.now()) {
+    await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
+    return { reply: "That request expired. Send clock in or clock out again." };
+  }
 
-  const timeZone = await getCompanyTimezone(employee.companyId);
-  return {
-    reply: `Clocked out at ${formatInTimeZone(now, timeZone, "HH:mm")}. Hours: ${hoursWorked}, Overtime: ${overtimeHours}h.`,
-  };
+  if (pending.employeeId !== employee.id || pending.companyId !== employee.companyId) {
+    await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
+    return { reply: "Could not verify your session. Try again." };
+  }
+
+  if (pending.intent === "clock_in") {
+    try {
+      await validateClockIn(pending.shiftId, employee.companyId);
+    } catch (err) {
+      if (err instanceof AttendanceValidationError) {
+        await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
+        return { reply: err.message };
+      }
+      throw err;
+    }
+
+    const shift = await prisma.shift.findFirst({
+      where: { id: pending.shiftId, companyId: employee.companyId },
+      include: { post: { include: { site: true } } },
+    });
+    if (!shift?.post?.site) {
+      await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
+      return { reply: "Shift or site not found. Contact HR." };
+    }
+
+    try {
+      assertWithinSiteGeofence(shift.post.site, latitude, longitude);
+    } catch (err) {
+      if (err instanceof AttendanceValidationError) {
+        return { reply: err.message };
+      }
+      throw err;
+    }
+
+    const now = new Date();
+    const attendance = await prisma.attendance.create({
+      data: {
+        shiftId: shift.id,
+        clockIn: now,
+        status: "clocked_in",
+        clockInLat: latitude,
+        clockInLng: longitude,
+      },
+      include: {
+        shift: { include: { post: { include: { site: true } } } },
+      },
+    });
+
+    await prisma.shift.update({
+      where: { id: shift.id },
+      data: { status: "active" },
+    });
+
+    await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
+
+    await createAuditLog({
+      companyId: employee.companyId,
+      action: "attendance.clock_in",
+      entityType: "attendance",
+      entityId: attendance.id,
+      metadata: {
+        source: "whatsapp",
+        from: employee.phone,
+        shiftId: shift.id,
+        latitude,
+        longitude,
+      },
+    });
+
+    const siteName = shift.post?.site?.name ?? "your post";
+    const timeZone = await getCompanyTimezone(employee.companyId);
+    return {
+      reply: `Clocked in for ${siteName} at ${formatInTimeZone(now, timeZone, "HH:mm")}.`,
+    };
+  }
+
+  if (pending.intent === "clock_out") {
+    const attendance = await prisma.attendance.findFirst({
+      where: {
+        shiftId: pending.shiftId,
+        shift: { employeeId: employee.id, companyId: employee.companyId },
+        clockIn: { not: null },
+        clockOut: null,
+        status: "clocked_in",
+      },
+      include: { shift: { include: { post: { include: { site: true } } } } },
+    });
+
+    if (!attendance) {
+      await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
+      return { reply: "No active clock-in found for that shift." };
+    }
+
+    const site = attendance.shift.post?.site;
+    if (site) {
+      try {
+        assertWithinSiteGeofence(site, latitude, longitude);
+      } catch (err) {
+        if (err instanceof AttendanceValidationError) {
+          return { reply: err.message };
+        }
+        throw err;
+      }
+    }
+
+    await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
+    return completeWhatsAppClockOut(attendance.id, employee, { lat: latitude, lng: longitude });
+  }
+
+  await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
+  return { reply: "Unknown pending action. Send clock in or clock out again." };
 }
 
 async function handlePayslip(
@@ -512,6 +739,23 @@ async function handleRoster(
 
 export async function processAndSend(from: string, text: string): Promise<void> {
   const result = await processIncomingMessage(from, text);
+  if ("sendInteractiveList" in result && result.sendInteractiveList) {
+    const { body, buttonText, rows } = result.sendInteractiveList;
+    await sendInteractiveList(from, body, buttonText, rows);
+  } else if ("reply" in result) {
+    await sendText(from, result.reply);
+    if (result.sendDocument) {
+      await sendDocument(from, result.sendDocument.buffer, result.sendDocument.filename);
+    }
+  }
+}
+
+export async function processLocationAndSend(
+  from: string,
+  latitude: number,
+  longitude: number
+): Promise<void> {
+  const result = await processIncomingLocation(from, latitude, longitude);
   if ("sendInteractiveList" in result && result.sendInteractiveList) {
     const { body, buttonText, rows } = result.sendInteractiveList;
     await sendInteractiveList(from, body, buttonText, rows);

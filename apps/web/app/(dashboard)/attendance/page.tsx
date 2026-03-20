@@ -330,6 +330,9 @@ export default function AttendancePage() {
               </h3>
               <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
                 Shifts within clock-in window. Clock in when the guard arrives, or mark absent to replace with another guard.
+                Sites with a geofence set under{" "}
+                <span className="font-medium text-neutral-700 dark:text-neutral-300">Sites</span> still allow dashboard
+                clock-in without GPS; guards using WhatsApp must share their location for those sites.
               </p>
               <div className="space-y-2">
                 {shiftsForClockIn.map((shift) => (

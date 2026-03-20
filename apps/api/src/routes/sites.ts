@@ -16,35 +16,75 @@ const SERVICE_TYPES = [
   "other",
 ] as const;
 
-const createSiteSchema = z.object({
-  name: z.string().min(1),
-  location: z.string().optional(),
-  physicalAddress: z.string().optional(),
-  contactPersonName: z.string().optional(),
-  contactPersonPhone: z.string().optional(),
-  contractOrServiceAgreement: z.string().optional(),
-  serviceType: z
-    .union([z.enum(SERVICE_TYPES), z.literal("")])
-    .optional()
-    .transform((v) => (v === "" ? undefined : v)),
-  monthlyRevenue: z.number().positive().optional(),
-  assignedGuardIds: z.array(z.string()).optional(),
-});
+function refineSiteGeofenceThreeOrNone(data: {
+  latitude?: number | null;
+  longitude?: number | null;
+  geofenceRadiusMeters?: number | null;
+}) {
+  const lat = data.latitude;
+  const lng = data.longitude;
+  const r = data.geofenceRadiusMeters;
+  const touched = [lat !== undefined, lng !== undefined, r !== undefined].filter(Boolean).length;
+  if (touched === 0) return { ok: true as const };
+  const allNull = lat === null && lng === null && r === null;
+  if (allNull) return { ok: true as const };
+  const allSet = lat != null && lng != null && r != null;
+  if (allSet) return { ok: true as const };
+  return {
+    ok: false as const,
+    message: "Geofence requires latitude, longitude, and radius together (or omit all three / set all to null to clear).",
+  };
+}
 
-const updateSiteSchema = z.object({
-  name: z.string().min(1).optional(),
-  location: z.string().optional(),
-  physicalAddress: z.string().optional(),
-  contactPersonName: z.string().optional(),
-  contactPersonPhone: z.string().optional(),
-  contractOrServiceAgreement: z.string().optional(),
-  serviceType: z
-    .union([z.enum(SERVICE_TYPES), z.literal("")])
-    .optional()
-    .transform((v) => (v === "" ? undefined : v)),
-  monthlyRevenue: z.number().positive().optional().nullable(),
-  assignedGuardIds: z.array(z.string()).optional(),
-});
+const createSiteSchema = z
+  .object({
+    name: z.string().min(1),
+    location: z.string().optional(),
+    physicalAddress: z.string().optional(),
+    contactPersonName: z.string().optional(),
+    contactPersonPhone: z.string().optional(),
+    contractOrServiceAgreement: z.string().optional(),
+    serviceType: z
+      .union([z.enum(SERVICE_TYPES), z.literal("")])
+      .optional()
+      .transform((v) => (v === "" ? undefined : v)),
+    monthlyRevenue: z.number().positive().optional(),
+    assignedGuardIds: z.array(z.string()).optional(),
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional(),
+    geofenceRadiusMeters: z.number().int().positive().max(100_000).optional(),
+  })
+  .superRefine((data, ctx) => {
+    const g = refineSiteGeofenceThreeOrNone(data);
+    if (!g.ok) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: g.message, path: ["latitude"] });
+    }
+  });
+
+const updateSiteSchema = z
+  .object({
+    name: z.string().min(1).optional(),
+    location: z.string().optional(),
+    physicalAddress: z.string().optional(),
+    contactPersonName: z.string().optional(),
+    contactPersonPhone: z.string().optional(),
+    contractOrServiceAgreement: z.string().optional(),
+    serviceType: z
+      .union([z.enum(SERVICE_TYPES), z.literal("")])
+      .optional()
+      .transform((v) => (v === "" ? undefined : v)),
+    monthlyRevenue: z.number().positive().optional().nullable(),
+    assignedGuardIds: z.array(z.string()).optional(),
+    latitude: z.number().min(-90).max(90).nullable().optional(),
+    longitude: z.number().min(-180).max(180).nullable().optional(),
+    geofenceRadiusMeters: z.number().int().positive().max(100_000).nullable().optional(),
+  })
+  .superRefine((data, ctx) => {
+    const g = refineSiteGeofenceThreeOrNone(data);
+    if (!g.ok) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: g.message, path: ["latitude"] });
+    }
+  });
 
 const POST_SHIFT_TYPES = ["day", "night"] as const;
 
@@ -141,6 +181,18 @@ export async function sitesRoutes(app: FastifyInstance) {
         contractOrServiceAgreement: d.contractOrServiceAgreement,
         serviceType: d.serviceType,
         monthlyRevenue: d.monthlyRevenue,
+        latitude:
+          d.latitude !== undefined && d.longitude !== undefined && d.geofenceRadiusMeters !== undefined
+            ? d.latitude
+            : undefined,
+        longitude:
+          d.latitude !== undefined && d.longitude !== undefined && d.geofenceRadiusMeters !== undefined
+            ? d.longitude
+            : undefined,
+        geofenceRadiusMeters:
+          d.latitude !== undefined && d.longitude !== undefined && d.geofenceRadiusMeters !== undefined
+            ? d.geofenceRadiusMeters
+            : undefined,
       },
     });
 
@@ -272,11 +324,16 @@ export async function sitesRoutes(app: FastifyInstance) {
     }
 
     const d = parsed.data;
-    const { assignedGuardIds, ...updateData } = d;
+    const { assignedGuardIds, latitude, longitude, geofenceRadiusMeters, ...rest } = d;
+
+    const geoPatch: Record<string, unknown> = {};
+    if (latitude !== undefined) geoPatch.latitude = latitude;
+    if (longitude !== undefined) geoPatch.longitude = longitude;
+    if (geofenceRadiusMeters !== undefined) geoPatch.geofenceRadiusMeters = geofenceRadiusMeters;
 
     const site = await prisma.site.update({
       where: { id },
-      data: updateData,
+      data: { ...rest, ...geoPatch },
     });
 
     if (assignedGuardIds !== undefined) {

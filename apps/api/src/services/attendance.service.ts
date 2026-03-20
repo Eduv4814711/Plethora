@@ -1,5 +1,7 @@
+import type { Site } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { config } from "../lib/config.js";
+import { siteHasGeofence, toGeoNumber, haversineMeters } from "../lib/geo.js";
 
 export class AttendanceValidationError extends Error {
   constructor(message: string) {
@@ -76,4 +78,21 @@ export function calculateHours(
     hoursWorked: Math.round(shiftDurationHours * 100) / 100,
     overtimeHours: Math.round(overtimeHours * 100) / 100,
   };
+}
+
+/** Throws if the point is outside the site geofence. No-op if geofence is not configured on the site. */
+export function assertWithinSiteGeofence(site: Site, lat: number, lng: number): void {
+  if (!siteHasGeofence(site)) return;
+
+  const centerLat = toGeoNumber(site.latitude);
+  const centerLng = toGeoNumber(site.longitude);
+  const radius = site.geofenceRadiusMeters;
+  if (centerLat == null || centerLng == null || radius == null || radius <= 0) return;
+
+  const d = haversineMeters(centerLat, centerLng, lat, lng);
+  if (d > radius) {
+    throw new AttendanceValidationError(
+      `You must be within ${radius}m of the site to clock in or out. (${Math.round(d)}m away)`
+    );
+  }
 }

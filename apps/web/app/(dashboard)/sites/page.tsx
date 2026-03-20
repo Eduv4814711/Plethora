@@ -63,6 +63,9 @@ interface Site {
   contactPersonPhone: string | null;
   contractOrServiceAgreement: string | null;
   serviceType: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  geofenceRadiusMeters?: number | null;
   posts: Post[];
   assignedGuards: AssignedGuard[];
 }
@@ -290,6 +293,17 @@ function SiteCard({
               Contract: {site.contractOrServiceAgreement}
             </p>
           )}
+
+          {site.geofenceRadiusMeters != null &&
+            site.latitude != null &&
+            site.longitude != null && (
+              <p className="mt-2 text-xs text-amber-700 dark:text-amber-500/90 flex items-center gap-1.5">
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                </svg>
+                Geofence: {site.geofenceRadiusMeters}m — WhatsApp clock-in/out requires location share
+              </p>
+            )}
         </div>
 
         {canManageSites && (
@@ -397,6 +411,9 @@ function SiteForm({
   const [contractAgreementCustom, setContractAgreementCustom] = useState("");
   const [serviceType, setServiceType] = useState("");
   const [assignedGuardIds, setAssignedGuardIds] = useState<string[]>([]);
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
+  const [geofenceRadiusMeters, setGeofenceRadiusMeters] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -411,6 +428,21 @@ function SiteForm({
     setError("");
     setSubmitting(true);
     try {
+      const latStr = latitude.trim();
+      const lngStr = longitude.trim();
+      const radStr = geofenceRadiusMeters.trim();
+      const hasAny = latStr || lngStr || radStr;
+      let geoBody: Record<string, number> = {};
+      if (hasAny) {
+        const latN = Number(latStr);
+        const lngN = Number(lngStr);
+        const radN = Number(radStr);
+        if (!Number.isFinite(latN) || !Number.isFinite(lngN) || !Number.isFinite(radN) || radN <= 0) {
+          throw new Error("Geofence: enter valid latitude, longitude, and a positive radius (meters), or leave all three empty.");
+        }
+        geoBody = { latitude: latN, longitude: lngN, geofenceRadiusMeters: Math.round(radN) };
+      }
+
       const res = await authFetch("/sites", token, {
         method: "POST",
         body: JSON.stringify({
@@ -422,6 +454,7 @@ function SiteForm({
           contractOrServiceAgreement: contractAgreementType === "other" ? (contractAgreementCustom || undefined) : (contractAgreementType || undefined),
           serviceType: serviceType || undefined,
           assignedGuardIds: assignedGuardIds.length ? assignedGuardIds : undefined,
+          ...geoBody,
         }),
       });
       if (!res.ok) {
@@ -540,6 +573,45 @@ function SiteForm({
           )}
         </div>
 
+        <div className="md:col-span-2 border-t border-neutral-200 dark:border-neutral-700 pt-4 mt-2">
+          <h4 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 mb-2">Clock-in geofence (optional)</h4>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-3">
+            Set a center point (WGS84) and radius in meters. When all three are filled, guards on WhatsApp must share their location to complete clock-in/out for shifts at this site. Dashboard clock-in is unchanged.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">Latitude</label>
+              <input
+                placeholder="-26.1076"
+                value={latitude}
+                onChange={(e) => setLatitude(e.target.value)}
+                className="input-modern"
+                inputMode="decimal"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">Longitude</label>
+              <input
+                placeholder="28.0567"
+                value={longitude}
+                onChange={(e) => setLongitude(e.target.value)}
+                className="input-modern"
+                inputMode="decimal"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">Radius (m)</label>
+              <input
+                placeholder="e.g. 150"
+                value={geofenceRadiusMeters}
+                onChange={(e) => setGeofenceRadiusMeters(e.target.value)}
+                className="input-modern"
+                inputMode="numeric"
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">
             Assigned guards
@@ -611,6 +683,16 @@ function EditSiteModal({
   const [assignedGuardIds, setAssignedGuardIds] = useState<string[]>(
     site.assignedGuards?.map((a) => a.employee.id) ?? []
   );
+  const [latitude, setLatitude] = useState(
+    site.latitude != null && site.latitude !== "" ? String(site.latitude) : ""
+  );
+  const [longitude, setLongitude] = useState(
+    site.longitude != null && site.longitude !== "" ? String(site.longitude) : ""
+  );
+  const [geofenceRadiusMeters, setGeofenceRadiusMeters] = useState(
+    site.geofenceRadiusMeters != null ? String(site.geofenceRadiusMeters) : ""
+  );
+  const [clearGeofence, setClearGeofence] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -625,6 +707,29 @@ function EditSiteModal({
     setError("");
     setSubmitting(true);
     try {
+      let geoPayload: Record<string, number | null> = {};
+      if (clearGeofence) {
+        geoPayload = { latitude: null, longitude: null, geofenceRadiusMeters: null };
+      } else {
+        const latStr = latitude.trim();
+        const lngStr = longitude.trim();
+        const radStr = geofenceRadiusMeters.trim();
+        const hasAny = latStr || lngStr || radStr;
+        if (hasAny) {
+          const latN = Number(latStr);
+          const lngN = Number(lngStr);
+          const radN = Number(radStr);
+          if (!Number.isFinite(latN) || !Number.isFinite(lngN) || !Number.isFinite(radN) || radN <= 0) {
+            throw new Error("Geofence: enter valid latitude, longitude, and a positive radius (meters), or clear the geofence.");
+          }
+          geoPayload = {
+            latitude: latN,
+            longitude: lngN,
+            geofenceRadiusMeters: Math.round(radN),
+          };
+        }
+      }
+
       const res = await authFetch(`/sites/${site.id}`, token, {
         method: "PUT",
         body: JSON.stringify({
@@ -636,6 +741,7 @@ function EditSiteModal({
           contractOrServiceAgreement: contractAgreementType === "other" ? (contractAgreementCustom || undefined) : (contractAgreementType || undefined),
           serviceType: serviceType || undefined,
           assignedGuardIds,
+          ...geoPayload,
         }),
       });
       if (!res.ok) {
@@ -711,6 +817,64 @@ function EditSiteModal({
                 />
               )}
             </div>
+
+            <div className="md:col-span-2 border-t border-neutral-200 dark:border-neutral-700 pt-4">
+              <h4 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 mb-2">Clock-in geofence</h4>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-3">
+                All three values required to enforce location on WhatsApp. Supervisors can still clock guards in here without GPS.
+              </p>
+              <label className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400 mb-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={clearGeofence}
+                  onChange={(e) => {
+                    setClearGeofence(e.target.checked);
+                    if (e.target.checked) {
+                      setLatitude("");
+                      setLongitude("");
+                      setGeofenceRadiusMeters("");
+                    }
+                  }}
+                  className="w-4 h-4 rounded border-neutral-300"
+                />
+                Remove geofence (disable location check for this site)
+              </label>
+              {!clearGeofence && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">Latitude</label>
+                    <input
+                      value={latitude}
+                      onChange={(e) => setLatitude(e.target.value)}
+                      className="input-modern"
+                      inputMode="decimal"
+                      disabled={clearGeofence}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">Longitude</label>
+                    <input
+                      value={longitude}
+                      onChange={(e) => setLongitude(e.target.value)}
+                      className="input-modern"
+                      inputMode="decimal"
+                      disabled={clearGeofence}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">Radius (m)</label>
+                    <input
+                      value={geofenceRadiusMeters}
+                      onChange={(e) => setGeofenceRadiusMeters(e.target.value)}
+                      className="input-modern"
+                      inputMode="numeric"
+                      disabled={clearGeofence}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">Assigned guards</label>
               <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg p-4 bg-neutral-50/50 dark:bg-neutral-800/30 max-h-40 overflow-y-auto">

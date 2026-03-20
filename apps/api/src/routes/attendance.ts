@@ -6,12 +6,27 @@ import { prisma } from "../lib/prisma.js";
 import {
   validateClockIn,
   calculateHours,
+  assertWithinSiteGeofence,
 } from "../services/attendance.service.js";
 import { AttendanceValidationError } from "../services/attendance.service.js";
 import { createAuditLog } from "../lib/audit.js";
-const clockInSchema = z.object({
-  shiftId: z.string().min(1),
-});
+const optionalCoords = z
+  .object({
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional(),
+  })
+  .refine(
+    (d) =>
+      (d.latitude === undefined && d.longitude === undefined) ||
+      (d.latitude !== undefined && d.longitude !== undefined),
+    { message: "latitude and longitude must both be provided together" }
+  );
+
+const clockInSchema = z
+  .object({
+    shiftId: z.string().min(1),
+  })
+  .and(optionalCoords);
 
 const manualAttendanceSchema = z.object({
   employeeId: z.string().min(1),
@@ -222,14 +237,27 @@ export async function attendanceRoutes(app: FastifyInstance) {
     }
 
     try {
-      const { shift } = await validateClockIn(parsed.data.shiftId, request.user!.companyId);
+      await validateClockIn(parsed.data.shiftId, request.user!.companyId);
       const now = new Date();
+
+      const shiftWithSite = await prisma.shift.findFirst({
+        where: { id: parsed.data.shiftId, companyId: request.user!.companyId },
+        include: { post: { include: { site: true } } },
+      });
+      const site = shiftWithSite?.post?.site;
+      const lat = parsed.data.latitude;
+      const lng = parsed.data.longitude;
+      if (site && lat !== undefined && lng !== undefined) {
+        assertWithinSiteGeofence(site, lat, lng);
+      }
 
       const attendance = await prisma.attendance.create({
         data: {
           shiftId: parsed.data.shiftId,
           clockIn: now,
           status: "clocked_in",
+          clockInLat: lat !== undefined ? lat : undefined,
+          clockInLng: lng !== undefined ? lng : undefined,
         },
         include: {
           shift: {
@@ -268,7 +296,9 @@ export async function attendanceRoutes(app: FastifyInstance) {
   });
 
   app.post("/clock-out", { preHandler: protect }, async (request, reply) => {
-    const schema = z.object({ attendanceId: z.string().min(1) });
+    const schema = z
+      .object({ attendanceId: z.string().min(1) })
+      .and(optionalCoords);
     const parsed = schema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -284,11 +314,28 @@ export async function attendanceRoutes(app: FastifyInstance) {
         id: parsed.data.attendanceId,
         shift: { companyId: user.companyId },
       },
-      include: { shift: true },
+      include: { shift: { include: { post: { include: { site: true } } } } },
     });
 
     if (!attendance) {
       return reply.code(404).send({ error: "Attendance record not found" });
+    }
+
+    const outLat = parsed.data.latitude;
+    const outLng = parsed.data.longitude;
+    const outSite = attendance.shift.post?.site;
+    if (outSite && outLat !== undefined && outLng !== undefined) {
+      try {
+        assertWithinSiteGeofence(outSite, outLat, outLng);
+      } catch (err) {
+        if (err instanceof AttendanceValidationError) {
+          return reply.code(400).send({
+            error: "Clock-out validation failed",
+            message: err.message,
+          });
+        }
+        throw err;
+      }
     }
 
     if (!attendance.clockIn) {
@@ -319,6 +366,8 @@ export async function attendanceRoutes(app: FastifyInstance) {
         hoursWorked,
         overtimeHours,
         status: "completed",
+        clockOutLat: outLat !== undefined ? outLat : undefined,
+        clockOutLng: outLng !== undefined ? outLng : undefined,
       },
       include: {
         shift: {
@@ -348,7 +397,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
   });
 
   app.post("/clock-out-by-shift", { preHandler: protect }, async (request, reply) => {
-    const schema = z.object({ shiftId: z.string().min(1) });
+    const schema = z.object({ shiftId: z.string().min(1) }).and(optionalCoords);
     const parsed = schema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -367,7 +416,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         clockOut: null,
         status: "clocked_in",
       },
-      include: { shift: true },
+      include: { shift: { include: { post: { include: { site: true } } } } },
     });
 
     if (!attendance) {
@@ -375,6 +424,23 @@ export async function attendanceRoutes(app: FastifyInstance) {
         error: "No active attendance",
         message: "No clocked-in attendance found for this shift",
       });
+    }
+
+    const byShiftLat = parsed.data.latitude;
+    const byShiftLng = parsed.data.longitude;
+    const byShiftSite = attendance.shift.post?.site;
+    if (byShiftSite && byShiftLat !== undefined && byShiftLng !== undefined) {
+      try {
+        assertWithinSiteGeofence(byShiftSite, byShiftLat, byShiftLng);
+      } catch (err) {
+        if (err instanceof AttendanceValidationError) {
+          return reply.code(400).send({
+            error: "Clock-out validation failed",
+            message: err.message,
+          });
+        }
+        throw err;
+      }
     }
 
     const now = new Date();
@@ -391,6 +457,8 @@ export async function attendanceRoutes(app: FastifyInstance) {
         hoursWorked,
         overtimeHours,
         status: "completed",
+        clockOutLat: byShiftLat !== undefined ? byShiftLat : undefined,
+        clockOutLng: byShiftLng !== undefined ? byShiftLng : undefined,
       },
       include: {
         shift: {
