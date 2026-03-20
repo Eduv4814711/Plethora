@@ -51,12 +51,22 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-security-navy-50">
         <div className="flex flex-col items-center gap-4 animate-fade-in">
-          <div className="w-12 h-12 rounded-security-lg bg-security-navy-100 border-2 border-neutral-200 flex items-center justify-center">
-            <svg className="w-6 h-6 text-security-navy-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
+          <div
+            className="w-14 h-14 rounded-security-lg bg-white border-2 border-neutral-200 flex items-center justify-center shadow-security-card p-2"
+            aria-hidden
+          >
+            {/* Same asset as app/icon.svg (tab favicon) */}
+            <img
+              src="/icon.svg"
+              alt=""
+              width={40}
+              height={40}
+              className="w-10 h-10 object-contain animate-pulse"
+              decoding="async"
+              fetchPriority="high"
+            />
           </div>
-          <span className="text-xs font-semibold uppercase tracking-wider text-security-navy-500">Loading</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-security-navy-600">Loading</span>
         </div>
       </div>
     );
@@ -101,15 +111,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
 
   return (
-    <div className="min-h-screen flex flex-col bg-security-navy-50">
-      {/* Brand header – dark green */}
-      <header className="h-14 bg-security-navy-700 flex items-center justify-between px-6 shrink-0">
+    <div className="min-h-screen flex flex-col bg-[var(--bg-canvas)]">
+      {/* Brand header – orange palette */}
+      <header className="h-14 bg-gradient-to-r from-security-navy-800 via-security-navy-700 to-security-navy-800 flex items-center justify-between px-6 shrink-0 shadow-md border-b border-black/10">
         <Link href="/" className="flex items-center shrink-0">
           <img src="/plethora-logo-header.svg" alt="Plethora" className="h-20 w-auto object-contain opacity-95" />
         </Link>
 
-        <nav className="flex flex-1 items-center justify-center gap-8">
-          <span className="text-sm font-semibold text-white/90 tracking-wide">
+        <nav className="flex flex-1 items-center justify-center gap-6 md:gap-8 min-w-0">
+          <span className="text-sm font-semibold text-white/95 tracking-wide truncate max-w-[10rem] md:max-w-none hidden sm:block">
             {companyName}
           </span>
           {mainNavItems.map((item) => (
@@ -117,10 +127,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               key={item.href}
               href={item.href}
               className={clsx(
-                "text-sm font-medium tracking-wide transition-colors py-2 px-3 rounded-security",
+                "text-sm font-medium tracking-wide transition-all py-2 px-3 rounded-full",
                 isActive(item.href)
-                  ? "text-white bg-security-navy-800"
-                  : "text-white/85 hover:text-white hover:bg-security-navy-800/80"
+                  ? "text-security-navy-900 bg-white shadow-sm"
+                  : "text-white/90 hover:text-white hover:bg-white/10"
               )}
             >
               {item.label}
@@ -131,10 +141,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <button
                 onClick={() => setMoreOpen((o) => !o)}
                 className={clsx(
-                  "text-sm font-medium tracking-wide transition-colors py-2 px-3 rounded-security",
+                  "text-sm font-medium tracking-wide transition-all py-2 px-3 rounded-full",
                   moreNavItems.some((i) => isActive(i.href))
-                    ? "text-white bg-security-navy-800"
-                    : "text-white/85 hover:text-white hover:bg-security-navy-800/80"
+                    ? "text-security-navy-900 bg-white shadow-sm"
+                    : "text-white/90 hover:text-white hover:bg-white/10"
                 )}
               >
                 More
@@ -246,7 +256,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="flex-1 p-6 md:p-8 overflow-auto bg-neutral-50">{hasAccess ? children : null}</main>
+      <main className="flex-1 p-6 md:p-8 lg:p-10 overflow-auto bg-gradient-to-b from-[var(--bg-canvas)] via-white to-security-navy-50/35">
+        {hasAccess ? children : null}
+      </main>
     </div>
   );
 }
