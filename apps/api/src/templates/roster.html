@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>My roster</title>
+  <style>
+    /* Mobile-friendly: large type, spacing, single-column cards (readable on phone PDF viewers) */
+    @page {
+      margin: 10mm 12mm;
+      size: A4 portrait;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      font-size: 13pt;
+      line-height: 1.45;
+      color: #0f172a;
+      margin: 0;
+      padding: 0;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .header {
+      border-bottom: 3px solid #ea580c;
+      padding-bottom: 10pt;
+      margin-bottom: 14pt;
+    }
+    .brand {
+      font-size: 11pt;
+      font-weight: 600;
+      color: #c2410c;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin: 0 0 4pt;
+    }
+    h1 {
+      font-size: 20pt;
+      font-weight: 700;
+      margin: 0 0 6pt;
+      letter-spacing: -0.02em;
+    }
+    .sub {
+      font-size: 11pt;
+      color: #475569;
+      margin: 0;
+    }
+    .shifts {
+      display: flex;
+      flex-direction: column;
+      gap: 10pt;
+    }
+    .shift {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 12pt 14pt;
+      background: #fffefb;
+      page-break-inside: avoid;
+    }
+    .shift-date {
+      font-size: 14pt;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 0 0 6pt;
+    }
+    .shift-time {
+      font-size: 14pt;
+      font-weight: 600;
+      color: #c2410c;
+      margin: 0 0 8pt;
+    }
+    .shift-loc {
+      font-size: 12.5pt;
+      color: #334155;
+      margin: 0;
+    }
+    .shift-loc strong {
+      color: #0f172a;
+    }
+    .footer {
+      margin-top: 18pt;
+      padding-top: 10pt;
+      border-top: 1px solid #e2e8f0;
+      font-size: 10pt;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <p class="brand" id="brand">Plethora</p>
+    <h1 id="title">My roster</h1>
+    <p class="sub" id="meta"></p>
+  </div>
+  <div class="shifts" id="shifts"></div>
+  <p class="footer" id="footer"></p>
+  <script>
+    (function () {
+      var d = window.__ROSTER_DATA__ || {};
+      var elBrand = document.getElementById("brand");
+      var elMeta = document.getElementById("meta");
+      var elShifts = document.getElementById("shifts");
+      var elFooter = document.getElementById("footer");
+      if (d.companyName) elBrand.textContent = d.companyName;
+      elMeta.textContent =
+        (d.employeeName || "") +
+        (d.generatedAtLabel ? " · Generated " + d.generatedAtLabel : "") +
+        (d.timeZoneLabel ? " · Times: " + d.timeZoneLabel : "");
+      var shifts = d.shifts || [];
+      shifts.forEach(function (s) {
+        var card = document.createElement("div");
+        card.className = "shift";
+        var dateEl = document.createElement("p");
+        dateEl.className = "shift-date";
+        dateEl.textContent = s.dateLine || "";
+        var timeEl = document.createElement("p");
+        timeEl.className = "shift-time";
+        timeEl.textContent = s.timeRange || "";
+        var locEl = document.createElement("p");
+        locEl.className = "shift-loc";
+        locEl.innerHTML =
+          "<strong>Site:</strong> " +
+          escapeHtml(s.site || "—") +
+          "<br/><strong>Post:</strong> " +
+          escapeHtml(s.post || "—");
+        card.appendChild(dateEl);
+        card.appendChild(timeEl);
+        card.appendChild(locEl);
+        elShifts.appendChild(card);
+      });
+      elFooter.textContent =
+        shifts.length === 0
+          ? "No shifts in this report."
+          : shifts.length + " shift" + (shifts.length === 1 ? "" : "s") + " shown.";
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+    })();
+  </script>
+</body>
+</html>

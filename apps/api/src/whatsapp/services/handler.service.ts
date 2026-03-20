@@ -3,9 +3,12 @@ import { config } from "../../lib/config.js";
 import { validateClockIn, calculateHours, AttendanceValidationError } from "../../services/attendance.service.js";
 import { fetchPayslipData, buildPayslipTemplateData } from "../../services/payslip-data.service.js";
 import { generatePayslipPDFFromTemplate } from "../../services/payslip-pdf.service.js";
+import { generateRosterPDF } from "../../services/roster-pdf.service.js";
 import { sendText, sendDocument, sendInteractiveList } from "./send.service.js";
 import { createAuditLog } from "../../lib/audit.js";
+import { getCompanyTimezone } from "../../lib/timezone.js";
 import { addDays, format } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 
 type EmployeeWithCompany = {
   id: string;
@@ -55,7 +58,7 @@ const HELP_TEXT = `*Plethora - Commands*
 • *clock in* / *in* - Clock in for your shift
 • *clock out* / *out* - Clock out
 • *payslip* - Request your latest payslip
-• *roster* / *schedule* / *shifts* / *my shifts* - Your upcoming assigned shifts
+• *roster* / *schedule* / *shifts* / *my shifts* - Upcoming shifts (PDF, mobile-friendly)
 • *leave YYYY-MM-DD type* - Apply for leave (e.g. leave 2025-03-15 annual)
   Types: annual, sick, family, maternity, parental, unpaid
 • *help* - Show this menu`;
@@ -73,12 +76,11 @@ const HELP_INTERACTIVE_ROWS = [
   { id: "clock_in", title: "Clock In", description: "Clock in for your shift" },
   { id: "clock_out", title: "Clock Out", description: "Clock out" },
   { id: "payslip", title: "Payslip", description: "Request your latest payslip" },
-  { id: "roster", title: "My roster", description: "Upcoming assigned shifts" },
+  { id: "roster", title: "My roster", description: "Upcoming shifts as PDF" },
   { id: "leave", title: "Apply Leave", description: "Apply for leave" },
   { id: "help", title: "Help", description: "Show this menu" },
 ];
 
-const ROSTER_REPLY_MAX_CHARS = 3500;
 const ROSTER_MAX_SHIFTS = 20;
 const ROSTER_HORIZON_DAYS = 45;
 
@@ -239,8 +241,9 @@ async function handleClockIn(
   });
 
   const siteName = shift.post?.site?.name ?? "your post";
+  const timeZone = await getCompanyTimezone(employee.companyId);
   return {
-    reply: `Clocked in for ${siteName} at ${format(now, "HH:mm")}.`,
+    reply: `Clocked in for ${siteName} at ${formatInTimeZone(now, timeZone, "HH:mm")}.`,
   };
 }
 
@@ -311,8 +314,9 @@ async function handleClockOut(
     },
   });
 
+  const timeZone = await getCompanyTimezone(employee.companyId);
   return {
-    reply: `Clocked out at ${format(now, "HH:mm")}. Hours: ${hoursWorked}, Overtime: ${overtimeHours}h.`,
+    reply: `Clocked out at ${formatInTimeZone(now, timeZone, "HH:mm")}. Hours: ${hoursWorked}, Overtime: ${overtimeHours}h.`,
   };
 }
 
@@ -432,12 +436,23 @@ async function handleLeave(
   };
 }
 
+function sanitizePdfFilenamePart(s: string): string {
+  const t = s.replace(/[^a-zA-Z0-9]/g, "").slice(0, 24);
+  return t || "user";
+}
+
 async function handleRoster(
   employee: EmployeeWithCompany,
   fromWaId: string
-): Promise<{ reply: string }> {
+): Promise<{ reply: string; sendDocument?: { buffer: Buffer; filename: string } }> {
   const now = new Date();
   const horizonEnd = addDays(now, ROSTER_HORIZON_DAYS);
+  const timeZone = await getCompanyTimezone(employee.companyId);
+
+  const company = await prisma.company.findUnique({
+    where: { id: employee.companyId },
+    select: { name: true },
+  });
 
   const shifts = await prisma.shift.findMany({
     where: {
@@ -467,36 +482,32 @@ async function handleRoster(
     };
   }
 
-  const header = `*Your upcoming roster* (${shifts.length} shift${shifts.length === 1 ? "" : "s"})`;
-  const lines: string[] = [header];
+  const tzLabel = timeZone.replace(/_/g, " ");
+  const employeeName = `${employee.firstName} ${employee.lastName}`.trim();
+  const pdfRows = shifts.map((s) => ({
+    dateLine: formatInTimeZone(s.startTime, timeZone, "EEE d MMM yyyy"),
+    timeRange: `${formatInTimeZone(s.startTime, timeZone, "HH:mm")} – ${formatInTimeZone(s.endTime, timeZone, "HH:mm")}`,
+    site: s.post?.site?.name ?? "—",
+    post: s.post?.name ?? "—",
+  }));
 
-  for (const s of shifts) {
-    const siteName = s.post?.site?.name ?? "Site";
-    const postName = s.post?.name ?? "Post";
-    const day = format(s.startTime, "EEE d MMM");
-    const t0 = format(s.startTime, "HH:mm");
-    const t1 = format(s.endTime, "HH:mm");
-    const line = `• ${day} · ${t0}–${t1} · ${siteName} / ${postName}`;
-    const omitted = shifts.length - (lines.length - 1);
-    const nextLen = lines.join("\n").length + 1 + line.length;
-    if (nextLen > ROSTER_REPLY_MAX_CHARS - 80) {
-      if (omitted > 0) {
-        lines.push(
-          `…and ${omitted} more (list trimmed). Contact HR for full schedule.`
-        );
-      }
-      break;
-    }
-    lines.push(line);
-  }
+  const pdfBuffer = await generateRosterPDF({
+    companyName: company?.name ?? undefined,
+    employeeName,
+    generatedAtLabel: formatInTimeZone(now, timeZone, "d MMM yyyy, HH:mm"),
+    timeZoneLabel: tzLabel,
+    shifts: pdfRows,
+  });
 
-  let reply = lines.join("\n");
-  if (reply.length > ROSTER_REPLY_MAX_CHARS) {
-    reply = reply.slice(0, ROSTER_REPLY_MAX_CHARS - 50).trimEnd();
-    reply += "\n\n_(Message trimmed.)_";
-  }
+  const datePart = formatInTimeZone(now, timeZone, "yyyy-MM-dd");
+  const filename = `roster-${sanitizePdfFilenamePart(employee.firstName)}-${sanitizePdfFilenamePart(employee.lastName)}-${datePart}.pdf`;
 
-  return { reply };
+  return {
+    reply:
+      `Your roster (${shifts.length} shift${shifts.length === 1 ? "" : "s"}) is attached as a PDF. ` +
+      `Times use your company timezone (${tzLabel}).`,
+    sendDocument: { buffer: pdfBuffer, filename },
+  };
 }
 
 export async function processAndSend(from: string, text: string): Promise<void> {
