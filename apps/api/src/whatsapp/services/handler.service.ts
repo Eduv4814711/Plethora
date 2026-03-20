@@ -5,7 +5,7 @@ import { fetchPayslipData, buildPayslipTemplateData } from "../../services/paysl
 import { generatePayslipPDFFromTemplate } from "../../services/payslip-pdf.service.js";
 import { sendText, sendDocument, sendInteractiveList } from "./send.service.js";
 import { createAuditLog } from "../../lib/audit.js";
-import { format } from "date-fns";
+import { addDays, format } from "date-fns";
 
 type EmployeeWithCompany = {
   id: string;
@@ -55,6 +55,7 @@ const HELP_TEXT = `*Plethora - Commands*
 • *clock in* / *in* - Clock in for your shift
 • *clock out* / *out* - Clock out
 • *payslip* - Request your latest payslip
+• *roster* / *schedule* / *shifts* / *my shifts* - Your upcoming assigned shifts
 • *leave YYYY-MM-DD type* - Apply for leave (e.g. leave 2025-03-15 annual)
   Types: annual, sick, family, maternity, parental, unpaid
 • *help* - Show this menu`;
@@ -63,6 +64,7 @@ const INTERACTIVE_ID_TO_CMD: Record<string, string> = {
   clock_in: "clock in",
   clock_out: "clock out",
   payslip: "payslip",
+  roster: "roster",
   leave: "apply leave",
   help: "help",
 };
@@ -71,9 +73,14 @@ const HELP_INTERACTIVE_ROWS = [
   { id: "clock_in", title: "Clock In", description: "Clock in for your shift" },
   { id: "clock_out", title: "Clock Out", description: "Clock out" },
   { id: "payslip", title: "Payslip", description: "Request your latest payslip" },
+  { id: "roster", title: "My roster", description: "Upcoming assigned shifts" },
   { id: "leave", title: "Apply Leave", description: "Apply for leave" },
   { id: "help", title: "Help", description: "Show this menu" },
 ];
+
+const ROSTER_REPLY_MAX_CHARS = 3500;
+const ROSTER_MAX_SHIFTS = 20;
+const ROSTER_HORIZON_DAYS = 45;
 
 type ProcessResult =
   | { reply: string; sendDocument?: { buffer: Buffer; filename: string } }
@@ -83,7 +90,7 @@ export async function processIncomingMessage(
   from: string,
   text: string
 ): Promise<ProcessResult> {
-  let cmd = text.trim().toLowerCase();
+  let cmd = text.trim().toLowerCase().replace(/\s+/g, " ");
   if (INTERACTIVE_ID_TO_CMD[cmd]) {
     cmd = INTERACTIVE_ID_TO_CMD[cmd];
   }
@@ -129,6 +136,15 @@ export async function processIncomingMessage(
 
   if (cmd.startsWith("payslip")) {
     return handlePayslip(employee);
+  }
+
+  if (
+    cmd === "roster" ||
+    cmd === "schedule" ||
+    cmd === "shifts" ||
+    cmd === "my shifts"
+  ) {
+    return handleRoster(employee, from);
   }
 
   if (cmd.startsWith("leave ") || cmd === "apply leave") {
@@ -414,6 +430,73 @@ async function handleLeave(
   return {
     reply: `Leave request submitted for ${leaveDate} (${leaveType}). HR will review shortly.`,
   };
+}
+
+async function handleRoster(
+  employee: EmployeeWithCompany,
+  fromWaId: string
+): Promise<{ reply: string }> {
+  const now = new Date();
+  const horizonEnd = addDays(now, ROSTER_HORIZON_DAYS);
+
+  const shifts = await prisma.shift.findMany({
+    where: {
+      employeeId: employee.id,
+      companyId: employee.companyId,
+      endTime: { gte: now },
+      startTime: { lte: horizonEnd },
+      status: { in: ["assigned", "active", "created"] },
+    },
+    include: { post: { include: { site: true } } },
+    orderBy: { startTime: "asc" },
+    take: ROSTER_MAX_SHIFTS,
+  });
+
+  await createAuditLog({
+    companyId: employee.companyId,
+    action: "roster.whatsapp_request",
+    entityType: "employee",
+    entityId: employee.id,
+    metadata: { source: "whatsapp", from: employee.phone, waId: fromWaId, shiftCount: shifts.length },
+  });
+
+  if (shifts.length === 0) {
+    return {
+      reply:
+        "You have no upcoming shifts in the next 45 days. If this looks wrong, contact scheduling or HR.",
+    };
+  }
+
+  const header = `*Your upcoming roster* (${shifts.length} shift${shifts.length === 1 ? "" : "s"})`;
+  const lines: string[] = [header];
+
+  for (const s of shifts) {
+    const siteName = s.post?.site?.name ?? "Site";
+    const postName = s.post?.name ?? "Post";
+    const day = format(s.startTime, "EEE d MMM");
+    const t0 = format(s.startTime, "HH:mm");
+    const t1 = format(s.endTime, "HH:mm");
+    const line = `• ${day} · ${t0}–${t1} · ${siteName} / ${postName}`;
+    const omitted = shifts.length - (lines.length - 1);
+    const nextLen = lines.join("\n").length + 1 + line.length;
+    if (nextLen > ROSTER_REPLY_MAX_CHARS - 80) {
+      if (omitted > 0) {
+        lines.push(
+          `…and ${omitted} more (list trimmed). Contact HR for full schedule.`
+        );
+      }
+      break;
+    }
+    lines.push(line);
+  }
+
+  let reply = lines.join("\n");
+  if (reply.length > ROSTER_REPLY_MAX_CHARS) {
+    reply = reply.slice(0, ROSTER_REPLY_MAX_CHARS - 50).trimEnd();
+    reply += "\n\n_(Message trimmed.)_";
+  }
+
+  return { reply };
 }
 
 export async function processAndSend(from: string, text: string): Promise<void> {
