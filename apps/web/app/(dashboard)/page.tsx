@@ -182,12 +182,12 @@ export default function DashboardPage() {
 
   const DashboardCard = ({ title, children, className = "", icons }: { title?: string; children: React.ReactNode; className?: string; icons?: React.ReactNode }) => (
     <div
-      className={`group flex flex-col relative rounded-2xl border border-neutral-200/70 bg-white p-5 md:p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-8px_rgba(245,124,0,0.07)] transition-shadow duration-300 hover:shadow-[0_4px_12px_rgba(15,23,42,0.06),0_20px_40px_-12px_rgba(245,124,0,0.12)] ${className}`}
+      className={`group flex flex-col relative rounded-2xl border border-neutral-200/70 bg-white p-3 md:p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-8px_rgba(245,124,0,0.07)] transition-shadow duration-300 hover:shadow-[0_4px_12px_rgba(15,23,42,0.06),0_20px_40px_-12px_rgba(245,124,0,0.12)] ${className}`}
     >
       {title && (
-        <div className="flex items-start justify-between gap-3 mb-5">
-          <h2 className="font-semibold text-[0.9375rem] text-neutral-900 tracking-tight leading-snug flex items-center gap-2.5">
-            <span className="w-1 h-5 rounded-full bg-gradient-to-b from-security-navy-400 to-security-navy-700 shrink-0 shadow-sm" />
+        <div className="flex items-start justify-between gap-3 mb-2.5">
+          <h2 className="font-semibold text-[0.875rem] text-neutral-900 tracking-tight leading-snug flex items-center gap-2">
+            <span className="w-1 h-4 rounded-full bg-gradient-to-b from-security-navy-400 to-security-navy-700 shrink-0 shadow-sm" />
             {title}
           </h2>
           {icons}
@@ -198,22 +198,22 @@ export default function DashboardPage() {
   );
 
   const KpiTile = ({ label, value, hint }: { label: string; value: string | number; hint?: string }) => (
-    <div className="rounded-2xl border border-neutral-200/60 bg-white/90 px-4 py-4 shadow-sm backdrop-blur-sm">
+    <div className="rounded-2xl border border-neutral-200/60 bg-white/90 px-3 py-2.5 shadow-sm backdrop-blur-sm">
       <p className="text-xs font-medium uppercase tracking-wider text-neutral-600">{label}</p>
-      <p className="mt-1.5 text-2xl font-bold tabular-nums text-neutral-900 tracking-tight">{value}</p>
+      <p className="mt-1 text-xl font-bold tabular-nums text-neutral-900 tracking-tight">{value}</p>
       {hint ? <p className="mt-1 text-xs text-neutral-600">{hint}</p> : null}
     </div>
   );
 
   return (
-    <div className="animate-fade-in max-w-[1600px] mx-auto w-full">
-      <header className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between pb-8 border-b border-neutral-200/80">
+    <div className="animate-fade-in max-w-[1600px] mx-auto w-full h-full min-h-0 overflow-hidden flex flex-col">
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between pb-4 border-b border-neutral-200/80 shrink-0">
         <div className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-widest text-security-navy-700">
             {format(new Date(), "EEEE, MMMM d, yyyy")}
           </p>
-          <h1 className="text-3xl font-bold text-neutral-900 tracking-tight md:text-[2rem]">Dashboard</h1>
-          <p className="text-sm text-neutral-600 max-w-xl">
+          <h1 className="text-2xl font-bold text-neutral-900 tracking-tight md:text-[1.75rem]">Dashboard</h1>
+          <p className="text-xs md:text-sm text-neutral-600 max-w-xl">
             Live snapshot of guards, sites, shifts, and tasks—filtered by your selection below.
           </p>
         </div>
@@ -284,17 +284,17 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 py-8" aria-label="Key metrics">
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 md:gap-3 py-3 md:py-4 shrink-0" aria-label="Key metrics">
         <KpiTile label="Peak on duty (week)" value={peakGuardsThisWeek} hint="From roster trend" />
         <KpiTile label="Active sites" value={data?.activeSitesCount ?? 0} />
         <KpiTile label="Tasks needing attention" value={taskUrgentCount} hint="Overdue + due today" />
         <KpiTile label="Open alerts" value={alertTally} />
       </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6 pb-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4 pb-1 flex-1 min-h-0 auto-rows-fr overflow-hidden">
         {/* Row 1 */}
-        <DashboardCard title="Guards On Duty" className="min-h-[300px] xl:min-h-[320px]">
-          <div className="flex-1 min-h-[220px] w-full">
+        <DashboardCard title="Guards On Duty" className="h-full min-h-0">
+          <div className="flex-1 min-h-[120px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={guardsByDay} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
@@ -306,10 +306,10 @@ export default function DashboardPage() {
           </div>
         </DashboardCard>
 
-        <DashboardCard title="Active Sites" className="min-h-[300px] xl:min-h-[320px]">
-          <div className="flex flex-col items-center justify-center flex-1 gap-4 py-2">
-            <div className="flex h-28 w-28 items-center justify-center rounded-2xl bg-gradient-to-br from-security-navy-50 to-white border border-security-navy-100 shadow-inner">
-              <span className="text-5xl font-bold tabular-nums text-neutral-900 tracking-tight">{data?.activeSitesCount ?? 0}</span>
+        <DashboardCard title="Active Sites" className="h-full min-h-0">
+          <div className="flex flex-col items-center justify-center flex-1 gap-2 py-1">
+            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-security-navy-50 to-white border border-security-navy-100 shadow-inner">
+              <span className="text-3xl font-bold tabular-nums text-neutral-900 tracking-tight">{data?.activeSitesCount ?? 0}</span>
             </div>
             {typeof data?.activeSitesDelta === "number" && (
               <p className="text-sm text-neutral-600 text-center">
@@ -322,7 +322,7 @@ export default function DashboardPage() {
             {canSites && (
               <Link
                 href="/sites"
-                className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-security-navy-700 text-white text-sm font-semibold hover:bg-security-navy-800 transition-colors shadow-sm hover:shadow-md"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-security-navy-700 text-white text-sm font-semibold hover:bg-security-navy-800 transition-colors shadow-sm hover:shadow-md"
               >
                 Add site
                 <span className="text-lg leading-none">+</span>
@@ -331,9 +331,9 @@ export default function DashboardPage() {
           </div>
         </DashboardCard>
 
-        <DashboardCard title="Active Guards Rostered" className="min-h-[300px] xl:min-h-[320px]">
-          <div className="flex flex-col h-full gap-4">
-            <div className="flex-1 min-h-[140px] w-full">
+        <DashboardCard title="Active Guards Rostered" className="h-full min-h-0">
+          <div className="flex flex-col h-full gap-2">
+            <div className="flex-1 min-h-[100px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={shiftsOverTimeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
@@ -352,7 +352,7 @@ export default function DashboardPage() {
             {canRostering && (
               <Link
                 href="/rostering"
-                className="w-full py-2.5 rounded-xl border border-neutral-200 bg-neutral-50/80 text-center text-sm font-semibold text-neutral-900 hover:bg-white hover:border-security-navy-200 hover:text-security-navy-900 transition-all shrink-0"
+                className="w-full py-2 rounded-xl border border-neutral-200 bg-neutral-50/80 text-center text-sm font-semibold text-neutral-900 hover:bg-white hover:border-security-navy-200 hover:text-security-navy-900 transition-all shrink-0"
               >
                 View schedule
               </Link>
@@ -360,20 +360,20 @@ export default function DashboardPage() {
           </div>
         </DashboardCard>
 
-        <DashboardCard title="My Tasks" className="min-h-[300px] xl:min-h-[320px]">
-          <div className="space-y-3 text-sm flex-1">
-            <div className="flex justify-between items-center rounded-xl bg-red-50/80 border border-red-100 px-3 py-2.5">
+        <DashboardCard title="My Tasks" className="h-full min-h-0">
+          <div className="space-y-2 text-sm flex-1">
+            <div className="flex justify-between items-center rounded-xl bg-red-50/80 border border-red-100 px-3 py-2">
               <span className="font-medium text-neutral-900">Overdue</span>
               <span className="font-bold tabular-nums text-neutral-900">{data?.taskStats?.overdue ?? 0}</span>
             </div>
-            <div className="flex justify-between items-center rounded-xl bg-security-navy-50/80 border border-security-navy-100 px-3 py-2.5">
+            <div className="flex justify-between items-center rounded-xl bg-security-navy-50/80 border border-security-navy-100 px-3 py-2">
               <span className="font-medium text-neutral-900">Due today</span>
               <span className="font-bold tabular-nums text-neutral-900">{data?.taskStats?.dueToday ?? 0}</span>
             </div>
           </div>
           <Link
             href="/tasks"
-            className="mt-auto pt-4 flex items-center justify-center gap-2 w-full px-5 py-2.5 font-semibold rounded-xl border border-neutral-200 bg-white text-neutral-900 hover:border-security-navy-300 hover:bg-security-navy-50/50 text-sm transition-all shadow-sm"
+            className="mt-auto pt-2 flex items-center justify-center gap-2 w-full px-4 py-2 font-semibold rounded-xl border border-neutral-200 bg-white text-neutral-900 hover:border-security-navy-300 hover:bg-security-navy-50/50 text-sm transition-all shadow-sm"
           >
             View Tasks
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -383,9 +383,9 @@ export default function DashboardPage() {
         </DashboardCard>
 
         {/* Row 2 */}
-        <DashboardCard title="Team Member By Status" className="min-h-[300px] xl:min-h-[320px]">
-          <div className="relative w-full flex-1 flex flex-col gap-3">
-            <div className="relative flex-1 min-h-[200px] flex items-center justify-center">
+        <DashboardCard title="Team Member By Status" className="h-full min-h-0">
+          <div className="relative w-full flex-1 flex flex-col gap-2">
+            <div className="relative flex-1 min-h-[120px] flex items-center justify-center">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -395,8 +395,8 @@ export default function DashboardPage() {
                     })()}
                     cx="50%"
                     cy="50%"
-                    innerRadius={50}
-                    outerRadius={70}
+                    innerRadius={40}
+                    outerRadius={56}
                     fill="#8884d8"
                     dataKey="value"
                     paddingAngle={2}
@@ -412,10 +412,10 @@ export default function DashboardPage() {
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="text-2xl font-bold text-neutral-900">{employeesTotal || 0}</span>
+                <span className="text-xl font-bold text-neutral-900">{employeesTotal || 0}</span>
               </div>
             </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5 justify-center border-t border-neutral-100/90 pt-4">
+            <div className="flex flex-wrap gap-x-3 gap-y-1 justify-center border-t border-neutral-100/90 pt-2">
               {(() => {
                 const raw = data?.employeesByStatus ?? [];
                 const chartData = raw.some((d) => d.value > 0) ? raw : defaultStatusData;
@@ -434,8 +434,8 @@ export default function DashboardPage() {
           </div>
         </DashboardCard>
 
-        <DashboardCard title="Shift Scheduled Over Time" className="min-h-[300px] xl:min-h-[320px]">
-          <div className="flex-1 min-h-[220px] w-full">
+        <DashboardCard title="Shift Scheduled Over Time" className="h-full min-h-0">
+          <div className="flex-1 min-h-[120px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={shiftsOverTimeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} barSize={40}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
@@ -447,13 +447,13 @@ export default function DashboardPage() {
           </div>
         </DashboardCard>
 
-        <DashboardCard title="Payroll Status" className="min-h-[300px] xl:min-h-[320px]">
-          <div className="flex flex-col gap-2.5 flex-1">
+        <DashboardCard title="Payroll Status" className="h-full min-h-0">
+          <div className="flex flex-col gap-2 flex-1">
             {canPayroll ? (
               <>
                 <Link
                   href="/payroll"
-                  className="flex items-center justify-between w-full bg-neutral-50 hover:bg-white py-3.5 px-4 rounded-xl border border-neutral-200/90 transition-all hover:border-security-navy-200 shadow-sm hover:shadow-md"
+                  className="flex items-center justify-between w-full bg-neutral-50 hover:bg-white py-2.5 px-3 rounded-xl border border-neutral-200/90 transition-all hover:border-security-navy-200 shadow-sm hover:shadow-md"
                 >
                   <span className="flex items-center gap-3">
                     <span className="w-5 h-5 rounded-full border-2 border-neutral-400 flex items-center justify-center bg-white" />
@@ -463,7 +463,7 @@ export default function DashboardPage() {
                 </Link>
                 <Link
                   href="/payroll"
-                  className="flex items-center justify-between w-full bg-neutral-50 hover:bg-white py-3.5 px-4 rounded-xl border border-neutral-200/90 transition-all hover:border-security-navy-200 shadow-sm hover:shadow-md"
+                  className="flex items-center justify-between w-full bg-neutral-50 hover:bg-white py-2.5 px-3 rounded-xl border border-neutral-200/90 transition-all hover:border-security-navy-200 shadow-sm hover:shadow-md"
                 >
                   <span className="flex items-center gap-3">
                     <span className="w-5 h-5 rounded-full border-2 border-neutral-400 flex items-center justify-center bg-white" />
@@ -473,7 +473,7 @@ export default function DashboardPage() {
                 </Link>
                 <Link
                   href="/payroll"
-                  className="flex items-center justify-between w-full bg-security-navy-50/60 hover:bg-security-navy-50 py-3.5 px-4 rounded-xl border border-security-navy-100 transition-all shadow-sm hover:shadow-md"
+                  className="flex items-center justify-between w-full bg-security-navy-50/60 hover:bg-security-navy-50 py-2.5 px-3 rounded-xl border border-security-navy-100 transition-all shadow-sm hover:shadow-md"
                 >
                   <span className="flex items-center gap-3">
                     <span className="w-5 h-5 rounded-full border-2 border-security-navy-700 bg-security-navy-700 flex items-center justify-center">
@@ -487,7 +487,7 @@ export default function DashboardPage() {
                 </Link>
                 <Link
                   href="/payroll"
-                  className="mt-1 w-full py-3 px-4 text-center font-semibold text-sm bg-security-navy-700 hover:bg-security-navy-800 text-white rounded-xl transition-all shadow-md hover:shadow-lg"
+                  className="mt-1 w-full py-2 px-3 text-center font-semibold text-sm bg-security-navy-700 hover:bg-security-navy-800 text-white rounded-xl transition-all shadow-md hover:shadow-lg"
                 >
                   Generate Payrun
                 </Link>
@@ -512,8 +512,8 @@ export default function DashboardPage() {
         </DashboardCard>
 
         {canWhatsApp ? (
-          <DashboardCard title="WhatsApp" className="min-h-[300px] xl:min-h-[320px]">
-            <p className="text-xs text-neutral-600 mb-3 leading-relaxed">Message team members directly</p>
+          <DashboardCard title="WhatsApp" className="h-full min-h-0">
+            <p className="text-xs text-neutral-600 mb-2 leading-relaxed">Message team members directly</p>
             <div className="space-y-1 flex-1 min-h-0 overflow-hidden">
               {whatsappContacts.length > 0 ? (
                 whatsappContacts.slice(0, 3).map((contact) => (
@@ -528,7 +528,7 @@ export default function DashboardPage() {
                         router.push(`/whatsapp?contact=${contact.id}`);
                       }
                     }}
-                    className="flex items-center gap-2 py-2.5 border-b border-neutral-100 last:border-0 cursor-pointer transition-colors hover:bg-security-navy-50/60 rounded-xl px-2 -mx-1"
+                    className="flex items-center gap-2 py-2 border-b border-neutral-100 last:border-0 cursor-pointer transition-colors hover:bg-security-navy-50/60 rounded-xl px-2 -mx-1"
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-neutral-900 truncate">
@@ -565,7 +565,7 @@ export default function DashboardPage() {
             )}
             <Link
               href="/whatsapp"
-              className="mt-auto pt-3 flex items-center justify-center gap-2 w-full px-5 py-2.5 font-semibold rounded-xl border border-security-navy-500 bg-security-navy-500 text-white hover:bg-security-navy-600 text-sm transition-all shadow-md hover:shadow-lg"
+              className="mt-auto pt-2 flex items-center justify-center gap-2 w-full px-4 py-2 font-semibold rounded-xl border border-security-navy-500 bg-security-navy-500 text-white hover:bg-security-navy-600 text-sm transition-all shadow-md hover:shadow-lg"
             >
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
@@ -574,7 +574,7 @@ export default function DashboardPage() {
             </Link>
           </DashboardCard>
         ) : (
-          <DashboardCard title="WhatsApp" className="min-h-[300px] xl:min-h-[320px]">
+          <DashboardCard title="WhatsApp" className="h-full min-h-0">
             <p className="text-xs text-neutral-600 mb-3">Message team members directly</p>
             <p className="text-sm text-neutral-600 py-6 text-center rounded-xl bg-neutral-50 border border-dashed border-neutral-200">No access</p>
           </DashboardCard>

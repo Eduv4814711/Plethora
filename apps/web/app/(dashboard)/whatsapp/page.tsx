@@ -151,10 +151,10 @@ export default function WhatsAppPage() {
               </div>
             </div>
           ) : (
-            <div className="card-dashboard p-5 flex flex-col border-neutral-200">
+            <div className="card-dashboard p-5 flex flex-col border-neutral-200 md:h-[calc(100vh-13rem)] overflow-hidden">
               <h2 className="font-semibold text-sm text-black uppercase tracking-wider mb-3">Contacts</h2>
               {contacts.length > 0 ? (
-                <div className="space-y-1">
+                <div className="space-y-1 flex-1 min-h-0 overflow-y-auto pr-1">
                   {contacts.map((c) => (
                     <button
                       key={c.id}
@@ -194,7 +194,7 @@ export default function WhatsAppPage() {
         </div>
 
         {/* Conversation area */}
-        <div className="md:col-span-2 card-dashboard border-neutral-200 flex flex-col min-h-[400px]">
+        <div className="md:col-span-2 card-dashboard border-neutral-200 flex flex-col min-h-[400px] md:h-[calc(100vh-13rem)] overflow-hidden">
           {selectedContact ? (
             <>
               <div className="p-4 border-b border-neutral-200 flex items-center gap-3">

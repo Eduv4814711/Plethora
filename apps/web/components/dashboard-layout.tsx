@@ -106,6 +106,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const canAccessSettings = canAccessRoute("/settings", user.role);
 
   const hasAccess = canAccessRoute(pathname, user.role);
+  const isDashboardHome = pathname === "/";
+  const isWhatsAppPage = pathname === "/whatsapp" || pathname.startsWith("/whatsapp/");
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
@@ -256,7 +258,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="flex-1 p-6 md:p-8 lg:p-10 overflow-auto bg-gradient-to-b from-[var(--bg-canvas)] via-white to-security-navy-50/35">
+      <main
+        className={clsx(
+          "flex-1 p-6 md:p-8 lg:p-10 bg-gradient-to-b from-[var(--bg-canvas)] via-white to-security-navy-50/35",
+          isDashboardHome || isWhatsAppPage ? "overflow-hidden" : "overflow-auto"
+        )}
+      >
         {hasAccess ? children : null}
       </main>
     </div>
