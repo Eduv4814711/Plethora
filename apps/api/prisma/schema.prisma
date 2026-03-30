@@ -65,6 +65,10 @@ model User {
   name         String
   email        String   @unique
   passwordHash String
+  passwordSetupRequired     Boolean   @default(false)
+  passwordSetupTokenHash    String?
+  passwordSetupTokenExpiresAt DateTime?
+  passwordSetupTokenConsumedAt DateTime?
   role         UserRole
   roleLabel    String?
   /// When null, module access follows `role` defaults. When a non-empty JSON array of paths (e.g. ["/employees","/payroll"]), only those modules apply; Admin with null = full access, Admin with a list = scoped like other users.

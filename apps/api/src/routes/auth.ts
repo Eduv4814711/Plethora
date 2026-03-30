@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { login, refreshAccessToken, hashPassword, issueTokensForUser } from "../services/auth.service.js";
+import { login, refreshAccessToken, hashPassword, hashPasswordSetupToken, issueTokensForUser } from "../services/auth.service.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { findUniqueUserForMe } from "../lib/user-module-column.js";
@@ -20,6 +20,15 @@ const onboardSchema = z.object({
     email: z.string().email("Valid admin email is required"),
     password: z.string().min(8, "Admin password must be at least 8 characters"),
   }),
+});
+
+const setupPasswordValidateSchema = z.object({
+  token: z.string().min(20),
+});
+
+const setupPasswordCompleteSchema = z.object({
+  token: z.string().min(20),
+  password: z.string().min(8),
 });
 
 export async function authRoutes(app: FastifyInstance) {
@@ -99,6 +108,64 @@ export async function authRoutes(app: FastifyInstance) {
         message: err instanceof Error ? err.message : "An error occurred during login",
       });
     }
+  });
+
+  app.post("/setup-password/validate", async (request, reply) => {
+    const parsed = setupPasswordValidateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Validation error", message: "Valid token is required" });
+    }
+    const now = new Date();
+    const tokenHash = hashPasswordSetupToken(parsed.data.token);
+    const found = await prisma.user.findFirst({
+      where: {
+        passwordSetupRequired: true,
+        passwordSetupTokenHash: tokenHash,
+        passwordSetupTokenConsumedAt: null,
+        passwordSetupTokenExpiresAt: { gt: now },
+      },
+      select: { id: true, email: true, name: true },
+    });
+    if (!found) {
+      return reply.code(400).send({ error: "Invalid or expired setup link" });
+    }
+    return reply.send({ valid: true, email: found.email, name: found.name });
+  });
+
+  app.post("/setup-password/complete", async (request, reply) => {
+    const parsed = setupPasswordCompleteSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
+    }
+
+    const now = new Date();
+    const tokenHash = hashPasswordSetupToken(parsed.data.token);
+    const found = await prisma.user.findFirst({
+      where: {
+        passwordSetupRequired: true,
+        passwordSetupTokenHash: tokenHash,
+        passwordSetupTokenConsumedAt: null,
+        passwordSetupTokenExpiresAt: { gt: now },
+      },
+      select: { id: true },
+    });
+    if (!found) {
+      return reply.code(400).send({ error: "Invalid or expired setup link" });
+    }
+
+    const passwordHash = await hashPassword(parsed.data.password);
+    await prisma.user.update({
+      where: { id: found.id },
+      data: {
+        passwordHash,
+        passwordSetupRequired: false,
+        passwordSetupTokenHash: null,
+        passwordSetupTokenExpiresAt: null,
+        passwordSetupTokenConsumedAt: now,
+      },
+    });
+
+    return reply.send({ success: true });
   });
 
   app.post("/refresh", async (request, reply) => {

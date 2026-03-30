@@ -13,11 +13,21 @@ export function isMissingRoleLabelColumnError(e: unknown): boolean {
   return /roleLabel/i.test(msg) && /does not exist|Unknown column|Unknown field|Unknown argument|not available/i.test(msg);
 }
 
+/** Prisma/Postgres error when password setup link columns were never migrated. */
+export function isMissingPasswordSetupColumnError(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e);
+  return /passwordSetup/i.test(msg) && /does not exist|Unknown column|Unknown field|Unknown argument|not available/i.test(msg);
+}
+
 const authScalarsBase = {
   id: true,
   name: true,
   email: true,
   passwordHash: true,
+  passwordSetupRequired: true,
+  passwordSetupTokenHash: true,
+  passwordSetupTokenExpiresAt: true,
+  passwordSetupTokenConsumedAt: true,
   role: true,
   roleLabel: true,
   companyId: true,
@@ -47,14 +57,32 @@ export async function findFirstUserAuthScalars(
   try {
     return await prisma.user.findFirst({ where, select: authScalarsWithModule });
   } catch (e) {
-    if (!isMissingModuleAccessColumnError(e) && !isMissingRoleLabelColumnError(e)) throw e;
+    if (
+      !isMissingModuleAccessColumnError(e) &&
+      !isMissingRoleLabelColumnError(e) &&
+      !isMissingPasswordSetupColumnError(e)
+    ) {
+      throw e;
+    }
     try {
       const row = await prisma.user.findFirst({ where, select: authScalarsBase });
       return row ? { ...row, moduleAccess: null } : null;
     } catch (fallbackErr) {
-      if (!isMissingRoleLabelColumnError(fallbackErr)) throw fallbackErr;
+      if (!isMissingRoleLabelColumnError(fallbackErr) && !isMissingPasswordSetupColumnError(fallbackErr)) {
+        throw fallbackErr;
+      }
       const legacyRow = await prisma.user.findFirst({ where, select: authScalarsLegacyBase });
-      return legacyRow ? { ...legacyRow, roleLabel: null, moduleAccess: null } : null;
+      return legacyRow
+        ? {
+            ...legacyRow,
+            passwordSetupRequired: false,
+            passwordSetupTokenHash: null,
+            passwordSetupTokenExpiresAt: null,
+            passwordSetupTokenConsumedAt: null,
+            roleLabel: null,
+            moduleAccess: null,
+          }
+        : null;
     }
   }
 }
@@ -65,14 +93,32 @@ export async function findUniqueUserAuthScalars(
   try {
     return await prisma.user.findUnique({ where, select: authScalarsWithModule });
   } catch (e) {
-    if (!isMissingModuleAccessColumnError(e) && !isMissingRoleLabelColumnError(e)) throw e;
+    if (
+      !isMissingModuleAccessColumnError(e) &&
+      !isMissingRoleLabelColumnError(e) &&
+      !isMissingPasswordSetupColumnError(e)
+    ) {
+      throw e;
+    }
     try {
       const row = await prisma.user.findUnique({ where, select: authScalarsBase });
       return row ? { ...row, moduleAccess: null } : null;
     } catch (fallbackErr) {
-      if (!isMissingRoleLabelColumnError(fallbackErr)) throw fallbackErr;
+      if (!isMissingRoleLabelColumnError(fallbackErr) && !isMissingPasswordSetupColumnError(fallbackErr)) {
+        throw fallbackErr;
+      }
       const legacyRow = await prisma.user.findUnique({ where, select: authScalarsLegacyBase });
-      return legacyRow ? { ...legacyRow, roleLabel: null, moduleAccess: null } : null;
+      return legacyRow
+        ? {
+            ...legacyRow,
+            passwordSetupRequired: false,
+            passwordSetupTokenHash: null,
+            passwordSetupTokenExpiresAt: null,
+            passwordSetupTokenConsumedAt: null,
+            roleLabel: null,
+            moduleAccess: null,
+          }
+        : null;
     }
   }
 }
@@ -110,7 +156,13 @@ export async function findUniqueUserListRow(id: string, companyId: string) {
       },
     });
   } catch (e) {
-    if (!isMissingModuleAccessColumnError(e) && !isMissingRoleLabelColumnError(e)) throw e;
+    if (
+      !isMissingModuleAccessColumnError(e) &&
+      !isMissingRoleLabelColumnError(e) &&
+      !isMissingPasswordSetupColumnError(e)
+    ) {
+      throw e;
+    }
     const row = await prisma.user.findFirst({
       where: { id, companyId },
       select: {
@@ -152,7 +204,13 @@ export async function findManyUsersForCompany(
       },
     });
   } catch (e) {
-    if (!isMissingModuleAccessColumnError(e) && !isMissingRoleLabelColumnError(e)) throw e;
+    if (
+      !isMissingModuleAccessColumnError(e) &&
+      !isMissingRoleLabelColumnError(e) &&
+      !isMissingPasswordSetupColumnError(e)
+    ) {
+      throw e;
+    }
     const rows = await prisma.user.findMany({
       ...base,
       select: {
@@ -184,7 +242,13 @@ export async function findUniqueUserForMe(sub: string) {
       },
     });
   } catch (e) {
-    if (!isMissingModuleAccessColumnError(e) && !isMissingRoleLabelColumnError(e)) throw e;
+    if (
+      !isMissingModuleAccessColumnError(e) &&
+      !isMissingRoleLabelColumnError(e) &&
+      !isMissingPasswordSetupColumnError(e)
+    ) {
+      throw e;
+    }
     const row = await prisma.user.findUnique({
       where: { id: sub },
       select: {

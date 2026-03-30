@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { authMiddleware } from "../middleware/auth.js";
@@ -8,10 +8,11 @@ import {
   findManyUsersForCompany,
   findUniqueUserListRow,
   isMissingModuleAccessColumnError,
+  isMissingPasswordSetupColumnError,
   isMissingRoleLabelColumnError,
 } from "../lib/user-module-column.js";
 import { createAuditLog } from "../lib/audit.js";
-import { hashPassword } from "../services/auth.service.js";
+import { generatePasswordSetupToken, hashPassword, hashPasswordSetupToken } from "../services/auth.service.js";
 
 const MODULE_ACCESS_MIGRATION_MESSAGE =
   "The database is missing the User.moduleAccess column. From the project root run: npm run db:push. If that fails on duplicate User emails (email unique), run: npm run db:add-module-access — it only adds the moduleAccess column. Later, fix duplicate emails (npm run db:check-email-unique in apps/api) then db:push to align the rest of the schema. DATABASE_URL must be set in apps/api/.env.";
@@ -30,10 +31,20 @@ function normalizeRoleLabel(value: string | null | undefined): string | null | u
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function buildPasswordSetupLink(request: FastifyRequest, token: string): string {
+  const protoHeader = request.headers["x-forwarded-proto"];
+  const hostHeader = request.headers["x-forwarded-host"] ?? request.headers.host;
+  const proto = Array.isArray(protoHeader) ? protoHeader[0] : protoHeader;
+  const host = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
+  if (proto && host) return `${proto}://${host}/setup-password?token=${encodeURIComponent(token)}`;
+  return `http://localhost:3000/setup-password?token=${encodeURIComponent(token)}`;
+}
+
 const createUserSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
-  password: z.string().min(8),
+  password: z.string().min(8).optional(),
+  sendSetupLink: z.boolean().optional().default(true),
   role: z.enum(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"]),
   roleLabel: roleLabelSchema,
   moduleAccess: moduleAccessSchema,
@@ -75,13 +86,29 @@ export async function usersRoutes(app: FastifyInstance) {
     }
 
     const companyId = request.user!.companyId;
-    const passwordHash = await hashPassword(parsed.data.password);
+    const inviteMode = parsed.data.sendSetupLink ?? true;
+    if (!inviteMode && !parsed.data.password) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: { password: ["Password is required when setup link is disabled"] },
+      });
+    }
+    const setupToken = inviteMode ? generatePasswordSetupToken() : null;
+    const setupTokenHash = setupToken ? hashPasswordSetupToken(setupToken) : null;
+    const setupTokenExpiresAt = inviteMode ? new Date(Date.now() + 24 * 60 * 60 * 1000) : null;
+    const passwordHash = parsed.data.password
+      ? await hashPassword(parsed.data.password)
+      : await hashPassword(generatePasswordSetupToken());
 
     const baseCreate = {
       companyId,
       name: parsed.data.name,
       email: parsed.data.email.toLowerCase(),
       passwordHash,
+      passwordSetupRequired: inviteMode,
+      passwordSetupTokenHash: setupTokenHash,
+      passwordSetupTokenExpiresAt: setupTokenExpiresAt,
+      passwordSetupTokenConsumedAt: null,
       role: parsed.data.role,
       roleLabel: normalizeRoleLabel(parsed.data.roleLabel),
     };
@@ -109,7 +136,8 @@ export async function usersRoutes(app: FastifyInstance) {
       } catch (e) {
         const missingModuleAccess = isMissingModuleAccessColumnError(e);
         const missingRoleLabel = isMissingRoleLabelColumnError(e);
-        if (!missingModuleAccess && !missingRoleLabel) throw e;
+        const missingPasswordSetup = isMissingPasswordSetupColumnError(e);
+        if (!missingModuleAccess && !missingRoleLabel && !missingPasswordSetup) throw e;
         if (missingModuleAccess && Object.prototype.hasOwnProperty.call(createData, "moduleAccess")) {
           return reply.code(503).send({
             error: "Module access not available",
@@ -118,6 +146,10 @@ export async function usersRoutes(app: FastifyInstance) {
         }
         const fallbackCreate = { ...createData };
         delete (fallbackCreate as { roleLabel?: string | null }).roleLabel;
+        delete (fallbackCreate as { passwordSetupRequired?: boolean }).passwordSetupRequired;
+        delete (fallbackCreate as { passwordSetupTokenHash?: string | null }).passwordSetupTokenHash;
+        delete (fallbackCreate as { passwordSetupTokenExpiresAt?: Date | null }).passwordSetupTokenExpiresAt;
+        delete (fallbackCreate as { passwordSetupTokenConsumedAt?: Date | null }).passwordSetupTokenConsumedAt;
         user = await prisma.user.create({
           data: fallbackCreate,
           select: {
@@ -140,7 +172,10 @@ export async function usersRoutes(app: FastifyInstance) {
         entityId: user.id,
       });
 
-      return reply.code(201).send(user);
+      return reply.code(201).send({
+        ...user,
+        ...(setupToken ? { setupLink: buildPasswordSetupLink(request, setupToken) } : {}),
+      });
     } catch (err: unknown) {
       const prismaErr = err as { code?: string };
       if (prismaErr.code === "P2002") {
@@ -220,7 +255,8 @@ export async function usersRoutes(app: FastifyInstance) {
     } catch (e) {
       const missingModuleAccess = isMissingModuleAccessColumnError(e);
       const missingRoleLabel = isMissingRoleLabelColumnError(e);
-      if (!missingModuleAccess && !missingRoleLabel) throw e;
+      const missingPasswordSetup = isMissingPasswordSetupColumnError(e);
+      if (!missingModuleAccess && !missingRoleLabel && !missingPasswordSetup) throw e;
       if (missingModuleAccess && Object.prototype.hasOwnProperty.call(updateData, "moduleAccess")) {
         return reply.code(503).send({
           error: "Module access not available",
@@ -229,6 +265,10 @@ export async function usersRoutes(app: FastifyInstance) {
       }
       const softData = { ...updateData };
       delete (softData as { roleLabel?: string | null }).roleLabel;
+      delete (softData as { passwordSetupRequired?: boolean }).passwordSetupRequired;
+      delete (softData as { passwordSetupTokenHash?: string | null }).passwordSetupTokenHash;
+      delete (softData as { passwordSetupTokenExpiresAt?: Date | null }).passwordSetupTokenExpiresAt;
+      delete (softData as { passwordSetupTokenConsumedAt?: Date | null }).passwordSetupTokenConsumedAt;
       updated = await prisma.user.update({
         where: { id },
         data: softData,

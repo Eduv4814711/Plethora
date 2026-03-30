@@ -575,9 +575,10 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
   const [addForm, setAddForm] = useState({
     name: "",
     email: "",
-    password: "",
     role: "supervisor" as UserRole,
   });
+  const [latestSetupLink, setLatestSetupLink] = useState<string | null>(null);
+  const [setupLinkCopied, setSetupLinkCopied] = useState(false);
   const [addAccountKind, setAddAccountKind] = useState<"admin" | "assign">("assign");
   const [addStaffRoleInput, setAddStaffRoleInput] = useState(ROLE_LABELS.supervisor);
   const [addStaffRoleFieldError, setAddStaffRoleFieldError] = useState<string | null>(null);
@@ -673,15 +674,23 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
       let payload: Parameters<typeof createUser>[1];
       if (resolvedRole === "admin") {
         payload = addAdminFullAccess
-          ? { ...addForm, role: "admin", roleLabel: null }
-          : { ...addForm, role: "admin", roleLabel: null, moduleAccess: modulesForPayload };
+          ? { ...addForm, role: "admin", roleLabel: null, sendSetupLink: true }
+          : { ...addForm, role: "admin", roleLabel: null, sendSetupLink: true, moduleAccess: modulesForPayload };
       } else if (addGrantAppModules) {
-        payload = { ...addForm, role: resolvedRole, roleLabel: roleLabelForPayload, moduleAccess: modulesForPayload };
+        payload = {
+          ...addForm,
+          role: resolvedRole,
+          roleLabel: roleLabelForPayload,
+          sendSetupLink: true,
+          moduleAccess: modulesForPayload,
+        };
       } else {
-        payload = { ...addForm, role: resolvedRole, roleLabel: roleLabelForPayload, moduleAccess: null };
+        payload = { ...addForm, role: resolvedRole, roleLabel: roleLabelForPayload, sendSetupLink: true, moduleAccess: null };
       }
-      await createUser(token, payload);
-      setAddForm({ name: "", email: "", password: "", role: "supervisor" });
+      const created = await createUser(token, payload);
+      setLatestSetupLink(created.setupLink ?? null);
+      setSetupLinkCopied(false);
+      setAddForm({ name: "", email: "", role: "supervisor" });
       setAddStaffRoleInput(ROLE_LABELS.supervisor);
       setAddStaffRoleFieldError(null);
       setAddAccountKind("assign");
@@ -844,6 +853,30 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
           {error}
         </div>
       )}
+      {latestSetupLink && (
+        <div className="mb-4 p-3 text-sm text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 rounded-sm border border-emerald-200 dark:border-emerald-800/50 space-y-2">
+          <p className="font-medium">User created. Share this password setup link:</p>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <code className="px-2 py-1 rounded bg-white/80 dark:bg-neutral-900/50 border border-emerald-200/70 dark:border-emerald-800/60 break-all text-[11px]">
+              {latestSetupLink}
+            </code>
+            <button
+              type="button"
+              className="btn-secondary whitespace-nowrap"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(latestSetupLink);
+                  setSetupLinkCopied(true);
+                } catch {
+                  setSetupLinkCopied(false);
+                }
+              }}
+            >
+              {setupLinkCopied ? "Copied" : "Copy Link"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-4 max-w-2xl">
         <div className="flex items-center justify-between">
@@ -889,19 +922,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                 />
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Password</label>
-                <input
-                  type="password"
-                  value={addForm.password}
-                  onChange={(e) => setAddForm((f) => ({ ...f, password: e.target.value }))}
-                  className="input-modern"
-                  placeholder="Min 8 characters"
-                  minLength={8}
-                  required
-                />
-              </div>
+            <div className="grid grid-cols-1 gap-4">
               <div>
                 <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Account</label>
                 <select

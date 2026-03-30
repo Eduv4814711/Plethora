@@ -19,6 +19,12 @@ export interface LoginResponse {
   expiresIn: number;
 }
 
+export interface SetupPasswordValidation {
+  valid: boolean;
+  email: string;
+  name: string;
+}
+
 export async function login(
   email: string,
   password: string,
@@ -87,6 +93,31 @@ export async function refreshToken(refreshToken: string): Promise<LoginResponse>
   });
   if (!res.ok) throw new Error("Token refresh failed");
   return res.json();
+}
+
+export async function validateSetupPasswordToken(token: string): Promise<SetupPasswordValidation> {
+  const res = await fetch(`${API_BASE}/auth/setup-password/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || err?.message || "Invalid or expired setup link");
+  }
+  return res.json();
+}
+
+export async function completeSetupPassword(token: string, password: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/auth/setup-password/complete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, password }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || err?.message || "Failed to set password");
+  }
 }
 
 export interface CompanySettings {
@@ -269,6 +300,7 @@ export interface UserListItem {
   companyId: string;
   createdAt: string;
   moduleAccess?: unknown;
+  setupLink?: string;
 }
 
 export async function listUsers(token: string): Promise<{ data: UserListItem[]; total: number }> {
@@ -282,7 +314,15 @@ export async function listUsers(token: string): Promise<{ data: UserListItem[]; 
 
 export async function createUser(
   token: string,
-  data: { name: string; email: string; password: string; role: UserRole; roleLabel?: string | null; moduleAccess?: string[] | null }
+  data: {
+    name: string;
+    email: string;
+    password?: string;
+    sendSetupLink?: boolean;
+    role: UserRole;
+    roleLabel?: string | null;
+    moduleAccess?: string[] | null;
+  }
 ): Promise<UserListItem> {
   const res = await authFetch("/users", token, {
     method: "POST",

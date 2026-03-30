@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { createHash, randomBytes } from "crypto";
 import { config } from "../lib/config.js";
 import type { UserRole } from "@prisma/client";
 import { normalizeModuleAccess } from "../middleware/rbac.js";
@@ -46,6 +47,7 @@ export async function login(input: LoginInput): Promise<AuthResult | null> {
   });
 
   if (!user) return null;
+  if (user.passwordSetupRequired) return null;
 
   const valid = await verifyPassword(input.password, user.passwordHash);
   if (!valid) return null;
@@ -99,6 +101,14 @@ export interface UserForTokens {
   roleLabel?: string | null;
   companyId: string;
   moduleAccess?: unknown;
+}
+
+export function generatePasswordSetupToken(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+export function hashPasswordSetupToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
 }
 
 export function issueTokensForUser(user: UserForTokens): AuthResult {
