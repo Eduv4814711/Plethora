@@ -45,6 +45,7 @@ This guide covers deploying Plethora to Railway. All components (web, API, datab
    | JWT_SECRET | Random 32+ character string |
    | JWT_REFRESH_SECRET | Random 32+ character string |
    | CORS_ORIGIN | Your web app URL (e.g. `https://your-app.up.railway.app`) – set after Phase 4 |
+   | FRONTEND_URL | Your web app URL (e.g. `https://your-web.up.railway.app`) for invite/setup-password links |
    | PORT | `3001` |
 
 5. Go to **Settings** → **Networking** → **Generate Domain** to get a public URL for the API.
@@ -121,6 +122,7 @@ See [docs/WHATSAPP_PRODUCTION.md](docs/WHATSAPP_PRODUCTION.md) for full details 
   - `JWT_SECRET` (e.g. a random 32+ char string)
   - `JWT_REFRESH_SECRET` (e.g. a different random 32+ char string)
   - `CORS_ORIGIN` (use a placeholder like `https://placeholder.up.railway.app` until the web URL exists, then update)
+  - `FRONTEND_URL` (set to your web app URL so setup-password links point to the frontend)
   - `PORT` = `3001`
 - **CORS errors**: Ensure `CORS_ORIGIN` exactly matches your web URL (including `https://`).
 - **Database connection**: Use Railway's variable reference to link the PostgreSQL service, e.g. `${{Postgres.DATABASE_URL}}`. Replace `Postgres` with your database service name.

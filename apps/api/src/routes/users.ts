@@ -32,6 +32,11 @@ function normalizeRoleLabel(value: string | null | undefined): string | null | u
 }
 
 function buildPasswordSetupLink(request: FastifyRequest, token: string): string {
+  const configuredWebUrl = process.env.FRONTEND_URL ?? process.env.CORS_ORIGIN;
+  if (configuredWebUrl) {
+    const baseUrl = configuredWebUrl.replace(/\/+$/, "");
+    return `${baseUrl}/setup-password?token=${encodeURIComponent(token)}`;
+  }
   const protoHeader = request.headers["x-forwarded-proto"];
   const hostHeader = request.headers["x-forwarded-host"] ?? request.headers.host;
   const proto = Array.isArray(protoHeader) ? protoHeader[0] : protoHeader;
