@@ -320,9 +320,24 @@ export async function usersRoutes(app: FastifyInstance) {
 
     try {
       await prisma.$transaction(async (tx) => {
-        await tx.taskComment.deleteMany({ where: { userId: id } });
-        await tx.taskAttachment.deleteMany({ where: { uploadedById: id } });
+        // Be explicit about dependent task data to stay compatible with older DBs
+        // where FK cascades may not have been applied yet.
+        await tx.taskReminder.deleteMany({ where: { task: { createdById: id } } });
+        await tx.taskComment.deleteMany({
+          where: {
+            OR: [{ userId: id }, { task: { createdById: id } }],
+          },
+        });
+        await tx.taskAttachment.deleteMany({
+          where: {
+            OR: [{ uploadedById: id }, { task: { createdById: id } }],
+          },
+        });
         await tx.task.deleteMany({ where: { createdById: id } });
+        await tx.whatsAppMessage.updateMany({
+          where: { companyId: user.companyId, sentByUserId: id },
+          data: { sentByUserId: null },
+        });
         await tx.auditLog.updateMany({
           where: { userId: id },
           data: { userId: null },
@@ -331,9 +346,11 @@ export async function usersRoutes(app: FastifyInstance) {
       });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2003") {
+        const rawField = (e.meta as { field_name?: unknown } | undefined)?.field_name;
+        const fieldName = typeof rawField === "string" ? rawField : "a related record";
         return reply.code(409).send({
           error: "Cannot delete user",
-          message: "This account is still linked to other records. Remove those links or contact support.",
+          message: `This account is still linked to ${fieldName}. Remove linked records and try again.`,
         });
       }
       throw e;
