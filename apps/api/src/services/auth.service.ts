@@ -4,7 +4,7 @@ import { createHash, randomBytes } from "crypto";
 import { config } from "../lib/config.js";
 import type { UserRole } from "@prisma/client";
 import { normalizeModuleAccess } from "../middleware/rbac.js";
-import { findFirstUserAuthScalars, findUniqueUserAuthScalars } from "../lib/user-module-column.js";
+import { findFirstUserAuthScalars, findManyUserAuthScalars, findUniqueUserAuthScalars } from "../lib/user-module-column.js";
 
 export interface LoginInput {
   email: string;
@@ -41,24 +41,41 @@ export async function verifyPassword(
 }
 
 export async function login(input: LoginInput): Promise<AuthResult | null> {
-  const user = await findFirstUserAuthScalars({
-    email: input.email.toLowerCase(),
-    ...(input.companyId ? { companyId: input.companyId } : {}),
-  });
+  const email = input.email.toLowerCase();
 
-  if (!user) return null;
-  if (user.passwordSetupRequired) return null;
+  const user = input.companyId
+    ? await findFirstUserAuthScalars({ email, companyId: input.companyId })
+    : null;
 
-  const valid = await verifyPassword(input.password, user.passwordHash);
-  if (!valid) return null;
+  if (user) {
+    if (user.passwordSetupRequired) return null;
+    const valid = await verifyPassword(input.password, user.passwordHash);
+    if (!valid) return null;
+  } else if (input.companyId) {
+    return null;
+  }
 
-  const moduleAccess = normalizeModuleAccess(user.moduleAccess);
+  let matchedUser = user;
+  if (!matchedUser) {
+    const candidates = await findManyUserAuthScalars({ email });
+    for (const candidate of candidates) {
+      if (candidate.passwordSetupRequired) continue;
+      const valid = await verifyPassword(input.password, candidate.passwordHash);
+      if (valid) {
+        matchedUser = candidate;
+        break;
+      }
+    }
+  }
+  if (!matchedUser) return null;
+
+  const moduleAccess = normalizeModuleAccess(matchedUser.moduleAccess);
 
   const payload = {
-    sub: user.id,
-    email: user.email,
-    companyId: user.companyId,
-    role: user.role,
+    sub: matchedUser.id,
+    email: matchedUser.email,
+    companyId: matchedUser.companyId,
+    role: matchedUser.role,
     ...(moduleAccess ? { moduleAccess } : {}),
   };
 
@@ -79,12 +96,12 @@ export async function login(input: LoginInput): Promise<AuthResult | null> {
 
   return {
     user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      roleLabel: user.roleLabel ?? null,
-      companyId: user.companyId,
+      id: matchedUser.id,
+      name: matchedUser.name,
+      email: matchedUser.email,
+      role: matchedUser.role,
+      roleLabel: matchedUser.roleLabel ?? null,
+      companyId: matchedUser.companyId,
       moduleAccess,
     },
     accessToken,

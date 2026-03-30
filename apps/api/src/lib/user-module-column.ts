@@ -87,6 +87,41 @@ export async function findFirstUserAuthScalars(
   }
 }
 
+export async function findManyUserAuthScalars(
+  where: Prisma.UserWhereInput
+): Promise<UserAuthScalars[]> {
+  const orderBy = { createdAt: "desc" as const };
+  try {
+    return await prisma.user.findMany({ where, orderBy, select: authScalarsWithModule });
+  } catch (e) {
+    if (
+      !isMissingModuleAccessColumnError(e) &&
+      !isMissingRoleLabelColumnError(e) &&
+      !isMissingPasswordSetupColumnError(e)
+    ) {
+      throw e;
+    }
+    try {
+      const rows = await prisma.user.findMany({ where, orderBy, select: authScalarsBase });
+      return rows.map((row) => ({ ...row, moduleAccess: null }));
+    } catch (fallbackErr) {
+      if (!isMissingRoleLabelColumnError(fallbackErr) && !isMissingPasswordSetupColumnError(fallbackErr)) {
+        throw fallbackErr;
+      }
+      const legacyRows = await prisma.user.findMany({ where, orderBy, select: authScalarsLegacyBase });
+      return legacyRows.map((legacyRow) => ({
+        ...legacyRow,
+        passwordSetupRequired: false,
+        passwordSetupTokenHash: null,
+        passwordSetupTokenExpiresAt: null,
+        passwordSetupTokenConsumedAt: null,
+        roleLabel: null,
+        moduleAccess: null,
+      }));
+    }
+  }
+}
+
 export async function findUniqueUserAuthScalars(
   where: Prisma.UserWhereUniqueInput
 ): Promise<UserAuthScalars | null> {
