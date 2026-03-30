@@ -235,12 +235,14 @@ function SiteCard({
 }) {
   const router = useRouter();
   const address = site.physicalAddress || site.location;
-  const guards = site.assignedGuards?.map((a) => a.employee) ?? [];
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <div
-      onClick={() => router.push(`/sites/${site.id}`)}
+      onClick={() => setExpanded((v) => !v)}
       className="card-elevated group p-6 cursor-pointer"
+      role="button"
+      aria-expanded={expanded}
     >
       <div className="flex justify-between items-start gap-4">
         <div className="min-w-0 flex-1">
@@ -262,49 +264,42 @@ function SiteCard({
             </div>
           </div>
 
-          {address && (
-            <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400 flex items-start gap-2">
-              <svg className="w-4 h-4 mt-0.5 shrink-0 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <span>{address}</span>
-            </p>
-          )}
+          {expanded && (
+            <>
+              {address && (
+                <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400 flex items-start gap-2">
+                  <svg className="w-4 h-4 mt-0.5 shrink-0 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span>{address}</span>
+                </p>
+              )}
 
-          {(site.contactPersonName || site.contactPersonPhone) && (
-            <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400 flex items-center gap-2">
-              <svg className="w-4 h-4 shrink-0 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-              <span>
-                {site.contactPersonName}
-                {site.contactPersonName && site.contactPersonPhone && " • "}
-                {site.contactPersonPhone && (
-                  <a href={`tel:${site.contactPersonPhone}`} onClick={(e) => e.stopPropagation()} className="text-neutral-600 dark:text-neutral-400 hover:underline">
-                    {site.contactPersonPhone}
-                  </a>
-                )}
-              </span>
-            </p>
-          )}
+              {(site.contactPersonName || site.contactPersonPhone) && (
+                <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400 flex items-center gap-2">
+                  <svg className="w-4 h-4 shrink-0 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <span>
+                    {site.contactPersonName}
+                    {site.contactPersonName && site.contactPersonPhone && " • "}
+                    {site.contactPersonPhone && (
+                      <a href={`tel:${site.contactPersonPhone}`} onClick={(e) => e.stopPropagation()} className="text-neutral-600 dark:text-neutral-400 hover:underline">
+                        {site.contactPersonPhone}
+                      </a>
+                    )}
+                  </span>
+                </p>
+              )}
 
-          {site.contractOrServiceAgreement && (
-            <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-500 truncate" title={site.contractOrServiceAgreement}>
-              Contract: {site.contractOrServiceAgreement}
-            </p>
+              {site.contractOrServiceAgreement && (
+                <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-500 truncate" title={site.contractOrServiceAgreement}>
+                  Contract: {site.contractOrServiceAgreement}
+                </p>
+              )}
+            </>
           )}
-
-          {site.geofenceRadiusMeters != null &&
-            site.latitude != null &&
-            site.longitude != null && (
-              <p className="mt-2 text-xs text-amber-700 dark:text-amber-500/90 flex items-center gap-1.5">
-                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                </svg>
-                Geofence: {site.geofenceRadiusMeters}m — WhatsApp clock-in/out requires location share
-              </p>
-            )}
         </div>
 
         {canManageSites && (
@@ -330,48 +325,17 @@ function SiteCard({
           </div>
         )}
       </div>
-
-      {guards.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
-          <h4 className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider mb-2">
-            Assigned Guards
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            {guards.map((g) => (
-              <span
-                key={g.id}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
-              >
-                <span className="w-2 h-2 rounded-full bg-neutral-500" />
-                {g.firstName} {g.lastName}
-              </span>
-            ))}
-          </div>
+      {expanded && (
+        <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={() => router.push(`/sites/${site.id}`)}
+            className="text-sm font-medium text-neutral-600 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 underline"
+          >
+            Open full site details
+          </button>
         </div>
       )}
-
-      <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
-        <h4 className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider mb-2">
-          Posts
-        </h4>
-        <ul className="space-y-1.5">
-          {site.posts.map((post) => (
-            <PostRow
-              key={post.id}
-              post={post}
-              siteId={site.id}
-              token={token}
-              canManage={canManageSites}
-              onSuccess={onRefresh}
-            />
-          ))}
-        </ul>
-        {canManageSites && (
-          <div onClick={(e) => e.stopPropagation()}>
-            <PostForm siteId={site.id} token={token} onSuccess={onRefresh} />
-          </div>
-        )}
-      </div>
     </div>
   );
 }
