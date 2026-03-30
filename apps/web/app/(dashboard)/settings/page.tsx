@@ -139,7 +139,7 @@ export default function SettingsPage() {
           })}
       </div>
 
-      <div className={clsx("card-wireframe p-6", activeTab === "profile" && "max-w-[50%]")}>
+      <div className={clsx("card-wireframe p-6 w-full max-w-6xl mx-auto", activeTab === "profile" && "max-w-[50%]")}>
         {activeTab === "profile" && (
           <ProfileSection user={user} />
         )}
@@ -1460,9 +1460,9 @@ function FactoryResetSection({
   };
 
   return (
-    <div>
+    <div className="text-center">
       <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Factory Reset</h3>
-      <div className="max-w-2xl space-y-4">
+      <div className="max-w-3xl mx-auto space-y-5">
         <div className="p-4 rounded-sm border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20">
           <p className="text-sm text-red-800 dark:text-red-200 font-medium mb-2">
             This action cannot be undone.
@@ -1475,7 +1475,7 @@ function FactoryResetSection({
         </div>
 
         <div className="space-y-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-center gap-2">
             <input
               type="checkbox"
               id="reset-all"
@@ -1494,7 +1494,7 @@ function FactoryResetSection({
 
           {!resetAll && (
             <>
-              <div className="flex gap-2">
+              <div className="flex justify-center gap-3">
                 <button
                   type="button"
                   onClick={selectAll}
@@ -1510,7 +1510,7 @@ function FactoryResetSection({
                   Deselect all
                 </button>
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2 text-left">
                 {FACTORY_RESET_MODULES.map((mod) => (
                   <div
                     key={mod.id}
@@ -1595,7 +1595,7 @@ function FactoryResetSection({
             type="text"
             value={confirmText}
             onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
-            className="input-modern font-mono"
+            className="input-modern font-mono max-w-md mx-auto"
             placeholder={CONFIRM_PHRASE}
             disabled={resetting}
           />
@@ -1611,14 +1611,16 @@ function FactoryResetSection({
           </p>
         )}
 
-        <button
-          type="button"
-          onClick={handleReset}
-          disabled={!canReset}
-          className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-neutral-400 disabled:cursor-not-allowed rounded-sm transition-colors"
-        >
-          {resetting ? "Resetting..." : "Factory Reset"}
-        </button>
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={handleReset}
+            disabled={!canReset}
+            className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-neutral-400 disabled:cursor-not-allowed rounded-sm transition-colors"
+          >
+            {resetting ? "Resetting..." : "Factory Reset"}
+          </button>
+        </div>
       </div>
     </div>
   );
