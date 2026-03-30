@@ -15,7 +15,10 @@ const updateTimesheetSchema = z.object({
 });
 
 export async function timesheetsRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll"])];
+  const protect = [
+    authMiddleware,
+    requireRole(["admin", "operations_manager", "hr_payroll"], { module: "/payroll" }),
+  ];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

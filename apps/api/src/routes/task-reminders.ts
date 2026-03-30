@@ -22,7 +22,7 @@ const createReminderSchema = z.object({
 });
 
 export async function taskRemindersRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole([...TASK_ROLES])];
+  const protect = [authMiddleware, requireRole([...TASK_ROLES], { module: "/tasks" })];
 
   app.post("/tasks/:taskId/reminders", { preHandler: protect }, async (request, reply) => {
     const parsed = createReminderSchema.safeParse(request.body);

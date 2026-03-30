@@ -14,7 +14,9 @@
     "build": "npm run build --workspaces",
     "db:generate": "npm run db:generate --workspace=api",
     "db:migrate": "npm run db:migrate --workspace=api",
+    "db:migrate:deploy": "npm run db:migrate:deploy --workspace=api",
     "db:push": "npm run db:push --workspace=api",
+    "db:add-module-access": "npm run db:add-module-access --workspace=api",
     "db:seed": "npm run db:seed --workspace=api"
   },
   "devDependencies": {

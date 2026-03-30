@@ -6,7 +6,9 @@ import { prisma } from "../../lib/prisma.js";
 export async function messagesRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"]),
+    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
+      module: "/whatsapp",
+    }),
   ];
 
   app.get("/messages", { preHandler: protect }, async (request, reply) => {

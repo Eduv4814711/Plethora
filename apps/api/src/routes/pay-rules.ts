@@ -13,7 +13,7 @@ const updatePayRuleSchema = z.object({
 });
 
 export async function payRulesRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin", "hr_payroll"])];
+  const protect = [authMiddleware, requireRole(["admin", "hr_payroll"], { module: "/payroll" })];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

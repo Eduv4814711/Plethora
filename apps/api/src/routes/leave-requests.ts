@@ -12,7 +12,9 @@ import { createAuditLog } from "../lib/audit.js";
 export async function leaveRequestsRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll"]),
+    requireRole(["admin", "operations_manager", "hr_payroll"], {
+      anyOfModules: ["/employees", "/payroll"],
+    }),
   ];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {

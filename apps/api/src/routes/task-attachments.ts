@@ -27,7 +27,7 @@ const ALLOWED_TYPES = [
 ];
 
 export async function taskAttachmentsRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole([...TASK_ROLES])];
+  const protect = [authMiddleware, requireRole([...TASK_ROLES], { module: "/tasks" })];
 
   app.post("/tasks/:taskId/attachments", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

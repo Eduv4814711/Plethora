@@ -43,7 +43,10 @@ async function collectMultipartFiles(
 }
 
 export async function migrationsRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"])];
+  const protect = [
+    authMiddleware,
+    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"], { module: "/settings" }),
+  ];
   const adminProtect = [authMiddleware, requireAdmin()];
 
   // GET /migrations/templates/:type - Download CSV template

@@ -85,7 +85,7 @@ const taskInclude = {
 } as const;
 
 export async function tasksRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole([...TASK_ROLES])];
+  const protect = [authMiddleware, requireRole([...TASK_ROLES], { module: "/tasks" })];
 
   app.get("/assignees", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

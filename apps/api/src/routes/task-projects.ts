@@ -22,7 +22,7 @@ const updateProjectSchema = z.object({
 });
 
 export async function taskProjectsRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole([...TASK_ROLES])];
+  const protect = [authMiddleware, requireRole([...TASK_ROLES], { module: "/tasks" })];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

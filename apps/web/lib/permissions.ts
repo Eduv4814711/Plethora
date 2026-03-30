@@ -3,14 +3,14 @@ import type { UserRole } from "./api";
 export interface NavItem {
   href: string;
   label: string;
-  /** Roles that can see this module. Empty = all authenticated users. */
+  /** Roles that can see this module when no custom `moduleAccess` is set. */
   roles: UserRole[];
 }
 
 /**
- * Navigation items with role-based access.
- * Matches API route protection: each module is visible only to roles that can use its APIs.
- * Controller role: only Rostering and Attendance are visible.
+ * Navigation items. `roles` are used for **templates** (defaultModulesForRole) and docs only.
+ * Runtime access: only **full** admins (see isFullAdmin) may see everything without a list;
+ * everyone else must have an explicit non-empty `moduleAccess` from an administrator.
  */
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Dashboard", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
@@ -32,34 +32,92 @@ export const MAIN_NAV_HREFS = ["/", "/employees", "/sites", "/rostering", "/atte
 /** Nav items shown in the "More" dropdown (remaining items). */
 export const MORE_NAV_HREFS = ["/whatsapp", "/reports", "/audit"];
 
-/**
- * Default route for a role when they don't have access to the requested path.
- * Controller only has access to Rostering and Attendance - redirect to Rostering.
- */
-export function getDefaultRouteForRole(role: string): string {
-  if (role === "controller") return "/rostering";
-  return "/";
+/** Modules an admin can assign to a user (same as primary nav; Audit only effective for admin accounts). */
+export const MODULE_ASSIGN_OPTIONS: { href: string; label: string }[] = NAV_ITEMS.map(({ href, label }) => ({
+  href,
+  label,
+}));
+
+/** Shown when a non-admin has no modules assigned yet (login-only). Not a product module. */
+export const ACCESS_PENDING_HREF = "/access-pending";
+
+export function normalizeUserModuleAccess(raw: unknown): string[] | null {
+  if (raw == null) return null;
+  if (!Array.isArray(raw)) return null;
+  const out = raw.filter((x): x is string => typeof x === "string" && x.startsWith("/"));
+  return out.length > 0 ? out : null;
+}
+
+/** Suggested module paths for a role (admin UI pre-fill). Not applied at runtime without saving. */
+export function defaultModulesForRole(role: string): string[] {
+  const userRole = role as UserRole;
+  return NAV_ITEMS.filter(
+    (n) => n.roles.includes(userRole) && (n.href !== "/audit" || userRole === "admin")
+  ).map((n) => n.href);
+}
+
+/** Full tenant administrator: may use all modules and admin-only APIs. Scoped admins have role admin + explicit module list. */
+export function isFullAdmin(user: { role: string; moduleAccess?: unknown }): boolean {
+  return user.role === "admin" && !normalizeUserModuleAccess(user.moduleAccess);
+}
+
+function navItemForPath(pathname: string): NavItem | undefined {
+  return NAV_ITEMS.find((n) => {
+    if (n.href === "/") return pathname === "/" || pathname === "";
+    return pathname === n.href || pathname.startsWith(`${n.href}/`);
+  });
 }
 
 /**
- * Check if a user role can access a route.
- * @param pathname - Route path (e.g. "/payroll" or "/sites/abc")
- * @param role - User's role
+ * First route to open for a user. Non-admins without assigned modules → access-pending page.
  */
-export function canAccessRoute(pathname: string, role: string): boolean {
+export function getDefaultRouteForUser(user: { role: string; moduleAccess?: unknown }): string {
+  const custom = normalizeUserModuleAccess(user.moduleAccess);
+  if (custom) {
+    for (const nav of NAV_ITEMS) {
+      if (!custom.includes(nav.href)) continue;
+      if (nav.href === "/audit" && user.role !== "admin") continue;
+      return nav.href;
+    }
+    return custom[0] ?? (user.role === "admin" ? "/" : ACCESS_PENDING_HREF);
+  }
+  if (user.role === "admin") return "/";
+  return ACCESS_PENDING_HREF;
+}
+
+/**
+ * Route access: full admin → all nav modules; anyone else → explicit module list only.
+ */
+export function canAccessRoute(pathname: string, role: string, moduleAccess?: unknown): boolean {
   const userRole = role as UserRole;
 
-  // Find matching nav item (exact or prefix for nested routes like /sites/[id])
-  const item = NAV_ITEMS.find((n) => {
-    if (n.href === "/") return pathname === "/" || pathname === "";
-    return pathname === n.href || pathname.startsWith(n.href + "/");
-  });
-
-  if (!item) {
-    // Unknown route - allow (e.g. 404) or deny? Deny to be safe.
-    return false;
+  if (pathname === ACCESS_PENDING_HREF || pathname.startsWith(`${ACCESS_PENDING_HREF}/`)) {
+    if (userRole === "admin") return false;
+    return normalizeUserModuleAccess(moduleAccess) == null;
   }
 
-  if (item.roles.length === 0) return true;
-  return item.roles.includes(userRole);
+  const item = navItemForPath(pathname);
+  if (!item) return false;
+
+  if (userRole === "admin" && !normalizeUserModuleAccess(moduleAccess)) {
+    return true;
+  }
+
+  const custom = normalizeUserModuleAccess(moduleAccess);
+  if (!custom) return false;
+
+  const covers = custom.some(
+    (m) => item.href === m || pathname === m || pathname.startsWith(`${m}/`)
+  );
+  if (!covers) return false;
+  if (item.href === "/audit" && userRole !== "admin") return false;
+  return true;
+}
+
+/** Site create/edit/delete: must have `/sites` in assigned modules; full admin unrestricted. */
+export function canManageSitesModule(user: { role: string; moduleAccess?: unknown }): boolean {
+  if (!canAccessRoute("/sites", user.role, user.moduleAccess)) return false;
+  const custom = normalizeUserModuleAccess(user.moduleAccess);
+  if (custom) return custom.includes("/sites");
+  return user.role === "admin";
 }

@@ -28,7 +28,8 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const { token, user } = useAuth();
-  const showSites = user ? canAccessRoute("/sites", user.role) : false;
+  const showEmployees = user ? canAccessRoute("/employees", user.role, user.moduleAccess) : false;
+  const showSites = user ? canAccessRoute("/sites", user.role, user.moduleAccess) : false;
   const router = useRouter();
   const debouncedQuery = useDebounce(query, 300);
 
@@ -67,7 +68,8 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const employees = results?.employees ?? [];
+  const employeesRaw = results?.employees ?? [];
+  const employees = showEmployees ? employeesRaw : [];
   const sitesRaw = results?.sites ?? [];
   const sites = showSites ? sitesRaw : [];
   const totalItems = employees.length + sites.length;

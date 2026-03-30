@@ -10,7 +10,9 @@
     "start": "node dist/index.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
     "db:check-email-unique": "tsx prisma/check-duplicate-emails.ts",
+    "db:add-module-access": "prisma db execute --file prisma/sql/add_user_module_access_column.sql --schema prisma/schema.prisma",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio"

@@ -19,7 +19,7 @@ const createDeductionRuleSchema = z.object({
 const updateDeductionRuleSchema = createDeductionRuleSchema.partial();
 
 export async function deductionRulesRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin", "hr_payroll"])];
+  const protect = [authMiddleware, requireRole(["admin", "hr_payroll"], { module: "/payroll" })];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

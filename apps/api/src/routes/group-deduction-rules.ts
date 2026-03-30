@@ -26,7 +26,7 @@ async function ensureGroupBelongsToCompany(groupId: string, companyId: string) {
 }
 
 export async function groupDeductionRulesRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin", "hr_payroll"])];
+  const protect = [authMiddleware, requireRole(["admin", "hr_payroll"], { module: "/payroll" })];
 
   app.get<{ Params: { groupId: string } }>(
     "/groups/:groupId/deduction-rules",

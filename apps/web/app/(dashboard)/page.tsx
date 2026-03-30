@@ -87,10 +87,10 @@ export default function DashboardPage() {
   const [siteFilterOpen, setSiteFilterOpen] = useState(false);
   const [whatsappContacts, setWhatsappContacts] = useState<{ id: string; firstName: string; lastName: string; phone: string | null; whatsappUrl: string | null }[]>([]);
 
-  const canSites = user ? canAccessRoute("/sites", user.role) : false;
-  const canWhatsApp = user ? canAccessRoute("/whatsapp", user.role) : false;
-  const canPayroll = user ? canAccessRoute("/payroll", user.role) : false;
-  const canRostering = user ? canAccessRoute("/rostering", user.role) : false;
+  const canSites = user ? canAccessRoute("/sites", user.role, user.moduleAccess) : false;
+  const canWhatsApp = user ? canAccessRoute("/whatsapp", user.role, user.moduleAccess) : false;
+  const canPayroll = user ? canAccessRoute("/payroll", user.role, user.moduleAccess) : false;
+  const canRostering = user ? canAccessRoute("/rostering", user.role, user.moduleAccess) : false;
 
   const fetchDashboard = useCallback(() => {
     if (!token) return;

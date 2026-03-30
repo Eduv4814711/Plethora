@@ -24,7 +24,10 @@ import { getPayrollReserveSnapshot } from "../services/payroll-reserve.service.j
 const CORE_EARNINGS = ["Basic", "Basic Salary", "Overtime", "Sunday", "Public Holiday"];
 
 export async function payrollIntelligenceRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll"])];
+  const protect = [
+    authMiddleware,
+    requireRole(["admin", "operations_manager", "hr_payroll"], { module: "/payroll" }),
+  ];
 
   app.get("/runs/:id/summary", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };

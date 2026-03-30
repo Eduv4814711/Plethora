@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
+import { canManageSitesModule } from "@/lib/permissions";
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
   guarding: "Guarding",
@@ -86,7 +87,7 @@ export default function SitesPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingSite, setEditingSite] = useState<Site | null>(null);
   const [deletingSite, setDeletingSite] = useState<Site | null>(null);
-  const canManageSites = ["admin", "operations_manager", "supervisor"].includes((user as { role?: string })?.role ?? "");
+  const canManageSites = user ? canManageSitesModule(user) : false;
 
   const refresh = () => {
     if (!token) return;

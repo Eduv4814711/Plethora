@@ -5,6 +5,8 @@ export interface JWTPayload {
   email: string;
   companyId: string;
   role: UserRole;
+  /** Non-empty list of dashboard module paths when admin assigned custom access; omitted/null = role defaults */
+  moduleAccess?: unknown;
   iat?: number;
   exp?: number;
 }

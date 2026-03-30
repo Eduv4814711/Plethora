@@ -6,6 +6,12 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
 import { listUsers, createUser, updateUser, deleteUser, factoryReset, FACTORY_RESET_MODULES, authFetch, type UserListItem, type UserRole, type FactoryResetModuleId } from "@/lib/api";
+import {
+  MODULE_ASSIGN_OPTIONS,
+  normalizeUserModuleAccess,
+  defaultModulesForRole,
+  isFullAdmin,
+} from "@/lib/permissions";
 import { DateInput } from "@/components/date-input";
 import { clsx } from "clsx";
 
@@ -19,12 +25,48 @@ const ROLE_LABELS: Record<UserRole, string> = {
   controller: "Controller",
 };
 
+/** Shown when "Assign Role" is selected (add/edit user). */
+const STAFF_ROLES: UserRole[] = ["operations_manager", "hr_payroll", "supervisor", "controller"];
+
+/** Map free-text to a staff UserRole. Returns null if unrecognized. */
+function parseStaffRoleInput(raw: string): UserRole | null {
+  const t = raw.trim().toLowerCase();
+  if (!t) return null;
+
+  const asKey = t.replace(/\s+/g, "_").replace(/&/g, "and").replace(/[^a-z0-9_]/g, "");
+  const squish = t.replace(/[\s&.,-]+/g, "");
+
+  for (const r of STAFF_ROLES) {
+    if (r === t || r === asKey) return r;
+    const label = ROLE_LABELS[r].toLowerCase();
+    const labelKey = label.replace(/\s+/g, "_").replace(/&/g, "and").replace(/[^a-z0-9_]/g, "");
+    if (label === t || labelKey === asKey) return r;
+  }
+
+  const aliases: Record<string, UserRole> = {
+    om: "operations_manager",
+    operationsmanager: "operations_manager",
+    opsmanager: "operations_manager",
+    hr: "hr_payroll",
+    hrandpayroll: "hr_payroll",
+    hrpayroll: "hr_payroll",
+    payroll: "hr_payroll",
+    pay: "hr_payroll",
+    sup: "supervisor",
+    ctrl: "controller",
+  };
+  if (aliases[squish]) return aliases[squish];
+  if (aliases[asKey.replace(/_/g, "")]) return aliases[asKey.replace(/_/g, "")];
+
+  return null;
+}
+
 export default function SettingsPage() {
   const { user, token, logout } = useAuth();
   const { settings, loading, update, refresh, error } = useSettings();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab") as Tab | null;
-  const isAdmin = user?.role === "admin";
+  const isFullAdminUser = user ? isFullAdmin(user) : false;
   const tabIds: Tab[] = ["profile", "business", "settings", "users", "migrate", "factory_reset"];
   const [activeTab, setActiveTab] = useState<Tab>(tabParam && tabIds.includes(tabParam) ? tabParam : "profile");
 
@@ -63,15 +105,15 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {!isAdmin && activeTab !== "profile" && (
+      {!isFullAdminUser && activeTab !== "profile" && (
         <div className="mb-4 p-3 text-sm text-neutral-700 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-neutral-200 dark:border-neutral-600">
-          Only administrators can edit business details and settings.
+          Only full administrators can edit business details and settings.
         </div>
       )}
 
       <div className="flex gap-1 mb-6 border-b border-neutral-200 dark:border-neutral-700 overflow-x-auto">
         {tabs
-          .filter((t) => !t.adminOnly || isAdmin)
+          .filter((t) => !t.adminOnly || isFullAdminUser)
           .map((tab) => {
             const tabProps = {
               key: tab.id,
@@ -103,7 +145,7 @@ export default function SettingsPage() {
         )}
         {activeTab === "business" && (
           <BusinessDetailsSection
-            readOnly={!isAdmin}
+            readOnly={!isFullAdminUser}
             settings={settings}
             saving={saving}
             saveError={saveError}
@@ -123,7 +165,7 @@ export default function SettingsPage() {
         )}
         {activeTab === "settings" && (
           <BusinessSettingsSection
-            readOnly={!isAdmin}
+            readOnly={!isFullAdminUser}
             settings={settings}
             saving={saving}
             saveError={saveError}
@@ -140,10 +182,10 @@ export default function SettingsPage() {
             }}
           />
         )}
-        {activeTab === "users" && isAdmin && token && (
+        {activeTab === "users" && isFullAdminUser && token && (
           <UsersSection token={token} currentUserId={user?.id} />
         )}
-        {activeTab === "factory_reset" && isAdmin && token && (
+        {activeTab === "factory_reset" && isFullAdminUser && token && (
           <FactoryResetSection token={token} refresh={refresh} logout={logout} />
         )}
       </div>
@@ -536,6 +578,9 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
     password: "",
     role: "supervisor" as UserRole,
   });
+  const [addAccountKind, setAddAccountKind] = useState<"admin" | "assign">("assign");
+  const [addStaffRoleInput, setAddStaffRoleInput] = useState(ROLE_LABELS.supervisor);
+  const [addStaffRoleFieldError, setAddStaffRoleFieldError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
@@ -544,6 +589,24 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
     password: "",
     role: "supervisor" as UserRole,
   });
+  /** Admin user: full tenant admin vs scoped (explicit module list). */
+  const [addAdminFullAccess, setAddAdminFullAccess] = useState(true);
+  /** Non-admin: assign modules vs no app access (pending page). */
+  const [addGrantAppModules, setAddGrantAppModules] = useState(true);
+  const [addCustomModules, setAddCustomModules] = useState<string[]>(() => defaultModulesForRole("supervisor"));
+  const [editAdminFullAccess, setEditAdminFullAccess] = useState(true);
+  const [editGrantAppModules, setEditGrantAppModules] = useState(true);
+  const [editCustomModules, setEditCustomModules] = useState<string[]>([]);
+  const [editAccountKind, setEditAccountKind] = useState<"admin" | "assign">("assign");
+  const [editStaffRoleInput, setEditStaffRoleInput] = useState(ROLE_LABELS.supervisor);
+  const [editStaffRoleFieldError, setEditStaffRoleFieldError] = useState<string | null>(null);
+
+  const assignableModules = (role: UserRole) =>
+    MODULE_ASSIGN_OPTIONS.filter((m) => m.href !== "/audit" || role === "admin");
+
+  const toggleCustomModule = (href: string, setList: React.Dispatch<React.SetStateAction<string[]>>) => {
+    setList((prev) => (prev.includes(href) ? prev.filter((x) => x !== href) : [...prev, href]));
+  };
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -561,13 +624,70 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
     fetchUsers();
   }, [fetchUsers]);
 
+  useEffect(() => {
+    if (addForm.role === "admin") {
+      setAddAdminFullAccess(true);
+      return;
+    }
+    setAddGrantAppModules(true);
+    setAddCustomModules(defaultModulesForRole(addForm.role));
+  }, [addForm.role]);
+
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    let resolvedRole: UserRole = addForm.role;
+    let modulesForPayload = addCustomModules;
+    let roleLabelForPayload: string | null = null;
+
+    if (addAccountKind === "assign") {
+      const typedRole = addStaffRoleInput.trim();
+      if (!typedRole) {
+        setError("Please enter a role title.");
+        setAddStaffRoleFieldError("Role is required.");
+        return;
+      }
+      roleLabelForPayload = typedRole;
+      const parsedRole = parseStaffRoleInput(typedRole);
+      resolvedRole = parsedRole ?? "supervisor";
+      if (resolvedRole !== addForm.role) {
+        modulesForPayload = defaultModulesForRole(resolvedRole);
+      }
+    } else {
+      resolvedRole = "admin";
+      roleLabelForPayload = null;
+    }
+
+    if (resolvedRole === "admin") {
+      if (!addAdminFullAccess && modulesForPayload.length === 0) {
+        setError("Select at least one module for a scoped administrator, or choose Full access.");
+        return;
+      }
+    } else if (addGrantAppModules && modulesForPayload.length === 0) {
+      setError("Select at least one module, or choose No app access.");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     try {
-      await createUser(token, addForm);
+      let payload: Parameters<typeof createUser>[1];
+      if (resolvedRole === "admin") {
+        payload = addAdminFullAccess
+          ? { ...addForm, role: "admin", roleLabel: null }
+          : { ...addForm, role: "admin", roleLabel: null, moduleAccess: modulesForPayload };
+      } else if (addGrantAppModules) {
+        payload = { ...addForm, role: resolvedRole, roleLabel: roleLabelForPayload, moduleAccess: modulesForPayload };
+      } else {
+        payload = { ...addForm, role: resolvedRole, roleLabel: roleLabelForPayload, moduleAccess: null };
+      }
+      await createUser(token, payload);
       setAddForm({ name: "", email: "", password: "", role: "supervisor" });
+      setAddStaffRoleInput(ROLE_LABELS.supervisor);
+      setAddStaffRoleFieldError(null);
+      setAddAccountKind("assign");
+      setAddAdminFullAccess(true);
+      setAddGrantAppModules(true);
+      setAddCustomModules(defaultModulesForRole("supervisor"));
       setShowAddForm(false);
       await fetchUsers();
     } catch (err) {
@@ -580,13 +700,62 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
   const handleEditUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUserId) return;
+
+    let resolvedEditRole: UserRole = editForm.role;
+    let editModulesPayload = editCustomModules;
+    let editRoleLabelForPayload: string | null = null;
+
+    if (editAccountKind === "assign") {
+      const typedRole = editStaffRoleInput.trim();
+      if (!typedRole) {
+        setError("Please enter a role title.");
+        setEditStaffRoleFieldError("Role is required.");
+        return;
+      }
+      editRoleLabelForPayload = typedRole;
+      const parsedRole = parseStaffRoleInput(typedRole);
+      resolvedEditRole = parsedRole ?? "supervisor";
+      if (resolvedEditRole !== editForm.role) {
+        editModulesPayload = defaultModulesForRole(resolvedEditRole);
+      }
+    } else {
+      resolvedEditRole = "admin";
+      editRoleLabelForPayload = null;
+    }
+
+    if (resolvedEditRole === "admin") {
+      if (!editAdminFullAccess && editModulesPayload.length === 0) {
+        setError("Select at least one module for a scoped administrator, or choose Full access.");
+        return;
+      }
+    } else if (editGrantAppModules && editModulesPayload.length === 0) {
+      setError("Select at least one module, or choose No app access.");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     try {
-      const payload: Partial<{ name: string; email: string; password: string; role: UserRole }> = {
+      const payload: Partial<{
+        name: string;
+        email: string;
+        password: string;
+        role: UserRole;
+        roleLabel: string | null;
+        moduleAccess: string[] | null;
+      }> = {
         name: editForm.name,
         email: editForm.email,
-        role: editForm.role,
+        role: resolvedEditRole,
+        roleLabel: editRoleLabelForPayload,
+        moduleAccess:
+          resolvedEditRole === "admin"
+            ? editAdminFullAccess
+              ? null
+              : editModulesPayload
+            : editGrantAppModules
+              ? editModulesPayload
+              : null,
       };
       if (editForm.password) payload.password = editForm.password;
       await updateUser(token, editingUserId, payload);
@@ -615,12 +784,23 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
 
   const startEditing = (u: UserListItem) => {
     setEditingUserId(u.id);
+    setEditAccountKind(u.role === "admin" ? "admin" : "assign");
+    setEditStaffRoleFieldError(null);
+    setEditStaffRoleInput(u.role === "admin" ? ROLE_LABELS.supervisor : (u.roleLabel?.trim() || ROLE_LABELS[u.role]));
     setEditForm({
       name: u.name,
       email: u.email,
       password: "",
       role: u.role,
     });
+    const norm = normalizeUserModuleAccess(u.moduleAccess);
+    if (u.role === "admin") {
+      setEditAdminFullAccess(!norm);
+      setEditCustomModules(norm ?? defaultModulesForRole("admin"));
+    } else {
+      setEditGrantAppModules(!!norm);
+      setEditCustomModules(norm ?? defaultModulesForRole(u.role));
+    }
   };
 
   if (loading) {
@@ -634,9 +814,30 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
   return (
     <div>
       <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Users & Roles</h3>
-      <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-6">
-        Add, edit, and delete users. Assign role-based permissions. Only admins can manage users.
-      </p>
+      <div className="text-sm text-neutral-600 dark:text-neutral-400 mb-6 leading-relaxed max-w-3xl space-y-3">
+        <p>
+          Use this page to invite people and control <strong className="font-medium text-neutral-800 dark:text-neutral-200">what they can open in Plethora</strong>—not everyone needs to see payroll, team, or settings.
+        </p>
+        <ul className="list-disc pl-5 space-y-1.5 marker:text-neutral-400">
+          <li>
+            <strong className="font-medium text-neutral-800 dark:text-neutral-200">Full admin</strong> — can use the whole app (including users and audit). Pick “Admin” and full access when adding them.
+          </li>
+          <li>
+            <strong className="font-medium text-neutral-800 dark:text-neutral-200">Everyone else</strong> — tick only the sections they need. If something isn’t ticked, they won’t see it in the menu.
+          </li>
+          <li>
+            <strong className="font-medium text-neutral-800 dark:text-neutral-200">No app access</strong> — the account stays active, but they’ll see a “waiting for access” note until you turn on at least one section.
+          </li>
+          <li>
+            After you save changes, ask that person to <strong className="font-medium text-neutral-800 dark:text-neutral-200">sign out and back in</strong> so their screen updates.
+          </li>
+        </ul>
+        <p className="text-xs text-neutral-500 dark:text-neutral-500 pt-1">
+          Trouble saving? The database may need an update for permissions—your IT person can run{" "}
+          <code className="bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded font-mono text-[11px]">npm run db:add-module-access</code> or{" "}
+          <code className="bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded font-mono text-[11px]">npm run db:push</code> from the project folder.
+        </p>
+      </div>
 
       {error && (
         <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-sm border border-red-200 dark:border-red-800/50">
@@ -702,19 +903,142 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Role</label>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Account</label>
                 <select
-                  value={addForm.role}
-                  onChange={(e) => setAddForm((f) => ({ ...f, role: e.target.value as UserRole }))}
+                  value={addAccountKind}
+                  onChange={(e) => {
+                    const k = e.target.value as "admin" | "assign";
+                    setAddAccountKind(k);
+                    if (k === "admin") {
+                      setAddForm((f) => ({ ...f, role: "admin" }));
+                    } else {
+                      setAddForm((f) => ({ ...f, role: "supervisor" }));
+                      setAddStaffRoleInput(ROLE_LABELS.supervisor);
+                      setAddStaffRoleFieldError(null);
+                    }
+                  }}
                   className="input-modern"
                 >
-                  {(Object.keys(ROLE_LABELS) as UserRole[]).map((r) => (
-                    <option key={r} value={r}>
-                      {ROLE_LABELS[r]}
-                    </option>
-                  ))}
+                  <option value="admin">Admin</option>
+                  <option value="assign">Assign Role</option>
                 </select>
+                {addAccountKind === "assign" && (
+                  <>
+                    <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mt-3 mb-1">
+                      Role
+                    </label>
+                    <input
+                      type="text"
+                      value={addStaffRoleInput}
+                      onChange={(e) => {
+                        setAddStaffRoleInput(e.target.value);
+                        setAddStaffRoleFieldError(null);
+                      }}
+                      onBlur={() => {
+                        if (!addStaffRoleInput.trim()) {
+                          setAddStaffRoleFieldError("Role is required.");
+                        }
+                      }}
+                      className="input-modern"
+                      placeholder="e.g. Site Supervisor, HR & Payroll, operations_manager"
+                      autoComplete="off"
+                    />
+                    {addStaffRoleFieldError && (
+                      <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">{addStaffRoleFieldError}</p>
+                    )}
+                  </>
+                )}
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1.5">
+                  Choose Admin or Assign Role, then type any role title manually. Module rules apply below.
+                </p>
               </div>
+            </div>
+            <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg p-4 space-y-3">
+              <p className="text-sm font-medium text-neutral-800 dark:text-white">Module access</p>
+              {addForm.role === "admin" ? (
+                <>
+                  <div className="flex flex-wrap gap-4">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer text-neutral-700 dark:text-neutral-300">
+                      <input
+                        type="radio"
+                        name="addAdminAccess"
+                        checked={addAdminFullAccess}
+                        onChange={() => setAddAdminFullAccess(true)}
+                        className="border-neutral-300"
+                      />
+                      Full access (all modules, user management, audit)
+                    </label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer text-neutral-700 dark:text-neutral-300">
+                      <input
+                        type="radio"
+                        name="addAdminAccess"
+                        checked={!addAdminFullAccess}
+                        onChange={() => {
+                          setAddAdminFullAccess(false);
+                          setAddCustomModules(defaultModulesForRole("admin"));
+                        }}
+                        className="border-neutral-300"
+                      />
+                      Scoped admin (select modules below)
+                    </label>
+                  </div>
+                  {!addAdminFullAccess && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      {assignableModules("admin").map((m) => (
+                        <label key={m.href} className="flex items-center gap-2 text-sm cursor-pointer text-neutral-700 dark:text-neutral-300">
+                          <input
+                            type="checkbox"
+                            checked={addCustomModules.includes(m.href)}
+                            onChange={() => toggleCustomModule(m.href, setAddCustomModules)}
+                            className="border-neutral-300 rounded"
+                          />
+                          {m.label}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-4">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer text-neutral-700 dark:text-neutral-300">
+                      <input
+                        type="radio"
+                        name="addGrantModules"
+                        checked={addGrantAppModules}
+                        onChange={() => setAddGrantAppModules(true)}
+                        className="border-neutral-300"
+                      />
+                      Assign modules (tick at least one)
+                    </label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer text-neutral-700 dark:text-neutral-300">
+                      <input
+                        type="radio"
+                        name="addGrantModules"
+                        checked={!addGrantAppModules}
+                        onChange={() => setAddGrantAppModules(false)}
+                        className="border-neutral-300"
+                      />
+                      No app access (login only until you assign modules later)
+                    </label>
+                  </div>
+                  {addGrantAppModules && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      {assignableModules(addForm.role).map((m) => (
+                        <label key={m.href} className="flex items-center gap-2 text-sm cursor-pointer text-neutral-700 dark:text-neutral-300">
+                          <input
+                            type="checkbox"
+                            checked={addCustomModules.includes(m.href)}
+                            onChange={() => toggleCustomModule(m.href, setAddCustomModules)}
+                            className="border-neutral-300 rounded"
+                          />
+                          {m.label}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
             <button type="submit" disabled={submitting} className="btn-primary">
               {submitting ? "Adding..." : "Add User"}
@@ -729,6 +1053,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                 <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Name</th>
                 <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Email</th>
                 <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Role</th>
+                <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Modules</th>
                 <th className="text-right py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300 w-32">Actions</th>
               </tr>
             </thead>
@@ -753,7 +1078,17 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                       {editingUserId === u.id ? null : u.email}
                     </td>
                     <td className="py-3 px-4 text-neutral-700 dark:text-neutral-300">
-                      {editingUserId === u.id ? null : ROLE_LABELS[u.role]}
+                      {editingUserId === u.id ? null : (u.roleLabel?.trim() || ROLE_LABELS[u.role])}
+                    </td>
+                    <td className="py-3 px-4 text-neutral-600 dark:text-neutral-400 text-xs">
+                      {editingUserId === u.id
+                        ? null
+                        : (() => {
+                            const m = normalizeUserModuleAccess(u.moduleAccess);
+                            if (m) return `${m.length} assigned`;
+                            if (u.role === "admin") return "Full admin";
+                            return "None (pending)";
+                          })()}
                     </td>
                     <td className="py-3 px-4 text-right">
                       {editingUserId === u.id ? (
@@ -793,7 +1128,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                   </tr>
                   {editingUserId === u.id && (
                     <tr className="border-b border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50">
-                      <td colSpan={4} className="py-4 px-4">
+                      <td colSpan={5} className="py-4 px-4">
                         <form onSubmit={handleEditUser} className="space-y-4">
                           <h4 className="font-medium text-neutral-800 dark:text-white">Edit User</h4>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -830,19 +1165,153 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                               />
                             </div>
                             <div>
-                              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Role</label>
+                              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                                Account
+                              </label>
                               <select
-                                value={editForm.role}
-                                onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value as UserRole }))}
+                                value={editAccountKind}
+                                onChange={(e) => {
+                                  const k = e.target.value as "admin" | "assign";
+                                  setEditAccountKind(k);
+                                  if (k === "admin") {
+                                    setEditForm((f) => ({ ...f, role: "admin" }));
+                                    setEditAdminFullAccess(true);
+                                    setEditCustomModules(defaultModulesForRole("admin"));
+                                  } else {
+                                    setEditForm((f) => ({ ...f, role: "supervisor" }));
+                                    setEditStaffRoleInput(ROLE_LABELS.supervisor);
+                                    setEditStaffRoleFieldError(null);
+                                    setEditGrantAppModules(true);
+                                    setEditCustomModules(defaultModulesForRole("supervisor"));
+                                  }
+                                }}
                                 className="input-modern"
                               >
-                                {(Object.keys(ROLE_LABELS) as UserRole[]).map((r) => (
-                                  <option key={r} value={r}>
-                                    {ROLE_LABELS[r]}
-                                  </option>
-                                ))}
+                                <option value="admin">Admin</option>
+                                <option value="assign">Assign Role</option>
                               </select>
+                              {editAccountKind === "assign" && (
+                                <>
+                                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mt-3 mb-1">
+                                    Role
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={editStaffRoleInput}
+                                    onChange={(e) => {
+                                      setEditStaffRoleInput(e.target.value);
+                                      setEditStaffRoleFieldError(null);
+                                    }}
+                                    onBlur={() => {
+                                      if (!editStaffRoleInput.trim()) {
+                                        setEditStaffRoleFieldError("Role is required.");
+                                      }
+                                    }}
+                                    className="input-modern"
+                                    placeholder="e.g. Site Supervisor, HR & Payroll, operations_manager"
+                                    autoComplete="off"
+                                  />
+                                  {editStaffRoleFieldError && (
+                                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                                      {editStaffRoleFieldError}
+                                    </p>
+                                  )}
+                                </>
+                              )}
                             </div>
+                          </div>
+                          <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg p-4 space-y-3">
+                            <p className="text-sm font-medium text-neutral-800 dark:text-white">Module access</p>
+                            {editForm.role === "admin" ? (
+                              <>
+                                <div className="flex flex-wrap gap-4">
+                                  <label className="flex items-center gap-2 text-sm cursor-pointer text-neutral-700 dark:text-neutral-300">
+                                    <input
+                                      type="radio"
+                                      name="editAdminAccess"
+                                      checked={editAdminFullAccess}
+                                      onChange={() => setEditAdminFullAccess(true)}
+                                      className="border-neutral-300"
+                                    />
+                                    Full access
+                                  </label>
+                                  <label className="flex items-center gap-2 text-sm cursor-pointer text-neutral-700 dark:text-neutral-300">
+                                    <input
+                                      type="radio"
+                                      name="editAdminAccess"
+                                      checked={!editAdminFullAccess}
+                                      onChange={() => {
+                                        setEditAdminFullAccess(false);
+                                        setEditCustomModules(defaultModulesForRole("admin"));
+                                      }}
+                                      className="border-neutral-300"
+                                    />
+                                    Scoped (select modules)
+                                  </label>
+                                </div>
+                                {!editAdminFullAccess && (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                                    {assignableModules("admin").map((m) => (
+                                      <label
+                                        key={m.href}
+                                        className="flex items-center gap-2 text-sm cursor-pointer text-neutral-700 dark:text-neutral-300"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={editCustomModules.includes(m.href)}
+                                          onChange={() => toggleCustomModule(m.href, setEditCustomModules)}
+                                          className="border-neutral-300 rounded"
+                                        />
+                                        {m.label}
+                                      </label>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <div className="flex flex-wrap gap-4">
+                                  <label className="flex items-center gap-2 text-sm cursor-pointer text-neutral-700 dark:text-neutral-300">
+                                    <input
+                                      type="radio"
+                                      name="editGrantModules"
+                                      checked={editGrantAppModules}
+                                      onChange={() => setEditGrantAppModules(true)}
+                                      className="border-neutral-300"
+                                    />
+                                    Assign modules
+                                  </label>
+                                  <label className="flex items-center gap-2 text-sm cursor-pointer text-neutral-700 dark:text-neutral-300">
+                                    <input
+                                      type="radio"
+                                      name="editGrantModules"
+                                      checked={!editGrantAppModules}
+                                      onChange={() => setEditGrantAppModules(false)}
+                                      className="border-neutral-300"
+                                    />
+                                    No app access
+                                  </label>
+                                </div>
+                                {editGrantAppModules && (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                                    {assignableModules(editForm.role).map((m) => (
+                                      <label
+                                        key={m.href}
+                                        className="flex items-center gap-2 text-sm cursor-pointer text-neutral-700 dark:text-neutral-300"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={editCustomModules.includes(m.href)}
+                                          onChange={() => toggleCustomModule(m.href, setEditCustomModules)}
+                                          className="border-neutral-300 rounded"
+                                        />
+                                        {m.label}
+                                      </label>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            )}
                           </div>
                           <div className="flex gap-2">
                             <button type="submit" disabled={submitting} className="btn-primary text-sm">

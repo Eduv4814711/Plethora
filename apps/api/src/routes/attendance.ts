@@ -36,7 +36,10 @@ const manualAttendanceSchema = z.object({
 });
 
 export async function attendanceRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"])];
+  const protect = [
+    authMiddleware,
+    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], { module: "/attendance" }),
+  ];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
@@ -602,7 +605,10 @@ export async function attendanceRoutes(app: FastifyInstance) {
     return reply.send(attendance);
   });
 
-  const updateAttendanceProtect = [authMiddleware, requireRole(["admin", "hr_payroll"])];
+  const updateAttendanceProtect = [
+    authMiddleware,
+    requireRole(["admin", "hr_payroll"], { module: "/attendance" }),
+  ];
 
   app.put("/:id", { preHandler: updateAttendanceProtect }, async (request, reply) => {
     const { id } = request.params as { id: string };

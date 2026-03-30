@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
+import { canManageSitesModule } from "@/lib/permissions";
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
   guarding: "Guarding",
@@ -74,7 +75,7 @@ export default function SiteDetailPage() {
   const [draggedGuard, setDraggedGuard] = useState<{ guard: Guard; source: "pool" | string } | null>(null);
   const [dragOverPost, setDragOverPost] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const canManage = ["admin", "operations_manager", "hr_payroll", "supervisor"].includes((user as { role?: string })?.role ?? "");
+  const canManage = user ? canManageSitesModule(user) : false;
 
   const refresh = () => {
     if (!token || !siteId) return;

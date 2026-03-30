@@ -11,7 +11,7 @@ const createCommentSchema = z.object({
 });
 
 export async function taskCommentsRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole([...TASK_ROLES])];
+  const protect = [authMiddleware, requireRole([...TASK_ROLES], { module: "/tasks" })];
 
   app.get("/tasks/:taskId/comments", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

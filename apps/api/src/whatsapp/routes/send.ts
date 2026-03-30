@@ -25,7 +25,9 @@ const sendTemplateSchema = z.object({
 export async function sendRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"]),
+    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
+      module: "/whatsapp",
+    }),
   ];
 
   app.post("/send", { preHandler: protect }, async (request, reply) => {

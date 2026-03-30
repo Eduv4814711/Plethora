@@ -3,6 +3,7 @@
 import React, { useState, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { isFullAdmin } from "@/lib/permissions";
 import {
   downloadMigrationTemplate,
   migrationPreview,
@@ -16,7 +17,7 @@ import {
 
 export default function MigratePage() {
   const { user, token } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const isFullAdminUser = user ? isFullAdmin(user) : false;
 
   const [companiesFile, setCompaniesFile] = useState<File | null>(null);
   const [employeesFile, setEmployeesFile] = useState<File | null>(null);
@@ -36,7 +37,7 @@ export default function MigratePage() {
   const [exportEmployeesLoading, setExportEmployeesLoading] = useState(false);
   const [exportSitesLoading, setExportSitesLoading] = useState(false);
 
-  const hasFiles = !!(employeesFile || sitesFile || (isAdmin && companiesFile));
+  const hasFiles = !!(employeesFile || sitesFile || (isFullAdminUser && companiesFile));
 
   const canImport =
     hasFiles &&
@@ -44,7 +45,7 @@ export default function MigratePage() {
     preview.companies.errors.length === 0 &&
     preview.employees.errors.length === 0 &&
     preview.sites.errors.length === 0 &&
-    (preview.employees.validCount > 0 || preview.sites.validCount > 0 || (isAdmin && preview.companies.validCount > 0));
+    (preview.employees.validCount > 0 || preview.sites.validCount > 0 || (isFullAdminUser && preview.companies.validCount > 0));
 
   const handleDownloadTemplate = useCallback(
     async (type: "company" | "employees" | "sites") => {
@@ -64,7 +65,7 @@ export default function MigratePage() {
     if (!token) return;
     if (!hasFiles) {
       setPreviewError(
-        isAdmin
+        isFullAdminUser
           ? "Upload companies.csv and/or team (employees.csv), sites.csv"
           : "Upload at least team (employees.csv) or sites.csv"
       );
@@ -86,7 +87,7 @@ export default function MigratePage() {
     } finally {
       setPreviewLoading(false);
     }
-  }, [token, isAdmin, companiesFile, employeesFile, sitesFile]);
+  }, [token, isFullAdminUser, companiesFile, employeesFile, sitesFile]);
 
   const handleImport = useCallback(async () => {
     if (!token || !canImport) return;
@@ -95,7 +96,7 @@ export default function MigratePage() {
     setImportError(null);
     setImportResult(null);
     try {
-      if (isAdmin && companiesFile) {
+      if (isFullAdminUser && companiesFile) {
         const res = await migrationAdminBulkCreate(token, {
           companies: companiesFile,
           employees: employeesFile ?? undefined,
@@ -114,7 +115,7 @@ export default function MigratePage() {
     } finally {
       setImportLoading(false);
     }
-  }, [token, canImport, isAdmin, companiesFile, employeesFile, sitesFile]);
+  }, [token, canImport, isFullAdminUser, companiesFile, employeesFile, sitesFile]);
 
   const handleExportEmployees = useCallback(async () => {
     if (!token) return;
@@ -164,7 +165,7 @@ export default function MigratePage() {
         Bulk Import / Export
       </h1>
       <p className="text-neutral-600 dark:text-neutral-400 mb-6">
-        {isAdmin
+        {isFullAdminUser
           ? "Export team and sites to CSV, or upload CSV files to create multiple companies with team and sites. Download templates, validate, then import."
           : "Export team and sites to CSV, or upload CSV files to import team and sites into your company. Download templates, validate, then import."}
       </p>
@@ -208,7 +209,7 @@ export default function MigratePage() {
             Step 1: Download templates
           </h2>
           <div className="flex flex-wrap gap-3">
-            {isAdmin && (
+            {isFullAdminUser && (
               <button
                 type="button"
                 onClick={() => handleDownloadTemplate("company")}
@@ -239,7 +240,7 @@ export default function MigratePage() {
             Step 2: Upload your CSV files
           </h2>
           <div className="grid gap-4 sm:grid-cols-3">
-            {isAdmin && (
+            {isFullAdminUser && (
               <FileInput
                 label="Companies (required for admin)"
                 accept=".csv"

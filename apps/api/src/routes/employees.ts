@@ -141,8 +141,16 @@ const statusTransitionSchema = z.object({
 });
 
 export async function employeesRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"])];
-  const readProtect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"])];
+  const protect = [
+    authMiddleware,
+    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"], { module: "/employees" }),
+  ];
+  const readProtect = [
+    authMiddleware,
+    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
+      module: "/employees",
+    }),
+  ];
 
   app.get("/", { preHandler: readProtect }, async (request, reply) => {
     const user = request.user!;

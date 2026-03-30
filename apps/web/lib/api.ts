@@ -6,7 +6,10 @@ export interface AuthUser {
   name: string;
   email: string;
   role: string;
+  roleLabel?: string | null;
   companyId: string;
+  /** Non-empty list = admin-assigned modules only; omitted/null = use role defaults */
+  moduleAccess?: string[] | null;
 }
 
 export interface LoginResponse {
@@ -262,8 +265,10 @@ export interface UserListItem {
   name: string;
   email: string;
   role: UserRole;
+  roleLabel?: string | null;
   companyId: string;
   createdAt: string;
+  moduleAccess?: unknown;
 }
 
 export async function listUsers(token: string): Promise<{ data: UserListItem[]; total: number }> {
@@ -277,7 +282,7 @@ export async function listUsers(token: string): Promise<{ data: UserListItem[]; 
 
 export async function createUser(
   token: string,
-  data: { name: string; email: string; password: string; role: UserRole }
+  data: { name: string; email: string; password: string; role: UserRole; roleLabel?: string | null; moduleAccess?: string[] | null }
 ): Promise<UserListItem> {
   const res = await authFetch("/users", token, {
     method: "POST",
@@ -294,7 +299,7 @@ export async function createUser(
 export async function updateUser(
   token: string,
   id: string,
-  data: Partial<{ name: string; email: string; password: string; role: UserRole }>
+  data: Partial<{ name: string; email: string; password: string; role: UserRole; roleLabel: string | null; moduleAccess: string[] | null }>
 ): Promise<UserListItem> {
   const res = await authFetch(`/users/${id}`, token, {
     method: "PUT",
@@ -302,7 +307,8 @@ export async function updateUser(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to update user");
+    const msg = err?.message;
+    throw new Error(typeof msg === "string" ? msg : "Failed to update user");
   }
   return res.json();
 }

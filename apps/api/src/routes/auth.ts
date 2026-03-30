@@ -3,6 +3,7 @@ import { z } from "zod";
 import { login, refreshAccessToken, hashPassword, issueTokensForUser } from "../services/auth.service.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
+import { findUniqueUserForMe } from "../lib/user-module-column.js";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -126,34 +127,7 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(401).send({ error: "Unauthorized" });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: request.user.sub },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        companyId: true,
-        company: {
-          select: {
-            id: true,
-            name: true,
-            legalName: true,
-            registrationNumber: true,
-            taxNumber: true,
-            address: true,
-            phone: true,
-            email: true,
-            logoUrl: true,
-            website: true,
-            fax: true,
-            psiraRegistration: true,
-            uifReference: true,
-            settings: true,
-          },
-        },
-      },
-    });
+    const user = await findUniqueUserForMe(request.user.sub);
 
     if (!user) {
       return reply.code(404).send({ error: "User not found" });

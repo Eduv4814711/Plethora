@@ -13,7 +13,9 @@ const GRAPH_URL = "https://graph.facebook.com";
 export async function templatesRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"]),
+    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
+      module: "/whatsapp",
+    }),
   ];
 
   app.get("/templates", { preHandler: protect }, async (request, reply) => {

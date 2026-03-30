@@ -12,7 +12,9 @@ import {
   MAIN_NAV_HREFS,
   MORE_NAV_HREFS,
   canAccessRoute,
-  getDefaultRouteForRole,
+  getDefaultRouteForUser,
+  isFullAdmin,
+  normalizeUserModuleAccess,
 } from "@/lib/permissions";
 import { clsx } from "clsx";
 
@@ -32,8 +34,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!user || !pathname) return;
-    if (!canAccessRoute(pathname, user.role)) {
-      router.replace(getDefaultRouteForRole(user.role));
+    if (!canAccessRoute(pathname, user.role, user.moduleAccess)) {
+      router.replace(getDefaultRouteForUser(user));
     }
   }, [pathname, user, router]);
 
@@ -89,28 +91,25 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           });
           await refresh();
         }}
-        isAdmin={user.role === "admin"}
+        isAdmin={isFullAdmin(user)}
         onLogout={logout}
       />
     );
   }
 
-  const userRole = user.role as "admin" | "operations_manager" | "hr_payroll" | "supervisor" | "controller";
-  const allNavItems = NAV_ITEMS.filter((item) => {
-    if (item.roles.length === 0) return true;
-    return item.roles.includes(userRole);
-  });
+  const allNavItems = NAV_ITEMS.filter((item) => canAccessRoute(item.href, user.role, user.moduleAccess));
 
   const mainNavItems = allNavItems.filter((item) => MAIN_NAV_HREFS.includes(item.href));
   const moreNavItems = allNavItems.filter((item) => MORE_NAV_HREFS.includes(item.href));
-  const canAccessSettings = canAccessRoute("/settings", user.role);
+  const canAccessSettings = canAccessRoute("/settings", user.role, user.moduleAccess);
 
-  const hasAccess = canAccessRoute(pathname, user.role);
+  const hasAccess = canAccessRoute(pathname, user.role, user.moduleAccess);
   const isDashboardHome = pathname === "/";
   const isWhatsAppPage = pathname === "/whatsapp" || pathname.startsWith("/whatsapp/");
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
+  const roleDisplay = user.roleLabel?.trim() || user.role.replace(/_/g, " ");
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg-canvas)]">
@@ -176,6 +175,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
         <div className="flex items-center gap-2 shrink-0">
           <div ref={searchRef} className="relative flex items-center">
+            {(user.role === "admin" || normalizeUserModuleAccess(user.moduleAccess)) && (
+            <>
             {searchOpen ? (
               <div className="flex items-center gap-2">
                 <SearchDropdown onClose={() => setSearchOpen(false)} />
@@ -200,6 +201,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </button>
+            )}
+            </>
             )}
           </div>
 
@@ -237,7 +240,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <div className="px-4 py-3 border-b border-security-navy-100">
                   <p className="text-sm font-semibold text-security-navy">{user.name}</p>
                   <p className="text-xs text-security-navy-500 capitalize mt-0.5">
-                    {user.role.replace(/_/g, " ")}
+                    {roleDisplay}
                   </p>
                 </div>
                 <button

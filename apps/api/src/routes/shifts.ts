@@ -203,8 +203,16 @@ async function handleBulkCreateSite(
 }
 
 export async function shiftsRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"])];
-  const verifyProtect = [authMiddleware, requireRole(["admin", "hr_payroll"])];
+  const protect = [
+    authMiddleware,
+    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
+      module: "/rostering",
+    }),
+  ];
+  const verifyProtect = [
+    authMiddleware,
+    requireRole(["admin", "hr_payroll"], { anyOfModules: ["/rostering", "/payroll"] }),
+  ];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

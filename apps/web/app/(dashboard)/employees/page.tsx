@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
+import { isFullAdmin } from "@/lib/permissions";
 import { DateInput } from "@/components/date-input";
 import { clsx } from "clsx";
 
@@ -91,8 +92,12 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   offboarded: [],
 };
 
+/** Bucket key for team members with no group or an unknown/deleted group id */
+const TEAM_UNASSIGNED_FOLDER_KEY = "__unassigned__";
+
 export default function EmployeesPage() {
   const { token, user } = useAuth();
+  const canDeleteEmployees = user ? isFullAdmin(user) : false;
   const searchParams = useSearchParams();
   const searchQuery = searchParams.get("q") ?? "";
   const defaultCompanyName = (user as { company?: { name: string } } | null)?.company?.name ?? "";
@@ -102,16 +107,44 @@ export default function EmployeesPage() {
   const [showForm, setShowForm] = useState(false);
   const [showManageGroups, setShowManageGroups] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [groupFilter, setGroupFilter] = useState<string>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [statusChangeId, setStatusChangeId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => new Set());
+
+  const groupSections = useMemo(() => {
+    const validIds = new Set(groups.map((g) => g.id));
+    const byKey = new Map<string, Employee[]>();
+    for (const emp of employees) {
+      const rawId = emp.group?.id ?? emp.groupId ?? null;
+      const key =
+        rawId && validIds.has(rawId) ? rawId : TEAM_UNASSIGNED_FOLDER_KEY;
+      if (!byKey.has(key)) byKey.set(key, []);
+      byKey.get(key)!.push(emp);
+    }
+    const sorted = [...groups].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+    );
+    const sections = sorted.map((g) => ({
+      key: g.id,
+      name: g.name,
+      employees: byKey.get(g.id) ?? [],
+    }));
+    const unassigned = byKey.get(TEAM_UNASSIGNED_FOLDER_KEY);
+    if (unassigned && unassigned.length > 0) {
+      sections.push({
+        key: TEAM_UNASSIGNED_FOLDER_KEY,
+        name: "Unassigned",
+        employees: unassigned,
+      });
+    }
+    return sections;
+  }, [employees, groups]);
 
   const fetchEmployees = () => {
     if (!token) return;
     const params = new URLSearchParams();
     if (statusFilter !== "all") params.set("status", statusFilter);
-    if (groupFilter !== "all") params.set("groupId", groupFilter);
     if (searchQuery.trim().length >= 2) params.set("q", searchQuery.trim());
     const url = `/employees${params.toString() ? `?${params}` : ""}`;
     authFetch(url, token)
@@ -132,7 +165,7 @@ export default function EmployeesPage() {
     fetchEmployees();
     fetchGroups();
     setLoading(false);
-  }, [token, statusFilter, groupFilter, searchQuery]);
+  }, [token, statusFilter, searchQuery]);
 
   if (loading) {
     return (
@@ -184,13 +217,26 @@ export default function EmployeesPage() {
         </div>
       </div>
 
-      <div className="flex flex-nowrap items-center gap-3 mb-8 p-4 rounded-[10px] bg-wireframe-accent border-2 border-neutral-200">
-        <span className="text-sm font-medium text-black shrink-0">Filters:</span>
-        <div className="flex items-center gap-3 shrink-0">
+      <div className="flex flex-wrap items-center gap-4 mb-8 p-4 sm:p-5 rounded-security-lg bg-gradient-to-br from-white via-neutral-50/80 to-security-navy-50/30 border-2 border-neutral-200 shadow-security-card">
+        <span className="text-xs font-bold uppercase tracking-widest text-neutral-600 shrink-0">
+          Filters
+        </span>
+        <div className="relative shrink-0 min-w-[min(100%,14rem)] sm:min-w-[15.5rem]">
+          <label htmlFor="team-status-filter" className="sr-only">
+            Filter team by employment status
+          </label>
           <select
+            id="team-status-filter"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="input-modern h-11 w-40 cursor-pointer"
+            className={clsx(
+              "h-11 w-full min-w-[13.5rem] appearance-none rounded-security-lg border-2 border-neutral-200/90 bg-white",
+              "pl-4 pr-11 text-sm font-semibold text-neutral-900 tracking-tight",
+              "shadow-security-card",
+              "cursor-pointer transition-all duration-200 ease-out",
+              "hover:border-security-navy-300 hover:shadow-security-card-hover",
+              "focus:border-security-navy-500 focus:outline-none focus:ring-2 focus:ring-security-navy-200 focus:ring-offset-2 focus:ring-offset-white"
+            )}
           >
             <option value="all">All statuses</option>
             <option value="applicant">Applicant</option>
@@ -200,16 +246,14 @@ export default function EmployeesPage() {
             <option value="suspended">Suspended</option>
             <option value="offboarded">Offboarded</option>
           </select>
-          <select
-            value={groupFilter}
-            onChange={(e) => setGroupFilter(e.target.value)}
-            className="input-modern h-11 w-40 cursor-pointer"
+          <span
+            className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-[calc(0.5rem-1px)] border-l border-neutral-200/70 bg-gradient-to-b from-security-navy-50/90 to-white text-security-navy-700"
+            aria-hidden
           >
-            <option value="all">All groups</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>{g.name}</option>
-            ))}
-          </select>
+            <svg className="h-4 w-4 shrink-0 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.25} d="M19 9l-7 7-7-7" />
+            </svg>
+          </span>
         </div>
       </div>
 
@@ -229,6 +273,7 @@ export default function EmployeesPage() {
           employeeId={editingId}
           token={token!}
           defaultPlaceOfWork={defaultCompanyName}
+          canDeleteEmployees={canDeleteEmployees}
           onClose={() => setEditingId(null)}
           onSuccess={() => {
             setEditingId(null);
@@ -260,118 +305,91 @@ export default function EmployeesPage() {
         />
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {employees.map((emp) => (
-          <div
-            key={emp.id}
-            onClick={() => setExpandedId((prev) => (prev === emp.id ? null : emp.id))}
-            className={`card-elevated p-5 cursor-pointer ${
-              expandedId === emp.id ? "ring-2 ring-offset-2 ring-black" : ""
-            }`}
-          >
-            {/* Top: Name, ID, Guard/Group, Status badge */}
-            <div className="flex justify-between items-start gap-3">
-              <div>
-                <h3 className="text-lg font-bold text-black uppercase tracking-tight">
-                  {emp.firstName} {emp.lastName}
-                </h3>
-                <p className="text-xs uppercase tracking-wider text-black mt-1">
-                  ID: {emp.employeeNumber}
-                </p>
-                <p className="text-xs uppercase tracking-wider text-black mt-0.5">
-                  {(emp.employeeType === "office" ? "Office" : "Guard")}: {emp.group?.name ?? "—"}
-                </p>
-              </div>
-              <span
-                className={`shrink-0 px-3 py-1 rounded-[10px] text-xs font-bold uppercase border-2 border-neutral-200 ${
-                  emp.status === "active" ? "bg-neutral-200 text-black" : "bg-neutral-100 text-black"
-                }`}
+      {employees.length > 0 && (
+        <div className="space-y-3">
+          {groupSections.map((section) => {
+            const isOpen = expandedFolderIds.has(section.key);
+            return (
+              <div
+                key={section.key}
+                className="rounded-[10px] border-2 border-neutral-200 bg-white overflow-hidden shadow-sm"
               >
-                {emp.status}
-              </span>
-            </div>
-
-            {/* Yellow info block */}
-            <div className="mt-4 p-4 rounded-[10px] bg-neutral-200 border-2 border-neutral-200">
-              <div className="space-y-1.5 text-xs uppercase tracking-wider text-black font-medium">
-                {emp.idNumber && <p>ID: {emp.idNumber}</p>}
-                {emp.psiraNumber && <p>PSIRA: {emp.psiraNumber}</p>}
-                {emp.phone && <p>PHONE: {emp.phone}</p>}
-                {(emp.grade || emp.hourlyRate != null || emp.monthlySalary != null) && (
-                  <p>
-                    GRADE: {emp.grade
-                      ? `${emp.grade.name} (${Number(emp.grade.hourlyRate).toFixed(2)}/HR)`
-                      : emp.employeeType === "office" && emp.monthlySalary != null
-                        ? `R${emp.monthlySalary}/MONTH`
-                        : emp.hourlyRate != null
-                          ? `R${Number(emp.hourlyRate).toFixed(2)}/HR`
-                          : "—"}
-                  </p>
-                )}
-                {!emp.idNumber && !emp.psiraNumber && !emp.phone && !emp.grade && emp.hourlyRate == null && emp.monthlySalary == null && (
-                  <p className="text-black/70">No details</p>
-                )}
-              </div>
-            </div>
-
-            {expandedId === emp.id && (
-              <div className="mt-4 pt-4 border-t-2 border-neutral-200 space-y-3 text-sm">
-                {emp.email && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-black">Email</span><br />{emp.email}</p>
-                )}
-                {emp.dateOfBirth && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-black">DOB</span><br />{toDateStr(emp.dateOfBirth)}</p>
-                )}
-                {emp.gender && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-black">Gender</span><br />{emp.gender === "M" ? "Male" : "Female"}</p>
-                )}
-                {emp.maritalStatus && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-black">Marital status</span><br />{emp.maritalStatus.charAt(0).toUpperCase() + emp.maritalStatus.slice(1)}</p>
-                )}
-                {emp.physicalAddress && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-black">Address</span><br />{emp.physicalAddress}{emp.postalCode ? ` ${emp.postalCode}` : ""}</p>
-                )}
-                {emp.commencementDate && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-black">Started</span><br />{toDateStr(emp.commencementDate)}</p>
-                )}
-                {(emp.bankName || emp.bankAccountNumber) && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-black">Bank</span><br />{emp.bankName || "—"}{emp.bankAccountNumber ? ` •••• ${String(emp.bankAccountNumber).slice(-4)}` : ""}</p>
-                )}
-                {(emp.nextOfKin1Name || emp.nextOfKin1Phone) && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-black">Next of kin</span><br />{emp.nextOfKin1Name || "—"} {emp.nextOfKin1Phone ? `• ${emp.nextOfKin1Phone}` : ""}</p>
-                )}
-                {emp.psiraExpiryDate && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-black">PSIRA expiry</span><br />{toDateStr(emp.psiraExpiryDate)}</p>
-                )}
-                {emp.occupation && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-black">Occupation</span><br />{emp.occupation}</p>
-                )}
-                {emp.placeOfWork && (
-                  <p><span className="text-[10px] uppercase tracking-wider text-black">Place of work</span><br />{emp.placeOfWork}</p>
-                )}
-              </div>
-            )}
-
-            {/* Bottom: Edit, Change Status */}
-            <div className="mt-4 flex justify-end gap-4" onClick={(e) => e.stopPropagation()}>
-              <button
-                onClick={() => setEditingId(emp.id)}
-                className="text-xs font-medium uppercase tracking-wider text-black hover:underline"
-              >
-                Edit
-              </button>
-              {emp.status !== "offboarded" && (
                 <button
-                  onClick={() => setStatusChangeId(emp.id)}
-                  className="text-xs font-medium uppercase tracking-wider text-black hover:underline"
+                  type="button"
+                  className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-neutral-50/90 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2"
+                  aria-expanded={isOpen}
+                  aria-controls={`team-folder-panel-${section.key}`}
+                  id={`team-folder-trigger-${section.key}`}
+                  onClick={() => {
+                    setExpandedFolderIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(section.key)) next.delete(section.key);
+                      else next.add(section.key);
+                      return next;
+                    });
+                  }}
                 >
-                  Change Status
+                  <span className="shrink-0 text-neutral-600" aria-hidden>
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.75}
+                        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+                      />
+                    </svg>
+                  </span>
+                  <span className="flex-1 min-w-0 font-semibold text-black truncate">
+                    {section.name}
+                  </span>
+                  <span className="shrink-0 text-sm text-neutral-500 tabular-nums">
+                    ({section.employees.length})
+                  </span>
+                  <svg
+                    className={clsx(
+                      "w-5 h-5 shrink-0 text-neutral-500 transition-transform duration-200",
+                      isOpen && "rotate-180"
+                    )}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
                 </button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
+                {isOpen && (
+                  <div
+                    id={`team-folder-panel-${section.key}`}
+                    role="region"
+                    aria-labelledby={`team-folder-trigger-${section.key}`}
+                    className="border-t-2 border-neutral-200 p-4 bg-wireframe-accent/40"
+                  >
+                    {section.employees.length === 0 ? (
+                      <p className="text-sm text-neutral-600 py-2 px-1">No members in this group.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                        {section.employees.map((emp) => (
+                          <EmployeeTeamCard
+                            key={emp.id}
+                            emp={emp}
+                            expandedId={expandedId}
+                            onToggleExpand={(id) =>
+                              setExpandedId((prev) => (prev === id ? null : id))
+                            }
+                            onEdit={setEditingId}
+                            onChangeStatus={setStatusChangeId}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {employees.length === 0 && (
         <div className="card-wireframe text-center py-16">
@@ -387,6 +405,129 @@ function toDateStr(d: string | Date | null | undefined): string {
   if (!d) return "";
   const x = typeof d === "string" ? d : d.toISOString?.().slice(0, 10);
   return x?.slice(0, 10) ?? "";
+}
+
+function EmployeeTeamCard({
+  emp,
+  expandedId,
+  onToggleExpand,
+  onEdit,
+  onChangeStatus,
+}: {
+  emp: Employee;
+  expandedId: string | null;
+  onToggleExpand: (id: string) => void;
+  onEdit: (id: string) => void;
+  onChangeStatus: (id: string) => void;
+}) {
+  return (
+    <div
+      onClick={() => onToggleExpand(emp.id)}
+      className={`card-elevated p-5 cursor-pointer ${
+        expandedId === emp.id ? "ring-2 ring-offset-2 ring-black" : ""
+      }`}
+    >
+      <div className="flex justify-between items-start gap-3">
+        <div>
+          <h3 className="text-lg font-bold text-black uppercase tracking-tight">
+            {emp.firstName} {emp.lastName}
+          </h3>
+          <p className="text-xs uppercase tracking-wider text-black mt-1">
+            ID: {emp.employeeNumber}
+          </p>
+          <p className="text-xs uppercase tracking-wider text-black mt-0.5">
+            {(emp.employeeType === "office" ? "Office" : "Guard")}: {emp.group?.name ?? "—"}
+          </p>
+        </div>
+        <span
+          className={`shrink-0 px-3 py-1 rounded-[10px] text-xs font-bold uppercase border-2 border-neutral-200 ${
+            emp.status === "active" ? "bg-neutral-200 text-black" : "bg-neutral-100 text-black"
+          }`}
+        >
+          {emp.status}
+        </span>
+      </div>
+
+      <div className="mt-4 p-4 rounded-[10px] bg-neutral-200 border-2 border-neutral-200">
+        <div className="space-y-1.5 text-xs uppercase tracking-wider text-black font-medium">
+          {emp.idNumber && <p>ID: {emp.idNumber}</p>}
+          {emp.psiraNumber && <p>PSIRA: {emp.psiraNumber}</p>}
+          {emp.phone && <p>PHONE: {emp.phone}</p>}
+          {(emp.grade || emp.hourlyRate != null || emp.monthlySalary != null) && (
+            <p>
+              GRADE: {emp.grade
+                ? `${emp.grade.name} (${Number(emp.grade.hourlyRate).toFixed(2)}/HR)`
+                : emp.employeeType === "office" && emp.monthlySalary != null
+                  ? `R${emp.monthlySalary}/MONTH`
+                  : emp.hourlyRate != null
+                    ? `R${Number(emp.hourlyRate).toFixed(2)}/HR`
+                    : "—"}
+            </p>
+          )}
+          {!emp.idNumber && !emp.psiraNumber && !emp.phone && !emp.grade && emp.hourlyRate == null && emp.monthlySalary == null && (
+            <p className="text-black/70">No details</p>
+          )}
+        </div>
+      </div>
+
+      {expandedId === emp.id && (
+        <div className="mt-4 pt-4 border-t-2 border-neutral-200 space-y-3 text-sm">
+          {emp.email && (
+            <p><span className="text-[10px] uppercase tracking-wider text-black">Email</span><br />{emp.email}</p>
+          )}
+          {emp.dateOfBirth && (
+            <p><span className="text-[10px] uppercase tracking-wider text-black">DOB</span><br />{toDateStr(emp.dateOfBirth)}</p>
+          )}
+          {emp.gender && (
+            <p><span className="text-[10px] uppercase tracking-wider text-black">Gender</span><br />{emp.gender === "M" ? "Male" : "Female"}</p>
+          )}
+          {emp.maritalStatus && (
+            <p><span className="text-[10px] uppercase tracking-wider text-black">Marital status</span><br />{emp.maritalStatus.charAt(0).toUpperCase() + emp.maritalStatus.slice(1)}</p>
+          )}
+          {emp.physicalAddress && (
+            <p><span className="text-[10px] uppercase tracking-wider text-black">Address</span><br />{emp.physicalAddress}{emp.postalCode ? ` ${emp.postalCode}` : ""}</p>
+          )}
+          {emp.commencementDate && (
+            <p><span className="text-[10px] uppercase tracking-wider text-black">Started</span><br />{toDateStr(emp.commencementDate)}</p>
+          )}
+          {(emp.bankName || emp.bankAccountNumber) && (
+            <p><span className="text-[10px] uppercase tracking-wider text-black">Bank</span><br />{emp.bankName || "—"}{emp.bankAccountNumber ? ` •••• ${String(emp.bankAccountNumber).slice(-4)}` : ""}</p>
+          )}
+          {(emp.nextOfKin1Name || emp.nextOfKin1Phone) && (
+            <p><span className="text-[10px] uppercase tracking-wider text-black">Next of kin</span><br />{emp.nextOfKin1Name || "—"} {emp.nextOfKin1Phone ? `• ${emp.nextOfKin1Phone}` : ""}</p>
+          )}
+          {emp.psiraExpiryDate && (
+            <p><span className="text-[10px] uppercase tracking-wider text-black">PSIRA expiry</span><br />{toDateStr(emp.psiraExpiryDate)}</p>
+          )}
+          {emp.occupation && (
+            <p><span className="text-[10px] uppercase tracking-wider text-black">Occupation</span><br />{emp.occupation}</p>
+          )}
+          {emp.placeOfWork && (
+            <p><span className="text-[10px] uppercase tracking-wider text-black">Place of work</span><br />{emp.placeOfWork}</p>
+          )}
+        </div>
+      )}
+
+      <div className="mt-4 flex justify-end gap-4" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          onClick={() => onEdit(emp.id)}
+          className="text-xs font-medium uppercase tracking-wider text-black hover:underline"
+        >
+          Edit
+        </button>
+        {emp.status !== "offboarded" && (
+          <button
+            type="button"
+            onClick={() => onChangeStatus(emp.id)}
+            className="text-xs font-medium uppercase tracking-wider text-black hover:underline"
+          >
+            Change Status
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -993,12 +1134,14 @@ function EditModal({
   employeeId,
   token,
   defaultPlaceOfWork,
+  canDeleteEmployees,
   onClose,
   onSuccess,
 }: {
   employeeId: string;
   token: string;
   defaultPlaceOfWork?: string;
+  canDeleteEmployees: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -1450,7 +1593,7 @@ function EditModal({
             </section>
             )}
 
-            <div className="flex gap-3 pt-2">
+            <div className={clsx("flex gap-3 pt-2", !canDeleteEmployees && "flex-wrap")}>
               <button
                 type="button"
                 onClick={onClose}
@@ -1461,31 +1604,34 @@ function EditModal({
               <button type="submit" disabled={saving} className="flex-1 btn-primary">
                 {saving ? "Saving..." : "Save"}
               </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!confirm(`Permanently delete ${firstName} ${lastName} from the system? This cannot be undone.`)) return;
-                  setError("");
-                  setDeleting(true);
-                  try {
-                    const res = await authFetch(`/employees/${employeeId}`, token, { method: "DELETE" });
-                    if (!res.ok) {
-                      const data = await res.json();
-                      throw new Error(data?.message || data?.error || "Failed to delete");
+              {canDeleteEmployees && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!confirm(`Permanently delete ${firstName} ${lastName} from the system? This cannot be undone.`))
+                      return;
+                    setError("");
+                    setDeleting(true);
+                    try {
+                      const res = await authFetch(`/employees/${employeeId}`, token, { method: "DELETE" });
+                      if (!res.ok) {
+                        const data = await res.json();
+                        throw new Error(data?.message || data?.error || "Failed to delete");
+                      }
+                      onSuccess();
+                      onClose();
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Failed to delete team member");
+                    } finally {
+                      setDeleting(false);
                     }
-                    onSuccess();
-                    onClose();
-                  } catch (err) {
-                    setError(err instanceof Error ? err.message : "Failed to delete team member");
-                  } finally {
-                    setDeleting(false);
-                  }
-                }}
-                disabled={deleting}
-                className="flex-1 btn-primary bg-security-navy-700 border-neutral-200 hover:bg-security-navy-800 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {deleting ? "Deleting..." : "Delete"}
-              </button>
+                  }}
+                  disabled={deleting}
+                  className="flex-1 btn-primary bg-security-navy-700 border-neutral-200 hover:bg-security-navy-800 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {deleting ? "Deleting..." : "Delete"}
+                </button>
+              )}
             </div>
           </form>
         )}

@@ -6,7 +6,12 @@ import { prisma } from "../lib/prisma.js";
 import { startOfMonth, subMonths, format } from "date-fns";
 
 export async function reportsRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"])];
+  const protect = [
+    authMiddleware,
+    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
+      module: "/reports",
+    }),
+  ];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

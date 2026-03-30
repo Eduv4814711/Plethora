@@ -103,9 +103,18 @@ const assignGuardSchema = z.object({
 });
 
 export async function sitesRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"])];
-  const readProtect = [authMiddleware, requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"])];
-  const manageSites = [authMiddleware, requireRole(["admin", "operations_manager", "supervisor"])];
+  const protect = [
+    authMiddleware,
+    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"], { module: "/sites" }),
+  ];
+  const readProtect = [
+    authMiddleware,
+    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], { module: "/sites" }),
+  ];
+  const manageSites = [
+    authMiddleware,
+    requireRole(["admin", "operations_manager", "supervisor"], { module: "/sites" }),
+  ];
 
   app.get("/", { preHandler: readProtect }, async (request, reply) => {
     const user = request.user!;

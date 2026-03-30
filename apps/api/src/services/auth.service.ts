@@ -1,8 +1,9 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { prisma } from "../lib/prisma.js";
 import { config } from "../lib/config.js";
 import type { UserRole } from "@prisma/client";
+import { normalizeModuleAccess } from "../middleware/rbac.js";
+import { findFirstUserAuthScalars, findUniqueUserAuthScalars } from "../lib/user-module-column.js";
 
 export interface LoginInput {
   email: string;
@@ -10,8 +11,18 @@ export interface LoginInput {
   companyId?: string;
 }
 
+export interface AuthUserPublic {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  roleLabel?: string | null;
+  companyId: string;
+  moduleAccess: string[] | null;
+}
+
 export interface AuthResult {
-  user: { id: string; name: string; email: string; role: UserRole; companyId: string };
+  user: AuthUserPublic;
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
@@ -29,11 +40,9 @@ export async function verifyPassword(
 }
 
 export async function login(input: LoginInput): Promise<AuthResult | null> {
-  const user = await prisma.user.findFirst({
-    where: {
-      email: input.email.toLowerCase(),
-      ...(input.companyId ? { companyId: input.companyId } : {}),
-    },
+  const user = await findFirstUserAuthScalars({
+    email: input.email.toLowerCase(),
+    ...(input.companyId ? { companyId: input.companyId } : {}),
   });
 
   if (!user) return null;
@@ -41,11 +50,14 @@ export async function login(input: LoginInput): Promise<AuthResult | null> {
   const valid = await verifyPassword(input.password, user.passwordHash);
   if (!valid) return null;
 
+  const moduleAccess = normalizeModuleAccess(user.moduleAccess);
+
   const payload = {
     sub: user.id,
     email: user.email,
     companyId: user.companyId,
     role: user.role,
+    ...(moduleAccess ? { moduleAccess } : {}),
   };
 
   const accessToken = jwt.sign(
@@ -69,7 +81,9 @@ export async function login(input: LoginInput): Promise<AuthResult | null> {
       name: user.name,
       email: user.email,
       role: user.role,
+      roleLabel: user.roleLabel ?? null,
       companyId: user.companyId,
+      moduleAccess,
     },
     accessToken,
     refreshToken,
@@ -82,15 +96,19 @@ export interface UserForTokens {
   name: string;
   email: string;
   role: UserRole;
+  roleLabel?: string | null;
   companyId: string;
+  moduleAccess?: unknown;
 }
 
 export function issueTokensForUser(user: UserForTokens): AuthResult {
+  const moduleAccess = normalizeModuleAccess(user.moduleAccess);
   const payload = {
     sub: user.id,
     email: user.email,
     companyId: user.companyId,
     role: user.role,
+    ...(moduleAccess ? { moduleAccess } : {}),
   };
 
   const accessToken = jwt.sign(
@@ -114,7 +132,9 @@ export function issueTokensForUser(user: UserForTokens): AuthResult {
       name: user.name,
       email: user.email,
       role: user.role,
+      roleLabel: user.roleLabel ?? null,
       companyId: user.companyId,
+      moduleAccess,
     },
     accessToken,
     refreshToken,
@@ -129,19 +149,21 @@ export async function refreshAccessToken(refreshToken: string): Promise<AuthResu
       email: string;
       companyId: string;
       role: UserRole;
+      moduleAccess?: unknown;
     };
 
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.sub },
-    });
+    const user = await findUniqueUserAuthScalars({ id: decoded.sub });
 
     if (!user) return null;
+
+    const moduleAccess = normalizeModuleAccess(user.moduleAccess);
 
     const payload = {
       sub: user.id,
       email: user.email,
       companyId: user.companyId,
       role: user.role,
+      ...(moduleAccess ? { moduleAccess } : {}),
     };
 
     const accessToken = jwt.sign(
@@ -165,7 +187,9 @@ export async function refreshAccessToken(refreshToken: string): Promise<AuthResu
         name: user.name,
         email: user.email,
         role: user.role,
+        roleLabel: user.roleLabel ?? null,
         companyId: user.companyId,
+        moduleAccess,
       },
       accessToken,
       refreshToken: newRefreshToken,
