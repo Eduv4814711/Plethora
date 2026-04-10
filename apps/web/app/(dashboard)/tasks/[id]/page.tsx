@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import {
   getTask,
   updateTask,
+  listTaskProjects,
   deleteTask,
   completeTask,
   reopenTask,
@@ -16,6 +17,7 @@ import {
   addTaskReminder,
   deleteTaskReminder,
   type Task,
+  type TaskProject,
   type TaskAttachment,
   type TaskReminder,
   type TaskStatus,
@@ -46,8 +48,10 @@ export default function TaskDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(false);
+  const [projects, setProjects] = useState<TaskProject[]>([]);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editProjectId, setEditProjectId] = useState("");
   const [editStatus, setEditStatus] = useState<TaskStatus>("todo");
   const [editPriority, setEditPriority] = useState<TaskPriority>("medium");
   const [editDueDate, setEditDueDate] = useState<string>("");
@@ -79,9 +83,17 @@ export default function TaskDetailPage() {
   }, [token, id]);
 
   useEffect(() => {
+    if (!token) return;
+    listTaskProjects(token)
+      .then((res) => setProjects(res.data ?? []))
+      .catch(() => setProjects([]));
+  }, [token]);
+
+  useEffect(() => {
     if (task) {
       setEditTitle(task.title);
       setEditDescription(task.description ?? "");
+      setEditProjectId(task.projectId ?? "");
       setEditStatus(task.status);
       setEditPriority(task.priority);
       setEditDueDate(task.dueDate ? task.dueDate.slice(0, 16) : "");
@@ -114,6 +126,7 @@ export default function TaskDetailPage() {
       const updated = await updateTask(token, task.id, {
         title: editTitle,
         description: editDescription || null,
+        projectId: editProjectId || null,
         status: editStatus,
         priority: editPriority,
         dueDate: editDueDate ? new Date(editDueDate).toISOString() : null,
@@ -296,6 +309,21 @@ export default function TaskDetailPage() {
               className="input-modern min-h-[80px]"
               rows={3}
             />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
+              <select
+                value={editProjectId}
+                onChange={(e) => setEditProjectId(e.target.value)}
+                className="input-compact w-full sm:w-72"
+              >
+                <option value="">No project</option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="flex flex-wrap gap-4">
               <select
                 value={editStatus}

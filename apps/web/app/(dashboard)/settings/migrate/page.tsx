@@ -233,6 +233,11 @@ export default function MigratePage() {
               Download sites.csv
             </button>
           </div>
+          <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
+            The team template includes an instruction row under the headers. Enter names in separate{" "}
+            <span className="font-medium">First Name</span> and <span className="font-medium">Last Name</span> columns for
+            clean imports.
+          </p>
         </section>
 
         <section className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-600 p-6">

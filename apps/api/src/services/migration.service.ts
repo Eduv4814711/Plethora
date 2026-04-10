@@ -156,6 +156,19 @@ function rowToObject(record: string[], headers: string[]): Record<string, string
   return obj;
 }
 
+function isInstructionOrExampleEmployeeRow(obj: Record<string, string>): boolean {
+  const companyCell = (obj.companyName ?? "").trim().toLowerCase();
+  const firstNameCell = (obj.firstName ?? "").trim().toLowerCase();
+  const lastNameCell = (obj.lastName ?? "").trim().toLowerCase();
+
+  const isInstructionCompanyCell = companyCell.startsWith("instruction:");
+  const isGuidanceNameCells =
+    firstNameCell.includes("enter given name") &&
+    lastNameCell.includes("enter surname/family name");
+
+  return isInstructionCompanyCell || isGuidanceNameCells;
+}
+
 // --- Parse CSV buffer ---
 export interface ParseResult<T> {
   valid: T[];
@@ -217,17 +230,20 @@ export function parseAndValidateEmployees(
   const valid: ValidatedEmployee[] = [];
   const errors: ParseResult<ValidatedEmployee>["errors"] = [];
 
-  if (rows.length > MAX_EMPLOYEES) {
+  const employeeRows = rows
+    .map((record, index) => ({ index, obj: rowToObject(record, headers) }))
+    .filter(({ obj }) => !isInstructionOrExampleEmployeeRow(obj));
+
+  if (employeeRows.length > MAX_EMPLOYEES) {
     errors.push({ row: 0, field: "_", value: "", message: `Maximum ${MAX_EMPLOYEES} employees per import` });
     return { valid, errors };
   }
 
-  for (let i = 0; i < rows.length; i++) {
-    const obj = rowToObject(rows[i], headers);
+  for (const { index, obj } of employeeRows) {
     let result = employeeRowSchema.safeParse(obj);
     if (result.success && options?.requireCompanyName && !result.data.companyName) {
       errors.push({
-        row: i + 2,
+        row: index + 2,
         field: "companyName",
         value: obj.companyname ?? "",
         message: "companyName is required for admin bulk import",
@@ -238,7 +254,7 @@ export function parseAndValidateEmployees(
       for (const issue of result.error.issues) {
         const path = issue.path.join(".");
         errors.push({
-          row: i + 2,
+          row: index + 2,
           field: path || "unknown",
           value: obj[path] ?? "",
           message: issue.message,
