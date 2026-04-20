@@ -148,7 +148,7 @@ export async function employeesRoutes(app: FastifyInstance) {
   const readProtect = [
     authMiddleware,
     requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
-      module: "/employees",
+      anyOfModules: ["/employees", "/rostering"],
     }),
   ];
 

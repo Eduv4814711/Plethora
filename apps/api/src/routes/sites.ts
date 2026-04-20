@@ -109,7 +109,9 @@ export async function sitesRoutes(app: FastifyInstance) {
   ];
   const readProtect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], { module: "/sites" }),
+    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
+      anyOfModules: ["/sites", "/rostering"],
+    }),
   ];
   const manageSites = [
     authMiddleware,
