@@ -16,11 +16,6 @@ function LoginForm() {
 
   useEffect(() => {
     if (user) {
-      const moduleList = normalizeUserModuleAccess(user.moduleAccess);
-      const suggestedRoute = getDefaultRouteForUser(user);
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/88a7285e-a4b7-491f-ab73-2cd80dfe89c9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fb2299'},body:JSON.stringify({sessionId:'fb2299',runId:'pre-fix',hypothesisId:'H1',location:'apps/web/app/(auth)/login/page.tsx:20',message:'login user state resolved',data:{role:user.role,moduleCount:moduleList?.length ?? 0,suggestedRoute},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       router.replace("/");
     }
   }, [user, router]);
@@ -32,13 +27,7 @@ function LoginForm() {
     setError(null);
     setSubmitting(true);
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/88a7285e-a4b7-491f-ab73-2cd80dfe89c9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fb2299'},body:JSON.stringify({sessionId:'fb2299',runId:'pre-fix',hypothesisId:'H2',location:'apps/web/app/(auth)/login/page.tsx:31',message:'login submit start',data:{hasEmail:email.includes("@"),passwordLength:password.length},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       await login(email, password);
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/88a7285e-a4b7-491f-ab73-2cd80dfe89c9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fb2299'},body:JSON.stringify({sessionId:'fb2299',runId:'pre-fix',hypothesisId:'H3',location:'apps/web/app/(auth)/login/page.tsx:34',message:'login submit success pushing root',data:{pushTarget:'/'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       router.push("/");
       router.refresh();
     } catch (err) {
