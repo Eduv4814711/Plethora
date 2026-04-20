@@ -15,11 +15,13 @@ const createPayGradeSchema = z.object({
 const updatePayGradeSchema = createPayGradeSchema.partial();
 
 export async function payGradesRoutes(app: FastifyInstance) {
+  const readProtect = [authMiddleware, requireRole(["admin", "hr_payroll"], { anyOfModules: ["/payroll", "/employees"] })];
   const protect = [authMiddleware, requireRole(["admin", "hr_payroll"], { module: "/payroll" })];
 
-  app.get("/", { preHandler: protect }, async (request, reply) => {
+  app.get("/", { preHandler: readProtect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as { groupId?: string };
+
     const where: { companyId: string; groupId?: null | { equals: string } } = {
       companyId: user.companyId,
     };
@@ -32,6 +34,7 @@ export async function payGradesRoutes(app: FastifyInstance) {
       where,
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     });
+
     return reply.send({ data: grades });
   });
 
