@@ -157,6 +157,24 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   paid: { label: "Paid", className: "bg-security-emerald-50 text-security-emerald-600 border-security-emerald-200" },
 };
 
+const PAYROLL_WORKFLOW_STEPS = [
+  { step: 1, title: "Attendance", caption: "Timesheets & clock data", ring: "border-neutral-200 bg-white text-security-navy" },
+  { step: 2, title: "Create run", caption: "Open a pay period", ring: "border-neutral-200 bg-white text-security-navy" },
+  {
+    step: 3,
+    title: "Calculate",
+    caption: "Pay, tax & compliance",
+    ring: "border-security-amber-400 bg-security-amber-50 text-security-amber-800 shadow-sm shadow-security-amber-200/50",
+  },
+  { step: 4, title: "Approve", caption: "Review & sign off", ring: "border-neutral-200 bg-white text-security-navy" },
+  {
+    step: 5,
+    title: "Mark paid",
+    caption: "Close the period",
+    ring: "border-security-emerald-400 bg-security-emerald-50 text-security-emerald-800 shadow-sm shadow-security-emerald-200/40",
+  },
+] as const;
+
 export default function PayrollPage() {
   const { token } = useAuth();
   const [runs, setRuns] = useState<PayrollRun[]>([]);
@@ -290,6 +308,88 @@ export default function PayrollPage() {
         </div>
       </div>
 
+      {/* Payroll workflow — high-visibility guide aligned with dashboard aesthetic */}
+      <section
+        className="mb-6 overflow-hidden rounded-security-lg border border-security-navy-200/70 bg-white shadow-security-elevated"
+        aria-label="Payroll workflow steps"
+      >
+        <div className="border-b border-neutral-100 bg-gradient-to-r from-security-navy-50/90 via-white to-security-emerald-50/40 px-5 py-4 sm:px-6 sm:py-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-5">
+            <div
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-security-lg border border-security-emerald-200/80 bg-security-emerald-50 text-security-emerald-700 shadow-sm"
+              aria-hidden
+            >
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.75}
+                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                />
+              </svg>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-security-navy-500">Process guide</p>
+              <h2 className="mt-1 text-lg font-semibold tracking-tight text-security-navy sm:text-xl">Payroll workflow</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-security-navy-600">
+                Follow these stages in order for every period: capture attendance, create the run, calculate pay and statutory amounts, approve, then mark as paid.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-5 py-5 sm:px-6 sm:py-6">
+          {/* Desktop: horizontal stepper with connector line */}
+          <div className="relative hidden md:block">
+            <div
+              className="absolute left-[10%] right-[10%] top-5 h-px bg-gradient-to-r from-neutral-200 via-security-navy-200 to-security-emerald-300"
+              aria-hidden
+            />
+            <ol className="relative grid grid-cols-5 gap-2">
+              {PAYROLL_WORKFLOW_STEPS.map((s) => (
+                <li key={s.step} className="flex flex-col items-center text-center">
+                  <div
+                    className={`relative z-[1] flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold tabular-nums ${s.ring}`}
+                  >
+                    {s.step}
+                  </div>
+                  <p className="mt-3 text-xs font-semibold text-security-navy">{s.title}</p>
+                  <p className="mt-1 max-w-[9rem] text-[11px] leading-snug text-security-navy-500">{s.caption}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          {/* Mobile / small: vertical timeline */}
+          <div className="relative md:hidden">
+            <div
+              className="absolute left-[19px] top-3 bottom-3 w-px bg-gradient-to-b from-neutral-200 via-security-navy-200 to-security-emerald-300"
+              aria-hidden
+            />
+            <ol className="relative m-0 list-none space-y-0 p-0">
+              {PAYROLL_WORKFLOW_STEPS.map((s) => (
+                <li key={s.step} className="relative flex gap-4 pb-6 last:pb-0">
+                  <div
+                    className={`relative z-[1] flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold tabular-nums ${s.ring}`}
+                  >
+                    {s.step}
+                  </div>
+                  <div className="min-w-0 pt-1">
+                    <p className="text-sm font-semibold text-security-navy">{s.title}</p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-security-navy-600">{s.caption}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <p className="mt-5 rounded-security border border-neutral-100 bg-security-navy-50/50 px-3 py-2.5 text-center text-xs text-security-navy-600 md:text-left">
+            <span className="font-medium text-security-navy">Tip:</span> always run <strong className="font-semibold text-security-amber-800">Calculate</strong> before{" "}
+            <strong className="font-semibold text-security-navy">Approve</strong>, then <strong className="font-semibold text-security-emerald-800">Mark paid</strong> when funds have cleared.
+          </p>
+        </div>
+      </section>
+
       {showForm && (
         <PayrollRunForm
           token={token!}
@@ -409,23 +509,6 @@ export default function PayrollPage() {
           </button>
         </div>
       )}
-
-      {/* Payroll Workflow - at bottom */}
-      <div className="card-wireframe p-5 mt-8">
-        <h3 className="font-semibold text-security-navy mb-4">Payroll Workflow</h3>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="badge-neutral">1. Attendance</span>
-          <span className="text-security-navy-400">→</span>
-          <span className="badge-neutral">2. Create Run</span>
-          <span className="text-security-navy-400">→</span>
-          <span className="badge-warning">3. Calculate</span>
-          <span className="text-security-navy-400">→</span>
-          <span className="badge-neutral">4. Approve</span>
-          <span className="text-security-navy-400">→</span>
-          <span className="badge-success">5. Mark Paid</span>
-        </div>
-        <p className="text-sm text-security-navy-600 mt-3">Each run progresses through these stages. Calculate first, then approve, then mark as paid.</p>
-      </div>
     </div>
   );
 }
