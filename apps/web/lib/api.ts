@@ -978,3 +978,510 @@ export async function deleteTaskReminder(token: string, id: string): Promise<voi
     throw new Error(err.message || "Failed to delete reminder");
   }
 }
+
+// --- Academy Management ---
+
+function academyErrorMessage(err: Record<string, unknown>): string {
+  if (typeof err.message === "string" && err.message) return err.message;
+  if (typeof err.error === "string" && err.error) return err.error;
+  const details = err.details as { fieldErrors?: Record<string, string[]> } | undefined;
+  const fe = details?.fieldErrors;
+  if (fe) {
+    const first = Object.values(fe).flat()[0];
+    if (first) return first;
+  }
+  return "Academy request failed";
+}
+
+async function academyRequest<T>(token: string, path: string, init?: RequestInit): Promise<T> {
+  const res = await authFetch(`/academy${path}`, token, init);
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    throw new Error(academyErrorMessage(err));
+  }
+  if (res.status === 204) return undefined as T;
+  const ct = res.headers.get("content-type");
+  if (!ct?.includes("application/json")) return undefined as T;
+  return res.json();
+}
+
+export async function uploadAcademyStudentDocument(
+  token: string,
+  studentId: string,
+  file: File,
+  documentType: string
+): Promise<{ document: Record<string, unknown> }> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const q = new URLSearchParams({ documentType });
+  const res = await authFetch(`/academy/students/${studentId}/documents?${q}`, token, {
+    method: "POST",
+    body: fd,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || "Upload failed");
+  }
+  return res.json();
+}
+
+export const academyApi = {
+  listBranches: (token: string) => academyRequest<{ branches: unknown[] }>(token, "/branches"),
+  createBranch: (token: string, body: Record<string, unknown>) =>
+    academyRequest<{ branch: unknown }>(token, "/branches", { method: "POST", body: JSON.stringify(body) }),
+  deleteBranch: (token: string, id: string) =>
+    academyRequest<void>(token, `/branches/${id}`, { method: "DELETE" }),
+
+  listStudents: (token: string, q?: string, limit?: number) => {
+    const params = new URLSearchParams();
+    if (q && q.trim().length >= 2) params.set("q", q.trim());
+    if (limit != null && limit > 0) params.set("limit", String(Math.min(limit, 200)));
+    const s = params.toString();
+    return academyRequest<{ students: unknown[]; total: number }>(token, `/students${s ? `?${s}` : ""}`);
+  },
+  createStudent: (token: string, body: Record<string, unknown>) =>
+    academyRequest<{ student: unknown }>(token, "/students", { method: "POST", body: JSON.stringify(body) }),
+  getStudent: (token: string, id: string) => academyRequest<{ student: unknown }>(token, `/students/${id}`),
+  updateStudent: (token: string, id: string, body: Record<string, unknown>) =>
+    academyRequest<{ student: unknown }>(token, `/students/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteStudent: (token: string, id: string) => academyRequest<void>(token, `/students/${id}`, { method: "DELETE" }),
+  recordStudentAdminFee: (
+    token: string,
+    id: string,
+    body: {
+      status: "paid" | "waived" | "unpaid";
+      amount?: number | string;
+      method?: string | null;
+      reference?: string | null;
+      notes?: string | null;
+    }
+  ) =>
+    academyRequest<{ student: unknown }>(token, `/students/${id}/admin-fee`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  listStudentDocuments: (token: string, studentId: string) =>
+    academyRequest<{ documents: unknown[] }>(token, `/students/${studentId}/documents`),
+  deleteStudentDocument: (token: string, studentId: string, documentId: string) =>
+    academyRequest<{ ok: boolean }>(token, `/students/${studentId}/documents/${documentId}`, {
+      method: "DELETE",
+    }),
+
+  listCourses: (token: string, activeOnly?: boolean) =>
+    academyRequest<{ courses: unknown[] }>(
+      token,
+      `/courses${activeOnly ? "?active=true" : ""}`
+    ),
+  createCourse: (token: string, body: Record<string, unknown>) =>
+    academyRequest<{ course: unknown }>(token, "/courses", { method: "POST", body: JSON.stringify(body) }),
+  updateCourse: (token: string, id: string, body: Record<string, unknown>) =>
+    academyRequest<{ course: unknown }>(token, `/courses/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteCourse: (token: string, id: string) => academyRequest<void>(token, `/courses/${id}`, { method: "DELETE" }),
+
+  listCourseRuns: (token: string, courseId?: string, options?: { enrollable?: boolean }) => {
+    const q = new URLSearchParams();
+    if (courseId) q.set("courseId", courseId);
+    if (options?.enrollable) q.set("enrollable", "true");
+    const s = q.toString();
+    return academyRequest<{ courseRuns: unknown[] }>(token, `/course-runs${s ? `?${s}` : ""}`);
+  },
+  createCourseRun: (token: string, body: Record<string, unknown>) =>
+    academyRequest<{ courseRun: unknown }>(token, "/course-runs", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  getCourseRun: (token: string, id: string) =>
+    academyRequest<{ courseRun: unknown }>(token, `/course-runs/${id}`),
+  updateCourseRun: (token: string, id: string, body: Record<string, unknown>) =>
+    academyRequest<{ courseRun: unknown }>(token, `/course-runs/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  listFeePlans: (token: string) => academyRequest<{ feePlans: unknown[] }>(token, "/fee-plans"),
+  createFeePlan: (token: string, body: { name: string; notes?: string | null }) =>
+    academyRequest<{ feePlan: unknown }>(token, "/fee-plans", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  listEnrolments: (token: string, params?: { courseRunId?: string; studentId?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.courseRunId) q.set("courseRunId", params.courseRunId);
+    if (params?.studentId) q.set("studentId", params.studentId);
+    const s = q.toString();
+    return academyRequest<{ enrolments: unknown[]; total: number }>(token, `/enrolments${s ? `?${s}` : ""}`);
+  },
+  createEnrolment: (token: string, body: Record<string, unknown>) =>
+    academyRequest<{ enrolment: unknown }>(token, "/enrolments", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  createEnrolmentsBatch: (token: string, body: { studentId: string; courseRunIds: string[] }) =>
+    academyRequest<{ enrolments: unknown[] }>(token, "/enrolments/batch", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  deleteEnrolment: (token: string, id: string) =>
+    academyRequest<void>(token, `/enrolments/${id}`, { method: "DELETE" }),
+  updateEnrolment: (token: string, id: string, body: Record<string, unknown>) =>
+    academyRequest<{ enrolment: unknown }>(token, `/enrolments/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
+  getFinanceDashboard: (token: string) =>
+    academyRequest<{ summary: Record<string, unknown>; recentPayments: unknown[] }>(token, "/finance/dashboard"),
+
+  getHubSummary: (token: string) =>
+    academyRequest<{
+      totalStudents: number;
+      activeCourseRunCount: number;
+      enrolmentsInCurrentMonth: number;
+      outstanding: string;
+      overdueInvoiceCount: number;
+      summary: {
+        totalBilled: string;
+        totalCollected: string;
+        activeInvoiceCount: number;
+      };
+      deltas: {
+        totalStudents: number | null;
+        newEnrolments: number | null;
+        activeCourseRuns: number | null;
+        newStudents: number | null;
+        outstanding: null;
+      };
+    }>(token, "/hub/summary"),
+
+  getActivity: (token: string, options?: { limit?: number }) => {
+    const q = new URLSearchParams();
+    if (options?.limit != null && options.limit > 0) q.set("limit", String(options.limit));
+    const s = q.toString();
+    return academyRequest<{
+      items: Array<{
+        id: string;
+        at: string;
+        label: string;
+        action: string;
+        entityType: string;
+        userName: string | null;
+        link: string | null;
+      }>;
+    }>(token, `/activity${s ? `?${s}` : ""}`);
+  },
+  getProfile: (token: string) => academyRequest<{ profile: unknown | null; readiness: { compliant: boolean; blockers: string[] } }>(token, "/profile"),
+  updateProfile: (token: string, body: Record<string, unknown>) =>
+    academyRequest<{ profile: unknown; readiness: { compliant: boolean; blockers: string[] } }>(token, "/profile", { method: "PATCH", body: JSON.stringify(body) }),
+  listInstructors: (
+    token: string,
+    params?: {
+      status?: string;
+      search?: string;
+      complianceStatus?: string;
+      contractExpiry?: string;
+      branchId?: string;
+      courseId?: string;
+      sort?: string;
+      includeArchived?: boolean;
+      limit?: number;
+      offset?: number;
+    }
+  ) => {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.search) q.set("search", params.search);
+    if (params?.complianceStatus) q.set("complianceStatus", params.complianceStatus);
+    if (params?.contractExpiry) q.set("contractExpiry", params.contractExpiry);
+    if (params?.branchId) q.set("branchId", params.branchId);
+    if (params?.courseId) q.set("courseId", params.courseId);
+    if (params?.sort) q.set("sort", params.sort);
+    if (params?.includeArchived) q.set("includeArchived", "true");
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const s = q.toString();
+    return academyRequest<{
+      instructors: unknown[];
+      total: number;
+      limit: number;
+      offset: number;
+      summary: {
+        totalInstructors: number;
+        activeInstructors: number;
+        expiringContracts: number;
+        missingDocuments: number;
+        suspendedInactive: number;
+        psiraComplianceScore: number;
+        highRisk: number;
+        attentionNeeded: number;
+      };
+    }>(token, `/instructors${s ? `?${s}` : ""}`);
+  },
+  getInstructor: (token: string, id: string) =>
+    academyRequest<{ instructor: unknown }>(token, `/instructors/${id}`),
+  createInstructor: (token: string, body: Record<string, unknown>) =>
+    academyRequest<{ instructor: unknown }>(token, "/instructors", { method: "POST", body: JSON.stringify(body) }),
+  updateInstructor: (token: string, id: string, body: Record<string, unknown>) =>
+    academyRequest<{ instructor: unknown }>(token, `/instructors/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  archiveInstructor: (token: string, id: string) =>
+    academyRequest<{ ok: boolean }>(token, `/instructors/${id}/archive`, { method: "POST" }),
+  restoreInstructor: (token: string, id: string) =>
+    academyRequest<{ ok: boolean }>(token, `/instructors/${id}/restore`, { method: "POST" }),
+  bulkInstructorAction: (
+    token: string,
+    body: {
+      ids: string[];
+      action: "archive" | "delete" | "assign_branch" | "assign_courses" | "status" | "mark_documents_requested";
+      assignedBranchId?: string | null;
+      assignedCourseIds?: string[] | null;
+      status?: "active" | "inactive" | "suspended" | "contract_ended";
+    }
+  ) =>
+    academyRequest<{ ok: boolean; count: number }>(token, "/instructors/bulk", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  deleteInstructor: (token: string, id: string, options?: { permanent?: boolean }) => {
+    const q = new URLSearchParams();
+    if (options?.permanent) q.set("permanent", "true");
+    const s = q.toString();
+    return academyRequest<{ ok: boolean } | void>(token, `/instructors/${id}${s ? `?${s}` : ""}`, {
+      method: "DELETE",
+    });
+  },
+  listInstructorDocuments: (token: string, instructorId: string) =>
+    academyRequest<{ documents: unknown[] }>(token, `/instructors/${instructorId}/documents`),
+  uploadInstructorDocument: (
+    token: string,
+    instructorId: string,
+    file: File,
+    metadata: {
+      documentType: string;
+      issueDate?: string | null;
+      expiryDate?: string | null;
+      verificationStatus?: "verified" | "pending_review" | "missing" | "expired";
+      notes?: string | null;
+    }
+  ) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const q = new URLSearchParams();
+    q.set("documentType", metadata.documentType);
+    if (metadata.issueDate) q.set("issueDate", metadata.issueDate);
+    if (metadata.expiryDate) q.set("expiryDate", metadata.expiryDate);
+    if (metadata.verificationStatus) q.set("verificationStatus", metadata.verificationStatus);
+    if (metadata.notes) q.set("notes", metadata.notes);
+    return authFetch(`/academy/instructors/${instructorId}/documents?${q.toString()}`, token, {
+      method: "POST",
+      body: fd,
+    }).then(async (res) => {
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        throw new Error(academyErrorMessage(err));
+      }
+      return res.json() as Promise<{ document: unknown }>;
+    });
+  },
+  updateInstructorDocument: (
+    token: string,
+    instructorId: string,
+    documentId: string,
+    body: {
+      documentType?: string | null;
+      issueDate?: string | null;
+      expiryDate?: string | null;
+      verificationStatus?: "verified" | "pending_review" | "missing" | "expired";
+      notes?: string | null;
+    }
+  ) =>
+    academyRequest<{ document: unknown }>(
+      token,
+      `/instructors/${instructorId}/documents/${documentId}`,
+      { method: "PATCH", body: JSON.stringify(body) }
+    ),
+  deleteInstructorDocument: (token: string, instructorId: string, documentId: string) =>
+    academyRequest<{ ok: boolean }>(token, `/instructors/${instructorId}/documents/${documentId}`, {
+      method: "DELETE",
+    }),
+  listClassrooms: (token: string, params?: { academyBranchId?: string; status?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.academyBranchId) q.set("academyBranchId", params.academyBranchId);
+    if (params?.status) q.set("status", params.status);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const s = q.toString();
+    return academyRequest<{ classrooms: unknown[]; total: number; limit: number; offset: number }>(token, `/classrooms${s ? `?${s}` : ""}`);
+  },
+  createClassroom: (token: string, body: Record<string, unknown>) =>
+    academyRequest<{ classroom: unknown }>(token, "/classrooms", { method: "POST", body: JSON.stringify(body) }),
+  updateClassroom: (token: string, id: string, body: Record<string, unknown>) =>
+    academyRequest<{ classroom: unknown }>(token, `/classrooms/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteClassroom: (token: string, id: string) => academyRequest<void>(token, `/classrooms/${id}`, { method: "DELETE" }),
+  listAttendanceSessions: (token: string, params?: { courseRunId?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.courseRunId) q.set("courseRunId", params.courseRunId);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const s = q.toString();
+    return academyRequest<{ sessions: unknown[]; total: number; limit: number; offset: number }>(token, `/attendance/sessions${s ? `?${s}` : ""}`);
+  },
+  createAttendanceSession: (token: string, body: Record<string, unknown>) =>
+    academyRequest<{ session: unknown }>(token, "/attendance/sessions", { method: "POST", body: JSON.stringify(body) }),
+  updateAttendanceSession: (token: string, id: string, body: Record<string, unknown>) =>
+    academyRequest<{ session: unknown }>(token, `/attendance/sessions/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteAttendanceSession: (token: string, id: string) => academyRequest<void>(token, `/attendance/sessions/${id}`, { method: "DELETE" }),
+  markAttendance: (token: string, body: Record<string, unknown>) =>
+    academyRequest<{ record: unknown }>(token, "/attendance/mark", { method: "POST", body: JSON.stringify(body) }),
+  markAttendanceBulk: (token: string, body: Record<string, unknown>) =>
+    academyRequest<{ records: unknown[] }>(token, "/attendance/mark-bulk", { method: "POST", body: JSON.stringify(body) }),
+  listAssessments: (token: string, params?: { learnerId?: string; courseId?: string; result?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.learnerId) q.set("learnerId", params.learnerId);
+    if (params?.courseId) q.set("courseId", params.courseId);
+    if (params?.result) q.set("result", params.result);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const s = q.toString();
+    return academyRequest<{ assessments: unknown[]; total: number; limit: number; offset: number }>(token, `/assessments${s ? `?${s}` : ""}`);
+  },
+  createAssessment: (token: string, body: Record<string, unknown>) =>
+    academyRequest<{ assessment: unknown }>(token, "/assessments", { method: "POST", body: JSON.stringify(body) }),
+  updateAssessment: (token: string, id: string, body: Record<string, unknown>) =>
+    academyRequest<{ assessment: unknown }>(token, `/assessments/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteAssessment: (token: string, id: string) => academyRequest<void>(token, `/assessments/${id}`, { method: "DELETE" }),
+  listCertificates: (token: string, params?: { learnerId?: string; courseId?: string; status?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.learnerId) q.set("learnerId", params.learnerId);
+    if (params?.courseId) q.set("courseId", params.courseId);
+    if (params?.status) q.set("status", params.status);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const s = q.toString();
+    return academyRequest<{ certificates: unknown[]; total: number; limit: number; offset: number }>(token, `/certificates${s ? `?${s}` : ""}`);
+  },
+  createCertificate: (token: string, body: Record<string, unknown>) =>
+    academyRequest<{ certificate: unknown }>(token, "/certificates", { method: "POST", body: JSON.stringify(body) }),
+  updateCertificate: (token: string, id: string, body: Record<string, unknown>) =>
+    academyRequest<{ certificate: unknown }>(token, `/certificates/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteCertificate: (token: string, id: string) => academyRequest<void>(token, `/certificates/${id}`, { method: "DELETE" }),
+  reprintCertificate: (token: string, id: string) =>
+    academyRequest<{ certificate: unknown }>(token, `/certificates/${id}/reprint`, { method: "POST" }),
+  revokeCertificate: (token: string, id: string) =>
+    academyRequest<{ certificate: unknown }>(token, `/certificates/${id}/revoke`, { method: "POST" }),
+  verifyCertificate: (token: string, code: string) =>
+    academyRequest<{ valid: boolean; certificate: unknown }>(token, `/certificates/verify/${code}`),
+  listComplianceDocuments: (token: string, params?: { status?: string; documentType?: string; search?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.documentType) q.set("documentType", params.documentType);
+    if (params?.search) q.set("search", params.search);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const s = q.toString();
+    return academyRequest<{ documents: unknown[]; total: number; limit: number; offset: number }>(token, `/compliance-documents${s ? `?${s}` : ""}`);
+  },
+  createComplianceDocument: (token: string, body: Record<string, unknown>) =>
+    academyRequest<{ document: unknown }>(token, "/compliance-documents", { method: "POST", body: JSON.stringify(body) }),
+  updateComplianceDocument: (token: string, id: string, body: Record<string, unknown>) =>
+    academyRequest<{ document: unknown }>(token, `/compliance-documents/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteComplianceDocument: (token: string, id: string) => academyRequest<void>(token, `/compliance-documents/${id}`, { method: "DELETE" }),
+  listPolicies: (token: string, params?: { policyType?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.policyType) q.set("policyType", params.policyType);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const s = q.toString();
+    return academyRequest<{ policies: unknown[]; total: number; limit: number; offset: number }>(token, `/policies${s ? `?${s}` : ""}`);
+  },
+  createPolicy: (token: string, body: Record<string, unknown>) =>
+    academyRequest<{ policy: unknown }>(token, "/policies", { method: "POST", body: JSON.stringify(body) }),
+  updatePolicy: (token: string, id: string, body: Record<string, unknown>) =>
+    academyRequest<{ policy: unknown }>(token, `/policies/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deletePolicy: (token: string, id: string) => academyRequest<void>(token, `/policies/${id}`, { method: "DELETE" }),
+  listRenewals: (token: string, params?: { severity?: string; status?: string; alertType?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.severity) q.set("severity", params.severity);
+    if (params?.status) q.set("status", params.status);
+    if (params?.alertType) q.set("alertType", params.alertType);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const s = q.toString();
+    return academyRequest<{ alerts: unknown[]; total: number; limit: number; offset: number }>(token, `/renewals${s ? `?${s}` : ""}`);
+  },
+  createRenewal: (token: string, body: Record<string, unknown>) =>
+    academyRequest<{ alert: unknown }>(token, "/renewals", { method: "POST", body: JSON.stringify(body) }),
+  updateRenewal: (token: string, id: string, body: Record<string, unknown>) =>
+    academyRequest<{ alert: unknown }>(token, `/renewals/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteRenewal: (token: string, id: string) => academyRequest<void>(token, `/renewals/${id}`, { method: "DELETE" }),
+  getReportsDashboard: (token: string, params?: { from?: string; to?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
+    const s = q.toString();
+    return academyRequest<Record<string, unknown>>(token, `/reports/dashboard${s ? `?${s}` : ""}`);
+  },
+  listAuditLogs: (token: string, params?: { entityType?: string; entityId?: string; action?: string; userId?: string; from?: string; to?: string; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.entityType) q.set("entityType", params.entityType);
+    if (params?.entityId) q.set("entityId", params.entityId);
+    if (params?.action) q.set("action", params.action);
+    if (params?.userId) q.set("userId", params.userId);
+    if (params?.from) q.set("from", params.from);
+    if (params?.to) q.set("to", params.to);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const s = q.toString();
+    return academyRequest<{ logs: unknown[]; total: number; limit: number; offset: number }>(token, `/audit${s ? `?${s}` : ""}`);
+  },
+
+  listInvoices: (
+    token: string,
+    params?: { studentId?: string; enrolmentId?: string; status?: string; limit?: number; offset?: number }
+  ) => {
+    const q = new URLSearchParams();
+    if (params?.studentId) q.set("studentId", params.studentId);
+    if (params?.enrolmentId) q.set("enrolmentId", params.enrolmentId);
+    if (params?.status) q.set("status", params.status);
+    if (params?.limit != null) q.set("limit", String(params.limit));
+    if (params?.offset != null) q.set("offset", String(params.offset));
+    const s = q.toString();
+    return academyRequest<{ invoices: unknown[]; total: number; limit: number; offset: number }>(
+      token,
+      `/invoices${s ? `?${s}` : ""}`
+    );
+  },
+  getInvoice: (token: string, id: string) => academyRequest<{ invoice: unknown }>(token, `/invoices/${id}`),
+  createInvoice: (token: string, body: Record<string, unknown>) =>
+    academyRequest<{ invoice: unknown }>(token, "/invoices", { method: "POST", body: JSON.stringify(body) }),
+  updateInvoice: (token: string, id: string, body: Record<string, unknown>) =>
+    academyRequest<{ invoice: unknown }>(token, `/invoices/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  issueInvoice: (token: string, id: string) =>
+    academyRequest<{ invoice: unknown }>(token, `/invoices/${id}/issue`, { method: "POST" }),
+  cancelInvoice: (token: string, id: string) =>
+    academyRequest<{ invoice: unknown }>(token, `/invoices/${id}/cancel`, { method: "POST" }),
+
+  listPayments: (token: string, params?: { invoiceId?: string; studentId?: string; verificationStatus?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.invoiceId) q.set("invoiceId", params.invoiceId);
+    if (params?.studentId) q.set("studentId", params.studentId);
+    if (params?.verificationStatus) q.set("verificationStatus", params.verificationStatus);
+    const s = q.toString();
+    return academyRequest<{ payments: unknown[] }>(token, `/payments${s ? `?${s}` : ""}`);
+  },
+  createPayment: (token: string, body: Record<string, unknown>) =>
+    academyRequest<{ payment: unknown }>(token, "/payments", { method: "POST", body: JSON.stringify(body) }),
+  verifyPayment: (token: string, id: string) =>
+    academyRequest<{ payment: unknown }>(token, `/payments/${id}/verify`, { method: "POST" }),
+  rejectPayment: (token: string, id: string, remarks?: string | null) =>
+    academyRequest<{ payment: unknown }>(token, `/payments/${id}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ remarks: remarks ?? null }),
+    }),
+  getReceipt: (token: string, id: string) => academyRequest<{ receipt: unknown }>(token, `/receipts/${id}`),
+};

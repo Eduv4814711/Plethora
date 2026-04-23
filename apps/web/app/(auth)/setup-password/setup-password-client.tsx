@@ -62,9 +62,6 @@ export default function SetupPasswordClient() {
     setSubmitting(true);
     try {
       await completeSetupPassword(token, password);
-      // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/88a7285e-a4b7-491f-ab73-2cd80dfe89c9',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fb2299'},body:JSON.stringify({sessionId:'fb2299',runId:'pre-fix',hypothesisId:'H4',location:'apps/web/app/(auth)/setup-password/setup-password-client.tsx:60',message:'setup password complete success',data:{redirectTarget:'/login'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       setSuccess(true);
       setTimeout(() => router.push("/login"), 1200);
     } catch (err) {

@@ -106,6 +106,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const hasAccess = canAccessRoute(pathname, user.role, user.moduleAccess);
   const isDashboardHome = pathname === "/";
   const isWhatsAppPage = pathname === "/whatsapp" || pathname.startsWith("/whatsapp/");
+  const isAcademyPage = pathname === "/academy" || (pathname != null && pathname.startsWith("/academy/"));
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
@@ -113,13 +114,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg-canvas)]">
-      {/* Brand header – orange palette */}
-      <header className="h-14 bg-gradient-to-r from-security-navy-800 via-security-navy-700 to-security-navy-800 flex items-center justify-between px-6 shrink-0 shadow-md border-b border-black/10">
+      {/* Brand header – compact/lightweight */}
+      <header className="h-14 bg-security-navy-800/95 backdrop-blur flex items-center justify-between px-5 shrink-0 shadow-sm border-b border-white/10">
         <Link href="/" className="flex items-center shrink-0">
-          <img src="/plethora-logo-header.svg" alt="Plethora" className="h-20 w-auto object-contain opacity-95" />
+          <img src="/plethora-logo-header.svg" alt="Plethora" className="h-16 w-auto object-contain opacity-95" />
         </Link>
 
-        <nav className="flex flex-1 items-center justify-center gap-6 md:gap-8 min-w-0">
+        <nav className="flex flex-1 items-center justify-center gap-5 md:gap-7 min-w-0">
           <span className="text-sm font-semibold text-white/95 tracking-wide truncate max-w-[10rem] md:max-w-none hidden sm:block">
             {companyName}
           </span>
@@ -130,7 +131,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               className={clsx(
                 "text-sm font-medium tracking-wide transition-all py-2 px-3 rounded-full",
                 isActive(item.href)
-                  ? "text-security-navy-900 bg-white shadow-sm"
+                  ? "text-security-navy-900 bg-white/95 shadow-sm"
                   : "text-white/90 hover:text-white hover:bg-white/10"
               )}
             >
@@ -264,10 +265,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <main
         className={clsx(
           "flex-1 p-6 md:p-8 lg:p-10 bg-gradient-to-b from-[var(--bg-canvas)] via-white to-security-navy-50/35",
-          isDashboardHome || isWhatsAppPage ? "overflow-hidden" : "overflow-auto"
+          isDashboardHome || isWhatsAppPage
+            ? "overflow-hidden"
+            : isAcademyPage
+              ? "min-h-0 flex flex-col overflow-y-auto max-lg:overflow-y-auto lg:h-[calc(100dvh-3.5rem)] lg:max-h-[calc(100dvh-3.5rem)] lg:overflow-hidden"
+              : "overflow-auto"
         )}
       >
-        {hasAccess ? children : null}
+        {hasAccess ? (isAcademyPage ? <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col lg:h-full">{children}</div> : children) : null}
       </main>
     </div>
   );

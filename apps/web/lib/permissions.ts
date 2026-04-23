@@ -22,6 +22,11 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/tasks", label: "Tasks", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
   { href: "/whatsapp", label: "WhatsApp", roles: ["admin", "operations_manager", "hr_payroll", "supervisor", "controller"] },
   { href: "/reports", label: "Reports", roles: ["admin", "operations_manager", "hr_payroll"] },
+  {
+    href: "/academy",
+    label: "Academy",
+    roles: ["admin", "operations_manager", "hr_payroll", "supervisor", "controller"],
+  },
   { href: "/audit", label: "Audit", roles: ["admin"] },
   { href: "/settings", label: "Settings", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
 ];
@@ -30,7 +35,7 @@ export const NAV_ITEMS: NavItem[] = [
 export const MAIN_NAV_HREFS = ["/", "/employees", "/sites", "/rostering", "/attendance", "/payroll", "/tasks"];
 
 /** Nav items shown in the "More" dropdown (remaining items). */
-export const MORE_NAV_HREFS = ["/whatsapp", "/reports", "/audit"];
+export const MORE_NAV_HREFS = ["/whatsapp", "/reports", "/academy", "/audit"];
 
 /** Modules an admin can assign to a user (same as primary nav; Audit only effective for admin accounts). */
 export const MODULE_ASSIGN_OPTIONS: { href: string; label: string }[] = NAV_ITEMS.map(({ href, label }) => ({

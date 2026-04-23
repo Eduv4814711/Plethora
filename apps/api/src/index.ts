@@ -6,6 +6,7 @@ config();
 
 await mkdir(join(process.cwd(), "uploads", "logos"), { recursive: true });
 await mkdir(join(process.cwd(), "uploads", "tasks"), { recursive: true });
+await mkdir(join(process.cwd(), "uploads", "academy"), { recursive: true });
 
 import Fastify from "fastify";
 import cors from "@fastify/cors";
@@ -47,6 +48,7 @@ import { tasksRoutes } from "./routes/tasks.js";
 import { taskCommentsRoutes } from "./routes/task-comments.js";
 import { taskAttachmentsRoutes } from "./routes/task-attachments.js";
 import { taskRemindersRoutes } from "./routes/task-reminders.js";
+import { academyRoutes } from "./routes/academy/index.js";
 
 const app = Fastify({ logger: true });
 
@@ -109,6 +111,7 @@ app.register(tasksRoutes, { prefix: "/tasks" });
 app.register(taskCommentsRoutes, { prefix: "/task-comments" });
 app.register(taskAttachmentsRoutes, { prefix: "/task-attachments" });
 app.register(taskRemindersRoutes, { prefix: "/task-reminders" });
+app.register(academyRoutes, { prefix: "/academy" });
 
 const port = Number(process.env.PORT) || 3001;
 const host = process.env.HOST ?? "0.0.0.0";

@@ -17,70 +17,100 @@ model Company {
   updatedAt DateTime @updatedAt
 
   // Business details
-  legalName          String?
-  registrationNumber String?
-  taxNumber          String?
-  address            String?
-  phone              String?
-  email              String?
-  logoUrl            String?
-  website            String?
-  fax                String?
-  psiraRegistration  String?
-  uifReference       String?
-  payeReference      String?   // PAYE ref starts with '7'
-  sdlReference       String?   // SDL ref starts with 'L'
-  sdlLiableFrom      DateTime? // When company first exceeded R500k payroll
-  monthlyPayrollTotals Json?   // { "YYYY-MM": total } for rolling 12-month SDL tracking
+  legalName            String?
+  registrationNumber   String?
+  taxNumber            String?
+  address              String?
+  phone                String?
+  email                String?
+  logoUrl              String?
+  website              String?
+  fax                  String?
+  psiraRegistration    String?
+  uifReference         String?
+  payeReference        String? // PAYE ref starts with '7'
+  sdlReference         String? // SDL ref starts with 'L'
+  sdlLiableFrom        DateTime? // When company first exceeded R500k payroll
+  monthlyPayrollTotals Json? // { "YYYY-MM": total } for rolling 12-month SDL tracking
 
   // Business settings & theme (JSON for flexibility)
   settings Json? // { currency, dateFormat, timezone, payrollPeriod, etc. }
   theme    Json? // { primaryColor, accentColor, mode: "light"|"dark"|"system" }
 
-  users            User[]
-  employees        Employee[]
-  sites            Site[]
+  users                 User[]
+  employees             Employee[]
+  sites                 Site[]
   whatsAppClockPendings WhatsAppClockPending[]
-  shifts           Shift[]
-  payrollRuns      PayrollRun[]
-  auditLogs        AuditLog[]
-  payRules         PayRule[]
-  payGrades        PayGrade[]
-  employeeGroups   EmployeeGroup[]
-  groupPayRules    GroupPayRule[]
-  groupEarningsRules GroupEarningsRule[]
-  groupDeductionRules GroupDeductionRule[]
-  earningsRules    EarningsRule[]
-  deductionRules   DeductionRule[]
-  publicHolidays   PublicHoliday[]
-  timesheets       Timesheet[]
-  taskProjects     TaskProject[]
-  tasks            Task[]
-  whatsappMessages WhatsAppMessage[]
+  shifts                Shift[]
+  payrollRuns           PayrollRun[]
+  auditLogs             AuditLog[]
+  payRules              PayRule[]
+  payGrades             PayGrade[]
+  employeeGroups        EmployeeGroup[]
+  groupPayRules         GroupPayRule[]
+  groupEarningsRules    GroupEarningsRule[]
+  groupDeductionRules   GroupDeductionRule[]
+  earningsRules         EarningsRule[]
+  deductionRules        DeductionRule[]
+  publicHolidays        PublicHoliday[]
+  timesheets            Timesheet[]
+  taskProjects          TaskProject[]
+  tasks                 Task[]
+  whatsappMessages      WhatsAppMessage[]
+
+  academyBranches         AcademyBranch[]
+  academyStudents         Student[]
+  academyStudentDocuments StudentDocument[]
+  academyCourses          Course[]
+  academyCourseRuns       CourseRun[]
+  academyFeePlans         FeePlan[]
+  academyEnrolments       Enrolment[]
+  academyInvoices         AcademyInvoice[]
+  academyPayments         AcademyPayment[]
+  academyReceipts         AcademyReceipt[]
+  academyProfile          AcademyProfile?
+  academyInstructors      AcademyInstructor[]
+  academyInstructorDocuments AcademyInstructorDocument[]
+  academyClassrooms       AcademyClassroom[]
+  academyAttendanceSessions AcademyAttendanceSession[]
+  academyAttendanceRecords  AcademyAttendanceRecord[]
+  academyAssessments      AcademyAssessment[]
+  academyCertificates     AcademyCertificate[]
+  academyComplianceDocuments AcademyComplianceDocument[]
+  academyPolicyDocuments  AcademyPolicyDocument[]
+  academyRenewalAlerts    AcademyRenewalAlert[]
 }
 
 model User {
-  id           String   @id @default(cuid())
-  companyId    String
-  name         String
-  email        String   @unique
-  passwordHash String
-  passwordSetupRequired     Boolean   @default(false)
-  passwordSetupTokenHash    String?
-  passwordSetupTokenExpiresAt DateTime?
+  id                           String    @id @default(cuid())
+  companyId                    String
+  name                         String
+  email                        String    @unique
+  passwordHash                 String
+  passwordSetupRequired        Boolean   @default(false)
+  passwordSetupTokenHash       String?
+  passwordSetupTokenExpiresAt  DateTime?
   passwordSetupTokenConsumedAt DateTime?
-  role         UserRole
-  roleLabel    String?
+  role                         UserRole
+  roleLabel                    String?
   /// When null, module access follows `role` defaults. When a non-empty JSON array of paths (e.g. ["/employees","/payroll"]), only those modules apply; Admin with null = full access, Admin with a list = scoped like other users.
-  moduleAccess Json?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  moduleAccess                 Json?
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
 
-  company       Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  auditLogs     AuditLog[]
-  tasksCreated Task[]
-  taskComments TaskComment[]
-  taskAttachments TaskAttachment[]
+  company                  Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  auditLogs                AuditLog[]
+  tasksCreated             Task[]
+  taskComments             TaskComment[]
+  taskAttachments          TaskAttachment[]
+  studentDocumentsUploaded StudentDocument[]
+  academyPaymentsVerified  AcademyPayment[]  @relation("AcademyPaymentVerifiedBy")
+  academyReceiptsIssued    AcademyReceipt[]  @relation("AcademyReceiptIssuedBy")
+  academyAttendanceMarked  AcademyAttendanceRecord[] @relation("AcademyAttendanceMarkedBy")
+  academyCertificatesIssued AcademyCertificate[] @relation("AcademyCertificateIssuedBy")
+  academyComplianceVerified AcademyComplianceDocument[] @relation("AcademyComplianceVerifiedBy")
+  academyInstructorDocumentsUploaded AcademyInstructorDocument[] @relation("AcademyInstructorDocumentUploadedBy")
+  academyInstructorDocumentsVerified AcademyInstructorDocument[] @relation("AcademyInstructorDocumentVerifiedBy")
 
   @@index([companyId])
 }
@@ -94,77 +124,79 @@ enum UserRole {
 }
 
 model Employee {
-  id             String   @id @default(cuid())
+  id             String         @id @default(cuid())
   companyId      String
-  employeeNumber String   @default(cuid()) // Unique per company - auto-generated for existing rows, can be set on create
+  employeeNumber String         @default(cuid()) // Unique per company - auto-generated for existing rows, can be set on create
   firstName      String
   lastName       String
   idNumber       String?
-  phone     String?
-  status    EmployeeStatus
-  hourlyRate Decimal? @db.Decimal(10, 2)   // For Guards
-  monthlySalary Decimal? @db.Decimal(12, 2) // For Office staff (fixed monthly)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  phone          String?
+  status         EmployeeStatus
+  hourlyRate     Decimal?       @db.Decimal(10, 2) // For Guards
+  monthlySalary  Decimal?       @db.Decimal(12, 2) // For Office staff (fixed monthly)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   // Employee type: office (Labour Law) vs security/guard (PSIRA)
-  employeeType String @default("security") // "office" | "security"
+  employeeType String  @default("security") // "office" | "security"
   jobRole      String? // e.g. "Security Officer", "HR Manager"
 
   // Labour Law (BCEA) - office staff
-  dateOfBirth      DateTime?
-  gender           String?   // M/F
-  maritalStatus    String?   // single, married, divorced, widowed
-  email            String?
-  physicalAddress  String?
-  postalAddress    String?
-  postalCode       String?
-  taxNumber        String?
-  bankName         String?
+  dateOfBirth       DateTime?
+  gender            String? // M/F
+  maritalStatus     String? // single, married, divorced, widowed
+  email             String?
+  physicalAddress   String?
+  postalAddress     String?
+  postalCode        String?
+  taxNumber         String?
+  bankName          String?
   bankAccountNumber String?
-  bankBranchCode   String?
-  commencementDate DateTime?
-  occupation       String?
-  placeOfWork      String?
-  ordinaryHours    String?   // e.g. "45 hours/week"
-  ordinaryDays     String?   // e.g. "Mon-Fri"
-  overtimeRate     Decimal?  @db.Decimal(10, 2)
-  payFrequency     String?   // weekly, bi-weekly, monthly
-  leaveEntitlement String?
-  noticePeriod     String?
-  previousService  String?
+  bankBranchCode    String?
+  commencementDate  DateTime?
+  occupation        String?
+  placeOfWork       String?
+  ordinaryHours     String? // e.g. "45 hours/week"
+  ordinaryDays      String? // e.g. "Mon-Fri"
+  overtimeRate      Decimal?  @db.Decimal(10, 2)
+  payFrequency      String? // weekly, bi-weekly, monthly
+  leaveEntitlement  String?
+  noticePeriod      String?
+  previousService   String?
 
   // PSIRA - security staff
-  psiraNumber      String?
-  psiraExpiryDate  DateTime?
-  securityServiceType String? // guarding, patrolling, close_protection, etc.
-  nextOfKin1Name   String?
-  nextOfKin1Phone  String?
-  nextOfKin2Name   String?
-  nextOfKin2Phone  String?
-  nextOfKin3Name   String?
-  nextOfKin3Phone  String?
-  residedOutsideSA Boolean?
+  psiraNumber           String?
+  psiraExpiryDate       DateTime?
+  securityServiceType   String? // guarding, patrolling, close_protection, etc.
+  nextOfKin1Name        String?
+  nextOfKin1Phone       String?
+  nextOfKin2Name        String?
+  nextOfKin2Phone       String?
+  nextOfKin3Name        String?
+  nextOfKin3Phone       String?
+  residedOutsideSA      Boolean?
   militaryPoliceService Boolean?
   criminalInvestigation Boolean?
-  mentallyUnstable Boolean?
-  trainingCompleted Boolean?
+  mentallyUnstable      Boolean?
+  trainingCompleted     Boolean?
 
-  gradeId            String?
-  groupId            String?
-  company            Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  grade              PayGrade?          @relation(fields: [gradeId], references: [id], onDelete: SetNull)
-  group              EmployeeGroup?     @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  shifts             Shift[]
-  payrollItems       PayrollItem[]
-  siteAssignments   SiteAssignment[]
-  postAssignments   PostAssignment[]
-  timesheets         Timesheet[]
-  leaveRecords      LeaveRecord[]
-  leaveRequests     LeaveRequest[]
-  employeeDeductions EmployeeDeduction[]
-  whatsappMessages   WhatsAppMessage[]
-  whatsAppClockPendings WhatsAppClockPending[]
+  gradeId                     String?
+  groupId                     String?
+  company                     Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  grade                       PayGrade?              @relation(fields: [gradeId], references: [id], onDelete: SetNull)
+  group                       EmployeeGroup?         @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  shifts                      Shift[]
+  payrollItems                PayrollItem[]
+  siteAssignments             SiteAssignment[]
+  postAssignments             PostAssignment[]
+  timesheets                  Timesheet[]
+  leaveRecords                LeaveRecord[]
+  leaveRequests               LeaveRequest[]
+  employeeDeductions          EmployeeDeduction[]
+  whatsappMessages            WhatsAppMessage[]
+  whatsAppClockPendings       WhatsAppClockPending[]
+  academyLinkedStudents       Student[]              @relation("AcademyStudentEmployee")
+  academyCourseRunsInstructed CourseRun[]            @relation("CourseRunInstructor")
 
   @@unique([companyId, employeeNumber])
   @@index([companyId])
@@ -184,25 +216,25 @@ enum EmployeeStatus {
 }
 
 model Site {
-  id                     String   @id @default(cuid())
-  companyId              String
-  name                   String
-  location               String?  // Legacy/short name
-  physicalAddress        String?  // Full physical address
-  contactPersonName      String?
-  contactPersonPhone     String?
-  contractOrServiceAgreement String?  // Contract reference or description
-  serviceType            String?  // guarding, access_control, patrols, etc.
-  monthlyRevenue         Decimal? @db.Decimal(12, 2)  // Optional - for labour % and profitability
+  id                         String   @id @default(cuid())
+  companyId                  String
+  name                       String
+  location                   String? // Legacy/short name
+  physicalAddress            String? // Full physical address
+  contactPersonName          String?
+  contactPersonPhone         String?
+  contractOrServiceAgreement String? // Contract reference or description
+  serviceType                String? // guarding, access_control, patrols, etc.
+  monthlyRevenue             Decimal? @db.Decimal(12, 2) // Optional - for labour % and profitability
   /// Geofence center (WGS84). All three geofence fields must be set to enforce clock-in location on WhatsApp.
-  latitude               Decimal? @db.Decimal(10, 7)
-  longitude              Decimal? @db.Decimal(10, 7)
-  geofenceRadiusMeters   Int?
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  latitude                   Decimal? @db.Decimal(10, 7)
+  longitude                  Decimal? @db.Decimal(10, 7)
+  geofenceRadiusMeters       Int?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
 
-  company  Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  posts    Post[]           @relation("SitePosts")
+  company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  posts          Post[]           @relation("SitePosts")
   assignedGuards SiteAssignment[]
 
   @@index([companyId])
@@ -226,13 +258,13 @@ model Post {
   id        String   @id @default(cuid())
   siteId    String
   name      String
-  shiftType String?  // "day" (6-18) | "night" (18-6)
+  shiftType String? // "day" (6-18) | "night" (18-6)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  site            Site            @relation("SitePosts", fields: [siteId], references: [id], onDelete: Cascade)
-  shifts          Shift[]
-  assignedGuards  PostAssignment[]
+  site           Site             @relation("SitePosts", fields: [siteId], references: [id], onDelete: Cascade)
+  shifts         Shift[]
+  assignedGuards PostAssignment[]
 
   @@index([siteId])
 }
@@ -252,19 +284,19 @@ model PostAssignment {
 }
 
 model Shift {
-  id         String   @id @default(cuid())
+  id         String      @id @default(cuid())
   companyId  String
   employeeId String
   postId     String
   startTime  DateTime
   endTime    DateTime
   status     ShiftStatus
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 
-  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee   Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  post       Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee    Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  post        Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
   attendances Attendance[]
 
   @@index([companyId])
@@ -283,20 +315,20 @@ enum ShiftStatus {
 }
 
 model Attendance {
-  id         String   @id @default(cuid())
-  shiftId    String
-  clockIn    DateTime?
-  clockOut   DateTime?
-  clockInLat  Decimal? @db.Decimal(10, 7)
-  clockInLng  Decimal? @db.Decimal(10, 7)
-  clockOutLat Decimal? @db.Decimal(10, 7)
-  clockOutLng Decimal? @db.Decimal(10, 7)
-  hoursWorked Decimal? @db.Decimal(10, 2)
-  overtimeHours Decimal? @db.Decimal(10, 2)
-  status     String   @default("pending")
-  source     String   @default("clock_in") // "clock_in" | "manual"
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id            String    @id @default(cuid())
+  shiftId       String
+  clockIn       DateTime?
+  clockOut      DateTime?
+  clockInLat    Decimal?  @db.Decimal(10, 7)
+  clockInLng    Decimal?  @db.Decimal(10, 7)
+  clockOutLat   Decimal?  @db.Decimal(10, 7)
+  clockOutLng   Decimal?  @db.Decimal(10, 7)
+  hoursWorked   Decimal?  @db.Decimal(10, 2)
+  overtimeHours Decimal?  @db.Decimal(10, 2)
+  status        String    @default("pending")
+  source        String    @default("clock_in") // "clock_in" | "manual"
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
 
@@ -304,16 +336,16 @@ model Attendance {
 }
 
 model PayrollRun {
-  id         String    @id @default(cuid())
-  companyId  String
+  id          String        @id @default(cuid())
+  companyId   String
   periodStart DateTime
   periodEnd   DateTime
-  status     PayrollStatus
-  lockedAt   DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  status      PayrollStatus
+  lockedAt    DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
-  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company    Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   items      PayrollItem[]
   timesheets Timesheet[]
 
@@ -331,24 +363,24 @@ enum PayrollStatus {
 }
 
 model PayrollItem {
-  id                 String   @id @default(cuid())
-  payrollRunId       String
-  employeeId         String
-  hoursWorked        Decimal  @db.Decimal(10, 2)
-  overtimeHours      Decimal  @db.Decimal(10, 2)
-  basePay            Decimal  @db.Decimal(12, 2)
-  overtimePay        Decimal  @db.Decimal(12, 2)
-  sundayPay          Decimal? @db.Decimal(12, 2)
-  publicHolidayPay   Decimal? @db.Decimal(12, 2)
-  grossPay           Decimal  @db.Decimal(12, 2) @default(0)
-  deductions         Decimal  @db.Decimal(12, 2)
-  netPay             Decimal  @db.Decimal(12, 2)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id               String   @id @default(cuid())
+  payrollRunId     String
+  employeeId       String
+  hoursWorked      Decimal  @db.Decimal(10, 2)
+  overtimeHours    Decimal  @db.Decimal(10, 2)
+  basePay          Decimal  @db.Decimal(12, 2)
+  overtimePay      Decimal  @db.Decimal(12, 2)
+  sundayPay        Decimal? @db.Decimal(12, 2)
+  publicHolidayPay Decimal? @db.Decimal(12, 2)
+  grossPay         Decimal  @default(0) @db.Decimal(12, 2)
+  deductions       Decimal  @db.Decimal(12, 2)
+  netPay           Decimal  @db.Decimal(12, 2)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   payrollRun PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
-  employee  Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  payslip   Payslip?
+  employee   Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  payslip    Payslip?
 
   @@index([payrollRunId])
   @@index([employeeId])
@@ -357,7 +389,7 @@ model PayrollItem {
 model PayRule {
   id         String   @id @default(cuid())
   companyId  String
-  ruleType   String   // "overtime" | "sunday" | "public_holiday"
+  ruleType   String // "overtime" | "sunday" | "public_holiday"
   multiplier Decimal  @db.Decimal(5, 2)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -371,15 +403,15 @@ model PayRule {
 model PayGrade {
   id         String   @id @default(cuid())
   companyId  String
-  groupId    String?  // null = company default; set = group-specific
-  name       String   // e.g. "Grade A", "Senior Guard"
+  groupId    String? // null = company default; set = group-specific
+  name       String // e.g. "Grade A", "Senior Guard"
   hourlyRate Decimal  @db.Decimal(10, 2)
   sortOrder  Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  company Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  group   EmployeeGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  group     EmployeeGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
   employees Employee[]
 
   @@index([companyId])
@@ -395,11 +427,11 @@ model EmployeeGroup {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  company           Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employees         Employee[]
-  payGrades         PayGrade[]
-  groupPayRules     GroupPayRule[]
-  groupEarningsRules GroupEarningsRule[]
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employees           Employee[]
+  payGrades           PayGrade[]
+  groupPayRules       GroupPayRule[]
+  groupEarningsRules  GroupEarningsRule[]
   groupDeductionRules GroupDeductionRule[]
 
   @@index([companyId])
@@ -409,7 +441,7 @@ model GroupPayRule {
   id         String   @id @default(cuid())
   companyId  String
   groupId    String
-  ruleType   String   // "overtime" | "sunday" | "public_holiday"
+  ruleType   String // "overtime" | "sunday" | "public_holiday"
   multiplier Decimal  @db.Decimal(5, 2)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -423,17 +455,17 @@ model GroupPayRule {
 }
 
 model GroupEarningsRule {
-  id         String   @id @default(cuid())
-  companyId  String
-  groupId    String
-  name       String   // e.g. "Transport", "Uniform allowance"
-  type       String   // "fixed" | "percentage"
-  amount     Decimal? @db.Decimal(12, 2)
-  rate       Decimal? @db.Decimal(5, 2)
-  appliesTo  String   @default("all") // "all" | "security" | "office"
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(cuid())
+  companyId String
+  groupId   String
+  name      String // e.g. "Transport", "Uniform allowance"
+  type      String // "fixed" | "percentage"
+  amount    Decimal? @db.Decimal(12, 2)
+  rate      Decimal? @db.Decimal(5, 2)
+  appliesTo String   @default("all") // "all" | "security" | "office"
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   company Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   group   EmployeeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
@@ -447,7 +479,7 @@ model GroupDeductionRule {
   companyId   String
   groupId     String
   name        String
-  type        String   // "fixed" | "percentage"
+  type        String // "fixed" | "percentage"
   amount      Decimal? @db.Decimal(12, 2)
   rate        Decimal? @db.Decimal(5, 2)
   appliesTo   String   @default("all") // "all" | "security" | "office"
@@ -465,10 +497,10 @@ model GroupDeductionRule {
 }
 
 model EarningsRule {
-  id         String   @id @default(cuid())
+  id        String   @id @default(cuid())
   companyId String
-  name      String   // e.g. "Transport", "Uniform allowance"
-  type      String   // "fixed" | "percentage"
+  name      String // e.g. "Transport", "Uniform allowance"
+  type      String // "fixed" | "percentage"
   amount    Decimal? @db.Decimal(12, 2)
   rate      Decimal? @db.Decimal(5, 2)
   appliesTo String   @default("all") // "all" | "security" | "office"
@@ -485,7 +517,7 @@ model DeductionRule {
   id          String   @id @default(cuid())
   companyId   String
   name        String
-  type        String   // "fixed" | "percentage"
+  type        String // "fixed" | "percentage"
   amount      Decimal? @db.Decimal(12, 2)
   rate        Decimal? @db.Decimal(5, 2)
   appliesTo   String   @default("all") // "all" | "security" | "office"
@@ -506,7 +538,7 @@ model EmployeeDeduction {
   employeeId      String
   deductionRuleId String?
   name            String
-  type            String    // "fixed" | "percentage"
+  type            String // "fixed" | "percentage"
   amount          Decimal   @db.Decimal(12, 2)
   rate            Decimal?  @db.Decimal(5, 2)
   appliesFrom     DateTime  @default(now())
@@ -535,20 +567,20 @@ model PublicHoliday {
 }
 
 model Timesheet {
-  id                   String    @id @default(cuid())
-  companyId            String
-  employeeId           String
-  payrollRunId         String?
-  periodStart          DateTime
-  periodEnd            DateTime
-  basicHours           Decimal   @db.Decimal(10, 2)
-  overtimeHours        Decimal   @db.Decimal(10, 2)
-  sundayHours         Decimal   @db.Decimal(10, 2) @default(0)
-  publicHolidayHours  Decimal   @db.Decimal(10, 2) @default(0)
-  leaveDays            Decimal   @db.Decimal(5, 2) @default(0)
-  source               String    @default("auto") // "auto" | "manual"
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  id                 String   @id @default(cuid())
+  companyId          String
+  employeeId         String
+  payrollRunId       String?
+  periodStart        DateTime
+  periodEnd          DateTime
+  basicHours         Decimal  @db.Decimal(10, 2)
+  overtimeHours      Decimal  @db.Decimal(10, 2)
+  sundayHours        Decimal  @default(0) @db.Decimal(10, 2)
+  publicHolidayHours Decimal  @default(0) @db.Decimal(10, 2)
+  leaveDays          Decimal  @default(0) @db.Decimal(5, 2)
+  source             String   @default("auto") // "auto" | "manual"
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   employee   Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
@@ -564,8 +596,8 @@ model LeaveRecord {
   id         String   @id @default(cuid())
   employeeId String
   date       DateTime @db.Date
-  type       String   // "annual" | "sick" | "unpaid"
-  hours      Decimal  @db.Decimal(5, 2) @default(8)
+  type       String // "annual" | "sick" | "unpaid"
+  hours      Decimal  @default(8) @db.Decimal(5, 2)
   createdAt  DateTime @default(now())
 
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
@@ -577,8 +609,8 @@ model LeaveRequest {
   id         String    @id @default(cuid())
   employeeId String
   date       DateTime  @db.Date
-  type       String    // "annual" | "sick" | "unpaid"
-  hours      Decimal   @db.Decimal(5, 2) @default(8)
+  type       String // "annual" | "sick" | "unpaid"
+  hours      Decimal   @default(8) @db.Decimal(5, 2)
   status     String    @default("pending") // "pending" | "approved" | "rejected"
   reason     String?
   reviewedBy String?
@@ -592,21 +624,21 @@ model LeaveRequest {
 }
 
 model Payslip {
-  id                String   @id @default(cuid())
-  payrollItemId     String   @unique
-  earnings          Json     // [{ name, amount }]
-  deductions        Json     // [{ name, amount }]
-  grossPay          Decimal  @db.Decimal(12, 2)
-  totalDeductions   Decimal  @db.Decimal(12, 2)
-  netPay            Decimal  @db.Decimal(12, 2)
-  generatedAt       DateTime @default(now())
+  id              String   @id @default(cuid())
+  payrollItemId   String   @unique
+  earnings        Json // [{ name, amount }]
+  deductions      Json // [{ name, amount }]
+  grossPay        Decimal  @db.Decimal(12, 2)
+  totalDeductions Decimal  @db.Decimal(12, 2)
+  netPay          Decimal  @db.Decimal(12, 2)
+  generatedAt     DateTime @default(now())
 
   // SARS tax fields
-  tax               Decimal? @db.Decimal(12, 2)  // PAYE
-  taxableEarnings   Decimal? @db.Decimal(12, 2)
-  uifEmployee      Decimal? @db.Decimal(12, 2)
-  uifEmployer      Decimal? @db.Decimal(12, 2)
-  sdl              Decimal? @db.Decimal(12, 2)
+  tax             Decimal? @db.Decimal(12, 2) // PAYE
+  taxableEarnings Decimal? @db.Decimal(12, 2)
+  uifEmployee     Decimal? @db.Decimal(12, 2)
+  uifEmployer     Decimal? @db.Decimal(12, 2)
+  sdl             Decimal? @db.Decimal(12, 2)
 
   payrollItem PayrollItem @relation(fields: [payrollItemId], references: [id], onDelete: Cascade)
 }
@@ -621,8 +653,8 @@ model AuditLog {
   metadata   Json?
   timestamp  DateTime @default(now())
 
-  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@index([entityType])
@@ -670,17 +702,17 @@ model Task {
   priority       TaskPriority @default(medium)
   dueDate        DateTime?
   completedAt    DateTime?
-  assigneeType   String?      // "employee" | "user"
+  assigneeType   String? // "employee" | "user"
   assigneeId     String?
-  recurrenceRule Json?        // { frequency, interval?, daysOfWeek?, endDate? }
+  recurrenceRule Json? // { frequency, interval?, daysOfWeek?, endDate? }
   createdById    String
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  company    Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project    TaskProject?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  createdBy  User            @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  comments   TaskComment[]
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project     TaskProject?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdBy   User             @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  comments    TaskComment[]
   attachments TaskAttachment[]
   reminders   TaskReminder[]
 
@@ -706,16 +738,16 @@ model TaskComment {
 }
 
 model TaskAttachment {
-  id          String   @id @default(cuid())
-  taskId      String
-  filename    String
-  mimeType    String
-  size        Int
-  url         String
+  id           String   @id @default(cuid())
+  taskId       String
+  filename     String
+  mimeType     String
+  size         Int
+  url          String
   uploadedById String
-  createdAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
 
-  task      Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  task       Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   uploadedBy User @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
 
   @@index([taskId])
@@ -739,7 +771,7 @@ model WhatsAppMessage {
   companyId         String
   employeeId        String
   whatsappMessageId String?
-  direction         String   // "inbound" | "outbound"
+  direction         String // "inbound" | "outbound"
   type              String   @default("text")
   text              String?  @db.Text
   status            String?
@@ -759,7 +791,7 @@ model WhatsAppClockPending {
   waFrom     String   @unique
   employeeId String
   companyId  String
-  intent     String   // clock_in | clock_out
+  intent     String // clock_in | clock_out
   shiftId    String
   expiresAt  DateTime
   createdAt  DateTime @default(now())
@@ -769,4 +801,739 @@ model WhatsAppClockPending {
 
   @@index([expiresAt])
   @@index([employeeId])
+}
+
+// --- Academy Management (training provider operations) ---
+
+enum AcademyStudentStatus {
+  prospect
+  registered
+  active
+  completed
+  inactive
+  blocked
+}
+
+enum AcademyPsiraPreRegistrationStatus {
+  unknown
+  not_required
+  pending
+  completed
+}
+
+enum AcademyStudentDocumentType {
+  id_copy
+  proof_of_address
+  passport_permit
+  qualification
+  application_form
+  payment_proof
+  consent
+  psira_other
+  other
+}
+
+enum AcademyAdminFeeStatus {
+  unpaid
+  paid
+  waived
+}
+
+enum AcademyCourseRunStatus {
+  planned
+  open
+  in_progress
+  completed
+  reported
+  closed
+}
+
+enum AcademyEnrolmentFinancialStatus {
+  unpaid
+  partial
+  paid
+}
+
+enum AcademyEnrolmentAttendanceStatus {
+  pending
+  in_progress
+  compliant
+  non_compliant
+}
+
+enum AcademyEnrolmentCompletionStatus {
+  pending
+  in_progress
+  completed
+  failed
+}
+
+enum AcademyReportingReadinessStatus {
+  not_started
+  incomplete
+  ready
+  blocked
+}
+
+enum AcademyPsiraSubmissionStatus {
+  not_applicable
+  not_started
+  pending
+  submitted
+  approved
+  rejected
+}
+
+enum AcademyInvoiceStatus {
+  draft
+  issued
+  partially_paid
+  paid
+  overdue
+  cancelled
+}
+
+enum AcademyPaymentVerificationStatus {
+  pending
+  verified
+  rejected
+}
+
+model AcademyBranch {
+  id           String   @id @default(cuid())
+  companyId    String
+  name         String
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  province     String?
+  postalCode   String?
+  phone        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  courseRuns CourseRun[]
+  instructors AcademyInstructor[]
+  classrooms AcademyClassroom[]
+
+  @@index([companyId])
+}
+
+model Student {
+  id                         String                            @id @default(cuid())
+  companyId                  String
+  studentNumber              String
+  firstName                  String
+  middleName                 String?
+  lastName                   String
+  preferredName              String?
+  idType                     String? // national_id | passport | etc.
+  idNumber                   String?
+  dateOfBirth                DateTime?
+  gender                     String?
+  nationality                String?
+  phone                      String?
+  alternatePhone             String?
+  email                      String?
+  addressLine1               String?
+  addressLine2               String?
+  city                       String?
+  province                   String?
+  postalCode                 String?
+  nextOfKinName              String?
+  nextOfKinPhone             String?
+  psiraProfileReference      String?
+  psiraPreRegistrationStatus AcademyPsiraPreRegistrationStatus @default(unknown)
+  status                     AcademyStudentStatus              @default(prospect)
+  employeeId                 String?
+  adminFeeStatus             AcademyAdminFeeStatus               @default(unpaid)
+  adminFeePaidAt             DateTime?
+  adminFeeAmount             Decimal?                            @db.Decimal(12, 2)
+  adminFeeMethod             String?
+  adminFeeReference          String?
+  adminFeeNotes              String?                             @db.Text
+  adminFeeRecordedByUserId   String?
+  createdAt                  DateTime                            @default(now())
+  updatedAt                  DateTime                            @updatedAt
+
+  company         Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee        Employee?         @relation("AcademyStudentEmployee", fields: [employeeId], references: [id], onDelete: SetNull)
+  documents       StudentDocument[]
+  enrolments      Enrolment[]
+  academyInvoices AcademyInvoice[]
+  academyPayments AcademyPayment[]
+  academyAssessments AcademyAssessment[]
+  academyCertificates AcademyCertificate[]
+
+  @@unique([companyId, studentNumber])
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([status])
+}
+
+model StudentDocument {
+  id               String                     @id @default(cuid())
+  companyId        String
+  studentId        String
+  documentType     AcademyStudentDocumentType
+  fileName         String
+  mimeType         String
+  sizeBytes        Int
+  storagePath      String
+  uploadedByUserId String
+  deletedAt        DateTime?
+  createdAt        DateTime                   @default(now())
+
+  company                Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  student                Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  uploadedBy             User             @relation(fields: [uploadedByUserId], references: [id], onDelete: Cascade)
+  academyPaymentsAsProof AcademyPayment[] @relation("AcademyPaymentProofDocument")
+
+  @@index([companyId])
+  @@index([studentId])
+  @@index([uploadedByUserId])
+  @@index([deletedAt])
+}
+
+model Course {
+  id                       String   @id @default(cuid())
+  companyId                String
+  code                     String
+  title                    String
+  description              String?  @db.Text
+  psiraCategory            String?
+  durationDays             Int?
+  deliveryMode             String?
+  feeAmount                Decimal? @db.Decimal(12, 2)
+  minimumAttendancePercent Int?
+  requiresAssessment       Boolean  @default(false)
+  requiresDocuments        Boolean  @default(true)
+  active                   Boolean  @default(true)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  courseRuns CourseRun[]
+  academyAssessments AcademyAssessment[]
+  academyCertificates AcademyCertificate[]
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@index([active])
+}
+
+model CourseRun {
+  id                   String                 @id @default(cuid())
+  companyId            String
+  courseId             String
+  runCode              String
+  intakeName           String?
+  academyBranchId      String
+  venueText            String?
+  instructorEmployeeId String?
+  startDate            DateTime               @db.Date
+  endDate              DateTime               @db.Date
+  capacity             Int                    @default(0)
+  enrolledCount        Int                    @default(0)
+  status               AcademyCourseRunStatus @default(planned)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  company            Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  course             Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  branch             AcademyBranch @relation(fields: [academyBranchId], references: [id], onDelete: Restrict)
+  instructorEmployee Employee?     @relation("CourseRunInstructor", fields: [instructorEmployeeId], references: [id], onDelete: SetNull)
+  enrolments         Enrolment[]
+  academyAttendanceSessions AcademyAttendanceSession[]
+
+  @@unique([companyId, runCode])
+  @@index([companyId])
+  @@index([courseId])
+  @@index([academyBranchId])
+  @@index([instructorEmployeeId])
+  @@index([status])
+}
+
+model FeePlan {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  enrolments Enrolment[]
+
+  @@index([companyId])
+}
+
+model Enrolment {
+  id                       String                           @id @default(cuid())
+  companyId                String
+  studentId                String
+  courseRunId              String
+  enrolmentDate            DateTime                         @default(now()) @db.Date
+  feePlanId                String?
+  financialStatus          AcademyEnrolmentFinancialStatus  @default(unpaid)
+  attendanceStatus         AcademyEnrolmentAttendanceStatus @default(pending)
+  completionStatus         AcademyEnrolmentCompletionStatus @default(pending)
+  reportingReadinessStatus AcademyReportingReadinessStatus  @default(not_started)
+  psiraSubmissionStatus    AcademyPsiraSubmissionStatus     @default(not_applicable)
+  remarks                  String?                          @db.Text
+  createdAt                DateTime                         @default(now())
+  updatedAt                DateTime                         @updatedAt
+
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  student         Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseRun       CourseRun        @relation(fields: [courseRunId], references: [id], onDelete: Cascade)
+  feePlan         FeePlan?         @relation(fields: [feePlanId], references: [id], onDelete: SetNull)
+  academyInvoices AcademyInvoice[]
+  academyAttendanceRecords AcademyAttendanceRecord[]
+  academyCertificates AcademyCertificate[]
+
+  @@unique([studentId, courseRunId])
+  @@index([companyId])
+  @@index([courseRunId])
+  @@index([studentId])
+}
+
+model AcademyInvoice {
+  id             String               @id @default(cuid())
+  companyId      String
+  studentId      String
+  enrolmentId    String?
+  invoiceNumber  String
+  invoiceDate    DateTime             @db.Date
+  dueDate        DateTime             @db.Date
+  subtotal       Decimal              @default(0) @db.Decimal(12, 2)
+  discountAmount Decimal              @default(0) @db.Decimal(12, 2)
+  totalAmount    Decimal              @default(0) @db.Decimal(12, 2)
+  status         AcademyInvoiceStatus @default(draft)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  company   Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  student   Student              @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  enrolment Enrolment?           @relation(fields: [enrolmentId], references: [id], onDelete: SetNull)
+  items     AcademyInvoiceLine[]
+  payments  AcademyPayment[]
+
+  @@unique([companyId, invoiceNumber])
+  @@index([companyId])
+  @@index([studentId])
+  @@index([enrolmentId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model AcademyInvoiceLine {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  description String
+  quantity    Int     @default(1)
+  unitAmount  Decimal @db.Decimal(12, 2)
+  lineTotal   Decimal @db.Decimal(12, 2)
+
+  invoice AcademyInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
+
+model AcademyPayment {
+  id                 String                           @id @default(cuid())
+  companyId          String
+  invoiceId          String
+  studentId          String
+  paymentDate        DateTime                         @db.Date
+  amount             Decimal                          @db.Decimal(12, 2)
+  paymentMethod      String?
+  referenceNumber    String?
+  proofDocumentId    String?
+  verificationStatus AcademyPaymentVerificationStatus @default(pending)
+  verifiedByUserId   String?
+  verifiedAt         DateTime?
+  rejectionRemarks   String?                          @db.Text
+  createdAt          DateTime                         @default(now())
+  updatedAt          DateTime                         @updatedAt
+
+  company       Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoice       AcademyInvoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  student       Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  proofDocument StudentDocument? @relation("AcademyPaymentProofDocument", fields: [proofDocumentId], references: [id], onDelete: SetNull)
+  verifiedBy    User?            @relation("AcademyPaymentVerifiedBy", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
+  receipt       AcademyReceipt?
+
+  @@index([companyId])
+  @@index([invoiceId])
+  @@index([studentId])
+  @@index([verificationStatus])
+}
+
+model AcademyReceipt {
+  id             String   @id @default(cuid())
+  companyId      String
+  paymentId      String   @unique
+  receiptNumber  String
+  receiptDate    DateTime @db.Date
+  amount         Decimal  @db.Decimal(12, 2)
+  issuedByUserId String
+  createdAt      DateTime @default(now())
+
+  company  Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  payment  AcademyPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  issuedBy User           @relation("AcademyReceiptIssuedBy", fields: [issuedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, receiptNumber])
+  @@index([companyId])
+  @@index([issuedByUserId])
+}
+
+enum AcademyAccreditationStatus {
+  active
+  pending
+  suspended
+  expired
+}
+
+enum AcademyInstructorStatus {
+  active
+  inactive
+  suspended
+  contract_ended
+}
+
+enum AcademyClassroomStatus {
+  available
+  in_use
+  maintenance
+  closed
+}
+
+enum AcademyAttendanceMethod {
+  manual
+  qr_code
+  otp
+  biometric
+}
+
+enum AcademySessionAttendanceStatus {
+  present
+  absent
+  late
+  excused
+}
+
+enum AcademyAssessmentResult {
+  pass
+  fail
+  competent
+  not_yet_competent
+}
+
+enum AcademyCertificateStatus {
+  active
+  reprinted
+  revoked
+  void
+}
+
+enum AcademyComplianceDocumentStatus {
+  active
+  expired
+  pending_review
+  missing
+}
+
+enum AcademyRenewalSeverity {
+  green
+  amber
+  red
+}
+
+model AcademyProfile {
+  id                                String                     @id @default(cuid())
+  companyId                         String                     @unique
+  trainingCentreName                String
+  tradingName                       String?
+  psiraTrainingProviderNumber       String?
+  psiraBusinessRegistrationNumber   String?
+  accreditationStatus               AcademyAccreditationStatus @default(pending)
+  accreditationIssueDate            DateTime?                  @db.Date
+  reAccreditationDueDate            DateTime?                  @db.Date
+  province                          String?
+  city                              String?
+  physicalAddress                   String?                    @db.Text
+  postalAddress                     String?                    @db.Text
+  contactPerson                     String?
+  phoneNumber                       String?
+  landline                          String?
+  email                             String?
+  verificationReference             String?
+  notes                             String?                    @db.Text
+  createdAt                         DateTime                   @default(now())
+  updatedAt                         DateTime                   @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+}
+
+model AcademyInstructor {
+  id                     String                @id @default(cuid())
+  companyId              String
+  fullName               String
+  idNumber               String?
+  dateOfBirth            DateTime?             @db.Date
+  gender                 String?
+  residentialAddress     String?               @db.Text
+  emergencyContact       String?
+  psiraInstructorNumber  String?
+  qualification          String?
+  instructorGrade        String?
+  accreditationScope     String?
+  accreditationStatus    String?
+  certificateNumber      String?
+  certificateIssueDate   DateTime?             @db.Date
+  certificateExpiryDate  DateTime?             @db.Date
+  phone                  String?
+  email                  String?
+  employmentType         String?
+  contractStartDate      DateTime?             @db.Date
+  contractEndDate        DateTime?             @db.Date
+  contractStatus         String?
+  status                 AcademyInstructorStatus @default(active)
+  assignedBranchId       String?
+  assignedCourseIds      Json?
+  complianceStatus       String?
+  archivedAt             DateTime?
+  notes                  String?               @db.Text
+  certificateDocumentId  String?
+  contractDocumentId     String?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  company        Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignedBranch AcademyBranch?       @relation(fields: [assignedBranchId], references: [id], onDelete: SetNull)
+  sessions       AcademyAttendanceSession[]
+  assessments    AcademyAssessment[]
+  documents      AcademyInstructorDocument[]
+
+  @@index([companyId])
+  @@index([status])
+  @@index([assignedBranchId])
+  @@index([archivedAt])
+  @@index([complianceStatus])
+  @@index([contractEndDate])
+  @@index([certificateExpiryDate])
+}
+
+model AcademyInstructorDocument {
+  id                 String   @id @default(cuid())
+  companyId          String
+  instructorId       String
+  documentType       String
+  fileUrl            String
+  fileName           String
+  issueDate          DateTime? @db.Date
+  expiryDate         DateTime? @db.Date
+  verificationStatus String   @default("pending_review")
+  uploadedByUserId   String?
+  uploadedAt         DateTime @default(now())
+  verifiedByUserId   String?
+  verifiedAt         DateTime?
+  notes              String?  @db.Text
+  deletedAt          DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  company    Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  instructor AcademyInstructor @relation(fields: [instructorId], references: [id], onDelete: Cascade)
+  uploadedBy User?            @relation("AcademyInstructorDocumentUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  verifiedBy User?            @relation("AcademyInstructorDocumentVerifiedBy", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([instructorId])
+  @@index([documentType])
+  @@index([verificationStatus])
+  @@index([expiryDate])
+  @@index([deletedAt])
+}
+
+model AcademyClassroom {
+  id                String               @id @default(cuid())
+  companyId         String
+  academyBranchId   String
+  classroomName     String
+  capacity          Int                  @default(0)
+  approvedCapacity  Int?
+  equipmentChecklist String?             @db.Text
+  status            AcademyClassroomStatus @default(available)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  company      Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch       AcademyBranch          @relation(fields: [academyBranchId], references: [id], onDelete: Cascade)
+  sessions     AcademyAttendanceSession[]
+
+  @@index([companyId])
+  @@index([academyBranchId])
+  @@index([status])
+}
+
+model AcademyAttendanceSession {
+  id            String               @id @default(cuid())
+  companyId     String
+  courseRunId   String?
+  classroomId   String?
+  instructorId  String?
+  sessionDate   DateTime             @db.Date
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  company      Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  courseRun    CourseRun?            @relation(fields: [courseRunId], references: [id], onDelete: SetNull)
+  classroom    AcademyClassroom?     @relation(fields: [classroomId], references: [id], onDelete: SetNull)
+  instructor   AcademyInstructor?    @relation(fields: [instructorId], references: [id], onDelete: SetNull)
+  records      AcademyAttendanceRecord[]
+
+  @@index([companyId])
+  @@index([sessionDate])
+}
+
+model AcademyAttendanceRecord {
+  id              String                        @id @default(cuid())
+  companyId       String
+  sessionId       String
+  enrolmentId     String
+  checkInTime     DateTime?
+  checkOutTime    DateTime?
+  attendanceStatus AcademySessionAttendanceStatus @default(present)
+  method          AcademyAttendanceMethod       @default(manual)
+  markedByUserId  String?
+  createdAt       DateTime                      @default(now())
+  updatedAt       DateTime                      @updatedAt
+
+  company      Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  session      AcademyAttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  enrolment    Enrolment               @relation(fields: [enrolmentId], references: [id], onDelete: Cascade)
+  markedByUser User?                   @relation("AcademyAttendanceMarkedBy", fields: [markedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, enrolmentId])
+  @@index([companyId])
+  @@index([attendanceStatus])
+}
+
+model AcademyAssessment {
+  id               String                 @id @default(cuid())
+  companyId        String
+  learnerId        String
+  courseId         String
+  instructorId     String?
+  assessmentType   String
+  assessmentDate   DateTime               @db.Date
+  venue            String?
+  attemptNumber    Int                    @default(1)
+  mark             Decimal?               @db.Decimal(5, 2)
+  result           AcademyAssessmentResult?
+  moderationStatus String?
+  reassessmentDate DateTime?              @db.Date
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  company      Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  learner      Student            @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  course       Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  instructor   AcademyInstructor? @relation(fields: [instructorId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([assessmentDate])
+}
+
+model AcademyCertificate {
+  id               String                 @id @default(cuid())
+  companyId        String
+  certificateNumber String
+  learnerId        String
+  courseId         String
+  enrolmentId      String?
+  completionDate   DateTime?              @db.Date
+  issueDate        DateTime               @db.Date
+  verificationCode String                 @unique
+  pdfPath          String?
+  issuedByUserId   String?
+  status           AcademyCertificateStatus @default(active)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  company     Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  learner     Student    @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  course      Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  enrolment   Enrolment? @relation(fields: [enrolmentId], references: [id], onDelete: SetNull)
+  issuedBy    User?      @relation("AcademyCertificateIssuedBy", fields: [issuedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, certificateNumber])
+  @@index([companyId])
+  @@index([status])
+}
+
+model AcademyComplianceDocument {
+  id             String                          @id @default(cuid())
+  companyId      String
+  documentName   String
+  documentType   String
+  issueDate      DateTime?                       @db.Date
+  expiryDate     DateTime?                       @db.Date
+  status         AcademyComplianceDocumentStatus @default(pending_review)
+  filePath       String?
+  verifiedByUserId String?
+  verifiedDate   DateTime?
+  notes          String?                         @db.Text
+  createdAt      DateTime                        @default(now())
+  updatedAt      DateTime                        @updatedAt
+
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  verifiedBy User?   @relation("AcademyComplianceVerifiedBy", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([status])
+}
+
+model AcademyPolicyDocument {
+  id             String   @id @default(cuid())
+  companyId      String
+  policyType     String
+  version        String
+  effectiveDate  DateTime? @db.Date
+  nextReviewDate DateTime? @db.Date
+  approvedBy     String?
+  filePath       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([policyType])
+}
+
+model AcademyRenewalAlert {
+  id          String               @id @default(cuid())
+  companyId   String
+  alertType   String
+  title       String
+  dueDate     DateTime             @db.Date
+  severity    AcademyRenewalSeverity @default(green)
+  status      String               @default("open")
+  relatedId   String?
+  notes       String?              @db.Text
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([dueDate])
+  @@index([severity])
 }

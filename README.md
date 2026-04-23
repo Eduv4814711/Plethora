@@ -81,14 +81,14 @@ notifications without ever opening the web app.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                                Browser (Operator)                            │
-│   Next.js 14 App Router · Tailwind · React 18 · client-side auth context     │
+│                                Browser (Operator)                           │
+│   Next.js 14 App Router · Tailwind · React 18 · client-side auth context    │
 └──────────────┬──────────────────────────────────────────────────────────────┘
                │ /api/*  (Next.js rewrite)
                ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                            Fastify HTTP API (apps/api)                       │
-│                                                                              │
+│                            Fastify HTTP API (apps/api)                      │
+│                                                                             │
 │   ┌────────────┐  ┌─────────────┐  ┌────────────┐  ┌──────────────────────┐ │
 │   │  Plugins   │  │ Middleware  │  │   Routes   │  │   Domain Services    │ │
 │   │ cors,      │  │ authMiddle  │  │ /auth      │  │ payroll, payroll-    │ │
