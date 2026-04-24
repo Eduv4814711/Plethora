@@ -95,6 +95,7 @@ export default function RosteringPage() {
   const [draggedGuard, setDraggedGuard] = useState<Employee | null>(null);
   const [dragOverPostId, setDragOverPostId] = useState<string | null>(null);
   const [dragOverSiteId, setDragOverSiteId] = useState<string | null>(null);
+  const [guardSearch, setGuardSearch] = useState("");
 
   const isDualPattern = pattern === "3_on_3_off" || pattern === "custom_builder";
   const [bulkError, setBulkError] = useState<string | null>(null);
@@ -348,6 +349,19 @@ export default function RosteringPage() {
       ),
     [employees]
   );
+
+  const filteredAvailableGuards = useMemo(() => {
+    const term = guardSearch.trim().toLowerCase();
+    if (!term) return availableGuards;
+    return availableGuards.filter((g) => {
+      const fullName = `${g.firstName} ${g.lastName}`.toLowerCase();
+      return (
+        fullName.includes(term) ||
+        g.firstName.toLowerCase().includes(term) ||
+        g.lastName.toLowerCase().includes(term)
+      );
+    });
+  }, [availableGuards, guardSearch]);
 
   const postsForSelectedSite = useMemo(() => {
     if (!selectedSiteId) return [];
@@ -619,8 +633,16 @@ export default function RosteringPage() {
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
                   Available guards
                 </h4>
+                <input
+                  type="text"
+                  value={guardSearch}
+                  onChange={(e) => setGuardSearch(e.target.value)}
+                  placeholder="Search guards..."
+                  className="input-modern py-2 text-sm w-full mb-2"
+                  aria-label="Search available guards"
+                />
                 <div className="space-y-1">
-                  {availableGuards.map((g) => (
+                  {filteredAvailableGuards.map((g) => (
                     <div
                       key={g.id}
                       draggable
@@ -637,8 +659,10 @@ export default function RosteringPage() {
                       {g.firstName} {g.lastName}
                     </div>
                   ))}
-                  {availableGuards.length === 0 && (
-                    <p className="text-xs text-neutral-500 py-2">No guards available</p>
+                  {filteredAvailableGuards.length === 0 && (
+                    <p className="text-xs text-neutral-500 py-2">
+                      {guardSearch.trim() ? "No guards match your search" : "No guards available"}
+                    </p>
                   )}
                 </div>
               </div>
