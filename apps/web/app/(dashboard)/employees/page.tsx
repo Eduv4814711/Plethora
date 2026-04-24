@@ -143,13 +143,34 @@ export default function EmployeesPage() {
 
   const fetchEmployees = () => {
     if (!token) return;
-    const params = new URLSearchParams();
-    if (statusFilter !== "all") params.set("status", statusFilter);
-    if (searchQuery.trim().length >= 2) params.set("q", searchQuery.trim());
-    const url = `/employees${params.toString() ? `?${params}` : ""}`;
-    authFetch(url, token)
-      .then((r) => r.json())
-      .then((d) => setEmployees(d.data || []));
+    const pageSize = 100;
+    const baseParams = new URLSearchParams();
+    if (statusFilter !== "all") baseParams.set("status", statusFilter);
+    if (searchQuery.trim().length >= 2) baseParams.set("q", searchQuery.trim());
+
+    (async () => {
+      const all: Employee[] = [];
+      let offset = 0;
+      let total = Number.POSITIVE_INFINITY;
+
+      while (all.length < total) {
+        const params = new URLSearchParams(baseParams);
+        params.set("limit", String(pageSize));
+        params.set("offset", String(offset));
+        const res = await authFetch(`/employees?${params.toString()}`, token);
+        const payload = await res.json();
+        const page = Array.isArray(payload?.data) ? payload.data : [];
+        total = Number(payload?.total ?? page.length);
+        all.push(...page);
+        if (page.length < pageSize) break;
+        offset += pageSize;
+      }
+
+      setEmployees(all);
+    })().catch((err) => {
+      console.error(err);
+      setEmployees([]);
+    });
   };
 
   const fetchGroups = () => {
