@@ -96,6 +96,12 @@ export default function RosteringPage() {
   const [dragOverPostId, setDragOverPostId] = useState<string | null>(null);
   const [dragOverSiteId, setDragOverSiteId] = useState<string | null>(null);
   const [guardSearch, setGuardSearch] = useState("");
+  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
+  const [shiftContextMenu, setShiftContextMenu] = useState<{
+    shift: Shift;
+    x: number;
+    y: number;
+  } | null>(null);
 
   const isDualPattern = pattern === "3_on_3_off" || pattern === "custom_builder";
   const [bulkError, setBulkError] = useState<string | null>(null);
@@ -369,6 +375,17 @@ export default function RosteringPage() {
     return site?.posts ?? [];
   }, [sites, selectedSiteId]);
 
+  useEffect(() => {
+    if (calendarDays.length === 0) {
+      setSelectedDayKey(null);
+      return;
+    }
+    const dayKeys = new Set(calendarDays.map((d) => format(d, "yyyy-MM-dd")));
+    if (selectedDayKey && dayKeys.has(selectedDayKey)) return;
+    const todayKey = format(new Date(), "yyyy-MM-dd");
+    setSelectedDayKey(dayKeys.has(todayKey) ? todayKey : format(calendarDays[0], "yyyy-MM-dd"));
+  }, [calendarDays, selectedDayKey]);
+
   const handleBulkDrop = async (employeeId: string, postId: string) => {
     if (!token) return;
     setBulkError(null);
@@ -457,11 +474,40 @@ export default function RosteringPage() {
     if (token) refresh();
   }, [token, periodStart, periodEnd]);
 
+  useEffect(() => {
+    if (!shiftContextMenu) return;
+    const close = () => setShiftContextMenu(null);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [shiftContextMenu]);
+
   if (loading) {
     return (
-      <div className="animate-pulse flex flex-col h-[calc(100vh-8rem)]">
-        <div className="h-10 bg-neutral-200 dark:bg-neutral-700 rounded w-48 mb-4" />
-        <div className="flex-1 bg-neutral-200 dark:bg-neutral-700 rounded-sm" />
+      <div className="animate-pulse mx-auto w-full max-w-[1760px] h-[calc(100vh-7.5rem)] rounded-[28px] bg-gradient-to-b from-neutral-50 via-white to-orange-50/30 dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900 p-3">
+        <div className="h-full grid grid-cols-1 xl:grid-cols-[300px_1fr] gap-4">
+          <div className="rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/70 p-4 space-y-3">
+            <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-32" />
+            <div className="h-10 bg-neutral-200 dark:bg-neutral-700 rounded-lg" />
+            <div className="h-10 bg-neutral-200 dark:bg-neutral-700 rounded-lg" />
+            <div className="h-32 bg-neutral-200 dark:bg-neutral-700 rounded-xl" />
+          </div>
+          <div className="rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/70 p-4 space-y-4">
+            <div className="h-12 bg-neutral-200 dark:bg-neutral-700 rounded-xl" />
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="h-20 bg-neutral-200 dark:bg-neutral-700 rounded-xl" />
+              ))}
+            </div>
+            <div className="flex-1 min-h-[400px] bg-neutral-200 dark:bg-neutral-700 rounded-2xl" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -472,18 +518,35 @@ export default function RosteringPage() {
         ? format(calendarDays[0], "d MMM yyyy")
         : format(calendarDays[0], "d MMM") + " – " + format(calendarDays[calendarDays.length - 1], "d MMM yyyy")
       : "";
+  const calendarWeeks = Array.from(
+    { length: Math.max(1, Math.ceil(displayCells.length / 7)) },
+    (_, index) => displayCells.slice(index * 7, index * 7 + 7)
+  );
+  const selectedSiteName = selectedSiteId
+    ? sites.find((s) => s.id === selectedSiteId)?.name ?? "Unknown site"
+    : "All sites";
+  const totalPostsForSummary = selectedSiteId
+    ? postsForSelectedSite.length
+    : sites.reduce((sum, site) => sum + site.posts.length, 0);
+  const totalShiftsForSummary = shifts.length;
+  const dayShiftCount = shifts.filter((s) => (s.post.shiftType ?? "day") === "day").length;
+  const nightShiftCount = shifts.filter((s) => s.post.shiftType === "night").length;
+  const expectedShiftSlots = totalPostsForSummary * calendarDays.length;
+  const openShiftCount = Math.max(expectedShiftSlots - totalShiftsForSummary, 0);
+  const coveragePercent =
+    expectedShiftSlots > 0
+      ? Math.min(100, Math.round((totalShiftsForSummary / expectedShiftSlots) * 100))
+      : 0;
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] min-h-[500px] w-full">
-      <aside className="w-72 shrink-0 card-wireframe flex flex-col overflow-hidden border-r border-neutral-200 dark:border-neutral-700">
-        <div className="p-4 border-b border-neutral-200 dark:border-neutral-700 shrink-0 space-y-4">
-          <div>
-            <h2 className="text-sm font-bold text-neutral-800 dark:text-neutral-100 uppercase tracking-wider mb-1">
-              Roster period
-            </h2>
-            <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-200">
-              {periodLabel || "—"}
+    <div className="mx-auto flex h-[calc(100vh-7.5rem)] min-h-[620px] w-full max-w-[1760px] flex-col xl:flex-row gap-5 rounded-[28px] bg-gradient-to-b from-neutral-50/85 via-white to-orange-50/35 dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900 p-2 xl:p-3">
+      <aside className="xl:w-[18.75rem] w-full xl:h-full max-h-[48vh] xl:max-h-none shrink-0 flex flex-col overflow-hidden rounded-2xl border border-neutral-200/90 dark:border-neutral-700 bg-white/95 dark:bg-neutral-900/80 shadow-[0_10px_30px_-18px_rgba(15,23,42,0.35)]">
+        <div className="p-4 shrink-0 space-y-3 border-b border-neutral-200/80 dark:border-neutral-700 bg-gradient-to-b from-white to-neutral-50/70 dark:from-neutral-900 dark:to-neutral-900/80">
+          <div className="rounded-xl border border-neutral-200/90 dark:border-neutral-700 bg-white dark:bg-neutral-900/70 p-3.5 shadow-sm">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-500 dark:text-neutral-400 mb-1">
+              Roster Period
             </p>
+            <p className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">{periodLabel || "—"}</p>
             <button
               type="button"
               onClick={() => setShowPeriodModal(true)}
@@ -493,9 +556,9 @@ export default function RosteringPage() {
             </button>
           </div>
 
-          <div className="border-t border-neutral-200 dark:border-neutral-700 pt-4">
-            <h3 className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider mb-2">
-              Step 1: Site
+          <div className="rounded-xl border border-neutral-200/90 dark:border-neutral-700 bg-white dark:bg-neutral-900/70 p-3.5 space-y-2">
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-600 dark:text-neutral-300">
+              Step 1: Select Site
             </h3>
             <select
               value={selectedSiteId}
@@ -511,9 +574,9 @@ export default function RosteringPage() {
             </select>
           </div>
 
-          <div className="border-t border-neutral-200 dark:border-neutral-700 pt-4">
-            <h3 className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider mb-2">
-              Step 2: Pattern
+          <div className="rounded-xl border border-neutral-200/90 dark:border-neutral-700 bg-white dark:bg-neutral-900/70 p-3.5 space-y-2">
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-600 dark:text-neutral-300">
+              Step 2: Choose Pattern
             </h3>
             <select
               value={pattern}
@@ -554,19 +617,43 @@ export default function RosteringPage() {
               />
             )}
           </div>
+
+          <div className="rounded-xl border border-neutral-200/90 dark:border-neutral-700 bg-neutral-50/90 dark:bg-neutral-800/70 p-3.5 space-y-2">
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-600 dark:text-neutral-300">
+              Quick Summary
+            </h3>
+            <div className="space-y-1.5 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-neutral-500 dark:text-neutral-400">Selected site</span>
+                <span className="font-medium text-neutral-800 dark:text-neutral-100 text-right">{selectedSiteName}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-neutral-500 dark:text-neutral-400">Pattern</span>
+                <span className="font-medium text-neutral-800 dark:text-neutral-100">{PATTERN_LABELS[pattern]}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-neutral-500 dark:text-neutral-400">Guards assigned</span>
+                <span className="font-medium text-neutral-800 dark:text-neutral-100">{rosteredEmployees.length}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-neutral-500 dark:text-neutral-400">Total shifts</span>
+                <span className="font-medium text-neutral-800 dark:text-neutral-100">{totalShiftsForSummary}</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 border-t border-neutral-200 dark:border-neutral-700">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 border-t border-neutral-200/80 dark:border-neutral-700 bg-neutral-50/40 dark:bg-neutral-900/30">
           {selectedSiteId ? (
             <>
               <div>
-                <h3 className="text-xs font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider mb-2">
-                  Step 3: Assign guard
+                <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-600 dark:text-neutral-300 mb-2">
+                  Step 3: Assign Guard
                 </h3>
               </div>
               {isDualPattern ? (
-                <div>
+                <div className="rounded-xl border border-dashed border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900/50 p-3">
                   <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">
-                    Drag a guard onto the site. Pattern fills the chosen range: {format(parseISO(periodStart), "d MMM")} to {format(parseISO(periodEnd), "d MMM yyyy")}.
+                    Drag a guard onto this site to auto-fill the selected period.
                   </p>
                   <div
                     onDragOver={(e) => {
@@ -584,19 +671,19 @@ export default function RosteringPage() {
                       }
                       setDraggedGuard(null);
                     }}
-                    className={`min-h-[56px] p-3 rounded-sm border-2 border-dashed flex items-center justify-center text-sm font-medium transition-colors ${
+                    className={`min-h-[56px] rounded-lg border-2 border-dashed flex items-center justify-center text-sm font-medium transition-colors ${
                       dragOverSiteId === selectedSiteId
-                        ? "border-neutral-500 dark:border-neutral-400 bg-neutral-100 dark:bg-neutral-800"
-                        : "border-neutral-300 dark:border-neutral-600 text-neutral-600 dark:text-neutral-400"
+                        ? "border-orange-400 dark:border-orange-300 bg-orange-50/70 dark:bg-orange-900/20 text-orange-800 dark:text-orange-300"
+                        : "border-neutral-300 dark:border-neutral-600 text-neutral-600 dark:text-neutral-400 bg-neutral-50/70 dark:bg-neutral-800/40"
                     }`}
                   >
                     {sites.find((s) => s.id === selectedSiteId)?.name ?? "Site"}
                   </div>
                 </div>
               ) : (
-                <div>
+                <div className="rounded-xl border border-dashed border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900/50 p-3">
                   <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">
-                    Drag a guard onto a post. Pattern fills the chosen range: {format(parseISO(periodStart), "d MMM")} to {format(parseISO(periodEnd), "d MMM yyyy")}.
+                    Drag a guard onto a post to auto-fill the selected period.
                   </p>
                   <div className="space-y-2">
                     {postsForSelectedSite.map((post) => (
@@ -617,10 +704,10 @@ export default function RosteringPage() {
                           }
                           setDraggedGuard(null);
                         }}
-                        className={`min-h-[48px] p-3 rounded-sm border-2 border-dashed flex items-center justify-center text-sm font-medium transition-colors ${
+                        className={`min-h-[46px] px-3 py-2 rounded-lg border-2 border-dashed flex items-center justify-center text-sm font-medium transition-colors ${
                           dragOverPostId === post.id
-                            ? "border-neutral-300 dark:border-neutral-600 bg-neutral-100 dark:bg-neutral-800"
-                            : "border-neutral-300 dark:border-neutral-600 text-neutral-600 dark:text-neutral-400"
+                            ? "border-orange-400 dark:border-orange-300 bg-orange-50/70 dark:bg-orange-900/20 text-orange-800 dark:text-orange-300"
+                            : "border-neutral-300 dark:border-neutral-600 text-neutral-600 dark:text-neutral-400 bg-neutral-50/70 dark:bg-neutral-800/40"
                         }`}
                       >
                         {post.name} {post.shiftType ? `(${post.shiftType})` : ""}
@@ -629,9 +716,9 @@ export default function RosteringPage() {
                   </div>
                 </div>
               )}
-              <div>
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
-                  Available guards
+              <div className="rounded-xl border border-neutral-200/90 dark:border-neutral-700 bg-white dark:bg-neutral-900/60 p-3">
+                <h4 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-600 dark:text-neutral-300 mb-2">
+                  Available Guards
                 </h4>
                 <input
                   type="text"
@@ -641,7 +728,7 @@ export default function RosteringPage() {
                   className="input-modern py-2 text-sm w-full mb-2"
                   aria-label="Search available guards"
                 />
-                <div className="space-y-1">
+                <div className="space-y-1.5 max-h-[280px] overflow-y-auto pr-1">
                   {filteredAvailableGuards.map((g) => (
                     <div
                       key={g.id}
@@ -652,8 +739,10 @@ export default function RosteringPage() {
                         e.dataTransfer.effectAllowed = "move";
                       }}
                       onDragEnd={() => setDraggedGuard(null)}
-                      className={`px-3 py-2 rounded-md border border-neutral-200 dark:border-neutral-700 text-sm cursor-grab active:cursor-grabbing ${
-                        draggedGuard?.id === g.id ? "opacity-50" : "bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                      className={`px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 text-sm cursor-grab active:cursor-grabbing transition-colors ${
+                        draggedGuard?.id === g.id
+                          ? "opacity-50"
+                          : "bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                       }`}
                     >
                       {g.firstName} {g.lastName}
@@ -668,8 +757,8 @@ export default function RosteringPage() {
               </div>
             </>
           ) : (
-            <div className="py-8 text-center">
-              <p className="text-sm text-neutral-500 dark:text-neutral-400">
+            <div className="py-10 text-center rounded-xl border border-dashed border-neutral-300 dark:border-neutral-600 bg-white/70 dark:bg-neutral-900/40">
+              <p className="text-sm text-neutral-600 dark:text-neutral-400 font-medium">
                 Select a site in Step 1 to assign guards.
               </p>
             </div>
@@ -682,28 +771,42 @@ export default function RosteringPage() {
         )}
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0">
-      <div className="shrink-0 px-6 py-4 border-b border-neutral-200 dark:border-neutral-700 bg-neutral-50/30 dark:bg-neutral-900/30">
-        <div className="flex justify-between items-center flex-wrap gap-3">
-          <div className="flex items-center gap-6">
-            <h1 className="text-xl font-bold text-neutral-800 dark:text-neutral-100">Rostering</h1>
-            <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-neutral-200 dark:border-neutral-600 bg-white dark:bg-neutral-900">
-              <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Period</span>
-              <button
-                type="button"
-                onClick={() => setShowPeriodModal(true)}
-                className="font-semibold text-neutral-800 dark:text-neutral-200 hover:text-neutral-600 dark:hover:text-neutral-300 flex items-center gap-1.5"
-                title="Choose time period to roster"
-              >
-                {periodLabel || "Select period"}
-                <svg className="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </button>
+      <div className="flex-1 flex flex-col min-w-0 rounded-3xl border border-neutral-200/90 dark:border-neutral-700 bg-white/85 dark:bg-neutral-900/75 shadow-[0_12px_34px_-20px_rgba(15,23,42,0.38)] overflow-hidden">
+      <div className="sticky top-0 z-30 shrink-0 px-6 py-4 border-b border-neutral-200/80 dark:border-neutral-700 bg-gradient-to-b from-white/95 to-neutral-50/85 dark:from-neutral-900/95 dark:to-neutral-900/85 backdrop-blur">
+        <div className="grid gap-4 xl:grid-cols-[minmax(220px,1fr)_auto_minmax(420px,1fr)] xl:items-center">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 flex items-center justify-center">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-[1.75rem] leading-none font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">Roster Calendar</h1>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">Security workforce scheduling view</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center h-11 rounded-md border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800/30 overflow-hidden">
+          <div className="hidden xl:flex justify-center">
+            <button
+              type="button"
+              onClick={() => setShowPeriodModal(true)}
+              className="h-11 px-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm font-semibold text-neutral-800 dark:text-neutral-200 hover:border-neutral-300 dark:hover:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors flex items-center gap-2"
+              title="Choose time period to roster"
+            >
+              <span className="text-[11px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Period</span>
+              <span>{periodLabel || "Select period"}</span>
+            </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2.5 xl:justify-end">
+            <button
+              type="button"
+              onClick={() => setShowPeriodModal(true)}
+              className="h-11 px-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm font-semibold text-neutral-800 dark:text-neutral-200 hover:border-neutral-300 dark:hover:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors flex items-center gap-2 xl:hidden"
+              title="Choose time period to roster"
+            >
+              <span className="text-[11px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Period</span>
+              <span>{periodLabel || "Select period"}</span>
+            </button>
+            <div className="flex items-center h-11 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 overflow-hidden">
               <button
                 type="button"
                 onClick={() => {
@@ -715,7 +818,7 @@ export default function RosteringPage() {
                   setPeriodStart(format(newStart, "yyyy-MM-dd"));
                   setPeriodEnd(format(newEnd, "yyyy-MM-dd"));
                 }}
-                className="h-full px-3 flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors text-neutral-600 dark:text-neutral-400"
+                className="h-full px-3 flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-600 dark:text-neutral-400"
                 aria-label="Previous period"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -725,14 +828,14 @@ export default function RosteringPage() {
               <button
                 type="button"
                 onClick={() => setPeriodToMonth(new Date())}
-                className="h-full px-4 text-sm font-medium border-x border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors text-neutral-700 dark:text-neutral-300"
+                className="h-full px-4 text-sm font-medium border-x border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-700 dark:text-neutral-300"
               >
                 This month
               </button>
               <button
                 type="button"
                 onClick={() => setPeriodToMonth(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1))}
-                className="h-full px-3 text-sm font-medium border-r border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors text-neutral-700 dark:text-neutral-300"
+                className="h-full px-3 text-sm font-medium border-r border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-700 dark:text-neutral-300"
               >
                 Next month
               </button>
@@ -747,7 +850,7 @@ export default function RosteringPage() {
                   setPeriodStart(format(newStart, "yyyy-MM-dd"));
                   setPeriodEnd(format(newEnd, "yyyy-MM-dd"));
                 }}
-                className="h-full px-3 flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors text-neutral-600 dark:text-neutral-400"
+                className="h-full px-3 flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-600 dark:text-neutral-400"
                 aria-label="Next period"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -757,7 +860,7 @@ export default function RosteringPage() {
             </div>
             <button
               onClick={() => { setSelectedDayForShift(null); setShowForm(!showForm); }}
-              className="btn-secondary h-11 flex items-center gap-2 shrink-0"
+              className="h-11 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition-colors flex items-center gap-2 shadow-sm"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -768,7 +871,7 @@ export default function RosteringPage() {
               <button
                 type="button"
                 onClick={() => { setShowResetMenu(false); setShowPdfMenu((v) => !v); }}
-                className="h-11 px-5 py-2.5 text-sm font-semibold rounded-sm border-2 border-neutral-200 dark:border-white bg-transparent dark:bg-transparent text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 flex items-center gap-2"
+                className="h-11 px-4 text-sm font-semibold rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 flex items-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
@@ -838,7 +941,7 @@ export default function RosteringPage() {
                 type="button"
                 onClick={() => { setShowPdfMenu(false); setShowResetMenu((v) => !v); }}
                 disabled={resetting}
-                className="btn-secondary h-11 flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="h-11 px-4 text-sm font-semibold rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-800 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1033,101 +1136,216 @@ export default function RosteringPage() {
       </div>
 
       <div className="flex-1 min-h-0 px-6 pb-6 flex flex-col overflow-hidden">
-        <div className="flex-1 min-h-0 rounded-lg card-wireframe border border-neutral-200 dark:border-neutral-700 relative overflow-y-auto overflow-x-hidden">
-          <div className="grid min-h-full w-full" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
-            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((wd, i) => (
-              <div
-                key={wd}
-                className={`shrink-0 py-4 px-4 text-center text-[11px] font-semibold uppercase tracking-[0.08em] border-b flex items-center justify-center ${
-                  i >= 5
-                    ? "text-neutral-400 dark:text-neutral-500 bg-neutral-50/80 dark:bg-neutral-800/30 border-neutral-200 dark:border-neutral-700"
-                    : "text-neutral-600 dark:text-neutral-400 bg-gradient-to-b from-neutral-50 to-neutral-100/50 dark:from-neutral-800/60 dark:to-neutral-800/30 border-neutral-200 dark:border-neutral-700"
-                }`}
-              >
-                {wd}
-              </div>
-            ))}
-            {displayCells.map((day, idx) => {
-              if (!day) {
-                return (
-                  <div
-                    key={`empty-${idx}`}
-                    className="min-h-[100px] bg-neutral-50/40 dark:bg-neutral-800/10 border-b border-r border-neutral-200 dark:border-neutral-700"
-                  />
-                );
-              }
-              const key = format(day, "yyyy-MM-dd");
-              const dayShifts = shiftsByDay.get(key) ?? [];
-              const isToday = isSameDay(day, new Date());
-              const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-              return (
+        <div className="grid grid-cols-2 xl:grid-cols-5 gap-3 mb-4">
+          <RosterKpiCard
+            label="Guards Scheduled"
+            value={rosteredEmployees.length}
+            tone="neutral"
+            icon={
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM4 21a8 8 0 0116 0" />
+              </svg>
+            }
+          />
+          <RosterKpiCard
+            label="Day Shifts"
+            value={dayShiftCount}
+            tone="day"
+            icon={
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2v2m0 16v2m8-10h2M2 12h2m12.95 6.95l1.414 1.414M4.636 4.636L6.05 6.05m0 11.9l-1.414 1.414m12.728-12.728l1.414-1.414M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            }
+          />
+          <RosterKpiCard
+            label="Night Shifts"
+            value={nightShiftCount}
+            tone="night"
+            icon={
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            }
+          />
+          <RosterKpiCard
+            label="Open Shifts"
+            value={openShiftCount}
+            tone="neutral"
+            icon={
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            }
+          />
+          <RosterKpiCard
+            label="Coverage"
+            value={expectedShiftSlots > 0 ? `${coveragePercent}%` : "—"}
+            tone="coverage"
+            icon={
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-5m3 5V7m3 10v-3m3 7H6a2 2 0 01-2-2V5a2 2 0 012-2h8.586a1 1 0 01.707.293l4.414 4.414A1 1 0 0120 8.414V19a2 2 0 01-2 2z" />
+              </svg>
+            }
+            emphasize
+          />
+        </div>
+        <div className="flex-1 min-h-0 rounded-2xl border border-neutral-200/90 dark:border-neutral-700 relative overflow-hidden bg-neutral-100/45 dark:bg-neutral-900/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_8px_30px_-20px_rgba(15,23,42,0.35)]">
+          <div className="sticky top-0 z-20 border-b border-neutral-200/80 dark:border-neutral-700 bg-white/90 dark:bg-neutral-900/90 backdrop-blur">
+            <div className="grid grid-cols-7 gap-2 px-3 py-2.5">
+              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((wd, i) => (
                 <div
-                  key={key}
-                  className={`flex flex-col min-h-0 border-b border-r border-neutral-200 dark:border-neutral-700 last:border-r-0 transition-colors ${
-                    isToday
-                      ? "bg-neutral-50/50 dark:bg-neutral-950/30"
-                      : isWeekend
-                        ? "bg-neutral-50/30 dark:bg-neutral-800/10"
-                        : "bg-white dark:bg-neutral-900"
+                  key={wd}
+                  className={`rounded-lg py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] ${
+                    i >= 5
+                      ? "text-neutral-500 dark:text-neutral-400 bg-neutral-100/80 dark:bg-neutral-800/60"
+                      : "text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-800/40"
                   }`}
                 >
-                  <div className="shrink-0 py-2.5 px-3 text-center">
-                    <span
-                      className={`inline-flex items-center justify-center w-9 h-9 rounded-sm text-sm font-semibold transition-all ${
-                        isToday
-                          ? "bg-neutral-600 text-neutral-100 shadow-lg shadow-neutral-500/25 dark:shadow-neutral-500/20 ring-2 ring-neutral-400/30"
-                          : "text-neutral-600 dark:text-neutral-300 bg-neutral-100/80 dark:bg-neutral-700/50"
-                      }`}
-                    >
-                      {format(day, "d")}
-                    </span>
-                    <div className={`text-[10px] font-medium mt-1 ${isToday ? "text-neutral-600 dark:text-neutral-400" : "text-neutral-400 dark:text-neutral-500"}`}>
-                      {format(day, "MMM")}
-                    </div>
-                  </div>
-                  <div
-                    onClick={() => { setSelectedDayForShift(day); setShowForm(true); }}
-                    className="flex-1 px-3 py-2.5 space-y-2 overflow-y-auto min-h-0 cursor-pointer group"
-                  >
-                    {dayShifts.length === 0 ? (
-                      <div className="flex-1 min-h-[60px] flex items-center justify-center rounded-md border-2 border-dashed border-neutral-300 dark:border-neutral-600 group-hover:border-neutral-500 dark:group-hover:border-neutral-400 group-hover:bg-neutral-50/30 dark:group-hover:bg-neutral-950/20 transition-all duration-200">
-                        <span className="text-neutral-400 dark:text-neutral-500 group-hover:text-neutral-500 dark:group-hover:text-neutral-400 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                          </svg>
-                          Add shift
-                        </span>
-                      </div>
-                    ) : (
-                      dayShifts.map((s) => (
-                        <div
-                          key={s.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveShift(s);
-                          }}
-                          className={`px-3 py-2 rounded-sm text-xs font-medium shrink-0 transition-all duration-200 hover:scale-[1.02] cursor-pointer group/guard ${
-                            deletingShiftId === s.id
-                              ? "opacity-60 pointer-events-none"
-                              : "hover:ring-2 hover:ring-rose-500/50 dark:hover:ring-rose-400/50"
-                          } ${
-                            s.post.shiftType === "night"
-                              ? "bg-gradient-to-br from-neutral-500/15 to-neutral-600/10 dark:from-neutral-500/20 dark:to-neutral-600/10 text-neutral-800 dark:text-neutral-200 border border-neutral-200 dark:border-neutral-600"
-                              : "bg-gradient-to-br from-neutral-500/15 to-orange-500/10 dark:from-neutral-500/20 dark:to-orange-600/10 text-neutral-900 dark:text-neutral-100 border border-neutral-200 dark:border-neutral-600"
-                          }`}
-                          title="Click to remove from roster"
-                        >
-                          <span className="truncate block">{s.employee.firstName} {s.employee.lastName}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
+                  {wd}
                 </div>
-              );
-            })}
+              ))}
+            </div>
+          </div>
+          <div key={`${periodStart}-${periodEnd}`} className="h-[calc(100%-64px)] px-3 pb-3 pt-2 animate-fade-in">
+            <div className="h-full flex flex-col gap-2">
+              {calendarWeeks.map((week, weekIndex) => (
+                <div
+                  key={`week-${weekIndex}`}
+                  className={`grid grid-cols-7 gap-2 flex-1 min-h-0 rounded-xl p-1 ${
+                    weekIndex % 2 === 0
+                      ? "bg-white/55 dark:bg-neutral-900/25"
+                      : "bg-neutral-50/65 dark:bg-neutral-900/40"
+                  }`}
+                >
+                  {week.map((day, dayIdx) => {
+                    if (!day) {
+                      return (
+                        <div
+                          key={`empty-${weekIndex}-${dayIdx}`}
+                          className="min-h-0 rounded-xl border border-dashed border-neutral-200 dark:border-neutral-700 bg-neutral-50/80 dark:bg-neutral-900/35"
+                        />
+                      );
+                    }
+                    const key = format(day, "yyyy-MM-dd");
+                    const dayShifts = shiftsByDay.get(key) ?? [];
+                    const isToday = isSameDay(day, new Date());
+                    const isSelected = selectedDayKey === key;
+                    const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+
+                    return (
+                      <div
+                        key={key}
+                        className={`group/day min-h-0 rounded-xl border p-2.5 flex flex-col transition-all duration-200 ${
+                          isSelected
+                            ? "border-orange-300 dark:border-orange-500 ring-2 ring-orange-200/60 dark:ring-orange-500/40 bg-white dark:bg-neutral-900/80 shadow-sm"
+                            : isToday
+                              ? "border-orange-200 dark:border-orange-700 bg-orange-50/70 dark:bg-orange-900/20"
+                              : isWeekend
+                                ? "border-neutral-200 dark:border-neutral-700 bg-neutral-50/85 dark:bg-neutral-900/55 hover:border-neutral-300 dark:hover:border-neutral-600"
+                                : "border-neutral-200 dark:border-neutral-700 bg-white/90 dark:bg-neutral-900/65 hover:border-neutral-300 dark:hover:border-neutral-600"
+                        }`}
+                        onClick={() => setSelectedDayKey(key)}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div
+                            className={`inline-flex items-center gap-2 rounded-lg px-2 py-1 ${
+                              isToday
+                                ? "bg-orange-100 dark:bg-orange-900/40 text-orange-900 dark:text-orange-200"
+                                : "bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
+                            }`}
+                          >
+                            <span className="text-sm font-semibold leading-none">{format(day, "d")}</span>
+                            <span className="text-[10px] font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                              {format(day, "MMM")}
+                            </span>
+                          </div>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400">
+                            {dayShifts.length}
+                          </span>
+                        </div>
+
+                        <div className="mt-2 flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-0.5">
+                          {dayShifts.length === 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedDayKey(key);
+                                setSelectedDayForShift(day);
+                                setShowForm(true);
+                              }}
+                              className="w-full h-full min-h-[86px] rounded-lg border border-dashed border-neutral-300 dark:border-neutral-600 bg-white/60 dark:bg-neutral-900/40 text-neutral-500 dark:text-neutral-400 hover:border-orange-300 dark:hover:border-orange-500/60 hover:text-orange-700 dark:hover:text-orange-300 transition-colors flex flex-col items-center justify-center gap-1.5"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                              </svg>
+                              <span className="text-[11px] font-medium">Drop shift here</span>
+                            </button>
+                          ) : (
+                            dayShifts.map((s) => {
+                              const isNightShift = s.post.shiftType === "night";
+                              const shiftTone = isNightShift
+                                ? "bg-slate-100/95 dark:bg-slate-900/45 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
+                                : "bg-orange-50/95 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800/60 text-orange-900 dark:text-orange-200";
+                              const shiftLabel = isNightShift ? "Night shift" : "Day shift";
+                              const timeLabel = `${format(parseISO(s.startTime), "HH:mm")}–${format(parseISO(s.endTime), "HH:mm")}`;
+
+                              return (
+                                <div
+                                  key={s.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveShift(s);
+                                  }}
+                                  onContextMenu={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setSelectedDayKey(key);
+                                    setShiftContextMenu({ shift: s, x: e.clientX, y: e.clientY });
+                                  }}
+                                  className={`group/shift rounded-xl border px-2.5 py-2 text-[11px] cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
+                                    deletingShiftId === s.id
+                                      ? "opacity-60 pointer-events-none"
+                                      : "hover:border-rose-300 dark:hover:border-rose-500/60"
+                                  } ${shiftTone}`}
+                                  title={`${s.employee.firstName} ${s.employee.lastName} • ${shiftLabel} • ${timeLabel}`}
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <p className="font-semibold truncate">
+                                      {s.employee.firstName} {s.employee.lastName}
+                                    </p>
+                                    <span className="text-[10px] opacity-0 group-hover/shift:opacity-100 transition-opacity text-rose-500 dark:text-rose-300">
+                                      remove
+                                    </span>
+                                  </div>
+                                  <p className="mt-0.5 text-[10px] opacity-90">
+                                    {shiftLabel} · {timeLabel}
+                                  </p>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedDayKey(key);
+                            setSelectedDayForShift(day);
+                            setShowForm(true);
+                          }}
+                          className="mt-2 h-7 rounded-lg border border-dashed border-neutral-300 dark:border-neutral-600 text-[11px] text-neutral-500 dark:text-neutral-400 hover:border-orange-300 dark:hover:border-orange-500/60 hover:text-orange-700 dark:hover:text-orange-300 transition-colors opacity-0 group-hover/day:opacity-100"
+                        >
+                          + Add shift
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
           {shifts.length === 0 && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-neutral-900 pointer-events-none rounded-sm">
+            <div className="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-neutral-900/90 pointer-events-none rounded-sm">
               <div className="text-center px-8">
                 <div className="w-20 h-20 mx-auto mb-4 rounded-sm bg-gradient-to-br from-neutral-100 to-neutral-50 dark:from-neutral-800 dark:to-neutral-800/50 flex items-center justify-center ring-1 ring-neutral-200/50 dark:ring-neutral-700/50">
                   <svg className="w-10 h-10 text-neutral-400 dark:text-neutral-500" fill="none" stroke="currentColor" strokeWidth={1.25} viewBox="0 0 24 24">
@@ -1140,18 +1358,95 @@ export default function RosteringPage() {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-8 mt-4 pl-1">
-          <span className="flex items-center gap-2.5 text-sm text-neutral-600 dark:text-neutral-400">
-            <span className="w-4 h-4 rounded-lg bg-gradient-to-br from-neutral-400/30 to-orange-500/20 dark:from-neutral-500/30 dark:to-orange-600/20 border border-neutral-200 dark:border-neutral-600" />
+        <div className="flex items-center flex-wrap gap-6 mt-3 pl-1">
+          <span className="flex items-center gap-2 text-xs text-neutral-600 dark:text-neutral-400">
+            <span className="w-3.5 h-3.5 rounded-md bg-orange-100 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800/60" />
             <span className="font-medium">Day shift</span>
           </span>
-          <span className="flex items-center gap-2.5 text-sm text-neutral-600 dark:text-neutral-400">
-            <span className="w-4 h-4 rounded-lg bg-gradient-to-br from-neutral-400/30 to-neutral-600/20 dark:from-neutral-500/30 dark:to-neutral-600/20 border border-neutral-200 dark:border-neutral-600" />
+          <span className="flex items-center gap-2 text-xs text-neutral-600 dark:text-neutral-400">
+            <span className="w-3.5 h-3.5 rounded-md bg-slate-100 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700" />
             <span className="font-medium">Night shift</span>
           </span>
+          <span className="flex items-center gap-2 text-xs text-neutral-600 dark:text-neutral-400">
+            <span className="w-3.5 h-3.5 rounded-md border border-dashed border-neutral-400 dark:border-neutral-500 bg-white/80 dark:bg-neutral-900/60" />
+            <span className="font-medium">Open slot</span>
+          </span>
         </div>
+        {shiftContextMenu && (
+          <div
+            className="fixed z-50 w-48 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-xl p-1"
+            style={{ left: shiftContextMenu.x, top: shiftContextMenu.y }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-200"
+              onClick={async () => {
+                const day = parseISO(shiftContextMenu.shift.startTime);
+                setSelectedDayKey(format(day, "yyyy-MM-dd"));
+                setSelectedDayForShift(day);
+                setShowForm(true);
+                setShiftContextMenu(null);
+              }}
+            >
+              Add another shift this day
+            </button>
+            <button
+              type="button"
+              className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/25 text-rose-600 dark:text-rose-300"
+              onClick={async () => {
+                const shift = shiftContextMenu.shift;
+                setShiftContextMenu(null);
+                await handleRemoveShift(shift);
+              }}
+            >
+              Remove shift
+            </button>
+          </div>
+        )}
       </div>
       </div>
+    </div>
+  );
+}
+
+function RosterKpiCard({
+  label,
+  value,
+  icon,
+  tone,
+  emphasize = false,
+}: {
+  label: string;
+  value: string | number;
+  icon: JSX.Element;
+  tone: "neutral" | "day" | "night" | "coverage";
+  emphasize?: boolean;
+}) {
+  const toneMap: Record<"neutral" | "day" | "night" | "coverage", string> = {
+    neutral:
+      "border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/70 text-neutral-700 dark:text-neutral-300",
+    day:
+      "border-orange-200 dark:border-orange-900/50 bg-orange-50/80 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300",
+    night:
+      "border-slate-200 dark:border-slate-700 bg-slate-50/85 dark:bg-slate-900/30 text-slate-700 dark:text-slate-300",
+    coverage:
+      "border-orange-300/80 dark:border-orange-800/70 bg-gradient-to-br from-orange-50 to-white dark:from-orange-900/25 dark:to-neutral-900 text-orange-700 dark:text-orange-300",
+  };
+
+  return (
+    <div
+      className={`h-full rounded-xl border px-3.5 py-3 shadow-sm transition-shadow hover:shadow-md ${
+        toneMap[tone]
+      } ${emphasize ? "ring-1 ring-orange-200/70 dark:ring-orange-700/50" : ""}`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] uppercase tracking-[0.12em] font-semibold opacity-90">{label}</p>
+        <span className="w-7 h-7 rounded-lg bg-white/80 dark:bg-neutral-900/70 border border-current/20 flex items-center justify-center">
+          {icon}
+        </span>
+      </div>
+      <p className="mt-2 text-2xl font-bold leading-none text-neutral-900 dark:text-neutral-100">{value}</p>
     </div>
   );
 }

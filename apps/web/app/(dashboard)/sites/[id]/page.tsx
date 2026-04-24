@@ -72,6 +72,7 @@ export default function SiteDetailPage() {
   const [loading, setLoading] = useState(true);
   const [availableGuards, setAvailableGuards] = useState<Guard[]>([]);
   const [showAddPost, setShowAddPost] = useState(false);
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [draggedGuard, setDraggedGuard] = useState<{ guard: Guard; source: "pool" | string } | null>(null);
   const [dragOverPost, setDragOverPost] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -280,6 +281,7 @@ export default function SiteDetailPage() {
                 onDragEnd={handleDragEnd}
                 onDelete={refresh}
                 onError={(msg) => setDeleteError(msg || null)}
+                onEdit={canManage ? (nextPost) => setEditingPost(nextPost) : undefined}
               />
             ))}
           </div>
@@ -331,6 +333,19 @@ export default function SiteDetailPage() {
         </div>
       </div>
 
+      {editingPost && canManage && (
+        <EditPostModal
+          post={editingPost}
+          siteId={siteId}
+          token={token!}
+          onClose={() => setEditingPost(null)}
+          onSuccess={() => {
+            setEditingPost(null);
+            refresh();
+          }}
+        />
+      )}
+
     </div>
   );
 }
@@ -350,6 +365,7 @@ function PostCard({
   onDragEnd,
   onDelete,
   onError,
+  onEdit,
 }: {
   post: Post;
   siteId: string;
@@ -365,6 +381,7 @@ function PostCard({
   onDragEnd: () => void;
   onDelete: () => void;
   onError?: (msg: string | null) => void;
+  onEdit?: (post: Post) => void;
 }) {
   const shiftLabel = post.shiftType ? SHIFT_LABELS[post.shiftType] : "Shift";
 
@@ -373,10 +390,25 @@ function PostCard({
       onDragOver={canManage ? onDragOver : undefined}
       onDragLeave={canManage ? onDragLeave : undefined}
       onDrop={canManage ? onDrop : undefined}
+      onClick={canManage && onEdit ? () => onEdit(post) : undefined}
+      onKeyDown={
+        canManage && onEdit
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onEdit(post);
+              }
+            }
+          : undefined
+      }
+      role={canManage && onEdit ? "button" : undefined}
+      tabIndex={canManage && onEdit ? 0 : undefined}
       className={`p-4 rounded-lg border-2 transition-all duration-200 ${
         isDragOver
           ? "border-neutral-400 dark:border-neutral-500 bg-neutral-50 dark:bg-neutral-800/50 ring-2 ring-neutral-300 dark:ring-neutral-600 ring-offset-2 dark:ring-offset-neutral-900"
           : "border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/50 hover:border-neutral-300 dark:hover:border-neutral-600"
+      } ${
+        canManage && onEdit ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-neutral-600 focus:ring-offset-2 dark:focus:ring-offset-neutral-900" : ""
       }`}
     >
       <div className="flex items-center justify-between gap-3 mb-4">
@@ -403,7 +435,8 @@ function PostCard({
         </div>
         {canManage && (
           <button
-            onClick={async () => {
+            onClick={async (e) => {
+              e.stopPropagation();
               if (!confirm("Delete this post?")) return;
               onError?.(null);
               try {
@@ -452,6 +485,100 @@ function PostCard({
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function EditPostModal({
+  post,
+  siteId,
+  token,
+  onClose,
+  onSuccess,
+}: {
+  post: Post;
+  siteId: string;
+  token: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [name, setName] = useState(post.name);
+  const [shiftType, setShiftType] = useState<"day" | "night">(
+    post.shiftType === "night" ? "night" : "day"
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setName(post.name);
+    setShiftType(post.shiftType === "night" ? "night" : "day");
+    setError("");
+  }, [post]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setError("Post name is required.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await authFetch(`/sites/${siteId}/posts/${post.id}`, token, {
+        method: "PUT",
+        body: JSON.stringify({ name: trimmedName, shiftType }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || data.error || "Failed to update post");
+      }
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update post");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      <div className="card-wireframe w-full max-w-md shadow-xl">
+        <div className="p-6 border-b-2 border-neutral-200 dark:border-neutral-700">
+          <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Edit Post</h3>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">Update post name and shift type</p>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <div className="p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-sm">
+              {error}
+            </div>
+          )}
+          <input
+            placeholder="Post name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            className="input-modern w-full"
+          />
+          <select
+            value={shiftType}
+            onChange={(e) => setShiftType(e.target.value as "day" | "night")}
+            className="input-modern w-full"
+          >
+            <option value="day">Day Shift (06:00 – 18:00)</option>
+            <option value="night">Night Shift (18:00 – 06:00)</option>
+          </select>
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose} className="flex-1 btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" disabled={submitting} className="flex-1 btn-primary">
+              {submitting ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
