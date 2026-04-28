@@ -785,205 +785,209 @@ export default function RosteringPage() {
               <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">Security workforce scheduling view</p>
             </div>
           </div>
-          <div className="hidden xl:flex justify-center">
-            <button
-              type="button"
-              onClick={() => setShowPeriodModal(true)}
-              className="h-11 px-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm font-semibold text-neutral-800 dark:text-neutral-200 hover:border-neutral-300 dark:hover:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors flex items-center gap-2"
-              title="Choose time period to roster"
-            >
-              <span className="text-[11px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Period</span>
-              <span>{periodLabel || "Select period"}</span>
-            </button>
-          </div>
-          <div className="flex flex-wrap items-center gap-2.5 xl:justify-end">
-            <button
-              type="button"
-              onClick={() => setShowPeriodModal(true)}
-              className="h-11 px-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm font-semibold text-neutral-800 dark:text-neutral-200 hover:border-neutral-300 dark:hover:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors flex items-center gap-2 xl:hidden"
-              title="Choose time period to roster"
-            >
-              <span className="text-[11px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Period</span>
-              <span>{periodLabel || "Select period"}</span>
-            </button>
-            <div className="flex items-center h-11 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 overflow-hidden">
+          <div className="hidden xl:flex justify-center" />
+          <div className="flex w-full flex-col gap-2.5 xl:items-end">
+            <div className="flex flex-wrap items-center gap-2.5 xl:flex-nowrap xl:justify-end">
               <button
                 type="button"
-                onClick={() => {
-                  const start = parseISO(periodStart);
-                  const end = parseISO(periodEnd);
-                  const days = Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
-                  const newStart = addDays(start, -days);
-                  const newEnd = addDays(end, -days);
-                  setPeriodStart(format(newStart, "yyyy-MM-dd"));
-                  setPeriodEnd(format(newEnd, "yyyy-MM-dd"));
-                }}
-                className="h-full px-3 flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-600 dark:text-neutral-400"
-                aria-label="Previous period"
+                onClick={() => setShowPeriodModal(true)}
+                className="h-11 px-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm font-semibold text-neutral-800 dark:text-neutral-200 hover:border-neutral-300 dark:hover:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors flex items-center gap-2 xl:hidden"
+                title="Choose time period to roster"
+              >
+                <span className="text-[11px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Period</span>
+                <span>{periodLabel || "Select period"}</span>
+              </button>
+              <div className="flex items-center h-11 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const start = parseISO(periodStart);
+                    const end = parseISO(periodEnd);
+                    const days = Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+                    const newStart = addDays(start, -days);
+                    const newEnd = addDays(end, -days);
+                    setPeriodStart(format(newStart, "yyyy-MM-dd"));
+                    setPeriodEnd(format(newEnd, "yyyy-MM-dd"));
+                  }}
+                  className="h-full px-3 flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-600 dark:text-neutral-400"
+                  aria-label="Previous period"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPeriodToMonth(new Date())}
+                  className="h-full px-4 text-sm font-medium border-x border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-700 dark:text-neutral-300"
+                >
+                  This month
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPeriodToMonth(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1))}
+                  className="h-full px-3 text-sm font-medium border-r border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-700 dark:text-neutral-300"
+                >
+                  Next month
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const start = parseISO(periodStart);
+                    const end = parseISO(periodEnd);
+                    const days = Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+                    const newStart = addDays(start, days);
+                    const newEnd = addDays(end, days);
+                    setPeriodStart(format(newStart, "yyyy-MM-dd"));
+                    setPeriodEnd(format(newEnd, "yyyy-MM-dd"));
+                  }}
+                  className="h-full px-3 flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-600 dark:text-neutral-400"
+                  aria-label="Next period"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+              <button
+                onClick={() => { setSelectedDayForShift(null); setShowForm(!showForm); }}
+                className="h-11 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition-colors flex items-center gap-2 shadow-sm"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPeriodToMonth(new Date())}
-                className="h-full px-4 text-sm font-medium border-x border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-700 dark:text-neutral-300"
-              >
-                This month
-              </button>
-              <button
-                type="button"
-                onClick={() => setPeriodToMonth(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1))}
-                className="h-full px-3 text-sm font-medium border-r border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-700 dark:text-neutral-300"
-              >
-                Next month
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const start = parseISO(periodStart);
-                  const end = parseISO(periodEnd);
-                  const days = Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
-                  const newStart = addDays(start, days);
-                  const newEnd = addDays(end, days);
-                  setPeriodStart(format(newStart, "yyyy-MM-dd"));
-                  setPeriodEnd(format(newEnd, "yyyy-MM-dd"));
-                }}
-                className="h-full px-3 flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-600 dark:text-neutral-400"
-                aria-label="Next period"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                {showForm ? "Cancel" : "Add Shift"}
               </button>
             </div>
-            <button
-              onClick={() => { setSelectedDayForShift(null); setShowForm(!showForm); }}
-              className="h-11 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition-colors flex items-center gap-2 shadow-sm"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              {showForm ? "Cancel" : "Add Shift"}
-            </button>
-            <div className="relative shrink-0">
-              <button
-                type="button"
-                onClick={() => { setShowResetMenu(false); setShowPdfMenu((v) => !v); }}
-                className="h-11 px-4 text-sm font-semibold rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                </svg>
-                PDF
-              </button>
-              {showPdfMenu && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    aria-hidden
-                    onClick={() => setShowPdfMenu(false)}
-                  />
-                  <div className="absolute right-0 top-full mt-1 z-20 min-w-[260px] py-1 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-lg">
-                    <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                      Full roster
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => openPdfPeriodModal("preview")}
-                      className="w-full px-4 py-2 text-left text-sm text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                    >
-                      Preview
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openPdfPeriodModal("download")}
-                      className="w-full px-4 py-2 text-left text-sm text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                    >
-                      Download
-                    </button>
-                    {rosteredEmployees.length > 0 && (
-                      <>
-                        <div className="border-t border-neutral-200 dark:border-neutral-700 my-1" />
-                        <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                          Per guard
-                        </div>
-                        {rosteredEmployees.map((e) => (
-                          <div key={e.id} className="flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() => openPdfPeriodModal("preview", e.id)}
-                              className="flex-1 px-4 py-2 text-left text-sm text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                            >
-                              Preview
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openPdfPeriodModal("download", e.id)}
-                              className="flex-1 px-4 py-2 text-left text-sm text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                            >
-                              Download
-                            </button>
-                            <span className="px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400 truncate min-w-0">
-                              {e.firstName} {e.lastName}
-                            </span>
+
+            <div className="flex flex-wrap items-center gap-2.5 xl:flex-nowrap xl:justify-end">
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => { setShowResetMenu(false); setShowPdfMenu((v) => !v); }}
+                  className="h-11 px-3 text-sm font-semibold rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:focus:ring-offset-neutral-900 flex flex-wrap items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  PDF
+                </button>
+                {showPdfMenu && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      aria-hidden
+                      onClick={() => setShowPdfMenu(false)}
+                    />
+                    <div className="absolute right-0 top-full mt-1 z-20 min-w-[260px] py-1 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-lg">
+                      <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                        Full roster
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openPdfPeriodModal("preview")}
+                        className="w-full px-4 py-2 text-left text-sm text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                      >
+                        Preview
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openPdfPeriodModal("download")}
+                        className="w-full px-4 py-2 text-left text-sm text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                      >
+                        Download
+                      </button>
+                      {rosteredEmployees.length > 0 && (
+                        <>
+                          <div className="border-t border-neutral-200 dark:border-neutral-700 my-1" />
+                          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+                            Per guard
                           </div>
-                        ))}
-                      </>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="relative shrink-0">
+                          {rosteredEmployees.map((e) => (
+                            <div key={e.id} className="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => openPdfPeriodModal("preview", e.id)}
+                                className="flex-1 px-4 py-2 text-left text-sm text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                              >
+                                Preview
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openPdfPeriodModal("download", e.id)}
+                                className="flex-1 px-4 py-2 text-left text-sm text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                              >
+                                Download
+                              </button>
+                              <span className="px-3 py-2 text-sm text-neutral-600 dark:text-neutral-400 truncate min-w-0">
+                                {e.firstName} {e.lastName}
+                              </span>
+                            </div>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => { setShowPdfMenu(false); setShowResetMenu((v) => !v); }}
+                  disabled={resetting}
+                  className="h-11 px-4 text-sm font-semibold rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-800 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Reset
+                </button>
+                {showResetMenu && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      aria-hidden
+                      onClick={() => setShowResetMenu(false)}
+                    />
+                    <div className="absolute right-0 top-full mt-1 z-20 min-w-[200px] py-1 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-lg">
+                      <button
+                        type="button"
+                        onClick={handleResetAll}
+                        className="w-full px-4 py-2.5 text-left text-sm font-medium text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                      >
+                        Reset whole roster
+                      </button>
+                      {rosteredEmployees.length > 0 && (
+                        <>
+                          <div className="border-t border-neutral-200 dark:border-neutral-700 my-1" />
+                          <div className="px-3 py-1.5 text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                            Reset for person
+                          </div>
+                          {rosteredEmployees.map((e) => (
+                            <button
+                              key={e.id}
+                              type="button"
+                              onClick={() => handleResetPerson(e.id)}
+                              className="w-full px-4 py-2 text-left text-sm text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                            >
+                              {e.firstName} {e.lastName}
+                            </button>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
               <button
                 type="button"
-                onClick={() => { setShowPdfMenu(false); setShowResetMenu((v) => !v); }}
-                disabled={resetting}
-                className="h-11 px-4 text-sm font-semibold rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-800 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                onClick={() => setShowPeriodModal(true)}
+                className="hidden h-11 w-[230px] px-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm font-semibold text-neutral-800 dark:text-neutral-200 hover:border-neutral-300 dark:hover:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors xl:flex items-center gap-2"
+                title="Choose time period to roster"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Reset
+                <span className="text-[11px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Period</span>
+                <span>{periodLabel || "Select period"}</span>
               </button>
-              {showResetMenu && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    aria-hidden
-                    onClick={() => setShowResetMenu(false)}
-                  />
-                  <div className="absolute right-0 top-full mt-1 z-20 min-w-[200px] py-1 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-lg">
-                    <button
-                      type="button"
-                      onClick={handleResetAll}
-                      className="w-full px-4 py-2.5 text-left text-sm font-medium text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                    >
-                      Reset whole roster
-                    </button>
-                    {rosteredEmployees.length > 0 && (
-                      <>
-                        <div className="border-t border-neutral-200 dark:border-neutral-700 my-1" />
-                        <div className="px-3 py-1.5 text-xs font-medium text-neutral-500 dark:text-neutral-400">
-                          Reset for person
-                        </div>
-                        {rosteredEmployees.map((e) => (
-                          <button
-                            key={e.id}
-                            type="button"
-                            onClick={() => handleResetPerson(e.id)}
-                            className="w-full px-4 py-2 text-left text-sm text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                          >
-                            {e.firstName} {e.lastName}
-                          </button>
-                        ))}
-                      </>
-                    )}
-                  </div>
-                </>
-              )}
             </div>
           </div>
         </div>
