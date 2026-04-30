@@ -89,8 +89,70 @@ export async function attendanceRoutes(app: FastifyInstance) {
       }),
       prisma.attendance.count({ where }),
     ]);
+    const includeOffice = source !== "manual";
+    const officeWhere: Record<string, unknown> = { companyId: user.companyId };
+    if (employeeId) officeWhere.employeeId = employeeId;
+    if (siteId) officeWhere.officeSiteId = siteId;
+    if (startDate && endDate) {
+      officeWhere.clockIn = { gte: new Date(startDate), lt: new Date(endDate) };
+    } else if (startDate) {
+      officeWhere.clockIn = { gte: new Date(startDate) };
+    } else if (endDate) {
+      officeWhere.clockIn = { lt: new Date(endDate) };
+    }
+    if (source === "office") officeWhere.source = "whatsapp";
 
-    return reply.send({ data: attendances, total, limit, offset });
+    const officeAttendances = includeOffice
+      ? await prisma.officeAttendance.findMany({
+          where: officeWhere,
+          include: {
+            employee: { select: { id: true, firstName: true, lastName: true } },
+            officeSite: true,
+          },
+          orderBy: { createdAt: "desc" },
+          take: limit,
+          skip: offset,
+        })
+      : [];
+
+    const officeAsAttendance = officeAttendances.map((record) => ({
+      id: record.id,
+      shiftId: `office:${record.id}`,
+      clockIn: record.clockIn,
+      clockOut: record.clockOut,
+      hoursWorked: record.hoursWorked,
+      overtimeHours: record.overtimeHours,
+      status: record.status,
+      source: record.source,
+      mode: "office",
+      createdAt: record.createdAt,
+      shift: {
+        id: `office:${record.id}`,
+        startTime: record.clockIn,
+        endTime: record.clockOut ?? record.clockIn,
+        status: record.status,
+        employee: record.employee,
+        post: {
+          name: "Office",
+          site: record.officeSite,
+        },
+      },
+      officeAttendance: record,
+    }));
+
+    const shiftAsAttendance = attendances.map((record) => ({
+      ...record,
+      mode: "shift",
+    }));
+
+    const merged = [...shiftAsAttendance, ...officeAsAttendance].sort((a, b) => {
+      const aTime = a.clockIn ? new Date(a.clockIn).getTime() : new Date(a.createdAt).getTime();
+      const bTime = b.clockIn ? new Date(b.clockIn).getTime() : new Date(b.createdAt).getTime();
+      return bTime - aTime;
+    });
+    const mergedTotal = total + (includeOffice ? officeAttendances.length : 0);
+
+    return reply.send({ data: merged.slice(0, limit), total: mergedTotal, limit, offset });
   });
 
   app.get("/missed", { preHandler: protect }, async (request, reply) => {

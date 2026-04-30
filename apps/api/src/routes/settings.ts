@@ -326,6 +326,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       // Shifts (includes Attendance via cascade)
       if (has("shifts")) {
         await tx.shift.deleteMany({ where: { companyId } });
+        await tx.officeAttendance.deleteMany({ where: { companyId } });
       }
 
       // Attendance only (clears clock-in/out records; shifts remain)
@@ -357,6 +358,23 @@ export async function settingsRoutes(app: FastifyInstance) {
             data: { status: "assigned" },
           });
         }
+        await tx.officeAttendance.deleteMany({
+          where: {
+            companyId,
+            ...(attendanceEmployeeId ? { employeeId: attendanceEmployeeId } : {}),
+            ...(attendanceFromDate
+              ? {
+                  clockIn: {
+                    gte: (() => {
+                      const fromDate = new Date(attendanceFromDate);
+                      fromDate.setUTCHours(0, 0, 0, 0);
+                      return fromDate;
+                    })(),
+                  },
+                }
+              : {}),
+          },
+        });
       }
 
       // Sites: PostAssignment, SiteAssignment, Shift, Post, Site
@@ -370,6 +388,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         }
         await tx.post.deleteMany({ where: { site: { companyId } } });
         await tx.site.deleteMany({ where: { companyId } });
+        await tx.officeAttendance.deleteMany({ where: { companyId } });
       }
 
       // Payroll: Payslip, PayrollItem, PayrollRun
@@ -427,6 +446,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         if (employeeIds.length > 0) {
           await tx.leaveRecord.deleteMany({ where: { employeeId: { in: employeeIds } } });
           await tx.employeeDeduction.deleteMany({ where: { employeeId: { in: employeeIds } } });
+          await tx.officeAttendance.deleteMany({ where: { employeeId: { in: employeeIds } } });
         }
         await tx.employee.deleteMany({ where: { companyId } });
       }

@@ -40,6 +40,7 @@ model Company {
   users                 User[]
   employees             Employee[]
   sites                 Site[]
+  officeAttendances     OfficeAttendance[]
   whatsAppClockPendings WhatsAppClockPending[]
   shifts                Shift[]
   payrollRuns           PayrollRun[]
@@ -195,6 +196,7 @@ model Employee {
   employeeDeductions          EmployeeDeduction[]
   whatsappMessages            WhatsAppMessage[]
   whatsAppClockPendings       WhatsAppClockPending[]
+  officeAttendances           OfficeAttendance[]
   academyLinkedStudents       Student[]              @relation("AcademyStudentEmployee")
   academyCourseRunsInstructed CourseRun[]            @relation("CourseRunInstructor")
 
@@ -236,6 +238,7 @@ model Site {
   company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   posts          Post[]           @relation("SitePosts")
   assignedGuards SiteAssignment[]
+  officeAttendances OfficeAttendance[]
 
   @@index([companyId])
 }
@@ -333,6 +336,35 @@ model Attendance {
   shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
 
   @@index([shiftId])
+}
+
+model OfficeAttendance {
+  id            String   @id @default(cuid())
+  companyId     String
+  employeeId    String
+  officeSiteId  String
+  workDate      DateTime
+  clockIn       DateTime
+  clockOut      DateTime?
+  clockInLat    Decimal? @db.Decimal(10, 7)
+  clockInLng    Decimal? @db.Decimal(10, 7)
+  clockOutLat   Decimal? @db.Decimal(10, 7)
+  clockOutLng   Decimal? @db.Decimal(10, 7)
+  hoursWorked   Decimal? @db.Decimal(10, 2)
+  overtimeHours Decimal? @db.Decimal(10, 2)
+  status        String   @default("clocked_in")
+  source        String   @default("whatsapp")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  officeSite Site     @relation(fields: [officeSiteId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, employeeId, workDate])
+  @@index([employeeId, status, clockOut])
+  @@index([officeSiteId])
+  @@index([companyId, createdAt])
 }
 
 model PayrollRun {
