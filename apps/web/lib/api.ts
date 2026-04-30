@@ -144,6 +144,14 @@ export interface CompanySettings {
     timezone?: string;
     payrollPeriod?: "weekly" | "biweekly" | "monthly";
     employeeIdPrefix?: string;
+    attendance?: {
+      officeNoShiftEnabled?: boolean;
+      officeSiteId?: string | null;
+      officeOvertimeAfterHours?: number;
+      officeLatitude?: number | null;
+      officeLongitude?: number | null;
+      officeGeofenceRadiusMeters?: number | null;
+    };
   } | null;
 }
 
@@ -188,6 +196,14 @@ export async function updateSettings(
       timezone: string;
       payrollPeriod: "weekly" | "biweekly" | "monthly";
       employeeIdPrefix: string;
+      attendance: {
+        officeNoShiftEnabled?: boolean;
+        officeSiteId?: string | null;
+        officeOvertimeAfterHours?: number;
+        officeLatitude?: number | null;
+        officeLongitude?: number | null;
+        officeGeofenceRadiusMeters?: number | null;
+      };
     }>;
   }>
 ): Promise<CompanySettings> {

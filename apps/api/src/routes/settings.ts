@@ -29,6 +29,16 @@ const businessSettingsSchema = z.object({
   timezone: z.string().optional(),
   payrollPeriod: z.enum(["weekly", "biweekly", "monthly"]).optional(),
   employeeIdPrefix: z.string().max(20).optional(),
+  attendance: z
+    .object({
+      officeNoShiftEnabled: z.boolean().optional(),
+      officeSiteId: z.string().optional().nullable(),
+      officeOvertimeAfterHours: z.number().positive().optional(),
+      officeLatitude: z.number().min(-90).max(90).optional().nullable(),
+      officeLongitude: z.number().min(-180).max(180).optional().nullable(),
+      officeGeofenceRadiusMeters: z.number().positive().optional().nullable(),
+    })
+    .optional(),
 });
 
 const updateSettingsSchema = z.object({

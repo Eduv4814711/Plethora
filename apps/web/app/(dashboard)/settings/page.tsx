@@ -451,16 +451,35 @@ function BusinessSettingsSection({
   settings: ReturnType<typeof useSettings>["settings"];
   saving: boolean;
   saveError: string | null;
-  onSave: (data: Record<string, string>) => Promise<void>;
+  onSave: (data: {
+    currency: string;
+    dateFormat: string;
+    timezone: string;
+    payrollPeriod: "weekly" | "biweekly" | "monthly";
+    employeeIdPrefix: string;
+    attendance: {
+      officeNoShiftEnabled: boolean;
+      officeSiteId: string | null;
+      officeOvertimeAfterHours: number;
+      officeLatitude: number | null;
+      officeLongitude: number | null;
+      officeGeofenceRadiusMeters: number | null;
+    };
+  }) => Promise<void>;
   readOnly?: boolean;
 }) {
-  const bizSettings = settings?.settings ?? {};
   const [form, setForm] = useState({
     currency: "ZAR",
     dateFormat: "DD/MM/YYYY",
     timezone: "Africa/Johannesburg",
     payrollPeriod: "monthly",
     employeeIdPrefix: "EMP",
+    officeNoShiftEnabled: true,
+    officeSiteId: "",
+    officeOvertimeAfterHours: "8",
+    officeLatitude: "",
+    officeLongitude: "",
+    officeGeofenceRadiusMeters: "100",
   });
 
   useEffect(() => {
@@ -472,13 +491,47 @@ function BusinessSettingsSection({
         timezone: s.timezone ?? "Africa/Johannesburg",
         payrollPeriod: s.payrollPeriod ?? "monthly",
         employeeIdPrefix: s.employeeIdPrefix ?? "EMP",
+        officeNoShiftEnabled: s.attendance?.officeNoShiftEnabled ?? true,
+        officeSiteId: s.attendance?.officeSiteId ?? "",
+        officeOvertimeAfterHours: String(s.attendance?.officeOvertimeAfterHours ?? 8),
+        officeLatitude:
+          s.attendance?.officeLatitude == null
+            ? ""
+            : String(s.attendance.officeLatitude),
+        officeLongitude:
+          s.attendance?.officeLongitude == null
+            ? ""
+            : String(s.attendance.officeLongitude),
+        officeGeofenceRadiusMeters:
+          s.attendance?.officeGeofenceRadiusMeters == null
+            ? "100"
+            : String(s.attendance.officeGeofenceRadiusMeters),
       });
     }
   }, [settings?.settings]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(form);
+    onSave({
+      currency: form.currency,
+      dateFormat: form.dateFormat,
+      timezone: form.timezone,
+      payrollPeriod: form.payrollPeriod as "weekly" | "biweekly" | "monthly",
+      employeeIdPrefix: form.employeeIdPrefix,
+      attendance: {
+        officeNoShiftEnabled: form.officeNoShiftEnabled,
+        officeSiteId: form.officeSiteId || null,
+        officeOvertimeAfterHours: Number(form.officeOvertimeAfterHours) || 8,
+        officeLatitude:
+          form.officeLatitude.trim() === "" ? null : Number(form.officeLatitude),
+        officeLongitude:
+          form.officeLongitude.trim() === "" ? null : Number(form.officeLongitude),
+        officeGeofenceRadiusMeters:
+          form.officeGeofenceRadiusMeters.trim() === ""
+            ? null
+            : Number(form.officeGeofenceRadiusMeters),
+      },
+    });
   };
 
   return (
@@ -553,6 +606,98 @@ function BusinessSettingsSection({
           <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
             Prefix for auto-generated team member IDs (e.g. EMP-0001, STAFF-0001)
           </p>
+        </div>
+        <div className="border-t border-neutral-200 dark:border-neutral-700 pt-4 mt-4 space-y-4">
+          <h4 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
+            Office WhatsApp Attendance
+          </h4>
+          <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300">
+            <input
+              type="checkbox"
+              checked={form.officeNoShiftEnabled}
+              onChange={(e) => setForm((f) => ({ ...f, officeNoShiftEnabled: e.target.checked }))}
+              disabled={readOnly}
+            />
+            Enable no-shift attendance for office team members
+          </label>
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              Office site ID (optional; defaults to first site)
+            </label>
+            <input
+              type="text"
+              value={form.officeSiteId}
+              onChange={(e) => setForm((f) => ({ ...f, officeSiteId: e.target.value }))}
+              className="input-modern"
+              placeholder="cuid site id"
+              disabled={readOnly}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              Overtime after hours
+            </label>
+            <input
+              type="number"
+              min={1}
+              step={0.5}
+              value={form.officeOvertimeAfterHours}
+              onChange={(e) => setForm((f) => ({ ...f, officeOvertimeAfterHours: e.target.value }))}
+              className="input-modern"
+              disabled={readOnly}
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                Clock-in geofence latitude
+              </label>
+              <input
+                type="number"
+                step="0.0000001"
+                min={-90}
+                max={90}
+                value={form.officeLatitude}
+                onChange={(e) => setForm((f) => ({ ...f, officeLatitude: e.target.value }))}
+                className="input-modern"
+                placeholder="-26.204103"
+                disabled={readOnly}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                Clock-in geofence longitude
+              </label>
+              <input
+                type="number"
+                step="0.0000001"
+                min={-180}
+                max={180}
+                value={form.officeLongitude}
+                onChange={(e) => setForm((f) => ({ ...f, officeLongitude: e.target.value }))}
+                className="input-modern"
+                placeholder="28.047305"
+                disabled={readOnly}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                Clock-in radius (m)
+              </label>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={form.officeGeofenceRadiusMeters}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, officeGeofenceRadiusMeters: e.target.value }))
+                }
+                className="input-modern"
+                placeholder="100"
+                disabled={readOnly}
+              />
+            </div>
+          </div>
         </div>
         {saveError && (
           <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>

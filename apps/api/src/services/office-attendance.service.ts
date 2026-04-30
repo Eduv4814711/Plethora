@@ -2,6 +2,7 @@ import { prisma } from "../lib/prisma.js";
 import { AttendanceValidationError, calculateHours, assertWithinSiteGeofence } from "./attendance.service.js";
 import { getCompanyTimezone } from "../lib/timezone.js";
 import { formatInTimeZone } from "date-fns-tz";
+import { haversineMeters } from "../lib/geo.js";
 
 type OfficeClockEmployee = {
   id: string;
@@ -19,6 +20,9 @@ type OfficeAttendanceSettings = {
   officeNoShiftEnabled: boolean;
   officeSiteId: string | null;
   officeOvertimeAfterHours: number;
+  officeLatitude: number | null;
+  officeLongitude: number | null;
+  officeGeofenceRadiusMeters: number | null;
 };
 
 function parsePositiveNumber(value: unknown, fallback: number): number {
@@ -28,6 +32,18 @@ function parsePositiveNumber(value: unknown, fallback: number): number {
     if (Number.isFinite(n) && n > 0) return n;
   }
   return fallback;
+}
+
+function parseBoundedNumber(
+  value: unknown,
+  min: number,
+  max: number
+): number | null {
+  if (value == null || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return null;
+  if (n < min || n > max) return null;
+  return n;
 }
 
 function computeWorkDate(now: Date, timeZone: string): Date {
@@ -53,27 +69,65 @@ export async function getOfficeAttendanceSettings(companyId: string): Promise<Of
   const attendanceSettings = (settings.attendance as Record<string, unknown> | undefined) ?? {};
 
   return {
-    officeNoShiftEnabled: Boolean(attendanceSettings.officeNoShiftEnabled),
+    officeNoShiftEnabled:
+      attendanceSettings.officeNoShiftEnabled === undefined
+        ? true
+        : Boolean(attendanceSettings.officeNoShiftEnabled),
     officeSiteId:
       typeof attendanceSettings.officeSiteId === "string" && attendanceSettings.officeSiteId.trim().length > 0
         ? attendanceSettings.officeSiteId
         : null,
     officeOvertimeAfterHours: parsePositiveNumber(attendanceSettings.officeOvertimeAfterHours, 8),
+    officeLatitude: parseBoundedNumber(attendanceSettings.officeLatitude, -90, 90),
+    officeLongitude: parseBoundedNumber(attendanceSettings.officeLongitude, -180, 180),
+    officeGeofenceRadiusMeters: parseBoundedNumber(
+      attendanceSettings.officeGeofenceRadiusMeters,
+      1,
+      100000
+    ),
   };
 }
 
+function assertWithinOfficeGeofence(
+  settings: OfficeAttendanceSettings,
+  site: Awaited<ReturnType<typeof resolveOfficeSite>>,
+  coords: OfficeClockCoords
+) {
+  if (
+    settings.officeLatitude != null &&
+    settings.officeLongitude != null &&
+    settings.officeGeofenceRadiusMeters != null
+  ) {
+    const d = haversineMeters(
+      settings.officeLatitude,
+      settings.officeLongitude,
+      coords.lat,
+      coords.lng
+    );
+    if (d > settings.officeGeofenceRadiusMeters) {
+      throw new AttendanceValidationError(
+        `You must be within ${settings.officeGeofenceRadiusMeters}m of the office to clock in or out. (${Math.round(d)}m away)`
+      );
+    }
+    return;
+  }
+
+  assertWithinSiteGeofence(site, coords.lat, coords.lng);
+}
+
 export async function resolveOfficeSite(companyId: string, siteId?: string | null) {
-  if (!siteId) {
+  const site = siteId
+    ? await prisma.site.findFirst({
+        where: { id: siteId, companyId },
+      })
+    : await prisma.site.findFirst({
+        where: { companyId },
+        orderBy: { createdAt: "asc" },
+      });
+  if (!site) {
     throw new AttendanceValidationError(
       "Office attendance is not configured. Ask admin to set attendance.officeSiteId."
     );
-  }
-
-  const site = await prisma.site.findFirst({
-    where: { id: siteId, companyId },
-  });
-  if (!site) {
-    throw new AttendanceValidationError("Configured office site not found.");
   }
   return site;
 }
@@ -114,7 +168,7 @@ export async function startOfficeAttendance(
     throw new AttendanceValidationError("You already have an active office clock-in.");
   }
 
-  assertWithinSiteGeofence(site, coords.lat, coords.lng);
+  assertWithinOfficeGeofence(settings, site, coords);
   const now = new Date();
   const timeZone = await getCompanyTimezone(employee.companyId);
   const workDate = computeWorkDate(now, timeZone);
@@ -158,7 +212,7 @@ export async function completeOfficeAttendance(
   }
 
   const site = await resolveOfficeSite(employee.companyId, open.officeSiteId);
-  assertWithinSiteGeofence(site, coords.lat, coords.lng);
+  assertWithinOfficeGeofence(settings, site, coords);
 
   const now = new Date();
   const withShiftMath = calculateHours(now, open.clockIn, now);
