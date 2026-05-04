@@ -122,29 +122,29 @@ export default function AcademyCoursesPage() {
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="module-shell">
       <div>
-        <Link href="/academy" className="text-sm text-primary hover:underline lg:hidden">
+        <Link href="/academy" className="text-sm font-semibold text-security-navy-800 hover:underline lg:hidden">
           ← Academy
         </Link>
-        <h1 className="mt-1 text-2xl font-semibold">Courses</h1>
+        <h1 className="page-title mt-1">Courses</h1>
       </div>
 
       {!canManage && (
-        <div className="rounded-lg border border-base-300 bg-base-200/50 px-3 py-2 text-sm">
+        <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm">
           Read-only: only admins can create, edit, activate, or delete courses.
         </div>
       )}
 
       {error && (
-        <div className="rounded-md border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>
+        <div className="rounded-md border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
       )}
 
-      <form onSubmit={create} className="flex flex-wrap items-end gap-2 rounded-lg border border-base-300 p-4">
+      <form onSubmit={create} className="flex flex-wrap items-end gap-2 rounded-lg border border-neutral-200 p-4">
         <div>
           <label className="label py-0 text-xs">Code</label>
           <input
-            className="input input-bordered input-sm"
+            className="input-compact"
             value={code}
             onChange={(e) => setCode(e.target.value)}
             disabled={!canManage || saving}
@@ -153,7 +153,7 @@ export default function AcademyCoursesPage() {
         <div className="min-w-[180px] flex-1">
           <label className="label py-0 text-xs">Title</label>
           <input
-            className="input input-bordered input-sm w-full"
+            className="input-compact w-full"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             disabled={!canManage || saving}
@@ -164,7 +164,7 @@ export default function AcademyCoursesPage() {
           <input
             type="number"
             step="0.01"
-            className="input input-bordered input-sm w-28"
+            className="input-compact w-28"
             value={feeAmount}
             onChange={(e) => setFeeAmount(e.target.value)}
             disabled={!canManage || saving}
@@ -172,7 +172,7 @@ export default function AcademyCoursesPage() {
         </div>
         <button
           type="submit"
-          className="btn btn-primary btn-sm"
+          className="btn-primary text-sm py-2 px-4"
           disabled={!canManage || !code.trim() || !title.trim() || saving}
         >
           Add course
@@ -180,12 +180,12 @@ export default function AcademyCoursesPage() {
       </form>
 
       {loading ? (
-        <p className="text-sm text-base-content/60">Loading…</p>
+        <p className="text-sm text-black">Loading…</p>
       ) : courses.length === 0 ? (
-        <p className="text-sm text-base-content/60">No courses yet.</p>
+        <p className="text-sm text-black">No courses yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-base-300">
-          <table className="table table-sm">
+        <div className="overflow-x-auto rounded-lg border border-neutral-200">
+          <table className="table-module">
             <thead>
               <tr>
                 <th>Code</th>
@@ -202,7 +202,7 @@ export default function AcademyCoursesPage() {
                   <td>
                     {editId === c.id ? (
                       <input
-                        className="input input-bordered input-xs w-full min-w-[200px]"
+                        className="input-modern input-xs w-full min-w-[200px]"
                         value={editTitle}
                         onChange={(e) => setEditTitle(e.target.value)}
                         disabled={!canManage || saving}
@@ -214,7 +214,7 @@ export default function AcademyCoursesPage() {
                   <td>
                     {editId === c.id ? (
                       <input
-                        className="input input-bordered input-xs w-24"
+                        className="input-modern input-xs w-24"
                         value={editFeeAmount}
                         onChange={(e) => setEditFeeAmount(e.target.value)}
                         placeholder="0.00"
@@ -228,10 +228,10 @@ export default function AcademyCoursesPage() {
                   </td>
                   <td>
                     <span
-                      className={`badge badge-sm ${
+                      className={`badge-neutral ${
                         (editId === c.id ? editActive : c.active)
                           ? "badge-success"
-                          : "badge-ghost border border-base-300"
+                          : "badge-neutral"
                       }`}
                     >
                       {(editId === c.id ? editActive : c.active) ? "active" : "inactive"}
@@ -242,7 +242,7 @@ export default function AcademyCoursesPage() {
                       <div className="flex justify-end gap-1">
                         <button
                           type="button"
-                          className="btn btn-ghost btn-xs"
+                          className="btn-ghost text-xs py-1 px-2 min-h-8"
                           onClick={() => setEditActive((v) => !v)}
                           disabled={!canManage || saving}
                         >
@@ -250,7 +250,7 @@ export default function AcademyCoursesPage() {
                         </button>
                         <button
                           type="button"
-                          className="btn btn-primary btn-xs"
+                          className="btn-primary text-xs py-1 px-2 min-h-8"
                           onClick={saveEdit}
                           disabled={!canManage || !editTitle.trim() || saving}
                         >
@@ -258,7 +258,7 @@ export default function AcademyCoursesPage() {
                         </button>
                         <button
                           type="button"
-                          className="btn btn-ghost btn-xs"
+                          className="btn-ghost text-xs py-1 px-2 min-h-8"
                           onClick={() => setEditId(null)}
                           disabled={saving}
                         >
@@ -269,7 +269,7 @@ export default function AcademyCoursesPage() {
                       <div className="flex justify-end gap-1">
                         <button
                           type="button"
-                          className="btn btn-ghost btn-xs"
+                          className="btn-ghost text-xs py-1 px-2 min-h-8"
                           onClick={() => startEdit(c)}
                           disabled={!canManage || saving}
                         >
@@ -277,7 +277,7 @@ export default function AcademyCoursesPage() {
                         </button>
                         <button
                           type="button"
-                          className="btn btn-ghost btn-xs"
+                          className="btn-ghost text-xs py-1 px-2 min-h-8"
                           onClick={() => toggleActive(c)}
                           disabled={!canManage || saving}
                         >
@@ -285,7 +285,7 @@ export default function AcademyCoursesPage() {
                         </button>
                         <button
                           type="button"
-                          className="btn btn-ghost btn-xs text-error"
+                          className="btn-ghost text-xs py-1 px-2 min-h-8 text-red-800"
                           onClick={() => remove(c)}
                           disabled={!canManage || saving}
                         >

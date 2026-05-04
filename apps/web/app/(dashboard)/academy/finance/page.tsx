@@ -52,17 +52,17 @@ export default function AcademyFinancePage() {
   }, [token]);
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="module-shell">
       <div>
-        <Link href="/academy" className="text-sm text-primary hover:underline lg:hidden">
+        <Link href="/academy" className="text-sm font-semibold text-security-navy-800 hover:underline lg:hidden">
           ← Academy
         </Link>
-        <h1 className="mt-1 text-2xl font-semibold">Finance</h1>
-        <p className="text-sm text-base-content/70">Academy billing overview and recent payment activity.</p>
+        <h1 className="page-title mt-1">Finance</h1>
+        <p className="text-sm text-black">Academy billing overview and recent payment activity.</p>
       </div>
 
       {error && (
-        <div className="rounded-md border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>
+        <div className="rounded-md border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
       )}
 
       {summary && (
@@ -77,20 +77,20 @@ export default function AcademyFinancePage() {
       )}
 
       <div className="flex gap-2">
-        <Link href="/academy/invoices" className="btn btn-primary btn-sm">
+        <Link href="/academy/invoices" className="btn-primary text-sm py-2 px-4">
           Invoices
         </Link>
-        <button type="button" className="btn btn-ghost btn-sm" onClick={load}>
+        <button type="button" className="btn-ghost text-sm py-2 px-3" onClick={load}>
           Refresh
         </button>
       </div>
 
-      <section className="rounded-lg border border-base-300 p-4">
+      <section className="rounded-lg border border-neutral-200 p-4">
         <h2 className="font-medium">Pending verification</h2>
         {pending.length === 0 ? (
-          <p className="mt-2 text-sm text-base-content/60">None.</p>
+          <p className="mt-2 text-sm text-black">None.</p>
         ) : (
-          <ul className="mt-2 divide-y divide-base-200 text-sm">
+          <ul className="mt-2 divide-y divide-neutral-200 text-sm">
             {pending.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                 <span>
@@ -99,7 +99,7 @@ export default function AcademyFinancePage() {
                 </span>
                 <Link
                   href={p.invoiceId ? `/academy/invoices/${p.invoiceId}` : "/academy/invoices"}
-                  className="link link-primary text-xs"
+                  className="text-xs font-semibold text-security-navy-800 underline hover:no-underline"
                 >
                   Open invoice
                 </Link>
@@ -109,13 +109,13 @@ export default function AcademyFinancePage() {
         )}
       </section>
 
-      <section className="rounded-lg border border-base-300 p-4">
+      <section className="rounded-lg border border-neutral-200 p-4">
         <h2 className="font-medium">Recent payments</h2>
         {recent.length === 0 ? (
-          <p className="mt-2 text-sm text-base-content/60">None yet.</p>
+          <p className="mt-2 text-sm text-black">None yet.</p>
         ) : (
           <div className="mt-2 overflow-x-auto">
-            <table className="table table-sm">
+            <table className="table-module">
               <thead>
                 <tr>
                   <th>Invoice</th>
@@ -146,8 +146,8 @@ export default function AcademyFinancePage() {
 
 function Kpi({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-base-300 bg-base-100 p-3">
-      <p className="text-xs text-base-content/60">{label}</p>
+    <div className="rounded-lg border border-neutral-200 bg-white p-3">
+      <p className="text-xs text-sm text-black">{label}</p>
       <p className="mt-1 font-mono text-lg font-semibold">{value}</p>
     </div>
   );

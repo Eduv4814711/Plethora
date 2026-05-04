@@ -1009,7 +1009,7 @@ function PostRow({
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="px-2 py-1 text-xs font-medium bg-neutral-600 text-white rounded hover:bg-neutral-700 disabled:opacity-50"
+            className="btn-primary px-3 py-1 text-xs min-h-9"
           >
             {saving ? "…" : "Save"}
           </button>
@@ -1017,7 +1017,7 @@ function PostRow({
             type="button"
             onClick={() => { setEditing(false); setName(post.name); }}
             disabled={saving}
-            className="px-2 py-1 text-xs font-medium border border-neutral-300 dark:border-neutral-600 rounded hover:bg-neutral-100 dark:hover:bg-neutral-800"
+            className="btn-secondary px-3 py-1 text-xs min-h-9"
           >
             Cancel
           </button>

@@ -28,10 +28,10 @@ const PRIORITY_LABELS: Record<TaskPriority, string> = {
 };
 
 const PRIORITY_COLORS: Record<TaskPriority, string> = {
-  low: "bg-gray-200 text-gray-700",
-  medium: "bg-blue-100 text-blue-800",
-  high: "bg-orange-100 text-orange-800",
-  urgent: "bg-red-100 text-red-800",
+  low: "bg-[var(--bg-nav-hover)] text-black border border-[var(--hairline)]",
+  medium: "bg-security-navy-50 text-black border border-security-navy-200",
+  high: "bg-security-navy-200 text-black border border-security-navy-400",
+  urgent: "bg-red-50 text-black border border-red-200",
 };
 
 function TaskCard({ task }: { task: Task }) {
@@ -41,27 +41,27 @@ function TaskCard({ task }: { task: Task }) {
   return (
     <Link
       href={`/tasks/${task.id}`}
-      className="block bg-gray-100 border border-gray-300 rounded-lg p-4 hover:border-gray-400 transition-colors"
+      className="block card-dashboard p-4 transition-shadow hover:shadow-security-card-hover min-h-[5.5rem]"
     >
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-semibold text-black truncate flex-1">{task.title}</h3>
         <span
-          className={`shrink-0 px-2 py-0.5 text-xs font-medium rounded ${PRIORITY_COLORS[task.priority]}`}
+          className={`shrink-0 px-2 py-0.5 text-xs font-semibold rounded-full ${PRIORITY_COLORS[task.priority]}`}
         >
           {PRIORITY_LABELS[task.priority]}
         </span>
       </div>
-      <div className="mt-2 flex flex-wrap gap-2 text-sm text-gray-600">
-        <span>{STATUS_LABELS[task.status]}</span>
+      <div className="mt-2 flex flex-wrap gap-2 text-sm text-black">
+        <span className="font-medium">{STATUS_LABELS[task.status]}</span>
         {task.project && (
-          <span className="text-gray-500">• {task.project.name}</span>
+          <span className="text-black/70">• {task.project.name}</span>
         )}
         {task.assigneeDisplayName && (
-          <span className="text-gray-500">• {task.assigneeDisplayName}</span>
+          <span className="text-black/70">• {task.assigneeDisplayName}</span>
         )}
       </div>
       {dueStr && (
-        <p className={`mt-1 text-xs ${isOverdue ? "text-red-600 font-medium" : "text-gray-500"}`}>
+        <p className={`mt-1 text-xs ${isOverdue ? "text-red-700 font-semibold" : "text-black/70"}`}>
           Due {dueStr}
         </p>
       )}
@@ -144,10 +144,10 @@ export default function TasksPage() {
   if (loading) {
     return (
       <div className="animate-pulse space-y-6">
-        <div className="h-9 w-48 bg-gray-200 rounded-lg" />
+        <div className="h-9 w-48 bg-[var(--bg-nav-hover)] rounded-security-lg" />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="h-32 bg-gray-200 rounded-lg" />
+            <div key={i} className="h-32 bg-[var(--bg-nav-hover)] rounded-security-lg" />
           ))}
         </div>
       </div>
@@ -155,14 +155,14 @@ export default function TasksPage() {
   }
 
   return (
-    <div className="animate-fade-in max-w-6xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-black">Tasks</h1>
+    <div className="module-shell max-w-6xl">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="page-title">Tasks</h1>
         <div className="flex items-center gap-3">
           <select
             value={projectFilter}
             onChange={(e) => setProjectFilter(e.target.value)}
-            className="input-compact w-auto"
+            className="input-compact min-h-11 w-full sm:w-auto"
           >
             <option value="all">All Projects</option>
             {projects.map((p) => (
@@ -174,28 +174,25 @@ export default function TasksPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="input-compact w-auto"
+            className="input-compact min-h-11 w-full sm:w-auto"
           >
             <option value="all">All Statuses</option>
             <option value="todo">To Do</option>
             <option value="in_progress">In Progress</option>
             <option value="done">Done</option>
           </select>
-          <Link
-            href="/tasks/projects"
-            className="btn-secondary text-sm py-2"
-          >
+          <Link href="/tasks/projects" className="btn-secondary text-sm py-2 min-h-11 inline-flex items-center justify-center w-full sm:w-auto">
             Projects
           </Link>
-          <button onClick={() => setShowForm(true)} className="btn-primary text-sm py-2">
+          <button type="button" onClick={() => setShowForm(true)} className="btn-primary text-sm py-2 min-h-11 w-full sm:w-auto">
             New Task
           </button>
         </div>
       </div>
 
       {showForm && (
-        <div className="mb-6 bg-gray-100 border border-gray-300 rounded-lg p-4">
-          <h2 className="font-bold text-black mb-3">Create Task</h2>
+        <div className="module-panel mb-6">
+          <h2 className="section-title normal-case tracking-tight text-base mb-3">Create Task</h2>
           <form onSubmit={handleCreateTask} className="space-y-3">
             <input
               type="text"
@@ -232,7 +229,7 @@ export default function TasksPage() {
                 <AssigneePicker value={formAssignee} onChange={setFormAssignee} />
               </div>
             </div>
-            {formError && <p className="text-sm text-red-600">{formError}</p>}
+            {formError && <p className="text-sm text-red-700 font-semibold">{formError}</p>}
             <div className="flex gap-2">
               <button type="submit" disabled={submitting} className="btn-primary">
                 Create
@@ -259,8 +256,12 @@ export default function TasksPage() {
       </div>
 
       {tasks.length === 0 && (
-        <div className="text-center py-12 text-gray-500">
-          No tasks yet. Create one to get started.
+        <div className="empty-state">
+          <p className="empty-state-title">No tasks yet</p>
+          <p className="empty-state-body">Create one to get started — assign it to a project, set priority, and pick an owner.</p>
+          <button type="button" onClick={() => setShowForm(true)} className="btn-primary mt-2">
+            New task
+          </button>
         </div>
       )}
     </div>

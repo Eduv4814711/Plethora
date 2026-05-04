@@ -39,9 +39,9 @@ interface LeaveRecord {
 }
 
 const statusColors: Record<string, string> = {
-  pending: "bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200",
-  approved: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200",
-  rejected: "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200",
+  pending: "bg-security-amber-100 text-black border border-security-amber-200 dark:bg-amber-900/30 dark:text-amber-200",
+  approved: "bg-security-emerald-50 text-black border border-security-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-200",
+  rejected: "bg-red-50 text-black border border-red-200 dark:bg-red-900/30 dark:text-red-200",
 };
 
 export default function LeaveManagementPage() {

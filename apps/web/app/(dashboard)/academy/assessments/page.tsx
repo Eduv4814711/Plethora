@@ -94,25 +94,25 @@ export default function AcademyAssessmentsPage() {
   };
 
   return (
-    <div className="w-full min-w-0 space-y-6">
+    <div className="module-shell">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-security-navy-900">Assessments</h1>
-        <p className="mt-1 text-sm text-base-content/70">Capture assessment outcomes, attempts, and result statuses.</p>
+        <h1 className="page-title">Assessments</h1>
+        <p className="mt-1 text-sm text-black">Capture assessment outcomes, attempts, and result statuses.</p>
       </div>
 
       {!canManage && (
-        <div className="rounded-lg border border-base-300 bg-base-200/50 px-3 py-2 text-sm">
+        <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm">
           Read-only: only admins can add or delete assessments.
         </div>
       )}
 
-      {error && <div className="rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>}
+      {error && <div className="rounded-lg border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
 
-      <div className="rounded-2xl border border-base-200 bg-base-100 p-5 shadow-sm">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-base-content/60">New assessment</h2>
+      <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-sm text-black">New assessment</h2>
         <form onSubmit={create} className="mt-3 grid gap-2 md:grid-cols-5">
           <select
-            className="select select-bordered rounded-xl"
+            className="input-modern rounded-security-lg"
             value={learnerId}
             onChange={(e) => setLearnerId(e.target.value)}
             disabled={!canManage || saving}
@@ -125,7 +125,7 @@ export default function AcademyAssessmentsPage() {
             ))}
           </select>
           <select
-            className="select select-bordered rounded-xl"
+            className="input-modern rounded-security-lg"
             value={courseId}
             onChange={(e) => setCourseId(e.target.value)}
             disabled={!canManage || saving}
@@ -138,37 +138,37 @@ export default function AcademyAssessmentsPage() {
             ))}
           </select>
           <input
-            className="input input-bordered rounded-xl"
+            className="input-modern"
             placeholder="Type"
             value={assessmentType}
             onChange={(e) => setAssessmentType(e.target.value)}
             disabled={!canManage || saving}
           />
           <input
-            className="input input-bordered rounded-xl"
+            className="input-modern"
             type="date"
             value={assessmentDate}
             onChange={(e) => setAssessmentDate(e.target.value)}
             disabled={!canManage || saving}
           />
-          <button className="btn btn-primary rounded-xl" disabled={!canManage || saving}>Add</button>
+          <button className="btn-primary rounded-security-lg" disabled={!canManage || saving}>Add</button>
         </form>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-base-200 bg-base-100 shadow-sm">
-        <div className="border-b border-base-200/80 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">Assessment register</h2></div>
+      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+        <div className="border-b border-neutral-200 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">Assessment register</h2></div>
         <div className="overflow-x-auto">
-          <table className="table table-sm">
-            <thead><tr className="text-[11px] uppercase tracking-wide text-base-content/60"><th>Learner</th><th>Type</th><th>Date</th><th>Result</th><th className="text-right">Action</th></tr></thead>
+          <table className="table-module">
+            <thead><tr className="text-[11px] uppercase tracking-wide text-sm text-black"><th>Learner</th><th>Type</th><th>Date</th><th>Result</th><th className="text-right">Action</th></tr></thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-sm text-base-content/60">Loading assessments...</td>
+                  <td colSpan={5} className="py-8 text-center text-sm text-black">Loading assessments...</td>
                 </tr>
-              ) : rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{r.learner ? `${r.learner.firstName} ${r.learner.lastName}` : r.learnerId}</td><td>{r.assessmentType}</td><td>{String(r.assessmentDate).slice(0,10)}</td><td><span className={`badge badge-sm ${r.result === "pass" || r.result === "competent" ? "badge-success" : r.result ? "badge-warning" : "badge-ghost border border-base-300"}`}>{r.result ?? "pending"}</span></td><td className="text-right">{canManage && <button className="btn btn-xs btn-error" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}</td></tr>)}
+              ) : rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{r.learner ? `${r.learner.firstName} ${r.learner.lastName}` : r.learnerId}</td><td>{r.assessmentType}</td><td>{String(r.assessmentDate).slice(0,10)}</td><td><span className={`badge-neutral ${r.result === "pass" || r.result === "competent" ? "badge-success" : r.result ? "badge-warning" : "badge-neutral"}`}>{r.result ?? "pending"}</span></td><td className="text-right">{canManage && <button className="btn-danger" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}</td></tr>)}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-sm text-base-content/60">No assessments yet.</td>
+                  <td colSpan={5} className="py-8 text-center text-sm text-black">No assessments yet.</td>
                 </tr>
               )}
             </tbody>

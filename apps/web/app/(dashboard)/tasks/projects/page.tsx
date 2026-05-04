@@ -96,18 +96,17 @@ export default function TaskProjectsPage() {
   }
 
   return (
-    <div className="animate-fade-in max-w-4xl mx-auto">
-      <div className="mb-4">
-        <Link href="/tasks" className="text-sm text-gray-600 hover:text-black">
+    <div className="module-shell max-w-4xl">
+      <div className="flex flex-col gap-4">
+        <Link href="/tasks" className="text-sm font-semibold text-security-navy-800 hover:underline min-h-11 inline-flex items-center w-fit">
           ← Back to Tasks
         </Link>
-      </div>
-
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-black">Task Projects</h1>
-        <button onClick={() => setShowForm(true)} className="btn-primary">
-          New Project
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="page-title">Task Projects</h1>
+          <button type="button" onClick={() => setShowForm(true)} className="btn-primary min-h-11 w-full sm:w-auto shrink-0">
+            New Project
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -117,8 +116,8 @@ export default function TaskProjectsPage() {
       )}
 
       {showForm && (
-        <div className="mb-6 bg-gray-100 border border-gray-300 rounded-lg p-4">
-          <h2 className="font-bold text-black mb-3">Create Project</h2>
+        <div className="module-panel mb-6">
+          <h2 className="section-title normal-case tracking-tight text-base mb-3">Create Project</h2>
           <form onSubmit={handleCreate} className="space-y-3">
             <input
               type="text"
@@ -158,7 +157,7 @@ export default function TaskProjectsPage() {
         {projects.map((p) => (
           <div
             key={p.id}
-            className="bg-gray-100 border border-gray-300 rounded-lg p-4 flex items-center justify-between"
+            className="card-dashboard p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
           >
             {editingId === p.id ? (
               <div className="flex-1 flex gap-2">

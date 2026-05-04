@@ -30,28 +30,30 @@ export default function AcademyAuditPage() {
   useEffect(load, [token]);
 
   return (
-    <div className="w-full min-w-0 space-y-6">
+    <div className="module-shell">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-security-navy-900">Audit Logs</h1>
-        <p className="mt-1 text-sm text-base-content/70">Search and inspect Academy audit events by action and entity type.</p>
+        <h1 className="page-title">Audit Logs</h1>
+        <p className="mt-2 max-w-2xl text-sm text-black">Search and inspect Academy audit events by action and entity type.</p>
       </div>
 
-      {error && <div className="rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>}
+      {error && <div className="rounded-security-lg border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
 
-      <div className="rounded-2xl border border-base-200 bg-base-100 p-5 shadow-sm">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-base-content/60">Filters</h2>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <input className="input input-bordered rounded-xl" placeholder="Filter action" value={action} onChange={(e) => setAction(e.target.value)} />
-          <input className="input input-bordered rounded-xl" placeholder="Filter entity type" value={entityType} onChange={(e) => setEntityType(e.target.value)} />
-          <button className="btn rounded-xl" onClick={load}>Apply</button>
+      <div className="module-panel">
+        <h2 className="section-title">Filters</h2>
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <input className="input-modern w-full sm:max-w-xs" placeholder="Filter action" value={action} onChange={(e) => setAction(e.target.value)} />
+          <input className="input-modern w-full sm:max-w-xs" placeholder="Filter entity type" value={entityType} onChange={(e) => setEntityType(e.target.value)} />
+          <button type="button" className="btn-secondary min-h-11 w-full sm:w-auto" onClick={load}>Apply</button>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-base-200 bg-base-100 shadow-sm">
-        <div className="border-b border-base-200/80 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">Audit stream</h2></div>
-        <div className="overflow-x-auto">
-          <table className="table table-sm">
-            <thead><tr className="text-[11px] uppercase tracking-wide text-base-content/60"><th>Time</th><th>Action</th><th>Entity</th><th>User</th></tr></thead>
+      <div className="module-panel overflow-hidden p-0">
+        <div className="border-b border-neutral-200 bg-neutral-50/80 px-4 py-3 sm:px-5 sm:py-4">
+          <h2 className="section-title normal-case tracking-tight text-base font-semibold">Audit stream</h2>
+        </div>
+        <div className="table-scroll rounded-none border-0 shadow-none">
+          <table className="table-module">
+            <thead><tr className="text-[11px] uppercase tracking-wide text-sm text-black"><th>Time</th><th>Action</th><th>Entity</th><th>User</th></tr></thead>
             <tbody>{rows.map((r)=><tr key={r.id} className="text-sm"><td>{new Date(r.timestamp).toLocaleString()}</td><td className="font-medium text-security-navy-900">{r.action}</td><td>{r.entityType}</td><td>{r.user?.name ?? "—"}</td></tr>)}</tbody>
           </table>
         </div>

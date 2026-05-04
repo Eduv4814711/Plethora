@@ -123,7 +123,7 @@ export default function AcademyInvoiceDetailPage() {
   if (!invoice && !error) {
     return (
       <div className="p-6">
-        <p className="text-sm text-base-content/60">Loading…</p>
+        <p className="text-sm text-black">Loading…</p>
       </div>
     );
   }
@@ -131,7 +131,7 @@ export default function AcademyInvoiceDetailPage() {
   if (!invoice) {
     return (
       <div className="p-6">
-        <p className="text-error">{error}</p>
+        <p className="text-red-800">{error}</p>
         <Link href="/academy/invoices" className="link mt-2 inline-block">
           Back
         </Link>
@@ -140,41 +140,41 @@ export default function AcademyInvoiceDetailPage() {
   }
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="module-shell">
       <div>
-        <Link href="/academy/invoices" className="text-sm text-primary hover:underline">
+        <Link href="/academy/invoices" className="text-sm font-semibold text-security-navy-800 hover:underline">
           ← Invoices
         </Link>
-        <h1 className="mt-1 font-mono text-2xl font-semibold">{invoice.invoiceNumber}</h1>
-        <p className="text-sm text-base-content/70">
+        <h1 className="page-title mt-1 font-mono">{invoice.invoiceNumber}</h1>
+        <p className="text-sm text-black">
           {invoice.student.firstName} {invoice.student.lastName} · {invoice.student.studentNumber}
         </p>
       </div>
 
       {error && (
-        <div className="rounded-md border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>
+        <div className="rounded-md border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
       )}
 
       <div className="flex flex-wrap gap-2">
-        <span className="badge badge-lg">{invoice.status}</span>
+        <span className="badge-neutral px-3 py-1 text-sm font-medium">{invoice.status}</span>
         {invoice.status === "draft" && (
           <>
-            <button type="button" className="btn btn-primary btn-sm" onClick={issue}>
+            <button type="button" className="btn-primary text-sm py-2 px-4" onClick={issue}>
               Issue invoice
             </button>
-            <button type="button" className="btn btn-ghost btn-sm text-error" onClick={cancel}>
+            <button type="button" className="btn-ghost text-sm py-2 px-3 text-red-800" onClick={cancel}>
               Cancel
             </button>
           </>
         )}
         {(invoice.status === "issued" || invoice.status === "partially_paid" || invoice.status === "overdue") && (
-          <button type="button" className="btn btn-ghost btn-sm text-error" onClick={cancel}>
+          <button type="button" className="btn-ghost text-sm py-2 px-3 text-red-800" onClick={cancel}>
             Cancel (no verified payments)
           </button>
         )}
       </div>
 
-      <div className="rounded-lg border border-base-300 p-4 text-sm">
+      <div className="rounded-lg border border-neutral-200 p-4 text-sm">
         <p>
           Dates: {String(invoice.invoiceDate).slice(0, 10)} → due {String(invoice.dueDate).slice(0, 10)}
         </p>
@@ -190,41 +190,41 @@ export default function AcademyInvoiceDetailPage() {
         </ul>
       </div>
 
-      <section className="rounded-lg border border-base-300 p-4">
+      <section className="rounded-lg border border-neutral-200 p-4">
         <h2 className="font-medium">Record payment</h2>
         <form onSubmit={addPayment} className="mt-3 flex flex-wrap items-end gap-2">
           <div>
             <label className="label py-0 text-xs">Date</label>
-            <input type="date" className="input input-bordered input-sm" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+            <input type="date" className="input-compact" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
           </div>
           <div>
             <label className="label py-0 text-xs">Amount</label>
-            <input className="input input-bordered input-sm w-28" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
+            <input className="input-compact w-28" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
           </div>
           <div>
             <label className="label py-0 text-xs">Method</label>
-            <input className="input input-bordered input-sm w-24" value={payMethod} onChange={(e) => setPayMethod(e.target.value)} />
+            <input className="input-compact w-24" value={payMethod} onChange={(e) => setPayMethod(e.target.value)} />
           </div>
           <div>
             <label className="label py-0 text-xs">Reference</label>
-            <input className="input input-bordered input-sm w-32" value={payRef} onChange={(e) => setPayRef(e.target.value)} />
+            <input className="input-compact w-32" value={payRef} onChange={(e) => setPayRef(e.target.value)} />
           </div>
-          <button type="submit" className="btn btn-primary btn-sm" disabled={invoice.status === "draft" || invoice.status === "cancelled"}>
+          <button type="submit" className="btn-primary text-sm py-2 px-4" disabled={invoice.status === "draft" || invoice.status === "cancelled"}>
             Add payment (pending)
           </button>
         </form>
-        <p className="mt-2 text-xs text-base-content/60">
+        <p className="mt-2 text-xs text-sm text-black">
           Upload proof of payment from the student profile (Documents → payment_proof), then optionally link the document id via API later.
         </p>
       </section>
 
-      <section className="rounded-lg border border-base-300 p-4">
+      <section className="rounded-lg border border-neutral-200 p-4">
         <h2 className="font-medium">Payments</h2>
         {invoice.payments.length === 0 ? (
-          <p className="mt-2 text-sm text-base-content/60">None.</p>
+          <p className="mt-2 text-sm text-black">None.</p>
         ) : (
           <div className="mt-2 overflow-x-auto">
-            <table className="table table-sm">
+            <table className="table-module">
               <thead>
                 <tr>
                   <th>Date</th>
@@ -244,10 +244,10 @@ export default function AcademyInvoiceDetailPage() {
                     <td>
                       {p.verificationStatus === "pending" && (
                         <div className="flex gap-1">
-                          <button type="button" className="btn btn-success btn-xs" onClick={() => verify(p.id)}>
+                          <button type="button" className="btn-primary text-xs py-1 px-2 min-h-8" onClick={() => verify(p.id)}>
                             Verify
                           </button>
-                          <button type="button" className="btn btn-ghost btn-xs text-error" onClick={() => reject(p.id)}>
+                          <button type="button" className="btn-ghost text-xs py-1 px-2 min-h-8 text-red-800" onClick={() => reject(p.id)}>
                             Reject
                           </button>
                         </div>

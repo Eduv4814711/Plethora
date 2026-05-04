@@ -44,10 +44,10 @@ function NavGroup({
     <Link
       href={href}
       className={clsx(
-        "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",
+        "flex min-h-11 items-center gap-2.5 rounded-security px-3 py-2 text-sm font-semibold transition-colors focus-ring",
         isActive
-          ? "bg-primary/12 text-primary shadow-sm"
-          : "text-security-navy-600 hover:bg-base-200/80 hover:text-security-navy-800"
+          ? "bg-security-navy-100 text-black border border-security-navy-400 shadow-security-card"
+          : "text-black border border-transparent hover:bg-[var(--bg-nav-hover)] hover:border-[var(--hairline)]"
       )}
     >
       {children}
@@ -153,10 +153,10 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
   return (
     <div className="flex min-h-0 w-full min-w-0 max-w-full flex-1 flex-col gap-4 pb-2 lg:h-full lg:flex-row lg:items-stretch lg:gap-6 lg:pb-0">
       <div className="flex shrink-0 items-center justify-between gap-2 lg:hidden">
-        <span className="text-sm font-semibold text-security-navy-800">Academy</span>
+        <span className="section-title normal-case tracking-tight text-base">Academy</span>
         <button
           type="button"
-          className="btn btn-ghost btn-sm"
+          className="btn-secondary"
           onClick={() => setMobileOpen((o) => !o)}
           aria-expanded={mobileOpen}
           aria-controls="academy-side-nav"
@@ -168,8 +168,7 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
       <aside
         id="academy-side-nav"
         className={clsx(
-          "flex w-full shrink-0 flex-col border border-base-300/60 bg-base-100/80 shadow-[0_1px_2px_rgba(15,23,42,0.06)]",
-          "rounded-xl p-3",
+          "flex w-full shrink-0 flex-col card-wireframe p-3 sm:p-4",
           "max-lg:max-h-[min(32rem,70vh)] max-lg:overflow-y-auto",
           "lg:h-full lg:min-h-0 lg:max-w-[15rem] lg:overflow-hidden lg:self-stretch",
           !mobileOpen && "hidden",
@@ -177,7 +176,7 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
         )}
       >
         <div className="shrink-0">
-          <p className="text-xs font-semibold uppercase tracking-wider text-base-content/50">Academy</p>
+          <p className="section-title">Academy</p>
         </div>
         <nav className="mt-2 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-0.5 lg:min-h-0" aria-label="Academy">
           {navItems.map((item) => {
@@ -213,12 +212,14 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
             </NavGroup>
           )}
         </nav>
-        <div className="mt-3 shrink-0 rounded-lg border border-base-200 bg-gradient-to-b from-primary/5 to-base-100 p-2.5 lg:mt-auto">
-          <p className="text-sm font-medium text-security-navy-800">Need help?</p>
-          <p className="mt-1 text-xs text-base-content/60">Module access and billing questions? Contact an administrator.</p>
+        <div className="mt-3 shrink-0 card-feature-orange p-3 lg:mt-auto">
+          <p className="text-sm font-semibold text-black">Need help?</p>
+          <p className="mt-1 text-xs text-black leading-relaxed">
+            Module access and billing questions? Contact an administrator.
+          </p>
           <button
             type="button"
-            className="mt-2 inline-flex h-7 items-center justify-center gap-1.5 rounded-lg border border-base-300 bg-white px-3 text-xs font-semibold text-security-navy-800 transition hover:border-base-400 hover:bg-base-200/60"
+            className="btn-secondary mt-3 w-full text-xs"
           >
             Contact support
             <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>

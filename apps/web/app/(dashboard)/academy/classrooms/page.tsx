@@ -71,45 +71,45 @@ export default function AcademyClassroomsPage() {
   };
 
   return (
-    <div className="w-full min-w-0 space-y-6">
+    <div className="module-shell">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-security-navy-900">Classrooms</h1>
-        <p className="mt-1 text-sm text-base-content/70">Maintain approved training rooms, capacities, and availability.</p>
+        <h1 className="page-title">Classrooms</h1>
+        <p className="mt-1 text-sm text-black">Maintain approved training rooms, capacities, and availability.</p>
       </div>
 
-      {error && <div className="rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>}
+      {error && <div className="rounded-lg border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
 
-      <div className="rounded-2xl border border-base-200 bg-base-100 p-5 shadow-sm">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-base-content/60">New classroom</h2>
+      <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-sm text-black">New classroom</h2>
         <form onSubmit={create} className="mt-3 grid gap-3 md:grid-cols-[1fr_auto_auto_auto] md:items-end">
           <label className="min-w-0">
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">Classroom name</span>
-            <input className="input input-bordered w-full rounded-xl" value={name} onChange={(e) => setName(e.target.value)} />
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-sm text-black">Classroom name</span>
+            <input className="input-modern w-full rounded-xl" value={name} onChange={(e) => setName(e.target.value)} />
           </label>
           <label>
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">Site</span>
-            <select className="select select-bordered rounded-xl" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-sm text-black">Site</span>
+            <select className="input-modern rounded-security-lg" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
               ))}
             </select>
           </label>
           <label>
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">Capacity</span>
-            <input className="input input-bordered w-24 rounded-xl" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-sm text-black">Capacity</span>
+            <input className="input-modern w-24 rounded-xl" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
           </label>
-          <button className="btn btn-primary rounded-xl" disabled={!canManage}>Add classroom</button>
+          <button className="btn-primary rounded-security-lg" disabled={!canManage}>Add classroom</button>
         </form>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-base-200 bg-base-100 shadow-sm">
-        <div className="border-b border-base-200/80 px-5 py-4">
+      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+        <div className="border-b border-neutral-200 px-5 py-4">
           <h2 className="text-base font-semibold text-security-navy-900">All classrooms</h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="table table-sm">
+          <table className="table-module">
             <thead>
-              <tr className="text-[11px] uppercase tracking-wide text-base-content/60">
+              <tr className="text-[11px] uppercase tracking-wide text-sm text-black">
                 <th>Classroom</th>
                 <th>Site</th>
                 <th>Capacity</th>
@@ -124,7 +124,7 @@ export default function AcademyClassroomsPage() {
                   <td>{r.branch?.name ?? "—"}</td>
                   <td>{r.capacity}</td>
                   <td>{r.status}</td>
-                  <td className="text-right">{canManage && <button className="btn btn-xs btn-error" onClick={() => remove(r.id)}>Delete</button>}</td>
+                  <td className="text-right">{canManage && <button className="btn-danger" onClick={() => remove(r.id)}>Delete</button>}</td>
                 </tr>
               ))}
             </tbody>

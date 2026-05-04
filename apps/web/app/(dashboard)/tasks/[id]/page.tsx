@@ -280,9 +280,9 @@ export default function TaskDetailPage() {
 
 
   return (
-    <div className="animate-fade-in max-w-4xl mx-auto">
-      <div className="mb-4">
-        <Link href="/tasks" className="text-sm text-gray-600 hover:text-black">
+    <div className="module-shell max-w-4xl">
+      <div className="mb-2">
+        <Link href="/tasks" className="text-sm font-semibold text-security-navy-800 hover:underline min-h-11 inline-flex items-center">
           ← Back to Tasks
         </Link>
       </div>
@@ -293,7 +293,7 @@ export default function TaskDetailPage() {
         </div>
       )}
 
-      <div className="bg-gray-100 border border-gray-300 rounded-lg p-6 mb-6">
+      <div className="module-panel mb-6">
         {editing ? (
           <div className="space-y-4">
             <input
@@ -409,7 +409,7 @@ export default function TaskDetailPage() {
           <>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-bold text-black">{task.title}</h1>
+                <h1 className="page-title">{task.title}</h1>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <span className="px-2 py-0.5 bg-gray-200 rounded text-sm">
                     {STATUS_LABELS[task.status]}

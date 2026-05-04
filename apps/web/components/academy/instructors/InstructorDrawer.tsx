@@ -37,12 +37,12 @@ function complianceHealth(status: string | null | undefined): {
   label: string;
   cls: string;
 } {
-  if (status === "compliant") return { label: "Healthy", cls: "bg-emerald-500" };
+  if (status === "compliant") return { label: "Healthy", cls: "bg-emerald-200 text-black" };
   if (status === "attention_needed" || status === "pending_review") {
-    return { label: "Watch", cls: "bg-amber-500" };
+    return { label: "Watch", cls: "bg-amber-200 text-black" };
   }
-  if (status === "high_risk") return { label: "Critical", cls: "bg-red-500" };
-  return { label: "Pending", cls: "bg-slate-400" };
+  if (status === "high_risk") return { label: "Critical", cls: "bg-red-200 text-black" };
+  return { label: "Pending", cls: "bg-slate-200 text-black" };
 }
 
 function formatDate(value?: string | null): string {
@@ -56,10 +56,10 @@ function contractWarning(daysRemaining?: number | null): {
   tone: string;
   text: string;
 } {
-  if (daysRemaining == null) return { tone: "border-slate-200 bg-slate-50 text-slate-700", text: "Contract date missing" };
-  if (daysRemaining < 0) return { tone: "border-red-200 bg-red-50 text-red-700", text: `Expired ${Math.abs(daysRemaining)} day(s) ago` };
-  if (daysRemaining <= 30) return { tone: "border-amber-200 bg-amber-50 text-amber-700", text: `${daysRemaining} day(s) remaining` };
-  return { tone: "border-emerald-200 bg-emerald-50 text-emerald-700", text: `${daysRemaining} day(s) remaining` };
+  if (daysRemaining == null) return { tone: "border-slate-200 bg-slate-50 text-black", text: "Contract date missing" };
+  if (daysRemaining < 0) return { tone: "border-red-200 bg-red-50 text-black", text: `Expired ${Math.abs(daysRemaining)} day(s) ago` };
+  if (daysRemaining <= 30) return { tone: "border-amber-200 bg-amber-50 text-black", text: `${daysRemaining} day(s) remaining` };
+  return { tone: "border-emerald-200 bg-emerald-50 text-black", text: `${daysRemaining} day(s) remaining` };
 }
 
 export function InstructorDrawer({
@@ -157,27 +157,27 @@ export function InstructorDrawer({
               <h2 className="text-lg font-semibold text-security-navy-900">
                 {mode === "create" ? "Add Instructor" : instructor?.fullName || "Instructor details"}
               </h2>
-              <p className="text-sm text-base-content/70">
+              <p className="text-sm text-black">
                 Manage accredited instructors, contracts, certificates, compliance, and assignments.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {mode === "view" && canEdit && (
-                <button type="button" className="btn btn-outline btn-sm rounded-xl" onClick={onStartEdit}>
+                <button type="button" className="btn-secondary text-sm py-2 px-4 rounded-xl" onClick={onStartEdit}>
                   Edit
                 </button>
               )}
               {editable && (
                 <>
-                  <button type="button" className="btn btn-ghost btn-sm rounded-xl" onClick={onSaveDraft} disabled={saving}>
+                  <button type="button" className="btn-ghost text-sm py-2 px-3 rounded-security-lg" onClick={onSaveDraft} disabled={saving}>
                     Save Draft
                   </button>
-                  <button type="button" className="btn btn-primary btn-sm rounded-xl" onClick={onSave} disabled={saving}>
+                  <button type="button" className="btn-primary text-sm py-2 px-4 rounded-security-lg" onClick={onSave} disabled={saving}>
                     {saving ? "Saving..." : mode === "create" ? "Create Instructor" : "Save Changes"}
                   </button>
                 </>
               )}
-              <button type="button" className="btn btn-ghost btn-sm rounded-xl" onClick={onClose}>
+              <button type="button" className="btn-ghost text-sm py-2 px-3 rounded-security-lg" onClick={onClose}>
                 Close
               </button>
             </div>
@@ -190,8 +190,8 @@ export function InstructorDrawer({
                   type="button"
                   className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
                     activeTab === tab.key
-                      ? "bg-security-navy-900 text-white"
-                      : "bg-slate-100 text-base-content/80 hover:bg-slate-200"
+                      ? "bg-security-navy-200 text-black border border-security-navy-400"
+                      : "bg-slate-100 text-sm text-black hover:bg-slate-200"
                   }`}
                   onClick={() => onTabChange(tab.key)}
                 >
@@ -214,12 +214,12 @@ export function InstructorDrawer({
                       <InstructorComplianceBadge
                         status={instructor?.complianceStatusComputed || form.complianceStatus || "pending_review"}
                       />
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold text-white ${health.cls}`}>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${health.cls}`}>
                         {health.label}
                       </span>
                     </div>
                   </div>
-                  <div className="grid gap-2 text-xs text-base-content/80">
+                  <div className="grid gap-2 text-xs text-sm text-black">
                     <div>PSIRA No: {instructor?.psiraInstructorNumber || form.psiraInstructorNumber || "—"}</div>
                     <div>Branch: {instructor?.assignedBranch?.name || branchName(form.assignedBranchId, branches) || "—"}</div>
                     <div>Courses: {instructor?.assignedCourses.length || form.assignedCourseIds.length || 0}</div>
@@ -231,27 +231,27 @@ export function InstructorDrawer({
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {canEdit && (
-                    <button type="button" className="btn btn-outline btn-sm rounded-xl" onClick={onStartEdit}>
+                    <button type="button" className="btn-secondary text-sm py-2 px-4 rounded-xl" onClick={onStartEdit}>
                       Edit
                     </button>
                   )}
                   {canEditCompliance && (
-                    <button type="button" className="btn btn-outline btn-sm rounded-xl" onClick={() => onTabChange("documents")}>
+                    <button type="button" className="btn-secondary text-sm py-2 px-4 rounded-xl" onClick={() => onTabChange("documents")}>
                       Upload Document
                     </button>
                   )}
                   {canEdit && (
-                    <button type="button" className="btn btn-outline btn-sm rounded-xl" onClick={onRenewContract}>
+                    <button type="button" className="btn-secondary text-sm py-2 px-4 rounded-xl" onClick={onRenewContract}>
                       Renew Contract
                     </button>
                   )}
                   {canArchive && (
-                    <button type="button" className="btn btn-outline btn-sm rounded-xl" onClick={onSuspend}>
+                    <button type="button" className="btn-secondary text-sm py-2 px-4 rounded-xl" onClick={onSuspend}>
                       Suspend Instructor
                     </button>
                   )}
                   {canArchive && (
-                    <button type="button" className="btn btn-outline btn-sm rounded-xl" onClick={onArchive}>
+                    <button type="button" className="btn-secondary text-sm py-2 px-4 rounded-xl" onClick={onArchive}>
                       Archive Instructor
                     </button>
                   )}
@@ -347,7 +347,7 @@ export function InstructorDrawer({
                 <div className="text-sm font-medium">Compliance Health Indicator</div>
                 <div className="mt-2 flex items-center gap-2">
                   <span className={`h-3 w-3 rounded-full ${health.cls}`} />
-                  <span className="text-sm text-base-content/80">{health.label}</span>
+                  <span className="text-sm text-black">{health.label}</span>
                 </div>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
@@ -500,7 +500,7 @@ export function InstructorDrawer({
               </div>
               <div className="rounded-xl border border-slate-200 p-4">
                 <h4 className="text-sm font-semibold text-security-navy-900">Assigned Courses</h4>
-                <p className="mt-1 text-xs text-base-content/70">
+                <p className="mt-1 text-xs text-sm text-black">
                   Assign courses, remove courses, and rebalance instructor allocation.
                 </p>
                 <div className="mt-3 grid gap-2 md:grid-cols-2">
@@ -548,16 +548,16 @@ export function InstructorDrawer({
           {activeTab === "activity" && (
             <div className="rounded-2xl border border-slate-200 bg-white">
               {activity.length === 0 ? (
-                <div className="p-6 text-sm text-base-content/60">No activity recorded yet.</div>
+                <div className="p-6 text-sm text-black">No activity recorded yet.</div>
               ) : (
                 <ul className="divide-y divide-slate-100">
                   {activity.map((item) => (
                     <li key={item.id} className="flex items-start justify-between gap-3 p-4">
                       <div>
                         <div className="text-sm font-medium text-security-navy-900">{prettyAction(item.action)}</div>
-                        <div className="text-xs text-base-content/70">{item.userName || "System user"}</div>
+                        <div className="text-xs text-sm text-black">{item.userName || "System user"}</div>
                       </div>
-                      <div className="text-xs text-base-content/60">{new Date(item.at).toLocaleString()}</div>
+                      <div className="text-xs text-sm text-black">{new Date(item.at).toLocaleString()}</div>
                     </li>
                   ))}
                 </ul>
@@ -570,17 +570,17 @@ export function InstructorDrawer({
           <div className="border-t border-slate-200 bg-white px-4 py-3 md:px-6">
             <div className="flex flex-wrap items-center justify-end gap-2">
               {canArchive && (
-                <button type="button" className="btn btn-outline btn-sm rounded-xl" onClick={onArchive}>
+                <button type="button" className="btn-secondary text-sm py-2 px-4 rounded-xl" onClick={onArchive}>
                   Archive
                 </button>
               )}
               {canDelete && (
-                <button type="button" className="btn btn-error btn-sm rounded-xl" onClick={() => onDelete(false)}>
+                <button type="button" className="btn-danger btn-sm rounded-xl" onClick={() => onDelete(false)}>
                   Delete
                 </button>
               )}
               {canPermanentDelete && (
-                <button type="button" className="btn btn-error btn-sm rounded-xl" onClick={() => onDelete(true)}>
+                <button type="button" className="btn-danger btn-sm rounded-xl" onClick={() => onDelete(true)}>
                   Permanent Delete
                 </button>
               )}
@@ -611,17 +611,17 @@ function TextField({
 }) {
   return (
     <label className="w-full">
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">
+      <span className="label-text mb-1 block">
         {label} {required ? "*" : ""}
       </span>
       <input
-        className={`input input-bordered w-full rounded-xl ${error ? "input-error" : ""}`}
+        className={`input-modern w-full rounded-xl ${error ? "input-error" : ""}`}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         placeholder={placeholder}
       />
-      {error ? <span className="mt-1 block text-xs text-error">{error}</span> : null}
+      {error ? <span className="mt-1 block text-xs text-red-800">{error}</span> : null}
     </label>
   );
 }
@@ -643,17 +643,17 @@ function DateField({
 }) {
   return (
     <label className="w-full">
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">
+      <span className="label-text mb-1 block">
         {label} {required ? "*" : ""}
       </span>
       <input
         type="date"
-        className={`input input-bordered w-full rounded-xl ${error ? "input-error" : ""}`}
+        className={`input-modern w-full rounded-xl ${error ? "input-error" : ""}`}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
       />
-      {error ? <span className="mt-1 block text-xs text-error">{error}</span> : null}
+      {error ? <span className="mt-1 block text-xs text-red-800">{error}</span> : null}
     </label>
   );
 }
@@ -677,11 +677,11 @@ function SelectField({
 }) {
   return (
     <label className="w-full">
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">
+      <span className="label-text mb-1 block">
         {label} {required ? "*" : ""}
       </span>
       <select
-        className={`select select-bordered w-full rounded-xl ${error ? "select-error" : ""}`}
+        className={`input-modern w-full rounded-security-lg ${error ? "border-red-500 ring-2 ring-red-200" : ""}`}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
@@ -692,7 +692,7 @@ function SelectField({
           </option>
         ))}
       </select>
-      {error ? <span className="mt-1 block text-xs text-error">{error}</span> : null}
+      {error ? <span className="mt-1 block text-xs text-red-800">{error}</span> : null}
     </label>
   );
 }
@@ -712,9 +712,9 @@ function TextAreaField({
 }) {
   return (
     <label className={className}>
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">{label}</span>
+      <span className="label-text mb-1 block">{label}</span>
       <textarea
-        className="textarea textarea-bordered min-h-[90px] w-full rounded-xl"
+        className="input-modern min-h-[90px] w-full rounded-security-lg py-2"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
@@ -725,9 +725,9 @@ function TextAreaField({
 
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-      <div className="text-xs uppercase tracking-wide text-base-content/60">{label}</div>
-      <div className="mt-1 text-sm font-medium text-security-navy-900">{value}</div>
+    <div className="card-wireframe bg-neutral-50 p-3">
+      <div className="label-text">{label}</div>
+      <div className="mt-1 text-sm font-semibold text-black">{value}</div>
     </div>
   );
 }

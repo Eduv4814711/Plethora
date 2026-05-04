@@ -1,8 +1,7 @@
 import type { Config } from "tailwindcss";
 
 /**
- * Plethora - Security Company Design System
- * Professional, trustworthy aesthetic for guard & workforce management
+ * Plethora — primary brand orange on `security-navy` (legacy token name).
  */
 const config: Config = {
   darkMode: "class",
@@ -14,62 +13,91 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["IBM Plex Sans", "system-ui", "sans-serif"],
-        mono: ["IBM Plex Mono", "monospace"],
+        sans: [
+          "Inter",
+          "Notion Sans",
+          "-apple-system",
+          "system-ui",
+          "Segoe UI",
+          "Helvetica",
+          "sans-serif",
+        ],
+        mono: ["IBM Plex Mono", "ui-monospace", "monospace"],
       },
       colors: {
-        // Plethora brand – orange palette
+        /** Primary brand orange (legacy class prefix `security-navy`) */
         "security-navy": {
           DEFAULT: "#FF9800",
-          50: "#FFF3E0",
-          100: "#FFE0B2",
-          200: "#FFCC80",
-          300: "#FFB74D",
-          400: "#FFA726",
-          500: "#FF9800",
-          600: "#FB8C00",
-          700: "#F57C00",
-          800: "#EF6C00",
-          900: "#E65100",
+          50: "#fff8f0",
+          100: "#ffecd9",
+          200: "#ffd9b3",
+          300: "#ffc285",
+          400: "#ffa726",
+          500: "#ff9800",
+          600: "#f57c00",
+          700: "#ef6c00",
+          800: "#e65100",
+          900: "#bf360c",
         },
+        /** Semantic warning — Notion brand-orange */
         "security-amber": {
-          DEFAULT: "#f59e0b",
-          50: "#fffbeb",
-          100: "#fef3c7",
-          200: "#fde68a",
-          300: "#fcd34d",
-          400: "#fbbf24",
-          500: "#f59e0b",
-          600: "#d97706",
-          700: "#b45309",
+          DEFAULT: "#dd5b00",
+          50: "#fff4ed",
+          100: "#ffe6d5",
+          200: "#ffc9a8",
+          300: "#ffa270",
+          400: "#ff7938",
+          500: "#dd5b00",
+          600: "#c44f00",
+          700: "#a04200",
         },
+        /** Success — semantic-green */
         "security-emerald": {
-          DEFAULT: "#FF9800",
-          50: "#FFF3E0",
-          100: "#FFE0B2",
-          200: "#FFCC80",
-          500: "#FF9800",
-          600: "#F57C00",
+          DEFAULT: "#1aae39",
+          50: "#e8f9eb",
+          100: "#c9efd2",
+          200: "#96dfa8",
+          300: "#5ec974",
+          400: "#2fb74d",
+          500: "#1aae39",
+          600: "#159630",
+          700: "#127d29",
         },
-        "wireframe-bg": "#f8fafc",
-        "wireframe-accent": "#f3f4f6",
+        notion: {
+          canvas: "#ffffff",
+          surface: "#f6f5f4",
+          "surface-soft": "#fafaf9",
+          ink: "#000000",
+          charcoal: "#000000",
+          slate: "#000000",
+          steel: "#787671",
+          hairline: "#e5e3df",
+          "hairline-strong": "#c8c4be",
+          navy: "#0a1530",
+          "link-blue": "#0075de",
+        },
+        "wireframe-bg": "#fafaf9",
+        "wireframe-accent": "#f0eeec",
       },
       boxShadow: {
-        "security-card": "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06)",
-        "security-card-hover": "0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.06)",
-        "security-elevated": "0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.06)",
+        "security-card": "rgba(15, 15, 15, 0.04) 0px 1px 2px 0px",
+        "security-card-hover": "rgba(15, 15, 15, 0.08) 0px 4px 12px 0px",
+        "security-elevated": "rgba(15, 15, 15, 0.16) 0px 16px 48px -8px",
+        "mockup-deep": "rgba(15, 15, 15, 0.2) 0px 24px 48px -8px",
       },
       borderWidth: {
         "wireframe-thin": "1px",
         "wireframe-thick": "2px",
       },
       borderRadius: {
-        "security": "0.5rem",
+        /** Notion md — buttons / inputs (8px) */
+        security: "0.5rem",
+        /** Notion lg — cards (12px) */
         "security-lg": "0.75rem",
       },
       animation: {
-        "fade-in": "fadeIn 0.3s ease-out",
-        "slide-up": "slideUp 0.25s ease-out",
+        "fade-in": "fadeIn 0.2s ease-out",
+        "slide-up": "slideUp 0.2s ease-out",
       },
       keyframes: {
         fadeIn: {

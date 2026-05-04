@@ -15,7 +15,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased min-h-screen">
+      <body className="antialiased min-h-screen font-sans bg-[var(--bg-canvas)] text-black">
         <AuthProvider>
           <SettingsProvider>
             {children}

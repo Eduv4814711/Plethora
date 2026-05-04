@@ -39,12 +39,12 @@ function LoginForm() {
 
   return (
     <div className="w-full animate-fade-in">
-      <div className="card-elevated p-10 md:p-12">
-        <div className="text-center mb-8 pb-8 border-b-2 border-neutral-200">
+      <div className="card-elevated p-8 sm:p-10 md:p-12">
+        <div className="text-center mb-8 pb-6 border-b border-[var(--hairline)]">
           <div className="inline-flex items-center justify-center mb-4">
-            <img src="/plethora-logo.svg" alt="Plethora" className="h-[7.5rem] w-auto object-contain" />
+            <img src="/plethora-logo.svg" alt="Plethora" className="h-24 sm:h-28 w-auto object-contain" />
           </div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-security-navy-500 mt-2">
+          <p className="label-text mt-2">
             Workforce & Payroll Management for Security Companies
           </p>
         </div>
@@ -87,7 +87,7 @@ function LoginForm() {
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-security text-security-navy-600 hover:bg-security-navy-50 border border-transparent hover:border-security-navy-300 transition-colors"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-security text-black hover:bg-[var(--bg-nav-hover)] border border-transparent hover:border-[var(--hairline)] transition-colors focus-ring"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? (
@@ -105,11 +105,11 @@ function LoginForm() {
           </div>
 
           {error && (
-            <div className="p-4 text-sm text-security-navy bg-security-amber-50 border-2 border-security-amber-200 rounded-security space-y-2">
-              <p className="font-medium">{error}</p>
+            <div className="notice-error flex-col gap-2">
+              <p className="font-semibold">{error}</p>
               {(error === "Login failed" || error.includes("connect") || error.includes("server") || error.includes("404")) && (
-                <p className="text-xs mt-2 text-security-navy-600">
-                  Run <code className="bg-security-navy-100 px-1.5 py-0.5 rounded text-security-navy-700 font-mono">npm run dev:all</code> (or <code className="bg-security-navy-100 px-1.5 py-0.5 rounded text-security-navy-700 font-mono">npm run dev:api</code> in a separate terminal). Web on port 3000, API on 3001. First-time: <code className="bg-security-navy-100 px-1.5 py-0.5 rounded text-security-navy-700 font-mono">npm run db:push</code> and <code className="bg-security-navy-100 px-1.5 py-0.5 rounded text-security-navy-700 font-mono">npm run db:seed</code>.
+                <p className="text-xs leading-relaxed">
+                  Run <code className="code-chip">npm run dev:all</code> (or <code className="code-chip">npm run dev:api</code> in a separate terminal). Web on port 3000, API on 3001. First-time: <code className="code-chip">npm run db:push</code> and <code className="code-chip">npm run db:seed</code>.
                 </p>
               )}
             </div>
@@ -118,20 +118,20 @@ function LoginForm() {
           <button
             type="submit"
             disabled={submitting}
-            className="btn-primary w-full py-3"
+            className="btn-primary w-full py-3 text-base"
           >
             {submitting ? "Signing in..." : "Sign in"}
           </button>
 
-          <p className="text-center text-sm text-security-navy-600 mt-6">
+          <p className="text-center text-sm text-black mt-6">
             New to Plethora?{" "}
-            <Link href="/register" className="font-semibold text-security-navy hover:underline">
+            <Link href="/register" className="link-inline">
               Create a company
             </Link>
           </p>
         </form>
       </div>
-      <p className="text-center text-xs font-medium uppercase tracking-widest text-security-navy-400 mt-6">
+      <p className="text-center label-text mt-6">
         Security Workforce Management
       </p>
     </div>

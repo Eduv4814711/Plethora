@@ -151,20 +151,20 @@ export default function MigratePage() {
     (preview?.sites.errors.length ?? 0);
 
   return (
-    <div>
-      <div className="mb-6 flex items-center gap-4">
+    <div className="module-shell max-w-4xl">
+      <div className="mb-2">
         <Link
           href="/settings"
-          className="text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
+          className="text-sm font-semibold text-security-navy-800 hover:underline min-h-11 inline-flex items-center"
         >
           ← Settings
         </Link>
       </div>
 
-      <h1 className="text-2xl font-bold text-neutral-800 dark:text-white mb-2">
+      <h1 className="page-title mb-2">
         Bulk Import / Export
       </h1>
-      <p className="text-neutral-600 dark:text-neutral-400 mb-6">
+      <p className="text-sm text-black mb-6 max-w-3xl">
         {isFullAdminUser
           ? "Export team and sites to CSV, or upload CSV files to create multiple companies with team and sites. Download templates, validate, then import."
           : "Export team and sites to CSV, or upload CSV files to import team and sites into your company. Download templates, validate, then import."}

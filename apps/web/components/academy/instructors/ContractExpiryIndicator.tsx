@@ -30,7 +30,7 @@ export function ContractExpiryIndicator({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs text-base-content/70">{formatDate(contractEndDate)}</span>
+      <span className="text-xs text-sm text-black">{formatDate(contractEndDate)}</span>
       <span className={`inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${tone(daysRemaining)}`}>
         {label(daysRemaining)}
       </span>

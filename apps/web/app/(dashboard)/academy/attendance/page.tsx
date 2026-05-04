@@ -99,48 +99,48 @@ export default function AcademyAttendancePage() {
   }, [rows]);
 
   return (
-    <div className="w-full min-w-0 space-y-6">
+    <div className="module-shell">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-security-navy-900">Attendance</h1>
-        <p className="mt-1 text-sm text-base-content/70">Track session attendance and maintain compliance thresholds.</p>
+        <h1 className="page-title">Attendance</h1>
+        <p className="mt-1 text-sm text-black">Track session attendance and maintain compliance thresholds.</p>
       </div>
 
       {!canManage && (
-        <div className="rounded-lg border border-base-300 bg-base-200/50 px-3 py-2 text-sm">
+        <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm">
           Read-only: only admins can create sessions, mark attendance, or delete sessions.
         </div>
       )}
 
-      <div className="rounded-2xl border border-base-200 bg-base-100 p-4 shadow-sm">
-        <p className="text-sm text-base-content/70">Overall attendance rate</p>
+      <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+        <p className="text-sm text-black">Overall attendance rate</p>
         <p className="mt-1 text-2xl font-semibold text-security-navy-900">{kpi.toFixed(1)}%</p>
       </div>
 
-      {error && <div className="rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>}
+      {error && <div className="rounded-lg border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-base-200 bg-base-100 p-5 shadow-sm">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-base-content/60">Create session</h2>
+        <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-sm text-black">Create session</h2>
           <form onSubmit={create} className="mt-3 flex items-end gap-2">
             <label>
-              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">Session date</span>
+              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-sm text-black">Session date</span>
               <input
-                className="input input-bordered rounded-xl"
+                className="input-modern"
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 disabled={!canManage || saving}
               />
             </label>
-            <button className="btn btn-primary rounded-xl" disabled={!canManage || saving}>Create</button>
+            <button className="btn-primary rounded-security-lg" disabled={!canManage || saving}>Create</button>
           </form>
         </div>
 
-        <div className="rounded-2xl border border-base-200 bg-base-100 p-5 shadow-sm">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-base-content/60">Mark attendance</h2>
+        <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-sm text-black">Mark attendance</h2>
           <form onSubmit={mark} className="mt-3 grid gap-2 md:grid-cols-2">
             <select
-              className="select select-bordered rounded-xl"
+              className="input-modern rounded-security-lg"
               value={markSessionId}
               onChange={(e) => setMarkSessionId(e.target.value)}
               disabled={!canManage || saving}
@@ -153,7 +153,7 @@ export default function AcademyAttendancePage() {
               ))}
             </select>
             <select
-              className="select select-bordered rounded-xl"
+              className="input-modern rounded-security-lg"
               value={markEnrolmentId}
               onChange={(e) => setMarkEnrolmentId(e.target.value)}
               disabled={!canManage || saving}
@@ -165,28 +165,28 @@ export default function AcademyAttendancePage() {
                 </option>
               ))}
             </select>
-            <select className="select select-bordered rounded-xl" value={status} onChange={(e) => setStatus(e.target.value)}>
+            <select className="input-modern rounded-security-lg" value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="present">Present</option><option value="absent">Absent</option><option value="late">Late</option><option value="excused">Excused</option>
             </select>
-            <button className="btn btn-primary rounded-xl" disabled={!canManage || saving}>Mark</button>
+            <button className="btn-primary rounded-security-lg" disabled={!canManage || saving}>Mark</button>
           </form>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-base-200 bg-base-100 shadow-sm">
-        <div className="border-b border-base-200/80 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">All sessions</h2></div>
+      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+        <div className="border-b border-neutral-200 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">All sessions</h2></div>
         <div className="overflow-x-auto">
-          <table className="table table-sm">
-            <thead><tr className="text-[11px] uppercase tracking-wide text-base-content/60"><th>Date</th><th>Records</th><th className="text-right">Action</th></tr></thead>
+          <table className="table-module">
+            <thead><tr className="text-[11px] uppercase tracking-wide text-sm text-black"><th>Date</th><th>Records</th><th className="text-right">Action</th></tr></thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={3} className="py-8 text-center text-sm text-base-content/60">Loading sessions...</td>
+                  <td colSpan={3} className="py-8 text-center text-sm text-black">Loading sessions...</td>
                 </tr>
-              ) : rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{String(r.sessionDate).slice(0,10)}</td><td>{r.records?.length ?? 0}</td><td className="text-right">{canManage && <button className="btn btn-xs btn-error" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}</td></tr>)}
+              ) : rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{String(r.sessionDate).slice(0,10)}</td><td>{r.records?.length ?? 0}</td><td className="text-right">{canManage && <button className="btn-danger" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}</td></tr>)}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="py-8 text-center text-sm text-base-content/60">No sessions yet.</td>
+                  <td colSpan={3} className="py-8 text-center text-sm text-black">No sessions yet.</td>
                 </tr>
               )}
             </tbody>

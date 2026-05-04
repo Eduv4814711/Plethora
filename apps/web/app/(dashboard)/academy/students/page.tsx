@@ -23,8 +23,8 @@ function AdminFeeBadge({ status }: { status?: string }) {
       ? "badge-success"
       : s === "waived"
         ? "badge-info"
-        : "badge-ghost border border-base-300";
-  return <span className={`badge badge-sm ${cls}`}>{s}</span>;
+        : "badge-neutral";
+  return <span className={`badge-neutral ${cls}`}>{s}</span>;
 }
 
 export default function AcademyStudentsPage() {
@@ -79,29 +79,29 @@ export default function AcademyStudentsPage() {
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="module-shell">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Link href="/academy" className="text-sm text-primary hover:underline lg:hidden">
+          <Link href="/academy" className="text-sm font-semibold text-security-navy-800 hover:underline lg:hidden">
             ← Academy
           </Link>
-          <h1 className="mt-1 text-2xl font-semibold">Students</h1>
-          <p className="text-sm text-base-content/70">{total} total</p>
+          <h1 className="page-title mt-1">Students</h1>
+          <p className="text-sm text-black">{total} total</p>
         </div>
-        <Link href="/academy/intake" className="btn btn-primary btn-sm">
+        <Link href="/academy/intake" className="btn-primary text-sm py-2 px-4">
           New intake
         </Link>
       </div>
 
       {error && (
-        <div className="rounded-md border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>
+        <div className="rounded-md border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
       )}
 
-      <form onSubmit={create} className="flex flex-wrap items-end gap-2 rounded-lg border border-base-300 p-4">
+      <form onSubmit={create} className="flex flex-wrap items-end gap-2 rounded-lg border border-neutral-200 p-4">
         <div>
           <label className="label py-0 text-xs">First name</label>
           <input
-            className="input input-bordered input-sm"
+            className="input-compact"
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
           />
@@ -109,12 +109,12 @@ export default function AcademyStudentsPage() {
         <div>
           <label className="label py-0 text-xs">Last name</label>
           <input
-            className="input input-bordered input-sm"
+            className="input-compact"
             value={lastName}
             onChange={(e) => setLastName(e.target.value)}
           />
         </div>
-        <button type="submit" className="btn btn-primary btn-sm" disabled={!firstName.trim() || !lastName.trim()}>
+        <button type="submit" className="btn-primary text-sm py-2 px-4" disabled={!firstName.trim() || !lastName.trim()}>
           Create student
         </button>
       </form>
@@ -122,7 +122,7 @@ export default function AcademyStudentsPage() {
       <div>
         <label className="label py-0 text-xs">Search (min 2 characters)</label>
         <input
-          className="input input-bordered input-sm max-w-md"
+          className="input-compact max-w-md"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Name, number, ID, email…"
@@ -130,12 +130,12 @@ export default function AcademyStudentsPage() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-base-content/60">Loading…</p>
+        <p className="text-sm text-black">Loading…</p>
       ) : students.length === 0 ? (
-        <p className="text-sm text-base-content/60">No students match.</p>
+        <p className="text-sm text-black">No students match.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-base-300">
-          <table className="table table-sm">
+        <div className="overflow-x-auto rounded-lg border border-neutral-200">
+          <table className="table-module">
             <thead>
               <tr>
                 <th>Number</th>
@@ -150,7 +150,7 @@ export default function AcademyStudentsPage() {
               {students.map((s) => (
                 <tr key={s.id}>
                   <td>
-                    <Link href={`/academy/students/${s.id}`} className="link link-primary font-mono text-xs">
+                    <Link href={`/academy/students/${s.id}`} className="font-mono font-semibold text-security-navy-800 underline hover:no-underline text-xs">
                       {s.studentNumber}
                     </Link>
                   </td>

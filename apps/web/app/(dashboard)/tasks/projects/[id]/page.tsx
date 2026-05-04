@@ -75,23 +75,22 @@ export default function TaskProjectDetailPage() {
   }
 
   return (
-    <div className="animate-fade-in max-w-4xl mx-auto">
-      <div className="mb-4">
-        <Link href="/tasks/projects" className="text-sm text-gray-600 hover:text-black">
+    <div className="module-shell max-w-4xl">
+      <div className="flex flex-col gap-4">
+        <Link href="/tasks/projects" className="text-sm font-semibold text-security-navy-800 hover:underline min-h-11 inline-flex items-center w-fit">
           ← Back to Projects
         </Link>
-      </div>
-
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-black">{project.name}</h1>
-          {project.description && (
-            <p className="text-gray-600 mt-1">{project.description}</p>
-          )}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="page-title">{project.name}</h1>
+            {project.description && (
+              <p className="mt-2 max-w-2xl text-sm text-black">{project.description}</p>
+            )}
+          </div>
+          <button type="button" onClick={() => setShowForm(true)} className="btn-primary min-h-11 w-full sm:w-auto shrink-0">
+            Add Task
+          </button>
         </div>
-        <button onClick={() => setShowForm(true)} className="btn-primary">
-          Add Task
-        </button>
       </div>
 
       {error && (
@@ -101,8 +100,8 @@ export default function TaskProjectDetailPage() {
       )}
 
       {showForm && (
-        <div className="mb-6 bg-gray-100 border border-gray-300 rounded-lg p-4">
-          <form onSubmit={handleCreateTask} className="flex gap-2">
+        <div className="module-panel mb-6">
+          <form onSubmit={handleCreateTask} className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
               type="text"
               value={formTitle}
@@ -130,16 +129,16 @@ export default function TaskProjectDetailPage() {
           <Link
             key={task.id}
             href={`/tasks/${task.id}`}
-            className="block bg-gray-100 border border-gray-300 rounded-lg p-4 hover:border-gray-400 transition-colors"
+            className="block card-dashboard p-4 transition-shadow hover:shadow-security-card-hover"
           >
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-black">{task.title}</h3>
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-black font-medium">
                 {task.status === "done" ? "Done" : task.status === "in_progress" ? "In Progress" : "To Do"}
               </span>
             </div>
             {task.dueDate && (
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-black/80 mt-1">
                 Due {new Date(task.dueDate).toLocaleDateString()}
               </p>
             )}
@@ -148,7 +147,7 @@ export default function TaskProjectDetailPage() {
       </div>
 
       {project.tasks.length === 0 && !showForm && (
-        <div className="text-center py-12 text-gray-500">
+        <div className="py-12 text-center text-sm text-black border-2 border-dashed border-neutral-200 rounded-security-lg bg-neutral-50/80">
           No tasks in this project yet.
         </div>
       )}

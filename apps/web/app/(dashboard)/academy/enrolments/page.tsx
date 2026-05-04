@@ -104,30 +104,30 @@ export default function AcademyEnrolmentsPage() {
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="module-shell">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Link href="/academy" className="text-sm text-primary hover:underline lg:hidden">
+          <Link href="/academy" className="text-sm font-semibold text-security-navy-800 hover:underline lg:hidden">
             ← Academy
           </Link>
-          <h1 className="mt-1 text-2xl font-semibold">Enrolments</h1>
-          <p className="mt-1 text-sm text-base-content/70">
+          <h1 className="page-title mt-1">Enrolments</h1>
+          <p className="mt-1 text-sm text-black">
             Course runs below are limited to intakes that still accept enrolments and have capacity.
           </p>
         </div>
-        <Link href="/academy/intake" className="btn btn-outline btn-sm">
+        <Link href="/academy/intake" className="btn-secondary text-sm py-2 px-4">
           Guided intake
         </Link>
       </div>
 
       {error && (
-        <div className="rounded-md border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>
+        <div className="rounded-md border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
       )}
 
-      <form onSubmit={create} className="grid gap-3 rounded-lg border border-base-300 p-4 sm:grid-cols-2 lg:grid-cols-4">
+      <form onSubmit={create} className="grid gap-3 rounded-lg border border-neutral-200 p-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <label className="label py-0 text-xs">Student</label>
-          <select className="select select-bordered select-sm w-full" value={studentId} onChange={(e) => setStudentId(e.target.value)}>
+          <select className="input-compact min-h-10 w-full" value={studentId} onChange={(e) => setStudentId(e.target.value)}>
             {students.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.studentNumber} — {s.firstName} {s.lastName}
@@ -138,7 +138,7 @@ export default function AcademyEnrolmentsPage() {
         </div>
         <div className="sm:col-span-2">
           <label className="label py-0 text-xs">Course run</label>
-          <select className="select select-bordered select-sm w-full" value={courseRunId} onChange={(e) => setCourseRunId(e.target.value)}>
+          <select className="input-compact min-h-10 w-full" value={courseRunId} onChange={(e) => setCourseRunId(e.target.value)}>
             {runs.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.runCode} — {r.course.code} {r.course.title} ({r.status}
@@ -149,7 +149,7 @@ export default function AcademyEnrolmentsPage() {
         </div>
         <div>
           <label className="label py-0 text-xs">Fee plan (optional)</label>
-          <select className="select select-bordered select-sm w-full" value={feePlanId} onChange={(e) => setFeePlanId(e.target.value)}>
+          <select className="input-compact min-h-10 w-full" value={feePlanId} onChange={(e) => setFeePlanId(e.target.value)}>
             <option value="">—</option>
             {feePlans.map((fp) => (
               <option key={fp.id} value={fp.id}>
@@ -174,7 +174,7 @@ export default function AcademyEnrolmentsPage() {
           ) : null}
           <button
             type="submit"
-            className="btn btn-primary btn-sm w-fit"
+            className="btn-primary text-sm py-2 px-4 w-fit"
             disabled={!students.length || !runs.length || !adminFeeOk}
           >
             Enrol
@@ -190,12 +190,12 @@ export default function AcademyEnrolmentsPage() {
       ) : null}
 
       {loading ? (
-        <p className="text-sm text-base-content/60">Loading…</p>
+        <p className="text-sm text-black">Loading…</p>
       ) : enrolments.length === 0 ? (
-        <p className="text-sm text-base-content/60">No enrolments yet.</p>
+        <p className="text-sm text-black">No enrolments yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-base-300">
-          <table className="table table-sm">
+        <div className="overflow-x-auto rounded-lg border border-neutral-200">
+          <table className="table-module">
             <thead>
               <tr>
                 <th>Student</th>
@@ -211,17 +211,17 @@ export default function AcademyEnrolmentsPage() {
                     <Link href={`/academy/students/${en.student.id}`} className="link">
                       {en.student.firstName} {en.student.lastName}
                     </Link>
-                    <div className="font-mono text-xs text-base-content/60">{en.student.studentNumber}</div>
+                    <div className="font-mono text-xs text-sm text-black">{en.student.studentNumber}</div>
                   </td>
                   <td>
                     <span className="font-mono text-xs">{en.courseRun.runCode}</span>{" "}
-                    <span className="text-xs text-base-content/70">
+                    <span className="text-xs text-sm text-black">
                       {en.courseRun.course.code} — {en.courseRun.course.title}
                     </span>
                   </td>
                   <td>{en.financialStatus}</td>
                   <td>
-                    <button type="button" className="btn btn-ghost btn-xs text-error" onClick={() => remove(en.id)}>
+                    <button type="button" className="btn-ghost text-xs py-1 px-2 min-h-8 text-red-800" onClick={() => remove(en.id)}>
                       Remove
                     </button>
                   </td>

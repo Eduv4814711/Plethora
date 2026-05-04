@@ -130,10 +130,10 @@ export default function WhatsAppPage() {
   };
 
   return (
-    <div className="animate-fade-in max-w-5xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-black tracking-tight">WhatsApp</h1>
-        <p className="text-sm text-neutral-500 mt-0.5">
+    <div className="module-shell max-w-5xl">
+      <div>
+        <h1 className="page-title">WhatsApp</h1>
+        <p className="mt-2 max-w-2xl text-sm text-black">
           Message team members and view conversation history
         </p>
       </div>
@@ -143,16 +143,16 @@ export default function WhatsAppPage() {
         <div className="md:col-span-1">
           {loadingContacts ? (
             <div className="card-dashboard p-5 animate-pulse">
-              <div className="h-6 bg-neutral-200 rounded w-24 mb-4" />
+              <div className="h-6 bg-[var(--bg-nav-hover)] rounded w-24 mb-4" />
               <div className="space-y-2">
                 {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="h-14 bg-neutral-100 rounded" />
+                  <div key={i} className="h-14 bg-[var(--bg-nav-hover)] rounded-security" />
                 ))}
               </div>
             </div>
           ) : (
-            <div className="card-dashboard p-5 flex flex-col border-neutral-200 md:h-[calc(100vh-13rem)] overflow-hidden">
-              <h2 className="font-semibold text-sm text-black uppercase tracking-wider mb-3">Contacts</h2>
+            <div className="card-dashboard p-5 flex flex-col md:h-[calc(100vh-13rem)] overflow-hidden">
+              <h2 className="section-title mb-3">Contacts</h2>
               {contacts.length > 0 ? (
                 <div className="space-y-1 flex-1 min-h-0 overflow-y-auto pr-1">
                   {contacts.map((c) => (
@@ -160,18 +160,18 @@ export default function WhatsAppPage() {
                       key={c.id}
                       type="button"
                       onClick={() => setSelectedContact(c)}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-security text-left transition-colors ${
-                        selectedContact?.id === c.id ? "bg-neutral-100" : "hover:bg-neutral-50"
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-security text-left transition-colors focus-ring ${
+                        selectedContact?.id === c.id ? "bg-security-navy-50 border border-security-navy-300" : "hover:bg-[var(--bg-nav-hover)] border border-transparent"
                       }`}
                     >
-                      <div className="w-9 h-9 rounded-full bg-neutral-200 flex items-center justify-center text-black font-semibold text-sm shrink-0">
+                      <div className="w-9 h-9 rounded-full bg-security-navy-100 border border-security-navy-300 flex items-center justify-center text-black font-bold text-sm shrink-0">
                         {c.firstName?.charAt(0)}{c.lastName?.charAt(0)}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-black truncate">
+                        <p className="text-sm font-semibold text-black truncate">
                           {c.firstName} {c.lastName}
                         </p>
-                        <p className="text-xs text-neutral-500 truncate">
+                        <p className="text-xs text-black truncate">
                           {c.phone ? `+${c.phone}` : ""}
                         </p>
                       </div>
@@ -179,13 +179,15 @@ export default function WhatsAppPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-neutral-500 py-4 text-center">
-                  No team members with WhatsApp numbers. Add phone numbers in Team.
-                </p>
+                <div className="empty-state mt-2">
+                  <p className="empty-state-body">
+                    No team members with WhatsApp numbers. Add phone numbers in Team.
+                  </p>
+                </div>
               )}
               <Link
                 href="/employees"
-                className="mt-3 text-sm text-center text-neutral-600 hover:text-black font-medium"
+                className="link-inline mt-3 text-sm text-center font-semibold"
               >
                 Manage Team →
               </Link>
@@ -194,25 +196,25 @@ export default function WhatsAppPage() {
         </div>
 
         {/* Conversation area */}
-        <div className="md:col-span-2 card-dashboard border-neutral-200 flex flex-col min-h-[400px] md:h-[calc(100vh-13rem)] overflow-hidden">
+        <div className="md:col-span-2 card-dashboard flex flex-col min-h-[400px] md:h-[calc(100vh-13rem)] overflow-hidden">
           {selectedContact ? (
             <>
-              <div className="p-4 border-b border-neutral-200 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-neutral-200 flex items-center justify-center text-black font-semibold">
+              <div className="p-4 border-b border-[var(--hairline)] flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-security-navy-100 border border-security-navy-300 flex items-center justify-center text-black font-bold">
                   {selectedContact.firstName?.charAt(0)}{selectedContact.lastName?.charAt(0)}
                 </div>
                 <div>
                   <p className="font-semibold text-black">
                     {selectedContact.firstName} {selectedContact.lastName}
                   </p>
-                  <p className="text-xs text-neutral-500">
+                  <p className="text-xs text-black">
                     {selectedContact.phone ? `+${selectedContact.phone}` : ""}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSelectedContact(null)}
-                  className="ml-auto text-sm text-neutral-500 hover:text-black"
+                  className="ml-auto btn-ghost text-sm min-h-9"
                 >
                   Close
                 </button>
@@ -224,18 +226,20 @@ export default function WhatsAppPage() {
                 isLoading={loadingMessages}
               />
 
-              <div className="p-4 border-t border-neutral-200">
-                {error && <p className="text-xs text-red-600 mb-2">{error}</p>}
+              <div className="p-4 border-t border-[var(--hairline)]">
+                {error && (
+                  <div className="notice-error mb-2 text-xs py-2">{error}</div>
+                )}
                 {requiresTemplate ? (
                   <div className="space-y-2">
-                    <p className="text-sm text-neutral-600">
+                    <p className="text-sm text-black">
                       Free-form messages require the contact to have messaged recently. Send a template instead:
                     </p>
                     <div className="flex gap-2">
                       <select
                         value={selectedTemplate}
                         onChange={(e) => setSelectedTemplate(e.target.value)}
-                        className="flex-1 px-3 py-2 border border-neutral-300 rounded-security text-sm"
+                        className="input-compact flex-1"
                       >
                         <option value="">Select template</option>
                         {templates.map((t) => (
@@ -248,7 +252,7 @@ export default function WhatsAppPage() {
                         type="button"
                         onClick={handleSendTemplate}
                         disabled={!selectedTemplate || sending}
-                        className="px-4 py-2 bg-security-navy-700 text-white rounded-security text-sm font-medium disabled:opacity-50 hover:bg-security-navy-800 transition-colors"
+                        className="btn-primary text-sm min-h-10 py-2"
                       >
                         {sending ? "Sending..." : "Send Template"}
                       </button>
@@ -256,7 +260,7 @@ export default function WhatsAppPage() {
                     <button
                       type="button"
                       onClick={() => setRequiresTemplate(false)}
-                      className="text-xs text-neutral-500 hover:text-black"
+                      className="link-inline text-xs"
                     >
                       Try free-form again
                     </button>
@@ -268,14 +272,14 @@ export default function WhatsAppPage() {
                       onChange={(e) => setMessageInput(e.target.value)}
                       placeholder="Type your message..."
                       rows={2}
-                      className="flex-1 px-3 py-2 text-sm border border-neutral-300 rounded-security resize-none focus:outline-none focus:ring-2 focus:ring-black"
+                      className="flex-1 px-3 py-2 text-sm border border-[var(--hairline-strong)] rounded-security resize-none focus:outline-none focus:border-security-navy-600 focus:ring-2 focus:ring-security-navy-200 bg-white"
                       disabled={sending}
                     />
                     <button
                       type="button"
                       onClick={handleSendMessage}
                       disabled={!messageInput.trim() || sending}
-                      className="px-4 py-2 bg-security-navy-700 text-white rounded-security text-sm font-medium self-end disabled:opacity-50 hover:bg-security-navy-800 transition-colors"
+                      className="btn-primary text-sm self-end"
                     >
                       {sending ? "Sending..." : "Send"}
                     </button>
@@ -284,12 +288,13 @@ export default function WhatsAppPage() {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-neutral-500 p-8">
+            <div className="flex-1 flex flex-col items-center justify-center text-black p-8 text-center">
               <svg
-                className="w-16 h-16 mb-4 text-neutral-300"
+                className="w-16 h-16 mb-4 text-security-navy-300"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
+                aria-hidden
               >
                 <path
                   strokeLinecap="round"
@@ -298,7 +303,7 @@ export default function WhatsAppPage() {
                   d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
                 />
               </svg>
-              <p className="text-sm font-medium">Select a contact to view conversation</p>
+              <p className="text-sm font-semibold">Select a contact to view conversation</p>
               <p className="text-xs mt-1">Click a contact on the left to start messaging</p>
             </div>
           )}

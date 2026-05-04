@@ -37,7 +37,7 @@ export function InstructorFiltersToolbar({
         <div className="overflow-x-auto">
           <div className="flex min-w-[980px] items-center gap-2 xl:min-w-0">
             <input
-              className="input input-bordered input-sm w-64 min-w-[16rem] rounded-lg"
+              className="input-compact w-64 min-w-[16rem] rounded-lg"
               placeholder="Search name, PSIRA, ID, email, phone"
               value={filters.search}
               onChange={(e) => onChange({ search: e.target.value })}
@@ -93,7 +93,7 @@ export function InstructorFiltersToolbar({
               ]}
             />
             <CompactSelect value={filters.sort} onChange={(value) => onChange({ sort: value })} options={SORT_OPTIONS} />
-            <button type="button" className="btn btn-ghost btn-sm rounded-lg" onClick={onReset}>
+            <button type="button" className="btn-ghost text-sm py-2 px-3 rounded-security-lg" onClick={onReset}>
               Reset
             </button>
           </div>
@@ -106,11 +106,11 @@ export function InstructorFiltersToolbar({
     <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className={`grid gap-3 ${compact ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-[1.3fr_repeat(6,minmax(0,1fr))_auto]"}`}>
         <label className="w-full">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">
+          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-sm text-black">
             Search
           </span>
           <input
-            className="input input-bordered w-full rounded-xl"
+            className="input-modern w-full rounded-xl"
             placeholder="Name, PSIRA no, ID no, email, phone"
             value={filters.search}
             onChange={(e) => onChange({ search: e.target.value })}
@@ -185,7 +185,7 @@ export function InstructorFiltersToolbar({
         />
 
         <div className="flex items-end">
-          <button type="button" className="btn btn-outline w-full rounded-xl" onClick={onReset}>
+          <button type="button" className="btn-secondary w-full rounded-xl" onClick={onReset}>
             Reset Filters
           </button>
         </div>
@@ -204,7 +204,7 @@ function CompactSelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <select className="select select-bordered select-sm min-w-36 rounded-lg" value={value} onChange={(e) => onChange(e.target.value)}>
+    <select className="input-compact min-h-10 min-w-36 rounded-lg" value={value} onChange={(e) => onChange(e.target.value)}>
       {options.map((option) => (
         <option key={option.value || `opt-${option.label}`} value={option.value}>
           {option.label}
@@ -227,8 +227,8 @@ function SelectField({
 }) {
   return (
     <label className="w-full">
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">{label}</span>
-      <select className="select select-bordered w-full rounded-xl" value={value} onChange={(e) => onChange(e.target.value)}>
+      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-sm text-black">{label}</span>
+      <select className="input-modern w-full rounded-security-lg" value={value} onChange={(e) => onChange(e.target.value)}>
         {options.map((option) => (
           <option key={option.value || `opt-${option.label}`} value={option.value}>
             {option.label}

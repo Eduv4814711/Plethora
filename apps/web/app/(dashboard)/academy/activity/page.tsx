@@ -40,23 +40,23 @@ export default function AcademyActivityPage() {
   }, [token]);
 
   return (
-    <div className="w-full min-w-0 space-y-4">
+    <div className="module-shell">
       <div>
-        <Link href="/academy" className="text-sm text-primary hover:underline lg:hidden">
+        <Link href="/academy" className="text-sm font-semibold text-security-navy-800 hover:underline lg:hidden">
           ← Academy
         </Link>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-security-navy-900">Activity</h1>
-        <p className="text-sm text-base-content/70">Recent changes across students, enrolments, invoices, and payments.</p>
+        <h1 className="page-title mt-1">Activity</h1>
+        <p className="text-sm text-black">Recent changes across students, enrolments, invoices, and payments.</p>
       </div>
 
       {error && (
-        <div className="rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-sm text-error" role="alert">
+        <div className="rounded-lg border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
           {error}
         </div>
       )}
 
       <div className="flex flex-wrap gap-2">
-        <button type="button" className="btn btn-ghost btn-sm" onClick={load} disabled={loading}>
+        <button type="button" className="btn-ghost text-sm py-2 px-3" onClick={load} disabled={loading}>
           Refresh
         </button>
       </div>
@@ -64,11 +64,11 @@ export default function AcademyActivityPage() {
       {loading && items.length === 0 ? (
         <ul className="space-y-2">
           {Array.from({ length: 8 }).map((_, i) => (
-            <li key={i} className="h-16 animate-pulse rounded-xl bg-base-200/60" />
+            <li key={i} className="h-16 animate-pulse rounded-xl bg-neutral-100/60" />
           ))}
         </ul>
       ) : items.length === 0 ? (
-        <p className="text-sm text-base-content/50">No activity yet.</p>
+        <p className="text-sm text-xs text-black">No activity yet.</p>
       ) : (
         <ul className="max-w-3xl space-y-2">
           {items.map((a) => (

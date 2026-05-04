@@ -69,15 +69,15 @@ export function InstructorTable({
 
   return (
     <div className="space-y-3">
-      <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:block">
-        <div className="overflow-x-auto">
-          <table className="table table-sm">
+      <div className="hidden lg:block">
+        <div className="table-scroll">
+          <table className="table-module">
             <thead>
-              <tr className="text-[11px] uppercase tracking-wide text-base-content/60">
+              <tr className="text-[11px] uppercase tracking-wide text-sm text-black">
                 <th className="w-8">
                   <input
                     type="checkbox"
-                    className="checkbox checkbox-sm rounded-md"
+                    className="h-4 w-4 shrink-0 rounded border-2 border-neutral-300 text-security-navy-600 focus:ring-2 focus:ring-security-navy focus:ring-offset-0"
                     checked={allSelected}
                     onChange={(e) => onToggleSelectAll(e.target.checked)}
                   />
@@ -99,13 +99,13 @@ export function InstructorTable({
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={13} className="py-10 text-center text-sm text-base-content/60">
+                  <td colSpan={13} className="py-10 text-center text-sm text-black">
                     Loading instructors...
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="py-10 text-center text-sm text-base-content/60">
+                  <td colSpan={13} className="py-10 text-center text-sm text-black">
                     No instructors match the selected filters.
                   </td>
                 </tr>
@@ -115,7 +115,7 @@ export function InstructorTable({
                     <td onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
-                        className="checkbox checkbox-sm rounded-md"
+                        className="h-4 w-4 shrink-0 rounded border-2 border-neutral-300 text-security-navy-600 focus:ring-2 focus:ring-security-navy focus:ring-offset-0"
                         checked={selectedIds.has(row.id)}
                         onChange={(e) => onToggleSelect(row.id, e.target.checked)}
                       />
@@ -127,7 +127,7 @@ export function InstructorTable({
                         </div>
                         <div>
                           <div className="font-medium text-security-navy-900">{row.fullName}</div>
-                          <div className="text-xs text-base-content/70">
+                          <div className="text-xs text-sm text-black">
                             {row.email || "No email"} · {row.phone || "No phone"}
                           </div>
                         </div>
@@ -138,12 +138,12 @@ export function InstructorTable({
                     <td>
                       <div className="text-xs">
                         <div>{row.qualification || "—"}</div>
-                        <div className="text-base-content/60">{row.instructorGrade || "—"}</div>
+                        <div className="text-sm text-black">{row.instructorGrade || "—"}</div>
                       </div>
                     </td>
                     <td>{row.assignedBranch?.name || "—"}</td>
                     <td>
-                      <div className="max-w-[220px] text-xs text-base-content/80">
+                      <div className="max-w-[220px] text-xs text-sm text-black">
                         {row.assignedCourses.length
                           ? row.assignedCourses
                               .slice(0, 2)
@@ -172,12 +172,12 @@ export function InstructorTable({
                     <td>
                       <InstructorStatusBadge status={row.archivedAt ? "archived" : row.status} />
                     </td>
-                    <td className="text-xs text-base-content/70">
+                    <td className="text-xs text-sm text-black">
                       {new Date(row.updatedAt).toLocaleDateString()}
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <select
-                        className="select select-bordered select-xs w-40 rounded-lg"
+                        className="input-compact text-xs min-h-8 w-40 rounded-security-lg"
                         value=""
                         onChange={(e) => {
                           const value = e.target.value as RowAction;
@@ -204,43 +204,43 @@ export function InstructorTable({
 
       <div className="space-y-3 lg:hidden">
         {loading ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-base-content/70 shadow-sm">
+          <div className="card-dashboard p-6 text-sm text-black">
             Loading instructors...
           </div>
         ) : rows.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-base-content/70 shadow-sm">
+          <div className="card-dashboard p-6 text-sm text-black">
             No instructors match the selected filters.
           </div>
         ) : (
           rows.map((row) => (
             <div
               key={row.id}
-              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+              className="card-dashboard p-4"
               onClick={() => onRowClick(row.id)}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    className="checkbox checkbox-sm rounded-md"
+                    className="h-4 w-4 shrink-0 rounded border-2 border-neutral-300 text-security-navy-600 focus:ring-2 focus:ring-security-navy focus:ring-offset-0"
                     checked={selectedIds.has(row.id)}
                     onClick={(e) => e.stopPropagation()}
                     onChange={(e) => onToggleSelect(row.id, e.target.checked)}
                   />
                   <div>
-                    <div className="font-medium text-security-navy-900">{row.fullName}</div>
-                    <div className="text-xs text-base-content/70">{row.psiraInstructorNumber || "No PSIRA number"}</div>
+                    <div className="font-semibold text-black">{row.fullName}</div>
+                    <div className="text-xs text-black">{row.psiraInstructorNumber || "No PSIRA number"}</div>
                   </div>
                 </div>
                 <InstructorStatusBadge status={row.archivedAt ? "archived" : row.status} />
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <span className="text-base-content/60">Branch</span>
+                  <span className="text-sm text-black">Branch</span>
                   <div>{row.assignedBranch?.name || "—"}</div>
                 </div>
                 <div>
-                  <span className="text-base-content/60">Courses</span>
+                  <span className="text-sm text-black">Courses</span>
                   <div>{row.assignedCourses.length || 0}</div>
                 </div>
                 <div className="col-span-2">
@@ -260,7 +260,7 @@ export function InstructorTable({
               </div>
               <div className="mt-3" onClick={(e) => e.stopPropagation()}>
                 <select
-                  className="select select-bordered select-sm w-full rounded-xl"
+                  className="input-compact min-h-10 w-full rounded-security-lg"
                   value=""
                   onChange={(e) => {
                     const value = e.target.value as RowAction;

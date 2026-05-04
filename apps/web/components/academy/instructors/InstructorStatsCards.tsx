@@ -65,23 +65,23 @@ export function InstructorStatsCards({
       key: "score",
       label: "PSIRA Compliance Score",
       value: `${summary?.psiraComplianceScore ?? 0}%`,
-      tone: "border-orange-200 bg-orange-50/70",
+      tone: "border-security-navy-200 bg-security-navy-50/70",
       filter: { complianceStatus: "high_risk" },
     },
   ];
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white/90 p-2 shadow-sm">
+    <div className="card-wireframe p-2 sm:p-3">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {cards.map((card) => (
           <button
             key={card.key}
             type="button"
             onClick={() => onFilterSelect(card.filter)}
-            className={`rounded-lg border px-3 py-2 text-left transition hover:shadow-sm ${card.tone}`}
+            className={`min-h-[3rem] rounded-security-lg border-2 px-3 py-2 text-left transition hover:shadow-security-card ${card.tone}`}
           >
-            <div className="truncate text-[10px] font-semibold uppercase tracking-wide text-base-content/55">{card.label}</div>
-            <div className="mt-1 text-lg font-semibold text-security-navy-900">{card.value}</div>
+            <div className="truncate label-text tracking-wide">{card.label}</div>
+            <div className="mt-1 text-lg font-semibold tabular-nums text-black">{card.value}</div>
           </button>
         ))}
       </div>

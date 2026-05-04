@@ -47,42 +47,33 @@ export default function AuditPage() {
   if (error) {
     return (
       <div>
-        <h1 className="text-2xl font-bold text-neutral-800 dark:text-white mb-6">
-          Audit Logs
-        </h1>
+        <h1 className="page-title mb-6">Audit Logs</h1>
         <p className="text-red-600">Access denied. Admin role required.</p>
       </div>
     );
   }
 
   return (
-    <div className="animate-fade-in">
-      <h1 className="page-title mb-6">Audit Logs</h1>
+    <div className="module-shell">
+      <h1 className="page-title">Audit Logs</h1>
 
-      <div className="card-wireframe overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 dark:bg-neutral-700">
+      <div className="table-scroll">
+        <table className="table-module">
+          <thead>
             <tr>
-              <th className="px-4 py-2 text-left">Timestamp</th>
-              <th className="px-4 py-2 text-left">User</th>
-              <th className="px-4 py-2 text-left">Action</th>
-              <th className="px-4 py-2 text-left">Entity</th>
+              <th>Timestamp</th>
+              <th>User</th>
+              <th>Action</th>
+              <th>Entity</th>
             </tr>
           </thead>
           <tbody>
             {logs.map((log) => (
-              <tr
-                key={log.id}
-                className="border-t border-neutral-200 dark:border-neutral-700"
-              >
-                <td className="px-4 py-2 text-neutral-600 dark:text-neutral-400">
-                  {new Date(log.timestamp).toLocaleString()}
-                </td>
-                <td className="px-4 py-2">
-                  {log.user?.name ?? "—"}
-                </td>
-                <td className="px-4 py-2 font-medium">{log.action}</td>
-                <td className="px-4 py-2">
+              <tr key={log.id}>
+                <td>{new Date(log.timestamp).toLocaleString()}</td>
+                <td>{log.user?.name ?? "—"}</td>
+                <td className="font-medium">{log.action}</td>
+                <td>
                   {log.entityType}
                   {log.entityId && ` #${log.entityId.slice(0, 8)}`}
                 </td>
@@ -93,7 +84,7 @@ export default function AuditPage() {
       </div>
 
       {logs.length === 0 && (
-        <p className="text-neutral-500 py-8 text-center">No audit logs</p>
+        <p className="py-8 text-center text-sm text-black">No audit logs</p>
       )}
     </div>
   );

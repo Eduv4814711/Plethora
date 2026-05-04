@@ -490,7 +490,7 @@ export default function RosteringPage() {
 
   if (loading) {
     return (
-      <div className="animate-pulse mx-auto w-full max-w-[1760px] h-[calc(100vh-7.5rem)] rounded-[28px] bg-gradient-to-b from-neutral-50 via-white to-orange-50/30 dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900 p-3">
+      <div className="animate-pulse mx-auto w-full max-w-[1760px] h-[calc(100vh-7.5rem)] rounded-[28px] bg-gradient-to-b from-neutral-50 via-white to-security-navy-50/35 dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900 p-3">
         <div className="h-full grid grid-cols-1 xl:grid-cols-[300px_1fr] gap-4">
           <div className="rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/70 p-4 space-y-3">
             <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-32" />
@@ -539,7 +539,7 @@ export default function RosteringPage() {
       : 0;
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-7.5rem)] min-h-[620px] w-full max-w-[1760px] flex-col xl:flex-row gap-5 rounded-[28px] bg-gradient-to-b from-neutral-50/85 via-white to-orange-50/35 dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900 p-2 xl:p-3">
+    <div className="mx-auto flex h-[calc(100vh-7.5rem)] min-h-[620px] w-full max-w-[1760px] flex-col xl:flex-row gap-5 rounded-[28px] bg-gradient-to-b from-neutral-50/85 via-white to-security-navy-50/40 dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900 p-2 xl:p-3">
       <aside className="xl:w-[18.75rem] w-full xl:h-full max-h-[48vh] xl:max-h-none shrink-0 flex flex-col overflow-hidden rounded-2xl border border-neutral-200/90 dark:border-neutral-700 bg-white/95 dark:bg-neutral-900/80 shadow-[0_10px_30px_-18px_rgba(15,23,42,0.35)]">
         <div className="p-4 shrink-0 space-y-3 border-b border-neutral-200/80 dark:border-neutral-700 bg-gradient-to-b from-white to-neutral-50/70 dark:from-neutral-900 dark:to-neutral-900/80">
           <div className="rounded-xl border border-neutral-200/90 dark:border-neutral-700 bg-white dark:bg-neutral-900/70 p-3.5 shadow-sm">
@@ -673,7 +673,7 @@ export default function RosteringPage() {
                     }}
                     className={`min-h-[56px] rounded-lg border-2 border-dashed flex items-center justify-center text-sm font-medium transition-colors ${
                       dragOverSiteId === selectedSiteId
-                        ? "border-orange-400 dark:border-orange-300 bg-orange-50/70 dark:bg-orange-900/20 text-orange-800 dark:text-orange-300"
+                        ? "border-security-navy-400 dark:border-security-navy-400 bg-security-navy-50/80 dark:bg-security-navy-900/25 text-security-navy-800 dark:text-security-navy-200"
                         : "border-neutral-300 dark:border-neutral-600 text-neutral-600 dark:text-neutral-400 bg-neutral-50/70 dark:bg-neutral-800/40"
                     }`}
                   >
@@ -706,7 +706,7 @@ export default function RosteringPage() {
                         }}
                         className={`min-h-[46px] px-3 py-2 rounded-lg border-2 border-dashed flex items-center justify-center text-sm font-medium transition-colors ${
                           dragOverPostId === post.id
-                            ? "border-orange-400 dark:border-orange-300 bg-orange-50/70 dark:bg-orange-900/20 text-orange-800 dark:text-orange-300"
+                            ? "border-security-navy-400 dark:border-security-navy-400 bg-security-navy-50/80 dark:bg-security-navy-900/25 text-security-navy-800 dark:text-security-navy-200"
                             : "border-neutral-300 dark:border-neutral-600 text-neutral-600 dark:text-neutral-400 bg-neutral-50/70 dark:bg-neutral-800/40"
                         }`}
                       >
@@ -775,14 +775,14 @@ export default function RosteringPage() {
       <div className="sticky top-0 z-30 shrink-0 px-6 py-4 border-b border-neutral-200/80 dark:border-neutral-700 bg-gradient-to-b from-white/95 to-neutral-50/85 dark:from-neutral-900/95 dark:to-neutral-900/85 backdrop-blur">
         <div className="grid gap-4 xl:grid-cols-[minmax(220px,1fr)_auto_minmax(420px,1fr)] xl:items-center">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-security-navy-100 dark:bg-security-navy-900/35 text-security-navy-700 dark:text-security-navy-200 flex items-center justify-center">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             </div>
             <div>
-              <h1 className="text-[1.75rem] leading-none font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">Roster Calendar</h1>
-              <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">Security workforce scheduling view</p>
+              <h1 className="page-title leading-tight">Roster Calendar</h1>
+              <p className="mt-2 text-sm text-neutral-700 dark:text-neutral-300 max-w-md">Security workforce scheduling view</p>
             </div>
           </div>
           <div className="hidden xl:flex justify-center" />
@@ -851,7 +851,7 @@ export default function RosteringPage() {
               </div>
               <button
                 onClick={() => { setSelectedDayForShift(null); setShowForm(!showForm); }}
-                className="h-11 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold transition-colors flex items-center gap-2 shadow-sm"
+                className="btn-primary rounded-xl gap-2 shadow-sm"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1241,9 +1241,9 @@ export default function RosteringPage() {
                         key={key}
                         className={`group/day min-h-0 rounded-xl border p-2.5 flex flex-col transition-all duration-200 ${
                           isSelected
-                            ? "border-orange-300 dark:border-orange-500 ring-2 ring-orange-200/60 dark:ring-orange-500/40 bg-white dark:bg-neutral-900/80 shadow-sm"
+                            ? "border-security-navy-300 dark:border-security-navy-500 ring-2 ring-security-navy-200/60 dark:ring-security-navy-500/40 bg-white dark:bg-neutral-900/80 shadow-sm"
                             : isToday
-                              ? "border-orange-200 dark:border-orange-700 bg-orange-50/70 dark:bg-orange-900/20"
+                              ? "border-security-navy-200 dark:border-security-navy-700 bg-security-navy-50/70 dark:bg-security-navy-900/25"
                               : isWeekend
                                 ? "border-neutral-200 dark:border-neutral-700 bg-neutral-50/85 dark:bg-neutral-900/55 hover:border-neutral-300 dark:hover:border-neutral-600"
                                 : "border-neutral-200 dark:border-neutral-700 bg-white/90 dark:bg-neutral-900/65 hover:border-neutral-300 dark:hover:border-neutral-600"
@@ -1254,7 +1254,7 @@ export default function RosteringPage() {
                           <div
                             className={`inline-flex items-center gap-2 rounded-lg px-2 py-1 ${
                               isToday
-                                ? "bg-orange-100 dark:bg-orange-900/40 text-orange-900 dark:text-orange-200"
+                                ? "bg-security-navy-100 dark:bg-security-navy-900/40 text-security-navy-900 dark:text-security-navy-100"
                                 : "bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
                             }`}
                           >
@@ -1277,7 +1277,7 @@ export default function RosteringPage() {
                                 setSelectedDayForShift(day);
                                 setShowForm(true);
                               }}
-                              className="w-full h-full min-h-[86px] rounded-lg border border-dashed border-neutral-300 dark:border-neutral-600 bg-white/60 dark:bg-neutral-900/40 text-neutral-500 dark:text-neutral-400 hover:border-orange-300 dark:hover:border-orange-500/60 hover:text-orange-700 dark:hover:text-orange-300 transition-colors flex flex-col items-center justify-center gap-1.5"
+                              className="w-full h-full min-h-[86px] rounded-lg border border-dashed border-neutral-300 dark:border-neutral-600 bg-white/60 dark:bg-neutral-900/40 text-neutral-500 dark:text-neutral-400 hover:border-security-navy-300 dark:hover:border-security-navy-500/60 hover:text-security-navy-700 dark:hover:text-security-navy-300 transition-colors flex flex-col items-center justify-center gap-1.5"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1289,7 +1289,7 @@ export default function RosteringPage() {
                               const isNightShift = s.post.shiftType === "night";
                               const shiftTone = isNightShift
                                 ? "bg-slate-100/95 dark:bg-slate-900/45 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
-                                : "bg-orange-50/95 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800/60 text-orange-900 dark:text-orange-200";
+                                : "bg-security-navy-50/95 dark:bg-security-navy-900/30 border-security-navy-200 dark:border-security-navy-800/60 text-security-navy-900 dark:text-security-navy-100";
                               const shiftLabel = isNightShift ? "Night shift" : "Day shift";
                               const timeLabel = `${format(parseISO(s.startTime), "HH:mm")}–${format(parseISO(s.endTime), "HH:mm")}`;
 
@@ -1337,7 +1337,7 @@ export default function RosteringPage() {
                             setSelectedDayForShift(day);
                             setShowForm(true);
                           }}
-                          className="mt-2 h-7 rounded-lg border border-dashed border-neutral-300 dark:border-neutral-600 text-[11px] text-neutral-500 dark:text-neutral-400 hover:border-orange-300 dark:hover:border-orange-500/60 hover:text-orange-700 dark:hover:text-orange-300 transition-colors opacity-0 group-hover/day:opacity-100"
+                          className="mt-2 h-7 rounded-lg border border-dashed border-neutral-300 dark:border-neutral-600 text-[11px] text-neutral-500 dark:text-neutral-400 hover:border-security-navy-300 dark:hover:border-security-navy-500/60 hover:text-security-navy-700 dark:hover:text-security-navy-300 transition-colors opacity-0 group-hover/day:opacity-100"
                         >
                           + Add shift
                         </button>
@@ -1364,7 +1364,7 @@ export default function RosteringPage() {
         </div>
         <div className="flex items-center flex-wrap gap-6 mt-3 pl-1">
           <span className="flex items-center gap-2 text-xs text-neutral-600 dark:text-neutral-400">
-            <span className="w-3.5 h-3.5 rounded-md bg-orange-100 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800/60" />
+            <span className="w-3.5 h-3.5 rounded-md bg-security-navy-100 dark:bg-security-navy-900/35 border border-security-navy-200 dark:border-security-navy-800/60" />
             <span className="font-medium">Day shift</span>
           </span>
           <span className="flex items-center gap-2 text-xs text-neutral-600 dark:text-neutral-400">
@@ -1431,18 +1431,18 @@ function RosterKpiCard({
     neutral:
       "border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/70 text-neutral-700 dark:text-neutral-300",
     day:
-      "border-orange-200 dark:border-orange-900/50 bg-orange-50/80 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300",
+      "border-security-navy-200 dark:border-security-navy-900/50 bg-security-navy-50/85 dark:bg-security-navy-900/22 text-security-navy-700 dark:text-security-navy-200",
     night:
       "border-slate-200 dark:border-slate-700 bg-slate-50/85 dark:bg-slate-900/30 text-slate-700 dark:text-slate-300",
     coverage:
-      "border-orange-300/80 dark:border-orange-800/70 bg-gradient-to-br from-orange-50 to-white dark:from-orange-900/25 dark:to-neutral-900 text-orange-700 dark:text-orange-300",
+      "border-security-navy-300/80 dark:border-security-navy-800/70 bg-gradient-to-br from-security-navy-50 to-white dark:from-security-navy-900/28 dark:to-neutral-900 text-security-navy-700 dark:text-security-navy-200",
   };
 
   return (
     <div
       className={`h-full rounded-xl border px-3.5 py-3 shadow-sm transition-shadow hover:shadow-md ${
         toneMap[tone]
-      } ${emphasize ? "ring-1 ring-orange-200/70 dark:ring-orange-700/50" : ""}`}
+      } ${emphasize ? "ring-1 ring-security-navy-200/70 dark:ring-security-navy-600/45" : ""}`}
     >
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] uppercase tracking-[0.12em] font-semibold opacity-90">{label}</p>

@@ -41,30 +41,30 @@ export default function AcademyComplianceDocumentsPage() {
   };
 
   return (
-    <div className="w-full min-w-0 space-y-6">
+    <div className="module-shell">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-security-navy-900">Compliance Documents</h1>
-        <p className="mt-1 text-sm text-base-content/70">Track document completeness, verification, and expiry posture.</p>
+        <h1 className="page-title">Compliance Documents</h1>
+        <p className="mt-1 text-sm text-black">Track document completeness, verification, and expiry posture.</p>
       </div>
 
-      {error && <div className="rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>}
+      {error && <div className="rounded-lg border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
 
-      <div className="rounded-2xl border border-base-200 bg-base-100 p-5 shadow-sm">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-base-content/60">Add document</h2>
+      <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-sm text-black">Add document</h2>
         <form onSubmit={create} className="mt-3 grid gap-2 md:grid-cols-4">
-          <input className="input input-bordered rounded-xl md:col-span-2" placeholder="Document name" value={name} onChange={(e) => setName(e.target.value)} />
-          <input className="input input-bordered rounded-xl" value={type} onChange={(e) => setType(e.target.value)} />
-          <input className="input input-bordered rounded-xl" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
-          <button className="btn btn-primary rounded-xl md:col-span-4 md:justify-self-end" disabled={!canManage}>Add document</button>
+          <input className="input-modern md:col-span-2" placeholder="Document name" value={name} onChange={(e) => setName(e.target.value)} />
+          <input className="input-modern" value={type} onChange={(e) => setType(e.target.value)} />
+          <input className="input-modern" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+          <button className="btn-primary rounded-security-lg md:col-span-4 md:justify-self-end" disabled={!canManage}>Add document</button>
         </form>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-base-200 bg-base-100 shadow-sm">
-        <div className="border-b border-base-200/80 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">Document vault</h2></div>
+      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+        <div className="border-b border-neutral-200 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">Document vault</h2></div>
         <div className="overflow-x-auto">
-          <table className="table table-sm">
-            <thead><tr className="text-[11px] uppercase tracking-wide text-base-content/60"><th>Name</th><th>Type</th><th>Status</th><th>Expiry</th><th className="text-right">Action</th></tr></thead>
-            <tbody>{rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{r.documentName}</td><td>{r.documentType}</td><td>{r.status}</td><td>{r.expiryDate ? String(r.expiryDate).slice(0,10) : "—"}</td><td className="text-right">{canManage && <button className="btn btn-xs btn-error" onClick={() => remove(r.id)}>Delete</button>}</td></tr>)}</tbody>
+          <table className="table-module">
+            <thead><tr className="text-[11px] uppercase tracking-wide text-sm text-black"><th>Name</th><th>Type</th><th>Status</th><th>Expiry</th><th className="text-right">Action</th></tr></thead>
+            <tbody>{rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{r.documentName}</td><td>{r.documentType}</td><td>{r.status}</td><td>{r.expiryDate ? String(r.expiryDate).slice(0,10) : "—"}</td><td className="text-right">{canManage && <button className="btn-danger" onClick={() => remove(r.id)}>Delete</button>}</td></tr>)}</tbody>
           </table>
         </div>
       </div>

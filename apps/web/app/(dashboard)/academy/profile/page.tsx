@@ -103,14 +103,14 @@ export default function AcademyProfilePage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h1 className="text-3xl font-semibold tracking-tight text-black">Profile</h1>
+          <h1 className="page-title">Profile</h1>
           <p className="text-sm text-[#6e7480]">Manage your training provider and organisation information.</p>
         </div>
         {canEdit && isEditing && (
           <button
             type="submit"
             form="academy-profile-form"
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#ff7a00] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#e86f00] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#ff7a00] px-4 text-sm font-semibold text-black shadow-sm transition hover:bg-[#e86f00] disabled:cursor-not-allowed disabled:opacity-60"
             disabled={saving}
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -123,12 +123,12 @@ export default function AcademyProfilePage() {
       </div>
 
       {!canEdit && (
-        <div className="rounded-lg border border-base-300 bg-base-200/50 px-3 py-2 text-sm">
+        <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm">
           Read-only: only admins can update academy profile.
         </div>
       )}
 
-      {error && <div className="rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>}
+      {error && <div className="rounded-lg border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
       {saveMessage && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-300/80 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
           <span>{saveMessage}</span>

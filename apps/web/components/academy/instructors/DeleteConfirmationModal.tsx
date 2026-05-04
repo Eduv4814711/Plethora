@@ -21,17 +21,17 @@ export function DeleteConfirmationModal({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/40 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
-        <h3 className="text-lg font-semibold text-security-navy-900">{title}</h3>
-        <p className="mt-2 text-sm text-base-content/70">{message}</p>
-        <div className="mt-5 flex justify-end gap-2">
-          <button type="button" className="btn btn-ghost rounded-xl" onClick={onCancel} disabled={loading}>
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4 sm:p-6">
+      <div className="w-full max-w-md card-elevated p-5 sm:p-6">
+        <h3 className="section-title normal-case tracking-tight text-lg">{title}</h3>
+        <p className="mt-2 text-sm text-black">{message}</p>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" className="btn-ghost min-h-11 rounded-security-lg" onClick={onCancel} disabled={loading}>
             Cancel
           </button>
           <button
             type="button"
-            className={`btn rounded-xl ${danger ? "btn-error" : "btn-primary"}`}
+            className={danger ? "btn-danger min-h-11 px-4" : "btn-primary min-h-11"}
             onClick={onConfirm}
             disabled={loading}
           >

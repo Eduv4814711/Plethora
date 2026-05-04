@@ -169,46 +169,50 @@ export default function AcademyIntakePage() {
   };
 
   const stepClass = (n: Step) =>
-    `flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
-      step >= n ? "bg-primary text-primary-content" : "bg-base-300 text-base-content/60"
+    `flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold border ${
+      step > n
+        ? "bg-security-navy-500 text-black border-security-navy-700 shadow-sm"
+        : step === n
+          ? "bg-security-navy-100 text-black border-security-navy-500 shadow-sm"
+          : "bg-white text-black border-[var(--hairline-strong)]"
     }`;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-6">
+    <div className="module-shell max-w-3xl mx-auto">
       <div>
-        <Link href="/academy" className="text-sm text-primary hover:underline lg:hidden">
+        <Link href="/academy" className="link-inline text-sm font-semibold lg:hidden">
           ← Academy
         </Link>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">New student intake</h1>
-        <p className="mt-1 text-sm text-base-content/70">
+        <h1 className="page-title mt-1">New student intake</h1>
+        <p className="page-subtitle mt-1">
           Capture details, record the admin fee, then enrol into available course runs.
         </p>
       </div>
 
       <ol className="flex flex-wrap items-center gap-3 text-sm">
         <li className="flex items-center gap-2">
-          <span className={stepClass(1)}>1</span>
-          <span className={step === 1 ? "font-medium" : "text-base-content/70"}>Details</span>
+          <span className={stepClass(1)}>{step > 1 ? "✓" : 1}</span>
+          <span className={step === 1 ? "font-semibold text-black" : "text-sm text-black"}>Details</span>
         </li>
-        <span className="text-base-content/30">→</span>
+        <span className="text-black/40" aria-hidden>→</span>
         <li className="flex items-center gap-2">
-          <span className={stepClass(2)}>2</span>
-          <span className={step === 2 ? "font-medium" : "text-base-content/70"}>Admin fee</span>
+          <span className={stepClass(2)}>{step > 2 ? "✓" : 2}</span>
+          <span className={step === 2 ? "font-semibold text-black" : "text-sm text-black"}>Admin fee</span>
         </li>
-        <span className="text-base-content/30">→</span>
+        <span className="text-black/40" aria-hidden>→</span>
         <li className="flex items-center gap-2">
           <span className={stepClass(3)}>3</span>
-          <span className={step === 3 ? "font-medium" : "text-base-content/70"}>Enrol</span>
+          <span className={step === 3 ? "font-semibold text-black" : "text-sm text-black"}>Enrol</span>
         </li>
       </ol>
 
       {error && (
-        <div className="rounded-md border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>
+        <div className="notice-error">{error}</div>
       )}
 
       {step === 1 && (
-        <form onSubmit={submitProfile} className="space-y-4 rounded-lg border border-base-300 bg-base-100 p-5 shadow-sm">
-          <h2 className="text-lg font-medium">Personal details</h2>
+        <form onSubmit={submitProfile} className="space-y-4 card-wireframe p-5">
+          <h2 className="text-lg font-semibold text-black">Personal details</h2>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="First name *" value={firstName} onChange={setFirstName} required />
             <Field label="Last name *" value={lastName} onChange={setLastName} required />
@@ -219,7 +223,7 @@ export default function AcademyIntakePage() {
               <label className="label py-0 text-xs">Date of birth</label>
               <input
                 type="date"
-                className="input input-bordered input-sm w-full"
+                className="input-compact w-full"
                 value={dateOfBirth}
                 onChange={(e) => setDateOfBirth(e.target.value)}
               />
@@ -227,7 +231,7 @@ export default function AcademyIntakePage() {
             <div className="sm:col-span-2">
               <label className="label py-0 text-xs">Address line 1</label>
               <input
-                className="input input-bordered input-sm w-full"
+                className="input-compact w-full"
                 value={addressLine1}
                 onChange={(e) => setAddressLine1(e.target.value)}
               />
@@ -236,7 +240,7 @@ export default function AcademyIntakePage() {
             <Field label="Province" value={province} onChange={setProvince} />
             <Field label="Postal code" value={postalCode} onChange={setPostalCode} />
           </div>
-          <button type="submit" className="btn btn-primary btn-sm" disabled={submitting || !firstName.trim() || !lastName.trim()}>
+          <button type="submit" className="btn-primary text-sm py-2 px-4" disabled={submitting || !firstName.trim() || !lastName.trim()}>
             {submitting ? "Saving…" : "Continue"}
           </button>
         </form>
@@ -244,41 +248,41 @@ export default function AcademyIntakePage() {
 
       {step === 2 && studentId && (
         <div className="space-y-6">
-          <div className="rounded-lg border border-base-300 bg-base-100 p-5 shadow-sm">
-            <h2 className="text-lg font-medium">Record admin fee (paid)</h2>
+          <div className="card-wireframe p-5">
+            <h2 className="text-lg font-semibold text-black">Record admin fee (paid)</h2>
             <form onSubmit={recordPaid} className="mt-3 grid gap-3 sm:grid-cols-2">
               <Field label="Amount *" value={feeAmount} onChange={setFeeAmount} placeholder="e.g. 350" required />
               <Field label="Method" value={feeMethod} onChange={setFeeMethod} />
               <div className="sm:col-span-2">
                 <label className="label py-0 text-xs">Reference (optional)</label>
                 <input
-                  className="input input-bordered input-sm w-full"
+                  className="input-compact w-full"
                   value={feeReference}
                   onChange={(e) => setFeeReference(e.target.value)}
                   placeholder="EFT reference or receipt no."
                 />
               </div>
               <div className="sm:col-span-2">
-                <button type="submit" className="btn btn-primary btn-sm" disabled={submitting || !feeAmount.trim()}>
+                <button type="submit" className="btn-primary text-sm py-2 px-4" disabled={submitting || !feeAmount.trim()}>
                   {submitting ? "Recording…" : "Mark fee as paid"}
                 </button>
               </div>
             </form>
           </div>
-          <div className="rounded-lg border border-base-300 bg-base-100 p-5 shadow-sm">
-            <h2 className="text-lg font-medium">Or waive the admin fee</h2>
-            <p className="mt-1 text-xs text-base-content/60">A short reason is required for audit.</p>
+          <div className="card-wireframe p-5">
+            <h2 className="text-lg font-semibold text-black">Or waive the admin fee</h2>
+            <p className="mt-1 caption">A short reason is required for audit.</p>
             <form onSubmit={recordWaived} className="mt-3 space-y-3">
               <div>
                 <label className="label py-0 text-xs">Reason *</label>
                 <textarea
-                  className="textarea textarea-bordered textarea-sm w-full min-h-[80px]"
+                  className="input-modern w-full min-h-[80px] rounded-security-lg py-2"
                   value={waiveNotes}
                   onChange={(e) => setWaiveNotes(e.target.value)}
                   placeholder="e.g. Sponsored intake, staff dependant, promotion…"
                 />
               </div>
-              <button type="submit" className="btn btn-outline btn-sm" disabled={submitting || !waiveNotes.trim()}>
+              <button type="submit" className="btn-secondary text-sm py-2 px-4" disabled={submitting || !waiveNotes.trim()}>
                 {submitting ? "Saving…" : "Waive admin fee"}
               </button>
             </form>
@@ -287,32 +291,32 @@ export default function AcademyIntakePage() {
       )}
 
       {step === 3 && studentId && (
-        <div className="rounded-lg border border-base-300 bg-base-100 p-5 shadow-sm">
-          <h2 className="text-lg font-medium">Enrol in course runs</h2>
-          <p className="mt-1 text-sm text-base-content/70">
+        <div className="card-wireframe p-5">
+          <h2 className="text-lg font-semibold text-black">Enrol in course runs</h2>
+          <p className="mt-1 text-sm text-black">
             Only runs that are open for intake and have capacity are listed.
           </p>
           {loadingRuns ? (
-            <p className="mt-4 text-sm text-base-content/60">Loading runs…</p>
+            <p className="mt-4 text-sm text-black">Loading runs…</p>
           ) : runs.length === 0 ? (
-            <p className="mt-4 text-sm text-amber-800">
+            <div className="notice-warn mt-4">
               No enrolable course runs right now. Create a run with status planned or open and available seats, then
               return to this student&apos;s profile to enrol.
-            </p>
+            </div>
           ) : (
             <ul className="mt-4 max-h-[360px] space-y-2 overflow-y-auto pr-1">
               {runs.map((r) => {
                 const checked = selectedRunIds.has(r.id);
                 return (
                   <li key={r.id}>
-                    <label className="flex cursor-pointer gap-3 rounded-md border border-base-200 p-3 hover:bg-base-200/40">
+                    <label className={`flex cursor-pointer gap-3 rounded-security border p-3 transition-colors ${checked ? "border-security-navy-400 bg-security-navy-50" : "border-[var(--hairline)] hover:bg-[var(--bg-nav-hover)]"}`}>
                       <input type="checkbox" className="checkbox checkbox-sm mt-0.5" checked={checked} onChange={() => toggleRun(r.id)} />
                       <span className="min-w-0 flex-1 text-sm">
-                        <span className="font-mono text-xs font-semibold">{r.runCode}</span>
-                        <span className="ml-2 text-base-content/80">
+                        <span className="font-mono text-xs font-semibold text-black">{r.runCode}</span>
+                        <span className="ml-2 text-sm text-black font-medium">
                           {r.course.code} — {r.course.title}
                         </span>
-                        <span className="mt-0.5 block text-xs text-base-content/60">
+                        <span className="mt-0.5 block caption">
                           {r.branch.name} · {formatDate(r.startDate)} – {formatDate(r.endDate)} · {r.status} ·{" "}
                           {seatsLeft(r)}
                         </span>
@@ -326,7 +330,7 @@ export default function AcademyIntakePage() {
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
-              className="btn btn-primary btn-sm"
+              className="btn-primary text-sm py-2 px-4"
               disabled={submitting || selectedRunIds.size === 0 || runs.length === 0}
               onClick={() => void submitEnrolments()}
             >
@@ -334,7 +338,7 @@ export default function AcademyIntakePage() {
             </button>
             <button
               type="button"
-              className="btn btn-ghost btn-sm"
+              className="btn-ghost text-sm py-2 px-3"
               disabled={submitting}
               onClick={() => studentId && (window.location.href = `/academy/students/${studentId}`)}
             >
@@ -367,7 +371,7 @@ function Field({
       <label className="label py-0 text-xs">{label}</label>
       <input
         type={type}
-        className="input input-bordered input-sm w-full"
+        className="input-compact w-full"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}

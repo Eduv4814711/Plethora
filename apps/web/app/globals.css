@@ -2,58 +2,134 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 
-/* Plethora – Orange Brand Design System */
+/* ============================================================
+ * Plethora — orange primary, black body copy.
+ * Source of truth for design tokens (mirrors uxuiskill.md).
+ * ============================================================ */
 :root {
-  --bg-canvas: #f8fafc;
+  /* Surfaces */
+  --bg-canvas: #fafaf9;
   --bg-content: #ffffff;
-  --bg-nav: #F57C00;
-  --bg-nav-hover: #EF6C00;
+  --bg-nav: #ffffff;
+  --bg-nav-hover: #f6f5f4;
+  --surface-soft: #fafaf9;
+
+  /* Text */
   --text-primary: #000000;
   --text-secondary: #000000;
   --text-muted: #000000;
-  --accent-primary: #FF9800;
-  --accent-amber: #f59e0b;
-  --accent-emerald: #FF9800;
-  --accent-red: #dc2626;
-  --border-light: #e5e7eb;
-  --border-medium: #d1d5db;
+
+  /* Brand orange (matches Tailwind `security-navy` orange scale) */
+  --accent-primary: #ff9800;
+  --accent-primary-pressed: #f57c00;
+  --accent-primary-deep: #e65100;
+  --accent-primary-soft: #fff8f0;
+
+  /* Semantic */
+  --accent-amber: #dd5b00;
+  --accent-emerald: #1aae39;
+  --accent-red: #e03131;
+  --accent-info: #0075de;
+
+  /* Hairlines */
+  --border-light: #e5e3df;
+  --border-medium: #c8c4be;
+  --hairline: #e5e3df;
+  --hairline-strong: #c8c4be;
+
+  /* Inline link is black + underline in product UI */
+  --link-blue: #000000;
+
+  /* Geometry */
   --radius: 0.5rem;
   --radius-lg: 0.75rem;
-  --transition: 150ms ease;
+  --radius-pill: 9999px;
+  --transition: 180ms ease;
 }
 
 body {
-  font-family: 'IBM Plex Sans', system-ui, sans-serif;
-  color: var(--text-primary);
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif;
+  color: #000000;
   background: var(--bg-canvas);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "cv11";
 }
 
 html {
   scroll-behavior: smooth;
 }
 
+/* Custom scrollbar — orange-aware, slim, subtle */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #c8c4be transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: #c8c4be;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #ff9800;
+}
+
+/* Selection */
+::selection {
+  background: #ffd9b3;
+  color: #000;
+}
+
 @layer utilities {
-  /* Primary action - navy, professional */
+  /* ==========================================================
+   * Buttons (rectangular 8px — never pill on primary)
+   * ========================================================== */
+
+  /** Primary — orange CTA */
   .btn-primary {
-    @apply px-5 py-2.5 font-semibold rounded-security border-2 border-security-navy bg-security-navy text-white hover:bg-security-navy-800 active:scale-[0.98] transition-all duration-150 outline-none focus:ring-2 focus:ring-security-navy focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
+    @apply px-[18px] py-2.5 font-medium text-sm rounded-security border border-transparent bg-security-navy text-black hover:bg-security-navy-600 active:bg-security-navy-700 active:scale-[0.98] transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-security-navy-400 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 min-h-[44px] inline-flex items-center justify-center gap-2;
   }
+  /** Soft primary — for secondary CTAs in dense surfaces */
+  .btn-primary-soft {
+    @apply px-[18px] py-2.5 font-medium text-sm rounded-security border border-security-navy-300 bg-security-navy-50 text-black hover:bg-security-navy-100 hover:border-security-navy-400 active:scale-[0.98] transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-security-navy-300 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] inline-flex items-center justify-center gap-2;
+  }
+  /** Secondary — outlined */
   .btn-secondary {
-    @apply px-5 py-2.5 font-medium rounded-security border-2 border-neutral-300 bg-white text-black hover:bg-neutral-50 hover:border-neutral-400 active:scale-[0.98] transition-all duration-150 outline-none focus:ring-2 focus:ring-security-navy focus:ring-offset-2;
+    @apply px-[18px] py-2.5 font-medium text-sm rounded-security border border-[var(--hairline-strong)] text-[var(--text-primary)] bg-white hover:bg-[var(--bg-nav-hover)] hover:border-security-navy-400 active:scale-[0.98] transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-security-navy-300 focus-visible:ring-offset-2 disabled:opacity-50 min-h-[44px] inline-flex items-center justify-center gap-2;
   }
   .btn-ghost {
-    @apply px-4 py-2 font-medium rounded-security text-black border border-transparent hover:border-neutral-300 hover:bg-neutral-50 transition-colors duration-150 outline-none;
+    @apply px-3 py-2 font-medium text-sm rounded-security text-[var(--text-primary)] border border-transparent hover:bg-[var(--bg-nav-hover)] hover:border-[var(--hairline)] transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-security-navy-300 focus-visible:ring-offset-2 min-h-[40px] inline-flex items-center justify-center gap-2;
   }
   .btn-amber {
-    @apply px-5 py-2.5 font-semibold rounded-security border-2 border-security-amber-500 bg-security-amber-500 text-white hover:bg-security-amber-600 active:scale-[0.98] transition-all duration-150 outline-none focus:ring-2 focus:ring-security-amber focus:ring-offset-2;
+    @apply px-[18px] py-2.5 font-medium text-sm rounded-security border border-security-amber-600 bg-security-amber-500 text-black hover:bg-security-amber-600 active:scale-[0.98] transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-security-amber-300 focus-visible:ring-offset-2 min-h-[44px] inline-flex items-center justify-center gap-2;
+  }
+  /** Destructive — keeps high-contrast red for clarity (intentional accessibility exception) */
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-security border border-red-700 bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 active:scale-[0.98] transition-all disabled:opacity-50 min-h-[40px] focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-2;
+  }
+  .btn-danger-soft {
+    @apply inline-flex items-center justify-center gap-2 rounded-security border border-red-300 bg-red-50 px-3 py-2 text-xs font-semibold text-red-900 hover:bg-red-100 hover:border-red-400 active:scale-[0.98] transition-all disabled:opacity-50 min-h-[40px] focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-2;
+  }
+  /** Square icon-only button (toolbar / chrome) */
+  .btn-icon {
+    @apply inline-flex items-center justify-center min-h-11 min-w-11 p-2 rounded-security text-black border border-transparent hover:bg-[var(--bg-nav-hover)] hover:border-[var(--hairline)] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-security-navy-300 focus-visible:ring-offset-2;
   }
 
-  /* Inputs - clean, readable */
+  /* ==========================================================
+   * Inputs
+   * ========================================================== */
   .input-modern {
-    @apply w-full px-4 py-2.5 rounded-security border-2 border-neutral-300 bg-white text-black placeholder-neutral-500 focus:border-security-navy-500 focus:ring-2 focus:ring-security-navy-200 transition-all duration-150 outline-none;
+    @apply w-full min-h-[44px] px-4 py-2.5 rounded-security border border-[var(--hairline-strong)] bg-white text-[var(--text-primary)] placeholder-neutral-400 focus:border-security-navy-600 focus:ring-2 focus:ring-security-navy-200 transition-all duration-150 outline-none;
     font-family: inherit;
   }
   select.input-modern {
@@ -63,88 +139,242 @@ html {
   }
   .site-form input.input-modern {
     width: 500px;
-    height: 40px;
+    height: 44px;
     max-width: 100%;
   }
   .site-form select.input-modern {
     width: 600px;
-    height: 40px;
+    height: 44px;
     max-width: 100%;
   }
   .input-compact {
-    @apply w-full px-3 py-2 text-sm rounded-security border-2 border-neutral-300 bg-white text-black placeholder-neutral-500 focus:border-security-navy-500 transition-all duration-150 outline-none;
+    @apply w-full min-h-[40px] px-3 py-2 text-sm rounded-security border border-[var(--hairline-strong)] bg-white text-[var(--text-primary)] placeholder-neutral-400 focus:border-security-navy-600 focus:ring-1 focus:ring-security-navy-300 transition-all duration-150 outline-none;
+  }
+  .input-error {
+    @apply border-red-400 focus:border-red-500 focus:ring-red-200;
   }
 
-  /* Cards - subtle shadow, professional */
+  /* ==========================================================
+   * Cards / surfaces
+   * ========================================================== */
   .card-wireframe {
-    @apply bg-white rounded-security-lg border border-neutral-200 shadow-security-card;
+    @apply bg-white rounded-security-lg border border-[var(--hairline)] shadow-security-card;
   }
   .card-elevated {
-    @apply bg-white rounded-security-lg border border-neutral-200 shadow-security-elevated;
+    @apply bg-white rounded-security-lg border border-[var(--hairline)] shadow-security-elevated;
   }
   .card-dashboard {
-    @apply bg-white rounded-security-lg border border-neutral-200 shadow-security-card hover:shadow-security-card-hover transition-shadow duration-200;
+    @apply bg-white rounded-security-lg border border-[var(--hairline)] shadow-security-card hover:shadow-security-card-hover transition-shadow duration-200;
+  }
+  .card-soft {
+    @apply rounded-security-lg border border-[var(--hairline)] bg-[var(--surface-soft)];
+  }
+  .card-feature-orange {
+    @apply rounded-security-lg border border-security-navy-200 bg-gradient-to-br from-security-navy-50 to-white;
   }
 
-  /* Typography */
+  /* ==========================================================
+   * Typography helpers
+   * ========================================================== */
   .page-title {
-    @apply text-2xl font-bold text-black tracking-tight;
+    @apply text-xl sm:text-2xl md:text-3xl font-semibold text-[var(--text-primary)] tracking-tight;
+  }
+  .page-subtitle {
+    @apply text-sm sm:text-base text-[var(--text-primary)] max-w-2xl;
   }
   .section-title {
-    @apply text-sm font-semibold text-black uppercase tracking-wider;
+    @apply text-xs font-semibold text-[var(--text-primary)] uppercase tracking-wider;
   }
   .label-text {
-    @apply text-xs font-semibold uppercase tracking-wider text-black;
+    @apply text-xs font-semibold uppercase tracking-wider text-[var(--text-primary)];
+  }
+  .body-md {
+    @apply text-base leading-relaxed text-[var(--text-primary)];
+  }
+  .body-sm {
+    @apply text-sm leading-relaxed text-[var(--text-primary)];
+  }
+  .caption {
+    @apply text-xs leading-snug text-[var(--text-primary)];
   }
 
-  /* Badges - status indicators */
+  /* ==========================================================
+   * Badges
+   * ========================================================== */
   .badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium;
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;
   }
   .badge-neutral {
-    @apply badge bg-neutral-100 text-black border border-neutral-200;
+    @apply badge bg-[var(--bg-nav-hover)] text-[var(--text-primary)] border border-[var(--hairline)];
+  }
+  .badge-primary {
+    @apply badge bg-security-navy-100 text-black border border-security-navy-300;
   }
   .badge-success {
-    @apply badge bg-security-emerald-50 text-security-emerald-600 border border-security-emerald-200;
+    @apply badge bg-security-emerald-50 text-black border border-security-emerald-200;
   }
   .badge-warning {
-    @apply badge bg-security-amber-100 text-security-amber-700 border border-security-amber-200;
+    @apply badge bg-security-amber-100 text-black border border-security-amber-200;
   }
   .badge-error {
-    @apply badge bg-red-50 text-red-700 border border-red-200;
+    @apply badge bg-red-50 text-black border border-red-200;
   }
   .badge-on-duty {
-    @apply badge bg-security-emerald-50 text-security-emerald-600 border border-security-emerald-200;
+    @apply badge bg-security-emerald-50 text-black border border-security-emerald-200;
   }
   .badge-off-duty {
-    @apply badge bg-neutral-100 text-black border border-neutral-200;
+    @apply badge bg-[var(--bg-nav-hover)] text-[var(--text-primary)] border border-[var(--hairline)];
   }
 
-  /* Borders */
+  /* ==========================================================
+   * Layout primitives
+   * ========================================================== */
   .border-wireframe-thin {
     border-width: 1px;
-    border-color: var(--border-light);
+    border-color: var(--hairline);
   }
   .border-wireframe-thick {
     border-width: 2px;
-    border-color: var(--border-medium);
+    border-color: var(--hairline-strong);
   }
   .bg-wireframe-accent {
-    background-color: var(--border-light);
+    background-color: var(--surface-soft);
   }
   .bg-wireframe-grid {
     background-color: var(--bg-canvas);
     background-image:
-      linear-gradient(to right, rgba(255, 152, 0, 0.06) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(255, 152, 0, 0.06) 1px, transparent 1px);
+      linear-gradient(to right, rgba(255, 152, 0, 0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 152, 0, 0.07) 1px, transparent 1px);
     background-size: 40px 40px;
+  }
+  .module-shell {
+    @apply w-full min-w-0 max-w-[1600px] mx-auto animate-fade-in flex flex-col gap-4 sm:gap-6;
+  }
+  .module-panel {
+    @apply card-wireframe p-4 sm:p-6;
+  }
+  .section-divider {
+    @apply h-px w-full bg-[var(--hairline)] my-4 sm:my-6;
+  }
+
+  /* ==========================================================
+   * Tables
+   * ========================================================== */
+  .table-scroll {
+    @apply w-full overflow-x-auto rounded-security-lg border border-[var(--hairline)] bg-white shadow-security-card;
+  }
+  .table-module {
+    @apply w-full min-w-[640px] border-collapse text-sm text-[var(--text-primary)];
+  }
+  .table-module thead tr {
+    @apply border-b border-[var(--hairline-strong)] bg-[var(--bg-nav-hover)];
+  }
+  .table-module th {
+    @apply px-3 py-3 text-left align-middle text-xs font-semibold uppercase tracking-wider text-[var(--text-primary)];
+  }
+  .table-module td {
+    @apply border-b border-[var(--hairline)] px-3 py-3 align-middle;
+  }
+  .table-module tbody tr:hover td {
+    @apply bg-[var(--surface-soft)];
+  }
+
+  /* ==========================================================
+   * Inline link — black + underline (separate from primary orange)
+   * ========================================================== */
+  .link-notion {
+    @apply text-black font-medium underline underline-offset-2 hover:no-underline;
+  }
+  .link-inline {
+    @apply text-black font-medium underline underline-offset-2 decoration-security-navy-400 hover:decoration-security-navy-700;
+  }
+
+  /* ==========================================================
+   * KPI tile (consistent stat cells across modules)
+   * ========================================================== */
+  .kpi-tile {
+    @apply flex flex-col justify-center min-h-[3.25rem] rounded-security-lg border border-[var(--hairline)] bg-white px-4 py-3 shadow-security-card;
+  }
+  .kpi-label {
+    @apply text-[11px] font-semibold uppercase tracking-wider text-[var(--text-primary)];
+  }
+  .kpi-value {
+    @apply text-xl sm:text-2xl font-bold tabular-nums text-black tracking-tight;
+  }
+
+  /* ==========================================================
+   * Segmented control (Today / Week / Month, etc.)
+   * ========================================================== */
+  .segmented {
+    @apply inline-flex rounded-security border border-[var(--hairline-strong)] bg-white p-0.5 shadow-security-card;
+  }
+  .segmented-option {
+    @apply min-h-10 px-3 sm:px-4 text-sm font-semibold rounded-security text-black border border-transparent transition-all hover:bg-[var(--bg-nav-hover)];
+  }
+  .segmented-option-active {
+    @apply bg-security-navy-500 text-black border-security-navy-600 shadow-sm hover:bg-security-navy-500;
+  }
+
+  /* ==========================================================
+   * Notices / alerts (used in forms and module panels)
+   * ========================================================== */
+  .notice-base {
+    @apply rounded-security border px-4 py-3 text-sm flex items-start gap-3;
+  }
+  .notice-info {
+    @apply notice-base bg-security-navy-50 border-security-navy-200 text-black;
+  }
+  .notice-warn {
+    @apply notice-base bg-security-amber-50 border-security-amber-200 text-black;
+  }
+  .notice-error {
+    @apply notice-base bg-red-50 border-red-200 text-black;
+  }
+  .notice-success {
+    @apply notice-base bg-security-emerald-50 border-security-emerald-200 text-black;
+  }
+
+  /* ==========================================================
+   * Empty state
+   * ========================================================== */
+  .empty-state {
+    @apply flex flex-col items-center justify-center text-center gap-2 px-6 py-10 rounded-security-lg border border-dashed border-[var(--hairline-strong)] bg-[var(--surface-soft)];
+  }
+  .empty-state-title {
+    @apply text-sm font-semibold text-black;
+  }
+  .empty-state-body {
+    @apply text-sm text-black max-w-md;
+  }
+
+  /* ==========================================================
+   * Brand chrome (header gradient utility)
+   * ========================================================== */
+  .brand-band {
+    @apply bg-gradient-to-r from-security-navy-500 via-security-navy-500 to-security-navy-600 text-black border-b border-security-navy-700;
+  }
+
+  /* ==========================================================
+   * Focus helper — apply to non-button interactives where needed
+   * ========================================================== */
+  .focus-ring {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-security-navy-400 focus-visible:ring-offset-2;
+  }
+
+  /* ==========================================================
+   * Code chip (inline <code> in notices)
+   * ========================================================== */
+  .code-chip {
+    @apply inline-flex items-center px-1.5 py-0.5 rounded text-[12px] font-mono bg-security-navy-100 text-black border border-security-navy-200;
   }
 }
 
-/* Date picker – orange brand styling */
+/* ============================================================
+ * React Day Picker — orange accent, neutral chrome
+ * ============================================================ */
 .rdp-root {
-  --rdp-accent-color: #FF9800;
-  --rdp-accent-background-color: #FFE0B2;
+  --rdp-accent-color: #f57c00;
+  --rdp-accent-background-color: #ffecd9;
   --rdp-day_button-border-radius: 0.375rem;
   --rdp-day_button-width: 36px;
   --rdp-day_button-height: 36px;
@@ -158,8 +388,8 @@ html {
   justify-content: center;
   padding: 0.5rem;
   margin-bottom: 0.5rem;
-  background: var(--border-light);
-  border: 1px solid var(--border-medium);
+  background: var(--bg-nav-hover);
+  border: 1px solid var(--hairline);
   border-radius: 0.5rem;
   font-weight: 600;
   font-size: 0.9375rem;
@@ -168,20 +398,67 @@ html {
 
 .rdp-root .rdp-button_previous,
 .rdp-root .rdp-button_next {
-  border: 2px solid var(--border-medium);
+  border: 1px solid var(--hairline-strong);
   border-radius: 0.5rem;
   background: white;
 }
 
 .rdp-root .rdp-button_previous:hover,
 .rdp-root .rdp-button_next:hover {
-  background: var(--border-light);
+  background: var(--bg-nav-hover);
 }
 
-/* Global: all text solid black (excludes text-white on buttons/nav) */
-.text-neutral-400, .text-neutral-500, .text-neutral-600, .text-neutral-700, .text-neutral-800, .text-neutral-900,
-.text-security-navy, .text-security-navy-500, .text-security-navy-600, .text-security-navy-700,
-.text-security-emerald-600, .text-security-amber-700,
-.text-gray-500, .text-gray-600, .text-gray-700 {
-  color: #000000 !important;
+/* ============================================================
+ * Light-mode text-uniformity overrides
+ * Force typical UI copy (neutral / slate / zinc / gray / brand
+ * `security-*`) to black so body copy is uniformly readable.
+ * Skips white text and semantic reds/greens/roses we want kept.
+ * Dark mode (`html.dark`) stays untouched.
+ * ============================================================ */
+@layer utilities {
+  html:not(.dark) .text-neutral-950,
+  html:not(.dark) .text-neutral-900,
+  html:not(.dark) .text-neutral-800,
+  html:not(.dark) .text-neutral-700,
+  html:not(.dark) .text-neutral-600,
+  html:not(.dark) .text-neutral-500,
+  html:not(.dark) .text-neutral-400,
+  html:not(.dark) .text-gray-950,
+  html:not(.dark) .text-gray-900,
+  html:not(.dark) .text-gray-800,
+  html:not(.dark) .text-gray-700,
+  html:not(.dark) .text-gray-600,
+  html:not(.dark) .text-gray-500,
+  html:not(.dark) .text-gray-400,
+  html:not(.dark) .text-slate-950,
+  html:not(.dark) .text-slate-900,
+  html:not(.dark) .text-slate-800,
+  html:not(.dark) .text-slate-700,
+  html:not(.dark) .text-slate-600,
+  html:not(.dark) .text-slate-500,
+  html:not(.dark) .text-slate-400,
+  html:not(.dark) .text-zinc-950,
+  html:not(.dark) .text-zinc-900,
+  html:not(.dark) .text-zinc-800,
+  html:not(.dark) .text-zinc-700,
+  html:not(.dark) .text-zinc-600,
+  html:not(.dark) .text-zinc-500,
+  html:not(.dark) .text-zinc-400,
+  html:not(.dark) .text-security-navy-900,
+  html:not(.dark) .text-security-navy-800,
+  html:not(.dark) .text-security-navy-700,
+  html:not(.dark) .text-security-navy-600,
+  html:not(.dark) .text-security-navy-500,
+  html:not(.dark) .text-security-amber-900,
+  html:not(.dark) .text-security-amber-800,
+  html:not(.dark) .text-security-amber-700,
+  html:not(.dark) .text-security-amber-600,
+  html:not(.dark) .text-security-amber-500,
+  html:not(.dark) .text-security-emerald-900,
+  html:not(.dark) .text-security-emerald-800,
+  html:not(.dark) .text-security-emerald-700,
+  html:not(.dark) .text-security-emerald-600,
+  html:not(.dark) .text-security-emerald-500 {
+    color: #000000 !important;
+  }
 }

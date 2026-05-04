@@ -19,37 +19,37 @@ const quickLinks: {
     href: "/academy/finance",
     label: "Finance",
     description: "Billed vs collected, outstanding, pending verification",
-    iconWrap: "bg-emerald-100 text-emerald-700",
+    iconWrap: "bg-security-emerald-100 text-black border border-security-emerald-300",
   },
   {
     href: "/academy/invoices",
     label: "Invoices",
     description: "Draft, issue, and track course fees",
-    iconWrap: "bg-sky-100 text-sky-700",
+    iconWrap: "bg-security-navy-50 text-black border border-security-navy-200",
   },
   {
     href: "/academy/branches",
     label: "Branches",
     description: "Training venues and academy locations",
-    iconWrap: "bg-violet-100 text-violet-700",
+    iconWrap: "bg-security-navy-100 text-black border border-security-navy-300",
   },
   {
     href: "/academy/students",
     label: "Students",
     description: "Learner profiles and documents",
-    iconWrap: "bg-amber-100 text-amber-800",
+    iconWrap: "bg-security-amber-100 text-black border border-security-amber-300",
   },
   {
     href: "/academy/courses",
     label: "Courses",
     description: "Course catalogue and management",
-    iconWrap: "bg-teal-100 text-teal-800",
+    iconWrap: "bg-security-navy-200 text-black border border-security-navy-400",
   },
   {
     href: "/academy/enrolments",
     label: "Enrolments",
     description: "Link students to course runs",
-    iconWrap: "bg-fuchsia-100 text-fuchsia-800",
+    iconWrap: "bg-white text-black border border-[var(--hairline-strong)]",
   },
 ];
 
@@ -86,7 +86,7 @@ function formatMoney(fmt: Intl.NumberFormat, raw: string): string {
 
 function ChevronRight() {
   return (
-    <svg className="h-4 w-4 shrink-0 text-base-content/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+    <svg className="h-4 w-4 shrink-0 text-black/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
     </svg>
   );
@@ -94,7 +94,7 @@ function ChevronRight() {
 
 function MortarboardIcon() {
   return (
-    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-2xl" aria-hidden>
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-security-lg bg-security-navy-100 text-2xl" aria-hidden>
       <span>🎓</span>
     </div>
   );
@@ -214,9 +214,9 @@ export default function AcademyHubPage() {
   const rDelta = formatDelta(summary?.deltas.activeCourseRuns ?? null);
 
   return (
-    <div className="w-full min-w-0">
+    <div className="module-shell">
       {error && (
-        <div className="mb-4 rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-sm text-error" role="alert">
+        <div className="notice-error mb-4" role="alert">
           {error}
         </div>
       )}
@@ -225,9 +225,9 @@ export default function AcademyHubPage() {
         <div className="flex gap-3">
           <MortarboardIcon />
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-security-navy-900">Academy</h1>
-            <p className="mt-1 text-sm text-base-content/70">
-              Manage students, courses, intakes, and enrolments in one place. Grant the <code className="rounded bg-base-200 px-1 text-xs">/academy</code> module to
+            <h1 className="page-title">Academy</h1>
+            <p className="mt-1 text-sm text-black">
+              Manage students, courses, intakes, and enrolments in one place. Grant the <code className="code-chip">/academy</code> module to
               give users access.
             </p>
           </div>
@@ -236,16 +236,16 @@ export default function AcademyHubPage() {
 
       <div className="grid gap-8 lg:grid-cols-[1fr_17.5rem] lg:items-start">
         <div className="min-w-0 space-y-6">
-          <div className="overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/10 via-amber-50/40 to-base-100 shadow-sm">
+          <div className="card-feature-orange overflow-hidden">
             <div className="grid gap-4 p-5 sm:grid-cols-[1fr_minmax(9rem,11rem)] sm:items-center">
               <div>
-                <h2 className="text-lg font-semibold text-security-navy-900">New student intake</h2>
-                <p className="mt-2 text-sm text-base-content/80">
+                <h2 className="text-lg sm:text-xl font-semibold text-black">New student intake</h2>
+                <p className="mt-2 text-sm text-black">
                   Walk through details, admin fee, and enrolment in open course runs — best for front desk.
                 </p>
                 <Link
                   href="/academy/intake"
-                  className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-content shadow-sm transition hover:brightness-105"
+                  className="btn-primary mt-4"
                 >
                   Start new intake
                   <span className="text-base leading-none" aria-hidden>
@@ -270,35 +270,38 @@ export default function AcademyHubPage() {
 
           <div>
             {profileReadiness && !profileReadiness.compliant && (
-              <div className="mb-4 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm">
-                <p className="font-semibold">Academy profile setup incomplete</p>
-                <p className="mt-1 text-base-content/80">Some workflows are blocked until profile compliance is complete.</p>
-                <Link href="/academy/profile" className="mt-2 inline-flex text-primary underline">
-                  Complete profile setup
-                </Link>
+              <div className="notice-warn mb-4">
+                <div>
+                  <p className="font-semibold">Academy profile setup incomplete</p>
+                  <p className="mt-1">Some workflows are blocked until profile compliance is complete.</p>
+                  <Link href="/academy/profile" className="link-inline mt-2 inline-flex">
+                    Complete profile setup
+                  </Link>
+                </div>
               </div>
             )}
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Quick access</h3>
+            <h3 className="section-title">Quick access</h3>
             <ul className="mt-3 grid gap-3 sm:grid-cols-2">
               {quickLinks.map((item, i) => (
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    className="group flex items-start gap-3 rounded-2xl border border-base-300/90 bg-base-100 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow"
+                    className="group flex items-start gap-3 rounded-security-lg border border-[var(--hairline)] bg-white p-4 shadow-security-card transition hover:-translate-y-0.5 hover:border-security-navy-400 hover:shadow-security-card-hover focus-ring"
                   >
                     <span
                       className={clsx(
-                        "inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl",
+                        "inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-security",
                         item.iconWrap
                       )}
+                      aria-hidden
                     >
                       <span className="text-current">
                         <QuickIcon kind={quickIcons[i] ?? "link"} />
                       </span>
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="font-medium text-primary">{item.label}</span>
-                      <span className="mt-0.5 block text-sm text-base-content/70">{item.description}</span>
+                      <span className="font-semibold text-black">{item.label}</span>
+                      <span className="mt-0.5 block text-sm text-black">{item.description}</span>
                     </span>
                     <ChevronRight />
                   </Link>
@@ -308,15 +311,15 @@ export default function AcademyHubPage() {
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Shortcuts</h3>
+            <h3 className="section-title">Shortcuts</h3>
             <div className="mt-3 flex flex-wrap gap-2">
               {shortcuts.map((s) => (
                 <Link
                   key={s.href + s.label}
                   href={s.href}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-base-300 bg-base-100/90 px-3.5 py-2 text-sm font-medium text-security-navy-800 shadow-sm transition hover:border-primary/40 hover:bg-base-200/50"
+                  className="btn-secondary"
                 >
-                  <span className="text-primary">+</span>
+                  <span aria-hidden>+</span>
                   {s.label}
                 </Link>
               ))}
@@ -326,7 +329,7 @@ export default function AcademyHubPage() {
 
         <div className="shrink-0 space-y-6 min-w-0 w-full max-w-sm lg:max-w-none lg:w-auto mx-auto lg:mx-0">
           <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-base-content/50">At a glance</h3>
+            <h3 className="section-title">At a glance</h3>
             <ul className="mt-3 space-y-3">
               {summary ? (
                 <>
@@ -356,21 +359,21 @@ export default function AcademyHubPage() {
 
           <div>
             <div className="flex items-baseline justify-between gap-2">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Recent activity</h3>
+              <h3 className="section-title">Recent activity</h3>
               <Link
                 href="/academy/activity"
-                className="shrink-0 text-xs font-medium text-primary hover:underline"
+                className="link-inline shrink-0 min-h-9 text-xs font-semibold"
               >
                 View all
               </Link>
             </div>
             {activityPreview.length === 0 && summary ? (
-              <p className="mt-3 text-sm text-base-content/50">No activity yet.</p>
+              <p className="mt-3 text-sm text-black">No activity yet.</p>
             ) : (
               <ul className="mt-3 space-y-1.5">
                 {activityPreview.length === 0
                   ? [0, 1, 2].map((i) => (
-                      <li key={i} className="h-12 animate-pulse rounded-lg bg-base-200/60" />
+                      <li key={i} className="h-12 animate-pulse rounded-security bg-[var(--bg-nav-hover)]" />
                     ))
                   : activityPreview.map((a) => (
                       <li key={a.id}>
@@ -390,7 +393,7 @@ function KpiRowSkeleton() {
   return (
     <>
       {[0, 1, 2, 3].map((i) => (
-        <li key={i} className="h-16 rounded-xl border border-base-200 bg-base-100/60 animate-pulse" />
+        <li key={i} className="h-16 rounded-security border border-[var(--hairline)] bg-white animate-pulse" />
       ))}
     </>
   );
@@ -414,29 +417,29 @@ function Kpi({
     delta && delta.tone !== "none" ? (
       <span
         className={clsx(
-          "ml-auto rounded-full px-1.5 py-0.5 text-xs font-medium",
+          "ml-auto rounded-full px-1.5 py-0.5 text-xs font-semibold border",
           !inverseGood
             ? delta.tone === "up"
-              ? "bg-emerald-100 text-emerald-800"
-              : "bg-rose-100 text-rose-800"
+              ? "bg-security-emerald-50 text-black border-security-emerald-200"
+              : "bg-red-50 text-black border-red-200"
             : delta.tone === "down"
-              ? "bg-emerald-100 text-emerald-800"
-              : "bg-amber-100 text-amber-900"
+              ? "bg-security-emerald-50 text-black border-security-emerald-200"
+              : "bg-security-amber-100 text-black border-security-amber-200"
         )}
       >
         {delta.text}
       </span>
     ) : delta ? (
-      <span className="ml-auto text-xs text-base-content/50">{delta.text}</span>
+      <span className="ml-auto text-xs text-black">{delta.text}</span>
     ) : null;
   return (
-    <li className="rounded-xl border border-base-200/80 bg-gradient-to-b from-base-100 to-base-200/20 p-3.5 shadow-sm">
+    <li className="kpi-tile">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs text-base-content/60">{label}</p>
+        <p className="kpi-label">{label}</p>
         {chip}
       </div>
-      <p className="mt-1 text-xl font-semibold tabular-nums text-security-navy-900">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-base-content/50">{sub}</p>}
+      <p className="kpi-value mt-1">{value}</p>
+      {sub && <p className="mt-0.5 caption">{sub}</p>}
     </li>
   );
 }

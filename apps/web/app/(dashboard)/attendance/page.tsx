@@ -983,7 +983,7 @@ function AttendanceRow({
             />
           )}
           {(isManualEntry || att.source === "manual" || att.shift?.post?.site?.name === "Manual") && (
-            <span className="badge bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-700">
+            <span className="badge-warning">
               Manual
             </span>
           )}

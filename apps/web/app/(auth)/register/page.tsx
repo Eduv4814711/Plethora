@@ -9,12 +9,12 @@ import { onboardCompany } from "@/lib/api";
 function RegisterFallback() {
   return (
     <div className="w-full animate-fade-in">
-      <div className="card-elevated p-10 md:p-12">
-        <div className="h-6 w-48 bg-security-navy-200 rounded-security mb-4 animate-pulse" />
+      <div className="card-elevated p-8 sm:p-10 md:p-12">
+        <div className="h-6 w-48 bg-security-navy-100 rounded-security mb-4 animate-pulse" />
         <div className="space-y-4">
-          <div className="h-11 bg-security-navy-200 rounded-security animate-pulse" />
-          <div className="h-11 bg-security-navy-200 rounded-security animate-pulse" />
-          <div className="h-11 bg-security-navy-200 rounded-security animate-pulse" />
+          <div className="h-11 bg-security-navy-100 rounded-security animate-pulse" />
+          <div className="h-11 bg-security-navy-100 rounded-security animate-pulse" />
+          <div className="h-11 bg-security-navy-100 rounded-security animate-pulse" />
         </div>
       </div>
     </div>
@@ -100,12 +100,12 @@ function RegisterFormContent() {
 
   return (
     <div className="w-full animate-fade-in">
-      <div className="card-elevated p-10 md:p-12">
-        <div className="text-center mb-8 pb-8 border-b-2 border-neutral-200">
+      <div className="card-elevated p-8 sm:p-10 md:p-12">
+        <div className="text-center mb-8 pb-6 border-b border-[var(--hairline)]">
           <div className="inline-flex items-center justify-center mb-4">
-            <img src="/plethora-logo.svg" alt="Plethora" className="h-[7.5rem] w-auto object-contain" />
+            <img src="/plethora-logo.svg" alt="Plethora" className="h-24 sm:h-28 w-auto object-contain" />
           </div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-security-navy-500 mt-2">
+          <p className="label-text mt-2">
             Register your security company
           </p>
         </div>
@@ -189,7 +189,7 @@ function RegisterFormContent() {
                   <button
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-security text-security-navy-600 hover:bg-security-navy-50 border border-transparent hover:border-security-navy-300 transition-colors"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-security text-black hover:bg-[var(--bg-nav-hover)] border border-transparent hover:border-[var(--hairline)] transition-colors focus-ring"
                     aria-label={showPassword ? "Hide password" : "Show password"}
                   >
                     {showPassword ? (
@@ -227,7 +227,7 @@ function RegisterFormContent() {
           </div>
 
           {error && (
-            <div className="p-4 text-sm text-security-navy bg-security-amber-50 border-2 border-security-amber-200 rounded-security">
+            <div className="notice-error">
               {error}
             </div>
           )}
@@ -235,15 +235,15 @@ function RegisterFormContent() {
           <button
             type="submit"
             disabled={submitting}
-            className="btn-primary w-full py-3"
+            className="btn-primary w-full py-3 text-base"
           >
             {submitting ? "Creating account..." : "Create company & sign in"}
           </button>
         </form>
 
-        <p className="text-center text-sm text-security-navy-600 mt-6">
+        <p className="text-center text-sm text-black mt-6">
           Already have an account?{" "}
-          <Link href="/login" className="font-semibold text-security-navy hover:underline">
+          <Link href="/login" className="link-inline">
             Sign in
           </Link>
         </p>
