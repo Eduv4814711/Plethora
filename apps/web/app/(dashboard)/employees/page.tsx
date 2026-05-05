@@ -264,6 +264,7 @@ export default function EmployeesPage() {
             <option value="hired">Hired</option>
             <option value="training">Training</option>
             <option value="active">Active</option>
+            <option value="reliever">Reliever</option>
             <option value="suspended">Suspended</option>
             <option value="offboarded">Offboarded</option>
           </select>
@@ -964,6 +965,7 @@ function EmployeeForm({
               <option value="hired">Hired</option>
               <option value="training">Training</option>
               <option value="active">Active</option>
+              <option value="reliever">Reliever</option>
               <option value="suspended">Suspended</option>
               <option value="offboarded">Offboarded</option>
             </select>

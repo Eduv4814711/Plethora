@@ -301,96 +301,6 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4 pb-1 flex-1 min-h-0 auto-rows-fr overflow-hidden">
         {/* Row 1 */}
-        <DashboardCard title="Guards On Duty" className="h-full min-h-0">
-          <div className="flex-1 min-h-[120px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={guardsByDay} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-              <XAxis dataKey="name" tick={{ fill: "#000000", fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis domain={[0, "auto"]} tick={{ fill: "#000000", fontSize: 12 }} axisLine={false} tickLine={false} />
-              <Bar dataKey="value" fill="#FF9800" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-          </div>
-        </DashboardCard>
-
-        <DashboardCard title="Active Sites" className="h-full min-h-0">
-          <div className="flex flex-col items-center justify-center flex-1 gap-2 py-1">
-            <div className="flex h-20 w-20 items-center justify-center rounded-security-lg bg-gradient-to-br from-security-navy-100 to-security-navy-50 border border-security-navy-300 shadow-inner">
-              <span className="text-3xl font-bold tabular-nums text-black tracking-tight">{data?.activeSitesCount ?? 0}</span>
-            </div>
-            {typeof data?.activeSitesDelta === "number" && (
-              <p className="text-sm text-black text-center">
-                <span className={`font-semibold ${data.activeSitesDelta >= 0 ? "text-black" : "text-red-700"}`}>
-                  {data.activeSitesDelta >= 0 ? "+" : ""}{data.activeSitesDelta}
-                </span>
-                {" "}since last month
-              </p>
-            )}
-            {canSites && (
-              <Link
-                href="/sites"
-                className="btn-primary"
-              >
-                Add site
-                <span className="text-lg leading-none">+</span>
-              </Link>
-            )}
-          </div>
-        </DashboardCard>
-
-        <DashboardCard title="Active Guards Rostered" className="h-full min-h-0">
-          <div className="flex flex-col h-full gap-2">
-            <div className="flex-1 min-h-[100px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={shiftsOverTimeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#FF9800" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="#FF9800" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                  <XAxis dataKey="name" tick={{ fill: "#000000", fontSize: 12 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "#000000", fontSize: 12 }} axisLine={false} tickLine={false} />
-                  <Area type="monotone" dataKey="value" stroke="#FF9800" strokeWidth={2} fill="url(#areaFill)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-            {canRostering && (
-              <Link
-                href="/rostering"
-                className="btn-secondary w-full justify-center text-sm"
-              >
-                View schedule
-              </Link>
-            )}
-          </div>
-        </DashboardCard>
-
-        <DashboardCard title="My Tasks" className="h-full min-h-0">
-          <div className="space-y-2 text-sm flex-1">
-            <div className="flex justify-between items-center rounded-security bg-red-50 border border-red-200 px-3 py-2.5">
-              <span className="font-semibold text-black">Overdue</span>
-              <span className="font-bold tabular-nums text-black">{data?.taskStats?.overdue ?? 0}</span>
-            </div>
-            <div className="flex justify-between items-center rounded-security bg-security-navy-50 border border-security-navy-200 px-3 py-2.5">
-              <span className="font-semibold text-black">Due today</span>
-              <span className="font-bold tabular-nums text-black">{data?.taskStats?.dueToday ?? 0}</span>
-            </div>
-          </div>
-          <Link
-            href="/tasks"
-            className="btn-secondary mt-auto w-full justify-center text-sm"
-          >
-            View Tasks
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-          </Link>
-        </DashboardCard>
-
-        {/* Row 2 */}
         <DashboardCard title="Team Member By Status" className="h-full min-h-0">
           <div className="relative w-full flex-1 flex flex-col gap-2">
             <div className="relative flex-1 min-h-[120px] flex items-center justify-center">
@@ -440,6 +350,96 @@ export default function DashboardPage() {
                 ));
               })()}
             </div>
+          </div>
+        </DashboardCard>
+
+        <DashboardCard title="My Tasks" className="h-full min-h-0">
+          <div className="space-y-2 text-sm flex-1">
+            <div className="flex justify-between items-center rounded-security bg-red-50 border border-red-200 px-3 py-2.5">
+              <span className="font-semibold text-black">Overdue</span>
+              <span className="font-bold tabular-nums text-black">{data?.taskStats?.overdue ?? 0}</span>
+            </div>
+            <div className="flex justify-between items-center rounded-security bg-security-navy-50 border border-security-navy-200 px-3 py-2.5">
+              <span className="font-semibold text-black">Due today</span>
+              <span className="font-bold tabular-nums text-black">{data?.taskStats?.dueToday ?? 0}</span>
+            </div>
+          </div>
+          <Link
+            href="/tasks"
+            className="btn-secondary mt-auto w-full justify-center text-sm"
+          >
+            View Tasks
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </Link>
+        </DashboardCard>
+
+        <DashboardCard title="Guards On Duty" className="h-full min-h-0">
+          <div className="flex-1 min-h-[120px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={guardsByDay} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+              <XAxis dataKey="name" tick={{ fill: "#000000", fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis domain={[0, "auto"]} tick={{ fill: "#000000", fontSize: 12 }} axisLine={false} tickLine={false} />
+              <Bar dataKey="value" fill="#FF9800" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          </div>
+        </DashboardCard>
+
+        <DashboardCard title="Active Sites" className="h-full min-h-0">
+          <div className="flex flex-col items-center justify-center flex-1 gap-2 py-1">
+            <div className="flex h-20 w-20 items-center justify-center rounded-security-lg bg-gradient-to-br from-security-navy-100 to-security-navy-50 border border-security-navy-300 shadow-inner">
+              <span className="text-3xl font-bold tabular-nums text-black tracking-tight">{data?.activeSitesCount ?? 0}</span>
+            </div>
+            {typeof data?.activeSitesDelta === "number" && (
+              <p className="text-sm text-black text-center">
+                <span className={`font-semibold ${data.activeSitesDelta >= 0 ? "text-black" : "text-red-700"}`}>
+                  {data.activeSitesDelta >= 0 ? "+" : ""}{data.activeSitesDelta}
+                </span>
+                {" "}since last month
+              </p>
+            )}
+            {canSites && (
+              <Link
+                href="/sites"
+                className="btn-primary"
+              >
+                Add site
+                <span className="text-lg leading-none">+</span>
+              </Link>
+            )}
+          </div>
+        </DashboardCard>
+
+        {/* Row 2 */}
+        <DashboardCard title="Active Guards Rostered" className="h-full min-h-0">
+          <div className="flex flex-col h-full gap-2">
+            <div className="flex-1 min-h-[100px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={shiftsOverTimeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#FF9800" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#FF9800" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                  <XAxis dataKey="name" tick={{ fill: "#000000", fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#000000", fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <Area type="monotone" dataKey="value" stroke="#FF9800" strokeWidth={2} fill="url(#areaFill)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            {canRostering && (
+              <Link
+                href="/rostering"
+                className="btn-secondary w-full justify-center text-sm"
+              >
+                View schedule
+              </Link>
+            )}
           </div>
         </DashboardCard>
 
