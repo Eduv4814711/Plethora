@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
+import { getResolvedAcademyCompanySettings } from "../../lib/academy-company-settings.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { getAcademyComplianceGate } from "../../services/academy-compliance.service.js";
 import { academyProtect } from "./constants.js";
@@ -104,8 +105,10 @@ export async function academyCertificatesRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "Validation error", message: gate.message, blockers: "blockers" in gate ? gate.blockers : undefined });
     }
 
+    const ac = await getResolvedAcademyCompanySettings(companyId);
     const count = await prisma.academyCertificate.count({ where: { companyId } });
-    const certificateNumber = d.certificateNumber?.trim() || `CERT-${String(count + 1).padStart(5, "0")}`;
+    const certificateNumber =
+      d.certificateNumber?.trim() || `${ac.certificateNumberPrefix}-${String(count + 1).padStart(5, "0")}`;
     const verificationCode = randomBytes(8).toString("hex");
     const cert = await prisma.academyCertificate.create({
       data: {

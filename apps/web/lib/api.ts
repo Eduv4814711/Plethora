@@ -120,6 +120,15 @@ export async function completeSetupPassword(token: string, password: string): Pr
   }
 }
 
+export interface AcademyCompanySettingsPayload {
+  studentNumberPrefix?: string;
+  invoiceNumberPrefix?: string;
+  receiptNumberPrefix?: string;
+  certificateNumberPrefix?: string;
+  renewalRedWithinDays?: number;
+  renewalAmberWithinDays?: number;
+}
+
 export interface CompanySettings {
   id: string;
   name: string;
@@ -152,6 +161,7 @@ export interface CompanySettings {
       officeLongitude?: number | null;
       officeGeofenceRadiusMeters?: number | null;
     };
+    academy?: AcademyCompanySettingsPayload | null;
   } | null;
 }
 
@@ -204,6 +214,7 @@ export async function updateSettings(
         officeLongitude?: number | null;
         officeGeofenceRadiusMeters?: number | null;
       };
+      academy?: Partial<AcademyCompanySettingsPayload>;
     }>;
   }>
 ): Promise<CompanySettings> {

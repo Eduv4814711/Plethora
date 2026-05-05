@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { AcademyStudentStatus, AcademyPsiraPreRegistrationStatus } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
+import { getResolvedAcademyCompanySettings } from "../../lib/academy-company-settings.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { academyProtect } from "./constants.js";
 
@@ -19,7 +20,8 @@ const optionalString = z.string().optional().nullable();
 const optionalDate = z.string().optional().nullable().transform((s) => (s ? sanitizeDate(s) : undefined));
 
 async function generateNextStudentNumber(companyId: string): Promise<string> {
-  const prefix = "STU";
+  const ac = await getResolvedAcademyCompanySettings(companyId);
+  const prefix = ac.studentNumberPrefix;
   const pattern = new RegExp(`^${prefix}-(\\d+)$`, "i");
   const students = await prisma.student.findMany({
     where: { companyId },

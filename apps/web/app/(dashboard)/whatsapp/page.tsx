@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
@@ -29,6 +29,8 @@ export default function WhatsAppPage() {
   const [requiresTemplate, setRequiresTemplate] = useState(false);
   const [templates, setTemplates] = useState<{ name: string; language: string }[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [contactSearchOpen, setContactSearchOpen] = useState(false);
+  const [contactSearch, setContactSearch] = useState("");
 
   const fetchContacts = useCallback(async () => {
     if (!token) return;
@@ -87,6 +89,21 @@ export default function WhatsAppPage() {
         .catch(() => setTemplates([]));
     }
   }, [requiresTemplate, token]);
+
+  const filteredContacts = useMemo(() => {
+    const q = contactSearch.trim().toLowerCase();
+    if (!q) return contacts;
+    const digits = q.replace(/\D/g, "");
+    return contacts.filter((c) => {
+      const name = `${c.firstName ?? ""} ${c.lastName ?? ""}`.toLowerCase();
+      const phone = String(c.phone ?? "").replace(/\D/g, "");
+      if (name.includes(q)) return true;
+      if (digits.length >= 1 && phone.includes(digits)) return true;
+      return false;
+    });
+  }, [contacts, contactSearch]);
+
+  const showContactSearch = contactSearchOpen;
 
   const handleSendMessage = async () => {
     if (!token || !selectedContact || !messageInput.trim()) return;
@@ -152,10 +169,50 @@ export default function WhatsAppPage() {
             </div>
           ) : (
             <div className="card-dashboard p-5 flex flex-col md:h-[calc(100vh-13rem)] overflow-hidden">
-              <h2 className="section-title mb-3">Contacts</h2>
+              <div className="flex items-center gap-2 mb-2">
+                <h2 className="section-title mb-0 flex-1 min-w-0">Contacts</h2>
+                <button
+                  type="button"
+                  className={`shrink-0 inline-flex items-center justify-center h-9 w-9 rounded-security border transition-colors focus-ring ${
+                    showContactSearch
+                      ? "border-security-navy-400 bg-security-navy-50 text-black"
+                      : "border-[var(--hairline)] bg-white hover:bg-[var(--bg-nav-hover)] text-black"
+                  }`}
+                  onClick={() =>
+                    setContactSearchOpen((open) => {
+                      if (open) setContactSearch("");
+                      return !open;
+                    })
+                  }
+                  aria-expanded={showContactSearch}
+                  aria-controls="whatsapp-contact-search"
+                  title="Search contacts"
+                >
+                  <span className="sr-only">Search contacts</span>
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </button>
+              </div>
+              {showContactSearch && (
+                <div className="mb-3 shrink-0" id="whatsapp-contact-search">
+                  <label htmlFor="whatsapp-contact-query" className="sr-only">
+                    Filter contacts by name or phone
+                  </label>
+                  <input
+                    id="whatsapp-contact-query"
+                    type="search"
+                    autoComplete="off"
+                    placeholder="Search by name or number…"
+                    value={contactSearch}
+                    onChange={(e) => setContactSearch(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-[var(--hairline-strong)] rounded-security bg-white text-black placeholder:text-black/45 focus:outline-none focus:border-security-navy-600 focus:ring-2 focus:ring-security-navy-200"
+                  />
+                </div>
+              )}
               {contacts.length > 0 ? (
                 <div className="space-y-1 flex-1 min-h-0 overflow-y-auto pr-1">
-                  {contacts.map((c) => (
+                  {filteredContacts.map((c) => (
                     <button
                       key={c.id}
                       type="button"
@@ -177,6 +234,9 @@ export default function WhatsAppPage() {
                       </div>
                     </button>
                   ))}
+                  {filteredContacts.length === 0 && (
+                    <p className="text-sm text-black/70 px-3 py-2">No contacts match your search.</p>
+                  )}
                 </div>
               ) : (
                 <div className="empty-state mt-2">

@@ -15,7 +15,7 @@ import {
 import { DateInput } from "@/components/date-input";
 import { clsx } from "clsx";
 
-type Tab = "profile" | "business" | "settings" | "users" | "migrate" | "factory_reset";
+type Tab = "profile" | "business" | "settings" | "academy" | "users" | "migrate" | "factory_reset";
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Admin",
@@ -67,7 +67,7 @@ export default function SettingsPage() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab") as Tab | null;
   const isFullAdminUser = user ? isFullAdmin(user) : false;
-  const tabIds: Tab[] = ["profile", "business", "settings", "users", "migrate", "factory_reset"];
+  const tabIds: Tab[] = ["profile", "business", "settings", "academy", "users", "migrate", "factory_reset"];
   const [activeTab, setActiveTab] = useState<Tab>(tabParam && tabIds.includes(tabParam) ? tabParam : "profile");
 
   useEffect(() => {
@@ -82,6 +82,7 @@ export default function SettingsPage() {
     { id: "profile", label: "Profile" },
     { id: "business", label: "Business Details" },
     { id: "settings", label: "Business Settings" },
+    { id: "academy", label: "Academy" },
     { id: "users", label: "Users", adminOnly: true },
     { id: "migrate", label: "Bulk Import/Export", href: "/settings/migrate" },
     { id: "factory_reset", label: "Factory Reset", adminOnly: true },
@@ -174,6 +175,25 @@ export default function SettingsPage() {
               setSaveError(null);
               try {
                 await update({ businessSettings: data });
+              } catch (err) {
+                setSaveError(err instanceof Error ? err.message : "Failed to save");
+              } finally {
+                setSaving(false);
+              }
+            }}
+          />
+        )}
+        {activeTab === "academy" && (
+          <AcademySettingsSection
+            readOnly={!isFullAdminUser}
+            settings={settings}
+            saving={saving}
+            saveError={saveError}
+            onSave={async (data) => {
+              setSaving(true);
+              setSaveError(null);
+              try {
+                await update({ businessSettings: { academy: data } });
               } catch (err) {
                 setSaveError(err instanceof Error ? err.message : "Failed to save");
               } finally {
@@ -705,6 +725,213 @@ function BusinessSettingsSection({
         {!readOnly && (
           <button type="submit" disabled={saving} className="btn-primary">
             {saving ? "Saving..." : "Save Business Settings"}
+          </button>
+        )}
+      </form>
+    </div>
+  );
+}
+
+const AC_PREFIX_RE = /^[A-Z0-9]{2,10}$/i;
+
+function AcademySettingsSection({
+  settings,
+  saving,
+  saveError,
+  onSave,
+  readOnly,
+}: {
+  settings: ReturnType<typeof useSettings>["settings"];
+  saving: boolean;
+  saveError: string | null;
+  onSave: (data: {
+    studentNumberPrefix: string;
+    invoiceNumberPrefix: string;
+    receiptNumberPrefix: string;
+    certificateNumberPrefix: string;
+    renewalRedWithinDays: number;
+    renewalAmberWithinDays: number;
+  }) => Promise<void>;
+  readOnly?: boolean;
+}) {
+  const [form, setForm] = useState({
+    studentNumberPrefix: "STU",
+    invoiceNumberPrefix: "INV",
+    receiptNumberPrefix: "REC",
+    certificateNumberPrefix: "CERT",
+    renewalRedWithinDays: "14",
+    renewalAmberWithinDays: "45",
+  });
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const a = settings?.settings?.academy;
+    if (a && typeof a === "object") {
+      setForm({
+        studentNumberPrefix: String(a.studentNumberPrefix ?? "STU").toUpperCase(),
+        invoiceNumberPrefix: String(a.invoiceNumberPrefix ?? "INV").toUpperCase(),
+        receiptNumberPrefix: String(a.receiptNumberPrefix ?? "REC").toUpperCase(),
+        certificateNumberPrefix: String(a.certificateNumberPrefix ?? "CERT").toUpperCase(),
+        renewalRedWithinDays: String(a.renewalRedWithinDays ?? 14),
+        renewalAmberWithinDays: String(a.renewalAmberWithinDays ?? 45),
+      });
+    }
+  }, [settings?.settings?.academy]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLocalError(null);
+    const prefixes = [
+      ["Student number", form.studentNumberPrefix],
+      ["Invoice number", form.invoiceNumberPrefix],
+      ["Receipt number", form.receiptNumberPrefix],
+      ["Certificate number", form.certificateNumberPrefix],
+    ] as const;
+    for (const [label, v] of prefixes) {
+      if (!AC_PREFIX_RE.test(v.trim())) {
+        setLocalError(`${label} prefix must be 2–10 letters or numbers only.`);
+        return;
+      }
+    }
+    const renewalRedWithinDays = Math.min(3650, Math.max(0, parseInt(form.renewalRedWithinDays, 10) || 0));
+    const renewalAmberWithinDays = Math.min(3650, Math.max(0, parseInt(form.renewalAmberWithinDays, 10) || 0));
+    if (renewalRedWithinDays > renewalAmberWithinDays) {
+      setLocalError('"Red" alert days must be less than or equal to "amber" alert days.');
+      return;
+    }
+    onSave({
+      studentNumberPrefix: form.studentNumberPrefix.trim().toUpperCase(),
+      invoiceNumberPrefix: form.invoiceNumberPrefix.trim().toUpperCase(),
+      receiptNumberPrefix: form.receiptNumberPrefix.trim().toUpperCase(),
+      certificateNumberPrefix: form.certificateNumberPrefix.trim().toUpperCase(),
+      renewalRedWithinDays,
+      renewalAmberWithinDays,
+    });
+  };
+
+  const showError = localError ?? saveError;
+
+  return (
+    <div>
+      <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Academy module settings</h3>
+      <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-6">
+        Company-wide defaults for numbering and renewal alerts. Changing prefixes affects new documents only (
+        existing numbers are unchanged).
+      </p>
+      <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              Student number prefix
+            </label>
+            <input
+              type="text"
+              value={form.studentNumberPrefix}
+              onChange={(e) => setForm((f) => ({ ...f, studentNumberPrefix: e.target.value.toUpperCase() }))}
+              className="input-modern"
+              placeholder="STU"
+              maxLength={10}
+              disabled={readOnly}
+            />
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">e.g. STU-0001</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              Certificate number prefix
+            </label>
+            <input
+              type="text"
+              value={form.certificateNumberPrefix}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, certificateNumberPrefix: e.target.value.toUpperCase() }))
+              }
+              className="input-modern"
+              placeholder="CERT"
+              maxLength={10}
+              disabled={readOnly}
+            />
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">Auto-issue e.g. CERT-00001</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              Invoice number prefix
+            </label>
+            <input
+              type="text"
+              value={form.invoiceNumberPrefix}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, invoiceNumberPrefix: e.target.value.toUpperCase() }))
+              }
+              className="input-modern"
+              placeholder="INV"
+              maxLength={10}
+              disabled={readOnly}
+            />
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">e.g. INV-0001</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              Receipt number prefix
+            </label>
+            <input
+              type="text"
+              value={form.receiptNumberPrefix}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, receiptNumberPrefix: e.target.value.toUpperCase() }))
+              }
+              className="input-modern"
+              placeholder="REC"
+              maxLength={10}
+              disabled={readOnly}
+            />
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">e.g. REC-0001</p>
+          </div>
+        </div>
+        <div className="border-t border-neutral-200 dark:border-neutral-700 pt-4 mt-4 space-y-4">
+          <h4 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">Renewal alert bands</h4>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            When creating or updating renewal alerts without a manual severity, due dates within these day counts
+            (from today) pick amber or red.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                Red within (days)
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={3650}
+                step={1}
+                value={form.renewalRedWithinDays}
+                onChange={(e) => setForm((f) => ({ ...f, renewalRedWithinDays: e.target.value }))}
+                className="input-modern"
+                disabled={readOnly}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                Amber within (days)
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={3650}
+                step={1}
+                value={form.renewalAmberWithinDays}
+                onChange={(e) => setForm((f) => ({ ...f, renewalAmberWithinDays: e.target.value }))}
+                className="input-modern"
+                disabled={readOnly}
+              />
+            </div>
+          </div>
+        </div>
+        {showError && (
+          <p className="text-sm text-red-600 dark:text-red-400">{showError}</p>
+        )}
+        {!readOnly && (
+          <button type="submit" disabled={saving} className="btn-primary">
+            {saving ? "Saving…" : "Save Academy settings"}
           </button>
         )}
       </form>

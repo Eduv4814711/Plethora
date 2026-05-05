@@ -7,6 +7,11 @@ import { authMiddleware } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
+import {
+  academyCompanySettingsPatchSchema,
+  DEFAULT_ACADEMY_COMPANY_SETTINGS,
+  mergeAcademyCompanySettingsPatch,
+} from "../lib/academy-company-settings.js";
 const businessDetailsSchema = z.object({
   legalName: z.string().optional(),
   registrationNumber: z.string().optional(),
@@ -39,6 +44,7 @@ const businessSettingsSchema = z.object({
       officeGeofenceRadiusMeters: z.number().positive().optional().nullable(),
     })
     .optional(),
+  academy: academyCompanySettingsPatchSchema.optional(),
 });
 
 const updateSettingsSchema = z.object({
@@ -187,7 +193,18 @@ export async function settingsRoutes(app: FastifyInstance) {
         select: { settings: true },
       });
       const currentSettings = { ...((companyBefore?.settings as Record<string, unknown>) ?? {}) };
-      Object.assign(currentSettings, data.businessSettings);
+      const { academy: academyPatch, ...restBusinessSettings } = data.businessSettings;
+      Object.assign(currentSettings, restBusinessSettings);
+      if (academyPatch !== undefined) {
+        try {
+          currentSettings.academy = mergeAcademyCompanySettingsPatch(currentSettings.academy, academyPatch);
+        } catch (e) {
+          return reply.code(400).send({
+            error: "Validation error",
+            message: e instanceof Error ? e.message : "Invalid Academy settings",
+          });
+        }
+      }
       updateData.settings = currentSettings;
     }
 
@@ -273,6 +290,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       timezone: "Africa/Johannesburg",
       payrollPeriod: "monthly" as const,
       employeeIdPrefix: "EMP",
+      academy: { ...DEFAULT_ACADEMY_COMPANY_SETTINGS },
     };
 
     const DEFAULT_PAY_RULES = [

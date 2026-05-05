@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import type { AcademyInvoiceStatus, AcademyEnrolmentFinancialStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { getResolvedAcademyCompanySettings } from "../lib/academy-company-settings.js";
 
 /** Start of UTC day for date-only comparisons. */
 export function startOfUtcDay(date: Date): Date {
@@ -77,7 +78,8 @@ export async function getAcademyReceivablesSummary(companyId: string): Promise<{
 }
 
 export async function generateNextInvoiceNumber(companyId: string): Promise<string> {
-  const prefix = "INV";
+  const ac = await getResolvedAcademyCompanySettings(companyId);
+  const prefix = ac.invoiceNumberPrefix;
   const pattern = new RegExp(`^${prefix}-(\\d+)$`, "i");
   const rows = await prisma.academyInvoice.findMany({
     where: { companyId },
@@ -92,7 +94,8 @@ export async function generateNextInvoiceNumber(companyId: string): Promise<stri
 }
 
 export async function generateNextReceiptNumber(companyId: string): Promise<string> {
-  const prefix = "REC";
+  const ac = await getResolvedAcademyCompanySettings(companyId);
+  const prefix = ac.receiptNumberPrefix;
   const pattern = new RegExp(`^${prefix}-(\\d+)$`, "i");
   const rows = await prisma.academyReceipt.findMany({
     where: { companyId },

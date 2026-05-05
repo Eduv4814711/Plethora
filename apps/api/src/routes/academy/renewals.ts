@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
+import { getResolvedAcademyCompanySettings } from "../../lib/academy-company-settings.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { academyProtect } from "./constants.js";
 
@@ -15,11 +16,14 @@ const schema = z.object({
 });
 const patchSchema = schema.partial();
 
-function computeSeverity(dueDate: Date): "green" | "amber" | "red" {
+function computeSeverity(
+  dueDate: Date,
+  bands: { renewalRedWithinDays: number; renewalAmberWithinDays: number }
+): "green" | "amber" | "red" {
   const now = new Date();
   const diffDays = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays <= 14) return "red";
-  if (diffDays <= 45) return "amber";
+  if (diffDays <= bands.renewalRedWithinDays) return "red";
+  if (diffDays <= bands.renewalAmberWithinDays) return "amber";
   return "green";
 }
 
@@ -57,13 +61,14 @@ export async function academyRenewalsRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: "Validation error", details: parsed.error.flatten() });
     const d = parsed.data;
     const dueDate = new Date(d.dueDate);
+    const ac = await getResolvedAcademyCompanySettings(companyId);
     const alert = await prisma.academyRenewalAlert.create({
       data: {
         companyId,
         alertType: d.alertType,
         title: d.title,
         dueDate,
-        severity: d.severity ?? computeSeverity(dueDate),
+        severity: d.severity ?? computeSeverity(dueDate, ac),
         status: d.status ?? "open",
         relatedId: d.relatedId,
         notes: d.notes,
@@ -83,7 +88,15 @@ export async function academyRenewalsRoutes(app: FastifyInstance) {
     if (!existing) return reply.code(404).send({ error: "Not found", message: "Alert not found" });
     const d = parsed.data;
     const dueDate = d.dueDate ? new Date(d.dueDate) : existing.dueDate;
-    const alert = await prisma.academyRenewalAlert.update({ where: { id }, data: { ...d, dueDate: d.dueDate ? dueDate : undefined, severity: d.severity ?? computeSeverity(dueDate) } });
+    const ac = await getResolvedAcademyCompanySettings(companyId);
+    const alert = await prisma.academyRenewalAlert.update({
+      where: { id },
+      data: {
+        ...d,
+        dueDate: d.dueDate ? dueDate : undefined,
+        severity: d.severity ?? computeSeverity(dueDate, ac),
+      },
+    });
     await createAuditLog({ userId, companyId, action: "academy.renewal.update", entityType: "AcademyRenewalAlert", entityId: id });
     return { alert };
   });
