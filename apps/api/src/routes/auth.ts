@@ -83,25 +83,93 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.post("/login", async (request, reply) => {
+    // #region agent log
+    const DBG = "[LOGIN_DEBUG_d774d4]";
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const rawEmail = typeof body.email === "string" ? body.email : "";
+    const rawPassword = typeof body.password === "string" ? body.password : "";
+    const rawCompanyId = typeof body.companyId === "string" ? body.companyId : "";
+    request.log.info(
+      {
+        tag: DBG,
+        hypothesisId: "H1",
+        bodyKeys: Object.keys(body),
+        emailType: typeof body.email,
+        emailLen: rawEmail.length,
+        emailHasAt: rawEmail.includes("@"),
+        emailHasLeadingOrTrailingWs: rawEmail !== rawEmail.trim(),
+        emailLooksValid: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail),
+        emailDomainTail: rawEmail.includes("@") ? rawEmail.split("@").pop()?.slice(-30) : null,
+        passwordType: typeof body.password,
+        passwordLen: rawPassword.length,
+        companyIdProvided: rawCompanyId.length > 0,
+        userAgent: request.headers["user-agent"]?.toString().slice(0, 120),
+      },
+      `${DBG} login request received`
+    );
+    // #endregion
+
     try {
       const parsed = loginSchema.safeParse(request.body);
       if (!parsed.success) {
+        const fieldErrors = parsed.error.flatten().fieldErrors;
+        // #region agent log
+        request.log.info(
+          {
+            tag: DBG,
+            hypothesisId: "H1",
+            path: "validation-400",
+            fieldErrorKeys: fieldErrors && typeof fieldErrors === "object" ? Object.keys(fieldErrors) : null,
+            fieldErrorMessages: Object.fromEntries(
+              Object.entries(fieldErrors ?? {}).map(([k, v]) => [k, Array.isArray(v) ? v : String(v)])
+            ),
+            messageType: typeof fieldErrors,
+            messageIsObject: fieldErrors !== null && typeof fieldErrors === "object",
+          },
+          `${DBG} responding 400 Validation error – message field is an OBJECT`
+        );
+        // #endregion
         return reply.code(400).send({
           error: "Validation error",
-          message: parsed.error.flatten().fieldErrors,
+          message: fieldErrors,
         });
       }
 
       const result = await login(parsed.data);
       if (!result) {
+        // #region agent log
+        request.log.info(
+          { tag: DBG, hypothesisId: "H2", path: "invalid-credentials-401" },
+          `${DBG} responding 401 Invalid credentials – message field is a STRING`
+        );
+        // #endregion
         return reply.code(401).send({
           error: "Invalid credentials",
           message: "Invalid email or password",
         });
       }
 
+      // #region agent log
+      request.log.info(
+        { tag: DBG, path: "success-200", userId: result.user?.id },
+        `${DBG} responding 200 success`
+      );
+      // #endregion
       return reply.send(result);
     } catch (err) {
+      // #region agent log
+      request.log.info(
+        {
+          tag: DBG,
+          hypothesisId: "H3+H7",
+          path: "catch-500",
+          errCtor: err instanceof Error ? err.constructor.name : typeof err,
+          errMessageType: typeof (err as { message?: unknown })?.message,
+          errMessage: err instanceof Error ? err.message : String(err),
+        },
+        `${DBG} responding 500 Login failed (caught)`
+      );
+      // #endregion
       request.log.error(err);
       return reply.code(500).send({
         error: "Login failed",
