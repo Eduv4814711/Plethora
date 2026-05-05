@@ -28,16 +28,17 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    const isInitialLoad = !settings;
+    if (isInitialLoad) setLoading(true);
     setError(null);
     try {
       const data = await getSettings(token);
       setSettings(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load settings");
-      setSettings(null);
+      if (isInitialLoad) setSettings(null);
     } finally {
-      setLoading(false);
+      if (isInitialLoad) setLoading(false);
     }
   };
 
