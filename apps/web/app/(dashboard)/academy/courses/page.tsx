@@ -123,26 +123,30 @@ export default function AcademyCoursesPage() {
 
   return (
     <div className="module-shell">
-      <div>
-        <Link href="/academy" className="text-sm font-semibold text-security-navy-800 hover:underline lg:hidden">
+      <header>
+        <Link href="/academy" className="link-inline text-sm font-semibold lg:hidden">
           ← Academy
         </Link>
+        <p className="label-text mt-1">Module · Academy</p>
         <h1 className="page-title mt-1">Courses</h1>
-      </div>
+        <p className="mt-1 text-sm text-black">Catalogue of academy offerings and default course fees.</p>
+      </header>
 
       {!canManage && (
-        <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm">
+        <div className="notice-info" role="status">
           Read-only: only admins can create, edit, activate, or delete courses.
         </div>
       )}
 
       {error && (
-        <div className="rounded-md border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
+        <div className="notice-error" role="alert">
+          {error}
+        </div>
       )}
 
-      <form onSubmit={create} className="flex flex-wrap items-end gap-2 rounded-lg border border-neutral-200 p-4">
+      <form onSubmit={create} className="card-wireframe flex flex-wrap items-end gap-3 p-4 sm:p-5">
         <div>
-          <label className="label py-0 text-xs">Code</label>
+          <label className="label-text mb-1 block">Code</label>
           <input
             className="input-compact"
             value={code}
@@ -151,7 +155,7 @@ export default function AcademyCoursesPage() {
           />
         </div>
         <div className="min-w-[180px] flex-1">
-          <label className="label py-0 text-xs">Title</label>
+          <label className="label-text mb-1 block">Title</label>
           <input
             className="input-compact w-full"
             value={title}
@@ -160,7 +164,7 @@ export default function AcademyCoursesPage() {
           />
         </div>
         <div>
-          <label className="label py-0 text-xs">Fee (optional)</label>
+          <label className="label-text mb-1 block">Fee (optional)</label>
           <input
             type="number"
             step="0.01"
@@ -172,7 +176,7 @@ export default function AcademyCoursesPage() {
         </div>
         <button
           type="submit"
-          className="btn-primary text-sm py-2 px-4"
+          className="btn-primary text-sm"
           disabled={!canManage || !code.trim() || !title.trim() || saving}
         >
           Add course
@@ -184,7 +188,7 @@ export default function AcademyCoursesPage() {
       ) : courses.length === 0 ? (
         <p className="text-sm text-black">No courses yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-neutral-200">
+        <div className="table-scroll">
           <table className="table-module">
             <thead>
               <tr>
@@ -228,11 +232,11 @@ export default function AcademyCoursesPage() {
                   </td>
                   <td>
                     <span
-                      className={`badge-neutral ${
+                      className={
                         (editId === c.id ? editActive : c.active)
                           ? "badge-success"
                           : "badge-neutral"
-                      }`}
+                      }
                     >
                       {(editId === c.id ? editActive : c.active) ? "active" : "inactive"}
                     </span>

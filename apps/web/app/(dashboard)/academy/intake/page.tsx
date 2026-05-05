@@ -183,6 +183,7 @@ export default function AcademyIntakePage() {
         <Link href="/academy" className="link-inline text-sm font-semibold lg:hidden">
           ← Academy
         </Link>
+        <p className="label-text mt-1">Module · Academy</p>
         <h1 className="page-title mt-1">New student intake</h1>
         <p className="page-subtitle mt-1">
           Capture details, record the admin fee, then enrol into available course runs.

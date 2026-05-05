@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { academyApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -1140,10 +1141,14 @@ export default function AcademyInstructorsPage() {
 
   return (
     <div className="module-shell pb-4">
-      <section className="rounded-xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm">
+      <section className="card-wireframe overflow-hidden px-4 py-3 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <h1 className="page-title text-xl md:text-2xl">Instructors</h1>
+            <Link href="/academy" className="link-inline text-sm font-semibold lg:hidden">
+              ← Academy
+            </Link>
+            <p className="label-text mt-1">People · Instructors</p>
+            <h1 className="page-title mt-1 text-xl md:text-2xl">Instructors</h1>
             <p className="mt-0.5 text-sm text-black">
               Manage accredited instructors, contracts, certificates, compliance, and assignments.
             </p>
@@ -1227,18 +1232,18 @@ export default function AcademyInstructorsPage() {
       </section>
 
       {!canEditRecords && (
-        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-black">
+        <div className="notice-info text-sm">
           Read-only access for your role. You can review instructor data but cannot create or update records.
         </div>
       )}
 
       {error && (
-        <div className="rounded-lg border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+        <div className="notice-error" role="alert">
           {error}
         </div>
       )}
       {notice && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+        <div className="notice-success text-sm">
           {notice}
         </div>
       )}

@@ -63,9 +63,10 @@ export default function AcademyCourseRunDetailPage() {
   return (
     <div className="module-shell">
       <div>
-        <Link href="/academy/course-runs" className="text-sm font-semibold text-security-navy-800 hover:underline">
+        <Link href="/academy/course-runs" className="link-inline text-sm font-semibold">
           ← Course runs
         </Link>
+        <p className="label-text mt-1">Catalogue · Course runs</p>
         <h1 className="page-title mt-1 font-mono">{String(run.runCode)}</h1>
         {course && (
           <p className="text-sm text-black">
@@ -75,10 +76,12 @@ export default function AcademyCourseRunDetailPage() {
       </div>
 
       {error && (
-        <div className="rounded-md border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
+        <div className="notice-error" role="alert">
+          {error}
+        </div>
       )}
 
-      <div className="flex flex-wrap items-end gap-2 rounded-lg border border-neutral-200 p-4">
+      <div className="card-wireframe flex flex-wrap items-end gap-3 p-4 sm:p-5">
         <div>
           <label className="label py-0 text-xs">Status</label>
           <select className="input-compact min-h-10" value={status} onChange={(e) => setStatus(e.target.value)}>

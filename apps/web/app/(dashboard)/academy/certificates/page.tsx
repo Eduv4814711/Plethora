@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
 
@@ -141,24 +142,34 @@ export default function AcademyCertificatesPage() {
 
   return (
     <div className="module-shell">
-      <div>
-        <h1 className="page-title">Certificates</h1>
-        <p className="mt-1 text-sm text-black">Issue and manage learner certificate lifecycle with verification codes.</p>
-      </div>
+      <header>
+        <Link href="/academy" className="link-inline text-sm font-semibold lg:hidden">
+          ← Academy
+        </Link>
+        <p className="label-text mt-1">Module · Academy</p>
+        <h1 className="page-title mt-1">Certificates</h1>
+        <p className="mt-1 max-w-xl text-sm text-black">
+          Issue and manage learner certificate lifecycle with verification codes.
+        </p>
+      </header>
 
       {!canManage && (
-        <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm">
+        <div className="notice-info text-sm">
           Read-only: only admins can issue, reprint, revoke, or delete certificates.
         </div>
       )}
 
-      {error && <div className="rounded-lg border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
+      {error && (
+        <div className="notice-error" role="alert">
+          {error}
+        </div>
+      )}
 
-      <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-sm text-black">Issue certificate</h2>
+      <div className="card-wireframe p-4 sm:p-5">
+        <h2 className="section-title">Issue certificate</h2>
         <form onSubmit={create} className="mt-3 grid gap-2 md:grid-cols-4">
           <select
-            className="input-modern rounded-security-lg"
+            className="input-modern"
             value={learnerId}
             onChange={(e) => setLearnerId(e.target.value)}
             disabled={!canManage || saving}
@@ -171,7 +182,7 @@ export default function AcademyCertificatesPage() {
             ))}
           </select>
           <select
-            className="input-modern rounded-security-lg"
+            className="input-modern"
             value={courseId}
             onChange={(e) => setCourseId(e.target.value)}
             disabled={!canManage || saving}
@@ -190,15 +201,17 @@ export default function AcademyCertificatesPage() {
             onChange={(e) => setIssueDate(e.target.value)}
             disabled={!canManage || saving}
           />
-          <button className="btn-primary rounded-security-lg" disabled={!canManage || saving || !learnerId || !courseId || !issueDate}>
+          <button type="submit" className="btn-primary text-sm" disabled={!canManage || saving || !learnerId || !courseId || !issueDate}>
             Issue
           </button>
         </form>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-        <div className="border-b border-neutral-200 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">Certificate register</h2></div>
-        <div className="overflow-x-auto">
+      <section className="card-wireframe overflow-hidden p-0">
+        <div className="border-b border-[var(--hairline)] px-4 py-3 sm:px-5">
+          <h2 className="section-title normal-case text-base font-semibold tracking-tight">Certificate register</h2>
+        </div>
+        <div className="table-scroll rounded-none border-0 shadow-none">
           <table className="table-module">
             <thead><tr className="text-[11px] uppercase tracking-wide text-sm text-black"><th>Certificate #</th><th>Learner</th><th>Status</th><th>Verification</th><th className="text-right">Actions</th></tr></thead>
             <tbody>
@@ -210,18 +223,20 @@ export default function AcademyCertificatesPage() {
                 </tr>
               ) : rows.map((r) => (
                 <tr key={r.id} className="text-sm">
-                  <td className="font-medium text-security-navy-900">{r.certificateNumber}</td>
+                  <td className="font-medium text-black">{r.certificateNumber}</td>
                   <td>{r.learner ? `${r.learner.firstName} ${r.learner.lastName}` : r.learnerId}</td>
                   <td>
-                    <span className={`badge-neutral ${statusBadgeClass(r.status)}`}>
-                      {r.status}
-                    </span>
+                    <span className={statusBadgeClass(r.status)}>{r.status}</span>
                   </td>
                   <td className="font-mono text-xs">{r.verificationCode}</td>
                   <td className="text-right space-x-1">
                     <button type="button" className="btn-secondary text-xs py-2 px-3 min-h-9" onClick={() => reprint(r.id)} disabled={!canManage || saving}>Reprint</button>
                     <button type="button" className="btn-amber text-xs py-2 px-3 min-h-9" onClick={() => revoke(r.id)} disabled={!canManage || saving}>Revoke</button>
-                    {canManage && <button className="btn-danger" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}
+                    {canManage && (
+                      <button type="button" className="btn-danger-soft text-xs" onClick={() => remove(r.id)} disabled={saving}>
+                        Delete
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -235,7 +250,7 @@ export default function AcademyCertificatesPage() {
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

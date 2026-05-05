@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
 
@@ -27,51 +28,63 @@ export default function AcademyReportsPage() {
 
   return (
     <div className="module-shell">
-      <div>
-        <h1 className="page-title">Reports</h1>
-        <p className="mt-1 text-sm text-black">Operational and compliance analytics with date-range filtering.</p>
-      </div>
+      <header>
+        <Link href="/academy" className="link-inline text-sm font-semibold lg:hidden">
+          ← Academy
+        </Link>
+        <p className="label-text mt-1">Module · Academy</p>
+        <h1 className="page-title mt-1">Reports</h1>
+        <p className="mt-1 max-w-xl text-sm text-black">
+          Operational and compliance analytics with date-range filtering.
+        </p>
+      </header>
 
-      {error && <div className="rounded-lg border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
+      {error && (
+        <div className="notice-error" role="alert">
+          {error}
+        </div>
+      )}
 
-      <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-sm text-black">Date range</h2>
-        <div className="mt-3 flex flex-wrap items-end gap-2">
+      <div className="card-wireframe p-4 sm:p-5">
+        <h2 className="section-title">Date range</h2>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
           <label>
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-sm text-black">From</span>
+            <span className="label-text mb-1 block">From</span>
             <input className="input-modern" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
           </label>
           <label>
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-sm text-black">To</span>
+            <span className="label-text mb-1 block">To</span>
             <input className="input-modern" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </label>
-          <button className="btn-secondary rounded-security-lg" onClick={load}>Apply filters</button>
+          <button type="button" className="btn-secondary text-sm" onClick={load}>
+            Apply filters
+          </button>
         </div>
       </div>
 
       {data ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Object.entries(data).map(([k, v]) => (
-            <div key={k} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-sm text-black">{k}</p>
+            <div key={k} className="card-wireframe p-4">
+              <p className="section-title">{k}</p>
               {typeof v === "object" && v != null && !Array.isArray(v) ? (
-                <div className="mt-2 space-y-1 text-sm text-security-navy-900">
+                <div className="mt-2 space-y-1 text-sm text-black">
                   {Object.entries(v as Record<string, unknown>).map(([innerKey, innerValue]) => (
                     <p key={innerKey} className="break-words">
-                      <span className="font-medium">{innerKey}: </span>
+                      <span className="font-semibold">{innerKey}: </span>
                       <span>{String(innerValue ?? "—")}</span>
                     </p>
                   ))}
                 </div>
               ) : (
-                <p className="mt-2 break-words text-sm font-semibold text-security-navy-900">{String(v)}</p>
+                <p className="mt-2 break-words text-sm font-semibold text-black">{String(v)}</p>
               )}
             </div>
           ))}
         </div>
       ) : (
-        <div className="rounded-2xl border border-neutral-200 bg-white p-6 text-sm text-black shadow-sm">
-          {loading ? "Loading report metrics..." : "No report data available for this period."}
+        <div className="card-wireframe p-6 text-sm text-black">
+          {loading ? "Loading report metrics…" : "No report data available for this period."}
         </div>
       )}
     </div>

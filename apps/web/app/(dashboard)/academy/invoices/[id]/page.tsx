@@ -132,8 +132,8 @@ export default function AcademyInvoiceDetailPage() {
     return (
       <div className="p-6">
         <p className="text-red-800">{error}</p>
-        <Link href="/academy/invoices" className="link mt-2 inline-block">
-          Back
+        <Link href="/academy/finance?tab=invoices" className="link-inline mt-2 inline-block text-sm font-semibold">
+          Back to invoices
         </Link>
       </div>
     );
@@ -142,9 +142,10 @@ export default function AcademyInvoiceDetailPage() {
   return (
     <div className="module-shell">
       <div>
-        <Link href="/academy/invoices" className="text-sm font-semibold text-security-navy-800 hover:underline">
+        <Link href="/academy/finance?tab=invoices" className="link-inline text-sm font-semibold">
           ← Invoices
         </Link>
+        <p className="label-text mt-1">Finance · Invoices</p>
         <h1 className="page-title mt-1 font-mono">{invoice.invoiceNumber}</h1>
         <p className="text-sm text-black">
           {invoice.student.firstName} {invoice.student.lastName} · {invoice.student.studentNumber}
@@ -152,11 +153,13 @@ export default function AcademyInvoiceDetailPage() {
       </div>
 
       {error && (
-        <div className="rounded-md border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
+        <div className="notice-error" role="alert">
+          {error}
+        </div>
       )}
 
       <div className="flex flex-wrap gap-2">
-        <span className="badge-neutral px-3 py-1 text-sm font-medium">{invoice.status}</span>
+        <span className="badge-neutral text-sm font-medium">{invoice.status}</span>
         {invoice.status === "draft" && (
           <>
             <button type="button" className="btn-primary text-sm py-2 px-4" onClick={issue}>
@@ -174,7 +177,7 @@ export default function AcademyInvoiceDetailPage() {
         )}
       </div>
 
-      <div className="rounded-lg border border-neutral-200 p-4 text-sm">
+      <div className="card-wireframe p-4 text-sm sm:p-5">
         <p>
           Dates: {String(invoice.invoiceDate).slice(0, 10)} → due {String(invoice.dueDate).slice(0, 10)}
         </p>
@@ -190,8 +193,8 @@ export default function AcademyInvoiceDetailPage() {
         </ul>
       </div>
 
-      <section className="rounded-lg border border-neutral-200 p-4">
-        <h2 className="font-medium">Record payment</h2>
+      <section className="card-wireframe p-4 sm:p-5">
+        <h2 className="section-title normal-case text-base font-semibold tracking-tight">Record payment</h2>
         <form onSubmit={addPayment} className="mt-3 flex flex-wrap items-end gap-2">
           <div>
             <label className="label py-0 text-xs">Date</label>
@@ -218,12 +221,12 @@ export default function AcademyInvoiceDetailPage() {
         </p>
       </section>
 
-      <section className="rounded-lg border border-neutral-200 p-4">
-        <h2 className="font-medium">Payments</h2>
+      <section className="card-wireframe p-4 sm:p-5">
+        <h2 className="section-title normal-case text-base font-semibold tracking-tight">Payments</h2>
         {invoice.payments.length === 0 ? (
           <p className="mt-2 text-sm text-black">None.</p>
         ) : (
-          <div className="mt-2 overflow-x-auto">
+          <div className="mt-2 table-scroll rounded-none border-0 shadow-none">
             <table className="table-module">
               <thead>
                 <tr>

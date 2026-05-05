@@ -77,7 +77,7 @@ function SortHeader({
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1 font-semibold uppercase tracking-wide text-left hover:text-security-navy-700"
+      className="inline-flex items-center gap-1 font-semibold uppercase tracking-wide text-left hover:opacity-80"
     >
       {label}
       <span className="text-black/50" aria-hidden>
@@ -201,17 +201,18 @@ export default function AcademyBranchesPage() {
   return (
     <div className="module-shell">
       {error && (
-        <div className="rounded-lg border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
+        <div className="notice-error" role="alert">
           {error}
         </div>
       )}
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <Link href="/academy" className="text-sm font-semibold text-security-navy-800 hover:underline lg:hidden">
+          <Link href="/academy" className="link-inline text-sm font-semibold lg:hidden">
             ← Academy
           </Link>
-          <h1 className="page-title mt-0 sm:mt-1">Branches</h1>
+          <p className="label-text mt-1">Module · Academy</p>
+          <h1 className="page-title mt-1">Branches</h1>
           <p className="mt-1 max-w-xl text-sm text-black">
             Manage your training venues and academy locations.
           </p>
@@ -228,18 +229,18 @@ export default function AcademyBranchesPage() {
 
       <div
         ref={addCardRef}
-        className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm"
+        className="card-wireframe overflow-hidden p-0"
       >
         <form id={BRANCH_ADD_FORM_ID} onSubmit={create}>
           <div className="grid gap-6 p-5 sm:grid-cols-[1fr_minmax(12rem,20rem)] sm:items-stretch sm:gap-8 md:p-6">
             <div>
-              <label className="mb-2 block text-sm font-medium text-security-navy-800" htmlFor="new-branch-name">
+              <label className="label-text mb-2 block" htmlFor="new-branch-name">
                 New branch name
               </label>
               <input
                 id="new-branch-name"
                 ref={nameInputRef}
-                className="input-modern w-full max-w-md rounded-xl border-neutral-200 bg-white"
+                className="input-modern w-full max-w-md"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Johannesburg campus"
@@ -248,16 +249,7 @@ export default function AcademyBranchesPage() {
               <p className="mt-2 text-xs text-black sm:hidden">Use a clear name. You can add more detail later in settings.</p>
             </div>
             <div className="hidden sm:flex sm:flex-col sm:justify-center">
-              <div className="flex gap-3 rounded-xl border border-sky-200/80 bg-sky-50/90 p-4 text-sm text-security-navy-800">
-                <div className="shrink-0 text-sky-600" aria-hidden>
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                </div>
+              <div className="notice-info flex gap-3 p-4 text-sm">
                 <div className="min-w-0 flex-1">
                   <p>
                     Add a new training venue or location. This will be available when scheduling course runs and generating
@@ -279,7 +271,7 @@ export default function AcademyBranchesPage() {
               </div>
             </div>
           </div>
-          <div className="border-t border-neutral-200 bg-neutral-100/20 px-5 py-3 sm:px-6 sm:text-right">
+          <div className="border-t border-[var(--hairline)] bg-[var(--bg-nav-hover)]/40 px-5 py-3 sm:px-6 sm:text-right">
             <button
               type="submit"
               form={BRANCH_ADD_FORM_ID}
@@ -292,11 +284,11 @@ export default function AcademyBranchesPage() {
         </form>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-neutral-200 p-4 sm:flex-row sm:items-center sm:justify-between md:p-5">
+      <section className="card-wireframe overflow-hidden p-0">
+        <div className="flex flex-col gap-3 border-b border-[var(--hairline)] p-4 sm:flex-row sm:items-center sm:justify-between md:p-5">
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-semibold text-security-navy-900">All branches</h2>
-            <span className="rounded-full bg-security-navy-100 px-2.5 py-0.5 text-sm font-medium text-security-navy-800">
+            <h2 className="section-title normal-case text-base font-semibold tracking-tight">All branches</h2>
+            <span className="badge-neutral text-xs">
               {loading ? "…" : sorted.length}
             </span>
           </div>
@@ -349,7 +341,7 @@ export default function AcademyBranchesPage() {
             {branches.length === 0 ? "No branches yet. Add your first training venue above." : "No branches match your search."}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="table-scroll rounded-none border-0 shadow-none">
             <table className="table-module">
               <thead>
                 <tr className="text-xs text-sm text-black">
@@ -380,7 +372,7 @@ export default function AcademyBranchesPage() {
                     <td>
                       <div className="flex min-w-0 max-w-md items-center gap-3">
                         <BuildingIcon />
-                        <span className="font-medium text-security-navy-900">{b.name}</span>
+                        <span className="font-medium text-black">{b.name}</span>
                       </div>
                     </td>
                     <td className="whitespace-nowrap text-sm text-black">{cityProvince(b)}</td>
@@ -406,7 +398,7 @@ export default function AcademyBranchesPage() {
                           </svg>
                         </button>
                         {openMenuId === b.id && (
-                          <ul className="menu absolute right-0 z-20 mt-1 w-40 rounded-box border border-neutral-200 bg-white p-1 shadow-lg">
+                          <ul className="menu absolute right-0 z-20 mt-1 w-40 rounded-box border border-[var(--hairline)] bg-white p-1 shadow-lg">
                             <li>
                               <button type="button" className="text-red-800" onClick={() => remove(b.id)}>
                                 Delete
@@ -422,7 +414,7 @@ export default function AcademyBranchesPage() {
             </table>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

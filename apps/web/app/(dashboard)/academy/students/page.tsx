@@ -22,9 +22,9 @@ function AdminFeeBadge({ status }: { status?: string }) {
     s === "paid"
       ? "badge-success"
       : s === "waived"
-        ? "badge-info"
+        ? "badge-primary"
         : "badge-neutral";
-  return <span className={`badge-neutral ${cls}`}>{s}</span>;
+  return <span className={cls}>{s}</span>;
 }
 
 export default function AcademyStudentsPage() {
@@ -80,47 +80,51 @@ export default function AcademyStudentsPage() {
 
   return (
     <div className="module-shell">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Link href="/academy" className="text-sm font-semibold text-security-navy-800 hover:underline lg:hidden">
+          <Link href="/academy" className="link-inline text-sm font-semibold lg:hidden">
             ← Academy
           </Link>
+          <p className="label-text mt-1">Module · Academy</p>
           <h1 className="page-title mt-1">Students</h1>
-          <p className="text-sm text-black">{total} total</p>
+          <p className="mt-1 text-sm text-black">
+            <span className="tabular-nums font-semibold">{total}</span> total learners
+          </p>
         </div>
-        <Link href="/academy/intake" className="btn-primary text-sm py-2 px-4">
+        <Link href="/academy/intake" className="btn-primary text-sm">
           New intake
         </Link>
-      </div>
+      </header>
 
       {error && (
-        <div className="rounded-md border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
+        <div className="notice-error" role="alert">
+          {error}
+        </div>
       )}
 
-      <form onSubmit={create} className="flex flex-wrap items-end gap-2 rounded-lg border border-neutral-200 p-4">
+      <form
+        onSubmit={create}
+        className="card-wireframe flex flex-wrap items-end gap-3 p-4 sm:p-5"
+      >
         <div>
-          <label className="label py-0 text-xs">First name</label>
-          <input
-            className="input-compact"
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-          />
+          <label className="label-text mb-1 block">First name</label>
+          <input className="input-compact max-w-[220px]" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
         </div>
         <div>
-          <label className="label py-0 text-xs">Last name</label>
-          <input
-            className="input-compact"
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-          />
+          <label className="label-text mb-1 block">Last name</label>
+          <input className="input-compact max-w-[220px]" value={lastName} onChange={(e) => setLastName(e.target.value)} />
         </div>
-        <button type="submit" className="btn-primary text-sm py-2 px-4" disabled={!firstName.trim() || !lastName.trim()}>
+        <button
+          type="submit"
+          className="btn-primary text-sm"
+          disabled={!firstName.trim() || !lastName.trim()}
+        >
           Create student
         </button>
       </form>
 
       <div>
-        <label className="label py-0 text-xs">Search (min 2 characters)</label>
+        <label className="label-text mb-1 block">Search (min 2 characters)</label>
         <input
           className="input-compact max-w-md"
           value={q}
@@ -132,9 +136,11 @@ export default function AcademyStudentsPage() {
       {loading ? (
         <p className="text-sm text-black">Loading…</p>
       ) : students.length === 0 ? (
-        <p className="text-sm text-black">No students match.</p>
+        <div className="rounded-security-lg border border-dashed border-[var(--hairline-strong)] bg-white p-6 text-center text-sm text-black">
+          No students match.
+        </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-neutral-200">
+        <div className="table-scroll">
           <table className="table-module">
             <thead>
               <tr>
@@ -150,12 +156,12 @@ export default function AcademyStudentsPage() {
               {students.map((s) => (
                 <tr key={s.id}>
                   <td>
-                    <Link href={`/academy/students/${s.id}`} className="font-mono font-semibold text-security-navy-800 underline hover:no-underline text-xs">
+                    <Link href={`/academy/students/${s.id}`} className="link-inline font-mono text-xs font-semibold">
                       {s.studentNumber}
                     </Link>
                   </td>
                   <td>
-                    <Link href={`/academy/students/${s.id}`} className="link">
+                    <Link href={`/academy/students/${s.id}`} className="link-inline">
                       {s.firstName} {s.lastName}
                     </Link>
                   </td>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
 
@@ -95,24 +96,34 @@ export default function AcademyAssessmentsPage() {
 
   return (
     <div className="module-shell">
-      <div>
-        <h1 className="page-title">Assessments</h1>
-        <p className="mt-1 text-sm text-black">Capture assessment outcomes, attempts, and result statuses.</p>
-      </div>
+      <header>
+        <Link href="/academy" className="link-inline text-sm font-semibold lg:hidden">
+          ← Academy
+        </Link>
+        <p className="label-text mt-1">Module · Academy</p>
+        <h1 className="page-title mt-1">Assessments</h1>
+        <p className="mt-1 max-w-xl text-sm text-black">
+          Capture assessment outcomes, attempts, and result statuses.
+        </p>
+      </header>
 
       {!canManage && (
-        <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm">
+        <div className="notice-info" role="status">
           Read-only: only admins can add or delete assessments.
         </div>
       )}
 
-      {error && <div className="rounded-lg border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
+      {error && (
+        <div className="notice-error" role="alert">
+          {error}
+        </div>
+      )}
 
-      <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-sm text-black">New assessment</h2>
+      <div className="card-wireframe p-4 sm:p-5">
+        <h2 className="section-title">New assessment</h2>
         <form onSubmit={create} className="mt-3 grid gap-2 md:grid-cols-5">
           <select
-            className="input-modern rounded-security-lg"
+            className="input-modern"
             value={learnerId}
             onChange={(e) => setLearnerId(e.target.value)}
             disabled={!canManage || saving}
@@ -125,7 +136,7 @@ export default function AcademyAssessmentsPage() {
             ))}
           </select>
           <select
-            className="input-modern rounded-security-lg"
+            className="input-modern"
             value={courseId}
             onChange={(e) => setCourseId(e.target.value)}
             disabled={!canManage || saving}
@@ -151,30 +162,80 @@ export default function AcademyAssessmentsPage() {
             onChange={(e) => setAssessmentDate(e.target.value)}
             disabled={!canManage || saving}
           />
-          <button className="btn-primary rounded-security-lg" disabled={!canManage || saving}>Add</button>
+          <button type="submit" className="btn-primary text-sm" disabled={!canManage || saving}>
+            Add
+          </button>
         </form>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-        <div className="border-b border-neutral-200 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">Assessment register</h2></div>
-        <div className="overflow-x-auto">
+      <section className="card-wireframe overflow-hidden p-0">
+        <div className="border-b border-[var(--hairline)] px-4 py-3 sm:px-5">
+          <h2 className="section-title normal-case text-base font-semibold tracking-tight">Assessment register</h2>
+        </div>
+        <div className="table-scroll rounded-none border-0 shadow-none">
           <table className="table-module">
-            <thead><tr className="text-[11px] uppercase tracking-wide text-sm text-black"><th>Learner</th><th>Type</th><th>Date</th><th>Result</th><th className="text-right">Action</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Learner</th>
+                <th>Type</th>
+                <th>Date</th>
+                <th>Result</th>
+                <th className="text-right">Action</th>
+              </tr>
+            </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-sm text-black">Loading assessments...</td>
+                  <td colSpan={5} className="py-8 text-center text-sm text-black">
+                    Loading assessments…
+                  </td>
                 </tr>
-              ) : rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{r.learner ? `${r.learner.firstName} ${r.learner.lastName}` : r.learnerId}</td><td>{r.assessmentType}</td><td>{String(r.assessmentDate).slice(0,10)}</td><td><span className={`badge-neutral ${r.result === "pass" || r.result === "competent" ? "badge-success" : r.result ? "badge-warning" : "badge-neutral"}`}>{r.result ?? "pending"}</span></td><td className="text-right">{canManage && <button className="btn-danger" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}</td></tr>)}
-              {!loading && rows.length === 0 && (
+              ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-sm text-black">No assessments yet.</td>
+                  <td colSpan={5} className="py-8 text-center text-sm text-black">
+                    No assessments yet.
+                  </td>
                 </tr>
+              ) : (
+                rows.map((r) => (
+                  <tr key={r.id}>
+                    <td className="text-sm font-medium text-black">
+                      {r.learner ? `${r.learner.firstName} ${r.learner.lastName}` : r.learnerId}
+                    </td>
+                    <td>{r.assessmentType}</td>
+                    <td className="text-xs">{String(r.assessmentDate).slice(0, 10)}</td>
+                    <td>
+                      <span
+                        className={
+                          r.result === "pass" || r.result === "competent"
+                            ? "badge-success"
+                            : r.result
+                              ? "badge-warning"
+                              : "badge-neutral"
+                        }
+                      >
+                        {r.result ?? "pending"}
+                      </span>
+                    </td>
+                    <td className="text-right">
+                      {canManage && (
+                        <button
+                          type="button"
+                          className="btn-danger-soft text-xs"
+                          onClick={() => remove(r.id)}
+                          disabled={saving}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

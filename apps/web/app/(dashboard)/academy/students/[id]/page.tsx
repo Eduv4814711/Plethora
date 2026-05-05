@@ -189,9 +189,10 @@ export default function AcademyStudentDetailPage() {
   return (
     <div className="module-shell">
       <div>
-        <Link href="/academy/students" className="text-sm font-semibold text-security-navy-800 hover:underline">
+        <Link href="/academy/students" className="link-inline text-sm font-semibold">
           ← Students
         </Link>
+        <p className="label-text mt-1">People · Students</p>
         <h1 className="page-title mt-1">
           {student.firstName} {student.lastName}
         </h1>
@@ -199,11 +200,13 @@ export default function AcademyStudentDetailPage() {
       </div>
 
       {error && (
-        <div className="rounded-md border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
+        <div className="notice-error" role="alert">
+          {error}
+        </div>
       )}
 
-      <section className="rounded-lg border border-neutral-200 p-4">
-        <h2 className="font-medium">Admin fee</h2>
+      <section className="card-wireframe p-4 sm:p-5">
+        <h2 className="section-title normal-case text-base font-semibold tracking-tight">Admin fee</h2>
         <p className="mt-1 max-w-2xl text-sm text-black leading-relaxed">
           Students must have the admin fee <strong>paid</strong> or <strong>waived</strong> before they can be enrolled
           in course runs.
@@ -246,7 +249,7 @@ export default function AcademyStudentDetailPage() {
             ) : null}
           </dl>
         )}
-        <div className="mt-4 grid gap-4 border-t border-neutral-200 pt-4 md:grid-cols-2">
+        <div className="mt-4 grid gap-4 border-t border-[var(--hairline)] pt-4 md:grid-cols-2">
           <form
             className="space-y-2"
             onSubmit={async (e) => {
@@ -351,8 +354,8 @@ export default function AcademyStudentDetailPage() {
         </div>
       </section>
 
-      <form onSubmit={save} className="space-y-4 rounded-lg border border-neutral-200 p-4">
-        <h2 className="font-medium">Profile</h2>
+      <form onSubmit={save} className="card-wireframe space-y-4 p-4 sm:p-5">
+        <h2 className="section-title normal-case text-base font-semibold tracking-tight">Profile</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="First name" value={student.firstName} onChange={(v) => setStudent({ ...student, firstName: v })} />
           <Field label="Last name" value={student.lastName} onChange={(v) => setStudent({ ...student, lastName: v })} />
@@ -407,8 +410,8 @@ export default function AcademyStudentDetailPage() {
         </button>
       </form>
 
-      <section className="rounded-lg border border-neutral-200 p-4">
-        <h2 className="font-medium">Documents</h2>
+      <section className="card-wireframe p-4 sm:p-5">
+        <h2 className="section-title normal-case text-base font-semibold tracking-tight">Documents</h2>
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <div>
             <label className="label py-0 text-xs">Type</label>
@@ -437,7 +440,7 @@ export default function AcademyStudentDetailPage() {
         {documents.length === 0 ? (
           <p className="mt-3 text-sm text-black">No documents uploaded.</p>
         ) : (
-          <ul className="mt-3 divide-y divide-neutral-200">
+          <ul className="mt-3 divide-y divide-[var(--hairline)]">
             {documents.map((d) => (
               <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
                 <span>

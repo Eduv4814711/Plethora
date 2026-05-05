@@ -105,28 +105,31 @@ export default function AcademyEnrolmentsPage() {
 
   return (
     <div className="module-shell">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Link href="/academy" className="text-sm font-semibold text-security-navy-800 hover:underline lg:hidden">
+          <Link href="/academy" className="link-inline text-sm font-semibold lg:hidden">
             ← Academy
           </Link>
+          <p className="label-text mt-1">Module · Academy</p>
           <h1 className="page-title mt-1">Enrolments</h1>
-          <p className="mt-1 text-sm text-black">
+          <p className="mt-1 max-w-xl text-sm text-black">
             Course runs below are limited to intakes that still accept enrolments and have capacity.
           </p>
         </div>
-        <Link href="/academy/intake" className="btn-secondary text-sm py-2 px-4">
+        <Link href="/academy/intake" className="btn-secondary text-sm">
           Guided intake
         </Link>
-      </div>
+      </header>
 
       {error && (
-        <div className="rounded-md border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
+        <div className="notice-error" role="alert">
+          {error}
+        </div>
       )}
 
-      <form onSubmit={create} className="grid gap-3 rounded-lg border border-neutral-200 p-4 sm:grid-cols-2 lg:grid-cols-4">
+      <form onSubmit={create} className="card-wireframe grid gap-3 p-4 sm:p-5 sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <label className="label py-0 text-xs">Student</label>
+          <label className="label-text mb-1 block">Student</label>
           <select className="input-compact min-h-10 w-full" value={studentId} onChange={(e) => setStudentId(e.target.value)}>
             {students.map((s) => (
               <option key={s.id} value={s.id}>
@@ -137,7 +140,7 @@ export default function AcademyEnrolmentsPage() {
           </select>
         </div>
         <div className="sm:col-span-2">
-          <label className="label py-0 text-xs">Course run</label>
+          <label className="label-text mb-1 block">Course run</label>
           <select className="input-compact min-h-10 w-full" value={courseRunId} onChange={(e) => setCourseRunId(e.target.value)}>
             {runs.map((r) => (
               <option key={r.id} value={r.id}>
@@ -148,7 +151,7 @@ export default function AcademyEnrolmentsPage() {
           </select>
         </div>
         <div>
-          <label className="label py-0 text-xs">Fee plan (optional)</label>
+          <label className="label-text mb-1 block">Fee plan (optional)</label>
           <select className="input-compact min-h-10 w-full" value={feePlanId} onChange={(e) => setFeePlanId(e.target.value)}>
             <option value="">—</option>
             {feePlans.map((fp) => (
@@ -160,13 +163,13 @@ export default function AcademyEnrolmentsPage() {
         </div>
         <div className="lg:col-span-4 flex flex-col gap-2">
           {!adminFeeOk && students.length > 0 && studentId ? (
-            <p className="text-xs text-amber-800">
+            <p className="notice-warn text-sm">
               Selected student must have admin fee <strong>paid</strong> or <strong>waived</strong> before enrolment. Use{" "}
-              <Link href={`/academy/students/${studentId}`} className="link">
+              <Link href={`/academy/students/${studentId}`} className="link-inline font-semibold">
                 student profile
               </Link>{" "}
               or{" "}
-              <Link href="/academy/intake" className="link">
+              <Link href="/academy/intake" className="link-inline font-semibold">
                 guided intake
               </Link>
               .
@@ -174,7 +177,7 @@ export default function AcademyEnrolmentsPage() {
           ) : null}
           <button
             type="submit"
-            className="btn-primary text-sm py-2 px-4 w-fit"
+            className="btn-primary text-sm w-fit"
             disabled={!students.length || !runs.length || !adminFeeOk}
           >
             Enrol
@@ -183,7 +186,7 @@ export default function AcademyEnrolmentsPage() {
       </form>
 
       {!students.length || !runs.length ? (
-        <p className="text-sm text-amber-700">
+        <p className="notice-warn text-sm" role="status">
           Create at least one student (with admin fee cleared), branch, course, and an enrolable course run before
           enrolling.
         </p>
@@ -194,7 +197,7 @@ export default function AcademyEnrolmentsPage() {
       ) : enrolments.length === 0 ? (
         <p className="text-sm text-black">No enrolments yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-neutral-200">
+        <div className="table-scroll">
           <table className="table-module">
             <thead>
               <tr>
@@ -208,7 +211,7 @@ export default function AcademyEnrolmentsPage() {
               {enrolments.map((en) => (
                 <tr key={en.id}>
                   <td>
-                    <Link href={`/academy/students/${en.student.id}`} className="link">
+                    <Link href={`/academy/students/${en.student.id}`} className="link-inline">
                       {en.student.firstName} {en.student.lastName}
                     </Link>
                     <div className="font-mono text-xs text-sm text-black">{en.student.studentNumber}</div>

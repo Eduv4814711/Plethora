@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
 
@@ -100,47 +101,59 @@ export default function AcademyAttendancePage() {
 
   return (
     <div className="module-shell">
-      <div>
-        <h1 className="page-title">Attendance</h1>
-        <p className="mt-1 text-sm text-black">Track session attendance and maintain compliance thresholds.</p>
-      </div>
+      <header>
+        <Link href="/academy" className="link-inline text-sm font-semibold lg:hidden">
+          ← Academy
+        </Link>
+        <p className="label-text mt-1">Module · Academy</p>
+        <h1 className="page-title mt-1">Attendance</h1>
+        <p className="mt-1 max-w-xl text-sm text-black">
+          Track session attendance and maintain compliance thresholds.
+        </p>
+      </header>
 
       {!canManage && (
-        <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm">
+        <div className="notice-info" role="status">
           Read-only: only admins can create sessions, mark attendance, or delete sessions.
         </div>
       )}
 
-      <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-        <p className="text-sm text-black">Overall attendance rate</p>
-        <p className="mt-1 text-2xl font-semibold text-security-navy-900">{kpi.toFixed(1)}%</p>
+      <div className="kpi-tile max-w-md">
+        <p className="kpi-label">Overall attendance rate</p>
+        <p className="kpi-value mt-1 tabular-nums">{kpi.toFixed(1)}%</p>
       </div>
 
-      {error && <div className="rounded-lg border-2 border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
+      {error && (
+        <div className="notice-error" role="alert">
+          {error}
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-sm text-black">Create session</h2>
-          <form onSubmit={create} className="mt-3 flex items-end gap-2">
-            <label>
-              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-sm text-black">Session date</span>
+        <div className="card-wireframe p-4 sm:p-5">
+          <h2 className="section-title">Create session</h2>
+          <form onSubmit={create} className="mt-3 flex flex-wrap items-end gap-2">
+            <label className="min-w-0 flex-1">
+              <span className="label-text mb-1 block">Session date</span>
               <input
-                className="input-modern"
+                className="input-modern w-full"
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 disabled={!canManage || saving}
               />
             </label>
-            <button className="btn-primary rounded-security-lg" disabled={!canManage || saving}>Create</button>
+            <button type="submit" className="btn-primary text-sm" disabled={!canManage || saving}>
+              Create
+            </button>
           </form>
         </div>
 
-        <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-sm text-black">Mark attendance</h2>
+        <div className="card-wireframe p-4 sm:p-5">
+          <h2 className="section-title">Mark attendance</h2>
           <form onSubmit={mark} className="mt-3 grid gap-2 md:grid-cols-2">
             <select
-              className="input-modern rounded-security-lg"
+              className="input-modern"
               value={markSessionId}
               onChange={(e) => setMarkSessionId(e.target.value)}
               disabled={!canManage || saving}
@@ -153,7 +166,7 @@ export default function AcademyAttendancePage() {
               ))}
             </select>
             <select
-              className="input-modern rounded-security-lg"
+              className="input-modern"
               value={markEnrolmentId}
               onChange={(e) => setMarkEnrolmentId(e.target.value)}
               disabled={!canManage || saving}
@@ -161,38 +174,77 @@ export default function AcademyAttendancePage() {
               <option value="">Select enrolment</option>
               {enrolments.map((en) => (
                 <option key={en.id} value={en.id}>
-                  {(en.student?.studentNumber ?? "Student")} {(en.student?.firstName ?? "")} {(en.student?.lastName ?? "")} {en.courseRun?.runCode ? `— ${en.courseRun.runCode}` : ""}
+                  {en.student?.studentNumber ?? "Student"} {en.student?.firstName ?? ""}{" "}
+                  {en.student?.lastName ?? ""}
+                  {en.courseRun?.runCode ? ` — ${en.courseRun.runCode}` : ""}
                 </option>
               ))}
             </select>
-            <select className="input-modern rounded-security-lg" value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="present">Present</option><option value="absent">Absent</option><option value="late">Late</option><option value="excused">Excused</option>
+            <select className="input-modern" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="present">Present</option>
+              <option value="absent">Absent</option>
+              <option value="late">Late</option>
+              <option value="excused">Excused</option>
             </select>
-            <button className="btn-primary rounded-security-lg" disabled={!canManage || saving}>Mark</button>
+            <button type="submit" className="btn-primary text-sm" disabled={!canManage || saving}>
+              Mark
+            </button>
           </form>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-        <div className="border-b border-neutral-200 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">All sessions</h2></div>
-        <div className="overflow-x-auto">
+      <section aria-labelledby="attendance-sessions-heading" className="card-wireframe overflow-hidden p-0">
+        <div className="border-b border-[var(--hairline)] px-4 py-3 sm:px-5">
+          <h2 id="attendance-sessions-heading" className="section-title normal-case text-base font-semibold tracking-tight">
+            All sessions
+          </h2>
+        </div>
+        <div className="table-scroll rounded-none border-0 shadow-none">
           <table className="table-module">
-            <thead><tr className="text-[11px] uppercase tracking-wide text-sm text-black"><th>Date</th><th>Records</th><th className="text-right">Action</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Records</th>
+                <th className="text-right">Action</th>
+              </tr>
+            </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={3} className="py-8 text-center text-sm text-black">Loading sessions...</td>
+                  <td colSpan={3} className="py-8 text-center text-sm text-black">
+                    Loading sessions…
+                  </td>
                 </tr>
-              ) : rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{String(r.sessionDate).slice(0,10)}</td><td>{r.records?.length ?? 0}</td><td className="text-right">{canManage && <button className="btn-danger" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}</td></tr>)}
-              {!loading && rows.length === 0 && (
+              ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="py-8 text-center text-sm text-black">No sessions yet.</td>
+                  <td colSpan={3} className="py-8 text-center text-sm text-black">
+                    No sessions yet.
+                  </td>
                 </tr>
+              ) : (
+                rows.map((r) => (
+                  <tr key={r.id}>
+                    <td className="text-sm font-medium text-black">{String(r.sessionDate).slice(0, 10)}</td>
+                    <td className="tabular-nums">{r.records?.length ?? 0}</td>
+                    <td className="text-right">
+                      {canManage && (
+                        <button
+                          type="button"
+                          className="btn-danger-soft text-xs"
+                          onClick={() => remove(r.id)}
+                          disabled={saving}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
