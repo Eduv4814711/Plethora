@@ -36,7 +36,10 @@ interface TopTask {
 interface DashboardData {
   guardsOnDuty: number;
   guardsOnDutyByDay?: { name: string; value: number }[];
+  /** Sites with a shift in progress now (legacy KPI semantics). */
   activeSitesCount: number;
+  /** Total configured sites (respects dashboard site filter). */
+  totalSitesCount?: number;
   activeSitesDelta?: number;
   payrollStatus: Record<string, number>;
   alerts: { type: string; message: string; count?: number }[];
@@ -180,6 +183,12 @@ export default function DashboardPage() {
   const peakGuardsThisWeek = Math.max(...guardsByDay.map((d) => d.value), 0);
   const taskUrgentCount = (data?.taskStats?.overdue ?? 0) + (data?.taskStats?.dueToday ?? 0);
   const alertTally = (data?.alerts ?? []).reduce((sum, a) => sum + (typeof a.count === "number" ? a.count : 1), 0);
+  const sitesKpiValue =
+    data?.totalSitesCount !== undefined && data.totalSitesCount !== null
+      ? data.totalSitesCount
+      : canSites
+        ? sites.length
+        : (data?.activeSitesCount ?? 0);
 
   const DashboardCard = ({ title, children, className = "", icons }: { title?: string; children: React.ReactNode; className?: string; icons?: React.ReactNode }) => (
     <div className={`group flex flex-col relative card-dashboard p-3 sm:p-4 transition-shadow duration-300 ${className}`}>
@@ -293,10 +302,10 @@ export default function DashboardPage() {
       </header>
 
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 py-3 md:py-4 shrink-0" aria-label="Key metrics">
-        <KpiTile label="Peak on duty (week)" value={peakGuardsThisWeek} hint="From roster trend" />
-        <KpiTile label="Active sites" value={data?.activeSitesCount ?? 0} />
-        <KpiTile label="Tasks needing attention" value={taskUrgentCount} hint="Overdue + due today" />
+        <KpiTile label="Sites" value={sitesKpiValue} hint="Configured sites" />
         <KpiTile label="Open alerts" value={alertTally} />
+        <KpiTile label="Peak on duty (week)" value={peakGuardsThisWeek} hint="From roster trend" />
+        <KpiTile label="Tasks needing attention" value={taskUrgentCount} hint="Overdue + due today" />
       </section>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4 pb-1 flex-1 min-h-0 auto-rows-fr overflow-hidden">

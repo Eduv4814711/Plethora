@@ -53,7 +53,6 @@ interface Site {
   longitude?: number | string | null;
   geofenceRadiusMeters?: number | null;
   posts: Post[];
-  assignedGuards: { employee: { id: string; firstName: string; lastName: string; status: string; phone: string | null } }[];
 }
 
 interface Guard {
@@ -70,27 +69,16 @@ export default function SiteDetailPage() {
   const siteId = params.id as string;
   const [site, setSite] = useState<Site | null>(null);
   const [loading, setLoading] = useState(true);
-  const [availableGuards, setAvailableGuards] = useState<Guard[]>([]);
   const [showAddPost, setShowAddPost] = useState(false);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
-  const [draggedGuard, setDraggedGuard] = useState<{ guard: Guard; source: "pool" | string } | null>(null);
-  const [dragOverPost, setDragOverPost] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const canManage = user ? canManageSitesModule(user) : false;
 
   const refresh = () => {
     if (!token || !siteId) return;
-    Promise.all([
-      authFetch(`/sites/${siteId}`, token).then((r) => r.json()),
-      authFetch("/employees?limit=200", token).then((r) => r.json()),
-    ]).then(([siteData, empData]) => {
-      setSite(siteData);
-      const guards = (empData.data || []).filter(
-        (e: Guard & { employeeType?: string }) =>
-          e.employeeType === "security" && ["active", "training", "hired"].includes(e.status)
-      );
-      setAvailableGuards(guards);
-    });
+    authFetch(`/sites/${siteId}`, token)
+      .then((r) => r.json())
+      .then(setSite);
   };
 
   useEffect(() => {
@@ -102,54 +90,6 @@ export default function SiteDetailPage() {
   const getGuardsInPost = (postId: string): Guard[] => {
     const post = site?.posts.find((p) => p.id === postId);
     return post?.assignedGuards?.map((a) => a.employee) ?? [];
-  };
-
-  const getUnassignedGuards = (): Guard[] => {
-    const assignedIds = new Set(
-      site?.posts.flatMap((p) => p.assignedGuards?.map((a) => a.employee.id) ?? []) ?? []
-    );
-    return availableGuards.filter((g) => !assignedIds.has(g.id));
-  };
-
-  const handleDragStart = (guard: Guard, source: "pool" | string) => {
-    setDraggedGuard({ guard, source });
-  };
-
-  const handleDragEnd = () => {
-    setDraggedGuard(null);
-    setDragOverPost(null);
-  };
-
-  const handleDragOver = (e: React.DragEvent, postId: string) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setDragOverPost(postId);
-  };
-
-  const handleDragLeave = () => {
-    setDragOverPost(null);
-  };
-
-  const handleDrop = async (e: React.DragEvent, postId: string) => {
-    e.preventDefault();
-    setDragOverPost(null);
-    if (!draggedGuard || !token) return;
-
-    const { guard, source } = draggedGuard;
-    setDraggedGuard(null);
-
-    if (source === postId) return;
-
-    if (source !== "pool") {
-      await authFetch(`/sites/${siteId}/posts/${source}/guards/${guard.id}`, token, { method: "DELETE" });
-    }
-
-    const res = await authFetch(`/sites/${siteId}/posts/${postId}/guards`, token, {
-      method: "POST",
-      body: JSON.stringify({ employeeId: guard.id }),
-    });
-
-    if (res.ok) refresh();
   };
 
   const handleRemoveFromPost = async (postId: string, employeeId: string) => {
@@ -167,8 +107,6 @@ export default function SiteDetailPage() {
     );
   }
 
-  const unassignedGuards = getUnassignedGuards();
-
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -185,7 +123,11 @@ export default function SiteDetailPage() {
           <div>
             <h1 className="page-title">{site.name}</h1>
             <p className="text-neutral-500 dark:text-neutral-400 mt-0.5 text-sm">
-              Manage posts and assign guards
+              Manage posts. Assign guards in{" "}
+              <Link href="/rostering" className="font-medium text-neutral-700 dark:text-neutral-200 hover:underline">
+                Roster
+              </Link>
+              .
             </p>
           </div>
         </div>
@@ -230,8 +172,7 @@ export default function SiteDetailPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
+      <div className="space-y-6">
           {deleteError && (
             <div className="p-4 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800/50 flex items-center justify-between">
               {deleteError}
@@ -242,7 +183,13 @@ export default function SiteDetailPage() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="section-title text-neutral-900 dark:text-neutral-100">Posts</h2>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">Assign guards to posts by dragging from the pool</p>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
+                  Guard assignments are managed in{" "}
+                  <Link href="/rostering" className="font-medium text-neutral-600 dark:text-neutral-300 hover:underline">
+                    Roster
+                  </Link>
+                  . You can remove a guard from a post here if needed.
+                </p>
               </div>
               {canManage && (
                 <button
@@ -271,14 +218,8 @@ export default function SiteDetailPage() {
                 siteId={siteId}
                 token={token!}
                 guards={getGuardsInPost(post.id)}
-                isDragOver={dragOverPost === post.id}
                 canManage={canManage}
-                onDragOver={(e) => handleDragOver(e, post.id)}
-                onDragLeave={handleDragLeave}
-                onDrop={(e) => handleDrop(e, post.id)}
                 onRemoveGuard={(empId) => handleRemoveFromPost(post.id, empId)}
-                onDragStart={(guard) => handleDragStart(guard, post.id)}
-                onDragEnd={handleDragEnd}
                 onDelete={refresh}
                 onError={(msg) => setDeleteError(msg || null)}
                 onEdit={canManage ? (nextPost) => setEditingPost(nextPost) : undefined}
@@ -294,43 +235,19 @@ export default function SiteDetailPage() {
                   </svg>
                 </div>
                 <p className="font-semibold text-neutral-700 dark:text-neutral-300">No posts yet</p>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1 max-w-sm mx-auto">Add posts and assign guards to define coverage for this site.</p>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1 max-w-sm mx-auto">
+                  Add posts to define coverage. Assign guards from{" "}
+                  <Link href="/rostering" className="font-medium text-neutral-600 dark:text-neutral-300 hover:underline">
+                    Roster
+                  </Link>
+                  .
+                </p>
                 {canManage && (
                   <button onClick={() => setShowAddPost(true)} className="mt-4 btn-primary">Add Post</button>
                 )}
               </div>
             )}
           </div>
-        </div>
-
-        <div className="lg:col-span-1">
-          <div className="card-elevated sticky top-6 p-5">
-            <h3 className="section-title text-neutral-900 dark:text-neutral-100 mb-1">
-              Available Guards
-            </h3>
-            <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
-              Drag guards into posts to assign them
-            </p>
-            <div className="space-y-2 max-h-[400px] overflow-y-auto">
-              {unassignedGuards.map((g) => (
-                <GuardChip
-                  key={g.id}
-                  guard={g}
-                  draggable={canManage}
-                  onDragStart={() => handleDragStart(g, "pool")}
-                  onDragEnd={handleDragEnd}
-                  isDragging={draggedGuard?.guard.id === g.id}
-                />
-              ))}
-              {unassignedGuards.length === 0 && (
-                <div className="text-center py-8 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 border border-dashed border-neutral-200 dark:border-neutral-700">
-                  <p className="text-sm text-neutral-500 dark:text-neutral-400 font-medium">All guards assigned</p>
-                  <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">Remove from a post to assign elsewhere</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
       </div>
 
       {editingPost && canManage && (
@@ -355,14 +272,8 @@ function PostCard({
   siteId,
   token,
   guards,
-  isDragOver,
   canManage,
-  onDragOver,
-  onDragLeave,
-  onDrop,
   onRemoveGuard,
-  onDragStart,
-  onDragEnd,
   onDelete,
   onError,
   onEdit,
@@ -371,14 +282,8 @@ function PostCard({
   siteId: string;
   token: string;
   guards: Guard[];
-  isDragOver: boolean;
   canManage: boolean;
-  onDragOver: (e: React.DragEvent) => void;
-  onDragLeave: () => void;
-  onDrop: (e: React.DragEvent) => void;
   onRemoveGuard: (empId: string) => void;
-  onDragStart: (guard: Guard) => void;
-  onDragEnd: () => void;
   onDelete: () => void;
   onError?: (msg: string | null) => void;
   onEdit?: (post: Post) => void;
@@ -387,9 +292,6 @@ function PostCard({
 
   return (
     <div
-      onDragOver={canManage ? onDragOver : undefined}
-      onDragLeave={canManage ? onDragLeave : undefined}
-      onDrop={canManage ? onDrop : undefined}
       onClick={canManage && onEdit ? () => onEdit(post) : undefined}
       onKeyDown={
         canManage && onEdit
@@ -403,11 +305,7 @@ function PostCard({
       }
       role={canManage && onEdit ? "button" : undefined}
       tabIndex={canManage && onEdit ? 0 : undefined}
-      className={`p-4 rounded-lg border-2 transition-all duration-200 ${
-        isDragOver
-          ? "border-neutral-400 dark:border-neutral-500 bg-neutral-50 dark:bg-neutral-800/50 ring-2 ring-neutral-300 dark:ring-neutral-600 ring-offset-2 dark:ring-offset-neutral-900"
-          : "border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/50 hover:border-neutral-300 dark:hover:border-neutral-600"
-      } ${
+      className={`p-4 rounded-lg border-2 transition-all duration-200 border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/50 hover:border-neutral-300 dark:hover:border-neutral-600 ${
         canManage && onEdit ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-neutral-600 focus:ring-offset-2 dark:focus:ring-offset-neutral-900" : ""
       }`}
     >
@@ -462,24 +360,27 @@ function PostCard({
         )}
       </div>
 
-      <div className={`min-h-[72px] rounded-lg p-3 transition-colors ${
-        isDragOver
-          ? "bg-neutral-100 dark:bg-neutral-800 border-2 border-dashed border-neutral-400 dark:border-neutral-500"
-          : "bg-neutral-50 dark:bg-neutral-800/50 border border-dashed border-neutral-200 dark:border-neutral-700"
-      }`}>
+      <div className="min-h-[72px] rounded-lg p-3 bg-neutral-50 dark:bg-neutral-800/50 border border-dashed border-neutral-200 dark:border-neutral-700">
         {guards.length === 0 ? (
           <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-4">
-            {canManage ? "Drag guards here or drop from the pool" : "No guards assigned"}
+            {canManage ? (
+              <>
+                No guards on this post. Assign in{" "}
+                <Link href="/rostering" className="font-medium text-neutral-600 dark:text-neutral-300 hover:underline">
+                  Roster
+                </Link>
+                .
+              </>
+            ) : (
+              "No guards assigned"
+            )}
           </p>
         ) : (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
             {guards.map((g) => (
               <GuardChip
                 key={g.id}
                 guard={g}
-                draggable={canManage}
-                onDragStart={() => onDragStart(g)}
-                onDragEnd={onDragEnd}
                 onRemove={canManage ? () => onRemoveGuard(g.id) : undefined}
               />
             ))}
@@ -586,33 +487,14 @@ function EditPostModal({
 
 function GuardChip({
   guard,
-  draggable,
-  onDragStart,
-  onDragEnd,
   onRemove,
-  isDragging,
 }: {
   guard: Guard;
-  draggable: boolean;
-  onDragStart: () => void;
-  onDragEnd: () => void;
   onRemove?: () => void;
-  isDragging?: boolean;
 }) {
   return (
     <div
-      draggable={draggable}
-      onDragStart={(e) => {
-        if (draggable) {
-          e.dataTransfer.effectAllowed = "move";
-          e.dataTransfer.setData("text/plain", guard.id);
-          onDragStart();
-        }
-      }}
-      onDragEnd={onDragEnd}
-      className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shadow-sm cursor-grab active:cursor-grabbing select-none transition-all ${
-        isDragging ? "opacity-50 scale-95" : "hover:shadow-md hover:border-neutral-300 dark:hover:border-neutral-600"
-      } ${draggable ? "" : "cursor-default"}`}
+      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shadow-sm select-none transition-all hover:shadow-md hover:border-neutral-300 dark:hover:border-neutral-600"
     >
       <span className={`w-2 h-2 rounded-full shrink-0 ${guard.status === "active" ? "bg-emerald-500" : guard.status === "training" ? "bg-amber-500" : "bg-neutral-400"}`} title={guard.status} />
       <span className="text-neutral-700 dark:text-neutral-300">

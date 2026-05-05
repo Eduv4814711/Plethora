@@ -88,7 +88,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
       ? { companyId, id: { in: siteIds } }
       : { companyId };
 
-    const [guardsOnDuty, activeSitesCount, activeSitesLastMonth, payrollStatus, missedShifts, pendingApprovals, employeesByStatus, shiftsByStatus] =
+    const [guardsOnDuty, activeSitesCount, totalSitesCount, activeSitesLastMonth, payrollStatus, missedShifts, pendingApprovals, employeesByStatus, shiftsByStatus] =
       await Promise.all([
         prisma.shift.count({
           where: {
@@ -114,6 +114,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
             },
           },
         }),
+        prisma.site.count({ where: activeSitesWhere }),
         prisma.site.count({
           where: {
             ...activeSitesWhere,
@@ -274,7 +275,10 @@ export async function dashboardRoutes(app: FastifyInstance) {
     return reply.send({
       guardsOnDuty,
       guardsOnDutyByDay,
+      /** Sites with at least one shift currently active (clocked in). */
       activeSitesCount,
+      /** All sites for the company (or matching the site filter). */
+      totalSitesCount,
       activeSitesDelta,
       payrollStatus: payrollByStatus,
       alerts,
