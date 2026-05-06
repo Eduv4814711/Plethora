@@ -234,6 +234,8 @@ model Site {
   geofenceRadiusMeters       Int?
   /// Optional multi-line text shown on the site shift roster matrix (e.g. staffing rules).
   rosterSiteRules            String?
+  /// Enforced when assigning shifts: optional { day?: "male"|"female", night?: "male"|"female" }.
+  rosterShiftGenderPolicy    Json?
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 

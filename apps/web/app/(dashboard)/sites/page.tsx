@@ -65,11 +65,23 @@ interface Site {
   contractOrServiceAgreement: string | null;
   serviceType: string | null;
   rosterSiteRules?: string | null;
+  rosterShiftGenderPolicy?: { day?: string; night?: string } | null;
   latitude?: number | string | null;
   longitude?: number | string | null;
   geofenceRadiusMeters?: number | null;
   posts: Post[];
   assignedGuards: AssignedGuard[];
+}
+
+type ShiftGenderSelect = "any" | "male" | "female";
+
+function shiftGenderFromSitePolicy(
+  policy: Site["rosterShiftGenderPolicy"],
+  which: "day" | "night"
+): ShiftGenderSelect {
+  if (!policy || typeof policy !== "object" || Array.isArray(policy)) return "any";
+  const v = (policy as Record<string, unknown>)[which];
+  return v === "male" || v === "female" ? v : "any";
 }
 
 interface Guard {
@@ -659,9 +671,36 @@ function EditSiteModal({
     site.geofenceRadiusMeters != null ? String(site.geofenceRadiusMeters) : ""
   );
   const [rosterSiteRules, setRosterSiteRules] = useState(site.rosterSiteRules ?? "");
+  const [dayGenderPolicy, setDayGenderPolicy] = useState<ShiftGenderSelect>(() =>
+    shiftGenderFromSitePolicy(site.rosterShiftGenderPolicy, "day")
+  );
+  const [nightGenderPolicy, setNightGenderPolicy] = useState<ShiftGenderSelect>(() =>
+    shiftGenderFromSitePolicy(site.rosterShiftGenderPolicy, "night")
+  );
   const [clearGeofence, setClearGeofence] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setName(site.name);
+    setLocation(site.location ?? "");
+    setPhysicalAddress(site.physicalAddress ?? "");
+    setContactPersonName(site.contactPersonName ?? "");
+    setContactPersonPhone(site.contactPersonPhone ?? "");
+    const ec = site.contractOrServiceAgreement ?? "";
+    const inOpts = CONTRACT_AGREEMENT_OPTIONS.some((o) => o.value && o.value !== "other" && o.value === ec);
+    setContractAgreementType(inOpts ? ec : ec ? "other" : "");
+    setContractAgreementCustom(ec && !inOpts ? ec : "");
+    setServiceType(site.serviceType ?? "");
+    setAssignedGuardIds(site.assignedGuards?.map((a) => a.employee.id) ?? []);
+    setLatitude(site.latitude != null && site.latitude !== "" ? String(site.latitude) : "");
+    setLongitude(site.longitude != null && site.longitude !== "" ? String(site.longitude) : "");
+    setGeofenceRadiusMeters(site.geofenceRadiusMeters != null ? String(site.geofenceRadiusMeters) : "");
+    setRosterSiteRules(site.rosterSiteRules ?? "");
+    setDayGenderPolicy(shiftGenderFromSitePolicy(site.rosterShiftGenderPolicy, "day"));
+    setNightGenderPolicy(shiftGenderFromSitePolicy(site.rosterShiftGenderPolicy, "night"));
+    setClearGeofence(false);
+  }, [site]);
 
   const toggleGuard = (id: string) => {
     setAssignedGuardIds((prev) =>
@@ -709,6 +748,13 @@ function EditSiteModal({
           serviceType: serviceType || undefined,
           assignedGuardIds,
           rosterSiteRules: rosterSiteRules.trim() || null,
+          rosterShiftGenderPolicy:
+            dayGenderPolicy === "any" && nightGenderPolicy === "any"
+              ? null
+              : {
+                  ...(dayGenderPolicy !== "any" ? { day: dayGenderPolicy } : {}),
+                  ...(nightGenderPolicy !== "any" ? { night: nightGenderPolicy } : {}),
+                },
           ...geoPayload,
         }),
       });
@@ -786,17 +832,54 @@ function EditSiteModal({
               )}
             </div>
 
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">
-                Site roster rules (shown on shift matrix)
-              </label>
-              <textarea
-                value={rosterSiteRules}
-                onChange={(e) => setRosterSiteRules(e.target.value)}
-                placeholder="e.g. 1 female guard per day shift"
-                rows={4}
-                className="input-modern w-full font-normal normal-case tracking-normal"
-              />
+            <div className="md:col-span-2 border border-neutral-200 dark:border-neutral-700 rounded-security-lg p-4 bg-neutral-50/80 dark:bg-neutral-900/30">
+              <h4 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mb-1">Roster enforcement</h4>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4">
+                Assigning shifts on this site is blocked if the guard does not match these rules (based on post day/night
+                type and the employee&apos;s gender on file).
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">
+                    Day shift
+                  </label>
+                  <select
+                    value={dayGenderPolicy}
+                    onChange={(e) => setDayGenderPolicy(e.target.value as ShiftGenderSelect)}
+                    className="input-modern"
+                  >
+                    <option value="any">Any</option>
+                    <option value="male">Male only</option>
+                    <option value="female">Female only</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">
+                    Night shift
+                  </label>
+                  <select
+                    value={nightGenderPolicy}
+                    onChange={(e) => setNightGenderPolicy(e.target.value as ShiftGenderSelect)}
+                    className="input-modern"
+                  >
+                    <option value="any">Any</option>
+                    <option value="male">Male only</option>
+                    <option value="female">Female only</option>
+                  </select>
+                </div>
+              </div>
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">
+                  Additional notes (matrix only, not enforced)
+                </label>
+                <textarea
+                  value={rosterSiteRules}
+                  onChange={(e) => setRosterSiteRules(e.target.value)}
+                  placeholder="e.g. client preference, contact for exceptions"
+                  rows={3}
+                  className="input-modern w-full font-normal normal-case tracking-normal"
+                />
+              </div>
             </div>
 
             <div className="md:col-span-2 border-t border-neutral-200 dark:border-neutral-700 pt-4">

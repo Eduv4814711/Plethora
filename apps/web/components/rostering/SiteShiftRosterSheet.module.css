@@ -204,93 +204,182 @@
   justify-content: flex-start;
   gap: 20px 24px;
   padding: 20px 16px;
-  background: #fafaf9;
+  background: var(--surface-soft, #fafaf9);
   border-top: 1px solid var(--sr-hairline, #e5e3df);
 }
 
+/* Full-width key: avoids a tall narrow “column of text” on wide viewports */
 .legend {
-  flex: 0 1 auto;
   width: 100%;
-  max-width: min(100%, 550px);
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: stretch;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 20px;
-  border-radius: 12px;
-  border: 1px solid var(--sr-hairline, #e5e3df);
-  padding: 16px 20px;
-  background: var(--sr-canvas, #ffffff);
-  box-shadow: rgba(15, 15, 15, 0.04) 0 1px 2px;
+  align-items: start;
+  border-radius: var(--radius-lg, 12px);
+  border: 1px solid var(--hairline, #e5e3df);
+  padding: 20px 20px 22px;
+  background: var(--bg-content, #ffffff);
+  box-shadow: rgba(15, 15, 15, 0.05) 0 1px 3px;
 }
 
-.requirements {
-  flex: 0 1 14rem;
-  max-width: min(100%, 17rem);
+@media (min-width: 768px) {
+  .legend {
+    grid-template-columns: minmax(200px, 300px) minmax(0, 1fr);
+    gap: 24px;
+    padding: 22px 24px 24px;
+  }
+}
+
+.legendSite {
   margin: 0;
-  padding: 0 20px 0 16px;
-  border: none;
-  border-radius: 0;
-  border-right: 1px solid #ede9e4;
-  border-left: 3px solid #e03131;
-  font-weight: 600;
-  font-size: 12px;
-  line-height: 1.45;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #e03131;
-  background: rgba(255, 248, 248, 0.55);
+  padding: 16px 18px;
+  border-radius: var(--radius-lg, 10px);
+  border: 1px solid var(--hairline, #e5e3df);
+  background: linear-gradient(180deg, var(--accent-primary-soft, #fff8f0) 0%, var(--bg-content, #fff) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
-.requirementsTitle {
+.legendSiteTitle {
   margin: 0 0 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--hairline, #e5e3df);
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #787671;
-  text-align: left;
+  color: var(--text-primary, #000);
 }
 
-.requirementsBody {
-  text-align: left;
+.legendSiteTitle::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 12px;
+  margin-right: 10px;
+  border-radius: 2px;
+  background: var(--accent-primary, #ff9800);
+  vertical-align: -2px;
+}
+
+.legendSiteBody {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  text-align: left;
 }
 
-.requirementsBody p {
+.legendSiteLine {
   margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--text-primary, #000);
   white-space: pre-wrap;
 }
 
-.legendColour {
-  flex: 1 1 14rem;
+.rulesEmpty {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: #787671;
+  font-style: italic;
+}
+
+.legendGuide {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 20px;
 }
 
-.legendTitle {
-  font-weight: 600;
+@media (min-width: 768px) {
+  .legendSite {
+    position: sticky;
+    top: 8px;
+  }
+}
+
+.guideBlock {
+  margin: 0;
+  padding: 0;
+}
+
+.guideBlockTitle {
+  margin: 0 0 10px;
   font-size: 11px;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #787671;
-  margin: 0 0 12px;
+  color: #5d5b54;
 }
 
 .legendGrid {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 8px 16px;
+  gap: 10px 14px;
   align-items: center;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--text-primary, #000);
+}
+
+.legendGridLabel {
+  line-height: 1.4;
+}
+
+.shiftChipList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.shiftChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: var(--radius-lg, 10px);
+  border: 1px solid var(--hairline-strong, #c8c4be);
+  background: var(--surface-soft, #fafaf9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.shiftChipLetter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 6px;
+  border-radius: 6px;
   font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary, #000);
+  background: var(--bg-content, #fff);
+  border: 1px solid var(--hairline-strong, #c8c4be);
+}
+
+.shiftChipText {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
   color: #37352f;
+}
+
+.specialCodeList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .swatch {
@@ -324,6 +413,38 @@
 .swatchAwol {
   background: #e03131;
   color: #000;
+}
+
+.legendDefText {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: #37352f;
+}
+
+.legendDefLead {
+  font-weight: 700;
+  color: var(--text-primary, #000);
+}
+
+.legendCodeRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-lg, 10px);
+  border: 1px solid var(--hairline, #e5e3df);
+  background: var(--surface-soft, #fafaf9);
+}
+
+.legendCodeRow .swatch {
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 .sheetTabs {
@@ -364,12 +485,20 @@
 
 .printActions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   max-width: 1328px;
   margin: 0 auto 12px;
   padding: 0 16px;
+}
+
+.printBtnRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
 
 .printBtn {
@@ -385,6 +514,24 @@
   box-shadow: rgba(15, 15, 15, 0.04) 0 1px 2px;
 }
 
+.pdfBtn {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: 2px solid #c8c4be;
+  cursor: pointer;
+  color: #000000;
+  background: #ffffff;
+  box-shadow: rgba(15, 15, 15, 0.04) 0 1px 2px;
+}
+
+.pdfBtn:hover {
+  background: #fafaf9;
+  border-color: #37352f;
+}
+
 .printBtn:hover {
   background: #f57c00;
 }
@@ -392,6 +539,18 @@
 .printHint {
   font-size: 12px;
   color: #5d5b54;
+  flex: 1 1 220px;
+  margin-right: auto;
+  min-width: min(100%, 12rem);
+}
+
+.pdfError {
+  flex-basis: 100%;
+  width: 100%;
+  text-align: right;
+  font-size: 12px;
+  color: #b91c1c;
+  margin: 0;
 }
 
 .page {
@@ -463,5 +622,19 @@
 
   .sheetTabs {
     display: none !important;
+  }
+
+  .legend {
+    box-shadow: none;
+    grid-template-columns: 1fr;
+    break-inside: avoid;
+  }
+
+  .legendSite {
+    position: static;
+  }
+
+  .shiftChip {
+    break-inside: avoid;
   }
 }

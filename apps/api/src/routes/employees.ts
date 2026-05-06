@@ -140,6 +140,21 @@ const statusTransitionSchema = z.object({
   status: z.enum(["applicant", "hired", "training", "active", "suspended", "offboarded"]),
 });
 
+const QUERY_STATUSES = [
+  "applicant",
+  "hired",
+  "training",
+  "active",
+  "suspended",
+  "offboarded",
+] as const satisfies readonly EmployeeStatus[];
+
+/** Ignore invalid status strings (e.g. legacy UI "reliever") so Prisma does not throw and the list stays usable. */
+function parseEmployeeStatusFilter(raw: string | undefined): EmployeeStatus | undefined {
+  if (!raw || raw === "all") return undefined;
+  return (QUERY_STATUSES as readonly string[]).includes(raw) ? (raw as EmployeeStatus) : undefined;
+}
+
 export async function employeesRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
@@ -157,7 +172,7 @@ export async function employeesRoutes(app: FastifyInstance) {
     const q = request.query as Record<string, string | undefined>;
     const limit = Math.min(Number(q.limit) || 20, 100);
     const offset = Number(q.offset) || 0;
-    const status = q.status as EmployeeStatus | undefined;
+    const status = parseEmployeeStatusFilter(q.status);
     const employeeType = q.employeeType;
     const groupId = q.groupId;
     const searchQuery = (q.q ?? q.search ?? "").trim();

@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import styles from "./SiteShiftRosterSheet.module.css";
+import { downloadSiteMatrixRosterPdf, previewSiteMatrixRosterPdf } from "@/lib/roster-pdf";
 
 export interface MatrixDay {
   date: string;
@@ -26,6 +28,8 @@ interface SiteShiftRosterSheetProps {
   sites: { id: string; name: string }[];
   activeSiteId: string;
   onSelectSite: (siteId: string) => void;
+  /** Shown in PDF footer (e.g. user name / email). */
+  pdfGeneratedBy?: string | null;
 }
 
 export function SiteShiftRosterSheet({
@@ -37,16 +41,65 @@ export function SiteShiftRosterSheet({
   sites,
   activeSiteId,
   onSelectSite,
+  pdfGeneratedBy,
 }: SiteShiftRosterSheetProps) {
   const rulesLines = siteRules?.trim().split(/\n+/).filter(Boolean) ?? [];
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
+  const handleDownloadPdf = () => {
+    setPdfError(null);
+    try {
+      downloadSiteMatrixRosterPdf({
+        siteName,
+        periodLabel,
+        siteRules,
+        days,
+        rows,
+        generatedBy: pdfGeneratedBy ?? undefined,
+      });
+    } catch (e) {
+      setPdfError(e instanceof Error ? e.message : "Could not create PDF");
+    }
+  };
+
+  const handlePreviewPdf = () => {
+    setPdfError(null);
+    try {
+      const opened = previewSiteMatrixRosterPdf({
+        siteName,
+        periodLabel,
+        siteRules,
+        days,
+        rows,
+        generatedBy: pdfGeneratedBy ?? undefined,
+      });
+      if (!opened) {
+        setPdfError("Pop-up blocked. Allow pop-ups for this site to preview the PDF.");
+      }
+    } catch (e) {
+      setPdfError(e instanceof Error ? e.message : "Could not create PDF");
+    }
+  };
 
   return (
     <>
       <div className={`${styles.printActions} ${styles.noPrint}`}>
-        <span className={styles.printHint}>Use your browser&apos;s print dialog, then choose &quot;Save as PDF&quot;.</span>
-        <button type="button" className={styles.printBtn} onClick={() => window.print()}>
-          Print / Save as PDF
-        </button>
+        <span className={styles.printHint}>
+          Download the roster PDF or preview it in a new tab (your browser&apos;s PDF viewer; you can print from there).
+        </span>
+        <div className={styles.printBtnRow}>
+          <button type="button" className={styles.pdfBtn} onClick={handleDownloadPdf}>
+            Download PDF
+          </button>
+          <button type="button" className={styles.printBtn} onClick={handlePreviewPdf}>
+            Preview PDF
+          </button>
+        </div>
+        {pdfError && (
+          <p className={styles.pdfError} role="alert">
+            {pdfError}
+          </p>
+        )}
       </div>
 
       <div className={styles.page}>
@@ -75,7 +128,7 @@ export function SiteShiftRosterSheet({
                     Gender
                   </th>
                   <th className={styles.colName} rowSpan={2}>
-                    Staff
+                    Guard
                   </th>
                   {days.map((d) => (
                     <th
@@ -140,34 +193,83 @@ export function SiteShiftRosterSheet({
 
           <div className={styles.footerRow}>
             <div className={styles.legend}>
-              <div className={styles.requirements}>
-                <h3 className={styles.requirementsTitle}>Site rules</h3>
-                <div className={styles.requirementsBody}>
+              <section className={styles.legendSite} aria-labelledby="roster-site-rules-heading">
+                <h3 id="roster-site-rules-heading" className={styles.legendSiteTitle}>
+                  Site rules
+                </h3>
+                <div className={styles.legendSiteBody}>
                   {rulesLines.length > 0 ? (
-                    rulesLines.map((line, i) => <p key={i}>{line}</p>)
+                    rulesLines.map((line, i) => (
+                      <p key={i} className={styles.legendSiteLine}>
+                        {line}
+                      </p>
+                    ))
                   ) : (
-                    <p style={{ textTransform: "none", fontWeight: 500, color: "#787671" }}>
-                      No site rules set. Edit the site to add roster rules.
-                    </p>
+                    <p className={styles.rulesEmpty}>No site rules set. Edit the site to add roster rules.</p>
                   )}
                 </div>
-              </div>
-              <div className={styles.legendColour}>
-                <div className={styles.legendTitle}>Colour codings</div>
-                <div className={styles.legendGrid}>
-                  <span className={`${styles.swatch} ${styles.swatchMale}`} aria-hidden />
-                  <span>Male</span>
-                  <span className={`${styles.swatch} ${styles.swatchFemale}`} aria-hidden />
-                  <span>Female</span>
-                  <span className={`${styles.swatch} ${styles.swatchReplaced}`} aria-hidden>
-                    R
-                  </span>
-                  <span>Replaced</span>
-                  <span className={`${styles.swatch} ${styles.swatchAwol}`} aria-hidden>
-                    A
-                  </span>
-                  <span>AWOL</span>
-                </div>
+              </section>
+
+              <div className={styles.legendGuide}>
+                <section className={styles.guideBlock} aria-labelledby="roster-legend-colour">
+                  <h4 id="roster-legend-colour" className={styles.guideBlockTitle}>
+                    Colour coding
+                  </h4>
+                  <div className={styles.legendGrid}>
+                    <span className={`${styles.swatch} ${styles.swatchMale}`} aria-hidden />
+                    <span className={styles.legendGridLabel}>Male (blue marker in Gender column)</span>
+                    <span className={`${styles.swatch} ${styles.swatchFemale}`} aria-hidden />
+                    <span className={styles.legendGridLabel}>Female (orange marker in Gender column)</span>
+                  </div>
+                </section>
+
+                <section className={styles.guideBlock} aria-labelledby="roster-legend-shifts">
+                  <h4 id="roster-legend-shifts" className={styles.guideBlockTitle}>
+                    Shift letters (day columns)
+                  </h4>
+                  <ul className={styles.shiftChipList}>
+                    <li className={styles.shiftChip}>
+                      <span className={styles.shiftChipLetter}>D</span>
+                      <span className={styles.shiftChipText}>Day shift</span>
+                    </li>
+                    <li className={styles.shiftChip}>
+                      <span className={styles.shiftChipLetter}>N</span>
+                      <span className={styles.shiftChipText}>Night shift</span>
+                    </li>
+                    <li className={styles.shiftChip}>
+                      <span className={styles.shiftChipLetter}>O</span>
+                      <span className={styles.shiftChipText}>Off (not rostered this day)</span>
+                    </li>
+                  </ul>
+                </section>
+
+                <section className={styles.guideBlock} aria-labelledby="roster-legend-special">
+                  <h4 id="roster-legend-special" className={styles.guideBlockTitle}>
+                    Special codes
+                  </h4>
+                  <div className={styles.specialCodeList}>
+                    <div className={styles.legendCodeRow}>
+                      <span className={`${styles.swatch} ${styles.swatchReplaced}`} aria-hidden>
+                        R
+                      </span>
+                      <p className={styles.legendDefText}>
+                        <span className={styles.legendDefLead}>R — Replaced.</span> The guard who was scheduled on that
+                        shift did not arrive, and a replacement was arranged with the controller (another guard took the
+                        slot; recorded in Plethora when the shift assignee is changed).
+                      </p>
+                    </div>
+                    <div className={styles.legendCodeRow}>
+                      <span className={`${styles.swatch} ${styles.swatchAwol}`} aria-hidden>
+                        A
+                      </span>
+                      <p className={styles.legendDefText}>
+                        <span className={styles.legendDefLead}>A — AWOL.</span> The scheduled guard did not report for
+                        duty and there was no controller-arranged replacement on record for that shift (shift ended
+                        without clock-in).
+                      </p>
+                    </div>
+                  </div>
+                </section>
               </div>
             </div>
           </div>

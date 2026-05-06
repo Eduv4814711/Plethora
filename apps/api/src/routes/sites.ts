@@ -1,12 +1,30 @@
 import type { FastifyInstance } from "fastify";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
+import {
+  rosterShiftGenderPolicyZod,
+  type RosterShiftGenderPolicy,
+} from "../services/site-roster-policy.service.js";
+
+const rosterShiftGenderPolicyField = rosterShiftGenderPolicyZod.optional().nullable();
+
+function normalizeRosterShiftGenderPolicyForDb(
+  p: RosterShiftGenderPolicy | null | undefined
+): Prisma.InputJsonValue | null | undefined {
+  if (p === undefined) return undefined;
+  if (p === null) return null;
+  const next: RosterShiftGenderPolicy = {};
+  if (p.day !== undefined) next.day = p.day;
+  if (p.night !== undefined) next.night = p.night;
+  if (next.day === undefined && next.night === undefined) return null;
+  return next as Prisma.InputJsonValue;
+}
 
 const SERVICE_TYPES = [
-  "guarding",
   "access_control",
   "patrols",
   "close_protection",
@@ -51,6 +69,7 @@ const createSiteSchema = z
     monthlyRevenue: z.number().positive().optional(),
     assignedGuardIds: z.array(z.string()).optional(),
     rosterSiteRules: z.string().optional(),
+    rosterShiftGenderPolicy: rosterShiftGenderPolicyField,
     latitude: z.number().min(-90).max(90).optional(),
     longitude: z.number().min(-180).max(180).optional(),
     geofenceRadiusMeters: z.number().int().positive().max(100_000).optional(),
@@ -77,6 +96,7 @@ const updateSiteSchema = z
     monthlyRevenue: z.number().positive().optional().nullable(),
     assignedGuardIds: z.array(z.string()).optional(),
     rosterSiteRules: z.string().optional().nullable(),
+    rosterShiftGenderPolicy: rosterShiftGenderPolicyField,
     latitude: z.number().min(-90).max(90).nullable().optional(),
     longitude: z.number().min(-180).max(180).nullable().optional(),
     geofenceRadiusMeters: z.number().int().positive().max(100_000).nullable().optional(),
@@ -207,6 +227,11 @@ export async function sitesRoutes(app: FastifyInstance) {
             ? d.geofenceRadiusMeters
             : undefined,
         rosterSiteRules: d.rosterSiteRules,
+        ...((): Record<string, unknown> => {
+          const p = normalizeRosterShiftGenderPolicyForDb(d.rosterShiftGenderPolicy);
+          if (p === undefined || p === null) return {};
+          return { rosterShiftGenderPolicy: p };
+        })(),
       },
     });
 
@@ -338,16 +363,22 @@ export async function sitesRoutes(app: FastifyInstance) {
     }
 
     const d = parsed.data;
-    const { assignedGuardIds, latitude, longitude, geofenceRadiusMeters, ...rest } = d;
+    const { assignedGuardIds, latitude, longitude, geofenceRadiusMeters, rosterShiftGenderPolicy, ...rest } = d;
 
     const geoPatch: Record<string, unknown> = {};
     if (latitude !== undefined) geoPatch.latitude = latitude;
     if (longitude !== undefined) geoPatch.longitude = longitude;
     if (geofenceRadiusMeters !== undefined) geoPatch.geofenceRadiusMeters = geofenceRadiusMeters;
 
+    const policyPatch: Record<string, unknown> = {};
+    if (rosterShiftGenderPolicy !== undefined) {
+      const p = normalizeRosterShiftGenderPolicyForDb(rosterShiftGenderPolicy);
+      policyPatch.rosterShiftGenderPolicy = p === null ? Prisma.JsonNull : p;
+    }
+
     const site = await prisma.site.update({
       where: { id },
-      data: { ...rest, ...geoPatch },
+      data: { ...rest, ...geoPatch, ...policyPatch },
     });
 
     if (assignedGuardIds !== undefined) {

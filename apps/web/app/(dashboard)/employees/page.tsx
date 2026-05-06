@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
@@ -104,6 +104,7 @@ export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showManageGroups, setShowManageGroups] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -111,6 +112,7 @@ export default function EmployeesPage() {
   const [statusChangeId, setStatusChangeId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => new Set());
+  const autoExpandedForListKey = useRef<string | null>(null);
 
   const groupSections = useMemo(() => {
     const validIds = new Set(groups.map((g) => g.id));
@@ -141,6 +143,18 @@ export default function EmployeesPage() {
     return sections;
   }, [employees, groups]);
 
+  /** Expand all group folders once per loaded list so members are visible without extra clicks. */
+  useEffect(() => {
+    if (employees.length === 0) {
+      autoExpandedForListKey.current = null;
+      return;
+    }
+    const key = `${employees.map((e) => e.id).join(",")}|${groupSections.map((s) => s.key).join(",")}`;
+    if (autoExpandedForListKey.current === key) return;
+    autoExpandedForListKey.current = key;
+    setExpandedFolderIds(new Set(groupSections.map((s) => s.key)));
+  }, [employees, groupSections]);
+
   const fetchEmployees = () => {
     if (!token) return;
     const pageSize = 100;
@@ -159,6 +173,15 @@ export default function EmployeesPage() {
         params.set("offset", String(offset));
         const res = await authFetch(`/employees?${params.toString()}`, token);
         const payload = await res.json();
+        if (!res.ok) {
+          throw new Error(
+            typeof payload?.message === "string"
+              ? payload.message
+              : payload?.error === "Validation error"
+                ? 'Could not load team (invalid filter). Try "All statuses".'
+                : "Could not load team"
+          );
+        }
         const page = Array.isArray(payload?.data) ? payload.data : [];
         total = Number(payload?.total ?? page.length);
         all.push(...page);
@@ -167,9 +190,11 @@ export default function EmployeesPage() {
       }
 
       setEmployees(all);
+      setListError(null);
     })().catch((err) => {
       console.error(err);
       setEmployees([]);
+      setListError(err instanceof Error ? err.message : "Could not load team");
     });
   };
 
@@ -264,7 +289,6 @@ export default function EmployeesPage() {
             <option value="hired">Hired</option>
             <option value="training">Training</option>
             <option value="active">Active</option>
-            <option value="reliever">Reliever</option>
             <option value="suspended">Suspended</option>
             <option value="offboarded">Offboarded</option>
           </select>
@@ -278,6 +302,12 @@ export default function EmployeesPage() {
           </span>
         </div>
       </div>
+
+      {listError && (
+        <div className="mb-4 p-4 rounded-security-lg border-2 border-red-200 bg-red-50 text-sm text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200">
+          {listError}
+        </div>
+      )}
 
       {showForm && (
         <EmployeeForm
@@ -965,7 +995,6 @@ function EmployeeForm({
               <option value="hired">Hired</option>
               <option value="training">Training</option>
               <option value="active">Active</option>
-              <option value="reliever">Reliever</option>
               <option value="suspended">Suspended</option>
               <option value="offboarded">Offboarded</option>
             </select>

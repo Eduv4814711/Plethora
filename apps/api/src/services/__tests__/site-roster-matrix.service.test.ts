@@ -97,7 +97,7 @@ describe("site-roster-matrix.service", () => {
     expect(cellForEmployeeDay("e1", [s], now)).toBe("N");
   });
 
-  it("cellForEmployeeDay returns A for missed current assignee", () => {
+  it("cellForEmployeeDay returns A for missed current assignee (AWOL)", () => {
     const s = shift({
       id: "1",
       employeeId: "e1",
@@ -108,6 +108,28 @@ describe("site-roster-matrix.service", () => {
       attendances: [],
     });
     expect(cellForEmployeeDay("e1", [s], now)).toBe("A");
+  });
+
+  it("cellForEmployeeDay returns A when any same-day shift is missed (even if another is valid)", () => {
+    const missed = shift({
+      id: "1",
+      employeeId: "e1",
+      startTime: new Date("2025-06-14T06:00:00.000Z"),
+      endTime: pastEnd,
+      status: "assigned",
+      shiftType: "day",
+      attendances: [],
+    });
+    const ok = shift({
+      id: "2",
+      employeeId: "e1",
+      startTime: new Date("2025-06-14T18:00:00.000Z"),
+      endTime: futureEnd,
+      status: "assigned",
+      shiftType: "night",
+      attendances: [],
+    });
+    expect(cellForEmployeeDay("e1", [missed, ok], now)).toBe("A");
   });
 
   it("cellForEmployeeDay returns R for superseded employee without current shift", () => {

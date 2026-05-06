@@ -1,6 +1,7 @@
 import { addDays, format } from "date-fns";
 import { prisma } from "../lib/prisma.js";
 import { parseDateOnly, parseDateOnlyEnd } from "../lib/timezone.js";
+import { formatSiteRulesForMatrix } from "./site-roster-policy.service.js";
 
 type ShiftWithRelations = {
   id: string;
@@ -28,7 +29,7 @@ function hasClockIn(shift: ShiftWithRelations): boolean {
   return shift.attendances.some((a) => a.clockIn != null);
 }
 
-/** Same predicate as GET /attendance/missed — ended shift, created/assigned, no clock-in recorded. */
+/** Same predicate as GET /attendance/missed — ended shift, created/assigned, no clock-in (shown as **A** in the matrix). */
 export function isMissedShift(shift: ShiftWithRelations, now: Date = new Date()): boolean {
   if (shift.endTime >= now) return false;
   if (shift.status !== "created" && shift.status !== "assigned") return false;
@@ -88,10 +89,14 @@ const WEEKDAYS: SiteRosterMatrixDay["weekday"][] = [
 ];
 
 /**
- * R: employee appears in supersededEmployeeIds on a shift overlapping the day and is not the current assignee,
- *    and has no other overlapping shift that day where they are the current assignee (D/N).
- * A: current assignee on an overlapping shift that matches the missed-shift predicate (past, no clock-in).
- * If both could apply, R wins (they were bumped off before the shift ran).
+ * Cell codes for one employee on one calendar day (site-scoped shifts only).
+ *
+ * - **D** / **N** — Scheduled day or night (from post.shiftType), shift not missed.
+ * - **O** — Off: not rostered on that day for this site (no overlapping shift as assignee or superseded-only R).
+ * - **A** — AWOL: current assignee on an overlapping shift that ended without clock-in (same rules as missed shifts).
+ * - **R** — Replaced: listed in `supersededEmployeeIds` on an overlapping shift, not the current assignee.
+ *
+ * If any overlapping shift for this employee is missed, the cell is **A** (even when another shift the same day would be D/N).
  */
 export function cellForEmployeeDay(employeeId: string, shiftsOnDay: ShiftWithRelations[], now?: Date): string {
   const t = now ?? new Date();
@@ -133,7 +138,7 @@ export async function buildSiteRosterMatrix(params: {
 
   const site = await prisma.site.findFirst({
     where: { id: siteId, companyId },
-    select: { id: true, name: true, rosterSiteRules: true },
+    select: { id: true, name: true, rosterSiteRules: true, rosterShiftGenderPolicy: true },
   });
 
   if (!site) {
@@ -244,7 +249,7 @@ export async function buildSiteRosterMatrix(params: {
   return {
     site: { id: site.id, name: site.name },
     periodLabel,
-    siteRules: site.rosterSiteRules ?? null,
+    siteRules: formatSiteRulesForMatrix(site.rosterShiftGenderPolicy, site.rosterSiteRules),
     days,
     rows,
   };

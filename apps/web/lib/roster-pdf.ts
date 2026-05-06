@@ -187,3 +187,211 @@ export function generateGuardRosterPDF(
 
   return doc.output("blob");
 }
+
+/** Matrix sheet types (aligned with SiteShiftRosterSheet). */
+export interface MatrixDayPdf {
+  date: string;
+  weekday: string;
+  dayOfMonth: number;
+}
+
+export interface MatrixRowPdf {
+  employeeId: string;
+  displayName: string;
+  gender: "male" | "female" | null;
+  contact: string | null;
+  cells: string[];
+}
+
+const MATRIX_LEGEND_PARAGRAPHS = [
+  "Colour coding: Male — blue marker in the Gender column (PDF shows M). Female — orange marker (PDF shows F).",
+  "Shift letters (day columns): D — Day shift. N — Night shift. O — Off (not rostered this day).",
+  "Special codes — R — Replaced: the scheduled guard did not arrive and a replacement was arranged with the controller (recorded when the shift assignee is changed).",
+  "A — AWOL: the scheduled guard did not report and there was no controller-arranged replacement on record (shift ended without clock-in).",
+];
+
+function safePdfFileSegment(name: string): string {
+  const s = name.replace(/[^\w\-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return s.slice(0, 48) || "site";
+}
+
+/**
+ * PDF for the site shift matrix: header, guard × day grid, site rules, and legend (matches on-screen roster sheet).
+ */
+export function generateSiteMatrixRosterPDF(params: {
+  siteName: string;
+  periodLabel: string;
+  siteRules: string | null;
+  days: MatrixDayPdf[];
+  rows: MatrixRowPdf[];
+  generatedBy?: string;
+}): Blob {
+  const { siteName, periodLabel, siteRules, days, rows, generatedBy } = params;
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 12;
+  const usableW = pageWidth - margin * 2;
+  let y = 16;
+
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.text("Shift roster", margin, y);
+  doc.setFontSize(11);
+  doc.text(siteName, pageWidth - margin, y, { align: "right" });
+  y += 7;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(80, 80, 80);
+  doc.text(periodLabel, margin, y);
+  y += 5;
+  doc.setFontSize(8);
+  doc.text(getGeneratedByText(generatedBy), margin, y);
+  doc.setTextColor(0, 0, 0);
+  y += 10;
+
+  const nDay = days.length;
+  const wGender = 11;
+  const wStaff = 34;
+  const wContact = 28;
+  const wDay = nDay > 0 ? Math.max(5.5, (usableW - wGender - wStaff - wContact) / nDay) : 0;
+
+  const head: string[][] = [
+    nDay > 0
+      ? ["Gender", "Guard", ...days.map((d) => `${d.weekday}\n${d.dayOfMonth}`), "Contact"]
+      : ["Gender", "Guard", "Contact"],
+  ];
+
+  const body =
+    rows.length === 0
+      ? [
+          nDay > 0
+            ? ["—", "No guards in range", ...Array(nDay).fill(""), "—"]
+            : ["—", "No guards in range", "—"],
+        ]
+      : rows.map((r) => [
+          r.gender === "male" ? "M" : r.gender === "female" ? "F" : "",
+          r.displayName,
+          ...(nDay > 0 ? Array.from({ length: nDay }, (_, i) => r.cells[i] ?? "") : []),
+          r.contact?.replace(/\s+/g, " ").trim() || "—",
+        ]);
+
+  const columnStyles: Record<number, { cellWidth: number; halign?: "center" }> =
+    nDay > 0
+      ? {
+          0: { cellWidth: wGender, halign: "center" },
+          1: { cellWidth: wStaff },
+          [2 + nDay]: { cellWidth: wContact },
+        }
+      : {
+          0: { cellWidth: wGender, halign: "center" },
+          1: { cellWidth: wStaff },
+          2: { cellWidth: wContact },
+        };
+  if (nDay > 0) {
+    for (let i = 0; i < nDay; i++) {
+      columnStyles[2 + i] = { cellWidth: wDay, halign: "center" };
+    }
+  }
+
+  autoTable(doc, {
+    head,
+    body,
+    startY: y,
+    styles: {
+      fontSize: nDay > 24 ? 5.5 : 6.5,
+      cellPadding: 1.2,
+      ...WIREFRAME_STYLES,
+      valign: "middle",
+    },
+    headStyles: {
+      ...HEADER_STYLES,
+      ...WIREFRAME_STYLES,
+      fontSize: nDay > 24 ? 5 : 6,
+    },
+    columnStyles,
+    alternateRowStyles: {
+      fillColor: [252, 252, 252] as [number, number, number],
+    },
+    margin: { left: margin, right: margin },
+  });
+
+  const lastY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+  y = lastY + 8;
+
+  const printBlock = (title: string, lines: string[]) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    if (y > pageHeight - 24) {
+      doc.addPage("landscape");
+      y = margin;
+    }
+    doc.text(title, margin, y);
+    y += 5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    for (const para of lines) {
+      const wrapped = doc.splitTextToSize(para, usableW);
+      for (const line of wrapped) {
+        if (y > pageHeight - margin) {
+          doc.addPage("landscape");
+          y = margin;
+        }
+        doc.text(line, margin, y);
+        y += 4;
+      }
+      y += 2;
+    }
+    y += 3;
+  };
+
+  const rulesText = siteRules?.trim()
+    ? siteRules.trim().split(/\n+/).filter(Boolean)
+    : ["No site rules set. Edit the site to add roster rules."];
+  printBlock("Site rules", rulesText);
+
+  printBlock("Legend", MATRIX_LEGEND_PARAGRAPHS);
+
+  return doc.output("blob");
+}
+
+export function downloadSiteMatrixRosterPdf(params: {
+  siteName: string;
+  periodLabel: string;
+  siteRules: string | null;
+  days: MatrixDayPdf[];
+  rows: MatrixRowPdf[];
+  generatedBy?: string;
+}): void {
+  const blob = generateSiteMatrixRosterPDF(params);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `shift-roster-${safePdfFileSegment(params.siteName)}.pdf`;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Open the same roster PDF in a new tab for preview (browser PDF viewer). Returns false if pop-up blocked. */
+export function previewSiteMatrixRosterPdf(params: {
+  siteName: string;
+  periodLabel: string;
+  siteRules: string | null;
+  days: MatrixDayPdf[];
+  rows: MatrixRowPdf[];
+  generatedBy?: string;
+}): boolean {
+  const blob = generateSiteMatrixRosterPDF(params);
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, "_blank", "noopener,noreferrer");
+  if (!win) {
+    URL.revokeObjectURL(url);
+    return false;
+  }
+  // Revoke after the tab has loaded the blob (avoids breaking the viewer if too early).
+  window.setTimeout(() => URL.revokeObjectURL(url), 120_000);
+  return true;
+}

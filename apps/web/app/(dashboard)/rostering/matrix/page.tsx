@@ -27,7 +27,7 @@ interface MatrixPayload {
 }
 
 function MatrixPageInner() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
   const qpSite = searchParams.get("siteId") ?? "";
@@ -178,6 +178,7 @@ function MatrixPageInner() {
           sites={sites}
           activeSiteId={activeSiteId}
           onSelectSite={onSelectSite}
+          pdfGeneratedBy={user ? `${user.name} (${user.email})` : null}
         />
       )}
     </div>

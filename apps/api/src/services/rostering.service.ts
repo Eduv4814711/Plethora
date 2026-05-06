@@ -1,5 +1,6 @@
 import { addDays, getDay } from "date-fns";
 import { prisma } from "../lib/prisma.js";
+import { getShiftGenderPolicyViolation } from "./site-roster-policy.service.js";
 
 export class RosteringValidationError extends Error {
   constructor(message: string) {
@@ -215,6 +216,15 @@ export async function validateShiftAssignment(params: {
 
   if (post.site.companyId !== companyId) {
     throw new RosteringValidationError("Post does not belong to company");
+  }
+
+  const genderViolation = getShiftGenderPolicyViolation(
+    employee.gender,
+    post.shiftType,
+    post.site.rosterShiftGenderPolicy
+  );
+  if (genderViolation) {
+    throw new RosteringValidationError(genderViolation);
   }
 
   const overlapping = await prisma.shift.findFirst({

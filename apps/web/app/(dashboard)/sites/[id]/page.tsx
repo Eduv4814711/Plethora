@@ -49,10 +49,23 @@ interface Site {
   contactPersonName: string | null;
   contactPersonPhone: string | null;
   serviceType: string | null;
+  rosterSiteRules?: string | null;
+  rosterShiftGenderPolicy?: { day?: string; night?: string } | null;
   latitude?: number | string | null;
   longitude?: number | string | null;
   geofenceRadiusMeters?: number | null;
   posts: Post[];
+}
+
+type ShiftGenderSelect = "any" | "male" | "female";
+
+function shiftGenderFromSitePolicy(
+  policy: Site["rosterShiftGenderPolicy"],
+  which: "day" | "night"
+): ShiftGenderSelect {
+  if (!policy || typeof policy !== "object" || Array.isArray(policy)) return "any";
+  const v = (policy as Record<string, unknown>)[which];
+  return v === "male" || v === "female" ? v : "any";
 }
 
 interface Guard {
@@ -180,6 +193,14 @@ export default function SiteDetailPage() {
         </div>
       )}
 
+      <SiteRosterRulesSection
+        site={site}
+        siteId={siteId}
+        token={token ?? ""}
+        canManage={canManage}
+        onSaved={refresh}
+      />
+
       <div className="space-y-6">
           {deleteError && (
             <div className="p-4 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800/50 flex items-center justify-between">
@@ -285,6 +306,193 @@ export default function SiteDetailPage() {
         />
       )}
 
+    </div>
+  );
+}
+
+function formatRosterRulesPreview(site: Site): string | null {
+  const lines: string[] = [];
+  const p = site.rosterShiftGenderPolicy;
+  if (p && typeof p === "object" && !Array.isArray(p)) {
+    if (p.day === "female") lines.push("Day shift: female guards only.");
+    if (p.day === "male") lines.push("Day shift: male guards only.");
+    if (p.night === "female") lines.push("Night shift: female guards only.");
+    if (p.night === "male") lines.push("Night shift: male guards only.");
+  }
+  const notes = site.rosterSiteRules?.trim();
+  if (notes) {
+    if (lines.length) lines.push("");
+    lines.push(...notes.split(/\n+/).filter(Boolean));
+  }
+  return lines.length ? lines.join("\n") : null;
+}
+
+function SiteRosterRulesSection({
+  site,
+  siteId,
+  token,
+  canManage,
+  onSaved,
+}: {
+  site: Site;
+  siteId: string;
+  token: string;
+  canManage: boolean;
+  onSaved: () => void;
+}) {
+  const [dayGenderPolicy, setDayGenderPolicy] = useState<ShiftGenderSelect>(() =>
+    shiftGenderFromSitePolicy(site.rosterShiftGenderPolicy, "day")
+  );
+  const [nightGenderPolicy, setNightGenderPolicy] = useState<ShiftGenderSelect>(() =>
+    shiftGenderFromSitePolicy(site.rosterShiftGenderPolicy, "night")
+  );
+  const [rosterSiteRules, setRosterSiteRules] = useState(site.rosterSiteRules ?? "");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    setDayGenderPolicy(shiftGenderFromSitePolicy(site.rosterShiftGenderPolicy, "day"));
+    setNightGenderPolicy(shiftGenderFromSitePolicy(site.rosterShiftGenderPolicy, "night"));
+    setRosterSiteRules(site.rosterSiteRules ?? "");
+    setError(null);
+  }, [site.id, site.rosterShiftGenderPolicy, site.rosterSiteRules]);
+
+  const preview = formatRosterRulesPreview(site);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      const res = await authFetch(`/sites/${siteId}`, token, {
+        method: "PUT",
+        body: JSON.stringify({
+          rosterSiteRules: rosterSiteRules.trim() || null,
+          rosterShiftGenderPolicy:
+            dayGenderPolicy === "any" && nightGenderPolicy === "any"
+              ? null
+              : {
+                  ...(dayGenderPolicy !== "any" ? { day: dayGenderPolicy } : {}),
+                  ...(nightGenderPolicy !== "any" ? { night: nightGenderPolicy } : {}),
+                },
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(typeof data.message === "string" ? data.message : "Failed to save roster rules");
+      }
+      setSavedAt(Date.now());
+      onSaved();
+    } catch (err) {
+      setSavedAt(null);
+      setError(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="card-elevated p-6">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+        <div>
+          <h2 className="section-title text-neutral-900 dark:text-neutral-100">Site roster rules</h2>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
+            Enforced when assigning shifts to this site. Shown on the{" "}
+            <Link
+              href={`/rostering/matrix?siteId=${encodeURIComponent(siteId)}`}
+              className="font-medium text-neutral-600 dark:text-neutral-300 hover:underline"
+            >
+              site shift matrix
+            </Link>
+            .
+          </p>
+        </div>
+      </div>
+
+      {canManage ? (
+        <form onSubmit={handleSave} className="space-y-4">
+          {error && (
+            <div className="p-3 text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/25 rounded-lg border border-red-200 dark:border-red-800/50">
+              {error}
+            </div>
+          )}
+          {savedAt && !error && (
+            <p className="text-sm text-emerald-700 dark:text-emerald-400">Saved.</p>
+          )}
+          <div className="border border-neutral-200 dark:border-neutral-700 rounded-security-lg p-4 bg-neutral-50/80 dark:bg-neutral-900/40">
+            <h3 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mb-1">Roster enforcement</h3>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4">
+              Assignments are blocked if the guard does not match the rule (by post day/night type and gender on file).
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">
+                  Day shift
+                </label>
+                <select
+                  value={dayGenderPolicy}
+                  onChange={(e) => {
+                    setDayGenderPolicy(e.target.value as ShiftGenderSelect);
+                    setSavedAt(null);
+                  }}
+                  className="input-modern w-full"
+                >
+                  <option value="any">Any</option>
+                  <option value="male">Male only</option>
+                  <option value="female">Female only</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">
+                  Night shift
+                </label>
+                <select
+                  value={nightGenderPolicy}
+                  onChange={(e) => {
+                    setNightGenderPolicy(e.target.value as ShiftGenderSelect);
+                    setSavedAt(null);
+                  }}
+                  className="input-modern w-full"
+                >
+                  <option value="any">Any</option>
+                  <option value="male">Male only</option>
+                  <option value="female">Female only</option>
+                </select>
+              </div>
+            </div>
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">
+                Additional notes (matrix only, not enforced)
+              </label>
+              <textarea
+                value={rosterSiteRules}
+                onChange={(e) => {
+                  setRosterSiteRules(e.target.value);
+                  setSavedAt(null);
+                }}
+                placeholder="e.g. client preferences, exceptions process"
+                rows={3}
+                className="input-modern w-full font-normal normal-case tracking-normal"
+              />
+            </div>
+          </div>
+          <button type="submit" disabled={submitting} className="btn-primary">
+            {submitting ? "Saving…" : "Save roster rules"}
+          </button>
+        </form>
+      ) : (
+        <div className="text-sm">
+          {preview ? (
+            <div className="whitespace-pre-wrap text-neutral-700 dark:text-neutral-300 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800/40 p-4">
+              {preview}
+            </div>
+          ) : (
+            <p className="text-neutral-500 dark:text-neutral-400 italic">No roster rules defined for this site.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
