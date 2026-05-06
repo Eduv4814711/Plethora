@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type { Post } from "@prisma/client";
+import { addDays } from "date-fns";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
@@ -12,6 +13,7 @@ import {
   computeDatesFromPatternDual,
   type BulkPattern,
 } from "../services/rostering.service.js";
+import { buildSiteRosterMatrix } from "../services/site-roster-matrix.service.js";
 import { createAuditLog } from "../lib/audit.js";
 import { getCompanyTimezone, getShiftTimes, parseDateOnly, parseDateOnlyEnd } from "../lib/timezone.js";
 
@@ -258,6 +260,57 @@ export async function shiftsRoutes(app: FastifyInstance) {
     ]);
 
     return reply.send({ data: shifts, total, limit, offset });
+  });
+
+  app.get("/site-matrix", { preHandler: protect }, async (request, reply) => {
+    const user = request.user!;
+    const q = request.query as Record<string, string | undefined>;
+    const siteId = q.siteId;
+    const startDate = q.startDate?.slice(0, 10);
+    const endDate = q.endDate?.slice(0, 10);
+
+    if (!siteId || !startDate || !endDate) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "siteId, startDate, and endDate are required (yyyy-MM-dd)",
+      });
+    }
+
+    const start = parseDateOnly(startDate);
+    const endDay = parseDateOnly(endDate);
+    if (start > endDay) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "endDate must be on or after startDate",
+      });
+    }
+
+    let dayCount = 0;
+    for (let d = new Date(start); d.getTime() <= endDay.getTime(); d = addDays(d, 1)) {
+      dayCount++;
+    }
+    const maxDays = 31;
+    if (dayCount > maxDays) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: `Period must be at most ${maxDays} days`,
+      });
+    }
+
+    try {
+      const matrix = await buildSiteRosterMatrix({
+        companyId: user.companyId,
+        siteId,
+        startDate,
+        endDate,
+      });
+      return reply.send(matrix);
+    } catch (err) {
+      if (err instanceof Error && err.message === "Site not found") {
+        return reply.code(404).send({ error: "Site not found" });
+      }
+      throw err;
+    }
   });
 
   app.post("/", { preHandler: protect }, async (request, reply) => {
@@ -609,6 +662,12 @@ export async function shiftsRoutes(app: FastifyInstance) {
       });
     }
 
+    const assigneeChanged = employeeId !== existing.employeeId;
+    const supersededEmployeeIds =
+      assigneeChanged
+        ? [...existing.supersededEmployeeIds, existing.employeeId]
+        : existing.supersededEmployeeIds;
+
     try {
       await validateShiftAssignment({
         companyId,
@@ -635,6 +694,7 @@ export async function shiftsRoutes(app: FastifyInstance) {
         postId,
         startTime,
         endTime,
+        ...(assigneeChanged ? { supersededEmployeeIds } : {}),
       },
       include: {
         employee: { select: { id: true, firstName: true, lastName: true } },

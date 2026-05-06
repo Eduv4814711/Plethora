@@ -50,6 +50,7 @@ const createSiteSchema = z
       .transform((v) => (v === "" ? undefined : v)),
     monthlyRevenue: z.number().positive().optional(),
     assignedGuardIds: z.array(z.string()).optional(),
+    rosterSiteRules: z.string().optional(),
     latitude: z.number().min(-90).max(90).optional(),
     longitude: z.number().min(-180).max(180).optional(),
     geofenceRadiusMeters: z.number().int().positive().max(100_000).optional(),
@@ -75,6 +76,7 @@ const updateSiteSchema = z
       .transform((v) => (v === "" ? undefined : v)),
     monthlyRevenue: z.number().positive().optional().nullable(),
     assignedGuardIds: z.array(z.string()).optional(),
+    rosterSiteRules: z.string().optional().nullable(),
     latitude: z.number().min(-90).max(90).nullable().optional(),
     longitude: z.number().min(-180).max(180).nullable().optional(),
     geofenceRadiusMeters: z.number().int().positive().max(100_000).nullable().optional(),
@@ -204,6 +206,7 @@ export async function sitesRoutes(app: FastifyInstance) {
           d.latitude !== undefined && d.longitude !== undefined && d.geofenceRadiusMeters !== undefined
             ? d.geofenceRadiusMeters
             : undefined,
+        rosterSiteRules: d.rosterSiteRules,
       },
     });
 

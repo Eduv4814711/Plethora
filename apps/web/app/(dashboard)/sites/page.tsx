@@ -64,6 +64,7 @@ interface Site {
   contactPersonPhone: string | null;
   contractOrServiceAgreement: string | null;
   serviceType: string | null;
+  rosterSiteRules?: string | null;
   latitude?: number | string | null;
   longitude?: number | string | null;
   geofenceRadiusMeters?: number | null;
@@ -657,6 +658,7 @@ function EditSiteModal({
   const [geofenceRadiusMeters, setGeofenceRadiusMeters] = useState(
     site.geofenceRadiusMeters != null ? String(site.geofenceRadiusMeters) : ""
   );
+  const [rosterSiteRules, setRosterSiteRules] = useState(site.rosterSiteRules ?? "");
   const [clearGeofence, setClearGeofence] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -706,6 +708,7 @@ function EditSiteModal({
           contractOrServiceAgreement: contractAgreementType === "other" ? (contractAgreementCustom || undefined) : (contractAgreementType || undefined),
           serviceType: serviceType || undefined,
           assignedGuardIds,
+          rosterSiteRules: rosterSiteRules.trim() || null,
           ...geoPayload,
         }),
       });
@@ -781,6 +784,19 @@ function EditSiteModal({
                   className="input-modern mt-2"
                 />
               )}
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">
+                Site roster rules (shown on shift matrix)
+              </label>
+              <textarea
+                value={rosterSiteRules}
+                onChange={(e) => setRosterSiteRules(e.target.value)}
+                placeholder="e.g. 1 female guard per day shift"
+                rows={4}
+                className="input-modern w-full font-normal normal-case tracking-normal"
+              />
             </div>
 
             <div className="md:col-span-2 border-t border-neutral-200 dark:border-neutral-700 pt-4">

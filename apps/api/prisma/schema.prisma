@@ -232,6 +232,8 @@ model Site {
   latitude                   Decimal? @db.Decimal(10, 7)
   longitude                  Decimal? @db.Decimal(10, 7)
   geofenceRadiusMeters       Int?
+  /// Optional multi-line text shown on the site shift roster matrix (e.g. staffing rules).
+  rosterSiteRules            String?
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
@@ -294,6 +296,8 @@ model Shift {
   startTime  DateTime
   endTime    DateTime
   status     ShiftStatus
+  /// Employees who were previously assigned to this shift before replacement (order = history).
+  supersededEmployeeIds String[] @default([])
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
 

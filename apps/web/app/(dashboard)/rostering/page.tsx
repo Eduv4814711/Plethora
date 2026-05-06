@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { format, addDays, startOfMonth, endOfMonth, isSameDay, parseISO, startOfDay } from "date-fns";
@@ -784,6 +785,12 @@ export default function RosteringPage() {
             <div>
               <h1 className="page-title leading-tight">Roster Calendar</h1>
               <p className="mt-2 text-sm text-neutral-700 dark:text-neutral-300 max-w-md">Security workforce scheduling view</p>
+              <Link
+                href="/rostering/matrix"
+                className="mt-2 inline-block text-sm font-semibold text-amber-700 dark:text-amber-400 hover:underline"
+              >
+                Site shift matrix →
+              </Link>
             </div>
           </div>
           <div className="hidden xl:flex justify-center" />

@@ -125,7 +125,15 @@ export default function SiteDetailPage() {
             <p className="text-neutral-500 dark:text-neutral-400 mt-0.5 text-sm">
               Manage posts. Assign guards in{" "}
               <Link href="/rostering" className="font-medium text-neutral-700 dark:text-neutral-200 hover:underline">
-                Roster
+                roster calendar
+              </Link>
+              {" "}
+              or view the{" "}
+              <Link
+                href={`/rostering/matrix?siteId=${encodeURIComponent(siteId)}`}
+                className="font-medium text-neutral-700 dark:text-neutral-200 hover:underline"
+              >
+                site shift matrix
               </Link>
               .
             </p>
@@ -187,6 +195,13 @@ export default function SiteDetailPage() {
                   Guard assignments are managed in{" "}
                   <Link href="/rostering" className="font-medium text-neutral-600 dark:text-neutral-300 hover:underline">
                     Roster
+                  </Link>{" "}
+                  or{" "}
+                  <Link
+                    href={`/rostering/matrix?siteId=${encodeURIComponent(siteId)}`}
+                    className="font-medium text-neutral-600 dark:text-neutral-300 hover:underline"
+                  >
+                    site matrix
                   </Link>
                   . You can remove a guard from a post here if needed.
                 </p>
@@ -239,6 +254,13 @@ export default function SiteDetailPage() {
                   Add posts to define coverage. Assign guards from{" "}
                   <Link href="/rostering" className="font-medium text-neutral-600 dark:text-neutral-300 hover:underline">
                     Roster
+                  </Link>{" "}
+                  or view{" "}
+                  <Link
+                    href={`/rostering/matrix?siteId=${encodeURIComponent(siteId)}`}
+                    className="font-medium text-neutral-600 dark:text-neutral-300 hover:underline"
+                  >
+                    matrix
                   </Link>
                   .
                 </p>
@@ -368,6 +390,13 @@ function PostCard({
                 No guards on this post. Assign in{" "}
                 <Link href="/rostering" className="font-medium text-neutral-600 dark:text-neutral-300 hover:underline">
                   Roster
+                </Link>{" "}
+                or{" "}
+                <Link
+                  href={`/rostering/matrix?siteId=${encodeURIComponent(siteId)}`}
+                  className="font-medium text-neutral-600 dark:text-neutral-300 hover:underline"
+                >
+                  matrix
                 </Link>
                 .
               </>

@@ -1,0 +1,467 @@
+/* Ported from shift-roster design — scoped to matrix print/sheet */
+
+.sheet {
+  background: var(--sr-canvas, #ffffff);
+  border-radius: 12px;
+  border: 1px solid var(--sr-hairline, #e5e3df);
+  box-shadow: rgba(15, 15, 15, 0.06) 0 4px 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.rosterHeader {
+  position: relative;
+  flex-shrink: 0;
+  padding: 20px 16px;
+  background: var(--sr-canvas, #ffffff);
+  border-bottom: 1px solid var(--sr-hairline, #e5e3df);
+}
+
+.rosterHeader::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #e65100, #ff9800, #f57c00);
+}
+
+.headerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.title,
+.libraryName {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #000000;
+}
+
+.libraryName {
+  text-align: right;
+}
+
+.range {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #37352f;
+  margin: 16px 0 0;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 16px 20px;
+}
+
+.table {
+  width: 100%;
+  min-width: 1120px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+  color: #000000;
+}
+
+.table th,
+.table td {
+  border: 1px solid #c8c4be;
+  padding: 10px 8px;
+  vertical-align: middle;
+}
+
+.table thead th {
+  font-weight: 600;
+  text-align: center;
+  background: #fafaf9;
+  color: #000000;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.colShift {
+  box-sizing: border-box;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.table thead th.colShift {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.015em;
+  line-height: 1.15;
+  padding: 6px 2px;
+  text-transform: uppercase;
+}
+
+.dateRow th.colShift {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums lining-nums;
+  padding: 5px 2px;
+  text-transform: none;
+}
+
+.table tbody td.colShift {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums lining-nums;
+  padding: 9px 2px;
+  color: #37352f;
+}
+
+.table tbody tr:nth-child(even) td {
+  background: rgba(246, 245, 244, 0.85);
+}
+
+.table tbody tr:hover td {
+  background: rgba(255, 152, 0, 0.09);
+}
+
+.colGender {
+  width: 3.75rem;
+  min-width: 3.5rem;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.colName {
+  width: 12.5rem;
+  min-width: 10rem;
+  text-align: left;
+  font-weight: 600;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+.table thead th.colName {
+  padding: 10px 14px;
+}
+
+.colContact {
+  width: 7.75rem;
+  min-width: 7.25rem;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: #5d5b54;
+  padding: 12px;
+}
+
+.genderMarker {
+  display: block;
+  width: 16px;
+  height: 16px;
+  margin: 0 auto;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 4px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.genderMale {
+  background: #2563eb;
+}
+
+.genderFemale {
+  background: #ff9800;
+}
+
+.sundayCol {
+  background: #fef7d6 !important;
+}
+
+.theadSunday {
+  background: #f9e79f !important;
+}
+
+.footerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 20px 24px;
+  padding: 20px 16px;
+  background: #fafaf9;
+  border-top: 1px solid var(--sr-hairline, #e5e3df);
+}
+
+.legend {
+  flex: 0 1 auto;
+  width: 100%;
+  max-width: min(100%, 550px);
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 20px;
+  border-radius: 12px;
+  border: 1px solid var(--sr-hairline, #e5e3df);
+  padding: 16px 20px;
+  background: var(--sr-canvas, #ffffff);
+  box-shadow: rgba(15, 15, 15, 0.04) 0 1px 2px;
+}
+
+.requirements {
+  flex: 0 1 14rem;
+  max-width: min(100%, 17rem);
+  margin: 0;
+  padding: 0 20px 0 16px;
+  border: none;
+  border-radius: 0;
+  border-right: 1px solid #ede9e4;
+  border-left: 3px solid #e03131;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1.45;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #e03131;
+  background: rgba(255, 248, 248, 0.55);
+}
+
+.requirementsTitle {
+  margin: 0 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #787671;
+  text-align: left;
+}
+
+.requirementsBody {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.requirementsBody p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.legendColour {
+  flex: 1 1 14rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.legendTitle {
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #787671;
+  margin: 0 0 12px;
+}
+
+.legendGrid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #37352f;
+}
+
+.swatch {
+  width: 26px;
+  height: 20px;
+  border: 1px solid #c8c4be;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 11px;
+  box-shadow: rgba(15, 15, 15, 0.04) 0 1px 2px;
+}
+
+.swatchMale {
+  background: #2563eb;
+  color: #fff;
+}
+
+.swatchFemale {
+  background: #ff9800;
+  color: #000;
+}
+
+.swatchReplaced {
+  background: #0a1530;
+  color: #e03131;
+}
+
+.swatchAwol {
+  background: #e03131;
+  color: #000;
+}
+
+.sheetTabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0;
+  padding: 0 16px;
+  margin: 0;
+  list-style: none;
+  background: linear-gradient(180deg, #ede9e4 0%, #e0ddd7 100%);
+  border-top: 1px solid #c8c4be;
+}
+
+.tab {
+  margin: 0 2px -1px 0;
+  padding: 8px 14px 9px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #5d5b54;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid #c8c4be;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.tabActive {
+  color: #000000;
+  background: #ffffff;
+  padding-bottom: 10px;
+  box-shadow: 0 1px 0 #ffffff;
+  border-top: 3px solid #ff9800;
+}
+
+.printActions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  max-width: 1328px;
+  margin: 0 auto 12px;
+  padding: 0 16px;
+}
+
+.printBtn {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  color: #000000;
+  background: #ff9800;
+  box-shadow: rgba(15, 15, 15, 0.04) 0 1px 2px;
+}
+
+.printBtn:hover {
+  background: #f57c00;
+}
+
+.printHint {
+  font-size: 12px;
+  color: #5d5b54;
+}
+
+.page {
+  padding: 24px 16px 32px;
+  max-width: 1328px;
+  margin: 0 auto;
+}
+
+@media (min-width: 768px) {
+  .rosterHeader,
+  .tableWrap,
+  .footerRow,
+  .sheetTabs {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .page {
+    padding: 32px 24px 32px;
+  }
+}
+
+@media print {
+  .noPrint {
+    display: none !important;
+  }
+
+  .page {
+    padding: 0;
+    max-width: none;
+    margin: 0;
+  }
+
+  .sheet {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible !important;
+  }
+
+  .tableWrap {
+    overflow: visible !important;
+    padding: 0 0 8px;
+  }
+
+  .table {
+    min-width: 0 !important;
+    width: 100%;
+    font-size: 9pt;
+  }
+
+  .table th,
+  .table td {
+    padding: 4px 2px;
+  }
+
+  .table tbody tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .table tbody tr:hover td {
+    background: inherit !important;
+  }
+
+  .table tbody tr:nth-child(even) td {
+    background: rgba(246, 245, 244, 0.85) !important;
+  }
+
+  .sheetTabs {
+    display: none !important;
+  }
+}
