@@ -540,8 +540,8 @@ export default function RosteringPage() {
 
   return (
     <div className="mx-auto flex h-[calc(100vh-7.5rem)] min-h-[620px] w-full max-w-[1760px] flex-col xl:flex-row gap-5 rounded-[28px] bg-gradient-to-b from-neutral-50/85 via-white to-security-navy-50/40 dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900 p-2 xl:p-3">
-      <aside className="xl:w-[18.75rem] w-full xl:h-full max-h-[48vh] xl:max-h-none shrink-0 flex flex-col overflow-hidden rounded-2xl border border-neutral-200/90 dark:border-neutral-700 bg-white/95 dark:bg-neutral-900/80 shadow-[0_10px_30px_-18px_rgba(15,23,42,0.35)]">
-        <div className="p-4 shrink-0 space-y-3 border-b border-neutral-200/80 dark:border-neutral-700 bg-gradient-to-b from-white to-neutral-50/70 dark:from-neutral-900 dark:to-neutral-900/80">
+      <aside className="xl:w-[18.75rem] w-full xl:h-full max-h-[48vh] xl:max-h-none shrink-0 flex flex-col min-h-0 overflow-hidden rounded-2xl border border-neutral-200/90 dark:border-neutral-700 bg-white/95 dark:bg-neutral-900/80 shadow-[0_10px_30px_-18px_rgba(15,23,42,0.35)]">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain p-4 space-y-3 bg-gradient-to-b from-white to-neutral-50/70 dark:from-neutral-900 dark:to-neutral-900/80 [scrollbar-width:thin] [scrollbar-color:rgba(148,163,184,0.55)_transparent]">
           <div className="rounded-xl border border-neutral-200/90 dark:border-neutral-700 bg-white dark:bg-neutral-900/70 p-3.5 shadow-sm">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-500 dark:text-neutral-400 mb-1">
               Roster Period
@@ -641,8 +641,8 @@ export default function RosteringPage() {
               </div>
             </div>
           </div>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 border-t border-neutral-200/80 dark:border-neutral-700 bg-neutral-50/40 dark:bg-neutral-900/30">
+
+          <div className="border-t border-neutral-200/80 dark:border-neutral-700 pt-4 space-y-4 bg-neutral-50/40 dark:bg-neutral-900/30 -mx-4 px-4 pb-1">
           {selectedSiteId ? (
             <>
               <div>
@@ -763,6 +763,7 @@ export default function RosteringPage() {
               </p>
             </div>
           )}
+          </div>
         </div>
         {bulkError && (
           <div className="p-3 border-t border-neutral-200 dark:border-neutral-700 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-xs">
