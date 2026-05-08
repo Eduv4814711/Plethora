@@ -4,6 +4,21 @@ import { mkdir } from "fs/promises";
 
 config();
 
+if (process.env.NODE_ENV === "production") {
+  const weakJwt =
+    !process.env.JWT_SECRET ||
+    process.env.JWT_SECRET === "dev-secret-change-in-production";
+  const weakRefresh =
+    !process.env.JWT_REFRESH_SECRET ||
+    process.env.JWT_REFRESH_SECRET === "dev-refresh-secret";
+  if (weakJwt || weakRefresh) {
+    console.error(
+      "FATAL: JWT_SECRET and JWT_REFRESH_SECRET must be set to strong, unique values in production."
+    );
+    process.exit(1);
+  }
+}
+
 await mkdir(join(process.cwd(), "uploads", "logos"), { recursive: true });
 await mkdir(join(process.cwd(), "uploads", "tasks"), { recursive: true });
 await mkdir(join(process.cwd(), "uploads", "academy"), { recursive: true });

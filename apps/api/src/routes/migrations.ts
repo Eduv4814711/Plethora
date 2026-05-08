@@ -49,8 +49,8 @@ export async function migrationsRoutes(app: FastifyInstance) {
   ];
   const adminProtect = [authMiddleware, requireAdmin()];
 
-  // GET /migrations/templates/:type - Download CSV template
-  app.get("/templates/:type", { preHandler: [authMiddleware] }, async (request, reply) => {
+  // GET /migrations/templates/:type - Download CSV template (same module gate as other migration routes)
+  app.get("/templates/:type", { preHandler: protect }, async (request, reply) => {
     const { type } = request.params as { type: string };
     const filename =
       type === "company"

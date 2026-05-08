@@ -19,6 +19,8 @@ export async function authMiddleware(
     const decoded = jwt.verify(token, config.jwt.accessSecret) as JWTPayload;
     request.user = decoded;
   } catch {
-    reply.code(401).send({ error: "Unauthorized", message: "Invalid or expired token" });
+    return reply
+      .code(401)
+      .send({ error: "Unauthorized", message: "Invalid or expired token" });
   }
 }
