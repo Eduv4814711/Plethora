@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
+import { DateInput } from "@/components/date-input";
 
 export default function AcademyProfilePage() {
   const { token, user } = useAuth();
@@ -227,37 +228,25 @@ export default function AcademyProfilePage() {
           </label>
           <label className="space-y-1.5">
             <span className={fieldLabelClass}>Accreditation issue date</span>
-            <div className="relative">
-              <input
-                className={`${fieldClass} pr-10`}
-                type="date"
-                value={form.accreditationIssueDate}
-                disabled={formReadOnly}
-                onChange={(e) => handleChange("accreditationIssueDate", e.target.value)}
-              />
-              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[#a3a7ae]" aria-hidden>
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 2v4M16 2v4M3 10h18M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
-                </svg>
-              </span>
-            </div>
+            <DateInput
+              value={form.accreditationIssueDate}
+              onChange={(v) => handleChange("accreditationIssueDate", v)}
+              disabled={formReadOnly}
+              className="input-modern"
+              ariaLabel="Accreditation issue date"
+              showToday
+            />
           </label>
           <label className="space-y-1.5">
             <span className={fieldLabelClass}>Re-accreditation due date</span>
-            <div className="relative">
-              <input
-                className={`${fieldClass} pr-10`}
-                type="date"
-                value={form.reAccreditationDueDate}
-                disabled={formReadOnly}
-                onChange={(e) => handleChange("reAccreditationDueDate", e.target.value)}
-              />
-              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-[#a3a7ae]" aria-hidden>
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 2v4M16 2v4M3 10h18M5 5h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
-                </svg>
-              </span>
-            </div>
+            <DateInput
+              value={form.reAccreditationDueDate}
+              onChange={(v) => handleChange("reAccreditationDueDate", v)}
+              disabled={formReadOnly}
+              className="input-modern"
+              ariaLabel="Re-accreditation due date"
+              showToday
+            />
           </label>
           <label className="space-y-1.5">
             <span className={fieldLabelClass}>Province</span>

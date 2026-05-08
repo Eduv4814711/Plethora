@@ -722,11 +722,11 @@ function ContractLabourCostPanel({ token }: { token: string }) {
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2">
           <span className="text-sm font-medium text-security-navy-600">From</span>
-          <input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} className="input-modern text-sm w-40" />
+          <DateInput value={periodStart} onChange={setPeriodStart} className="input-modern text-sm w-40" showToday ariaLabel="Period start" />
         </label>
         <label className="flex items-center gap-2">
           <span className="text-sm font-medium text-security-navy-600">To</span>
-          <input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} className="input-modern text-sm w-40" />
+          <DateInput value={periodEnd} onChange={setPeriodEnd} className="input-modern text-sm w-40" showToday ariaLabel="Period end" />
         </label>
         <button onClick={handleLoad} disabled={loading} className="btn-primary text-sm disabled:opacity-50">
           {loading ? "Loading…" : "Load"}

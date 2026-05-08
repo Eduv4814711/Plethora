@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
+import { DateInput } from "@/components/date-input";
 
 interface Session {
   id: string;
@@ -124,12 +125,13 @@ export default function AcademyAttendancePage() {
           <form onSubmit={create} className="mt-3 flex items-end gap-2">
             <label>
               <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">Session date</span>
-              <input
-                className="input input-bordered rounded-xl"
-                type="date"
+              <DateInput
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
+                onChange={setDate}
+                className="input-modern"
+                showToday
                 disabled={!canManage || saving}
+                ariaLabel="Session date"
               />
             </label>
             <button className="btn btn-primary rounded-xl" disabled={!canManage || saving}>Create</button>

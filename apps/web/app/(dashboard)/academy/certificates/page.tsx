@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
+import { DateInput } from "@/components/date-input";
 
 interface StudentOption {
   id: string;
@@ -183,12 +184,13 @@ export default function AcademyCertificatesPage() {
               </option>
             ))}
           </select>
-          <input
-            className="input input-bordered rounded-xl"
-            type="date"
+          <DateInput
             value={issueDate}
-            onChange={(e) => setIssueDate(e.target.value)}
+            onChange={setIssueDate}
+            className="input-modern"
+            showToday
             disabled={!canManage || saving}
+            ariaLabel="Certificate issue date"
           />
           <button className="btn btn-primary rounded-xl" disabled={!canManage || saving || !learnerId || !courseId || !issueDate}>
             Issue

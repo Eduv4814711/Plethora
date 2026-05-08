@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
+import { DateInput } from "@/components/date-input";
 
 interface Course {
   id: string;
@@ -125,11 +126,11 @@ export default function AcademyCourseRunsPage() {
         </div>
         <div>
           <label className="label py-0 text-xs">Start date</label>
-          <input type="date" className="input input-bordered input-sm w-full" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          <DateInput value={startDate} onChange={setStartDate} className="input-compact" showToday ariaLabel="Course run start date" />
         </div>
         <div>
           <label className="label py-0 text-xs">End date</label>
-          <input type="date" className="input input-bordered input-sm w-full" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          <DateInput value={endDate} onChange={setEndDate} className="input-compact" showToday ariaLabel="Course run end date" />
         </div>
         <div>
           <label className="label py-0 text-xs">Capacity (0 = unlimited)</label>

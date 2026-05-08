@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
+import { DateInput } from "@/components/date-input";
 
 export default function AcademyReportsPage() {
   const { token } = useAuth();
@@ -39,11 +40,11 @@ export default function AcademyReportsPage() {
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <label>
             <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">From</span>
-            <input className="input input-bordered rounded-xl" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            <DateInput value={from} onChange={setFrom} className="input-modern" showToday ariaLabel="Report from date" />
           </label>
           <label>
             <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">To</span>
-            <input className="input input-bordered rounded-xl" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            <DateInput value={to} onChange={setTo} className="input-modern" showToday ariaLabel="Report to date" />
           </label>
           <button className="btn rounded-xl" onClick={load}>Apply filters</button>
         </div>

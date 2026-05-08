@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
+import { DateInput } from "@/components/date-input";
 
 interface StudentOption {
   id: string;
@@ -144,12 +145,13 @@ export default function AcademyAssessmentsPage() {
             onChange={(e) => setAssessmentType(e.target.value)}
             disabled={!canManage || saving}
           />
-          <input
-            className="input input-bordered rounded-xl"
-            type="date"
+          <DateInput
             value={assessmentDate}
-            onChange={(e) => setAssessmentDate(e.target.value)}
+            onChange={setAssessmentDate}
+            className="input-modern"
+            showToday
             disabled={!canManage || saving}
+            ariaLabel="Assessment date"
           />
           <button className="btn btn-primary rounded-xl" disabled={!canManage || saving}>Add</button>
         </form>

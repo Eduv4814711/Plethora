@@ -24,6 +24,7 @@ import {
   type TaskPriority,
 } from "@/lib/api";
 import { AssigneePicker } from "@/components/assignee-picker";
+import { DateInput } from "@/components/date-input";
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
   todo: "To Do",
@@ -386,12 +387,12 @@ export default function TaskDetailPage() {
                         ? "week(s)"
                         : "month(s)"}
                   </span>
-                  <input
-                    type="date"
+                  <DateInput
                     value={editRecurrence.endDate}
-                    onChange={(e) => setEditRecurrence((r) => ({ ...r, endDate: e.target.value }))}
-                    placeholder="End date (optional)"
-                    className="input-compact w-auto"
+                    onChange={(v) => setEditRecurrence((r) => ({ ...r, endDate: v }))}
+                    className="input-compact min-w-[11rem]"
+                    showToday
+                    ariaLabel="Recurrence end date"
                   />
                 </>
               )}

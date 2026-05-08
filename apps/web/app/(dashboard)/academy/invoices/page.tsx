@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
+import { DateInput } from "@/components/date-input";
 
 interface StudentOpt {
   id: string;
@@ -180,22 +181,24 @@ export default function AcademyInvoicesPage() {
         </div>
         <div>
           <label className="label py-0 text-xs">Invoice date</label>
-          <input
-            type="date"
-            className="input input-bordered input-sm w-full"
+          <DateInput
             value={invoiceDate}
-            onChange={(e) => setInvoiceDate(e.target.value)}
+            onChange={setInvoiceDate}
+            className="input-compact"
+            showToday
             disabled={!canManage || saving}
+            ariaLabel="Invoice date"
           />
         </div>
         <div>
           <label className="label py-0 text-xs">Due date</label>
-          <input
-            type="date"
-            className="input input-bordered input-sm w-full"
+          <DateInput
             value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
+            onChange={setDueDate}
+            className="input-compact"
+            showToday
             disabled={!canManage || saving}
+            ariaLabel="Invoice due date"
           />
         </div>
         <div>

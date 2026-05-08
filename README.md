@@ -169,7 +169,7 @@ notifications without ever opening the web app.
 | Framework       | `next` 14 (App Router)               |
 | UI / Styling    | Tailwind CSS, custom design tokens   |
 | Charts          | `recharts`                           |
-| Date pickers    | `react-day-picker`                   |
+| Date pickers    | `react-day-picker` via shared `DateInput` (`apps/web/components/date-input.tsx`) |
 | PDFs (client)   | `jspdf`, `jspdf-autotable`           |
 | Utilities       | `clsx`, `date-fns`                   |
 

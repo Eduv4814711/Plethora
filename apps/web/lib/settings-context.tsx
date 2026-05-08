@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { CompanySettings } from "./api";
 import { getSettings, updateSettings } from "./api";
 import { useAuth } from "./auth-context";
@@ -21,23 +21,28 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** After first successful load, refetch in the background (e.g. token rotation) without blanking the whole app. */
+  const settingsHydratedRef = useRef(false);
 
   const fetchSettings = async () => {
     if (!token) {
+      settingsHydratedRef.current = false;
       setSettings(null);
       setLoading(false);
       return;
     }
-    setLoading(true);
+    const blockUI = !settingsHydratedRef.current;
+    if (blockUI) setLoading(true);
     setError(null);
     try {
       const data = await getSettings(token);
       setSettings(data);
+      settingsHydratedRef.current = true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load settings");
       setSettings(null);
     } finally {
-      setLoading(false);
+      if (blockUI) setLoading(false);
     }
   };
 
@@ -45,6 +50,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     if (token) {
       fetchSettings();
     } else {
+      settingsHydratedRef.current = false;
       setSettings(null);
       setLoading(false);
     }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
+import { DateInput } from "@/components/date-input";
 
 interface PaymentRow {
   id: string;
@@ -195,7 +196,7 @@ export default function AcademyInvoiceDetailPage() {
         <form onSubmit={addPayment} className="mt-3 flex flex-wrap items-end gap-2">
           <div>
             <label className="label py-0 text-xs">Date</label>
-            <input type="date" className="input input-bordered input-sm" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+            <DateInput value={payDate} onChange={setPayDate} className="input-compact" showToday ariaLabel="Payment date" />
           </div>
           <div>
             <label className="label py-0 text-xs">Amount</label>

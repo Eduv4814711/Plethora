@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
+import { DateInput } from "@/components/date-input";
 
 interface Doc {
   id: string;
@@ -54,7 +55,7 @@ export default function AcademyComplianceDocumentsPage() {
         <form onSubmit={create} className="mt-3 grid gap-2 md:grid-cols-4">
           <input className="input input-bordered rounded-xl md:col-span-2" placeholder="Document name" value={name} onChange={(e) => setName(e.target.value)} />
           <input className="input input-bordered rounded-xl" value={type} onChange={(e) => setType(e.target.value)} />
-          <input className="input input-bordered rounded-xl" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+          <DateInput value={expiryDate} onChange={setExpiryDate} className="input-modern" showToday ariaLabel="Document expiry date" />
           <button className="btn btn-primary rounded-xl md:col-span-4 md:justify-self-end" disabled={!canManage}>Add document</button>
         </form>
       </div>

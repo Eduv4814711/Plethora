@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi, uploadAcademyStudentDocument } from "@/lib/api";
+import { DateInput } from "@/components/date-input";
 
 interface Student {
   id: string;
@@ -361,16 +362,18 @@ export default function AcademyStudentDetailPage() {
           <Field label="ID number" value={student.idNumber ?? ""} onChange={(v) => setStudent({ ...student, idNumber: v })} />
           <div>
             <label className="label py-0 text-xs">Date of birth</label>
-            <input
-              type="date"
-              className="input input-bordered input-sm w-full"
+            <DateInput
               value={dateInput(student.dateOfBirth)}
-              onChange={(e) =>
+              onChange={(iso) =>
                 setStudent({
                   ...student,
-                  dateOfBirth: e.target.value ? new Date(e.target.value + "T12:00:00").toISOString() : null,
+                  dateOfBirth: iso ? new Date(iso + "T12:00:00").toISOString() : null,
                 })
               }
+              className="input-compact"
+              ariaLabel="Date of birth"
+              pastOnly
+              showToday={false}
             />
           </div>
           <div>

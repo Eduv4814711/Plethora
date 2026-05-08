@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
+import { DateInput } from "@/components/date-input";
 
 type Step = 1 | 2 | 3;
 
@@ -217,11 +218,13 @@ export default function AcademyIntakePage() {
             <Field label="ID number" value={idNumber} onChange={setIdNumber} />
             <div>
               <label className="label py-0 text-xs">Date of birth</label>
-              <input
-                type="date"
-                className="input input-bordered input-sm w-full"
+              <DateInput
                 value={dateOfBirth}
-                onChange={(e) => setDateOfBirth(e.target.value)}
+                onChange={setDateOfBirth}
+                className="input-compact"
+                ariaLabel="Date of birth"
+                pastOnly
+                showToday={false}
               />
             </div>
             <div className="sm:col-span-2">

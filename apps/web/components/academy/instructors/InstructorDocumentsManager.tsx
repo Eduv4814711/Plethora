@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { InstructorDocument } from "./types";
+import { DateInput } from "@/components/date-input";
 
 const DOCUMENT_TYPES = [
   { value: "instructor_certificate", label: "Instructor Certificate" },
@@ -96,22 +97,24 @@ export function InstructorDocumentsManager({
           </label>
           <label>
             <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">Issue Date</span>
-            <input
-              type="date"
-              className="input input-bordered w-full rounded-xl"
+            <DateInput
               value={issueDate}
-              onChange={(e) => setIssueDate(e.target.value)}
+              onChange={setIssueDate}
+              className="input-modern"
               disabled={!canEdit || uploading}
+              ariaLabel="Document issue date"
+              showToday
             />
           </label>
           <label>
             <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">Expiry Date</span>
-            <input
-              type="date"
-              className="input input-bordered w-full rounded-xl"
+            <DateInput
               value={expiryDate}
-              onChange={(e) => setExpiryDate(e.target.value)}
+              onChange={setExpiryDate}
+              className="input-modern"
               disabled={!canEdit || uploading}
+              ariaLabel="Document expiry date"
+              showToday
             />
           </label>
           <label>

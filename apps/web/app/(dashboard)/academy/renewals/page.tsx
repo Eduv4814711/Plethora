@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
+import { DateInput } from "@/components/date-input";
 
 interface Alert {
   id: string;
@@ -52,7 +53,7 @@ export default function AcademyRenewalsPage() {
         <form onSubmit={create} className="mt-3 grid gap-2 md:grid-cols-[1fr_1fr_auto_auto] md:items-end">
           <input className="input input-bordered rounded-xl" placeholder="Alert title" value={title} onChange={(e) => setTitle(e.target.value)} />
           <input className="input input-bordered rounded-xl" placeholder="Type" value={alertType} onChange={(e) => setAlertType(e.target.value)} />
-          <input className="input input-bordered rounded-xl" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          <DateInput value={dueDate} onChange={setDueDate} className="input-modern" showToday ariaLabel="Alert due date" />
           <button className="btn btn-primary rounded-xl" disabled={!canManage}>Add</button>
         </form>
       </div>

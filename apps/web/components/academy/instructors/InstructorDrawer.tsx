@@ -3,6 +3,7 @@
 import { InstructorComplianceBadge } from "./InstructorComplianceBadge";
 import { InstructorDocumentsManager } from "./InstructorDocumentsManager";
 import { InstructorStatusBadge } from "./InstructorStatusBadge";
+import { DateInput } from "@/components/date-input";
 import type {
   InstructorAuditItem,
   InstructorBranchOption,
@@ -646,12 +647,14 @@ function DateField({
       <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">
         {label} {required ? "*" : ""}
       </span>
-      <input
-        type="date"
-        className={`input input-bordered w-full rounded-xl ${error ? "input-error" : ""}`}
+      <DateInput
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={onChange}
         disabled={disabled}
+        required={required}
+        className="input-modern w-full"
+        ariaLabel={label}
+        showToday
       />
       {error ? <span className="mt-1 block text-xs text-error">{error}</span> : null}
     </label>
