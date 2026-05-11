@@ -263,6 +263,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       <main
+        id="dashboard-main"
         className={clsx(
           "flex-1 p-6 md:p-8 lg:p-10 bg-gradient-to-b from-[var(--bg-canvas)] via-white to-security-navy-50/35",
           isDashboardHome || isWhatsAppPage

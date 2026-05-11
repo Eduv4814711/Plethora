@@ -10,6 +10,7 @@ import {
   RosteringValidationError,
   computeDatesFromPattern,
   computeDatesFromPatternDual,
+  meetsSiteShiftGenderRule,
   type BulkPattern,
 } from "../services/rostering.service.js";
 import { createAuditLog } from "../lib/audit.js";
@@ -519,6 +520,7 @@ export async function shiftsRoutes(app: FastifyInstance) {
 
     const shift = await prisma.shift.findFirst({
       where: { id, companyId: user.companyId },
+      include: { post: { include: { site: true } } },
     });
 
     if (!shift) {
@@ -538,15 +540,21 @@ export async function shiftsRoutes(app: FastifyInstance) {
     const busyEmployeeIds = new Set(overlappingShifts.map((s) => s.employeeId));
     busyEmployeeIds.add(shift.employeeId);
 
-    const available = await prisma.employee.findMany({
+    const candidates = await prisma.employee.findMany({
       where: {
         companyId: user.companyId,
         id: { notIn: Array.from(busyEmployeeIds) },
         status: { in: ["active", "training", "hired"] },
       },
-      select: { id: true, firstName: true, lastName: true },
+      select: { id: true, firstName: true, lastName: true, gender: true },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     });
+
+    const site = shift.post.site;
+    const postShiftType = shift.post.shiftType;
+    const available = candidates
+      .filter((e) => meetsSiteShiftGenderRule(e.gender, site, postShiftType))
+      .map(({ id, firstName, lastName }) => ({ id, firstName, lastName }));
 
     return reply.send({ data: available });
   });

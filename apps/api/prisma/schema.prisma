@@ -230,6 +230,12 @@ model Site {
   latitude                   Decimal? @db.Decimal(10, 7)
   longitude                  Decimal? @db.Decimal(10, 7)
   geofenceRadiusMeters       Int?
+  /// Shown on the shift roster sheet / PDF under “Site rules” (e.g. gender mix per shift).
+  rosterSiteRules            String?  @db.Text
+  rosterDayShiftGender       String? // male | female | any — roster display only
+  rosterNightShiftGender     String? // male | female | any
+  /// Extra lines on the shift roster sheet / PDF (operational notes).
+  rosterSheetNotes           String?  @db.Text
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 

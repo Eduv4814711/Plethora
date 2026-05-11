@@ -178,6 +178,65 @@ function iterateBlocks(
 
 const ROSTERABLE_STATUSES = ["active", "training", "hired"] as const;
 
+type SiteShiftGenderRule = "male" | "female" | "any";
+
+function normalizeSiteShiftGenderRule(v: string | null | undefined): SiteShiftGenderRule | null {
+  if (v == null || v === "") return null;
+  const s = String(v).toLowerCase();
+  if (s === "male" || s === "female" || s === "any") return s;
+  return null;
+}
+
+/** Maps employee profile gender (M/F, male/female) to roster enforcement axis. */
+export function normalizeEmployeeGenderForRoster(g: string | null | undefined): "male" | "female" | null {
+  const raw = (g ?? "").trim().toLowerCase();
+  if (!raw) return null;
+  if (raw === "m" || raw === "male") return "male";
+  if (raw === "f" || raw === "female") return "female";
+  return null;
+}
+
+/**
+ * True if the employee satisfies the site's staffing rule for this post's shift type
+ * (day vs night). Unspecified / "any" rules always pass.
+ */
+export function meetsSiteShiftGenderRule(
+  employeeGender: string | null | undefined,
+  site: { rosterDayShiftGender: string | null; rosterNightShiftGender: string | null },
+  postShiftType: string | null | undefined
+): boolean {
+  const kind = (postShiftType ?? "day").toLowerCase() === "night" ? "night" : "day";
+  const ruleRaw = kind === "night" ? site.rosterNightShiftGender : site.rosterDayShiftGender;
+  const rule = normalizeSiteShiftGenderRule(ruleRaw);
+  if (rule == null || rule === "any") return true;
+  const emp = normalizeEmployeeGenderForRoster(employeeGender);
+  if (emp === null) return false;
+  return emp === rule;
+}
+
+function assertSiteShiftGenderRule(
+  employeeGender: string | null | undefined,
+  site: { rosterDayShiftGender: string | null; rosterNightShiftGender: string | null },
+  postShiftType: string | null | undefined
+): void {
+  const kind = (postShiftType ?? "day").toLowerCase() === "night" ? "night" : "day";
+  const ruleRaw = kind === "night" ? site.rosterNightShiftGender : site.rosterDayShiftGender;
+  const rule = normalizeSiteShiftGenderRule(ruleRaw);
+  if (rule == null || rule === "any") return;
+
+  const emp = normalizeEmployeeGenderForRoster(employeeGender);
+  if (emp === null) {
+    throw new RosteringValidationError(
+      `This site requires ${rule === "male" ? "male" : "female"} guards on ${kind} shift. Set the guard's gender on their employee profile, or change the site's shift staffing rules.`
+    );
+  }
+  if (emp !== rule) {
+    throw new RosteringValidationError(
+      `This site requires ${rule === "male" ? "male" : "female"} guards on ${kind} shift; this guard's profile does not match.`
+    );
+  }
+}
+
 export async function validateShiftAssignment(params: {
   companyId: string;
   employeeId: string;
@@ -216,6 +275,8 @@ export async function validateShiftAssignment(params: {
   if (post.site.companyId !== companyId) {
     throw new RosteringValidationError("Post does not belong to company");
   }
+
+  assertSiteShiftGenderRule(employee.gender, post.site, post.shiftType);
 
   const overlapping = await prisma.shift.findFirst({
     where: {

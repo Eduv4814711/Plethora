@@ -36,6 +36,8 @@ function refineSiteGeofenceThreeOrNone(data: {
   };
 }
 
+const ROSTER_SHIFT_GENDER = z.enum(["male", "female", "any"]).nullable().optional();
+
 const createSiteSchema = z
   .object({
     name: z.string().min(1),
@@ -53,6 +55,10 @@ const createSiteSchema = z
     latitude: z.number().min(-90).max(90).optional(),
     longitude: z.number().min(-180).max(180).optional(),
     geofenceRadiusMeters: z.number().int().positive().max(100_000).optional(),
+    rosterSiteRules: z.string().max(8000).optional(),
+    rosterSheetNotes: z.string().max(8000).optional(),
+    rosterDayShiftGender: ROSTER_SHIFT_GENDER,
+    rosterNightShiftGender: ROSTER_SHIFT_GENDER,
   })
   .superRefine((data, ctx) => {
     const g = refineSiteGeofenceThreeOrNone(data);
@@ -78,6 +84,10 @@ const updateSiteSchema = z
     latitude: z.number().min(-90).max(90).nullable().optional(),
     longitude: z.number().min(-180).max(180).nullable().optional(),
     geofenceRadiusMeters: z.number().int().positive().max(100_000).nullable().optional(),
+    rosterSiteRules: z.string().max(8000).optional(),
+    rosterSheetNotes: z.string().max(8000).optional(),
+    rosterDayShiftGender: ROSTER_SHIFT_GENDER,
+    rosterNightShiftGender: ROSTER_SHIFT_GENDER,
   })
   .superRefine((data, ctx) => {
     const g = refineSiteGeofenceThreeOrNone(data);
@@ -204,6 +214,10 @@ export async function sitesRoutes(app: FastifyInstance) {
           d.latitude !== undefined && d.longitude !== undefined && d.geofenceRadiusMeters !== undefined
             ? d.geofenceRadiusMeters
             : undefined,
+        rosterSiteRules: d.rosterSiteRules?.trim() ? d.rosterSiteRules : undefined,
+        rosterSheetNotes: d.rosterSheetNotes?.trim() ? d.rosterSheetNotes : undefined,
+        rosterDayShiftGender: d.rosterDayShiftGender ?? undefined,
+        rosterNightShiftGender: d.rosterNightShiftGender ?? undefined,
       },
     });
 
@@ -335,16 +349,40 @@ export async function sitesRoutes(app: FastifyInstance) {
     }
 
     const d = parsed.data;
-    const { assignedGuardIds, latitude, longitude, geofenceRadiusMeters, ...rest } = d;
+    const {
+      assignedGuardIds,
+      latitude,
+      longitude,
+      geofenceRadiusMeters,
+      rosterSiteRules,
+      rosterSheetNotes,
+      rosterDayShiftGender,
+      rosterNightShiftGender,
+      ...rest
+    } = d;
 
     const geoPatch: Record<string, unknown> = {};
     if (latitude !== undefined) geoPatch.latitude = latitude;
     if (longitude !== undefined) geoPatch.longitude = longitude;
     if (geofenceRadiusMeters !== undefined) geoPatch.geofenceRadiusMeters = geofenceRadiusMeters;
 
+    const rosterPatch: Record<string, unknown> = {};
+    if (rosterSiteRules !== undefined) {
+      rosterPatch.rosterSiteRules = rosterSiteRules.trim() === "" ? null : rosterSiteRules;
+    }
+    if (rosterSheetNotes !== undefined) {
+      rosterPatch.rosterSheetNotes = rosterSheetNotes.trim() === "" ? null : rosterSheetNotes;
+    }
+    if (rosterDayShiftGender !== undefined) {
+      rosterPatch.rosterDayShiftGender = rosterDayShiftGender;
+    }
+    if (rosterNightShiftGender !== undefined) {
+      rosterPatch.rosterNightShiftGender = rosterNightShiftGender;
+    }
+
     const site = await prisma.site.update({
       where: { id },
-      data: { ...rest, ...geoPatch },
+      data: { ...rest, ...geoPatch, ...rosterPatch },
     });
 
     if (assignedGuardIds !== undefined) {

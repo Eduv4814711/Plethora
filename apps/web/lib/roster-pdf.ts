@@ -1,6 +1,9 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { format, parseISO } from "date-fns";
+import type { ShiftSheetRow } from "./shift-sheet-matrix";
+import { genderPdfLabel } from "./shift-sheet-matrix";
+import { rosterSiteRulesLines } from "./roster-site-rules-defaults";
 
 export interface RosterShift {
   id: string;
@@ -184,6 +187,194 @@ export function generateGuardRosterPDF(
       margin: { left: 14 },
     });
   }
+
+  return doc.output("blob");
+}
+
+export interface ShiftRosterSheetPdfInput {
+  siteName: string;
+  periodLabel: string;
+  days: Date[];
+  rows: ShiftSheetRow[];
+  generatedBy?: string;
+  rosterSiteRules?: string | null;
+  rosterSheetNotes?: string | null;
+  rosterDayShiftGender?: string | null;
+  rosterNightShiftGender?: string | null;
+}
+
+const SUNDAY_HEADER: [number, number, number] = [249, 231, 159];
+const SUNDAY_BODY: [number, number, number] = [254, 247, 214];
+
+/**
+ * Shift sheet PDF: header band, staff × day matrix (D/N/O), legend and site rules.
+ * Landscape A4; Sunday columns highlighted; header rows repeat on continuation pages.
+ */
+export function generateShiftRosterSheetPDF({
+  siteName,
+  periodLabel,
+  days,
+  rows,
+  generatedBy,
+  rosterSiteRules,
+  rosterSheetNotes,
+  rosterDayShiftGender,
+  rosterNightShiftGender,
+}: ShiftRosterSheetPdfInput): Blob {
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 10;
+  let y = 12;
+
+  doc.setFillColor(234, 88, 12);
+  doc.rect(0, 0, pageWidth, 1.2, "F");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(0, 0, 0);
+  doc.text("SHIFT ROSTER", margin, y);
+  doc.text(siteName, pageWidth - margin, y, { align: "right" });
+  y += 7;
+  doc.setFontSize(10);
+  doc.text(periodLabel.toUpperCase(), pageWidth / 2, y, { align: "center" });
+  y += 5;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.setTextColor(80, 80, 80);
+  doc.text(getGeneratedByText(generatedBy), margin, y);
+  y += 6;
+  doc.setTextColor(0, 0, 0);
+
+  const n = days.length;
+  const fontSize = n <= 14 ? 7.5 : n <= 22 ? 6.5 : n <= 31 ? 5.5 : 5;
+  const cellPad = n <= 22 ? 1.5 : 1;
+
+  const head1: string[] = ["G", "Staff"];
+  const head2: string[] = ["", ""];
+  for (let i = 0; i < n; i++) {
+    const day = days[i]!;
+    head1.push(format(day, "EEE"));
+    head2.push(format(day, "d"));
+  }
+  head1.push("Contact");
+  head2.push("");
+
+  const colCount = 2 + n + 1;
+  const body =
+    rows.length === 0
+      ? [
+          [
+            {
+              content: "No shifts in this period for this site.",
+              colSpan: colCount,
+              styles: { halign: "center" as const, fontStyle: "normal" as const },
+            },
+          ],
+        ]
+      : rows.map((r) => {
+          const g = genderPdfLabel(r.gender);
+          const name = `${r.firstName} ${r.lastName}`;
+          const phone = (r.phone ?? "").trim() || "—";
+          return [g, name, ...r.cells, phone];
+        });
+
+  const dayColStart = 2;
+
+  autoTable(doc, {
+    startY: y,
+    head: [head1, head2],
+    body,
+    styles: {
+      fontSize,
+      cellPadding: cellPad,
+      ...WIREFRAME_STYLES,
+      valign: "middle",
+      halign: "center",
+    },
+    columnStyles: {
+      0: { cellWidth: 8, halign: "center" },
+      1: { cellWidth: "auto", halign: "left", fontStyle: "normal" },
+      [colCount - 1]: { cellWidth: 22, halign: "center", fontSize: fontSize - 0.5 },
+    },
+    headStyles: {
+      ...HEADER_STYLES,
+      ...WIREFRAME_STYLES,
+      fontSize: fontSize - 0.5,
+    },
+    alternateRowStyles: {
+      fillColor: [252, 252, 252] as [number, number, number],
+    },
+    margin: { left: margin, right: margin, bottom: 22 },
+    tableWidth: pageWidth - 2 * margin,
+    showHead: "everyPage",
+    didParseCell: (data) => {
+      const col = data.column.index;
+      if (col >= dayColStart && col < dayColStart + n) {
+        const dayIdx = col - dayColStart;
+        const day = days[dayIdx];
+        if (day && day.getDay() === 0) {
+          if (data.section === "head") {
+            data.cell.styles.fillColor = SUNDAY_HEADER;
+          } else if (data.section === "body") {
+            data.cell.styles.fillColor = SUNDAY_BODY;
+          }
+        }
+      }
+      if (data.section === "body" && col === 1 && typeof data.row.index === "number" && data.row.index >= 0) {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.halign = "left";
+      }
+    },
+  });
+
+  const lastY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+  let footY = lastY + 4;
+  if (footY > pageHeight - 26) {
+    doc.addPage("a4", "landscape");
+    footY = 14;
+  }
+
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "bold");
+  doc.text(
+    "Legend: D Day shift  N Night shift  O Off  M Male  F Female  R Replaced  A AWOL",
+    margin,
+    footY
+  );
+  footY += 4;
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(180, 40, 40);
+  doc.text("Site rules:", margin, footY);
+  footY += 3.5;
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(180, 40, 40);
+  const ruleLines = rosterSiteRulesLines(rosterSiteRules, rosterDayShiftGender, rosterNightShiftGender);
+  const maxTextW = pageWidth - 2 * margin;
+  const lineGap = 3.2;
+  for (const para of ruleLines) {
+    const wrapped = doc.splitTextToSize(para, maxTextW);
+    doc.text(wrapped, margin, footY);
+    footY += wrapped.length * lineGap;
+  }
+  const notes = rosterSheetNotes?.trim();
+  if (notes) {
+    footY += 2;
+    if (footY > pageHeight - 20) {
+      doc.addPage("a4", "landscape");
+      footY = 14;
+    }
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(60, 60, 60);
+    doc.text("Roster notes:", margin, footY);
+    footY += 3.5;
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0, 0, 0);
+    const noteWrapped = doc.splitTextToSize(notes, maxTextW);
+    doc.text(noteWrapped, margin, footY);
+    footY += noteWrapped.length * lineGap;
+  }
+  doc.setTextColor(0, 0, 0);
 
   return doc.output("blob");
 }

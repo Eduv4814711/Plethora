@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { format, addDays, startOfMonth, endOfMonth, isSameDay, parseISO, startOfDay } from "date-fns";
@@ -18,8 +19,21 @@ type BulkPattern =
 
 import { CustomPatternBuilder } from "./CustomPatternBuilder";
 import type { CustomBlock } from "./CustomPatternBuilder";
+import { ShiftRosterSheet } from "./ShiftRosterSheet";
+import { buildShiftSheetRows, type ShiftSheetRow } from "@/lib/shift-sheet-matrix";
 import { DateInput } from "@/components/date-input";
-import { generateFullRosterPDF, generateGuardRosterPDF } from "@/lib/roster-pdf";
+import { generateGuardRosterPDF, generateShiftRosterSheetPDF } from "@/lib/roster-pdf";
+import {
+  meetsSiteDualShiftRosterRules,
+  meetsSiteShiftGenderRule,
+  siteHasRestrictiveShiftGenderRules,
+} from "@/lib/site-shift-gender-rules";
+
+const DASHBOARD_MAIN_ID = "dashboard-main";
+
+function getRosteringModalContainer(): Element {
+  return document.getElementById(DASHBOARD_MAIN_ID) ?? document.body;
+}
 
 const PATTERN_LABELS: Record<BulkPattern, string> = {
   all_days: "All days",
@@ -39,7 +53,7 @@ interface Shift {
   endTime: string;
   status: string;
   employee: { id: string; firstName: string; lastName: string };
-  post: { id: string; name: string; shiftType: string | null; site: { name: string } };
+  post: { id: string; name: string; shiftType: string | null; site: { id: string; name: string } };
 }
 
 interface Employee {
@@ -48,6 +62,8 @@ interface Employee {
   lastName: string;
   status?: string;
   employeeType?: string;
+  gender?: string | null;
+  phone?: string | null;
 }
 
 interface Post {
@@ -60,6 +76,10 @@ interface Site {
   id: string;
   name: string;
   posts: Post[];
+  rosterSiteRules?: string | null;
+  rosterSheetNotes?: string | null;
+  rosterDayShiftGender?: string | null;
+  rosterNightShiftGender?: string | null;
 }
 
 const statusColors: Record<string, string> = {
@@ -114,6 +134,8 @@ export default function RosteringPage() {
   const [pdfEmployeeId, setPdfEmployeeId] = useState<string | undefined>(undefined);
   const [pdfPeriodStart, setPdfPeriodStart] = useState("");
   const [pdfPeriodEnd, setPdfPeriodEnd] = useState("");
+  const [pdfPeriodError, setPdfPeriodError] = useState<string | null>(null);
+  const [rosterView, setRosterView] = useState<"calendar" | "sheet">("calendar");
 
   const rosteredEmployees = useMemo(() => {
     const seen = new Set<string>();
@@ -204,12 +226,14 @@ export default function RosteringPage() {
     setPdfEmployeeId(employeeId);
     setPdfPeriodStart(periodStart);
     setPdfPeriodEnd(periodEnd);
+    setPdfPeriodError(null);
     setShowPdfMenu(false);
     setShowPdfPeriodModal(true);
   };
 
   const handlePdfConfirm = async () => {
     if (!token || !pdfPeriodStart || !pdfPeriodEnd) return;
+    setPdfPeriodError(null);
     const start = startOfDay(parseISO(pdfPeriodStart));
     const end = new Date(parseISO(pdfPeriodEnd));
     end.setHours(23, 59, 59, 999);
@@ -217,9 +241,30 @@ export default function RosteringPage() {
     const startDate = start.toISOString();
     const endDate = end.toISOString();
 
-    const shiftsRes = await authFetch(`/shifts?startDate=${startDate}&endDate=${endDate}&limit=5000`, token);
-    const shiftsData = await shiftsRes.json();
-    const periodShifts: Shift[] = shiftsData.data || [];
+    if (!pdfEmployeeId && !selectedSiteId) {
+      setPdfPeriodError("Select a site in Step 1 to export the shift sheet PDF.");
+      return;
+    }
+
+    let periodShifts: Shift[];
+    let pdfEmployees: Employee[] = employees;
+
+    if (pdfEmployeeId) {
+      const shiftsRes = await authFetch(`/shifts?startDate=${startDate}&endDate=${endDate}&limit=5000`, token);
+      const shiftsData = await shiftsRes.json();
+      periodShifts = shiftsData.data || [];
+    } else {
+      const [shiftsRes, empRes] = await Promise.all([
+        authFetch(`/shifts?startDate=${startDate}&endDate=${endDate}&limit=5000`, token),
+        authFetch("/employees?limit=100", token),
+      ]);
+      const shiftsData = await shiftsRes.json();
+      periodShifts = shiftsData.data || [];
+      if (empRes.ok) {
+        const empData = await empRes.json();
+        pdfEmployees = empData.data || [];
+      }
+    }
 
     const pdfCalendarDays: Date[] = [];
     let d = new Date(start);
@@ -233,6 +278,30 @@ export default function RosteringPage() {
         : pdfPeriodStart;
     const generatedBy = user?.name ?? undefined;
 
+    const siteName = selectedSiteId ? sites.find((s) => s.id === selectedSiteId)?.name ?? "Site" : "";
+
+    const siteForPdf = sites.find((s) => s.id === selectedSiteId);
+
+    const makeFullRosterBlob = () => {
+      const rows = buildShiftSheetRows({
+        shifts: periodShifts,
+        calendarDays: pdfCalendarDays,
+        siteId: selectedSiteId,
+        employees: pdfEmployees,
+      });
+      return generateShiftRosterSheetPDF({
+        siteName,
+        periodLabel,
+        days: pdfCalendarDays,
+        rows,
+        generatedBy,
+        rosterSiteRules: siteForPdf?.rosterSiteRules,
+        rosterSheetNotes: siteForPdf?.rosterSheetNotes,
+        rosterDayShiftGender: siteForPdf?.rosterDayShiftGender,
+        rosterNightShiftGender: siteForPdf?.rosterNightShiftGender,
+      });
+    };
+
     if (pdfAction === "preview") {
       const blob = pdfEmployeeId
         ? generateGuardRosterPDF(
@@ -241,7 +310,7 @@ export default function RosteringPage() {
             periodLabel,
             generatedBy
           )
-        : generateFullRosterPDF(periodShifts, pdfCalendarDays, periodLabel, generatedBy);
+        : makeFullRosterBlob();
       const url = URL.createObjectURL(blob);
       const win = window.open(url, "_blank");
       if (!win) {
@@ -249,14 +318,14 @@ export default function RosteringPage() {
         a.href = url;
         a.download = pdfEmployeeId
           ? `roster-${safeFilename(getGuardName(pdfEmployeeId))}-${safeFilename(periodLabel)}.pdf`
-          : `roster-${safeFilename(periodLabel)}.pdf`;
+          : `shift-roster-${safeFilename(siteName)}-${safeFilename(periodLabel)}.pdf`;
         a.click();
       }
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } else {
       const filename = pdfEmployeeId
         ? `roster-${safeFilename(getGuardName(pdfEmployeeId))}-${safeFilename(periodLabel)}.pdf`
-        : `roster-${safeFilename(periodLabel)}.pdf`;
+        : `shift-roster-${safeFilename(siteName)}-${safeFilename(periodLabel)}.pdf`;
       const blob = pdfEmployeeId
         ? generateGuardRosterPDF(
             periodShifts.filter((s) => s.employee.id === pdfEmployeeId),
@@ -264,7 +333,7 @@ export default function RosteringPage() {
             periodLabel,
             generatedBy
           )
-        : generateFullRosterPDF(periodShifts, pdfCalendarDays, periodLabel, generatedBy);
+        : makeFullRosterBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -346,6 +415,16 @@ export default function RosteringPage() {
     return map;
   }, [shifts, calendarDays]);
 
+  const sheetRows = useMemo((): ShiftSheetRow[] => {
+    if (!selectedSiteId) return [];
+    return buildShiftSheetRows({
+      shifts,
+      calendarDays,
+      siteId: selectedSiteId,
+      employees,
+    });
+  }, [selectedSiteId, shifts, calendarDays, employees]);
+
   const availableGuards = useMemo(
     () =>
       employees.filter(
@@ -374,6 +453,26 @@ export default function RosteringPage() {
     const site = sites.find((s) => s.id === selectedSiteId);
     return site?.posts ?? [];
   }, [sites, selectedSiteId]);
+
+  const selectedSite = useMemo(
+    () => (selectedSiteId ? sites.find((s) => s.id === selectedSiteId) : undefined),
+    [sites, selectedSiteId]
+  );
+
+  /** Shift kinds actually used by the dual-pattern bulk flow (site drop). */
+  const siteDualPatternShiftKinds = useMemo((): ("day" | "night")[] | null => {
+    if (!isDualPattern) return null;
+    if (pattern === "3_on_3_off") return ["day", "night"];
+    if (pattern === "custom_builder") {
+      const kinds = new Set<"day" | "night">();
+      for (const b of customBlocks) {
+        if (b.type === "day") kinds.add("day");
+        if (b.type === "night") kinds.add("night");
+      }
+      return [...kinds];
+    }
+    return null;
+  }, [isDualPattern, pattern, customBlocks]);
 
   useEffect(() => {
     if (calendarDays.length === 0) {
@@ -539,9 +638,14 @@ export default function RosteringPage() {
       : 0;
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-7.5rem)] min-h-[620px] w-full max-w-[1760px] flex-col xl:flex-row gap-5 rounded-[28px] bg-gradient-to-b from-neutral-50/85 via-white to-orange-50/35 dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900 p-2 xl:p-3">
-      <aside className="xl:w-[18.75rem] w-full xl:h-full max-h-[48vh] xl:max-h-none shrink-0 flex flex-col overflow-hidden rounded-2xl border border-neutral-200/90 dark:border-neutral-700 bg-white/95 dark:bg-neutral-900/80 shadow-[0_10px_30px_-18px_rgba(15,23,42,0.35)]">
-        <div className="p-4 shrink-0 space-y-3 border-b border-neutral-200/80 dark:border-neutral-700 bg-gradient-to-b from-white to-neutral-50/70 dark:from-neutral-900 dark:to-neutral-900/80">
+    <div className="mx-auto flex h-[calc(100vh-7.5rem)] min-h-[620px] w-full max-w-[1760px] flex-col xl:flex-row gap-5 rounded-[28px] bg-gradient-to-b from-neutral-50/85 via-white to-orange-50/35 dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900 p-2 xl:p-3 print:min-h-0 print:h-auto print:max-w-none print:rounded-none print:bg-white print:p-4 print:gap-0">
+      <aside className="print:hidden xl:w-[18.75rem] w-full xl:h-full min-h-0 max-h-[48vh] xl:max-h-none shrink-0 flex flex-col overflow-hidden rounded-2xl border border-neutral-200/90 dark:border-neutral-700 bg-white/95 dark:bg-neutral-900/80 shadow-[0_10px_30px_-18px_rgba(15,23,42,0.35)]">
+        <div
+          className="flex-1 min-h-0 overflow-y-scroll overflow-x-hidden overscroll-y-contain touch-pan-y [scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:theme(colors.neutral.400)_transparent] dark:[scrollbar-color:theme(colors.neutral.600)_transparent]"
+          role="region"
+          aria-label="Roster controls and guard list"
+        >
+          <div className="p-4 space-y-3 border-b border-neutral-200/80 dark:border-neutral-700 bg-gradient-to-b from-white to-neutral-50/70 dark:from-neutral-900 dark:to-neutral-900/80">
           <div className="rounded-xl border border-neutral-200/90 dark:border-neutral-700 bg-white dark:bg-neutral-900/70 p-3.5 shadow-sm">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-500 dark:text-neutral-400 mb-1">
               Roster Period
@@ -641,8 +745,8 @@ export default function RosteringPage() {
               </div>
             </div>
           </div>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 border-t border-neutral-200/80 dark:border-neutral-700 bg-neutral-50/40 dark:bg-neutral-900/30">
+          </div>
+          <div className="p-4 space-y-4 bg-neutral-50/40 dark:bg-neutral-900/30">
           {selectedSiteId ? (
             <>
               <div>
@@ -720,6 +824,22 @@ export default function RosteringPage() {
                 <h4 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-600 dark:text-neutral-300 mb-2">
                   Available Guards
                 </h4>
+                {isDualPattern && selectedSite && siteHasRestrictiveShiftGenderRules(selectedSite) && (
+                  <p className="text-[10px] text-neutral-500 dark:text-neutral-400 mb-2 leading-snug">
+                    {pattern === "custom_builder" ? (
+                      <>
+                        Custom patterns only roster the shift types in your blocks (e.g. day only). Guards must match
+                        this site&apos;s staffing rules for those types only; set M/F on the employee profile where a
+                        rule applies.
+                      </>
+                    ) : (
+                      <>
+                        This pattern uses day and night posts. Guards must fit this site&apos;s day and night staffing
+                        rules; set M/F on the employee profile where rules apply.
+                      </>
+                    )}
+                  </p>
+                )}
                 <input
                   type="text"
                   value={guardSearch}
@@ -728,26 +848,51 @@ export default function RosteringPage() {
                   className="input-modern py-2 text-sm w-full mb-2"
                   aria-label="Search available guards"
                 />
-                <div className="space-y-1.5 max-h-[280px] overflow-y-auto pr-1">
-                  {filteredAvailableGuards.map((g) => (
+                <div className="space-y-1.5 overflow-y-auto pr-1 max-h-[min(280px,40vh)] sm:max-h-[min(320px,35vh)] [scrollbar-width:thin] [scrollbar-color:theme(colors.neutral.400)_transparent] dark:[scrollbar-color:theme(colors.neutral.600)_transparent]">
+                  {filteredAvailableGuards.map((g) => {
+                    const dualDragOk =
+                      !isDualPattern ||
+                      !selectedSite ||
+                      (pattern === "custom_builder"
+                        ? (siteDualPatternShiftKinds ?? []).every((kind) =>
+                            meetsSiteShiftGenderRule(g.gender, selectedSite, kind)
+                          )
+                        : meetsSiteDualShiftRosterRules(g.gender, selectedSite));
+                    return (
                     <div
                       key={g.id}
-                      draggable
+                      draggable={dualDragOk}
                       onDragStart={(e) => {
+                        if (!dualDragOk) {
+                          e.preventDefault();
+                          return;
+                        }
                         setDraggedGuard(g);
                         e.dataTransfer.setData("guardId", g.id);
                         e.dataTransfer.effectAllowed = "move";
                       }}
                       onDragEnd={() => setDraggedGuard(null)}
-                      className={`px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 text-sm cursor-grab active:cursor-grabbing transition-colors ${
-                        draggedGuard?.id === g.id
-                          ? "opacity-50"
-                          : "bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                      title={
+                        dualDragOk
+                          ? undefined
+                          : pattern === "custom_builder"
+                            ? "Does not match this site's staffing rules for the shift types in your custom pattern. Update the guard's gender (M/F) or the site's shift staffing settings."
+                            : "Does not match this site's day and night staffing rules. Update the guard's gender (M/F) or the site's shift staffing settings."
+                      }
+                      className={`px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 text-sm transition-colors ${
+                        dualDragOk
+                          ? `cursor-grab active:cursor-grabbing ${
+                              draggedGuard?.id === g.id
+                                ? "opacity-50"
+                                : "bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                            }`
+                          : "opacity-55 cursor-not-allowed bg-neutral-100/80 dark:bg-neutral-800/30"
                       }`}
                     >
                       {g.firstName} {g.lastName}
                     </div>
-                  ))}
+                    );
+                  })}
                   {filteredAvailableGuards.length === 0 && (
                     <p className="text-xs text-neutral-500 py-2">
                       {guardSearch.trim() ? "No guards match your search" : "No guards available"}
@@ -763,26 +908,59 @@ export default function RosteringPage() {
               </p>
             </div>
           )}
-        </div>
-        {bulkError && (
-          <div className="p-3 border-t border-neutral-200 dark:border-neutral-700 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-xs">
-            {bulkError}
           </div>
-        )}
+          {bulkError && (
+            <div className="mx-4 mb-4 rounded-lg border border-red-200 dark:border-red-800/60 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-xs">
+              {bulkError}
+            </div>
+          )}
+        </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0 rounded-3xl border border-neutral-200/90 dark:border-neutral-700 bg-white/85 dark:bg-neutral-900/75 shadow-[0_12px_34px_-20px_rgba(15,23,42,0.38)] overflow-hidden">
-      <div className="sticky top-0 z-30 shrink-0 px-6 py-4 border-b border-neutral-200/80 dark:border-neutral-700 bg-gradient-to-b from-white/95 to-neutral-50/85 dark:from-neutral-900/95 dark:to-neutral-900/85 backdrop-blur">
+      <div className="flex-1 flex flex-col min-w-0 rounded-3xl border border-neutral-200/90 dark:border-neutral-700 bg-white/85 dark:bg-neutral-900/75 shadow-[0_12px_34px_-20px_rgba(15,23,42,0.38)] overflow-hidden print:rounded-none print:border-0 print:shadow-none print:bg-white">
+      <div className="print:hidden sticky top-0 z-30 shrink-0 px-6 py-4 border-b border-neutral-200/80 dark:border-neutral-700 bg-gradient-to-b from-white/95 to-neutral-50/85 dark:from-neutral-900/95 dark:to-neutral-900/85 backdrop-blur">
         <div className="grid gap-4 xl:grid-cols-[minmax(220px,1fr)_auto_minmax(420px,1fr)] xl:items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 flex items-center justify-center">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 flex items-center justify-center shrink-0">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             </div>
-            <div>
-              <h1 className="text-[1.75rem] leading-none font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">Roster Calendar</h1>
-              <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">Security workforce scheduling view</p>
+            <div className="min-w-0">
+              <h1 className="text-[1.75rem] leading-none font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">
+                {rosterView === "sheet" ? "Shift sheet" : "Roster Calendar"}
+              </h1>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
+                {rosterView === "sheet" ? "Staff × day matrix for the selected site" : "Security workforce scheduling view"}
+              </p>
+            </div>
+            <div
+              className="flex h-11 shrink-0 rounded-xl border border-neutral-200 dark:border-neutral-700 overflow-hidden bg-white dark:bg-neutral-900"
+              role="group"
+              aria-label="Roster view"
+            >
+              <button
+                type="button"
+                onClick={() => setRosterView("calendar")}
+                className={`px-3.5 text-sm font-semibold transition-colors ${
+                  rosterView === "calendar"
+                    ? "bg-orange-500 text-black"
+                    : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                }`}
+              >
+                Calendar
+              </button>
+              <button
+                type="button"
+                onClick={() => setRosterView("sheet")}
+                className={`px-3.5 text-sm font-semibold border-l border-neutral-200 dark:border-neutral-700 transition-colors ${
+                  rosterView === "sheet"
+                    ? "bg-orange-500 text-black"
+                    : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                }`}
+              >
+                Shift sheet
+              </button>
             </div>
           </div>
           <div className="hidden xl:flex justify-center" />
@@ -883,6 +1061,9 @@ export default function RosteringPage() {
                       <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
                         Full roster
                       </div>
+                      <p className="px-3 pb-2 text-[11px] text-neutral-500 dark:text-neutral-400 leading-snug">
+                        Shift sheet PDF for the site selected in Step 1 (required).
+                      </p>
                       <button
                         type="button"
                         onClick={() => openPdfPeriodModal("preview")}
@@ -992,7 +1173,8 @@ export default function RosteringPage() {
           </div>
         </div>
 
-        {showPeriodModal && (
+        {showPeriodModal &&
+          createPortal(
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="card-wireframe w-full max-w-sm shadow-xl">
               <div className="p-6">
@@ -1063,10 +1245,12 @@ export default function RosteringPage() {
                 </div>
               </div>
             </div>
-          </div>
+          </div>,
+          getRosteringModalContainer()
         )}
 
-        {showPdfPeriodModal && (
+        {showPdfPeriodModal &&
+          createPortal(
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="card-wireframe w-full max-w-sm shadow-xl">
               <div className="p-6">
@@ -1076,6 +1260,17 @@ export default function RosteringPage() {
                 <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
                   Select the start and end dates for the roster schedule. Periods can span across months.
                 </p>
+                {!pdfEmployeeId && (
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4 -mt-2">
+                    Full roster exports the <span className="font-semibold text-neutral-600 dark:text-neutral-300">shift sheet</span> (staff × days) for the{" "}
+                    <span className="font-semibold text-neutral-600 dark:text-neutral-300">currently selected site</span> in Step 1.
+                  </p>
+                )}
+                {pdfPeriodError && (
+                  <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200">
+                    {pdfPeriodError}
+                  </div>
+                )}
                 <div className="space-y-4 mb-6">
                   <div>
                     <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">
@@ -1083,7 +1278,10 @@ export default function RosteringPage() {
                     </label>
                     <DateInput
                       value={pdfPeriodStart}
-                      onChange={setPdfPeriodStart}
+                      onChange={(v) => {
+                        setPdfPeriodError(null);
+                        setPdfPeriodStart(v);
+                      }}
                       className="input-modern w-full"
                       showToday
                     />
@@ -1094,7 +1292,10 @@ export default function RosteringPage() {
                     </label>
                     <DateInput
                       value={pdfPeriodEnd}
-                      onChange={setPdfPeriodEnd}
+                      onChange={(v) => {
+                        setPdfPeriodError(null);
+                        setPdfPeriodEnd(v);
+                      }}
                       className="input-modern w-full"
                       showToday
                     />
@@ -1103,7 +1304,10 @@ export default function RosteringPage() {
                 <div className="flex gap-3">
                   <button
                     type="button"
-                    onClick={() => setShowPdfPeriodModal(false)}
+                    onClick={() => {
+                      setPdfPeriodError(null);
+                      setShowPdfPeriodModal(false);
+                    }}
                     className="flex-1 btn-secondary"
                   >
                     Cancel
@@ -1119,7 +1323,8 @@ export default function RosteringPage() {
                 </div>
               </div>
             </div>
-          </div>
+          </div>,
+          getRosteringModalContainer()
         )}
 
         {showForm && (
@@ -1139,8 +1344,8 @@ export default function RosteringPage() {
         )}
       </div>
 
-      <div className="flex-1 min-h-0 px-6 pb-6 flex flex-col overflow-hidden">
-        <div className="grid grid-cols-2 xl:grid-cols-5 gap-3 mb-4">
+      <div className="flex-1 min-h-0 px-6 pb-6 flex flex-col overflow-hidden print:px-4 print:pb-4">
+        <div className="print:hidden grid grid-cols-2 xl:grid-cols-5 gap-3 mb-4">
           <RosterKpiCard
             label="Guards Scheduled"
             value={rosteredEmployees.length}
@@ -1193,6 +1398,7 @@ export default function RosteringPage() {
             emphasize
           />
         </div>
+        {rosterView === "calendar" ? (
         <div className="flex-1 min-h-0 rounded-2xl border border-neutral-200/90 dark:border-neutral-700 relative overflow-hidden bg-neutral-100/45 dark:bg-neutral-900/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_8px_30px_-20px_rgba(15,23,42,0.35)]">
           <div className="sticky top-0 z-20 border-b border-neutral-200/80 dark:border-neutral-700 bg-white/90 dark:bg-neutral-900/90 backdrop-blur">
             <div className="grid grid-cols-7 gap-2 px-3 py-2.5">
@@ -1362,7 +1568,32 @@ export default function RosteringPage() {
             </div>
           )}
         </div>
-        <div className="flex items-center flex-wrap gap-6 mt-3 pl-1">
+        ) : selectedSiteId ? (
+          <div className="flex-1 min-h-0 overflow-auto rounded-2xl border border-neutral-200/90 dark:border-neutral-700 bg-neutral-50/80 dark:bg-neutral-900/50 p-3 md:p-4">
+            <ShiftRosterSheet
+              siteName={sites.find((s) => s.id === selectedSiteId)?.name ?? "Site"}
+              periodLabel={periodLabel || "—"}
+              days={calendarDays}
+              rows={sheetRows}
+              sites={sites.map((s) => ({ id: s.id, name: s.name }))}
+              selectedSiteId={selectedSiteId}
+              onSiteTabChange={setSelectedSiteId}
+              rosterSiteRules={sites.find((s) => s.id === selectedSiteId)?.rosterSiteRules}
+              rosterSheetNotes={sites.find((s) => s.id === selectedSiteId)?.rosterSheetNotes}
+              rosterDayShiftGender={sites.find((s) => s.id === selectedSiteId)?.rosterDayShiftGender}
+              rosterNightShiftGender={sites.find((s) => s.id === selectedSiteId)?.rosterNightShiftGender}
+            />
+          </div>
+        ) : (
+          <div className="flex-1 min-h-0 flex flex-col items-center justify-center rounded-2xl border border-dashed border-neutral-300 dark:border-neutral-600 bg-white/70 dark:bg-neutral-900/40 px-6 py-16 text-center">
+            <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-200">Select a site to view the shift sheet</p>
+            <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400 max-w-sm">
+              Choose a site in Step 1 in the sidebar. The sheet lists guards and D / N / O codes for each day in the roster period.
+            </p>
+          </div>
+        )}
+        {rosterView === "calendar" && (
+        <div className="print:hidden flex items-center flex-wrap gap-6 mt-3 pl-1">
           <span className="flex items-center gap-2 text-xs text-neutral-600 dark:text-neutral-400">
             <span className="w-3.5 h-3.5 rounded-md bg-orange-100 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800/60" />
             <span className="font-medium">Day shift</span>
@@ -1376,6 +1607,7 @@ export default function RosteringPage() {
             <span className="font-medium">Open slot</span>
           </span>
         </div>
+        )}
         {shiftContextMenu && (
           <div
             className="fixed z-50 w-48 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-xl p-1"

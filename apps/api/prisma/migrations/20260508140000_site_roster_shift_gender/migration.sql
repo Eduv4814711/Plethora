@@ -1,0 +1,2 @@
+ALTER TABLE "Site" ADD COLUMN IF NOT EXISTS "rosterDayShiftGender" TEXT;
+ALTER TABLE "Site" ADD COLUMN IF NOT EXISTS "rosterNightShiftGender" TEXT;

@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { canManageSitesModule } from "@/lib/permissions";
+import { rosterSiteRulesLines } from "@/lib/roster-site-rules-defaults";
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
   guarding: "Guarding",
@@ -49,6 +50,10 @@ interface Site {
   contactPersonName: string | null;
   contactPersonPhone: string | null;
   serviceType: string | null;
+  rosterSiteRules?: string | null;
+  rosterSheetNotes?: string | null;
+  rosterDayShiftGender?: string | null;
+  rosterNightShiftGender?: string | null;
   latitude?: number | string | null;
   longitude?: number | string | null;
   geofenceRadiusMeters?: number | null;
@@ -70,27 +75,18 @@ export default function SiteDetailPage() {
   const siteId = params.id as string;
   const [site, setSite] = useState<Site | null>(null);
   const [loading, setLoading] = useState(true);
-  const [availableGuards, setAvailableGuards] = useState<Guard[]>([]);
   const [showAddPost, setShowAddPost] = useState(false);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
-  const [draggedGuard, setDraggedGuard] = useState<{ guard: Guard; source: "pool" | string } | null>(null);
+  const [draggedGuard, setDraggedGuard] = useState<{ guard: Guard; source: string } | null>(null);
   const [dragOverPost, setDragOverPost] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const canManage = user ? canManageSitesModule(user) : false;
 
   const refresh = () => {
     if (!token || !siteId) return;
-    Promise.all([
-      authFetch(`/sites/${siteId}`, token).then((r) => r.json()),
-      authFetch("/employees?limit=200", token).then((r) => r.json()),
-    ]).then(([siteData, empData]) => {
-      setSite(siteData);
-      const guards = (empData.data || []).filter(
-        (e: Guard & { employeeType?: string }) =>
-          e.employeeType === "security" && ["active", "training", "hired"].includes(e.status)
-      );
-      setAvailableGuards(guards);
-    });
+    authFetch(`/sites/${siteId}`, token)
+      .then((r) => r.json())
+      .then(setSite);
   };
 
   useEffect(() => {
@@ -104,14 +100,7 @@ export default function SiteDetailPage() {
     return post?.assignedGuards?.map((a) => a.employee) ?? [];
   };
 
-  const getUnassignedGuards = (): Guard[] => {
-    const assignedIds = new Set(
-      site?.posts.flatMap((p) => p.assignedGuards?.map((a) => a.employee.id) ?? []) ?? []
-    );
-    return availableGuards.filter((g) => !assignedIds.has(g.id));
-  };
-
-  const handleDragStart = (guard: Guard, source: "pool" | string) => {
+  const handleDragStart = (guard: Guard, source: string) => {
     setDraggedGuard({ guard, source });
   };
 
@@ -140,9 +129,7 @@ export default function SiteDetailPage() {
 
     if (source === postId) return;
 
-    if (source !== "pool") {
-      await authFetch(`/sites/${siteId}/posts/${source}/guards/${guard.id}`, token, { method: "DELETE" });
-    }
+    await authFetch(`/sites/${siteId}/posts/${source}/guards/${guard.id}`, token, { method: "DELETE" });
 
     const res = await authFetch(`/sites/${siteId}/posts/${postId}/guards`, token, {
       method: "POST",
@@ -167,8 +154,6 @@ export default function SiteDetailPage() {
     );
   }
 
-  const unassignedGuards = getUnassignedGuards();
-
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -185,14 +170,21 @@ export default function SiteDetailPage() {
           <div>
             <h1 className="page-title">{site.name}</h1>
             <p className="text-neutral-500 dark:text-neutral-400 mt-0.5 text-sm">
-              Manage posts and assign guards
+              Manage posts — schedule guards on{" "}
+              <Link href="/rostering" className="font-medium text-orange-600 dark:text-orange-400 hover:underline">
+                Rostering
+              </Link>
             </p>
           </div>
         </div>
       </div>
 
-      {((site.physicalAddress || site.location) || site.contactPersonName || site.contactPersonPhone || site.serviceType) && (
-        <div className="card-elevated p-4">
+      <div className="card-elevated p-4 space-y-5">
+        {((site.physicalAddress || site.location) ||
+          site.contactPersonName ||
+          site.contactPersonPhone ||
+          site.serviceType ||
+          (site.geofenceRadiusMeters != null && site.latitude != null && site.longitude != null)) && (
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
             {(site.physicalAddress || site.location) && (
               <span className="flex items-center gap-2 text-neutral-600 dark:text-neutral-400">
@@ -227,11 +219,28 @@ export default function SiteDetailPage() {
                 </span>
               )}
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
+        <div
+          className={
+            (site.physicalAddress || site.location) ||
+            site.contactPersonName ||
+            site.contactPersonPhone ||
+            site.serviceType ||
+            (site.geofenceRadiusMeters != null && site.latitude != null && site.longitude != null)
+              ? "border-t border-neutral-200 dark:border-neutral-700 pt-5"
+              : ""
+          }
+        >
+          <h3 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Shift roster sheet</h3>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 mb-4 max-w-2xl">
+            Text here appears on the shift sheet and PDF for this site (e.g. female-only day shift, male-only night shift). Leave blank to use the default contract lines.
+          </p>
+          <SiteRosterSheetFields site={site} siteId={siteId} token={token!} canManage={canManage} onSaved={refresh} />
+        </div>
+      </div>
+
+      <div className="space-y-6">
           {deleteError && (
             <div className="p-4 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800/50 flex items-center justify-between">
               {deleteError}
@@ -242,7 +251,13 @@ export default function SiteDetailPage() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="section-title text-neutral-900 dark:text-neutral-100">Posts</h2>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">Assign guards to posts by dragging from the pool</p>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
+                  Shift assignments are created on{" "}
+                  <Link href="/rostering" className="font-medium text-orange-600 dark:text-orange-400 hover:underline">
+                    Rostering
+                  </Link>
+                  . You can still move guards between posts here.
+                </p>
               </div>
               {canManage && (
                 <button
@@ -294,43 +309,19 @@ export default function SiteDetailPage() {
                   </svg>
                 </div>
                 <p className="font-semibold text-neutral-700 dark:text-neutral-300">No posts yet</p>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1 max-w-sm mx-auto">Add posts and assign guards to define coverage for this site.</p>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1 max-w-sm mx-auto">
+                  Add posts, then schedule guards on{" "}
+                  <Link href="/rostering" className="font-medium text-orange-600 dark:text-orange-400 hover:underline">
+                    Rostering
+                  </Link>
+                  .
+                </p>
                 {canManage && (
                   <button onClick={() => setShowAddPost(true)} className="mt-4 btn-primary">Add Post</button>
                 )}
               </div>
             )}
           </div>
-        </div>
-
-        <div className="lg:col-span-1">
-          <div className="card-elevated sticky top-6 p-5">
-            <h3 className="section-title text-neutral-900 dark:text-neutral-100 mb-1">
-              Available Guards
-            </h3>
-            <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
-              Drag guards into posts to assign them
-            </p>
-            <div className="space-y-2 max-h-[400px] overflow-y-auto">
-              {unassignedGuards.map((g) => (
-                <GuardChip
-                  key={g.id}
-                  guard={g}
-                  draggable={canManage}
-                  onDragStart={() => handleDragStart(g, "pool")}
-                  onDragEnd={handleDragEnd}
-                  isDragging={draggedGuard?.guard.id === g.id}
-                />
-              ))}
-              {unassignedGuards.length === 0 && (
-                <div className="text-center py-8 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 border border-dashed border-neutral-200 dark:border-neutral-700">
-                  <p className="text-sm text-neutral-500 dark:text-neutral-400 font-medium">All guards assigned</p>
-                  <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">Remove from a post to assign elsewhere</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
       </div>
 
       {editingPost && canManage && (
@@ -346,6 +337,202 @@ export default function SiteDetailPage() {
         />
       )}
 
+    </div>
+  );
+}
+
+type RosterShiftGenderUi = "" | "male" | "female" | "any";
+
+function SiteRosterSheetFields({
+  site,
+  siteId,
+  token,
+  canManage,
+  onSaved,
+}: {
+  site: Site;
+  siteId: string;
+  token: string;
+  canManage: boolean;
+  onSaved: () => void;
+}) {
+  const [dayGender, setDayGender] = useState<RosterShiftGenderUi>(
+    (site.rosterDayShiftGender as RosterShiftGenderUi) || ""
+  );
+  const [nightGender, setNightGender] = useState<RosterShiftGenderUi>(
+    (site.rosterNightShiftGender as RosterShiftGenderUi) || ""
+  );
+  const [rules, setRules] = useState(site.rosterSiteRules ?? "");
+  const [notes, setNotes] = useState(site.rosterSheetNotes ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedFlash, setSavedFlash] = useState(false);
+
+  useEffect(() => {
+    setDayGender((site.rosterDayShiftGender as RosterShiftGenderUi) || "");
+    setNightGender((site.rosterNightShiftGender as RosterShiftGenderUi) || "");
+    setRules(site.rosterSiteRules ?? "");
+    setNotes(site.rosterSheetNotes ?? "");
+  }, [site.id, site.rosterSiteRules, site.rosterSheetNotes, site.rosterDayShiftGender, site.rosterNightShiftGender]);
+
+  const save = async () => {
+    setError(null);
+    setSaving(true);
+    try {
+      const res = await authFetch(`/sites/${siteId}`, token, {
+        method: "PUT",
+        body: JSON.stringify({
+          rosterSiteRules: rules,
+          rosterSheetNotes: notes,
+          rosterDayShiftGender: dayGender === "" ? null : dayGender,
+          rosterNightShiftGender: nightGender === "" ? null : nightGender,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof data.message === "string" ? data.message : data.error || "Failed to save"
+        );
+      }
+      onSaved();
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 2000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!canManage) {
+    const hasExplicitConfig =
+      site.rosterDayShiftGender != null ||
+      site.rosterNightShiftGender != null ||
+      Boolean(site.rosterSiteRules?.trim()) ||
+      Boolean(site.rosterSheetNotes?.trim());
+    const effectiveRules = rosterSiteRulesLines(
+      site.rosterSiteRules,
+      site.rosterDayShiftGender,
+      site.rosterNightShiftGender
+    );
+    return (
+      <div className="space-y-3 text-sm text-neutral-600 dark:text-neutral-400">
+        {hasExplicitConfig ? (
+          <>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1">
+                Site rules (shift roster & PDF)
+              </p>
+              <ul className="list-disc pl-5 space-y-0.5">
+                {effectiveRules.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+            </div>
+            {site.rosterSheetNotes?.trim() && (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1">
+                  Roster notes
+                </p>
+                <p className="whitespace-pre-wrap">{site.rosterSheetNotes}</p>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-xs">Default roster site rules apply. Only site managers can edit shift staffing and notes.</p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
+          {error}
+        </div>
+      )}
+      {savedFlash && (
+        <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Saved.</p>
+      )}
+      <div>
+        <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+          Shift staffing (shift roster & PDF)
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="roster-day-shift-gender" className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+              Day shift
+            </label>
+            <select
+              id="roster-day-shift-gender"
+              value={dayGender}
+              onChange={(e) => setDayGender(e.target.value as RosterShiftGenderUi)}
+              className="input-modern w-full text-sm"
+            >
+              <option value="">Not specified</option>
+              <option value="male">Male guards only</option>
+              <option value="female">Female guards only</option>
+              <option value="any">No gender restriction</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="roster-night-shift-gender" className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+              Night shift
+            </label>
+            <select
+              id="roster-night-shift-gender"
+              value={nightGender}
+              onChange={(e) => setNightGender(e.target.value as RosterShiftGenderUi)}
+              className="input-modern w-full text-sm"
+            >
+              <option value="">Not specified</option>
+              <option value="male">Male guards only</option>
+              <option value="female">Female guards only</option>
+              <option value="any">No gender restriction</option>
+            </select>
+          </div>
+        </div>
+        <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-1.5">
+          Choose a requirement per shift. &quot;Not specified&quot; skips that line on the sheet. Extra rules below are added after these lines.
+        </p>
+      </div>
+      <div>
+        <label htmlFor="roster-site-rules-extra" className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+          Additional site rules (optional)
+        </label>
+        <textarea
+          id="roster-site-rules-extra"
+          value={rules}
+          onChange={(e) => setRules(e.target.value)}
+          rows={4}
+          maxLength={8000}
+          placeholder="One line per rule. Leave empty if the shift options above are enough."
+          className="input-modern w-full text-sm min-h-[88px] resize-y"
+        />
+      </div>
+      <div>
+        <label htmlFor="roster-sheet-notes" className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+          Additional roster notes
+        </label>
+        <textarea
+          id="roster-sheet-notes"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={3}
+          maxLength={8000}
+          placeholder="Optional — parking, keys, control room contact, etc."
+          className="input-modern w-full text-sm min-h-[72px] resize-y"
+        />
+      </div>
+      <button
+        type="button"
+        onClick={save}
+        disabled={saving}
+        className="btn-primary text-sm py-2 disabled:opacity-60"
+      >
+        {saving ? "Saving…" : "Save roster settings"}
+      </button>
     </div>
   );
 }
@@ -462,16 +649,14 @@ function PostCard({
         )}
       </div>
 
-      <div className={`min-h-[72px] rounded-lg p-3 transition-colors ${
-        isDragOver
-          ? "bg-neutral-100 dark:bg-neutral-800 border-2 border-dashed border-neutral-400 dark:border-neutral-500"
-          : "bg-neutral-50 dark:bg-neutral-800/50 border border-dashed border-neutral-200 dark:border-neutral-700"
-      }`}>
-        {guards.length === 0 ? (
-          <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-4">
-            {canManage ? "Drag guards here or drop from the pool" : "No guards assigned"}
-          </p>
-        ) : (
+      {guards.length > 0 && (
+        <div
+          className={`min-h-[72px] rounded-lg p-3 transition-colors ${
+            isDragOver
+              ? "bg-neutral-100 dark:bg-neutral-800 border-2 border-dashed border-neutral-400 dark:border-neutral-500"
+              : "bg-neutral-50 dark:bg-neutral-800/50 border border-dashed border-neutral-200 dark:border-neutral-700"
+          }`}
+        >
           <div className="flex flex-wrap gap-2">
             {guards.map((g) => (
               <GuardChip
@@ -484,8 +669,8 @@ function PostCard({
               />
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
