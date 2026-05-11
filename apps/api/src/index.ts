@@ -1,8 +1,7 @@
-import { config } from "dotenv";
+import "dotenv/config";
 import { join } from "path";
 import { mkdir } from "fs/promises";
-
-config();
+import { uploadsRoot } from "./lib/uploads-root.js";
 
 if (process.env.NODE_ENV === "production") {
   const weakJwt =
@@ -19,9 +18,9 @@ if (process.env.NODE_ENV === "production") {
   }
 }
 
-await mkdir(join(process.cwd(), "uploads", "logos"), { recursive: true });
-await mkdir(join(process.cwd(), "uploads", "tasks"), { recursive: true });
-await mkdir(join(process.cwd(), "uploads", "academy"), { recursive: true });
+await mkdir(join(uploadsRoot, "logos"), { recursive: true });
+await mkdir(join(uploadsRoot, "tasks"), { recursive: true });
+await mkdir(join(uploadsRoot, "academy"), { recursive: true });
 
 import Fastify from "fastify";
 import cors from "@fastify/cors";
@@ -67,8 +66,20 @@ import { academyRoutes } from "./routes/academy/index.js";
 
 const app = Fastify({ logger: true });
 
+function corsOriginFromEnv(): boolean | string | string[] {
+  const raw = process.env.CORS_ORIGIN;
+  if (raw == null || raw.trim() === "") return true;
+  const parts = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return true;
+  if (parts.length === 1) return parts[0]!;
+  return parts;
+}
+
 await app.register(cors, {
-  origin: process.env.CORS_ORIGIN ?? true,
+  origin: corsOriginFromEnv(),
   credentials: true,
 });
 
@@ -86,7 +97,7 @@ await app.register(multipart, {
 });
 
 await app.register(fastifyStatic, {
-  root: join(process.cwd(), "uploads"),
+  root: uploadsRoot,
   prefix: "/uploads/",
 });
 

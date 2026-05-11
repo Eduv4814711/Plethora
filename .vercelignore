@@ -1,0 +1,6 @@
+# Smaller uploads for Vercel; repo root stays the project root for monorepo installs.
+.cursor
+**/.DS_Store
+**/coverage
+**/uploads
+**/*.log

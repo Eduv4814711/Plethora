@@ -1,7 +1,6 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { cwd } from "process";
-import puppeteer from "puppeteer";
 
 const TEMPLATE_PATH = join(cwd(), "src", "templates", "roster.html");
 
@@ -28,6 +27,7 @@ export async function generateRosterPDF(data: RosterPdfData): Promise<Buffer> {
   const dataScript = `<script>window.__ROSTER_DATA__ = ${JSON.stringify(data)};</script>`;
   const fullHtml = html.replace("</head>", `${dataScript}</head>`);
 
+  const { default: puppeteer } = await import("puppeteer");
   const browser = await puppeteer.launch({
     headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],

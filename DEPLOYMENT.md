@@ -1,8 +1,59 @@
-# Deploy Plethora to Railway
+# Deploy Plethora
+
+The **Next.js** dashboard (`apps/web`) can run on [Vercel](https://vercel.com). The **Fastify** API (`apps/api`) uses Puppeteer, file uploads, and a writable disk; host it on a long-lived Node service (Railway, Render, Fly.io, a VM, or Kubernetes) with PostgreSQL—not on Vercel Serverless Functions.
+
+This document covers **Vercel + API elsewhere** first, then an **all-in-one Railway** layout.
+
+---
+
+## Option A: Web on Vercel, API and database elsewhere
+
+### A.1 Prerequisites
+
+- **Vercel account** and GitHub repository access
+- **API + PostgreSQL** reachable from the internet (see Option B phases 2–3 on Railway, or your own host)
+
+### A.2 Create the Vercel project
+
+1. In the Vercel dashboard, choose **Add New… → Project** and import your Git repository.
+2. Under **Configure Project**:
+   - **Root Directory**: `apps/web` (required for this monorepo).
+   - **Framework Preset**: Next.js (should auto-detect).
+   - Leave **Build Command** and **Install Command** empty so Vercel uses [`apps/web/vercel.json`](apps/web/vercel.json): install runs `npm ci` from the repository root and the build runs `npm run build:web`.
+3. Add **Environment Variables** before the first production build:
+
+   | Name | Notes |
+   |------|--------|
+   | `NEXT_PUBLIC_API_URL` | Public base URL of your API, e.g. `https://api.example.com`. **No trailing slash.** This is inlined at build time; wrong or missing values send `/api/*` rewrites to `http://localhost:3001` and break production. |
+
+   Use the same value for **Preview** deployments if previews should talk to a shared staging API, or a different API URL per environment if you prefer.
+
+4. Deploy. Vercel assigns a hostname such as `https://<project>.vercel.app`.
+
+### A.3 CORS and invite links on the API
+
+On the API host, set:
+
+| Variable | Value |
+|----------|--------|
+| `CORS_ORIGIN` | Comma-separated list of browser origins that may call the API with cookies/credentials, e.g. `https://<project>.vercel.app,https://app.example.com`. |
+| `FRONTEND_URL` | The URL users open in the browser (used for password-setup and other links), e.g. `https://app.example.com` or your primary Vercel URL. |
+
+`CORS_ORIGIN` supports multiple origins (comma-separated) so preview and production frontends can both work against the same API when needed.
+
+### A.4 Verify
+
+1. Open the Vercel URL; you should see the login page.
+2. `GET <NEXT_PUBLIC_API_URL>/health` should return `{"status":"ok"}` (or your API’s health payload).
+3. If the UI loads but API calls fail, re-check `NEXT_PUBLIC_API_URL` (rebuild after changing it) and `CORS_ORIGIN`.
+
+---
+
+## Option B: Deploy everything to Railway
 
 This guide covers deploying Plethora to Railway. All components (web, API, database) run in one Railway project.
 
-## Prerequisites
+### Prerequisites
 
 - **Railway account**: Sign up at [railway.app](https://railway.app)
 - **GitHub**: Repository pushed to GitHub
@@ -117,6 +168,13 @@ See [docs/WHATSAPP_PRODUCTION.md](docs/WHATSAPP_PRODUCTION.md) for full details 
 
 ## Troubleshooting
 
+### Vercel (web)
+
+- **API calls go to localhost or fail**: `NEXT_PUBLIC_API_URL` is baked in at **build** time. Set it in the Vercel project for Production (and Preview if needed), then trigger a new deployment.
+- **CORS errors in the browser**: Your API’s `CORS_ORIGIN` must include the exact Vercel origin (e.g. `https://your-project.vercel.app`). Use a comma-separated list if you use multiple front-end URLs.
+
+### Railway (all services)
+
 - **`secret JWT_REFRESH_SECRET: not found`** (or similar): Railway requires all env vars used by the API to exist **before** the build. In your API service → **Variables**, add every variable from the table in Phase 3, including:
   - `DATABASE_URL`
   - `JWT_SECRET` (e.g. a random 32+ char string)
@@ -124,7 +182,7 @@ See [docs/WHATSAPP_PRODUCTION.md](docs/WHATSAPP_PRODUCTION.md) for full details 
   - `CORS_ORIGIN` (use a placeholder like `https://placeholder.up.railway.app` until the web URL exists, then update)
   - `FRONTEND_URL` (set to your web app URL so setup-password links point to the frontend)
   - `PORT` = `3001`
-- **CORS errors**: Ensure `CORS_ORIGIN` exactly matches your web URL (including `https://`).
+- **CORS errors**: Ensure your web origin is listed in `CORS_ORIGIN` (including `https://`). For multiple front-end URLs, use a comma-separated list.
 - **Database connection**: Use Railway's variable reference to link the PostgreSQL service, e.g. `${{Postgres.DATABASE_URL}}`. Replace `Postgres` with your database service name.
 - **Build fails**: Check that Root Directory is set correctly (`apps/api` or `apps/web`).
 - **Prisma errors**: Ensure the build command includes `npx prisma generate` before `npm run build`.

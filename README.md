@@ -380,7 +380,7 @@ behind `authMiddleware` and a `requireRole(...)` guard.
 
 Registered globally in `apps/api/src/index.ts`:
 
-- **CORS** — origin from `CORS_ORIGIN`, credentials enabled.
+- **CORS** — origin(s) from `CORS_ORIGIN` (comma-separated allowed), credentials enabled.
 - **Helmet** — secure HTTP headers (CSP disabled because the web app
   proxies through `/api/*`).
 - **Rate limit** — 100 requests/minute per IP by default.
@@ -567,7 +567,7 @@ The Next.js app rewrites `/api/*` to `http://localhost:3001/*`
 | `DATABASE_URL`              | yes      | PostgreSQL connection string used by Prisma                        |
 | `JWT_SECRET`                | yes      | Signing secret for access tokens                                   |
 | `JWT_REFRESH_SECRET`        | yes      | Signing secret for refresh tokens                                  |
-| `CORS_ORIGIN`               | yes      | Allowed origin for browser calls (e.g. `http://localhost:3000`)    |
+| `CORS_ORIGIN`               | yes      | Allowed origin(s) for browser calls; comma-separated list supported (e.g. preview + production URLs) |
 | `FRONTEND_URL`              | yes      | Used when building absolute URLs (password setup links, etc.)      |
 | `PORT`                      | no       | Defaults to `3001`                                                 |
 | `HOST`                      | no       | Defaults to `0.0.0.0`                                              |
@@ -677,7 +677,8 @@ Both apps are stateless and horizontally scalable, provided:
 If hosting `web` and `api` on different origins, set
 `NEXT_PUBLIC_API_URL` for the web app and `CORS_ORIGIN` for the API. The
 `/api/*` rewrite in `next.config.js` will continue to proxy through the
-Next.js runtime in production.
+Next.js runtime in production. Step-by-step hosting (including **Vercel** for
+the dashboard) is in [`DEPLOYMENT.md`](DEPLOYMENT.md).
 
 ---
 

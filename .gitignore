@@ -10,3 +10,5 @@ coverage
 .turbo
 uploads
 .cursor/
+.vercel
+.env*.local

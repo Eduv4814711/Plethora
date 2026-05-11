@@ -14,8 +14,9 @@ import {
   ACADEMY_DOCUMENT_ALLOWED_TYPES,
   ACADEMY_MAX_FILE_BYTES,
 } from "./constants.js";
+import { uploadsRoot } from "../../lib/uploads-root.js";
 
-const UPLOADS_BASE = join(process.cwd(), "uploads", "academy", "instructors");
+const UPLOADS_BASE = join(uploadsRoot, "academy", "instructors");
 const STATUS_VALUES = ["active", "inactive", "suspended", "contract_ended"] as const;
 const SORT_VALUES = [
   "newest",

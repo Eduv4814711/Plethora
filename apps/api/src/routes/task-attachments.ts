@@ -7,10 +7,11 @@ import { randomUUID } from "crypto";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
+import { uploadsRoot } from "../lib/uploads-root.js";
 
 const TASK_ROLES = ["admin", "operations_manager", "hr_payroll", "supervisor"] as const;
 
-const UPLOADS_BASE = join(process.cwd(), "uploads", "tasks");
+const UPLOADS_BASE = join(uploadsRoot, "tasks");
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = [
   "image/jpeg",

@@ -1,7 +1,6 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { cwd } from "process";
-import puppeteer from "puppeteer";
 
 // Use src/templates for dev (tsx) and prod (dist sibling to src)
 const TEMPLATE_PATH = join(cwd(), "src", "templates", "payslip.html");
@@ -66,6 +65,7 @@ export async function generatePayslipPDFFromTemplate(
   const dataScript = `<script>window.__PAYSLIP_DATA__ = ${JSON.stringify(data)};</script>`;
   const fullHtml = html.replace("</head>", `${dataScript}</head>`);
 
+  const { default: puppeteer } = await import("puppeteer");
   const browser = await puppeteer.launch({
     headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],

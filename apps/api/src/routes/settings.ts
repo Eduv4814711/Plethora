@@ -7,6 +7,7 @@ import { authMiddleware } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
+import { uploadsRoot } from "../lib/uploads-root.js";
 const businessDetailsSchema = z.object({
   legalName: z.string().optional(),
   registrationNumber: z.string().optional(),
@@ -89,7 +90,7 @@ async function cleanupKnownCompanyLogoFiles(
   logoUrl: string | null | undefined,
   log: FastifyInstance["log"]
 ) {
-  const uploadDir = join(process.cwd(), "uploads", "logos");
+  const uploadDir = join(uploadsRoot, "logos");
   const filenames = buildKnownCompanyLogoFilenames(companyId, logoUrl);
 
   for (const filename of filenames) {

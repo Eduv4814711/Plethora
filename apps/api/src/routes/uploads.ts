@@ -5,8 +5,9 @@ import { pipeline } from "stream/promises";
 import { join } from "path";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/rbac.js";
+import { uploadsRoot } from "../lib/uploads-root.js";
 
-const UPLOADS_DIR = join(process.cwd(), "uploads", "logos");
+const UPLOADS_DIR = join(uploadsRoot, "logos");
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 
 export async function uploadsRoutes(app: FastifyInstance) {
