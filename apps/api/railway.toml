@@ -17,9 +17,11 @@ watchPatterns = [
 ]
 
 [deploy]
-# `npm start --workspace=api` is already the Dockerfile CMD; leave startCommand
-# unset so Railway uses CMD (which runs `prisma migrate deploy && node dist/index.js`).
+# Migrations run in pre-deploy (separate step) so the app can listen before Railway's
+# /health probe window. Start is HTTP only — see apps/api/package.json `start:server`.
+preDeployCommand = ["npm", "run", "db:migrate:deploy", "--workspace=api"]
+startCommand = "npm run start:server --workspace=api"
 healthcheckPath = "/health"
-healthcheckTimeout = 60
+healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5

@@ -35,7 +35,7 @@ Plethora is an **npm workspace monorepo**. On Railway, use the **Dockerfile** bu
 
 - **Images:** root [`Dockerfile.api`](Dockerfile.api) (API) and [`Dockerfile.web`](Dockerfile.web) (web).
 - **Config-as-code:** set **Config-as-code path** to [`apps/api/railway.toml`](apps/api/railway.toml) or [`apps/web/railway.toml`](apps/web/railway.toml). Each file sets `builder = "DOCKERFILE"`, pins the Dockerfile path, defines **watch patterns**, and (for the API) sets `healthcheckPath = "/health"` in [`apps/api/railway.toml`](apps/api/railway.toml).
-- **Commands:** leave Railway **Build Command** / **Start Command** empty; the Dockerfiles run `npm ci`, workspace builds, and the correct start commands (API: `prisma migrate deploy` before `node dist/index.js`; web: `next start` on `$PORT`).
+- **Commands:** leave Railway **Build Command** empty. For the **API**, [`apps/api/railway.toml`](apps/api/railway.toml) sets **`preDeployCommand`** (Prisma migrate) and **`startCommand`** (`node` only) so the server listens before `/health` checks; the Dockerfile default `npm start` still runs migrate+node for non-Railway Docker. **Web:** leave **Start Command** empty; the image runs `next start` on `$PORT`.
 
 Do not set **Root Directory** to `apps/api` or `apps/web` when using this Docker path—that would shrink the build context and break the Dockerfiles.
 
@@ -152,11 +152,12 @@ See [docs/WHATSAPP_PRODUCTION.md](docs/WHATSAPP_PRODUCTION.md) for full details 
   - `JWT_REFRESH_SECRET` (e.g. a different random 32+ char string)
   - `CORS_ORIGIN` (use a placeholder like `https://placeholder.up.railway.app` until the web URL exists, then update)
   - `FRONTEND_URL` (set to your web app URL so setup-password links point to the frontend)
-  - `PORT` = `3001`
+  - Do **not** set `PORT` on Railway unless you know you need it — Railway injects `$PORT`.
 - **CORS errors**: Ensure your web origin is listed in `CORS_ORIGIN` (including `https://`). For multiple front-end URLs, use a comma-separated list.
 - **Database connection**: Use Railway's variable reference to link the PostgreSQL service, e.g. `${{Postgres.DATABASE_URL}}`. Replace `Postgres` with your database service name.
 - **Build fails (Dockerfile)**: Keep **Root Directory** at the repo root (blank or `/`) so the context includes `package.json`, `package-lock.json`, and both workspaces. Confirm **Config-as-code path** is `apps/api/railway.toml` or `apps/web/railway.toml`. If you are on the [Nixpacks fallback](#nixpacks-fallback-not-recommended) instead, Root Directory must be `apps/api` or `apps/web`.
-- **Prisma errors**: The API Dockerfile runs `prisma generate` via the workspace build. If you bypass Docker, ensure `npx prisma generate` runs before `npm run build` in the API service.
+- **Prisma errors**: The API Dockerfile runs `prisma generate` via the workspace build. On Railway, `apps/api/railway.toml` runs **`prisma migrate deploy` in pre-deploy** before the container starts; check the deployment logs for that step. If you bypass Docker, ensure `npx prisma generate` runs before `npm run build` in the API service.
+- **API healthcheck fails / "service unavailable"**: Confirm `DATABASE_URL` and strong `JWT_SECRET` / `JWT_REFRESH_SECRET` are set. In logs, look for **pre-deploy** migrate success, then `Plethora API running at`. If pre-deploy fails, the new version never starts; if runtime fails first, the `FATAL: API failed to initialize` line points at startup errors.
 - **Web API calls go to the wrong host**: `NEXT_PUBLIC_API_URL` is baked in at **build** time. Set it on the web service, then redeploy the web app. With Docker on Railway, service variables are passed as build args automatically.
 - **Deployments not updating** (code changes pushed but live site shows old version):
   1. **Force a fresh build**: In the Web service → **Variables**, add `NO_CACHE=1` (temporary). Redeploy. Remove it after a successful deploy if you want faster builds.

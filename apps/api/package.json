@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "build": "prisma generate && tsc && node scripts/copy-templates.mjs",
     "start": "prisma migrate deploy && node dist/index.js",
+    "start:server": "node dist/index.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
