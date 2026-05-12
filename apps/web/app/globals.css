@@ -30,10 +30,14 @@ body {
   background: var(--bg-canvas);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 html {
   scroll-behavior: smooth;
+  -webkit-tap-highlight-color: rgba(245, 124, 0, 0.15);
 }
 
 @layer utilities {

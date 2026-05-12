@@ -28,6 +28,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -40,13 +41,36 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   }, [pathname, user, router]);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (profileRef.current && !profileRef.current.contains(e.target as Node)) setProfileOpen(false);
-      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) setSearchOpen(false);
+    setMobileNavOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileNavOpen]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMobileNavOpen(false);
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileNavOpen]);
+
+  useEffect(() => {
+    function handlePointerDown(e: PointerEvent) {
+      const t = e.target as Node;
+      if (profileRef.current && !profileRef.current.contains(t)) setProfileOpen(false);
+      if (moreRef.current && !moreRef.current.contains(t)) setMoreOpen(false);
+      if (searchRef.current && !searchRef.current.contains(t)) setSearchOpen(false);
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, []);
 
   if (loading || settingsLoading) {
@@ -113,15 +137,97 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const roleDisplay = user.roleLabel?.trim() || user.role.replace(/_/g, " ");
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--bg-canvas)]">
-      {/* Brand header – compact/lightweight */}
-      <header className="h-14 bg-security-navy-800/95 backdrop-blur flex items-center justify-between px-5 shrink-0 shadow-sm border-b border-white/10">
-        <Link href="/" className="flex items-center shrink-0">
-          <img src="/plethora-logo-header.svg" alt="Plethora" className="h-16 w-auto object-contain opacity-95" />
-        </Link>
+    <div className="flex min-h-[100dvh] flex-col bg-[var(--bg-canvas)]">
+      {mobileNavOpen && (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-[60] bg-black/45 lg:hidden touch-manipulation"
+            aria-label="Close navigation"
+            onClick={() => setMobileNavOpen(false)}
+          />
+          <div
+            id="dashboard-mobile-nav"
+            className="fixed top-0 left-0 bottom-0 z-[70] flex w-[min(20.5rem,90vw)] flex-col border-r border-white/15 bg-security-navy-800 shadow-security-elevated lg:hidden touch-manipulation pt-[max(0.5rem,env(safe-area-inset-top,0px))] pb-[env(safe-area-inset-bottom,0px)]"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Main navigation"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
+              <p className="min-w-0 truncate text-sm font-semibold text-white/95">{companyName}</p>
+              <button
+                type="button"
+                onClick={() => setMobileNavOpen(false)}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-security text-white/90 hover:bg-white/10"
+                aria-label="Close menu"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <nav className="flex-1 overflow-y-auto overscroll-y-contain px-2 py-3">
+              {[...mainNavItems, ...moreNavItems].map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileNavOpen(false)}
+                  className={clsx(
+                    "mb-1 block rounded-security px-3 py-3 text-base font-medium tracking-wide transition-colors",
+                    isActive(item.href)
+                      ? "bg-white/95 text-security-navy-900 shadow-sm"
+                      : "text-white/90 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  {item.label}
+                </Link>
+              ))}
+              {canAccessSettings && (
+                <Link
+                  href="/settings"
+                  onClick={() => setMobileNavOpen(false)}
+                  className={clsx(
+                    "mb-1 block rounded-security px-3 py-3 text-base font-medium tracking-wide transition-colors",
+                    isActive("/settings")
+                      ? "bg-white/95 text-security-navy-900 shadow-sm"
+                      : "text-white/90 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  Settings
+                </Link>
+              )}
+            </nav>
+          </div>
+        </>
+      )}
 
-        <nav className="flex flex-1 items-center justify-center gap-5 md:gap-7 min-w-0">
-          <span className="text-sm font-semibold text-white/95 tracking-wide truncate max-w-[10rem] md:max-w-none hidden sm:block">
+      {/* Brand header – compact/lightweight */}
+      <header className="min-h-14 bg-security-navy-800/95 backdrop-blur flex items-center justify-between gap-2 px-3 sm:px-5 shrink-0 shadow-sm border-b border-white/10 pt-[env(safe-area-inset-top,0px)]">
+        <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2 lg:flex-initial">
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(true)}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-security text-white/90 hover:bg-white/10 lg:hidden touch-manipulation"
+            aria-expanded={mobileNavOpen}
+            aria-controls="dashboard-mobile-nav"
+            aria-label="Open navigation menu"
+          >
+            <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <Link href="/" className="flex min-w-0 items-center shrink-0 overflow-hidden">
+            <img
+              src="/plethora-logo-header.svg"
+              alt="Plethora"
+              className="h-9 w-auto max-h-10 object-contain object-left opacity-95 sm:h-10"
+            />
+          </Link>
+        </div>
+
+        <nav className="hidden lg:flex flex-1 items-center justify-center gap-5 xl:gap-7 min-w-0" aria-label="Primary">
+          <span className="text-sm font-semibold text-white/95 tracking-wide truncate max-w-[12rem] xl:max-w-none">
             {companyName}
           </span>
           {mainNavItems.map((item) => (
@@ -129,7 +235,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               key={item.href}
               href={item.href}
               className={clsx(
-                "text-sm font-medium tracking-wide transition-all py-2 px-3 rounded-full",
+                "text-sm font-medium tracking-wide transition-all py-2 px-3 rounded-full whitespace-nowrap",
                 isActive(item.href)
                   ? "text-security-navy-900 bg-white/95 shadow-sm"
                   : "text-white/90 hover:text-white hover:bg-white/10"
@@ -141,6 +247,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           {moreNavItems.length > 0 && (
             <div ref={moreRef} className="relative">
               <button
+                type="button"
                 onClick={() => setMoreOpen((o) => !o)}
                 className={clsx(
                   "text-sm font-medium tracking-wide transition-all py-2 px-3 rounded-full",
@@ -174,16 +281,17 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           )}
         </nav>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-0.5 sm:gap-2 shrink-0">
           <div ref={searchRef} className="relative flex items-center">
             {(user.role === "admin" || normalizeUserModuleAccess(user.moduleAccess)) && (
             <>
             {searchOpen ? (
-              <div className="flex items-center gap-2">
+              <div className="flex max-w-[calc(100vw-6.5rem)] items-center gap-1 sm:gap-2 md:max-w-none">
                 <SearchDropdown onClose={() => setSearchOpen(false)} />
                 <button
+                  type="button"
                   onClick={() => setSearchOpen(false)}
-                  className="p-2 text-white/85 hover:text-white hover:bg-security-navy-800 rounded-security transition-colors"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center text-white/85 hover:text-white hover:bg-security-navy-800 rounded-security transition-colors touch-manipulation"
                   aria-label="Close search"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -193,8 +301,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </div>
             ) : (
               <button
+                type="button"
                 onClick={() => setSearchOpen(true)}
-                className="p-2 text-white/85 hover:text-white hover:bg-security-navy-800 rounded-security transition-colors"
+                className="inline-flex h-11 w-11 items-center justify-center text-white/85 hover:text-white hover:bg-security-navy-800 rounded-security transition-colors touch-manipulation"
                 title="Search"
                 aria-label="Search"
               >
@@ -210,7 +319,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           {canAccessSettings && (
             <Link
               href="/settings"
-              className="p-2 text-security-navy-300 hover:text-white hover:bg-security-navy-800 rounded-security transition-colors"
+              className="inline-flex h-11 w-11 items-center justify-center text-security-navy-300 hover:text-white hover:bg-security-navy-800 rounded-security transition-colors touch-manipulation"
               title="Settings"
               aria-label="Settings"
             >
@@ -223,16 +332,17 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
           <div ref={profileRef} className="relative">
             <button
+              type="button"
               onClick={() => setProfileOpen((o) => !o)}
-              className="flex items-center gap-2 p-2 pr-3 text-white/85 hover:text-white hover:bg-security-navy-800 rounded-security transition-colors"
+              className="flex min-h-11 items-center gap-2 rounded-security py-1.5 pl-1.5 pr-2 text-white/85 hover:text-white hover:bg-security-navy-800 transition-colors touch-manipulation sm:pr-3"
               title="Profile"
               aria-label="Profile"
             >
-              <div className="w-8 h-8 rounded-full bg-security-navy-400 flex items-center justify-center text-white font-semibold text-sm">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-security-navy-400 text-sm font-semibold text-white sm:h-8 sm:w-8">
                 {user.name?.charAt(0)?.toUpperCase() ?? "U"}
               </div>
-              <span className="text-sm font-medium max-w-[100px] truncate hidden sm:inline">{user.name}</span>
-              <svg className="w-4 h-4 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <span className="hidden max-w-[100px] truncate text-sm font-medium sm:inline md:max-w-[140px]">{user.name}</span>
+              <svg className="hidden h-4 w-4 shrink-0 opacity-70 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
@@ -265,7 +375,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <main
         id="dashboard-main"
         className={clsx(
-          "flex-1 p-6 md:p-8 lg:p-10 bg-gradient-to-b from-[var(--bg-canvas)] via-white to-security-navy-50/35",
+          "flex-1 px-4 py-5 sm:p-6 md:p-8 lg:p-10 bg-gradient-to-b from-[var(--bg-canvas)] via-white to-security-navy-50/35",
           isDashboardHome || isWhatsAppPage
             ? "overflow-hidden"
             : isAcademyPage

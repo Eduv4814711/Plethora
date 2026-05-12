@@ -8,6 +8,9 @@ const MAX_EMPLOYEES = 1000;
 const MAX_SITES = 200;
 const MAX_COMPANIES = 50;
 
+/** Large CSV imports (many employees) can exceed default interactive transaction limits on hosted DBs. */
+const MIGRATION_TRANSACTION_OPTIONS = { maxWait: 30_000, timeout: 300_000 } as const;
+
 // --- Helpers ---
 function sanitizeDate(v: string | undefined): Date | undefined {
   if (!v || !String(v).trim()) return undefined;
@@ -58,67 +61,71 @@ const companyRowSchema = z.object({
 const employeeStatusEnum = z.enum(["applicant", "hired", "training", "active", "suspended", "offboarded"]);
 const employeeTypeEnum = z.enum(["office", "security"]);
 
-const employeeRowSchema = z
-  .object({
-    companyName: z.string().optional().transform(emptyToUndefined), // Admin flow: links to company
-    employeeNumber: z.string().optional().transform(emptyToUndefined),
-    firstName: z.string().min(1, "First name is required"),
-    lastName: z.string().min(1, "Last name is required"),
-    idNumber: z.string().optional().transform(emptyToUndefined),
-    phone: z.string().optional().transform(emptyToUndefined),
-    email: z.string().optional().transform(emptyToUndefined),
-    status: employeeStatusEnum.default("applicant"),
-    employeeType: employeeTypeEnum.default("security"),
-    hourlyRate: z.string().optional().transform((v) => parseOptionalNumber(v)),
-    monthlySalary: z.string().optional().transform((v) => parseOptionalNumber(v)),
-    jobRole: z.string().optional().transform(emptyToUndefined),
-    gradeName: z.string().optional().transform(emptyToUndefined),
-    psiraNumber: z.string().optional().transform(emptyToUndefined),
-    securityServiceType: z.string().optional().transform(emptyToUndefined),
-    dateOfBirth: z.string().optional().transform((v) => sanitizeDate(v)),
-    gender: z.string().optional().transform(emptyToUndefined),
-    maritalStatus: z.string().optional().transform(emptyToUndefined),
-    physicalAddress: z.string().optional().transform(emptyToUndefined),
-    postalAddress: z.string().optional().transform(emptyToUndefined),
-    postalCode: z.string().optional().transform(emptyToUndefined),
-    taxNumber: z.string().optional().transform(emptyToUndefined),
-    bankName: z.string().optional().transform(emptyToUndefined),
-    bankAccountNumber: z.string().optional().transform(emptyToUndefined),
-    bankBranchCode: z.string().optional().transform(emptyToUndefined),
-    commencementDate: z.string().optional().transform((v) => sanitizeDate(v)),
-    occupation: z.string().optional().transform(emptyToUndefined),
-    placeOfWork: z.string().optional().transform(emptyToUndefined),
-    ordinaryHours: z.string().optional().transform(emptyToUndefined),
-    ordinaryDays: z.string().optional().transform(emptyToUndefined),
-    overtimeRate: z.string().optional().transform((v) => parseOptionalNumber(v)),
-    payFrequency: z.string().optional().transform(emptyToUndefined),
-    leaveEntitlement: z.string().optional().transform(emptyToUndefined),
-    noticePeriod: z.string().optional().transform(emptyToUndefined),
-    previousService: z.string().optional().transform(emptyToUndefined),
-    psiraExpiryDate: z.string().optional().transform((v) => sanitizeDate(v)),
-    nextOfKin1Name: z.string().optional().transform(emptyToUndefined),
-    nextOfKin1Phone: z.string().optional().transform(emptyToUndefined),
-    nextOfKin2Name: z.string().optional().transform(emptyToUndefined),
-    nextOfKin2Phone: z.string().optional().transform(emptyToUndefined),
-    nextOfKin3Name: z.string().optional().transform(emptyToUndefined),
-    nextOfKin3Phone: z.string().optional().transform(emptyToUndefined),
-    residedOutsideSA: z.string().optional().transform((v) => parseOptionalBool(v)),
-    militaryPoliceService: z.string().optional().transform((v) => parseOptionalBool(v)),
-    criminalInvestigation: z.string().optional().transform((v) => parseOptionalBool(v)),
-    mentallyUnstable: z.string().optional().transform((v) => parseOptionalBool(v)),
-    trainingCompleted: z.string().optional().transform((v) => parseOptionalBool(v)),
-  })
-  .superRefine((data, ctx) => {
-    if (data.employeeType === "security" && (!data.psiraNumber || !String(data.psiraNumber).trim())) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["psiraNumber"], message: "PSIRA number is required for security guards" });
-    }
-    if (data.employeeType === "security" && !data.hourlyRate && !data.monthlySalary) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["hourlyRate"], message: "Security staff need hourlyRate or monthlySalary" });
-    }
-    if (data.employeeType === "office" && !data.monthlySalary && !data.hourlyRate) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["monthlySalary"], message: "Office staff need monthlySalary or hourlyRate" });
-    }
-  });
+/** CSV row shape (shared by strict and relaxed employee import parsers). */
+const employeeRowBaseSchema = z.object({
+  companyName: z.string().optional().transform(emptyToUndefined), // Admin flow: links to company
+  employeeNumber: z.string().optional().transform(emptyToUndefined),
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  idNumber: z.string().optional().transform(emptyToUndefined),
+  phone: z.string().optional().transform(emptyToUndefined),
+  email: z.string().optional().transform(emptyToUndefined),
+  status: employeeStatusEnum.default("applicant"),
+  employeeType: employeeTypeEnum.default("security"),
+  hourlyRate: z.string().optional().transform((v) => parseOptionalNumber(v)),
+  monthlySalary: z.string().optional().transform((v) => parseOptionalNumber(v)),
+  jobRole: z.string().optional().transform(emptyToUndefined),
+  gradeName: z.string().optional().transform(emptyToUndefined),
+  psiraNumber: z.string().optional().transform(emptyToUndefined),
+  securityServiceType: z.string().optional().transform(emptyToUndefined),
+  dateOfBirth: z.string().optional().transform((v) => sanitizeDate(v)),
+  gender: z.string().optional().transform(emptyToUndefined),
+  maritalStatus: z.string().optional().transform(emptyToUndefined),
+  physicalAddress: z.string().optional().transform(emptyToUndefined),
+  postalAddress: z.string().optional().transform(emptyToUndefined),
+  postalCode: z.string().optional().transform(emptyToUndefined),
+  taxNumber: z.string().optional().transform(emptyToUndefined),
+  bankName: z.string().optional().transform(emptyToUndefined),
+  bankAccountNumber: z.string().optional().transform(emptyToUndefined),
+  bankBranchCode: z.string().optional().transform(emptyToUndefined),
+  commencementDate: z.string().optional().transform((v) => sanitizeDate(v)),
+  occupation: z.string().optional().transform(emptyToUndefined),
+  placeOfWork: z.string().optional().transform(emptyToUndefined),
+  ordinaryHours: z.string().optional().transform(emptyToUndefined),
+  ordinaryDays: z.string().optional().transform(emptyToUndefined),
+  overtimeRate: z.string().optional().transform((v) => parseOptionalNumber(v)),
+  payFrequency: z.string().optional().transform(emptyToUndefined),
+  leaveEntitlement: z.string().optional().transform(emptyToUndefined),
+  noticePeriod: z.string().optional().transform(emptyToUndefined),
+  previousService: z.string().optional().transform(emptyToUndefined),
+  psiraExpiryDate: z.string().optional().transform((v) => sanitizeDate(v)),
+  nextOfKin1Name: z.string().optional().transform(emptyToUndefined),
+  nextOfKin1Phone: z.string().optional().transform(emptyToUndefined),
+  nextOfKin2Name: z.string().optional().transform(emptyToUndefined),
+  nextOfKin2Phone: z.string().optional().transform(emptyToUndefined),
+  nextOfKin3Name: z.string().optional().transform(emptyToUndefined),
+  nextOfKin3Phone: z.string().optional().transform(emptyToUndefined),
+  residedOutsideSA: z.string().optional().transform((v) => parseOptionalBool(v)),
+  militaryPoliceService: z.string().optional().transform((v) => parseOptionalBool(v)),
+  criminalInvestigation: z.string().optional().transform((v) => parseOptionalBool(v)),
+  mentallyUnstable: z.string().optional().transform((v) => parseOptionalBool(v)),
+  trainingCompleted: z.string().optional().transform((v) => parseOptionalBool(v)),
+});
+
+const employeeRowSchema = employeeRowBaseSchema.superRefine((data, ctx) => {
+  if (data.employeeType === "security" && (!data.psiraNumber || !String(data.psiraNumber).trim())) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["psiraNumber"], message: "PSIRA number is required for security guards" });
+  }
+  if (data.employeeType === "security" && !data.hourlyRate && !data.monthlySalary) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["hourlyRate"], message: "Security staff need hourlyRate or monthlySalary" });
+  }
+  if (data.employeeType === "office" && !data.monthlySalary && !data.hourlyRate) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["monthlySalary"], message: "Office staff need monthlySalary or hourlyRate" });
+  }
+});
+
+/** Same fields as strict schema but does not require PSIRA or pay rates (manual cleanup in app). */
+const employeeRowSchemaRelaxed = employeeRowBaseSchema;
 
 const siteRowSchema = z.object({
   companyName: z.string().optional().transform(emptyToUndefined), // Admin flow: links to company
@@ -176,7 +183,7 @@ export interface ParseResult<T> {
 }
 
 export type ValidatedCompany = z.infer<typeof companyRowSchema>;
-export type ValidatedEmployee = z.infer<typeof employeeRowSchema>;
+export type ValidatedEmployee = z.infer<typeof employeeRowBaseSchema>;
 export type ValidatedSite = z.infer<typeof siteRowSchema>;
 
 export function parseCsvBuffer(buffer: Buffer): { headers: string[]; rows: string[][] } {
@@ -224,7 +231,7 @@ export function parseAndValidateCompanies(buffer: Buffer): ParseResult<Validated
 
 export function parseAndValidateEmployees(
   buffer: Buffer,
-  options?: { requireCompanyName?: boolean }
+  options?: { requireCompanyName?: boolean; allowIncompleteRows?: boolean }
 ): ParseResult<ValidatedEmployee> {
   const { headers, rows } = parseCsvBuffer(buffer);
   const valid: ValidatedEmployee[] = [];
@@ -239,8 +246,10 @@ export function parseAndValidateEmployees(
     return { valid, errors };
   }
 
+  const rowSchema = options?.allowIncompleteRows ? employeeRowSchemaRelaxed : employeeRowSchema;
+
   for (const { index, obj } of employeeRows) {
-    let result = employeeRowSchema.safeParse(obj);
+    let result = rowSchema.safeParse(obj);
     if (result.success && options?.requireCompanyName && !result.data.companyName) {
       errors.push({
         row: index + 2,
@@ -457,7 +466,7 @@ export async function executeCompanyImport(
       });
       result.sitesCreated++;
     }
-  });
+  }, MIGRATION_TRANSACTION_OPTIONS);
 
   return result;
 }
@@ -567,7 +576,7 @@ export async function executeSelfImport(
       });
       result.sitesCreated++;
     }
-  });
+  }, MIGRATION_TRANSACTION_OPTIONS);
 
   return result;
 }

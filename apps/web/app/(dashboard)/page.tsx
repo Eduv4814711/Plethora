@@ -223,7 +223,7 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={() => setSiteFilterOpen((o) => !o)}
-                className="flex items-center gap-2 min-w-[220px] px-4 py-2.5 rounded-xl border border-neutral-200 bg-white text-left text-sm font-medium text-neutral-900 shadow-sm hover:border-security-navy-300 hover:shadow-md transition-all"
+                className="flex w-full min-w-0 items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-neutral-900 shadow-sm hover:border-security-navy-300 hover:shadow-md transition-all sm:min-w-[220px] sm:w-auto rounded-xl border border-neutral-200 bg-white"
               >
                 <span className="truncate">
                   {selectedSiteIds.length === 0

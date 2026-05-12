@@ -262,7 +262,7 @@ export default function PayrollPage() {
     return (
       <div className="animate-pulse">
         <div className="h-8 bg-security-navy-200 rounded w-48 mb-6" />
-        <div className="grid grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 gap-4 mb-8 sm:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="h-20 bg-security-navy-100 rounded-security-lg" />
           ))}

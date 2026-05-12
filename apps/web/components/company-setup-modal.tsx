@@ -139,7 +139,7 @@ export function CompanySetupModal({
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black/20">
       <div className="flex-1 overflow-y-auto p-4 min-h-0">
-        <div className="max-w-2xl mx-auto my-4 sm:my-8 card-elevated flex flex-col max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-4rem)]">
+        <div className="max-w-2xl mx-auto my-4 sm:my-8 card-elevated flex flex-col max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-4rem)]">
           {/* Sticky header - light blue accent */}
           <div className="shrink-0 p-6 pb-4 border-b-2 border-neutral-200 bg-wireframe-accent rounded-t-[10px]">
             <h2 className="text-xl font-bold text-black mb-2">

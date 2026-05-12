@@ -21,7 +21,8 @@
     "db:add-module-access": "prisma db execute --file prisma/sql/add_user_module_access_column.sql --schema prisma/schema.prisma",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "import:employees": "tsx scripts/import-employees-csv.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

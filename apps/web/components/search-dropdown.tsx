@@ -140,7 +140,7 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => debouncedQuery.length >= 2 && setOpen(true)}
         onKeyDown={handleKeyDown}
-        className="w-72 pl-10 pr-4 py-2 rounded-security border-2 border-security-navy-300 bg-white text-sm text-security-navy placeholder-security-navy-400 focus:border-security-navy-500 outline-none transition-all"
+        className="w-[min(18rem,calc(100vw-10rem))] min-w-0 max-w-[calc(100vw-2rem)] pl-10 pr-3 py-2 sm:w-72 sm:max-w-none rounded-security border-2 border-security-navy-300 bg-white text-sm text-security-navy placeholder-security-navy-400 focus:border-security-navy-500 outline-none transition-all"
         aria-label="Search"
         aria-expanded={open}
         aria-autocomplete="list"

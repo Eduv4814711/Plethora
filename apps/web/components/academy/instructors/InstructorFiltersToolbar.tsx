@@ -35,9 +35,9 @@ export function InstructorFiltersToolbar({
     return (
       <div className="rounded-xl border border-slate-200 bg-white/90 p-2 shadow-sm">
         <div className="overflow-x-auto">
-          <div className="flex min-w-[980px] items-center gap-2 xl:min-w-0">
+          <div className="flex flex-col gap-2 xl:flex-row xl:min-w-0 xl:flex-nowrap xl:items-center">
             <input
-              className="input input-bordered input-sm w-64 min-w-[16rem] rounded-lg"
+              className="input input-bordered input-sm w-full min-w-0 rounded-lg xl:w-64 xl:min-w-[16rem]"
               placeholder="Search name, PSIRA, ID, email, phone"
               value={filters.search}
               onChange={(e) => onChange({ search: e.target.value })}
@@ -93,7 +93,7 @@ export function InstructorFiltersToolbar({
               ]}
             />
             <CompactSelect value={filters.sort} onChange={(value) => onChange({ sort: value })} options={SORT_OPTIONS} />
-            <button type="button" className="btn btn-ghost btn-sm rounded-lg" onClick={onReset}>
+            <button type="button" className="btn btn-ghost btn-sm w-full rounded-lg xl:w-auto" onClick={onReset}>
               Reset
             </button>
           </div>
@@ -204,7 +204,11 @@ function CompactSelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <select className="select select-bordered select-sm min-w-36 rounded-lg" value={value} onChange={(e) => onChange(e.target.value)}>
+    <select
+      className="select select-bordered select-sm w-full min-w-0 rounded-lg xl:w-auto xl:min-w-36"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
       {options.map((option) => (
         <option key={option.value || `opt-${option.label}`} value={option.value}>
           {option.label}

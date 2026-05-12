@@ -192,7 +192,7 @@ export function DateInput({
         <div
           role="dialog"
           aria-label="Choose date"
-          className="absolute left-0 top-full z-50 mt-1 p-3 min-w-[300px] rounded-security-lg border-2 border-neutral-300 bg-white shadow-security-card"
+          className="absolute left-0 top-full z-50 mt-1 w-max max-w-[min(calc(100vw-1.5rem),340px)] min-w-0 p-3 rounded-security-lg border-2 border-neutral-300 bg-white shadow-security-card sm:min-w-[300px]"
         >
           <div className="rdp-root">
             <DayPicker
