@@ -137,7 +137,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const roleDisplay = user.roleLabel?.trim() || user.role.replace(/_/g, " ");
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-[var(--bg-canvas)]">
+    <div className="flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-[var(--bg-canvas)]">
       {mobileNavOpen && (
         <>
           <button
@@ -375,11 +375,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <main
         id="dashboard-main"
         className={clsx(
-          "flex-1 px-4 py-5 sm:p-6 md:p-8 lg:p-10 bg-gradient-to-b from-[var(--bg-canvas)] via-white to-security-navy-50/35",
+          "flex min-h-0 flex-1 flex-col px-4 py-5 sm:p-6 md:p-8 lg:p-10 bg-gradient-to-b from-[var(--bg-canvas)] via-white to-security-navy-50/35",
           isDashboardHome || isWhatsAppPage
             ? "overflow-hidden"
             : isAcademyPage
-              ? "min-h-0 flex flex-col overflow-y-auto max-lg:overflow-y-auto lg:h-[calc(100dvh-3.5rem)] lg:max-h-[calc(100dvh-3.5rem)] lg:overflow-hidden"
+              ? "overflow-y-auto lg:overflow-hidden"
               : "overflow-auto"
         )}
       >
