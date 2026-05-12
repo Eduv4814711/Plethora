@@ -1,0 +1,40 @@
+# Plethora API — build from monorepo root: docker build -f Dockerfile.api .
+FROM node:20-bookworm-slim AS builder
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY apps ./apps
+
+RUN npm ci
+
+RUN npm run build --workspace=api
+
+# Drop devDependencies from the hoisted install (keeps Prisma client + runtime deps).
+RUN npm prune --omit=dev
+
+FROM node:20-bookworm-slim AS runner
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=8080
+
+COPY --from=builder /app/package.json /app/package-lock.json ./
+COPY --from=builder /app/apps/api/package.json ./apps/api/
+COPY --from=builder /app/apps/web/package.json ./apps/web/
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/api/dist ./apps/api/dist
+COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
+
+EXPOSE 8080
+
+CMD ["npm", "start", "--workspace=api"]

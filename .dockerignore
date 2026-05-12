@@ -1,0 +1,35 @@
+# Git
+.git
+**/.git
+
+# Dependencies & build outputs
+**/node_modules
+apps/web/.next
+**/.next
+apps/api/dist
+**/dist
+
+# Secrets & local env (never bake into images)
+.env
+.env.*
+**/.env*
+
+# Runtime uploads & local data
+uploads
+**/uploads
+
+# Editor / tooling
+.cursor
+
+# Tests & logs
+coverage
+*.log
+
+# OS junk
+.DS_Store
+
+# TypeScript incremental (web)
+apps/web/tsconfig.tsbuildinfo
+
+# Archived Prisma migrations (not used by migrate deploy; shrinks build context)
+apps/api/prisma/migrations_archived

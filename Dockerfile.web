@@ -1,0 +1,39 @@
+# Plethora Web — build from monorepo root:
+#   docker build -f Dockerfile.web --build-arg NEXT_PUBLIC_API_URL=https://api.example.com .
+FROM node:20-bookworm-slim AS builder
+
+WORKDIR /app
+
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_API_PATH_PREFIX=
+
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_PUBLIC_API_PATH_PREFIX=${NEXT_PUBLIC_API_PATH_PREFIX}
+
+COPY package.json package-lock.json ./
+COPY apps ./apps
+
+RUN npm ci
+
+RUN npm run build --workspace=web
+
+RUN npm prune --omit=dev
+
+FROM node:20-bookworm-slim AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=8080
+
+COPY --from=builder /app/package.json /app/package-lock.json ./
+COPY --from=builder /app/apps/api/package.json ./apps/api/
+COPY --from=builder /app/apps/web/package.json ./apps/web/
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/web/.next ./apps/web/.next
+COPY --from=builder /app/apps/web/next.config.js ./apps/web/next.config.js
+COPY --from=builder /app/apps/web/public ./apps/web/public
+
+EXPOSE 8080
+
+CMD ["npm", "start", "--workspace=web"]

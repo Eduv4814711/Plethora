@@ -2,6 +2,8 @@
 
 This document describes deploying Plethora to **Railway** (web, API, and PostgreSQL). For running the stack on your machine, see the [README](README.md).
 
+**Google Cloud Run (Docker):** use the root `Dockerfile.api` and `Dockerfile.web` with a monorepo build context; see [docs/CLOUD_RUN.md](docs/CLOUD_RUN.md) for build/push/deploy examples, env vars, and uploads/PDF caveats.
+
 ---
 
 ## Option B: Deploy everything to Railway
