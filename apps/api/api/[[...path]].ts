@@ -1,5 +1,9 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import Fastify from "fastify";
 import { buildApp } from "../dist/create-app.js";
+
+/** Referenced so Vercel's Fastify build step sees a direct `fastify` import on this entry. */
+void Fastify.version;
 
 let appPromise: ReturnType<typeof buildApp> | undefined;
 
