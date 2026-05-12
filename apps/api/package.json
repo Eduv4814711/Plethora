@@ -16,6 +16,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:resolve-baseline-applied": "prisma migrate resolve --applied 20240101000000_baseline",
+    "db:migrate:clear-history": "prisma db execute --file prisma/sql/clear_prisma_migrations.sql --schema prisma/schema.prisma",
     "db:check-email-unique": "tsx prisma/check-duplicate-emails.ts",
     "db:add-module-access": "prisma db execute --file prisma/sql/add_user_module_access_column.sql --schema prisma/schema.prisma",
     "db:push": "prisma db push",
