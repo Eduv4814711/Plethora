@@ -1,6 +1,5 @@
 /**
- * Fastify application factory. Kept out of `app.ts` so Vercel does not treat
- * `src/app.ts` as a framework server entry (expects `export default` handler).
+ * Fastify application factory (`buildApp`).
  */
 import { join } from "node:path";
 import { mkdir } from "node:fs/promises";

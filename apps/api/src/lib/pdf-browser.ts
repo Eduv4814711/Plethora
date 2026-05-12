@@ -1,21 +1,8 @@
 /**
- * Launches a browser for HTML→PDF. On Vercel uses @sparticuz/chromium + puppeteer-core.
- * Elsewhere: puppeteer (bundled Chromium) when installed, else puppeteer-core + PUPPETEER_EXECUTABLE_PATH.
+ * Launches a browser for HTML→PDF: puppeteer-core + PUPPETEER_EXECUTABLE_PATH,
+ * or bundled puppeteer when installed.
  */
 export async function launchPdfBrowser() {
-  if (process.env.VERCEL === "1") {
-    const [{ default: chromium }, { default: puppeteer }] = await Promise.all([
-      import("@sparticuz/chromium"),
-      import("puppeteer-core"),
-    ]);
-    return puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: true,
-    });
-  }
-
   const exe = process.env.PUPPETEER_EXECUTABLE_PATH?.trim();
   if (exe) {
     const { default: puppeteer } = await import("puppeteer-core");

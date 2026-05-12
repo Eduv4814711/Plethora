@@ -677,8 +677,8 @@ Both apps are stateless and horizontally scalable, provided:
 If hosting `web` and `api` on different origins, set
 `NEXT_PUBLIC_API_URL` for the web app and `CORS_ORIGIN` for the API. The
 `/api/*` rewrite in `next.config.js` will continue to proxy through the
-Next.js runtime in production. Step-by-step hosting (including **Vercel** for
-the dashboard) is in [`DEPLOYMENT.md`](DEPLOYMENT.md).
+Next.js runtime in production. Step-by-step hosting (e.g. **Railway**) is in
+[`DEPLOYMENT.md`](DEPLOYMENT.md).
 
 ---
 

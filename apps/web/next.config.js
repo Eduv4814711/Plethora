@@ -2,16 +2,12 @@ const path = require("path");
 const fs = require("fs");
 
 const monorepoRoot = path.join(__dirname, "../..");
-const useTracingRoot =
-  process.env.VERCEL !== "1" &&
-  fs.existsSync(path.join(monorepoRoot, "package.json"));
+const useTracingRoot = fs.existsSync(path.join(monorepoRoot, "package.json"));
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // npm workspaces hoist dependencies to the repo root; tracing root includes
-  // those files in the production serverless bundle (local `next build`).
-  // Omitted on Vercel when only `apps/web` is uploaded (subdirectory deploy).
+  // npm workspaces hoist dependencies to the repo root; include them in the server bundle trace.
   experimental: {
     ...(useTracingRoot ? { outputFileTracingRoot: monorepoRoot } : {}),
   },
