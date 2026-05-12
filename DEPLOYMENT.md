@@ -1,8 +1,8 @@
 # Deploy Plethora
 
-The **Next.js** dashboard (`apps/web`) can run on [Vercel](https://vercel.com). The **Fastify** API (`apps/api`) uses Puppeteer, file uploads, and a writable disk; host it on a long-lived Node service (Railway, Render, Fly.io, a VM, or Kubernetes) with PostgreSQL—not on Vercel Serverless Functions.
+The **Next.js** dashboard (`apps/web`) can run on [Vercel](https://vercel.com). The **Fastify** API (`apps/api`) is easiest to host on a long-lived Node service (Railway, Render, Fly.io, a VM, or Kubernetes) with PostgreSQL. **Option C** documents an experimental **API on Vercel Serverless** path (Puppeteer + uploads have platform limits; see that section).
 
-This document covers **Vercel + API elsewhere** first, then an **all-in-one Railway** layout.
+This document covers **Vercel + API elsewhere** (Option A), **all-in-one Railway** (Option B), and **web + API + Postgres on Vercel** (Option C).
 
 ---
 
@@ -25,6 +25,7 @@ This document covers **Vercel + API elsewhere** first, then an **all-in-one Rail
    | Name | Notes |
    |------|--------|
    | `NEXT_PUBLIC_API_URL` | Public base URL of your API, e.g. `https://api.example.com`. **No trailing slash.** This is inlined at build time; wrong or missing values send `/api/*` rewrites to `http://localhost:3001` and break production. |
+   | `NEXT_PUBLIC_API_PATH_PREFIX` | Leave empty when the API serves routes at the origin root (`/health`, `/auth`, …). Set to **`/api`** when the API is deployed as Vercel Serverless (Option C) so browser rewrites target `…/api/health`, `…/api/auth`, … |
 
    Use the same value for **Preview** deployments if previews should talk to a shared staging API, or a different API URL per environment if you prefer.
 
@@ -43,9 +44,60 @@ On the API host, set:
 
 ### A.4 Verify
 
-1. Open the Vercel URL; you should see the login page.
-2. `GET <NEXT_PUBLIC_API_URL>/health` should return `{"status":"ok"}` (or your API’s health payload).
-3. If the UI loads but API calls fail, re-check `NEXT_PUBLIC_API_URL` (rebuild after changing it) and `CORS_ORIGIN`.
+1. Open the Vercel URL; you should see the Plethora login page.
+2. Call the API health endpoint at the path your API uses: root-hosted APIs use `GET <NEXT_PUBLIC_API_URL>/health`; Vercel Serverless (Option C) uses `GET <NEXT_PUBLIC_API_URL>/api/health` before the API strips the prefix internally.
+3. If the UI loads but API calls fail, re-check `NEXT_PUBLIC_API_URL` (rebuild after changing it), `NEXT_PUBLIC_API_PATH_PREFIX` if you use Option C, and `CORS_ORIGIN`.
+
+---
+
+## Option C: Web + API + Postgres on Vercel
+
+Use **two Vercel projects** (dashboard and API) plus **PostgreSQL** from the Vercel Marketplace (e.g. **Neon**). Expect **cold starts**, **function time/size limits**, **ephemeral `/tmp` for uploaded files** (logos and attachments are not durable across invocations unless you add object storage such as Vercel Blob or S3), and **PDF generation** tuned for serverless Chromium (`@sparticuz/chromium` + `puppeteer-core`).
+
+### C.1 Database (Neon)
+
+1. In the Vercel dashboard, open (or create) the **API** project, add **Neon Postgres** from the [Marketplace](https://vercel.com/marketplace), and link it so `DATABASE_URL` is available to that project.
+2. Ensure `DATABASE_URL` is set for **Production** (and **Preview** if you use preview databases). The API **build** runs `prisma migrate deploy` (see [`apps/api/package.json`](apps/api/package.json) script `build:vercel`), so migrations apply at deploy time when this variable is present.
+
+### C.2 API project (`apps/api`)
+
+1. **Add New → Project**, import the same Git repository.
+2. **Root Directory**: `apps/api`.
+3. Leave **Install Command** / **Build Command** empty so Vercel uses [`apps/api/vercel.json`](apps/api/vercel.json): install runs `npm ci` from the monorepo root; build runs `npm run build:api:vercel` (generate client, migrate deploy, compile TypeScript, copy HTML templates).
+4. **Environment variables** (minimum):
+
+   | Name | Notes |
+   |------|--------|
+   | `DATABASE_URL` | From Neon (required for build and runtime). |
+   | `JWT_SECRET` | Strong random string (not the dev default). |
+   | `JWT_REFRESH_SECRET` | Different strong random string. |
+   | `CORS_ORIGIN` | Comma-separated web origins, e.g. `https://your-web.vercel.app`. |
+   | `FRONTEND_URL` | Primary browser URL for invite/password links (your web deployment). |
+
+   Optional: WhatsApp variables from [docs/WHATSAPP_PRODUCTION.md](docs/WHATSAPP_PRODUCTION.md). Set the Meta webhook to **`https://<your-api>.vercel.app/api/webhook`** (the `/api` prefix matches how Vercel routes serverless functions).
+
+5. Deploy and copy the API hostname (e.g. `https://plethora-api.vercel.app`).
+
+### C.3 Web project (`apps/web`)
+
+1. **Root Directory**: `apps/web` (see [`apps/web/vercel.json`](apps/web/vercel.json)).
+2. Environment variables:
+
+   | Name | Value |
+   |------|--------|
+   | `NEXT_PUBLIC_API_URL` | Same origin as C.2, **no trailing slash**, e.g. `https://plethora-api.vercel.app`. |
+   | `NEXT_PUBLIC_API_PATH_PREFIX` | **`/api`** (required for this layout so `/api/*` rewrites target the API’s `/api/*` routes; the API strips `/api` before routing). |
+
+3. Redeploy the web app whenever `NEXT_PUBLIC_API_URL` or `NEXT_PUBLIC_API_PATH_PREFIX` changes (they are baked in at build time; see [`apps/web/next.config.js`](apps/web/next.config.js)).
+
+### C.4 Uploads on Vercel
+
+With `VERCEL=1`, uploads go under **`/tmp`** (see [`apps/api/src/lib/uploads-root.ts`](apps/api/src/lib/uploads-root.ts)). Files are **not** guaranteed to persist. For production durability, plan **Vercel Blob** or another object store and adjust upload routes accordingly.
+
+### C.5 Verify
+
+1. `GET https://<api>.vercel.app/api/health` → `{"status":"ok"}`.
+2. Open the web URL, sign in, and exercise PDF and attachment flows knowing `/tmp` and serverless timeouts may affect heavy use.
 
 ---
 
@@ -172,6 +224,12 @@ See [docs/WHATSAPP_PRODUCTION.md](docs/WHATSAPP_PRODUCTION.md) for full details 
 
 - **API calls go to localhost or fail**: `NEXT_PUBLIC_API_URL` is baked in at **build** time. Set it in the Vercel project for Production (and Preview if needed), then trigger a new deployment.
 - **CORS errors in the browser**: Your API’s `CORS_ORIGIN` must include the exact Vercel origin (e.g. `https://your-project.vercel.app`). Use a comma-separated list if you use multiple front-end URLs.
+
+### Vercel (API, Option C)
+
+- **404 on `GET /health`**: The serverless entry is mounted under `/api` on the deployment host. Use `GET /api/health`, and set **`NEXT_PUBLIC_API_PATH_PREFIX=/api`** on the web project so rewrites hit `/api/...` on the API origin.
+- **Prisma “query engine not found” on Vercel**: The schema includes `binaryTargets` for Linux; run `npx prisma generate` locally after pulling changes, commit if you vendor nothing, and redeploy so the build regenerates the client.
+- **Build fails at `prisma migrate deploy`**: The API Vercel project must have **`DATABASE_URL`** available at **build** time (Neon integration or manual env).
 
 ### Railway (all services)
 

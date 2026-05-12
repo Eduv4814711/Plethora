@@ -1,9 +1,8 @@
 import { readFileSync } from "fs";
-import { join } from "path";
-import { cwd } from "process";
+import { launchPdfBrowser } from "../lib/pdf-browser.js";
+import { templatePath } from "../lib/template-dir.js";
 
-// Use src/templates for dev (tsx) and prod (dist sibling to src)
-const TEMPLATE_PATH = join(cwd(), "src", "templates", "payslip.html");
+const TEMPLATE_PATH = templatePath("payslip.html");
 
 export interface PayslipTemplateData {
   employerName?: string;
@@ -65,11 +64,7 @@ export async function generatePayslipPDFFromTemplate(
   const dataScript = `<script>window.__PAYSLIP_DATA__ = ${JSON.stringify(data)};</script>`;
   const fullHtml = html.replace("</head>", `${dataScript}</head>`);
 
-  const { default: puppeteer } = await import("puppeteer");
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
+  const browser = await launchPdfBrowser();
 
   try {
     const page = await browser.newPage();
