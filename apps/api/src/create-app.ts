@@ -1,3 +1,7 @@
+/**
+ * Fastify application factory. Kept out of `app.ts` so Vercel does not treat
+ * `src/app.ts` as a framework server entry (expects `export default` handler).
+ */
 import { join } from "node:path";
 import { mkdir } from "node:fs/promises";
 import Fastify, { type FastifyInstance } from "fastify";

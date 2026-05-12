@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { buildApp } from "./app.js";
+import { buildApp } from "./create-app.js";
 
 const app = await buildApp();
 
