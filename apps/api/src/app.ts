@@ -46,17 +46,32 @@ import { taskAttachmentsRoutes } from "./routes/task-attachments.js";
 import { taskRemindersRoutes } from "./routes/task-reminders.js";
 import { academyRoutes } from "./routes/academy/index.js";
 
+const MIN_PROD_JWT_LEN = 32;
+
+/** Values that must never ship in production (dev defaults + .env.example placeholders). */
+const FORBIDDEN_JWT_SECRETS = new Set([
+  "",
+  "dev-secret-change-in-production",
+  "dev-refresh-secret",
+  "change-this-in-production",
+  "change-this-refresh-in-production",
+]);
+
 function assertProductionJwt(): void {
   if (process.env.NODE_ENV !== "production") return;
+  const jwt = process.env.JWT_SECRET?.trim() ?? "";
+  const refresh = process.env.JWT_REFRESH_SECRET?.trim() ?? "";
   const weakJwt =
-    !process.env.JWT_SECRET ||
-    process.env.JWT_SECRET === "dev-secret-change-in-production";
+    FORBIDDEN_JWT_SECRETS.has(jwt) || jwt.length < MIN_PROD_JWT_LEN;
   const weakRefresh =
-    !process.env.JWT_REFRESH_SECRET ||
-    process.env.JWT_REFRESH_SECRET === "dev-refresh-secret";
-  if (weakJwt || weakRefresh) {
+    FORBIDDEN_JWT_SECRETS.has(refresh) || refresh.length < MIN_PROD_JWT_LEN;
+  const same = jwt.length > 0 && jwt === refresh;
+  if (weakJwt || weakRefresh || same) {
     throw new Error(
-      "JWT_SECRET and JWT_REFRESH_SECRET must be set to strong, unique values in production."
+      "Invalid production JWT configuration. On Railway: open the API service → Variables and set JWT_SECRET and JWT_REFRESH_SECRET to two different random strings (at least " +
+        MIN_PROD_JWT_LEN +
+        " characters each). Do not use dev defaults, .env.example placeholders, or the same value for both. " +
+        `Details: weakJwt=${weakJwt}, weakRefresh=${weakRefresh}, sameValue=${same}.`
     );
   }
 }

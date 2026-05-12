@@ -100,6 +100,7 @@ See [docs/WHATSAPP_PRODUCTION.md](docs/WHATSAPP_PRODUCTION.md) for `WHATSAPP_*` 
 - **`EBUSY: rmdir '/app/node_modules/.cache'`** (or similar during build): Caused by running **`npm ci` twice** when Nixpacks already ran install; our `railway.toml` `buildCommand` must be **`npm run build --workspace=…` only** (no leading `npm ci`).
 - **`NEXT_PUBLIC_API_URL` / rewrites**: Must be valid for Next (full URL with scheme, or bare host per `apps/web/next.config.js`). Rebuild the web service after changes.
 - **Prisma / pre-deploy**: If pre-deploy fails, the deployment stops; read the **pre-deploy** log section. If the API crashes at runtime, look for `FATAL: API failed to initialize` in logs (JWT, DB, etc.).
+- **`FATAL: API failed to initialize` / `Invalid production JWT configuration`**: With **`NODE_ENV=production`** (Nixpacks sets this), the API requires **`JWT_SECRET`** and **`JWT_REFRESH_SECRET`** on the **API** service — two **different** random strings of **at least 32 characters** each. Set them under Railway → your API service → **Variables** (not only on Postgres or the web service). Redeploy after saving.
 - **CORS**: `CORS_ORIGIN` must include the exact browser origin (scheme + host, no trailing path).
 - **Uploads**: Default is local disk under the API process; attach a Railway **Volume** and set `UPLOADS_DIR` if you need persistence across deploys.
 - **PDF / Puppeteer**: The API may need extra system packages or `PUPPETEER_EXECUTABLE_PATH`; not covered by the default Nixpacks Node image — plan accordingly if you use PDF features.
