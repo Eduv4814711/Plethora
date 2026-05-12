@@ -96,6 +96,11 @@ See [docs/WHATSAPP_PRODUCTION.md](docs/WHATSAPP_PRODUCTION.md) for `WHATSAPP_*` 
 
 ## Troubleshooting
 
+- **Railway: “Application failed to respond” on the web URL** (dashboard still looks “online”):
+  1. Open the **Web** service → **Deployments** → latest → **HTTP Logs** / **Deploy Logs** (runtime, not only build). Confirm you see Next listening (no crash loop). If the process exits immediately, fix the error shown there.
+  2. Confirm **Config-as-code path** is `apps/web/railway.toml` (not the API file) and **Root Directory** is repo root. The start command runs from **`apps/web`** so `.next` is found.
+  3. Confirm **Networking** → **Generate Domain** (or custom domain) is set for the **Web** service, not only the API.
+  4. After a failed deploy, **Redeploy** once variables (especially `NEXT_PUBLIC_API_URL`) are correct.
 - **Build fails on `npm ci`**: Ensure **Root Directory** is the repo root so `package-lock.json` is present. Both services share the same root.
 - **`EBUSY: rmdir '/app/node_modules/.cache'`** (or similar during build): Caused by running **`npm ci` twice** when Nixpacks already ran install; our `railway.toml` `buildCommand` must be **`npm run build --workspace=…` only** (no leading `npm ci`).
 - **`NEXT_PUBLIC_API_URL` / rewrites**: Must be valid for Next (full URL with scheme, or bare host per `apps/web/next.config.js`). Rebuild the web service after changes.

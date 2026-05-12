@@ -15,8 +15,8 @@ watchPatterns = [
 
 [deploy]
 # Migrations run before the new container starts so the API can listen immediately for /health.
-preDeployCommand = "npm run db:migrate:deploy --workspace=api"
-startCommand = "npm run start:server --workspace=api"
+preDeployCommand = "cd apps/api && npm run db:migrate:deploy"
+startCommand = "cd apps/api && npm run start:server"
 healthcheckPath = "/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
