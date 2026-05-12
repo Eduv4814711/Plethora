@@ -1,8 +1,8 @@
 import "dotenv/config";
-import Fastify from "fastify";
+import fastify from "fastify";
 import { buildApp } from "./create-app.js";
 
-void Fastify.version;
+void fastify;
 
 const app = await buildApp();
 
