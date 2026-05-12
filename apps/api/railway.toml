@@ -1,25 +1,19 @@
-# Railway service config for the Plethora API.
-# In the API service (Railway → Settings):
-#   - Root Directory: leave at repo root (or "/")
-#   - Config-as-code path: apps/api/railway.toml
-# The build context is the monorepo root so the workspace lockfile is available.
+# Railway API service — Nixpacks at monorepo root (see DEPLOYMENT.md).
+# Settings → Root Directory: blank or "/"
+# Settings → Config-as-code path: apps/api/railway.toml
 
 [build]
-builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile.api"
-# Only redeploy on changes that affect the API image.
+builder = "NIXPACKS"
+buildCommand = "npm ci && npm run build --workspace=api"
 watchPatterns = [
   "apps/api/**",
-  "Dockerfile.api",
-  ".dockerignore",
   "package.json",
   "package-lock.json",
 ]
 
 [deploy]
-# Migrations run in pre-deploy (separate step) so the app can listen before Railway's
-# /health probe window. Start is HTTP only — see apps/api/package.json `start:server`.
-preDeployCommand = ["npm", "run", "db:migrate:deploy", "--workspace=api"]
+# Migrations run before the new container starts so the API can listen immediately for /health.
+preDeployCommand = "npm run db:migrate:deploy --workspace=api"
 startCommand = "npm run start:server --workspace=api"
 healthcheckPath = "/health"
 healthcheckTimeout = 120
