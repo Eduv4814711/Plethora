@@ -1,0 +1,22 @@
+# Railway service config for the Plethora Web (Next.js) app.
+# In the Web service (Railway → Settings):
+#   - Root Directory: leave at repo root (or "/")
+#   - Config-as-code path: apps/web/railway.toml
+# Set NEXT_PUBLIC_API_URL on this service BEFORE the first build — Railway
+# passes service Variables as --build-args, and Next.js bakes them into the
+# client bundle and into the `/api/*` rewrite in next.config.js.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.web"
+watchPatterns = [
+  "apps/web/**",
+  "Dockerfile.web",
+  ".dockerignore",
+  "package.json",
+  "package-lock.json",
+]
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

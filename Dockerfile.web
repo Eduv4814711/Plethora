@@ -1,14 +1,18 @@
 # Plethora Web — build from monorepo root:
 #   docker build -f Dockerfile.web --build-arg NEXT_PUBLIC_API_URL=https://api.example.com .
+# Used for Railway (root Dockerfile, repo as build context) and Google Cloud Run.
 FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
+# `NEXT_PUBLIC_*` is baked into the client bundle at build time. Railway passes
+# service Variables through as `--build-arg`s automatically when using a Dockerfile.
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_API_PATH_PREFIX=
 
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_API_PATH_PREFIX=${NEXT_PUBLIC_API_PATH_PREFIX}
+ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY package.json package-lock.json ./
 COPY apps ./apps
@@ -21,9 +25,15 @@ RUN npm prune --omit=dev
 
 FROM node:20-bookworm-slim AS runner
 
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends wget \
+  && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+# Default for local `docker run`; Railway/Cloud Run override $PORT and Next.js honours it.
 ENV PORT=8080
 
 COPY --from=builder /app/package.json /app/package-lock.json ./
@@ -35,5 +45,9 @@ COPY --from=builder /app/apps/web/next.config.js ./apps/web/next.config.js
 COPY --from=builder /app/apps/web/public ./apps/web/public
 
 EXPOSE 8080
+
+# Hit the Next.js root; any 2xx/3xx confirms the server is up.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget --quiet --spider "http://127.0.0.1:${PORT}/" || exit 1
 
 CMD ["npm", "start", "--workspace=web"]

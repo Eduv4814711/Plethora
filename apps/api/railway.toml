@@ -1,0 +1,25 @@
+# Railway service config for the Plethora API.
+# In the API service (Railway → Settings):
+#   - Root Directory: leave at repo root (or "/")
+#   - Config-as-code path: apps/api/railway.toml
+# The build context is the monorepo root so the workspace lockfile is available.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.api"
+# Only redeploy on changes that affect the API image.
+watchPatterns = [
+  "apps/api/**",
+  "Dockerfile.api",
+  ".dockerignore",
+  "package.json",
+  "package-lock.json",
+]
+
+[deploy]
+# `npm start --workspace=api` is already the Dockerfile CMD; leave startCommand
+# unset so Railway uses CMD (which runs `prisma migrate deploy && node dist/index.js`).
+healthcheckPath = "/health"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

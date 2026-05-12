@@ -1,4 +1,5 @@
 # Plethora API — build from monorepo root: docker build -f Dockerfile.api .
+# Used for Railway (root Dockerfile, repo as build context) and Google Cloud Run.
 FROM node:20-bookworm-slim AS builder
 
 RUN apt-get update \
@@ -7,6 +8,7 @@ RUN apt-get update \
 
 WORKDIR /app
 
+# Workspace install needs the root manifest + lockfile and every workspace package.json.
 COPY package.json package-lock.json ./
 COPY apps ./apps
 
@@ -20,12 +22,14 @@ RUN npm prune --omit=dev
 FROM node:20-bookworm-slim AS runner
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && apt-get install -y --no-install-recommends openssl ca-certificates wget \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 ENV NODE_ENV=production
+# Default port for local `docker run` and platforms (Cloud Run, Fly, etc.) that
+# don't inject one. Railway/Cloud Run override $PORT at runtime; the API reads it.
 ENV PORT=8080
 
 COPY --from=builder /app/package.json /app/package-lock.json ./
@@ -37,4 +41,10 @@ COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
 
 EXPOSE 8080
 
+# Local-only liveness probe; Railway/Cloud Run drive their own healthchecks
+# (see apps/api/railway.toml `healthcheckPath`).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget --quiet --spider "http://127.0.0.1:${PORT}/health" || exit 1
+
+# Runs `prisma migrate deploy && node dist/index.js` from apps/api/package.json.
 CMD ["npm", "start", "--workspace=api"]
