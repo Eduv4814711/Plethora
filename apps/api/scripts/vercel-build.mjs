@@ -30,6 +30,13 @@ const tsc = bin("tsc");
 run(`"${prisma}" generate`);
 
 if (dbUrl && !isLocal) {
+  if (process.env.VERCEL_PRISMA_REPAIR_HISTORY === "1") {
+    console.warn(
+      "[vercel-build] VERCEL_PRISMA_REPAIR_HISTORY=1: clearing stuck _prisma_migrations " +
+        "(remove this env var after one successful deploy)."
+    );
+    run(`node "${join(apiRoot, "scripts/repair-prisma-migration-history.mjs")}"`);
+  }
   run(`"${prisma}" migrate deploy`);
 } else {
   console.warn(
