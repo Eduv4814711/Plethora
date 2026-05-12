@@ -4,7 +4,9 @@
 
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm ci && npm run build --workspace=api"
+# Nixpacks already runs `npm ci` in the install phase; do not repeat it here — a
+# second `npm ci` conflicts with Railway's node_modules/.cache mount (EBUSY).
+buildCommand = "npm run build --workspace=api"
 watchPatterns = [
   "apps/api/**",
   "package.json",

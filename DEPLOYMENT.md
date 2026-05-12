@@ -18,7 +18,7 @@ Plethora is a single Git repo with workspaces `apps/api` and `apps/web`, and a r
 
 Do **not** point Root Directory at `apps/api` or `apps/web` alone: the lockfile and workspace install live at the repo root.
 
-Each service’s `railway.toml` ([`apps/api/railway.toml`](apps/api/railway.toml), [`apps/web/railway.toml`](apps/web/railway.toml)) sets `builder = "NIXPACKS"`, a **`buildCommand`** (`npm ci` then workspace build), **watch patterns**, and deploy commands. The API uses **`preDeployCommand`** for `prisma migrate deploy` so the process can start and serve `/health` without blocking on migrations in the same process.
+Each service’s `railway.toml` ([`apps/api/railway.toml`](apps/api/railway.toml), [`apps/web/railway.toml`](apps/web/railway.toml)) sets `builder = "NIXPACKS"`, a **`buildCommand`** that runs only the workspace **`npm run build`** (Nixpacks already runs **`npm ci`** in its install phase; duplicating `npm ci` in `buildCommand` can fail on Railway with `EBUSY` on `node_modules/.cache`), plus **watch patterns** and deploy commands. The API uses **`preDeployCommand`** for `prisma migrate deploy` so the process can start and serve `/health` without blocking on migrations in the same process.
 
 ---
 
@@ -97,6 +97,7 @@ See [docs/WHATSAPP_PRODUCTION.md](docs/WHATSAPP_PRODUCTION.md) for `WHATSAPP_*` 
 ## Troubleshooting
 
 - **Build fails on `npm ci`**: Ensure **Root Directory** is the repo root so `package-lock.json` is present. Both services share the same root.
+- **`EBUSY: rmdir '/app/node_modules/.cache'`** (or similar during build): Caused by running **`npm ci` twice** when Nixpacks already ran install; our `railway.toml` `buildCommand` must be **`npm run build --workspace=…` only** (no leading `npm ci`).
 - **`NEXT_PUBLIC_API_URL` / rewrites**: Must be valid for Next (full URL with scheme, or bare host per `apps/web/next.config.js`). Rebuild the web service after changes.
 - **Prisma / pre-deploy**: If pre-deploy fails, the deployment stops; read the **pre-deploy** log section. If the API crashes at runtime, look for `FATAL: API failed to initialize` in logs (JWT, DB, etc.).
 - **CORS**: `CORS_ORIGIN` must include the exact browser origin (scheme + host, no trailing path).

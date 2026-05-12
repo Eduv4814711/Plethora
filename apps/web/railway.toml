@@ -6,7 +6,8 @@
 
 [build]
 builder = "NIXPACKS"
-buildCommand = "npm ci && npm run build --workspace=web"
+# Nixpacks install phase already runs `npm ci`; repeating it causes EBUSY on .cache mounts.
+buildCommand = "npm run build --workspace=web"
 watchPatterns = [
   "apps/web/**",
   "package.json",
