@@ -202,8 +202,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </>
       )}
 
-      {/* Brand header – compact/lightweight */}
-      <header className="min-h-14 bg-security-navy-800/95 backdrop-blur flex items-center justify-between gap-2 px-3 sm:px-5 shrink-0 shadow-sm border-b border-white/10 pt-[env(safe-area-inset-top,0px)]">
+      {/* Brand header – fixed so it stays visible while main scrolls (mobile + desktop) */}
+      <header className="fixed top-0 left-0 right-0 z-[45] flex min-h-14 items-center justify-between gap-2 border-b border-white/10 bg-security-navy-800/95 px-3 shadow-sm backdrop-blur sm:px-5 pt-[env(safe-area-inset-top,0px)]">
         <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2 lg:flex-initial">
           <button
             type="button"
@@ -375,12 +375,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <main
         id="dashboard-main"
         className={clsx(
-          "flex min-h-0 flex-1 flex-col px-4 py-5 sm:p-6 md:p-8 lg:p-10 bg-gradient-to-b from-[var(--bg-canvas)] via-white to-security-navy-50/35",
+          "flex min-h-0 flex-1 flex-col box-border bg-gradient-to-b from-[var(--bg-canvas)] via-white to-security-navy-50/35",
+          /* Reserve space for fixed header: safe area + min-h-14 row + match previous vertical rhythm */
+          "pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1rem)] pb-5 pl-4 pr-4 sm:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.5rem)] sm:pb-6 sm:pl-6 sm:pr-6 md:pb-8 md:pl-8 md:pr-8 lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+2.5rem)] lg:pb-10 lg:pl-10 lg:pr-10",
+          "overscroll-y-contain",
           isDashboardHome || isWhatsAppPage
             ? "overflow-hidden"
             : isAcademyPage
               ? "overflow-y-auto lg:overflow-hidden"
-              : "overflow-auto"
+              : "overflow-y-auto",
         )}
       >
         {hasAccess ? (isAcademyPage ? <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col lg:h-full">{children}</div> : children) : null}
