@@ -550,20 +550,30 @@ export interface MigrationPreviewResponse {
   companies: { validCount: number; valid: unknown[]; errors: { row: number; field: string; value: string; message: string }[] };
   employees: { validCount: number; valid: unknown[]; errors: { row: number; field: string; value: string; message: string }[] };
   sites: { validCount: number; valid: unknown[]; errors: { row: number; field: string; value: string; message: string }[] };
+  groups: { validCount: number; valid: unknown[]; errors: { row: number; field: string; value: string; message: string }[] };
 }
 
 export interface MigrationImportResult {
   companiesCreated: number;
   employeesCreated: number;
   sitesCreated: number;
+  groupsCreated: number;
+  groupsSkipped: number;
   errors: { entity: string; row?: number; message: string }[];
 }
 
 export async function downloadMigrationTemplate(
   token: string,
-  type: "company" | "employees" | "sites"
+  type: "company" | "employees" | "sites" | "groups"
 ): Promise<void> {
-  const filename = type === "company" ? "company-import-template.csv" : type === "employees" ? "employees-import-template.csv" : "sites-import-template.csv";
+  const filename =
+    type === "company"
+      ? "company-import-template.csv"
+      : type === "employees"
+        ? "employees-import-template.csv"
+        : type === "sites"
+          ? "sites-import-template.csv"
+          : "employee-groups-import-template.csv";
   const res = await authFetch(`/migrations/templates/${type}`, token);
   if (!res.ok) throw new Error("Failed to download template");
   const blob = await res.blob();
@@ -605,14 +615,30 @@ export async function exportSites(token: string): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
+export async function exportEmployeeGroups(token: string): Promise<void> {
+  const res = await authFetch("/migrations/export/groups", token);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || "Export failed");
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "employee-groups-export.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export async function migrationPreview(
   token: string,
-  files: { companies?: File; employees?: File; sites?: File }
+  files: { companies?: File; employees?: File; sites?: File; groups?: File }
 ): Promise<MigrationPreviewResponse> {
   const formData = new FormData();
   if (files.companies) formData.append("companies", files.companies);
   if (files.employees) formData.append("employees", files.employees);
   if (files.sites) formData.append("sites", files.sites);
+  if (files.groups) formData.append("groups", files.groups);
 
   const res = await fetch(`${API_BASE}/migrations/preview`, {
     method: "POST",
@@ -628,11 +654,12 @@ export async function migrationPreview(
 
 export async function migrationImport(
   token: string,
-  files: { employees?: File; sites?: File }
+  files: { employees?: File; sites?: File; groups?: File }
 ): Promise<MigrationImportResult> {
   const formData = new FormData();
   if (files.employees) formData.append("employees", files.employees);
   if (files.sites) formData.append("sites", files.sites);
+  if (files.groups) formData.append("groups", files.groups);
 
   const res = await fetch(`${API_BASE}/migrations/import`, {
     method: "POST",
@@ -648,12 +675,13 @@ export async function migrationImport(
 
 export async function migrationAdminBulkCreate(
   token: string,
-  files: { companies: File; employees?: File; sites?: File }
+  files: { companies: File; employees?: File; sites?: File; groups?: File }
 ): Promise<MigrationImportResult> {
   const formData = new FormData();
   formData.append("companies", files.companies);
   if (files.employees) formData.append("employees", files.employees);
   if (files.sites) formData.append("sites", files.sites);
+  if (files.groups) formData.append("groups", files.groups);
 
   const res = await fetch(`${API_BASE}/migrations/admin/bulk-create`, {
     method: "POST",

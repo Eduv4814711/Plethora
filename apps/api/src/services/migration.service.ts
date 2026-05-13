@@ -6,6 +6,7 @@ import { prisma } from "../lib/prisma.js";
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_EMPLOYEES = 1000;
 const MAX_SITES = 200;
+const MAX_GROUPS = 500;
 const MAX_COMPANIES = 50;
 
 /** Large CSV imports (many employees) can exceed default interactive transaction limits on hosted DBs. */
@@ -127,6 +128,12 @@ const employeeRowSchema = employeeRowBaseSchema.superRefine((data, ctx) => {
 /** Same fields as strict schema but does not require PSIRA or pay rates (manual cleanup in app). */
 const employeeRowSchemaRelaxed = employeeRowBaseSchema;
 
+const employeeGroupRowSchema = z.object({
+  name: z.string().min(1, "Group name is required"),
+  description: z.string().optional().transform(emptyToUndefined),
+  sortOrder: z.string().optional().transform((v) => parseOptionalNumber(v)),
+});
+
 const siteRowSchema = z.object({
   companyName: z.string().optional().transform(emptyToUndefined), // Admin flow: links to company
   name: z.string().min(1, "Site name is required"),
@@ -151,6 +158,9 @@ function toCamelCase(s: string): string {
 // Map user-friendly header names to schema field names
 const HEADER_ALIASES: Record<string, string> = {
   sitename: "name", // "Site Name" -> name (for sites)
+  groupname: "name",
+  employeegroup: "name",
+  employeegroupname: "name",
 };
 
 function rowToObject(record: string[], headers: string[]): Record<string, string> {
@@ -185,6 +195,7 @@ export interface ParseResult<T> {
 export type ValidatedCompany = z.infer<typeof companyRowSchema>;
 export type ValidatedEmployee = z.infer<typeof employeeRowBaseSchema>;
 export type ValidatedSite = z.infer<typeof siteRowSchema>;
+export type ValidatedEmployeeGroup = z.infer<typeof employeeGroupRowSchema>;
 
 export function parseCsvBuffer(buffer: Buffer): { headers: string[]; rows: string[][] } {
   const content = buffer.toString("utf-8");
@@ -314,12 +325,58 @@ export function parseAndValidateSites(
   return { valid, errors };
 }
 
+export function parseAndValidateEmployeeGroups(buffer: Buffer): ParseResult<ValidatedEmployeeGroup> {
+  const { headers, rows } = parseCsvBuffer(buffer);
+  const valid: ValidatedEmployeeGroup[] = [];
+  const errors: ParseResult<ValidatedEmployeeGroup>["errors"] = [];
+
+  const dataRows = rows.filter((r) => r.some((cell) => String(cell ?? "").trim() !== ""));
+  if (dataRows.length > MAX_GROUPS) {
+    errors.push({ row: 0, field: "_", value: "", message: `Maximum ${MAX_GROUPS} employee groups per import` });
+    return { valid, errors };
+  }
+
+  const seenNames = new Set<string>();
+
+  for (let i = 0; i < dataRows.length; i++) {
+    const obj = rowToObject(dataRows[i], headers);
+    const result = employeeGroupRowSchema.safeParse(obj);
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        const path = issue.path.join(".");
+        errors.push({
+          row: i + 2,
+          field: path || "unknown",
+          value: obj[path] ?? "",
+          message: issue.message,
+        });
+      }
+      continue;
+    }
+    const key = result.data.name.trim().toLowerCase();
+    if (seenNames.has(key)) {
+      errors.push({
+        row: i + 2,
+        field: "name",
+        value: result.data.name,
+        message: "Duplicate group name in this file",
+      });
+      continue;
+    }
+    seenNames.add(key);
+    valid.push(result.data);
+  }
+  return { valid, errors };
+}
+
 // --- Import execution ---
 
 export interface ImportResult {
   companiesCreated: number;
   employeesCreated: number;
   sitesCreated: number;
+  groupsCreated: number;
+  groupsSkipped: number;
   errors: { entity: string; row?: number; message: string }[];
 }
 
@@ -333,6 +390,8 @@ export async function executeCompanyImport(
     companiesCreated: 0,
     employeesCreated: 0,
     sitesCreated: 0,
+    groupsCreated: 0,
+    groupsSkipped: 0,
     errors: [],
   };
 
@@ -474,12 +533,15 @@ export async function executeCompanyImport(
 export async function executeSelfImport(
   companyId: string,
   employees: ValidatedEmployee[],
-  sites: ValidatedSite[]
+  sites: ValidatedSite[],
+  groups: ValidatedEmployeeGroup[] = []
 ): Promise<ImportResult> {
   const result: ImportResult = {
     companiesCreated: 0,
     employeesCreated: 0,
     sitesCreated: 0,
+    groupsCreated: 0,
+    groupsSkipped: 0,
     errors: [],
   };
 
@@ -576,6 +638,29 @@ export async function executeSelfImport(
       });
       result.sitesCreated++;
     }
+
+    let groupSort = 0;
+    for (const g of groups) {
+      const name = g.name.trim();
+      const existing = await tx.employeeGroup.findFirst({
+        where: { companyId, name },
+        select: { id: true },
+      });
+      if (existing) {
+        result.groupsSkipped++;
+        continue;
+      }
+      await tx.employeeGroup.create({
+        data: {
+          companyId,
+          name,
+          description: g.description ?? null,
+          sortOrder: g.sortOrder !== undefined && !Number.isNaN(g.sortOrder) ? Math.floor(g.sortOrder) : groupSort,
+        },
+      });
+      result.groupsCreated++;
+      groupSort++;
+    }
   }, MIGRATION_TRANSACTION_OPTIONS);
 
   return result;
@@ -660,6 +745,23 @@ export async function exportEmployeesToCsv(companyId: string, companyName: strin
     csvEscape(formatDecimal(e.monthlySalary)),
     csvEscape(e.psiraNumber),
     csvEscape(e.securityServiceType),
+  ]);
+
+  return [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+}
+
+export async function exportEmployeeGroupsToCsv(companyId: string): Promise<string> {
+  const groups = await prisma.employeeGroup.findMany({
+    where: { companyId },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    take: MAX_GROUPS,
+  });
+
+  const headers = ["Name", "Description", "Sort Order"];
+  const rows = groups.map((g) => [
+    csvEscape(g.name),
+    csvEscape(g.description),
+    csvEscape(g.sortOrder),
   ]);
 
   return [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");

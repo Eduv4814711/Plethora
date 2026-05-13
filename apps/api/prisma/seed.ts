@@ -11,6 +11,7 @@ config({ path: join(__dirname, "..", ".env") });
 
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
+import { ensureSiteEmployeeGroups } from "../src/lib/site-employee-groups.js";
 
 const prisma = new PrismaClient();
 
@@ -64,6 +65,13 @@ async function main() {
   } else {
     console.log(`Admin user already exists: ${ADMIN_EMAIL}`);
     console.log(`If you forgot the password, run: npx tsx prisma/reset-admin.ts`);
+  }
+
+  const { created: groupsCreated, skipped: groupsSkipped } = await ensureSiteEmployeeGroups(prisma, company.id);
+  if (groupsCreated > 0 || groupsSkipped > 0) {
+    console.log(
+      `Site employee groups: created ${groupsCreated}, already present ${groupsSkipped} (${groupsCreated + groupsSkipped} total in list).`
+    );
   }
 }
 

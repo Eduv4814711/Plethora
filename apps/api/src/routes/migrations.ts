@@ -9,13 +9,16 @@ import {
   parseAndValidateCompanies,
   parseAndValidateEmployees,
   parseAndValidateSites,
+  parseAndValidateEmployeeGroups,
   executeSelfImport,
   checkFileSize,
   exportEmployeesToCsv,
   exportSitesToCsv,
+  exportEmployeeGroupsToCsv,
   type ValidatedCompany,
   type ValidatedEmployee,
   type ValidatedSite,
+  type ValidatedEmployeeGroup,
 } from "../services/migration.service.js";
 import { prisma } from "../lib/prisma.js";
 
@@ -59,10 +62,14 @@ export async function migrationsRoutes(app: FastifyInstance) {
           ? "employees-import-template.csv"
           : type === "sites"
             ? "sites-import-template.csv"
-            : null;
+            : type === "groups"
+              ? "employee-groups-import-template.csv"
+              : null;
 
     if (!filename) {
-      return reply.code(400).send({ error: "Invalid template type", message: "Use: company, employees, or sites" });
+      return reply
+        .code(400)
+        .send({ error: "Invalid template type", message: "Use: company, employees, sites, or groups" });
     }
 
     const filepath = join(TEMPLATES_DIR, filename);
@@ -108,14 +115,25 @@ export async function migrationsRoutes(app: FastifyInstance) {
       .send(csv);
   });
 
+  // GET /migrations/export/groups - Employee groups as CSV (same columns as import template)
+  app.get("/export/groups", { preHandler: protect }, async (request, reply) => {
+    const companyId = request.user!.companyId;
+    const csv = await exportEmployeeGroupsToCsv(companyId);
+    return reply
+      .header("Content-Type", "text/csv")
+      .header("Content-Disposition", 'attachment; filename="employee-groups-export.csv"')
+      .send(csv);
+  });
+
   // POST /migrations/preview - Validate upload, return preview + errors (no DB write)
   app.post("/preview", { preHandler: protect }, async (request, reply) => {
-    const fieldNames = ["companies", "employees", "sites"];
+    const fieldNames = ["companies", "employees", "sites", "groups"];
     const filesCollected = await collectMultipartFiles(request, fieldNames);
 
     let companies = { valid: [] as ValidatedCompany[], errors: [] as { row: number; field: string; value: string; message: string }[] };
     let employees = { valid: [] as ValidatedEmployee[], errors: [] as { row: number; field: string; value: string; message: string }[] };
     let sites = { valid: [] as ValidatedSite[], errors: [] as { row: number; field: string; value: string; message: string }[] };
+    let groups = { valid: [] as ValidatedEmployeeGroup[], errors: [] as { row: number; field: string; value: string; message: string }[] };
 
     const isAdmin = request.user!.role === "admin";
 
@@ -144,27 +162,36 @@ export async function migrationsRoutes(app: FastifyInstance) {
       });
     }
 
+    if (filesCollected.groups) {
+      if (!checkFileSize(filesCollected.groups, MAX_FILE_BYTES)) {
+        return reply.code(400).send({ error: "File too large", message: "groups CSV must be under 5MB" });
+      }
+      groups = parseAndValidateEmployeeGroups(filesCollected.groups);
+    }
+
     return reply.send({
       companies: { validCount: companies.valid.length, valid: companies.valid, errors: companies.errors },
       employees: { validCount: employees.valid.length, valid: employees.valid, errors: employees.errors },
       sites: { validCount: sites.valid.length, valid: sites.valid, errors: sites.errors },
+      groups: { validCount: groups.valid.length, valid: groups.valid, errors: groups.errors },
     });
   });
 
-  // POST /migrations/import - Company self-migration (employees + sites only)
+  // POST /migrations/import - Company self-migration (employees + sites + employee groups)
   app.post("/import", { preHandler: protect }, async (request, reply) => {
     const companyId = request.user!.companyId;
-    const filesCollected = await collectMultipartFiles(request, ["employees", "sites"]);
+    const filesCollected = await collectMultipartFiles(request, ["employees", "sites", "groups"]);
 
-    if (!filesCollected.employees && !filesCollected.sites) {
+    if (!filesCollected.employees && !filesCollected.sites && !filesCollected.groups) {
       return reply.code(400).send({
         error: "No files",
-        message: "Upload at least employees.csv or sites.csv",
+        message: "Upload at least employees.csv, sites.csv, or employee groups CSV",
       });
     }
 
     let employees = { valid: [] as ValidatedEmployee[], errors: [] as { row: number; field: string; value: string; message: string }[] };
     let sites = { valid: [] as ValidatedSite[], errors: [] as { row: number; field: string; value: string; message: string }[] };
+    let groups = { valid: [] as ValidatedEmployeeGroup[], errors: [] as { row: number; field: string; value: string; message: string }[] };
 
     if (filesCollected.employees) {
       if (!checkFileSize(filesCollected.employees, MAX_FILE_BYTES)) {
@@ -180,16 +207,24 @@ export async function migrationsRoutes(app: FastifyInstance) {
       sites = parseAndValidateSites(filesCollected.sites, { requireCompanyName: false });
     }
 
-    if (employees.errors.length > 0 || sites.errors.length > 0) {
+    if (filesCollected.groups) {
+      if (!checkFileSize(filesCollected.groups, MAX_FILE_BYTES)) {
+        return reply.code(400).send({ error: "File too large", message: "groups CSV must be under 5MB" });
+      }
+      groups = parseAndValidateEmployeeGroups(filesCollected.groups);
+    }
+
+    if (employees.errors.length > 0 || sites.errors.length > 0 || groups.errors.length > 0) {
       return reply.code(400).send({
         error: "Validation failed",
         message: "Fix errors before importing",
         employees: { errors: employees.errors },
         sites: { errors: sites.errors },
+        groups: { errors: groups.errors },
       });
     }
 
-    const result = await executeSelfImport(companyId, employees.valid, sites.valid);
+    const result = await executeSelfImport(companyId, employees.valid, sites.valid, groups.valid);
 
     await createAuditLog({
       userId: request.user!.sub,
@@ -199,6 +234,8 @@ export async function migrationsRoutes(app: FastifyInstance) {
       metadata: {
         employeesCreated: result.employeesCreated,
         sitesCreated: result.sitesCreated,
+        groupsCreated: result.groupsCreated,
+        groupsSkipped: result.groupsSkipped,
         errors: result.errors,
       },
     });
