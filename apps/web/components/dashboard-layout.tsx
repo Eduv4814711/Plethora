@@ -379,11 +379,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           /* Reserve space for fixed header: safe area + min-h-14 row + match previous vertical rhythm */
           "pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1rem)] pb-5 pl-4 pr-4 sm:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.5rem)] sm:pb-6 sm:pl-6 sm:pr-6 md:pb-8 md:pl-8 md:pr-8 lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+2.5rem)] lg:pb-10 lg:pl-10 lg:pr-10",
           "overscroll-y-contain",
-          isDashboardHome || isWhatsAppPage
-            ? "overflow-hidden"
-            : isAcademyPage
-              ? "overflow-y-auto lg:overflow-hidden"
-              : "overflow-y-auto",
+          isDashboardHome
+            ? "overflow-y-auto"
+            : isWhatsAppPage
+              ? "overflow-hidden"
+              : isAcademyPage
+                ? "overflow-y-auto lg:overflow-hidden"
+                : "overflow-y-auto",
         )}
       >
         {hasAccess ? (isAcademyPage ? <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col lg:h-full">{children}</div> : children) : null}

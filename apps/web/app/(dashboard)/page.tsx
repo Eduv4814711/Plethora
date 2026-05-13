@@ -182,7 +182,7 @@ export default function DashboardPage() {
 
   const DashboardCard = ({ title, children, className = "", icons }: { title?: string; children: React.ReactNode; className?: string; icons?: React.ReactNode }) => (
     <div
-      className={`group flex flex-col relative rounded-2xl border border-neutral-200/70 bg-white p-3 md:p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-8px_rgba(245,124,0,0.07)] transition-shadow duration-300 hover:shadow-[0_4px_12px_rgba(15,23,42,0.06),0_20px_40px_-12px_rgba(245,124,0,0.12)] ${className}`}
+      className={`group relative flex min-h-0 min-w-0 flex-col rounded-2xl border border-neutral-200/70 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-8px_rgba(245,124,0,0.07)] transition-shadow duration-300 hover:shadow-[0_4px_12px_rgba(15,23,42,0.06),0_20px_40px_-12px_rgba(245,124,0,0.12)] md:p-4 ${className}`}
     >
       {title && (
         <div className="flex items-start justify-between gap-3 mb-2.5">
@@ -198,16 +198,16 @@ export default function DashboardPage() {
   );
 
   const KpiTile = ({ label, value, hint }: { label: string; value: string | number; hint?: string }) => (
-    <div className="rounded-2xl border border-neutral-200/60 bg-white/90 px-3 py-2.5 shadow-sm backdrop-blur-sm">
-      <p className="text-xs font-medium uppercase tracking-wider text-neutral-600">{label}</p>
+    <div className="min-w-0 rounded-2xl border border-neutral-200/60 bg-white/90 px-3 py-2.5 shadow-sm backdrop-blur-sm">
+      <p className="text-xs font-medium uppercase tracking-wider text-neutral-600 [overflow-wrap:anywhere]">{label}</p>
       <p className="mt-1 text-xl font-bold tabular-nums text-neutral-900 tracking-tight">{value}</p>
       {hint ? <p className="mt-1 text-xs text-neutral-600">{hint}</p> : null}
     </div>
   );
 
   return (
-    <div className="animate-fade-in max-w-[1600px] mx-auto w-full h-full min-h-0 overflow-hidden flex flex-col">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between pb-4 border-b border-neutral-200/80 shrink-0">
+    <div className="animate-fade-in max-w-[1600px] mx-auto flex min-h-0 w-full min-w-0 flex-col lg:h-full lg:min-h-0 lg:overflow-hidden">
+      <header className="flex shrink-0 flex-col gap-4 border-b border-neutral-200/80 pb-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-widest text-security-navy-700">
             {format(new Date(), "EEEE, MMMM d, yyyy")}
@@ -217,13 +217,13 @@ export default function DashboardPage() {
             Live snapshot of guards, sites, shifts, and tasks—filtered by your selection below.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           {canSites && (
-            <div className="relative" ref={siteFilterRef}>
+            <div className="relative w-full min-w-0 sm:w-auto" ref={siteFilterRef}>
               <button
                 type="button"
                 onClick={() => setSiteFilterOpen((o) => !o)}
-                className="flex w-full min-w-0 items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-neutral-900 shadow-sm hover:border-security-navy-300 hover:shadow-md transition-all sm:min-w-[220px] sm:w-auto rounded-xl border border-neutral-200 bg-white"
+                className="flex w-full min-w-0 items-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-left text-sm font-medium text-neutral-900 shadow-sm transition-all hover:border-security-navy-300 hover:shadow-md sm:min-w-[220px] sm:w-auto"
               >
                 <span className="truncate">
                   {selectedSiteIds.length === 0
@@ -266,7 +266,7 @@ export default function DashboardPage() {
             </div>
           )}
           <div
-            className="inline-flex rounded-full border border-neutral-200/90 bg-neutral-100/80 p-1 shadow-inner"
+            className="flex w-full min-w-0 rounded-full border border-neutral-200/90 bg-neutral-100/80 p-1 shadow-inner sm:inline-flex sm:w-auto"
             role="group"
             aria-label="Date range"
           >
@@ -275,7 +275,7 @@ export default function DashboardPage() {
                 key={r.value}
                 type="button"
                 onClick={() => setDateRange(r.value)}
-                className={`px-3.5 sm:px-5 py-2 text-sm font-semibold rounded-full transition-all ${dateRange === r.value ? "bg-security-navy-700 text-white shadow-md" : "text-neutral-700 hover:text-neutral-900 hover:bg-white/80"}`}
+                className={`min-w-0 flex-1 px-3 py-2 text-sm font-semibold rounded-full transition-all sm:flex-none sm:px-5 ${dateRange === r.value ? "bg-security-navy-700 text-white shadow-md" : "text-neutral-700 hover:text-neutral-900 hover:bg-white/80"}`}
               >
                 {r.label}
               </button>
@@ -284,17 +284,20 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 md:gap-3 py-3 md:py-4 shrink-0" aria-label="Key metrics">
+      <section
+        className="grid shrink-0 grid-cols-1 gap-2.5 py-3 min-[380px]:grid-cols-2 md:gap-3 md:py-4 lg:grid-cols-4"
+        aria-label="Key metrics"
+      >
         <KpiTile label="Peak on duty (week)" value={peakGuardsThisWeek} hint="From roster trend" />
         <KpiTile label="Active sites" value={data?.activeSitesCount ?? 0} />
         <KpiTile label="Tasks needing attention" value={taskUrgentCount} hint="Overdue + due today" />
         <KpiTile label="Open alerts" value={alertTally} />
       </section>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4 pb-1 flex-1 min-h-0 auto-rows-fr overflow-hidden">
+      <div className="grid min-h-0 min-w-0 grid-cols-1 gap-3 pb-4 max-lg:auto-rows-auto md:grid-cols-2 md:gap-4 xl:grid-cols-4 lg:flex-1 lg:auto-rows-fr lg:overflow-hidden lg:pb-1">
         {/* Row 1 */}
-        <DashboardCard title="Guards On Duty" className="h-full min-h-0">
-          <div className="flex-1 min-h-[120px] w-full">
+        <DashboardCard title="Guards On Duty" className="min-h-0 max-lg:min-h-[220px] lg:h-full">
+          <div className="min-h-[160px] w-full flex-1 max-lg:min-h-[200px] lg:min-h-[120px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={guardsByDay} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
@@ -306,7 +309,7 @@ export default function DashboardPage() {
           </div>
         </DashboardCard>
 
-        <DashboardCard title="Active Sites" className="h-full min-h-0">
+        <DashboardCard title="Active Sites" className="min-h-0 max-lg:min-h-[220px] lg:h-full">
           <div className="flex flex-col items-center justify-center flex-1 gap-2 py-1">
             <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-security-navy-50 to-white border border-security-navy-100 shadow-inner">
               <span className="text-3xl font-bold tabular-nums text-neutral-900 tracking-tight">{data?.activeSitesCount ?? 0}</span>
@@ -331,9 +334,9 @@ export default function DashboardPage() {
           </div>
         </DashboardCard>
 
-        <DashboardCard title="Active Guards Rostered" className="h-full min-h-0">
-          <div className="flex flex-col h-full gap-2">
-            <div className="flex-1 min-h-[100px] w-full">
+        <DashboardCard title="Active Guards Rostered" className="min-h-0 max-lg:min-h-[260px] lg:h-full">
+          <div className="flex h-full flex-col gap-2">
+            <div className="min-h-[140px] w-full flex-1 max-lg:min-h-[180px] lg:min-h-[100px]">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={shiftsOverTimeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
@@ -360,7 +363,7 @@ export default function DashboardPage() {
           </div>
         </DashboardCard>
 
-        <DashboardCard title="My Tasks" className="h-full min-h-0">
+        <DashboardCard title="My Tasks" className="min-h-0 max-lg:min-h-[220px] lg:h-full">
           <div className="space-y-2 text-sm flex-1">
             <div className="flex justify-between items-center rounded-xl bg-red-50/80 border border-red-100 px-3 py-2">
               <span className="font-medium text-neutral-900">Overdue</span>
@@ -383,9 +386,9 @@ export default function DashboardPage() {
         </DashboardCard>
 
         {/* Row 2 */}
-        <DashboardCard title="Team Member By Status" className="h-full min-h-0">
-          <div className="relative w-full flex-1 flex flex-col gap-2">
-            <div className="relative flex-1 min-h-[120px] flex items-center justify-center">
+        <DashboardCard title="Team Member By Status" className="min-h-0 max-lg:min-h-[280px] lg:h-full">
+          <div className="relative flex w-full flex-1 flex-col gap-2">
+            <div className="relative flex min-h-[160px] flex-1 items-center justify-center max-lg:min-h-[200px] lg:min-h-[120px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -434,8 +437,8 @@ export default function DashboardPage() {
           </div>
         </DashboardCard>
 
-        <DashboardCard title="Shift Scheduled Over Time" className="h-full min-h-0">
-          <div className="flex-1 min-h-[120px] w-full">
+        <DashboardCard title="Shift Scheduled Over Time" className="min-h-0 max-lg:min-h-[220px] lg:h-full">
+          <div className="min-h-[160px] w-full flex-1 max-lg:min-h-[200px] lg:min-h-[120px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={shiftsOverTimeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} barSize={40}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
@@ -447,7 +450,7 @@ export default function DashboardPage() {
           </div>
         </DashboardCard>
 
-        <DashboardCard title="Payroll Status" className="h-full min-h-0">
+        <DashboardCard title="Payroll Status" className="min-h-0 max-lg:min-h-[220px] lg:h-full">
           <div className="flex flex-col gap-2 flex-1">
             {canPayroll ? (
               <>
@@ -512,7 +515,7 @@ export default function DashboardPage() {
         </DashboardCard>
 
         {canWhatsApp ? (
-          <DashboardCard title="WhatsApp" className="h-full min-h-0">
+          <DashboardCard title="WhatsApp" className="min-h-0 max-lg:min-h-[240px] lg:h-full">
             <p className="text-xs text-neutral-600 mb-2 leading-relaxed">Message team members directly</p>
             <div className="space-y-1 flex-1 min-h-0 overflow-hidden">
               {whatsappContacts.length > 0 ? (
@@ -574,7 +577,7 @@ export default function DashboardPage() {
             </Link>
           </DashboardCard>
         ) : (
-          <DashboardCard title="WhatsApp" className="h-full min-h-0">
+          <DashboardCard title="WhatsApp" className="min-h-0 max-lg:min-h-[240px] lg:h-full">
             <p className="text-xs text-neutral-600 mb-3">Message team members directly</p>
             <p className="text-sm text-neutral-600 py-6 text-center rounded-xl bg-neutral-50 border border-dashed border-neutral-200">No access</p>
           </DashboardCard>
