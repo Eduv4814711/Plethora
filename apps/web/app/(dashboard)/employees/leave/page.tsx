@@ -86,7 +86,9 @@ export default function LeaveManagementPage() {
     authFetch("/employees?limit=500", token)
       .then((r) => r.json())
       .then((d) => {
-        const list = (d.data || []).filter((e: { status: string }) => ["active", "training", "hired"].includes(e.status));
+        const list = (d.data || []).filter((e: { status: string }) =>
+          ["active", "training", "hired", "reliever"].includes(e.status)
+        );
         setEmployees(list.map((e: { id: string; firstName: string; lastName: string; employeeNumber: string }) => ({
           id: e.id,
           firstName: e.firstName,

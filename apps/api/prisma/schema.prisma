@@ -212,6 +212,7 @@ enum EmployeeStatus {
   hired
   training
   active
+  reliever
   suspended
   offboarded
 }
@@ -235,6 +236,9 @@ model Site {
   rosterSiteRules            String?  @db.Text
   rosterDayShiftGender       String? // male | female | any — roster display only
   rosterNightShiftGender     String? // male | female | any
+  /// Minimum guards rostered on each day / night shift (auto-roster and coverage checks).
+  rosterDayShiftGuardsRequired   Int @default(1)
+  rosterNightShiftGuardsRequired Int @default(1)
   /// Extra lines on the shift roster sheet / PDF (operational notes).
   rosterSheetNotes           String?  @db.Text
   createdAt                  DateTime @default(now())

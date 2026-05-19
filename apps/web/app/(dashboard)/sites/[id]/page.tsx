@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
@@ -54,6 +54,8 @@ interface Site {
   rosterSheetNotes?: string | null;
   rosterDayShiftGender?: string | null;
   rosterNightShiftGender?: string | null;
+  rosterDayShiftGuardsRequired?: number;
+  rosterNightShiftGuardsRequired?: number;
   latitude?: number | string | null;
   longitude?: number | string | null;
   geofenceRadiusMeters?: number | null;
@@ -238,6 +240,16 @@ export default function SiteDetailPage() {
           </p>
           <SiteRosterSheetFields site={site} siteId={siteId} token={token!} canManage={canManage} onSaved={refresh} />
         </div>
+
+        <div className="border-t border-neutral-200 dark:border-neutral-700 pt-5">
+          <SiteGuardsAssignment
+            site={site}
+            siteId={siteId}
+            token={token!}
+            canManage={canManage}
+            onUpdated={refresh}
+          />
+        </div>
       </div>
 
       <div className="space-y-6">
@@ -343,6 +355,259 @@ export default function SiteDetailPage() {
 
 type RosterShiftGenderUi = "" | "male" | "female" | "any";
 
+const ROSTERABLE_GUARD_STATUSES = ["active", "training", "hired", "reliever"] as const;
+
+function guardMatchesSearch(guard: Guard, query: string): boolean {
+  const term = query.trim().toLowerCase();
+  if (!term) return true;
+  const haystack = `${guard.firstName} ${guard.lastName} ${guard.phone ?? ""}`.toLowerCase();
+  return haystack.includes(term);
+}
+
+function useSecurityGuards(token: string) {
+  const [guards, setGuards] = useState<(Guard & { employeeType?: string })[]>([]);
+  useEffect(() => {
+    if (!token) return;
+    authFetch("/employees?limit=500", token)
+      .then((r) => r.json())
+      .then((d) => {
+        const list = (d.data || []).filter(
+          (e: Guard & { employeeType?: string }) =>
+            (e.employeeType ?? "security") === "security" &&
+            ROSTERABLE_GUARD_STATUSES.includes(e.status as (typeof ROSTERABLE_GUARD_STATUSES)[number])
+        );
+        setGuards(
+          list.sort((a: Guard, b: Guard) =>
+            `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`)
+          )
+        );
+      })
+      .catch(console.error);
+  }, [token]);
+  return guards;
+}
+
+function SiteGuardsAssignment({
+  site,
+  siteId,
+  token,
+  canManage,
+  onUpdated,
+}: {
+  site: Site;
+  siteId: string;
+  token: string;
+  canManage: boolean;
+  onUpdated: () => void;
+}) {
+  const allGuards = useSecurityGuards(token);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dragOverZone, setDragOverZone] = useState<"site" | "pool" | null>(null);
+  const [dragged, setDragged] = useState<{ guard: Guard; source: "site" | "pool" } | null>(null);
+  const [guardSearch, setGuardSearch] = useState("");
+
+  const assignedIds = new Set(site.assignedGuards?.map((a) => a.employee.id) ?? []);
+  const assignedGuards: Guard[] = (site.assignedGuards ?? []).map((a) => a.employee);
+  const availableGuards = allGuards.filter((g) => !assignedIds.has(g.id));
+  const filteredAvailableGuards = useMemo(
+    () => availableGuards.filter((g) => guardMatchesSearch(g, guardSearch)),
+    [availableGuards, guardSearch]
+  );
+  const guardSearchActive = guardSearch.trim().length > 0;
+
+  const persistAssignment = async (employeeIds: string[]) => {
+    setError(null);
+    setSaving(true);
+    try {
+      const res = await authFetch(`/sites/${siteId}`, token, {
+        method: "PUT",
+        body: JSON.stringify({ assignedGuardIds: employeeIds }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof data.message === "string" ? data.message : data.error || "Failed to update site guards"
+        );
+      }
+      onUpdated();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update site guards");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addGuard = (guardId: string) => {
+    if (assignedIds.has(guardId)) return;
+    void persistAssignment([...assignedIds, guardId]);
+  };
+
+  const removeGuard = (guardId: string) => {
+    void persistAssignment([...assignedIds].filter((id) => id !== guardId));
+  };
+
+  const handleDropOnSite = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverZone(null);
+    if (!dragged || !canManage) return;
+    const { guard, source } = dragged;
+    setDragged(null);
+    if (source === "site") return;
+    addGuard(guard.id);
+  };
+
+  const handleDropOnPool = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverZone(null);
+    if (!dragged || !canManage) return;
+    const { guard, source } = dragged;
+    setDragged(null);
+    if (source === "pool") return;
+    removeGuard(guard.id);
+  };
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
+        <h3 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Site guards</h3>
+        {saving && (
+          <span className="text-xs text-neutral-500 dark:text-neutral-400">Saving…</span>
+        )}
+      </div>
+      <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4 max-w-2xl">
+        Drag guards into the site box to assign them here. Assigned guards are used for{" "}
+        <Link href="/rostering" className="font-medium text-orange-600 dark:text-orange-400 hover:underline">
+          auto-rostering
+        </Link>{" "}
+        on this site. You can still assign guards to individual posts below.
+      </p>
+      {error && (
+        <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
+          {error}
+        </div>
+      )}
+
+      {!canManage ? (
+        <div className="min-h-[72px] rounded-lg border border-dashed border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 p-3">
+          {assignedGuards.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {assignedGuards.map((g) => (
+                <GuardChip key={g.id} guard={g} draggable={false} onDragStart={() => {}} onDragEnd={() => {}} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">No guards assigned to this site.</p>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div>
+            <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+              Available guards (
+              {guardSearchActive
+                ? `${filteredAvailableGuards.length} of ${availableGuards.length}`
+                : availableGuards.length}
+              )
+            </p>
+            <input
+              type="search"
+              value={guardSearch}
+              onChange={(e) => setGuardSearch(e.target.value)}
+              placeholder="Search by name or phone…"
+              className="input-modern w-full text-sm mb-2"
+              aria-label="Search available guards"
+            />
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                setDragOverZone("pool");
+              }}
+              onDragLeave={() => setDragOverZone(null)}
+              onDrop={handleDropOnPool}
+              className={`min-h-[120px] max-h-52 overflow-y-auto rounded-lg p-3 transition-colors ${
+                dragOverZone === "pool"
+                  ? "bg-neutral-100 dark:bg-neutral-800 border-2 border-dashed border-neutral-400 dark:border-neutral-500"
+                  : "bg-neutral-50 dark:bg-neutral-800/50 border border-dashed border-neutral-200 dark:border-neutral-700"
+              }`}
+            >
+              {availableGuards.length === 0 ? (
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                  All rosterable guards are assigned to this site.
+                </p>
+              ) : filteredAvailableGuards.length === 0 ? (
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                  No guards match &quot;{guardSearch.trim()}&quot;.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {filteredAvailableGuards.map((g) => (
+                    <GuardChip
+                      key={g.id}
+                      guard={g}
+                      draggable
+                      isDragging={dragged?.guard.id === g.id}
+                      onDragStart={() => setDragged({ guard: g, source: "pool" })}
+                      onDragEnd={() => {
+                        setDragged(null);
+                        setDragOverZone(null);
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+              Assigned to this site ({assignedGuards.length})
+            </p>
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                setDragOverZone("site");
+              }}
+              onDragLeave={() => setDragOverZone(null)}
+              onDrop={handleDropOnSite}
+              className={`min-h-[120px] rounded-lg p-3 transition-colors ${
+                dragOverZone === "site"
+                  ? "bg-orange-50 dark:bg-orange-950/30 border-2 border-dashed border-orange-400 dark:border-orange-600"
+                  : "bg-orange-50/50 dark:bg-orange-950/20 border border-dashed border-orange-200 dark:border-orange-800/60"
+              }`}
+            >
+              {assignedGuards.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {assignedGuards.map((g) => (
+                    <GuardChip
+                      key={g.id}
+                      guard={g}
+                      draggable
+                      isDragging={dragged?.guard.id === g.id}
+                      onDragStart={() => setDragged({ guard: g, source: "site" })}
+                      onDragEnd={() => {
+                        setDragged(null);
+                        setDragOverZone(null);
+                      }}
+                      onRemove={() => removeGuard(g.id)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                  Drop guards here to assign them to this site.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SiteRosterSheetFields({
   site,
   siteId,
@@ -364,6 +629,12 @@ function SiteRosterSheetFields({
   );
   const [rules, setRules] = useState(site.rosterSiteRules ?? "");
   const [notes, setNotes] = useState(site.rosterSheetNotes ?? "");
+  const [dayGuardsRequired, setDayGuardsRequired] = useState(
+    String(site.rosterDayShiftGuardsRequired ?? 1)
+  );
+  const [nightGuardsRequired, setNightGuardsRequired] = useState(
+    String(site.rosterNightShiftGuardsRequired ?? 1)
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -373,11 +644,35 @@ function SiteRosterSheetFields({
     setNightGender((site.rosterNightShiftGender as RosterShiftGenderUi) || "");
     setRules(site.rosterSiteRules ?? "");
     setNotes(site.rosterSheetNotes ?? "");
-  }, [site.id, site.rosterSiteRules, site.rosterSheetNotes, site.rosterDayShiftGender, site.rosterNightShiftGender]);
+    setDayGuardsRequired(String(site.rosterDayShiftGuardsRequired ?? 1));
+    setNightGuardsRequired(String(site.rosterNightShiftGuardsRequired ?? 1));
+  }, [
+    site.id,
+    site.rosterSiteRules,
+    site.rosterSheetNotes,
+    site.rosterDayShiftGender,
+    site.rosterNightShiftGender,
+    site.rosterDayShiftGuardsRequired,
+    site.rosterNightShiftGuardsRequired,
+  ]);
 
   const save = async () => {
     setError(null);
     setSaving(true);
+    const dayCount = parseInt(dayGuardsRequired, 10);
+    const nightCount = parseInt(nightGuardsRequired, 10);
+    if (
+      !Number.isFinite(dayCount) ||
+      dayCount < 1 ||
+      dayCount > 50 ||
+      !Number.isFinite(nightCount) ||
+      nightCount < 1 ||
+      nightCount > 50
+    ) {
+      setError("Guards per shift must be a whole number from 1 to 50.");
+      setSaving(false);
+      return;
+    }
     try {
       const res = await authFetch(`/sites/${siteId}`, token, {
         method: "PUT",
@@ -386,6 +681,8 @@ function SiteRosterSheetFields({
           rosterSheetNotes: notes,
           rosterDayShiftGender: dayGender === "" ? null : dayGender,
           rosterNightShiftGender: nightGender === "" ? null : nightGender,
+          rosterDayShiftGuardsRequired: dayCount,
+          rosterNightShiftGuardsRequired: nightCount,
         }),
       });
       if (!res.ok) {
@@ -413,7 +710,8 @@ function SiteRosterSheetFields({
     const effectiveRules = rosterSiteRulesLines(
       site.rosterSiteRules,
       site.rosterDayShiftGender,
-      site.rosterNightShiftGender
+      site.rosterNightShiftGender,
+      site
     );
     return (
       <div className="space-y-3 text-sm text-neutral-600 dark:text-neutral-400">
@@ -494,7 +792,46 @@ function SiteRosterSheetFields({
           </div>
         </div>
         <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-1.5">
-          Choose a requirement per shift. &quot;Not specified&quot; skips that line on the sheet. Extra rules below are added after these lines.
+          Choose a requirement per shift. &quot;Not specified&quot; skips gender lines on the sheet. Extra rules below are added after these lines.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+          <div>
+            <label
+              htmlFor="roster-day-guards-required"
+              className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1"
+            >
+              Day shift — guards required
+            </label>
+            <input
+              id="roster-day-guards-required"
+              type="number"
+              min={1}
+              max={50}
+              value={dayGuardsRequired}
+              onChange={(e) => setDayGuardsRequired(e.target.value)}
+              className="input-modern w-full text-sm"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="roster-night-guards-required"
+              className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1"
+            >
+              Night shift — guards required
+            </label>
+            <input
+              id="roster-night-guards-required"
+              type="number"
+              min={1}
+              max={50}
+              value={nightGuardsRequired}
+              onChange={(e) => setNightGuardsRequired(e.target.value)}
+              className="input-modern w-full text-sm"
+            />
+          </div>
+        </div>
+        <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-1.5">
+          Used when generating the auto-roster plan. Each calendar day must reach these counts (pattern and gender rules still apply).
         </p>
       </div>
       <div>

@@ -49,7 +49,7 @@ function LoginForm() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
           <div>
             <label
               htmlFor="email"
@@ -59,12 +59,16 @@ function LoginForm() {
             </label>
             <input
               id="email"
+              name="plethora-login-email"
               type="email"
+              inputMode="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               className="input-modern"
-              placeholder="admin@quickbopha.com"
+              placeholder="you@company.com"
+              autoComplete="off"
+              spellCheck={false}
             />
           </div>
 
@@ -78,11 +82,13 @@ function LoginForm() {
             <div className="relative">
               <input
                 id="password"
+                name="plethora-login-password"
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 className="input-modern pr-12"
+                autoComplete="off"
               />
               <button
                 type="button"

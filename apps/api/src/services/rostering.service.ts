@@ -1,4 +1,4 @@
-import { addDays, getDay } from "date-fns";
+import { addDays, differenceInCalendarDays, getDay } from "date-fns";
 import { prisma } from "../lib/prisma.js";
 
 export class RosteringValidationError extends Error {
@@ -129,46 +129,92 @@ export function computeDatesFromPatternDual(
   const end = new Date(endDate.getTime());
 
   if (pattern === "3_on_3_off") {
-    const blocks: CustomBlock[] = [
-      { type: "day", count: 3 },
-      { type: "night", count: 3 },
-      { type: "off", count: 3 },
-    ];
-    result.push(...iterateBlocks(d, end, blocks));
-    return result;
+    return buildGuardPatternSchedule(d, end, dualPatternBlocks3On3Off(), 0);
   }
 
   if (pattern === "custom_builder" && customBlocks && customBlocks.length > 0) {
     const hasWork = customBlocks.some((b) => b.type === "day" || b.type === "night");
     if (!hasWork) return result;
-    result.push(...iterateBlocks(d, end, customBlocks));
-    return result;
+    return buildGuardPatternSchedule(d, end, customBlocks, 0);
   }
 
   return result;
 }
 
-function iterateBlocks(
-  start: Date,
-  end: Date,
+export function dualPatternBlocks3On3Off(): CustomBlock[] {
+  return [
+    { type: "day", count: 3 },
+    { type: "night", count: 3 },
+    { type: "off", count: 3 },
+  ];
+}
+
+/** Block index and day-within-block for a position in the cycle (0 .. cycleLength-1). */
+export function cyclePositionToBlockCursor(
+  blocks: CustomBlock[],
+  positionInCycle: number
+): { blockIdx: number; dayInBlock: number } {
+  const cycleLength = blocks.reduce((sum, b) => sum + b.count, 0);
+  if (cycleLength === 0) return { blockIdx: 0, dayInBlock: 0 };
+
+  const pos = ((positionInCycle % cycleLength) + cycleLength) % cycleLength;
+  let cursor = 0;
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i]!;
+    if (pos < cursor + block.count) {
+      return { blockIdx: i, dayInBlock: pos - cursor };
+    }
+    cursor += block.count;
+  }
+  return { blockIdx: 0, dayInBlock: 0 };
+}
+
+/** Shift preference at cycle position p(g,t) = ((t - offsetDays) mod L). */
+export function getShiftPreferenceFromBlocks(
+  dayIndexFromStart: number,
   blocks: CustomBlock[]
+): CustomBlockType {
+  const cycleLength = blocks.reduce((sum, b) => sum + b.count, 0);
+  if (cycleLength === 0) return "off";
+
+  const pos = ((dayIndexFromStart % cycleLength) + cycleLength) % cycleLength;
+  let cursor = 0;
+  for (const block of blocks) {
+    if (pos < cursor + block.count) {
+      return block.type;
+    }
+    cursor += block.count;
+  }
+  return "off";
+}
+
+/**
+ * Build shift dates for one guard from block pattern with phase offset o_g.
+ * Calendar day t uses position ((t - offsetDays) mod L) — same as the preference grid.
+ * Off blocks produce no entries (rest days).
+ */
+export function buildGuardPatternSchedule(
+  startDate: Date,
+  endDate: Date,
+  blocks: CustomBlock[],
+  offsetDays = 0
 ): DualPatternResult {
   const result: DualPatternResult = [];
-  let d = new Date(start);
-  let blockIdx = 0;
-  let dayInBlock = 0;
+  if (blocks.length === 0) return result;
+
+  const rangeStart = new Date(startDate);
+  rangeStart.setUTCHours(0, 0, 0, 0);
+  let d = new Date(rangeStart);
+  const end = new Date(endDate);
+  end.setUTCHours(23, 59, 59, 999);
 
   while (d <= end) {
-    const block = blocks[blockIdx];
-    if (block.type === "day") {
+    const t = differenceInCalendarDays(d, rangeStart);
+    const preference = getShiftPreferenceFromBlocks(t - offsetDays, blocks);
+    if (preference === "day") {
       result.push({ date: new Date(d), shiftType: "day" });
-    } else if (block.type === "night") {
+    } else if (preference === "night") {
       result.push({ date: new Date(d), shiftType: "night" });
-    }
-    dayInBlock++;
-    if (dayInBlock >= block.count) {
-      dayInBlock = 0;
-      blockIdx = (blockIdx + 1) % blocks.length;
     }
     d = addDays(d, 1);
   }
@@ -176,7 +222,7 @@ function iterateBlocks(
   return result;
 }
 
-const ROSTERABLE_STATUSES = ["active", "training", "hired"] as const;
+const ROSTERABLE_STATUSES = ["active", "training", "hired", "reliever"] as const;
 
 type SiteShiftGenderRule = "male" | "female" | "any";
 
@@ -245,8 +291,19 @@ export async function validateShiftAssignment(params: {
   endTime: Date;
   excludeShiftId?: string;
   allowRosterable?: boolean;
+  /** When false (default), employee must have a SiteAssignment for the post's site. */
+  allowUnassigned?: boolean;
 }): Promise<void> {
-  const { companyId, employeeId, postId, startTime, endTime, excludeShiftId, allowRosterable } = params;
+  const {
+    companyId,
+    employeeId,
+    postId,
+    startTime,
+    endTime,
+    excludeShiftId,
+    allowRosterable,
+    allowUnassigned,
+  } = params;
 
   const employee = await prisma.employee.findFirst({
     where: { id: employeeId, companyId },
@@ -259,7 +316,7 @@ export async function validateShiftAssignment(params: {
   const validStatuses: readonly string[] = allowRosterable ? ROSTERABLE_STATUSES : ["active"];
   if (!validStatuses.includes(employee.status)) {
     throw new RosteringValidationError(
-      `Employee must be ${allowRosterable ? "active, training, or hired" : "active"} to be assigned. Current status: ${employee.status}`
+      `Employee must be ${allowRosterable ? "active, training, hired, or reliever" : "active"} to be assigned. Current status: ${employee.status}`
     );
   }
 
@@ -274,6 +331,17 @@ export async function validateShiftAssignment(params: {
 
   if (post.site.companyId !== companyId) {
     throw new RosteringValidationError("Post does not belong to company");
+  }
+
+  if (!allowUnassigned) {
+    const siteAssignment = await prisma.siteAssignment.findFirst({
+      where: { siteId: post.siteId, employeeId },
+    });
+    if (!siteAssignment) {
+      throw new RosteringValidationError(
+        "Employee is not assigned to this site. Assign the guard to the site in Sites first."
+      );
+    }
   }
 
   assertSiteShiftGenderRule(employee.gender, post.site, post.shiftType);

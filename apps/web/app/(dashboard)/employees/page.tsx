@@ -79,6 +79,7 @@ const statusColors: Record<string, string> = {
   hired: "badge-neutral",
   training: "badge-warning",
   active: "badge-success",
+  reliever: "badge-success",
   suspended: "badge-error",
   offboarded: "badge-neutral opacity-75",
 };
@@ -86,9 +87,10 @@ const statusColors: Record<string, string> = {
 const VALID_TRANSITIONS: Record<string, string[]> = {
   applicant: ["hired"],
   hired: ["training", "offboarded"],
-  training: ["active", "offboarded"],
-  active: ["suspended", "offboarded"],
-  suspended: ["active", "offboarded"],
+  training: ["active", "reliever", "offboarded"],
+  active: ["suspended", "reliever", "offboarded"],
+  reliever: ["active", "suspended", "offboarded"],
+  suspended: ["active", "reliever", "offboarded"],
   offboarded: [],
 };
 
@@ -264,6 +266,7 @@ export default function EmployeesPage() {
             <option value="hired">Hired</option>
             <option value="training">Training</option>
             <option value="active">Active</option>
+            <option value="reliever">Reliever</option>
             <option value="suspended">Suspended</option>
             <option value="offboarded">Offboarded</option>
           </select>
@@ -964,6 +967,7 @@ function EmployeeForm({
               <option value="hired">Hired</option>
               <option value="training">Training</option>
               <option value="active">Active</option>
+              <option value="reliever">Reliever</option>
               <option value="suspended">Suspended</option>
               <option value="offboarded">Offboarded</option>
             </select>

@@ -37,6 +37,7 @@ function refineSiteGeofenceThreeOrNone(data: {
 }
 
 const ROSTER_SHIFT_GENDER = z.enum(["male", "female", "any"]).nullable().optional();
+const ROSTER_SHIFT_GUARDS_REQUIRED = z.number().int().min(1).max(50).optional();
 
 const createSiteSchema = z
   .object({
@@ -59,6 +60,8 @@ const createSiteSchema = z
     rosterSheetNotes: z.string().max(8000).optional(),
     rosterDayShiftGender: ROSTER_SHIFT_GENDER,
     rosterNightShiftGender: ROSTER_SHIFT_GENDER,
+    rosterDayShiftGuardsRequired: ROSTER_SHIFT_GUARDS_REQUIRED,
+    rosterNightShiftGuardsRequired: ROSTER_SHIFT_GUARDS_REQUIRED,
   })
   .superRefine((data, ctx) => {
     const g = refineSiteGeofenceThreeOrNone(data);
@@ -88,6 +91,8 @@ const updateSiteSchema = z
     rosterSheetNotes: z.string().max(8000).optional(),
     rosterDayShiftGender: ROSTER_SHIFT_GENDER,
     rosterNightShiftGender: ROSTER_SHIFT_GENDER,
+    rosterDayShiftGuardsRequired: ROSTER_SHIFT_GUARDS_REQUIRED,
+    rosterNightShiftGuardsRequired: ROSTER_SHIFT_GUARDS_REQUIRED,
   })
   .superRefine((data, ctx) => {
     const g = refineSiteGeofenceThreeOrNone(data);
@@ -149,6 +154,8 @@ export async function sitesRoutes(app: FastifyInstance) {
                       lastName: true,
                       status: true,
                       phone: true,
+                      gender: true,
+                      employeeType: true,
                     },
                   },
                 },
@@ -164,6 +171,8 @@ export async function sitesRoutes(app: FastifyInstance) {
                   lastName: true,
                   status: true,
                   phone: true,
+                  gender: true,
+                  employeeType: true,
                 },
               },
             },
@@ -218,6 +227,8 @@ export async function sitesRoutes(app: FastifyInstance) {
         rosterSheetNotes: d.rosterSheetNotes?.trim() ? d.rosterSheetNotes : undefined,
         rosterDayShiftGender: d.rosterDayShiftGender ?? undefined,
         rosterNightShiftGender: d.rosterNightShiftGender ?? undefined,
+        rosterDayShiftGuardsRequired: d.rosterDayShiftGuardsRequired ?? undefined,
+        rosterNightShiftGuardsRequired: d.rosterNightShiftGuardsRequired ?? undefined,
       },
     });
 
@@ -243,13 +254,15 @@ export async function sitesRoutes(app: FastifyInstance) {
             assignedGuards: {
               include: {
                 employee: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    status: true,
-                    phone: true,
-                  },
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  status: true,
+                  phone: true,
+                  gender: true,
+                  employeeType: true,
+                },
                 },
               },
             },
@@ -258,13 +271,15 @@ export async function sitesRoutes(app: FastifyInstance) {
         assignedGuards: {
           include: {
             employee: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                status: true,
-                phone: true,
-              },
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  status: true,
+                  phone: true,
+                  gender: true,
+                  employeeType: true,
+                },
             },
           },
         },
@@ -294,13 +309,15 @@ export async function sitesRoutes(app: FastifyInstance) {
             assignedGuards: {
               include: {
                 employee: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    status: true,
-                    phone: true,
-                  },
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  status: true,
+                  phone: true,
+                  gender: true,
+                  employeeType: true,
+                },
                 },
               },
             },
@@ -309,13 +326,15 @@ export async function sitesRoutes(app: FastifyInstance) {
         assignedGuards: {
           include: {
             employee: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                status: true,
-                phone: true,
-              },
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  status: true,
+                  phone: true,
+                  gender: true,
+                  employeeType: true,
+                },
             },
           },
         },
@@ -358,6 +377,8 @@ export async function sitesRoutes(app: FastifyInstance) {
       rosterSheetNotes,
       rosterDayShiftGender,
       rosterNightShiftGender,
+      rosterDayShiftGuardsRequired,
+      rosterNightShiftGuardsRequired,
       ...rest
     } = d;
 
@@ -378,6 +399,12 @@ export async function sitesRoutes(app: FastifyInstance) {
     }
     if (rosterNightShiftGender !== undefined) {
       rosterPatch.rosterNightShiftGender = rosterNightShiftGender;
+    }
+    if (rosterDayShiftGuardsRequired !== undefined) {
+      rosterPatch.rosterDayShiftGuardsRequired = rosterDayShiftGuardsRequired;
+    }
+    if (rosterNightShiftGuardsRequired !== undefined) {
+      rosterPatch.rosterNightShiftGuardsRequired = rosterNightShiftGuardsRequired;
     }
 
     const site = await prisma.site.update({
@@ -410,13 +437,15 @@ export async function sitesRoutes(app: FastifyInstance) {
             assignedGuards: {
               include: {
                 employee: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    status: true,
-                    phone: true,
-                  },
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  status: true,
+                  phone: true,
+                  gender: true,
+                  employeeType: true,
+                },
                 },
               },
             },
@@ -425,13 +454,15 @@ export async function sitesRoutes(app: FastifyInstance) {
         assignedGuards: {
           include: {
             employee: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                status: true,
-                phone: true,
-              },
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  status: true,
+                  phone: true,
+                  gender: true,
+                  employeeType: true,
+                },
             },
           },
         },
@@ -684,13 +715,15 @@ export async function sitesRoutes(app: FastifyInstance) {
       },
       include: {
         employee: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            status: true,
-            phone: true,
-          },
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  status: true,
+                  phone: true,
+                  gender: true,
+                  employeeType: true,
+                },
         },
       },
     });

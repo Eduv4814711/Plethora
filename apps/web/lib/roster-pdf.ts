@@ -3,6 +3,7 @@ import autoTable from "jspdf-autotable";
 import { format, parseISO } from "date-fns";
 import type { ShiftSheetRow } from "./shift-sheet-matrix";
 import { genderPdfLabel } from "./shift-sheet-matrix";
+import { formatPhoneForDisplay } from "./phone-format";
 import { rosterSiteRulesLines } from "./roster-site-rules-defaults";
 
 export interface RosterShift {
@@ -201,6 +202,8 @@ export interface ShiftRosterSheetPdfInput {
   rosterSheetNotes?: string | null;
   rosterDayShiftGender?: string | null;
   rosterNightShiftGender?: string | null;
+  rosterDayShiftGuardsRequired?: number | null;
+  rosterNightShiftGuardsRequired?: number | null;
 }
 
 const SUNDAY_HEADER: [number, number, number] = [249, 231, 159];
@@ -220,6 +223,8 @@ export function generateShiftRosterSheetPDF({
   rosterSheetNotes,
   rosterDayShiftGender,
   rosterNightShiftGender,
+  rosterDayShiftGuardsRequired,
+  rosterNightShiftGuardsRequired,
 }: ShiftRosterSheetPdfInput): Blob {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -275,7 +280,7 @@ export function generateShiftRosterSheetPDF({
       : rows.map((r) => {
           const g = genderPdfLabel(r.gender);
           const name = `${r.firstName} ${r.lastName}`;
-          const phone = (r.phone ?? "").trim() || "—";
+          const phone = formatPhoneForDisplay(r.phone) || "—";
           return [g, name, ...r.cells, phone];
         });
 
@@ -349,7 +354,10 @@ export function generateShiftRosterSheetPDF({
   footY += 3.5;
   doc.setFont("helvetica", "normal");
   doc.setTextColor(180, 40, 40);
-  const ruleLines = rosterSiteRulesLines(rosterSiteRules, rosterDayShiftGender, rosterNightShiftGender);
+  const ruleLines = rosterSiteRulesLines(rosterSiteRules, rosterDayShiftGender, rosterNightShiftGender, {
+    rosterDayShiftGuardsRequired,
+    rosterNightShiftGuardsRequired,
+  });
   const maxTextW = pageWidth - 2 * margin;
   const lineGap = 3.2;
   for (const para of ruleLines) {

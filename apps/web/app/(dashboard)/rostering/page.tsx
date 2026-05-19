@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
@@ -19,6 +20,7 @@ type BulkPattern =
 
 import { CustomPatternBuilder } from "./CustomPatternBuilder";
 import type { CustomBlock } from "./CustomPatternBuilder";
+import { RosterPlanPreview, type RosterPlan } from "./RosterPlanPreview";
 import { ShiftRosterSheet } from "./ShiftRosterSheet";
 import { buildShiftSheetRows, type ShiftSheetRow } from "@/lib/shift-sheet-matrix";
 import { DateInput } from "@/components/date-input";
@@ -30,6 +32,19 @@ import {
 } from "@/lib/site-shift-gender-rules";
 
 const DASHBOARD_MAIN_ID = "dashboard-main";
+
+async function parseApiJsonResponse(res: Response): Promise<Record<string, unknown>> {
+  const text = await res.text();
+  try {
+    return text ? (JSON.parse(text) as Record<string, unknown>) : {};
+  } catch {
+    const hint =
+      text.trimStart().startsWith("<") ? " (server returned HTML, not JSON)" : "";
+    throw new Error(
+      `Invalid response from server (${res.status})${hint}. Ensure the API is running and try again.`
+    );
+  }
+}
 
 function getRosteringModalContainer(): Element {
   return document.getElementById(DASHBOARD_MAIN_ID) ?? document.body;
@@ -72,14 +87,30 @@ interface Post {
   shiftType?: string | null;
 }
 
+interface SiteAssignedGuard {
+  id: string;
+  employee: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    status: string;
+    phone: string | null;
+    gender?: string | null;
+    employeeType?: string;
+  };
+}
+
 interface Site {
   id: string;
   name: string;
   posts: Post[];
+  assignedGuards?: SiteAssignedGuard[];
   rosterSiteRules?: string | null;
   rosterSheetNotes?: string | null;
   rosterDayShiftGender?: string | null;
   rosterNightShiftGender?: string | null;
+  rosterDayShiftGuardsRequired?: number;
+  rosterNightShiftGuardsRequired?: number;
 }
 
 const statusColors: Record<string, string> = {
@@ -136,6 +167,12 @@ export default function RosteringPage() {
   const [pdfPeriodEnd, setPdfPeriodEnd] = useState("");
   const [pdfPeriodError, setPdfPeriodError] = useState<string | null>(null);
   const [rosterView, setRosterView] = useState<"calendar" | "sheet">("calendar");
+  const [rosterPlan, setRosterPlan] = useState<RosterPlan | null>(null);
+  const [showRosterPlanModal, setShowRosterPlanModal] = useState(false);
+  const [generatingPlan, setGeneratingPlan] = useState(false);
+  const [applyingPlan, setApplyingPlan] = useState(false);
+  const [rosterPlanApplyError, setRosterPlanApplyError] = useState<string | null>(null);
+  const [staggerGuards, setStaggerGuards] = useState(true);
 
   const rosteredEmployees = useMemo(() => {
     const seen = new Set<string>();
@@ -299,6 +336,8 @@ export default function RosteringPage() {
         rosterSheetNotes: siteForPdf?.rosterSheetNotes,
         rosterDayShiftGender: siteForPdf?.rosterDayShiftGender,
         rosterNightShiftGender: siteForPdf?.rosterNightShiftGender,
+        rosterDayShiftGuardsRequired: siteForPdf?.rosterDayShiftGuardsRequired,
+        rosterNightShiftGuardsRequired: siteForPdf?.rosterNightShiftGuardsRequired,
       });
     };
 
@@ -382,6 +421,7 @@ export default function RosteringPage() {
   const { calendarDays, displayCells } = useMemo(() => {
     const start = startOfDay(parseISO(periodStart));
     const end = new Date(parseISO(periodEnd));
+    end.setHours(23, 59, 59, 999);
     const days: Date[] = [];
     let d = new Date(start);
     while (d <= end) {
@@ -425,20 +465,42 @@ export default function RosteringPage() {
     });
   }, [selectedSiteId, shifts, calendarDays, employees]);
 
-  const availableGuards = useMemo(
-    () =>
-      employees.filter(
+  const siteAssignedGuards = useMemo((): Employee[] => {
+    if (!selectedSiteId) return [];
+    const site = sites.find((s) => s.id === selectedSiteId);
+    if (!site?.assignedGuards?.length) return [];
+    return site.assignedGuards
+      .map((a) => {
+        const fromList = employees.find((e) => e.id === a.employee.id);
+        return {
+          id: a.employee.id,
+          firstName: a.employee.firstName,
+          lastName: a.employee.lastName,
+          status: a.employee.status,
+          gender: a.employee.gender ?? fromList?.gender,
+          employeeType: a.employee.employeeType ?? fromList?.employeeType,
+          phone: a.employee.phone ?? fromList?.phone,
+        };
+      })
+      .filter(
         (e) =>
-          e.employeeType === "security" &&
-          ["active", "training", "hired"].includes(e.status ?? "")
-      ),
-    [employees]
-  );
+          (e.employeeType ?? "security") === "security" &&
+          ["active", "training", "hired", "reliever"].includes(e.status ?? "")
+      );
+  }, [selectedSiteId, sites, employees]);
+
+  const rosteredOnSiteCount = useMemo(() => {
+    if (!selectedSiteId) return rosteredEmployees.length;
+    const ids = new Set(
+      shifts.filter((s) => s.post.site.id === selectedSiteId).map((s) => s.employee.id)
+    );
+    return ids.size;
+  }, [selectedSiteId, shifts, rosteredEmployees.length]);
 
   const filteredAvailableGuards = useMemo(() => {
     const term = guardSearch.trim().toLowerCase();
-    if (!term) return availableGuards;
-    return availableGuards.filter((g) => {
+    if (!term) return siteAssignedGuards;
+    return siteAssignedGuards.filter((g) => {
       const fullName = `${g.firstName} ${g.lastName}`.toLowerCase();
       return (
         fullName.includes(term) ||
@@ -446,7 +508,7 @@ export default function RosteringPage() {
         g.lastName.toLowerCase().includes(term)
       );
     });
-  }, [availableGuards, guardSearch]);
+  }, [siteAssignedGuards, guardSearch]);
 
   const postsForSelectedSite = useMemo(() => {
     if (!selectedSiteId) return [];
@@ -513,6 +575,87 @@ export default function RosteringPage() {
       }
     } catch (err) {
       setBulkError(err instanceof Error ? err.message : "Failed to create shifts");
+    }
+  };
+
+  const canGenerateRosterPlan =
+    !!selectedSiteId &&
+    isDualPattern &&
+    siteAssignedGuards.length > 0 &&
+    !!periodStart &&
+    !!periodEnd &&
+    parseISO(periodEnd) >= parseISO(periodStart);
+
+  const handleGenerateRosterPlan = async () => {
+    if (!token || !selectedSiteId || !isDualPattern) return;
+    setGeneratingPlan(true);
+    setBulkError(null);
+    setRosterPlanApplyError(null);
+    const { startDate, endDate } = getDateRangeParams();
+    const body: Record<string, unknown> = {
+      siteId: selectedSiteId,
+      startDate: startDate.slice(0, 10),
+      endDate: endDate.slice(0, 10),
+      pattern,
+    };
+    if (pattern === "custom_builder") body.customBlocks = customBlocks;
+    body.options = { staggerGuards };
+    try {
+      const res = await authFetch("/shifts/roster/preview", token, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      const data = await parseApiJsonResponse(res);
+      if (!res.ok) {
+        throw new Error(
+          String(data.message || data.error || "Failed to generate roster plan")
+        );
+      }
+      setRosterPlan(data as RosterPlan);
+      setShowRosterPlanModal(true);
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : "Failed to generate roster plan");
+    } finally {
+      setGeneratingPlan(false);
+    }
+  };
+
+  const handleApplyRosterPlan = async () => {
+    if (!token || !rosterPlan) return;
+    setApplyingPlan(true);
+    setRosterPlanApplyError(null);
+    try {
+      const res = await authFetch("/shifts/roster/apply", token, {
+        method: "POST",
+        body: JSON.stringify({
+          plan: rosterPlan,
+          options: { replaceExisting: true },
+        }),
+      });
+      const data = await parseApiJsonResponse(res);
+      if (!res.ok) {
+        throw new Error(String(data.message || data.error || "Failed to apply roster plan"));
+      }
+      setShowRosterPlanModal(false);
+      setRosterPlan(null);
+      await refresh();
+      const deleted = Number(data.deleted ?? 0);
+      const created = Number(data.created ?? 0);
+      const skipped = Number(data.skipped ?? 0);
+      const applyErrors = Array.isArray(data.errors) ? (data.errors as string[]) : [];
+      const msg =
+        deleted > 0
+          ? `Replaced ${deleted} shift(s) and created ${created}.`
+          : `Created ${created} shift(s).`;
+      setBulkError(msg);
+      setTimeout(() => setBulkError(null), 5000);
+      if (applyErrors.length) {
+        setBulkError(`${msg} ${skipped} skipped: ${applyErrors.slice(0, 2).join("; ")}`);
+      }
+    } catch (err) {
+      setRosterPlanApplyError(err instanceof Error ? err.message : "Failed to apply roster plan");
+    } finally {
+      setApplyingPlan(false);
     }
   };
 
@@ -722,6 +865,43 @@ export default function RosteringPage() {
             )}
           </div>
 
+          {isDualPattern && selectedSiteId && (
+            <div className="rounded-xl border border-orange-200/90 dark:border-orange-800/50 bg-orange-50/50 dark:bg-orange-950/20 p-3.5 space-y-2">
+              <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700 dark:text-neutral-200">
+                Step 4: Generate Roster
+              </h3>
+              <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-snug">
+                Build a site-wide plan for all guards assigned to this site, preview it, then apply in one step.
+              </p>
+              <label className="flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={staggerGuards}
+                  onChange={(e) => setStaggerGuards(e.target.checked)}
+                  className="rounded border-neutral-300 dark:border-neutral-600"
+                />
+                Stagger guard cycles (spread phases across the full pattern, e.g. 0 / 3 / 6 days for 3D3N3O)
+              </label>
+              <button
+                type="button"
+                onClick={handleGenerateRosterPlan}
+                disabled={!canGenerateRosterPlan || generatingPlan}
+                className="w-full btn-primary py-2.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {generatingPlan ? "Generating…" : "Generate roster plan"}
+              </button>
+              {!canGenerateRosterPlan && siteAssignedGuards.length === 0 && (
+                <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
+                  Assign guards to this site in{" "}
+                  <Link href="/sites" className="text-orange-700 dark:text-orange-300 underline">
+                    Sites
+                  </Link>{" "}
+                  first.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="rounded-xl border border-neutral-200/90 dark:border-neutral-700 bg-neutral-50/90 dark:bg-neutral-800/70 p-3.5 space-y-2">
             <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-600 dark:text-neutral-300">
               Quick Summary
@@ -736,8 +916,16 @@ export default function RosteringPage() {
                 <span className="font-medium text-neutral-800 dark:text-neutral-100">{PATTERN_LABELS[pattern]}</span>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-neutral-500 dark:text-neutral-400">Guards assigned</span>
-                <span className="font-medium text-neutral-800 dark:text-neutral-100">{rosteredEmployees.length}</span>
+                <span className="text-neutral-500 dark:text-neutral-400">Guards on site</span>
+                <span className="font-medium text-neutral-800 dark:text-neutral-100">
+                  {selectedSiteId ? siteAssignedGuards.length : "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-neutral-500 dark:text-neutral-400">Rostered this period</span>
+                <span className="font-medium text-neutral-800 dark:text-neutral-100">
+                  {selectedSiteId ? rosteredOnSiteCount : rosteredEmployees.length}
+                </span>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-neutral-500 dark:text-neutral-400">Total shifts</span>
@@ -753,11 +941,16 @@ export default function RosteringPage() {
                 <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-600 dark:text-neutral-300 mb-2">
                   Step 3: Assign Guard
                 </h3>
+                {isDualPattern && (
+                  <p className="text-[10px] text-neutral-500 dark:text-neutral-400 mb-2 leading-snug">
+                    Or use Step 4 to roster all site guards at once. Drag-and-drop below still works for one guard.
+                  </p>
+                )}
               </div>
               {isDualPattern ? (
                 <div className="rounded-xl border border-dashed border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900/50 p-3">
                   <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">
-                    Drag a guard onto this site to auto-fill the selected period.
+                    Drag a guard onto this site to auto-fill the selected period for that guard only.
                   </p>
                   <div
                     onDragOver={(e) => {
@@ -822,8 +1015,11 @@ export default function RosteringPage() {
               )}
               <div className="rounded-xl border border-neutral-200/90 dark:border-neutral-700 bg-white dark:bg-neutral-900/60 p-3">
                 <h4 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-600 dark:text-neutral-300 mb-2">
-                  Available Guards
+                  Site Guards
                 </h4>
+                <p className="text-[10px] text-neutral-500 dark:text-neutral-400 mb-2 leading-snug">
+                  Only guards assigned to this site in Sites appear here.
+                </p>
                 {isDualPattern && selectedSite && siteHasRestrictiveShiftGenderRules(selectedSite) && (
                   <p className="text-[10px] text-neutral-500 dark:text-neutral-400 mb-2 leading-snug">
                     {pattern === "custom_builder" ? (
@@ -895,7 +1091,21 @@ export default function RosteringPage() {
                   })}
                   {filteredAvailableGuards.length === 0 && (
                     <p className="text-xs text-neutral-500 py-2">
-                      {guardSearch.trim() ? "No guards match your search" : "No guards available"}
+                      {guardSearch.trim() ? (
+                        "No guards match your search"
+                      ) : siteAssignedGuards.length === 0 ? (
+                        <>
+                          No guards assigned to this site.{" "}
+                          <Link
+                            href="/sites"
+                            className="text-orange-700 dark:text-orange-300 underline hover:no-underline"
+                          >
+                            Assign guards in Sites
+                          </Link>
+                        </>
+                      ) : (
+                        "No guards available"
+                      )}
                     </p>
                   )}
                 </div>
@@ -1327,6 +1537,33 @@ export default function RosteringPage() {
           getRosteringModalContainer()
         )}
 
+        {showRosterPlanModal &&
+          rosterPlan &&
+          createPortal(
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+              <div className="card-wireframe w-full max-w-2xl shadow-xl overflow-hidden">
+                <RosterPlanPreview
+                  plan={rosterPlan}
+                  siteName={selectedSite?.name ?? "Site"}
+                  periodLabel={periodLabel}
+                  guards={siteAssignedGuards}
+                  posts={postsForSelectedSite}
+                  onCancel={() => {
+                    if (!applyingPlan) {
+                      setShowRosterPlanModal(false);
+                      setRosterPlan(null);
+                      setRosterPlanApplyError(null);
+                    }
+                  }}
+                  onApply={handleApplyRosterPlan}
+                  applying={applyingPlan}
+                  applyError={rosterPlanApplyError}
+                />
+              </div>
+            </div>,
+            getRosteringModalContainer()
+          )}
+
         {showForm && (
           <div className="mt-4">
             <ShiftForm
@@ -1582,6 +1819,12 @@ export default function RosteringPage() {
               rosterSheetNotes={sites.find((s) => s.id === selectedSiteId)?.rosterSheetNotes}
               rosterDayShiftGender={sites.find((s) => s.id === selectedSiteId)?.rosterDayShiftGender}
               rosterNightShiftGender={sites.find((s) => s.id === selectedSiteId)?.rosterNightShiftGender}
+              rosterDayShiftGuardsRequired={
+                sites.find((s) => s.id === selectedSiteId)?.rosterDayShiftGuardsRequired
+              }
+              rosterNightShiftGuardsRequired={
+                sites.find((s) => s.id === selectedSiteId)?.rosterNightShiftGuardsRequired
+              }
             />
           </div>
         ) : (

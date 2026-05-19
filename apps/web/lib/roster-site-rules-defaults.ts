@@ -23,16 +23,29 @@ function lineForShift(shiftLabel: "Day" | "Night", g: RosterShiftGender): string
  * Lines shown under “Site rules” on the shift sheet and PDF: shift gender lines first, then custom text lines.
  * Falls back to defaults only when nothing is configured.
  */
+function clampStaffing(n: number | null | undefined): number {
+  return Math.min(50, Math.max(1, Math.floor(Number(n) || 1)));
+}
+
 export function rosterSiteRulesLines(
   rosterSiteRules: string | null | undefined,
   rosterDayShiftGender?: string | null,
-  rosterNightShiftGender?: string | null
+  rosterNightShiftGender?: string | null,
+  staffing?: {
+    rosterDayShiftGuardsRequired?: number | null;
+    rosterNightShiftGuardsRequired?: number | null;
+  }
 ): string[] {
   const fromShifts: string[] = [];
   const day = normalizeShiftGender(rosterDayShiftGender);
   const night = normalizeShiftGender(rosterNightShiftGender);
   if (day) fromShifts.push(lineForShift("Day", day));
   if (night) fromShifts.push(lineForShift("Night", night));
+
+  const dayGuards = clampStaffing(staffing?.rosterDayShiftGuardsRequired);
+  const nightGuards = clampStaffing(staffing?.rosterNightShiftGuardsRequired);
+  fromShifts.push(`Day shift: ${dayGuards} guard(s) required per day.`);
+  fromShifts.push(`Night shift: ${nightGuards} guard(s) required per day.`);
 
   const custom = rosterSiteRules?.trim()
     ? rosterSiteRules

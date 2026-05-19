@@ -60,7 +60,9 @@ const createEmployeeSchema = z.object({
   lastName: z.string().min(1),
   idNumber: optionalString,
   phone: optionalString.transform((v) => (v && v.trim() ? normalizePhoneForStorage(v) : undefined)),
-  status: z.enum(["applicant", "hired", "training", "active", "suspended", "offboarded"]).default("applicant"),
+  status: z
+    .enum(["applicant", "hired", "training", "active", "reliever", "suspended", "offboarded"])
+    .default("applicant"),
   hourlyRate: z.number().positive().optional(),
   monthlySalary: z.number().positive().optional(),
   gradeId: z.string().optional().nullable(),
@@ -122,7 +124,7 @@ const updateEmployeeSchema = createEmployeeSchema.partial().extend({
   employeeNumber: z.string().min(1).max(50).optional(),
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
-  status: z.enum(["applicant", "hired", "training", "active", "suspended", "offboarded"]).optional(),
+  status: z.enum(["applicant", "hired", "training", "active", "reliever", "suspended", "offboarded"]).optional(),
   hourlyRate: z.number().positive().optional().nullable(),
   monthlySalary: z.number().positive().optional().nullable(),
   gradeId: z.string().optional().nullable(),
@@ -137,7 +139,7 @@ const updateEmployeeSchema = createEmployeeSchema.partial().extend({
 });
 
 const statusTransitionSchema = z.object({
-  status: z.enum(["applicant", "hired", "training", "active", "suspended", "offboarded"]),
+  status: z.enum(["applicant", "hired", "training", "active", "reliever", "suspended", "offboarded"]),
 });
 
 export async function employeesRoutes(app: FastifyInstance) {

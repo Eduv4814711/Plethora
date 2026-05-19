@@ -348,7 +348,9 @@ function useGuards(token: string) {
       .then((r) => r.json())
       .then((d) => {
         const list = (d.data || []).filter(
-          (e: Guard) => e.employeeType === "security" && ["active", "training", "hired"].includes(e.status)
+          (e: Guard) =>
+            e.employeeType === "security" &&
+            ["active", "training", "hired", "reliever"].includes(e.status)
         );
         setGuards(list);
       })

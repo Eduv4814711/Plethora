@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { format } from "date-fns";
 import type { ShiftSheetRow } from "@/lib/shift-sheet-matrix";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 import { rosterSiteRulesLines } from "@/lib/roster-site-rules-defaults";
 
 export type { ShiftSheetRow } from "@/lib/shift-sheet-matrix";
@@ -21,6 +22,8 @@ export function ShiftRosterSheet({
   rosterSheetNotes,
   rosterDayShiftGender,
   rosterNightShiftGender,
+  rosterDayShiftGuardsRequired,
+  rosterNightShiftGuardsRequired,
 }: {
   siteName: string;
   periodLabel: string;
@@ -33,9 +36,14 @@ export function ShiftRosterSheet({
   rosterSheetNotes?: string | null;
   rosterDayShiftGender?: string | null;
   rosterNightShiftGender?: string | null;
+  rosterDayShiftGuardsRequired?: number | null;
+  rosterNightShiftGuardsRequired?: number | null;
 }) {
   const sortedSites = [...sites].sort((a, b) => a.name.localeCompare(b.name));
-  const rulesDisplay = rosterSiteRulesLines(rosterSiteRules, rosterDayShiftGender, rosterNightShiftGender);
+  const rulesDisplay = rosterSiteRulesLines(rosterSiteRules, rosterDayShiftGender, rosterNightShiftGender, {
+    rosterDayShiftGuardsRequired,
+    rosterNightShiftGuardsRequired,
+  });
   const notesTrimmed = rosterSheetNotes?.trim() ?? "";
 
   return (
@@ -172,7 +180,7 @@ export function ShiftRosterSheet({
                         );
                       })}
                       <td className="col-contact border border-neutral-300 px-2 py-2 text-center text-[11px] font-medium text-neutral-600 dark:border-neutral-600 dark:text-neutral-400 print:border-neutral-400 print:text-neutral-700">
-                        {row.phone?.trim() ? row.phone : "—"}
+                        {formatPhoneForDisplay(row.phone) || "—"}
                       </td>
                     </tr>
                   ))

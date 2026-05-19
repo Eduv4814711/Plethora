@@ -2,7 +2,7 @@
 CREATE TYPE "UserRole" AS ENUM ('admin', 'operations_manager', 'hr_payroll', 'supervisor', 'controller');
 
 -- CreateEnum
-CREATE TYPE "EmployeeStatus" AS ENUM ('applicant', 'hired', 'training', 'active', 'suspended', 'offboarded');
+CREATE TYPE "EmployeeStatus" AS ENUM ('applicant', 'hired', 'training', 'active', 'reliever', 'suspended', 'offboarded');
 
 -- CreateEnum
 CREATE TYPE "ShiftStatus" AS ENUM ('created', 'assigned', 'active', 'completed', 'verified');
@@ -201,6 +201,8 @@ CREATE TABLE "Site" (
     "rosterSiteRules" TEXT,
     "rosterDayShiftGender" TEXT,
     "rosterNightShiftGender" TEXT,
+    "rosterDayShiftGuardsRequired" INTEGER NOT NULL DEFAULT 1,
+    "rosterNightShiftGuardsRequired" INTEGER NOT NULL DEFAULT 1,
     "rosterSheetNotes" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,

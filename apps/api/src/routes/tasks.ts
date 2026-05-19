@@ -95,7 +95,7 @@ export async function tasksRoutes(app: FastifyInstance) {
         select: { id: true, name: true, email: true, role: true },
       }),
       prisma.employee.findMany({
-        where: { companyId: user.companyId, status: { in: ["active", "training", "hired"] } },
+        where: { companyId: user.companyId, status: { in: ["active", "training", "hired", "reliever"] } },
         select: { id: true, firstName: true, lastName: true, employeeType: true },
       }),
     ]);

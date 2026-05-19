@@ -1,5 +1,4 @@
 import type { FastifyInstance } from "fastify";
-import type { Post } from "@prisma/client";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
@@ -13,6 +12,14 @@ import {
   meetsSiteShiftGenderRule,
   type BulkPattern,
 } from "../services/rostering.service.js";
+import {
+  generateRosterPlan,
+  applyRosterPlan,
+  buildEmployeePostAssignmentMap,
+  resolvePostForShiftSlot,
+  type PostWithAssignments,
+  type RosterPlan,
+} from "../services/roster-engine.service.js";
 import { createAuditLog } from "../lib/audit.js";
 import { getCompanyTimezone, getShiftTimes, parseDateOnly, parseDateOnlyEnd } from "../lib/timezone.js";
 
@@ -101,23 +108,30 @@ async function handleBulkCreateSite(
 ) {
   const site = await prisma.site.findFirst({
     where: { id: siteId, companyId },
-    include: { posts: true },
+    include: {
+      posts: {
+        include: {
+          assignedGuards: { select: { employeeId: true } },
+        },
+      },
+    },
   });
 
   if (!site) {
     return reply.code(404).send({ error: "Site not found" });
   }
 
-  const dayPost = site.posts.find((p: Post) => (p.shiftType ?? "day") === "day");
-  const nightPost = site.posts.find((p: Post) => p.shiftType === "night");
+  const postsWithAssignments = site.posts as PostWithAssignments[];
+  const dayPosts = postsWithAssignments.filter((p) => (p.shiftType ?? "day") === "day");
+  const nightPosts = postsWithAssignments.filter((p) => p.shiftType === "night");
 
-  if (!dayPost) {
+  if (dayPosts.length === 0) {
     return reply.code(400).send({
       error: "Site has no day post",
       message: "Add a day post to use this pattern.",
     });
   }
-  if (!nightPost) {
+  if (nightPosts.length === 0) {
     return reply.code(400).send({
       error: "Site has no night post",
       message: "Add a night post to use this pattern.",
@@ -134,12 +148,15 @@ async function handleBulkCreateSite(
   }
 
   const timeZone = await getCompanyTimezone(companyId);
+  const sitePostIds = postsWithAssignments.map((p) => p.id);
+  const postAssignmentByEmployee = buildEmployeePostAssignmentMap(postsWithAssignments);
+  const roundRobin = { day: 0, night: 0 };
 
   const deleted = await prisma.shift.deleteMany({
     where: {
       companyId,
       employeeId,
-      postId: { in: [dayPost.id, nightPost.id] },
+      postId: { in: sitePostIds },
       status: { in: ["created", "assigned"] },
       startTime: { lt: end },
       endTime: { gt: start },
@@ -150,7 +167,14 @@ async function handleBulkCreateSite(
   const errors: string[] = [];
 
   for (const { date, shiftType } of dualDates) {
-    const post = shiftType === "day" ? dayPost : nightPost;
+    const post = resolvePostForShiftSlot({
+      employeeId,
+      shiftType,
+      dayPosts,
+      nightPosts,
+      assignmentByEmployee: postAssignmentByEmployee,
+      roundRobin,
+    });
     const { shiftStart, shiftEnd } = getShiftTimes(date, shiftType, timeZone);
 
     try {
@@ -161,6 +185,7 @@ async function handleBulkCreateSite(
         startTime: shiftStart,
         endTime: shiftEnd,
         allowRosterable: true,
+        allowUnassigned: false,
       });
     } catch (err) {
       if (err instanceof RosteringValidationError) {
@@ -234,14 +259,14 @@ export async function shiftsRoutes(app: FastifyInstance) {
       where.post = { siteId };
     }
     if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
+      const start = parseDateOnly(startDate.slice(0, 10));
+      const end = parseDateOnlyEnd(endDate.slice(0, 10));
       where.startTime = { lt: end };
       where.endTime = { gt: start };
     } else if (startDate) {
-      where.endTime = { gt: new Date(startDate) };
+      where.endTime = { gt: parseDateOnly(startDate.slice(0, 10)) };
     } else if (endDate) {
-      where.startTime = { lt: new Date(endDate) };
+      where.startTime = { lt: parseDateOnlyEnd(endDate.slice(0, 10)) };
     }
 
     const [shifts, total] = await Promise.all([
@@ -472,6 +497,7 @@ export async function shiftsRoutes(app: FastifyInstance) {
           startTime: shiftStart,
           endTime: shiftEnd,
           allowRosterable: true,
+          allowUnassigned: false,
         });
       } catch (err) {
         if (err instanceof RosteringValidationError) {
@@ -514,6 +540,259 @@ export async function shiftsRoutes(app: FastifyInstance) {
     });
   });
 
+  const rosterPreviewSchema = z.object({
+    siteId: z.string().min(1),
+    startDate: z.string(),
+    endDate: z.string(),
+    pattern: z.enum(["3_on_3_off", "custom_builder"]),
+    customBlocks: z.array(customBlockSchema).optional(),
+    options: z
+      .object({
+        staggerGuards: z.boolean().optional(),
+      })
+      .optional(),
+  });
+
+  app.post("/roster/preview", { preHandler: protect }, async (request, reply) => {
+    const parsed = rosterPreviewSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const companyId = request.user!.companyId;
+    const { siteId, startDate, endDate, pattern, customBlocks, options } = parsed.data;
+
+    const start = parseDateOnly(startDate.slice(0, 10));
+    const end = parseDateOnlyEnd(endDate.slice(0, 10));
+
+    if (start > end) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "endDate must be on or after startDate",
+      });
+    }
+
+    if (pattern === "custom_builder" && (!customBlocks || customBlocks.length === 0)) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "customBlocks required when pattern is custom_builder",
+      });
+    }
+
+    const site = await prisma.site.findFirst({
+      where: { id: siteId, companyId },
+      include: {
+        assignedGuards: {
+          include: {
+            employee: {
+              select: { id: true, status: true, employeeType: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!site) {
+      return reply.code(404).send({ error: "Site not found" });
+    }
+
+    const rosterableCount = site.assignedGuards.filter((a) => {
+      const e = a.employee;
+      return (
+        (e.employeeType ?? "security") === "security" &&
+        ["active", "training", "hired", "reliever"].includes(e.status)
+      );
+    }).length;
+
+    if (rosterableCount === 0) {
+      return reply.code(400).send({
+        error: "No site guards",
+        message: "Assign guards to this site in Sites first.",
+      });
+    }
+
+    try {
+      const plan = await generateRosterPlan({
+        companyId,
+        siteId,
+        startDate: start,
+        endDate: end,
+        pattern,
+        customBlocks,
+        options,
+      });
+      return reply.send(plan);
+    } catch (err) {
+      if (err instanceof Error && err.message === "SITE_NOT_FOUND") {
+        return reply.code(404).send({ error: "Site not found" });
+      }
+      throw err;
+    }
+  });
+
+  const rosterPlanEntrySchema = z.object({
+    employeeId: z.string().min(1),
+    postId: z.string().min(1),
+    startTime: z.string().datetime(),
+    endTime: z.string().datetime(),
+    shiftType: z.enum(["day", "night"]),
+  });
+
+  const rosterPlanSchema = z.object({
+    siteId: z.string().min(1),
+    pattern: z.enum(["3_on_3_off", "custom_builder"]),
+    startDate: z.string(),
+    endDate: z.string(),
+    entries: z.array(rosterPlanEntrySchema),
+    summary: z
+      .object({
+        guardsConsidered: z.number(),
+        shiftsPlanned: z.number(),
+        postsUsed: z.number(),
+        skippedGuardDays: z.number(),
+        uncoveredDays: z.number().optional(),
+        fairnessSpread: z
+          .object({
+            maxDayMinusMinDay: z.number(),
+            maxNightMinusMinNight: z.number(),
+            maxSundayMinusMinSunday: z.number(),
+          })
+          .optional(),
+      })
+      .optional(),
+    guardStats: z
+      .array(
+        z.object({
+          employeeId: z.string(),
+          dayCount: z.number(),
+          nightCount: z.number(),
+          offCount: z.number(),
+          sundayCount: z.number(),
+          weekendCount: z.number(),
+        })
+      )
+      .optional(),
+    warnings: z
+      .array(
+        z.object({
+          code: z.string(),
+          message: z.string(),
+          employeeId: z.string().optional(),
+          postId: z.string().optional(),
+          date: z.string().optional(),
+        })
+      )
+      .optional(),
+    conflicts: z
+      .array(
+        z.object({
+          employeeId: z.string(),
+          date: z.string(),
+          reason: z.string(),
+        })
+      )
+      .default([]),
+    guardCycleOffsets: z
+      .array(
+        z.object({
+          employeeId: z.string(),
+          offsetDays: z.number(),
+        })
+      )
+      .optional(),
+  });
+
+  const rosterApplySchema = z.object({
+    plan: rosterPlanSchema,
+    options: z
+      .object({
+        replaceExisting: z.boolean().optional(),
+        force: z.boolean().optional(),
+      })
+      .optional(),
+  });
+
+  const defaultFairnessSpread: RosterPlan["summary"]["fairnessSpread"] = {
+    maxDayMinusMinDay: 0,
+    maxNightMinusMinNight: 0,
+    maxSundayMinusMinSunday: 0,
+  };
+
+  function normalizeRosterPlanSummary(
+    summary: z.infer<typeof rosterPlanSchema>["summary"],
+    entryCount: number
+  ): RosterPlan["summary"] {
+    return {
+      guardsConsidered: summary?.guardsConsidered ?? 0,
+      shiftsPlanned: summary?.shiftsPlanned ?? entryCount,
+      postsUsed: summary?.postsUsed ?? 0,
+      skippedGuardDays: summary?.skippedGuardDays ?? 0,
+      uncoveredDays: summary?.uncoveredDays ?? 0,
+      fairnessSpread: summary?.fairnessSpread ?? defaultFairnessSpread,
+    };
+  }
+
+  app.post("/roster/apply", { preHandler: protect }, async (request, reply) => {
+    const parsed = rosterApplySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const companyId = request.user!.companyId;
+    const userId = request.user!.sub;
+    const { plan, options } = parsed.data;
+
+    try {
+      const result = await applyRosterPlan({
+        companyId,
+        userId,
+        plan: {
+          ...plan,
+          summary: normalizeRosterPlanSummary(plan.summary, plan.entries.length),
+          guardCycleOffsets: plan.guardCycleOffsets ?? [],
+          warnings: plan.warnings ?? [],
+        },
+        options,
+      });
+      return reply.code(201).send(result);
+    } catch (err) {
+      request.log.error({ err }, "roster apply failed");
+      if (err instanceof Error) {
+        if (err.message === "SITE_NOT_FOUND") {
+          return reply.code(404).send({ error: "Site not found" });
+        }
+        if (err.message === "PLAN_EMPTY") {
+          return reply.code(400).send({
+            error: "Empty plan",
+            message: "No shifts to apply. Adjust the pattern or assign more guards to the site.",
+          });
+        }
+        if (err.message === "PLAN_TOO_LARGE") {
+          return reply.code(400).send({
+            error: "Plan too large",
+            message: "Roster plan exceeds the maximum of 1000 shifts. Shorten the period or reduce guards.",
+          });
+        }
+        if (err.message === "INVALID_POST") {
+          return reply.code(400).send({
+            error: "Invalid plan",
+            message: "Plan references a post that does not belong to this site.",
+          });
+        }
+      }
+      return reply.code(500).send({
+        error: "Apply failed",
+        message: err instanceof Error ? err.message : "Failed to apply roster plan",
+      });
+    }
+  });
+
   app.get("/:id/available-relievers", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
@@ -544,7 +823,7 @@ export async function shiftsRoutes(app: FastifyInstance) {
       where: {
         companyId: user.companyId,
         id: { notIn: Array.from(busyEmployeeIds) },
-        status: { in: ["active", "training", "hired"] },
+        status: { in: ["active", "training", "hired", "reliever"] },
       },
       select: { id: true, firstName: true, lastName: true, gender: true },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
