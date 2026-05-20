@@ -13,6 +13,8 @@ import {
 } from "../lib/user-module-column.js";
 import { createAuditLog } from "../lib/audit.js";
 import { generatePasswordSetupToken, hashPassword, hashPasswordSetupToken } from "../services/auth.service.js";
+import { validatePassword, PASSWORD_MIN_LENGTH } from "../lib/password-policy.js";
+import { badRequest } from "../lib/api-response.js";
 
 const MODULE_ACCESS_MIGRATION_MESSAGE =
   "The database is missing the User.moduleAccess column. From the project root run: npm run db:push. If that fails on duplicate User emails (email unique), run: npm run db:add-module-access — it only adds the moduleAccess column. Later, fix duplicate emails (npm run db:check-email-unique in apps/api) then db:push to align the rest of the schema. DATABASE_URL must be set in apps/api/.env.";
@@ -48,7 +50,7 @@ function buildPasswordSetupLink(request: FastifyRequest, token: string): string 
 const createUserSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
-  password: z.string().min(8).optional(),
+  password: z.string().min(PASSWORD_MIN_LENGTH).optional(),
   sendSetupLink: z.boolean().optional().default(true),
   role: z.enum(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"]),
   roleLabel: roleLabelSchema,
@@ -58,7 +60,7 @@ const createUserSchema = z.object({
 const updateUserSchema = z.object({
   name: z.string().min(1).optional(),
   email: z.string().email().optional(),
-  password: z.string().min(8).optional(),
+  password: z.string().min(PASSWORD_MIN_LENGTH).optional(),
   role: z.enum(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"]).optional(),
   roleLabel: roleLabelSchema,
   moduleAccess: moduleAccessSchema,
@@ -97,6 +99,10 @@ export async function usersRoutes(app: FastifyInstance) {
         error: "Validation error",
         message: { password: ["Password is required when setup link is disabled"] },
       });
+    }
+    if (parsed.data.password) {
+      const check = validatePassword(parsed.data.password);
+      if (!check.valid) return badRequest(reply, check.message ?? "Password does not meet policy");
     }
     const setupToken = inviteMode ? generatePasswordSetupToken() : null;
     const setupTokenHash = setupToken ? hashPasswordSetupToken(setupToken) : null;
@@ -232,6 +238,8 @@ export async function usersRoutes(app: FastifyInstance) {
     if (parsed.data.role) updateData.role = parsed.data.role;
     if (parsed.data.roleLabel !== undefined) updateData.roleLabel = normalizeRoleLabel(parsed.data.roleLabel);
     if (parsed.data.password) {
+      const check = validatePassword(parsed.data.password);
+      if (!check.valid) return badRequest(reply, check.message ?? "Password does not meet policy");
       updateData.passwordHash = await hashPassword(parsed.data.password);
     }
     if (parsed.data.moduleAccess !== undefined) {

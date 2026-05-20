@@ -6,6 +6,14 @@ import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { transitionEmployeeStatus } from "../services/employee.service.js";
 import { createAuditLog } from "../lib/audit.js";
+import {
+  employeeListSelect,
+  employeeDetailSelect,
+  employeePayrollSelect,
+  sanitizeEmployeeForList,
+  sanitizeEmployeeForDetail,
+  canViewEmployeeSensitiveFields,
+} from "../lib/employee-dto.js";
 
 const optionalString = z.string().optional();
 const optionalNumber = z.number().optional();
@@ -184,7 +192,8 @@ export async function employeesRoutes(app: FastifyInstance) {
     const [employees, total] = await Promise.all([
       prisma.employee.findMany({
         where,
-        include: {
+        select: {
+          ...employeeListSelect,
           grade: { select: { name: true, hourlyRate: true } },
           group: { select: { id: true, name: true } },
           shifts: {
@@ -192,7 +201,9 @@ export async function employeesRoutes(app: FastifyInstance) {
               startTime: { gte: new Date() },
               status: { in: ["assigned", "created"] },
             },
-            include: { post: { include: { site: true } } },
+            select: {
+              post: { select: { name: true, site: { select: { name: true } } } },
+            },
             take: 1,
           },
         },
@@ -203,14 +214,14 @@ export async function employeesRoutes(app: FastifyInstance) {
       prisma.employee.count({ where }),
     ]);
 
-    const data = employees.map((e: (typeof employees)[number]) => {
-      const emp = e as typeof e & { shifts?: Array<{ post?: { site?: { name?: string }; name?: string } }> };
-      return {
+    const data = employees.map((e) => {
+      const row = {
         ...e,
-        currentSite: emp.shifts?.[0]?.post?.site?.name ?? null,
-        currentPost: emp.shifts?.[0]?.post?.name ?? null,
+        currentSite: e.shifts?.[0]?.post?.site?.name ?? null,
+        currentPost: e.shifts?.[0]?.post?.name ?? null,
         shifts: undefined,
       };
+      return sanitizeEmployeeForList(row, user);
     });
 
     return reply.send({ data, total, limit, offset });
@@ -300,7 +311,7 @@ export async function employeesRoutes(app: FastifyInstance) {
       entityId: employee.id,
     });
 
-    return reply.code(201).send(employee);
+    return reply.code(201).send(sanitizeEmployeeForDetail(employee, request.user!));
   });
 
   app.get("/next-number", { preHandler: protect }, async (request, reply) => {
@@ -326,9 +337,14 @@ export async function employeesRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const user = request.user!;
 
+    const select = canViewEmployeeSensitiveFields(user)
+      ? employeePayrollSelect
+      : employeeDetailSelect;
+
     const employee = await prisma.employee.findFirst({
       where: { id, companyId: user.companyId },
-      include: {
+      select: {
+        ...select,
         grade: { select: { name: true, hourlyRate: true } },
         group: { select: { id: true, name: true } },
       },
@@ -338,7 +354,7 @@ export async function employeesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Employee not found" });
     }
 
-    return reply.send(employee);
+    return reply.send(sanitizeEmployeeForDetail(employee, user));
   });
 
   app.put("/:id", { preHandler: protect }, async (request, reply) => {
@@ -403,20 +419,46 @@ export async function employeesRoutes(app: FastifyInstance) {
       updateData.employeeNumber = trimmed;
     }
 
-    const employee = await prisma.employee.update({
-      where: { id },
+    const updated = await prisma.employee.updateMany({
+      where: { id, companyId },
       data: updateData,
     });
+    if (updated.count === 0) {
+      return reply.code(404).send({ error: "Employee not found" });
+    }
+
+    const hasSensitive =
+      updateData.idNumber !== undefined ||
+      updateData.taxNumber !== undefined ||
+      updateData.bankAccountNumber !== undefined ||
+      updateData.bankName !== undefined ||
+      updateData.bankBranchCode !== undefined;
 
     await createAuditLog({
       userId: request.user!.sub,
       companyId,
-      action: "employee.update",
+      action: hasSensitive ? "employee.update_sensitive" : "employee.update",
       entityType: "employee",
       entityId: id,
     });
 
-    return reply.send(employee);
+    request.log.info(
+      { employeeId: id, companyId, requestId: request.requestId, sensitive: hasSensitive },
+      "employee updated"
+    );
+
+    const employee = await prisma.employee.findFirst({
+      where: { id, companyId },
+      select: {
+        ...(canViewEmployeeSensitiveFields(request.user!)
+          ? employeePayrollSelect
+          : employeeDetailSelect),
+        grade: { select: { name: true, hourlyRate: true } },
+        group: { select: { id: true, name: true } },
+      },
+    });
+
+    return reply.send(sanitizeEmployeeForDetail(employee ?? {}, request.user!));
   });
 
   app.delete("/:id", { preHandler: [authMiddleware, requireRole(["admin"])] }, async (request, reply) => {
@@ -431,9 +473,12 @@ export async function employeesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Employee not found" });
     }
 
-    await prisma.employee.delete({
-      where: { id },
+    const deleted = await prisma.employee.deleteMany({
+      where: { id, companyId: user.companyId },
     });
+    if (deleted.count === 0) {
+      return reply.code(404).send({ error: "Employee not found" });
+    }
 
     await createAuditLog({
       userId: user.sub,

@@ -112,8 +112,29 @@ model User {
   academyComplianceVerified AcademyComplianceDocument[] @relation("AcademyComplianceVerifiedBy")
   academyInstructorDocumentsUploaded AcademyInstructorDocument[] @relation("AcademyInstructorDocumentUploadedBy")
   academyInstructorDocumentsVerified AcademyInstructorDocument[] @relation("AcademyInstructorDocumentVerifiedBy")
+  refreshTokens                    RefreshToken[]
 
   @@index([companyId])
+}
+
+model RefreshToken {
+  id                String    @id @default(cuid())
+  userId            String
+  tokenHash         String    @unique
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  replacedByTokenId String?
+  userAgent         String?
+  ipAddress         String?
+
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replacedBy RefreshToken? @relation("RefreshTokenRotation", fields: [replacedByTokenId], references: [id], onDelete: SetNull)
+  replaces   RefreshToken[] @relation("RefreshTokenRotation")
+
+  @@index([userId])
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
 }
 
 enum UserRole {
@@ -201,6 +222,9 @@ model Employee {
 
   @@unique([companyId, employeeNumber])
   @@index([companyId])
+  @@index([companyId, status])
+  @@index([companyId, employeeType])
+  @@index([companyId, groupId])
   @@index([gradeId])
   @@index([groupId])
   @@index([status])
@@ -311,6 +335,10 @@ model Shift {
   attendances Attendance[]
 
   @@index([companyId])
+  @@index([companyId, startTime])
+  @@index([companyId, employeeId, startTime])
+  @@index([companyId, postId, startTime])
+  @@index([companyId, status, startTime])
   @@index([employeeId])
   @@index([postId])
   @@index([startTime])
@@ -361,6 +389,8 @@ model PayrollRun {
   timesheets Timesheet[]
 
   @@index([companyId])
+  @@index([companyId, periodStart, periodEnd])
+  @@index([companyId, status])
   @@index([periodStart])
   @@index([periodEnd])
   @@index([status])
@@ -668,6 +698,8 @@ model AuditLog {
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
+  @@index([companyId, timestamp])
+  @@index([companyId, entityType, entityId])
   @@index([entityType])
   @@index([entityId])
   @@index([timestamp])

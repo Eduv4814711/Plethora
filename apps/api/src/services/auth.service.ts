@@ -5,6 +5,13 @@ import { config } from "../lib/config.js";
 import type { UserRole } from "@prisma/client";
 import { normalizeModuleAccess } from "../middleware/rbac.js";
 import { findFirstUserAuthScalars, findManyUserAuthScalars, findUniqueUserAuthScalars } from "../lib/user-module-column.js";
+import {
+  isRefreshTokenActive,
+  persistRefreshToken,
+  revokeAllUserRefreshTokens,
+  rotateRefreshToken,
+  type RefreshTokenMeta,
+} from "./refresh-token.service.js";
 
 export interface LoginInput {
   email: string;
@@ -40,7 +47,68 @@ export async function verifyPassword(
   return bcrypt.compare(password, hash);
 }
 
-export async function login(input: LoginInput): Promise<AuthResult | null> {
+function buildPayload(user: {
+  id: string;
+  email: string;
+  companyId: string;
+  role: UserRole;
+  moduleAccess?: unknown;
+}) {
+  const moduleAccess = normalizeModuleAccess(user.moduleAccess);
+  return {
+    sub: user.id,
+    email: user.email,
+    companyId: user.companyId,
+    role: user.role,
+    ...(moduleAccess ? { moduleAccess } : {}),
+  };
+}
+
+function issueJwtPair(user: {
+  id: string;
+  email: string;
+  companyId: string;
+  role: UserRole;
+  moduleAccess?: unknown;
+  name: string;
+  roleLabel?: string | null;
+}): AuthResult {
+  const moduleAccess = normalizeModuleAccess(user.moduleAccess);
+  const payload = buildPayload(user);
+
+  const accessToken = jwt.sign(payload, config.jwt.accessSecret, {
+    expiresIn: config.jwt.accessExpiry,
+  });
+
+  const refreshToken = jwt.sign(
+    { ...payload, type: "refresh" },
+    config.jwt.refreshSecret,
+    { expiresIn: config.jwt.refreshExpiry }
+  );
+
+  const decoded = jwt.decode(accessToken) as { exp?: number };
+  const expiresIn = decoded?.exp ? decoded.exp - Math.floor(Date.now() / 1000) : 900;
+
+  return {
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      roleLabel: user.roleLabel ?? null,
+      companyId: user.companyId,
+      moduleAccess,
+    },
+    accessToken,
+    refreshToken,
+    expiresIn,
+  };
+}
+
+export async function login(
+  input: LoginInput,
+  meta?: RefreshTokenMeta
+): Promise<AuthResult | null> {
   const email = input.email.toLowerCase();
 
   const user = input.companyId
@@ -69,45 +137,9 @@ export async function login(input: LoginInput): Promise<AuthResult | null> {
   }
   if (!matchedUser) return null;
 
-  const moduleAccess = normalizeModuleAccess(matchedUser.moduleAccess);
-
-  const payload = {
-    sub: matchedUser.id,
-    email: matchedUser.email,
-    companyId: matchedUser.companyId,
-    role: matchedUser.role,
-    ...(moduleAccess ? { moduleAccess } : {}),
-  };
-
-  const accessToken = jwt.sign(
-    payload,
-    config.jwt.accessSecret,
-    { expiresIn: config.jwt.accessExpiry }
-  );
-
-  const refreshToken = jwt.sign(
-    { ...payload, type: "refresh" },
-    config.jwt.refreshSecret,
-    { expiresIn: config.jwt.refreshExpiry }
-  );
-
-  const decoded = jwt.decode(accessToken) as { exp?: number };
-  const expiresIn = decoded?.exp ? decoded.exp - Math.floor(Date.now() / 1000) : 900;
-
-  return {
-    user: {
-      id: matchedUser.id,
-      name: matchedUser.name,
-      email: matchedUser.email,
-      role: matchedUser.role,
-      roleLabel: matchedUser.roleLabel ?? null,
-      companyId: matchedUser.companyId,
-      moduleAccess,
-    },
-    accessToken,
-    refreshToken,
-    expiresIn,
-  };
+  const result = issueJwtPair(matchedUser);
+  await persistRefreshToken(matchedUser.id, result.refreshToken, meta);
+  return result;
 }
 
 export interface UserForTokens {
@@ -128,48 +160,19 @@ export function hashPasswordSetupToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export function issueTokensForUser(user: UserForTokens): AuthResult {
-  const moduleAccess = normalizeModuleAccess(user.moduleAccess);
-  const payload = {
-    sub: user.id,
-    email: user.email,
-    companyId: user.companyId,
-    role: user.role,
-    ...(moduleAccess ? { moduleAccess } : {}),
-  };
-
-  const accessToken = jwt.sign(
-    payload,
-    config.jwt.accessSecret,
-    { expiresIn: config.jwt.accessExpiry }
-  );
-
-  const refreshToken = jwt.sign(
-    { ...payload, type: "refresh" },
-    config.jwt.refreshSecret,
-    { expiresIn: config.jwt.refreshExpiry }
-  );
-
-  const decoded = jwt.decode(accessToken) as { exp?: number };
-  const expiresIn = decoded?.exp ? decoded.exp - Math.floor(Date.now() / 1000) : 900;
-
-  return {
-    user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      roleLabel: user.roleLabel ?? null,
-      companyId: user.companyId,
-      moduleAccess,
-    },
-    accessToken,
-    refreshToken,
-    expiresIn,
-  };
+export async function issueTokensForUser(
+  user: UserForTokens,
+  meta?: RefreshTokenMeta
+): Promise<AuthResult> {
+  const result = issueJwtPair(user);
+  await persistRefreshToken(user.id, result.refreshToken, meta);
+  return result;
 }
 
-export async function refreshAccessToken(refreshToken: string): Promise<AuthResult | null> {
+export async function refreshAccessToken(
+  refreshToken: string,
+  meta?: RefreshTokenMeta
+): Promise<AuthResult | null> {
   try {
     const decoded = jwt.verify(refreshToken, config.jwt.refreshSecret) as {
       sub: string;
@@ -177,52 +180,37 @@ export async function refreshAccessToken(refreshToken: string): Promise<AuthResu
       companyId: string;
       role: UserRole;
       moduleAccess?: unknown;
+      type?: string;
     };
+
+    if (decoded.type !== "refresh") return null;
+
+    const active = await isRefreshTokenActive(refreshToken, decoded.sub);
+    if (!active) return null;
 
     const user = await findUniqueUserAuthScalars({ id: decoded.sub });
-
     if (!user) return null;
 
-    const moduleAccess = normalizeModuleAccess(user.moduleAccess);
-
-    const payload = {
-      sub: user.id,
-      email: user.email,
-      companyId: user.companyId,
-      role: user.role,
-      ...(moduleAccess ? { moduleAccess } : {}),
-    };
-
-    const accessToken = jwt.sign(
-      payload,
-      config.jwt.accessSecret,
-      { expiresIn: config.jwt.accessExpiry }
+    const result = issueJwtPair(user);
+    const rotated = await rotateRefreshToken(
+      refreshToken,
+      result.refreshToken,
+      user.id,
+      meta
     );
+    if (!rotated) return null;
 
-    const newRefreshToken = jwt.sign(
-      { ...payload, type: "refresh" },
-      config.jwt.refreshSecret,
-      { expiresIn: config.jwt.refreshExpiry }
-    );
-
-    const accessDecoded = jwt.decode(accessToken) as { exp?: number };
-    const expiresIn = accessDecoded?.exp ? accessDecoded.exp - Math.floor(Date.now() / 1000) : 900;
-
-    return {
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        roleLabel: user.roleLabel ?? null,
-        companyId: user.companyId,
-        moduleAccess,
-      },
-      accessToken,
-      refreshToken: newRefreshToken,
-      expiresIn,
-    };
+    return result;
   } catch {
     return null;
   }
+}
+
+export async function logoutUser(userId: string, refreshToken?: string): Promise<void> {
+  if (refreshToken) {
+    const { revokeRefreshToken } = await import("./refresh-token.service.js");
+    await revokeRefreshToken(refreshToken);
+    return;
+  }
+  await revokeAllUserRefreshTokens(userId);
 }

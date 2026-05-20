@@ -3,6 +3,7 @@
  */
 import { join } from "node:path";
 import { mkdir } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
@@ -10,6 +11,7 @@ import rateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import multipart from "@fastify/multipart";
 import { uploadsRoot } from "./lib/uploads-root.js";
+import { registerRequestId } from "./lib/request-id.js";
 import { authRoutes } from "./routes/auth.js";
 import { usersRoutes } from "./routes/users.js";
 import { companiesRoutes } from "./routes/companies.js";
@@ -47,6 +49,7 @@ import { taskRemindersRoutes } from "./routes/task-reminders.js";
 import { academyRoutes } from "./routes/academy/index.js";
 
 const MIN_PROD_JWT_LEN = 32;
+const isProduction = process.env.NODE_ENV === "production";
 
 /** Values that must never ship in production (dev defaults + .env.example placeholders). */
 const FORBIDDEN_JWT_SECRETS = new Set([
@@ -58,7 +61,7 @@ const FORBIDDEN_JWT_SECRETS = new Set([
 ]);
 
 function assertProductionJwt(): void {
-  if (process.env.NODE_ENV !== "production") return;
+  if (!isProduction) return;
   const jwt = process.env.JWT_SECRET?.trim() ?? "";
   const refresh = process.env.JWT_REFRESH_SECRET?.trim() ?? "";
   const weakJwt =
@@ -76,26 +79,58 @@ function assertProductionJwt(): void {
   }
 }
 
+function assertProductionCors(): void {
+  if (!isProduction) return;
+  const raw = process.env.CORS_ORIGIN?.trim() ?? "";
+  if (!raw) {
+    throw new Error(
+      "CORS_ORIGIN is required in production. Set it to your web app origin(s), comma-separated (e.g. https://app.example.com)."
+    );
+  }
+}
+
 function corsOriginFromEnv(): boolean | string | string[] {
-  const raw = process.env.CORS_ORIGIN;
-  if (raw == null || raw.trim() === "") return true;
-  const parts = raw
+  if (!isProduction) {
+    const raw = process.env.CORS_ORIGIN;
+    if (raw == null || raw.trim() === "") return true;
+    const parts = raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (parts.length === 0) return true;
+    if (parts.length === 1) return parts[0]!;
+    return parts;
+  }
+
+  const parts = (process.env.CORS_ORIGIN ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  if (parts.length === 0) return true;
   if (parts.length === 1) return parts[0]!;
   return parts;
 }
 
+function isValidationError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { validation?: unknown; statusCode?: number };
+  return e.validation != null || e.statusCode === 400;
+}
+
 export async function buildApp(): Promise<FastifyInstance> {
   assertProductionJwt();
+  assertProductionCors();
 
   await mkdir(join(uploadsRoot, "logos"), { recursive: true });
   await mkdir(join(uploadsRoot, "tasks"), { recursive: true });
   await mkdir(join(uploadsRoot, "academy"), { recursive: true });
 
-  const app = Fastify({ logger: true });
+  const app = Fastify({
+    logger: true,
+    genReqId: () => randomUUID(),
+    requestIdHeader: "x-request-id",
+  });
+
+  await registerRequestId(app);
 
   await app.register(cors, {
     origin: corsOriginFromEnv(),
@@ -103,7 +138,21 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(helmet as never, {
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: isProduction
+      ? {
+          directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", "data:", "blob:"],
+            connectSrc: ["'self'"],
+            fontSrc: ["'self'"],
+            objectSrc: ["'none'"],
+            frameAncestors: ["'none'"],
+          },
+        }
+      : false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
   });
 
   await app.register(rateLimit, {
@@ -118,6 +167,48 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(fastifyStatic, {
     root: uploadsRoot,
     prefix: "/uploads/",
+  });
+
+  app.setErrorHandler((err, request, reply) => {
+    const statusCode =
+      typeof (err as { statusCode?: number }).statusCode === "number"
+        ? (err as { statusCode: number }).statusCode
+        : 500;
+
+    if (statusCode >= 500) {
+      request.log.error({ err, requestId: request.requestId }, "request failed");
+    } else {
+      request.log.warn({ err, requestId: request.requestId }, "client error");
+    }
+
+    if (isValidationError(err)) {
+      const message =
+        (err as { message?: string }).message ?? "Validation failed";
+      return reply.code(statusCode >= 400 && statusCode < 500 ? statusCode : 400).send({
+        error: "Validation error",
+        message,
+      });
+    }
+
+    if (statusCode === 429) {
+      return reply.code(429).send({
+        error: "Too many requests",
+        message: "Rate limit exceeded. Try again later.",
+      });
+    }
+
+    if (statusCode >= 500 && isProduction) {
+      return reply.code(500).send({
+        error: "Internal server error",
+        message: "An unexpected error occurred",
+      });
+    }
+
+    const message = err instanceof Error ? err.message : "An error occurred";
+    return reply.code(statusCode).send({
+      error: statusCode >= 500 ? "Internal server error" : "Request error",
+      message,
+    });
   });
 
   app.get("/health", async () => ({ status: "ok" }));
