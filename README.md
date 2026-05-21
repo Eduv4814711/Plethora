@@ -511,7 +511,7 @@ template approval) is documented in
 
 ### Prerequisites
 
-- **Node.js ≥ 18**
+- **Node.js 24.x** (see repo [`.nvmrc`](.nvmrc); run `nvm use` or `fnm use` before `npm install`)
 - **npm** (the repo uses npm workspaces)
 - **PostgreSQL ≥ 14** running locally (or accessible via `DATABASE_URL`)
 

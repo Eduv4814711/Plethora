@@ -20,6 +20,8 @@ Do **not** point Root Directory at `apps/api` or `apps/web` alone: the lockfile 
 
 Each service’s `railway.toml` ([`apps/api/railway.toml`](apps/api/railway.toml), [`apps/web/railway.toml`](apps/web/railway.toml)) sets `builder = "NIXPACKS"`, a **`buildCommand`** that runs only the workspace **`npm run build`** (Nixpacks already runs **`npm ci`** in its install phase; duplicating `npm ci` in `buildCommand` can fail on Railway with `EBUSY` on `node_modules/.cache`), plus **watch patterns** and deploy commands. The API uses **`preDeployCommand`** for `prisma migrate deploy` so the process can start and serve `/health` without blocking on migrations in the same process.
 
+**Node.js:** Nixpacks selects the runtime from the root [`package.json`](package.json) `engines.node` field (currently **24.x**). After changing Node version, redeploy **both** API and Web services and confirm build logs show Node 24.x.
+
 ---
 
 ## Phase 1: Project and GitHub
