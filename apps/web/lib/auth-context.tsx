@@ -3,7 +3,13 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { AuthUser } from "./api";
 import type { LoginResponse } from "./api";
-import { getMe, login as apiLogin, refreshToken, registerTokenRefreshCallback } from "./api";
+import {
+  getMe,
+  login as apiLogin,
+  logoutSession,
+  refreshSession,
+  registerTokenRefreshCallback,
+} from "./api";
 
 type AuthState = {
   user: AuthUser | null;
@@ -19,11 +25,25 @@ const AuthContext = createContext<AuthState & {
   setError: (err: string | null) => void;
 } | null>(null);
 
-const TOKEN_KEY = "plethora_access_token";
-const REFRESH_KEY = "plethora_refresh_token";
+/** Legacy keys — migrated once, then removed. */
+const LEGACY_ACCESS_KEY = "plethora_access_token";
+const LEGACY_REFRESH_KEY = "plethora_refresh_token";
 
 /** Refresh access token 2 min before expiry. Access token is 15m, so refresh every 12 min. */
 const PROACTIVE_REFRESH_MS = 12 * 60 * 1000;
+
+function clearLegacyAuthStorage(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(LEGACY_ACCESS_KEY);
+  localStorage.removeItem(LEGACY_REFRESH_KEY);
+}
+
+function consumeLegacyRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  const legacy = localStorage.getItem(LEGACY_REFRESH_KEY);
+  clearLegacyAuthStorage();
+  return legacy;
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -32,23 +52,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const doRefresh = async (): Promise<string | null> => {
-    const stored = typeof window !== "undefined" ? localStorage.getItem(REFRESH_KEY) : null;
-    if (!stored) return null;
+  const applySession = (data: LoginResponse) => {
+    setUser(data.user);
+    setToken(data.accessToken);
+  };
+
+  const doRefresh = async (legacyRefreshToken?: string): Promise<string | null> => {
     try {
-      const data = await refreshToken(stored);
-      if (typeof window !== "undefined") {
-        localStorage.setItem(TOKEN_KEY, data.accessToken);
-        localStorage.setItem(REFRESH_KEY, data.refreshToken);
-      }
-      setUser(data.user);
-      setToken(data.accessToken);
+      const data = await refreshSession(legacyRefreshToken);
+      applySession(data);
       return data.accessToken;
     } catch {
-      if (typeof window !== "undefined") {
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(REFRESH_KEY);
-      }
       setUser(null);
       setToken(null);
       return null;
@@ -69,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    registerTokenRefreshCallback(doRefresh);
+    registerTokenRefreshCallback(() => doRefreshRef.current());
     return () => {
       registerTokenRefreshCallback(() => Promise.resolve(null));
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
@@ -77,54 +91,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const stored = typeof window !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
-    const refresh = typeof window !== "undefined" ? localStorage.getItem(REFRESH_KEY) : null;
+    const legacyRefresh = consumeLegacyRefreshToken();
 
-    if (stored) {
-      getMe(stored)
-        .then((me) => {
-          setUser(me);
-          setToken(stored);
-          scheduleProactiveRefresh();
-        })
-        .catch(() => {
-          if (refresh) {
-            refreshToken(refresh)
-              .then((data) => {
-                localStorage.setItem(TOKEN_KEY, data.accessToken);
-                localStorage.setItem(REFRESH_KEY, data.refreshToken);
-                setUser(data.user);
-                setToken(data.accessToken);
-                scheduleProactiveRefresh();
-              })
-              .catch(() => {
-                localStorage.removeItem(TOKEN_KEY);
-                localStorage.removeItem(REFRESH_KEY);
-              });
-          }
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    doRefresh(legacyRefresh ?? undefined)
+      .then((access) => {
+        if (access) scheduleProactiveRefresh();
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const login = async (email: string, password: string) => {
     setError(null);
     const data = await apiLogin(email, password);
-    localStorage.setItem(TOKEN_KEY, data.accessToken);
-    localStorage.setItem(REFRESH_KEY, data.refreshToken);
-    setUser(data.user);
-    setToken(data.accessToken);
+    applySession(data);
     scheduleProactiveRefresh();
   };
 
   const loginWithResponse = (data: LoginResponse) => {
     setError(null);
-    localStorage.setItem(TOKEN_KEY, data.accessToken);
-    localStorage.setItem(REFRESH_KEY, data.refreshToken);
-    setUser(data.user);
-    setToken(data.accessToken);
+    applySession(data);
     scheduleProactiveRefresh();
   };
 
@@ -133,10 +118,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(refreshTimerRef.current);
       refreshTimerRef.current = null;
     }
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_KEY);
+    const access = token;
     setUser(null);
     setToken(null);
+    clearLegacyAuthStorage();
+    if (access) {
+      void logoutSession(access).catch(() => undefined);
+    }
   };
 
   return (

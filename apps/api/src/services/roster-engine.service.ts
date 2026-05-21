@@ -6,7 +6,7 @@ import {
   meetsSiteShiftGenderRule,
   type CustomBlock,
 } from "./rostering.service.js";
-import { createAuditLog } from "../lib/audit.js";
+import { auditRosterGeneration } from "../lib/roster-audit.js";
 import {
   buildCalendarDays,
   computeFairnessSpread,
@@ -800,20 +800,13 @@ export async function applyRosterPlan(input: ApplyRosterPlanInput): Promise<Appl
   );
 
   if (created > 0) {
-    await createAuditLog({
+    await auditRosterGeneration({
       userId,
       companyId,
-      action: "shift.roster_apply",
-      entityType: "shift",
-      entityId: undefined,
-      metadata: {
-        siteId: plan.siteId,
-        pattern: plan.pattern,
-        created,
-        deleted,
-        startDate: plan.startDate,
-        endDate: plan.endDate,
-      },
+      siteId: plan.siteId,
+      plan,
+      created,
+      deleted,
     });
   }
 

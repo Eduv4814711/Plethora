@@ -29,10 +29,13 @@ export async function transitionEmployeeStatus(
     };
   }
 
-  await prisma.employee.update({
-    where: { id: employeeId },
+  const updated = await prisma.employee.updateMany({
+    where: { id: employeeId, companyId },
     data: { status: newStatus },
   });
+  if (updated.count === 0) {
+    return { success: false, error: "Employee not found" };
+  }
 
   return { success: true };
 }

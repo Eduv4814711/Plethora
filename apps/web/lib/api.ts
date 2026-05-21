@@ -15,8 +15,27 @@ export interface AuthUser {
 export interface LoginResponse {
   user: AuthUser;
   accessToken: string;
-  refreshToken: string;
+  /** @deprecated Refresh token is stored in an HttpOnly cookie; not returned to clients. */
+  refreshToken?: string;
   expiresIn: number;
+}
+
+const AUTH_FETCH_INIT: RequestInit = { credentials: "include" };
+
+/** Read CSRF cookie set by the API (non-HttpOnly) for cookie-authenticated requests. */
+export function getCsrfTokenFromDocument(): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(/(?:^|;\s*)plethora_csrf=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function authJsonHeaders(extra?: Record<string, string>): Record<string, string> {
+  const csrf = getCsrfTokenFromDocument();
+  return {
+    "Content-Type": "application/json",
+    ...(csrf ? { "X-CSRF-Token": csrf } : {}),
+    ...extra,
+  };
 }
 
 export interface SetupPasswordValidation {
@@ -34,6 +53,7 @@ export async function login(
   let res: Response;
   try {
     res = await fetch(url, {
+      ...AUTH_FETCH_INIT,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password, companyId }),
@@ -70,6 +90,7 @@ export interface OnboardPayload {
 
 export async function onboardCompany(payload: OnboardPayload): Promise<LoginResponse> {
   const res = await fetch(`${API_BASE}/auth/onboard`, {
+    ...AUTH_FETCH_INIT,
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -85,14 +106,38 @@ export async function onboardCompany(payload: OnboardPayload): Promise<LoginResp
   return res.json();
 }
 
-export async function refreshToken(refreshToken: string): Promise<LoginResponse> {
+/**
+ * Refresh the access token using the HttpOnly refresh cookie.
+ * Pass `legacyRefreshToken` once when migrating from localStorage.
+ */
+export async function refreshSession(legacyRefreshToken?: string): Promise<LoginResponse> {
   const res = await fetch(`${API_BASE}/auth/refresh`, {
+    ...AUTH_FETCH_INIT,
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refreshToken }),
+    headers: authJsonHeaders(),
+    body: JSON.stringify(
+      legacyRefreshToken ? { refreshToken: legacyRefreshToken } : {}
+    ),
   });
   if (!res.ok) throw new Error("Token refresh failed");
   return res.json();
+}
+
+/** @deprecated Use refreshSession() — refresh token lives in an HttpOnly cookie. */
+export async function refreshToken(legacyRefreshToken: string): Promise<LoginResponse> {
+  return refreshSession(legacyRefreshToken);
+}
+
+export async function logoutSession(accessToken: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/auth/logout`, {
+    ...AUTH_FETCH_INIT,
+    method: "POST",
+    headers: authJsonHeaders({ Authorization: `Bearer ${accessToken}` }),
+    body: JSON.stringify({}),
+  });
+  if (!res.ok && res.status !== 401) {
+    throw new Error("Logout failed");
+  }
 }
 
 export async function validateSetupPasswordToken(token: string): Promise<SetupPasswordValidation> {
@@ -275,7 +320,7 @@ export async function authFetch(url: string, token: string, init?: RequestInit):
       ...(hasBody && !isFormData ? { "Content-Type": "application/json" } : {}),
       ...(init?.headers as Record<string, string> | undefined),
     };
-    return fetch(`${API_BASE}${url}`, { ...init, headers });
+    return fetch(`${API_BASE}${url}`, { credentials: "include", ...init, headers });
   };
 
   let res = await doFetch(token);

@@ -206,11 +206,13 @@ export async function refreshAccessToken(
   }
 }
 
-export async function logoutUser(userId: string, refreshToken?: string): Promise<void> {
+export async function logoutUser(userId?: string, refreshToken?: string): Promise<void> {
   if (refreshToken) {
     const { revokeRefreshToken } = await import("./refresh-token.service.js");
     await revokeRefreshToken(refreshToken);
     return;
   }
-  await revokeAllUserRefreshTokens(userId);
+  if (userId) {
+    await revokeAllUserRefreshTokens(userId);
+  }
 }

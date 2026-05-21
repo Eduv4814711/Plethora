@@ -332,11 +332,21 @@ export async function tasksRoutes(app: FastifyInstance) {
     if (d.assigneeId !== undefined) updateData.assigneeId = d.assigneeId;
     if (d.recurrenceRule !== undefined) updateData.recurrenceRule = d.recurrenceRule;
 
-    const task = await prisma.task.update({
-      where: { id },
+    const updatedCount = await prisma.task.updateMany({
+      where: { id, companyId: user.companyId },
       data: updateData,
+    });
+    if (updatedCount.count === 0) {
+      return reply.code(404).send({ error: "Not found", message: "Task not found" });
+    }
+
+    const task = await prisma.task.findFirst({
+      where: { id, companyId: user.companyId },
       include: taskInclude,
     });
+    if (!task) {
+      return reply.code(404).send({ error: "Not found", message: "Task not found" });
+    }
 
     const assigneeDisplayName = await resolveAssigneeDisplayName(
       task.assigneeType,
@@ -369,7 +379,12 @@ export async function tasksRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Not found", message: "Task not found" });
     }
 
-    await prisma.task.delete({ where: { id } });
+    const deleted = await prisma.task.deleteMany({
+      where: { id, companyId: user.companyId },
+    });
+    if (deleted.count === 0) {
+      return reply.code(404).send({ error: "Not found", message: "Task not found" });
+    }
 
     await createAuditLog({
       userId,
@@ -397,11 +412,21 @@ export async function tasksRoutes(app: FastifyInstance) {
     }
 
     const now = new Date();
-    const task = await prisma.task.update({
-      where: { id },
+    const doneUpdate = await prisma.task.updateMany({
+      where: { id, companyId: user.companyId },
       data: { status: "done", completedAt: now },
+    });
+    if (doneUpdate.count === 0) {
+      return reply.code(404).send({ error: "Not found", message: "Task not found" });
+    }
+
+    const task = await prisma.task.findFirst({
+      where: { id, companyId: user.companyId },
       include: taskInclude,
     });
+    if (!task) {
+      return reply.code(404).send({ error: "Not found", message: "Task not found" });
+    }
 
     const recurrenceRule = existing.recurrenceRule as
       | { frequency: string; interval?: number; daysOfWeek?: number[]; endDate?: string }
@@ -470,11 +495,21 @@ export async function tasksRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Not found", message: "Task not found" });
     }
 
-    const task = await prisma.task.update({
-      where: { id },
+    const reopenUpdate = await prisma.task.updateMany({
+      where: { id, companyId: user.companyId },
       data: { status: "todo", completedAt: null },
+    });
+    if (reopenUpdate.count === 0) {
+      return reply.code(404).send({ error: "Not found", message: "Task not found" });
+    }
+
+    const task = await prisma.task.findFirst({
+      where: { id, companyId: user.companyId },
       include: taskInclude,
     });
+    if (!task) {
+      return reply.code(404).send({ error: "Not found", message: "Task not found" });
+    }
 
     const assigneeDisplayName = await resolveAssigneeDisplayName(
       task.assigneeType,

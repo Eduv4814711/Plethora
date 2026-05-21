@@ -407,10 +407,13 @@ export async function sitesRoutes(app: FastifyInstance) {
       rosterPatch.rosterNightShiftGuardsRequired = rosterNightShiftGuardsRequired;
     }
 
-    const site = await prisma.site.update({
-      where: { id },
+    const siteUpdate = await prisma.site.updateMany({
+      where: { id, companyId },
       data: { ...rest, ...geoPatch, ...rosterPatch },
     });
+    if (siteUpdate.count === 0) {
+      return reply.code(404).send({ error: "Site not found" });
+    }
 
     if (assignedGuardIds !== undefined) {
       await prisma.siteAssignment.deleteMany({ where: { siteId: id } });
@@ -429,8 +432,8 @@ export async function sitesRoutes(app: FastifyInstance) {
       }
     }
 
-    const siteWithAssigned = await prisma.site.findUnique({
-      where: { id },
+    const siteWithAssigned = await prisma.site.findFirst({
+      where: { id, companyId },
       include: {
         posts: {
           include: {
@@ -469,6 +472,10 @@ export async function sitesRoutes(app: FastifyInstance) {
       },
     });
 
+    if (!siteWithAssigned) {
+      return reply.code(404).send({ error: "Site not found" });
+    }
+
     await createAuditLog({
       userId: request.user!.sub,
       companyId,
@@ -504,7 +511,10 @@ export async function sitesRoutes(app: FastifyInstance) {
       });
     }
 
-    await prisma.site.delete({ where: { id } });
+    const deleted = await prisma.site.deleteMany({ where: { id, companyId } });
+    if (deleted.count === 0) {
+      return reply.code(404).send({ error: "Site not found" });
+    }
 
     await createAuditLog({
       userId: request.user!.sub,
@@ -595,17 +605,22 @@ export async function sitesRoutes(app: FastifyInstance) {
     }
 
     const post = await prisma.post.findFirst({
-      where: { id: postId, siteId },
+      where: { id: postId, siteId, site: { companyId: user.companyId } },
     });
 
     if (!post) {
       return reply.code(404).send({ error: "Post not found" });
     }
 
-    const updated = await prisma.post.update({
-      where: { id: postId },
+    const postUpdate = await prisma.post.updateMany({
+      where: { id: postId, site: { companyId: user.companyId } },
       data: parsed.data,
     });
+    if (postUpdate.count === 0) {
+      return reply.code(404).send({ error: "Post not found" });
+    }
+
+    const updated = await prisma.post.findFirst({ where: { id: postId } });
 
     await createAuditLog({
       userId: request.user!.sub,
@@ -631,7 +646,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     }
 
     const post = await prisma.post.findFirst({
-      where: { id: postId, siteId },
+      where: { id: postId, siteId, site: { companyId: user.companyId } },
       include: { _count: { select: { shifts: true } } },
     });
 
@@ -646,7 +661,9 @@ export async function sitesRoutes(app: FastifyInstance) {
       });
     }
 
-    await prisma.post.delete({ where: { id: postId } });
+    await prisma.post.deleteMany({
+      where: { id: postId, site: { companyId: user.companyId } },
+    });
 
     await createAuditLog({
       userId: request.user!.sub,

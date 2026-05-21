@@ -15,6 +15,7 @@ import { createAuditLog } from "../lib/audit.js";
 import { generatePasswordSetupToken, hashPassword, hashPasswordSetupToken } from "../services/auth.service.js";
 import { validatePassword, PASSWORD_MIN_LENGTH } from "../lib/password-policy.js";
 import { badRequest } from "../lib/api-response.js";
+import { env } from "../lib/env.js";
 
 const MODULE_ACCESS_MIGRATION_MESSAGE =
   "The database is missing the User.moduleAccess column. From the project root run: npm run db:push. If that fails on duplicate User emails (email unique), run: npm run db:add-module-access — it only adds the moduleAccess column. Later, fix duplicate emails (npm run db:check-email-unique in apps/api) then db:push to align the rest of the schema. DATABASE_URL must be set in apps/api/.env.";
@@ -34,7 +35,8 @@ function normalizeRoleLabel(value: string | null | undefined): string | null | u
 }
 
 function buildPasswordSetupLink(request: FastifyRequest, token: string): string {
-  const configuredWebUrl = process.env.FRONTEND_URL ?? process.env.CORS_ORIGIN;
+  const configuredWebUrl =
+    env.frontendUrl ?? (env.corsOrigins.length > 0 ? env.corsOrigins[0] : undefined);
   if (configuredWebUrl) {
     const baseUrl = configuredWebUrl.replace(/\/+$/, "");
     return `${baseUrl}/setup-password?token=${encodeURIComponent(token)}`;

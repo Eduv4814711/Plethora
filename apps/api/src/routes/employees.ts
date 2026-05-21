@@ -521,9 +521,13 @@ export async function employeesRoutes(app: FastifyInstance) {
       metadata: { newStatus: parsed.data.status },
     });
 
-    const employee = await prisma.employee.findUnique({
-      where: { id },
+    const employee = await prisma.employee.findFirst({
+      where: { id, companyId },
     });
+
+    if (!employee) {
+      return reply.code(404).send({ error: "Employee not found" });
+    }
 
     return reply.send(employee);
   });

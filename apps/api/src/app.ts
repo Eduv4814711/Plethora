@@ -10,6 +10,7 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import multipart from "@fastify/multipart";
+import cookie from "@fastify/cookie";
 import { uploadsRoot } from "./lib/uploads-root.js";
 import { registerRequestId } from "./lib/request-id.js";
 import { authRoutes } from "./routes/auth.js";
@@ -17,7 +18,7 @@ import { usersRoutes } from "./routes/users.js";
 import { companiesRoutes } from "./routes/companies.js";
 import { employeesRoutes } from "./routes/employees.js";
 import { sitesRoutes } from "./routes/sites.js";
-import { shiftsRoutes } from "./routes/shifts.js";
+import { rosteringRoutes } from "./modules/rostering/rostering.routes.js";
 import { attendanceRoutes } from "./routes/attendance.js";
 import { payrollRoutes } from "./routes/payroll.js";
 import { payrollIntelligenceRoutes } from "./routes/payroll-intelligence.js";
@@ -47,68 +48,7 @@ import { taskCommentsRoutes } from "./routes/task-comments.js";
 import { taskAttachmentsRoutes } from "./routes/task-attachments.js";
 import { taskRemindersRoutes } from "./routes/task-reminders.js";
 import { academyRoutes } from "./routes/academy/index.js";
-
-const MIN_PROD_JWT_LEN = 32;
-const isProduction = process.env.NODE_ENV === "production";
-
-/** Values that must never ship in production (dev defaults + .env.example placeholders). */
-const FORBIDDEN_JWT_SECRETS = new Set([
-  "",
-  "dev-secret-change-in-production",
-  "dev-refresh-secret",
-  "change-this-in-production",
-  "change-this-refresh-in-production",
-]);
-
-function assertProductionJwt(): void {
-  if (!isProduction) return;
-  const jwt = process.env.JWT_SECRET?.trim() ?? "";
-  const refresh = process.env.JWT_REFRESH_SECRET?.trim() ?? "";
-  const weakJwt =
-    FORBIDDEN_JWT_SECRETS.has(jwt) || jwt.length < MIN_PROD_JWT_LEN;
-  const weakRefresh =
-    FORBIDDEN_JWT_SECRETS.has(refresh) || refresh.length < MIN_PROD_JWT_LEN;
-  const same = jwt.length > 0 && jwt === refresh;
-  if (weakJwt || weakRefresh || same) {
-    throw new Error(
-      "Invalid production JWT configuration. On Railway: open the API service → Variables and set JWT_SECRET and JWT_REFRESH_SECRET to two different random strings (at least " +
-        MIN_PROD_JWT_LEN +
-        " characters each). Do not use dev defaults, .env.example placeholders, or the same value for both. " +
-        `Details: weakJwt=${weakJwt}, weakRefresh=${weakRefresh}, sameValue=${same}.`
-    );
-  }
-}
-
-function assertProductionCors(): void {
-  if (!isProduction) return;
-  const raw = process.env.CORS_ORIGIN?.trim() ?? "";
-  if (!raw) {
-    throw new Error(
-      "CORS_ORIGIN is required in production. Set it to your web app origin(s), comma-separated (e.g. https://app.example.com)."
-    );
-  }
-}
-
-function corsOriginFromEnv(): boolean | string | string[] {
-  if (!isProduction) {
-    const raw = process.env.CORS_ORIGIN;
-    if (raw == null || raw.trim() === "") return true;
-    const parts = raw
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (parts.length === 0) return true;
-    if (parts.length === 1) return parts[0]!;
-    return parts;
-  }
-
-  const parts = (process.env.CORS_ORIGIN ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (parts.length === 1) return parts[0]!;
-  return parts;
-}
+import { corsOriginFromEnv, env } from "./lib/env.js";
 
 function isValidationError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
@@ -117,9 +57,6 @@ function isValidationError(err: unknown): boolean {
 }
 
 export async function buildApp(): Promise<FastifyInstance> {
-  assertProductionJwt();
-  assertProductionCors();
-
   await mkdir(join(uploadsRoot, "logos"), { recursive: true });
   await mkdir(join(uploadsRoot, "tasks"), { recursive: true });
   await mkdir(join(uploadsRoot, "academy"), { recursive: true });
@@ -132,13 +69,15 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await registerRequestId(app);
 
+  await app.register(cookie);
+
   await app.register(cors, {
     origin: corsOriginFromEnv(),
     credentials: true,
   });
 
   await app.register(helmet as never, {
-    contentSecurityPolicy: isProduction
+    contentSecurityPolicy: env.isProduction
       ? {
           directives: {
             defaultSrc: ["'self'"],
@@ -197,7 +136,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       });
     }
 
-    if (statusCode >= 500 && isProduction) {
+    if (statusCode >= 500 && env.isProduction) {
       return reply.code(500).send({
         error: "Internal server error",
         message: "An unexpected error occurred",
@@ -219,7 +158,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(companiesRoutes, { prefix: "/companies" });
   await app.register(employeesRoutes, { prefix: "/employees" });
   await app.register(sitesRoutes, { prefix: "/sites" });
-  await app.register(shiftsRoutes, { prefix: "/shifts" });
+  await app.register(rosteringRoutes, { prefix: "/shifts" });
   await app.register(attendanceRoutes, { prefix: "/attendance" });
   await app.register(payrollRoutes, { prefix: "/payroll" });
   await app.register(payrollIntelligenceRoutes, { prefix: "/payroll" });

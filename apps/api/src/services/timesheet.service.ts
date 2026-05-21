@@ -11,6 +11,38 @@ export interface TimesheetAggregate {
   leaveDays: number;
 }
 
+export type TimesheetHourBucket = "basic" | "overtime" | "sunday" | "public_holiday";
+
+/**
+ * Classify worked hours by shift start date in company timezone.
+ * Overnight shifts use the calendar day of shift start (not clock-out day).
+ */
+export function classifyShiftHours(params: {
+  shiftStartTime: Date;
+  hoursWorked: number;
+  overtimeHours: number;
+  timeZone: string;
+  holidayDates: Set<string>;
+}): { basicHours: number; overtimeHours: number; sundayHours: number; publicHolidayHours: number } {
+  const { shiftStartTime, hoursWorked, overtimeHours, timeZone, holidayDates } = params;
+  const shiftStartZoned = toZonedTime(shiftStartTime, timeZone);
+  const y = shiftStartZoned.getFullYear();
+  const m = String(shiftStartZoned.getMonth() + 1).padStart(2, "0");
+  const d = String(shiftStartZoned.getDate()).padStart(2, "0");
+  const shiftDateKey = `${y}-${m}-${d}`;
+  const isSunday = shiftStartZoned.getDay() === 0;
+  const isPublicHoliday = holidayDates.has(shiftDateKey);
+  const total = hoursWorked + overtimeHours;
+
+  if (isPublicHoliday) {
+    return { basicHours: 0, overtimeHours: 0, sundayHours: 0, publicHolidayHours: total };
+  }
+  if (isSunday) {
+    return { basicHours: 0, overtimeHours: 0, sundayHours: total, publicHolidayHours: 0 };
+  }
+  return { basicHours: hoursWorked, overtimeHours, sundayHours: 0, publicHolidayHours: 0 };
+}
+
 /**
  * Aggregate hours from Shift + Attendance for a period.
  * Classifies hours into basic, overtime, sunday, public holiday using company timezone.
@@ -92,23 +124,17 @@ export async function aggregateTimesheets(
     for (const att of shift.attendances) {
       const hoursWorked = att.hoursWorked != null ? Number(att.hoursWorked) : 0;
       const overtimeHours = att.overtimeHours != null ? Number(att.overtimeHours) : 0;
-
-      const shiftStartZoned = toZonedTime(shift.startTime, timeZone);
-      const y = shiftStartZoned.getFullYear();
-      const m = String(shiftStartZoned.getMonth() + 1).padStart(2, "0");
-      const d = String(shiftStartZoned.getDate()).padStart(2, "0");
-      const shiftDateKey = `${y}-${m}-${d}`;
-      const isSunday = shiftStartZoned.getDay() === 0;
-      const isPublicHoliday = holidayDates.has(shiftDateKey);
-
-      if (isPublicHoliday) {
-        t.publicHolidayHours += hoursWorked + overtimeHours;
-      } else if (isSunday) {
-        t.sundayHours += hoursWorked + overtimeHours;
-      } else {
-        t.basicHours += hoursWorked;
-        t.overtimeHours += overtimeHours;
-      }
+      const bucket = classifyShiftHours({
+        shiftStartTime: shift.startTime,
+        hoursWorked,
+        overtimeHours,
+        timeZone,
+        holidayDates,
+      });
+      t.basicHours += bucket.basicHours;
+      t.overtimeHours += bucket.overtimeHours;
+      t.sundayHours += bucket.sundayHours;
+      t.publicHolidayHours += bucket.publicHolidayHours;
     }
   }
 

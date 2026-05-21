@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
   login,
@@ -13,6 +13,14 @@ import { prisma } from "../lib/prisma.js";
 import { findUniqueUserForMe } from "../lib/user-module-column.js";
 import { validatePassword, PASSWORD_MIN_LENGTH } from "../lib/password-policy.js";
 import { badRequest } from "../lib/api-response.js";
+import {
+  assertCsrfForCookieAuth,
+  clearAuthCookies,
+  readRefreshTokenFromRequest,
+  setAuthCookies,
+  toPublicAuthResponse,
+} from "../lib/auth-cookies.js";
+import { env } from "../lib/env.js";
 
 const AUTH_RATE = { max: 10, timeWindow: "15 minutes" as const };
 
@@ -22,6 +30,22 @@ function refreshMeta(request: FastifyRequest) {
     userAgent: typeof ua === "string" ? ua : undefined,
     ipAddress: request.ip,
   };
+}
+
+function sendAuthSuccess(
+  reply: FastifyReply,
+  result: { refreshToken: string; accessToken: string; user: unknown; expiresIn: number },
+  statusCode = 200
+) {
+  setAuthCookies(reply, result.refreshToken);
+  return reply.code(statusCode).send(toPublicAuthResponse(result));
+}
+
+function csrfForbidden(reply: FastifyReply) {
+  return reply.code(403).send({
+    error: "Forbidden",
+    message: "Invalid or missing CSRF token",
+  });
 }
 
 const loginSchema = z.object({
@@ -48,6 +72,10 @@ const setupPasswordValidateSchema = z.object({
 const setupPasswordCompleteSchema = z.object({
   token: z.string().min(20),
   password: z.string().min(PASSWORD_MIN_LENGTH),
+});
+
+const refreshBodySchema = z.object({
+  refreshToken: z.string().min(1).optional(),
 });
 
 function passwordPolicyError(password: string, companyName?: string) {
@@ -95,7 +123,7 @@ export async function authRoutes(app: FastifyInstance) {
       });
 
       const result = await issueTokensForUser(adminUser, refreshMeta(request));
-      return reply.code(201).send(result);
+      return sendAuthSuccess(reply, result, 201);
     } catch (err: unknown) {
       const prismaErr = err as { code?: string };
       if (prismaErr.code === "P2002") {
@@ -108,7 +136,7 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(500).send({
         error: "Onboarding failed",
         message:
-          process.env.NODE_ENV === "production"
+          env.isProduction
             ? "An error occurred during signup"
             : err instanceof Error
               ? err.message
@@ -139,13 +167,13 @@ export async function authRoutes(app: FastifyInstance) {
         });
       }
 
-      return reply.send(result);
+      return sendAuthSuccess(reply, result);
     } catch (err) {
       request.log.error(err);
       return reply.code(500).send({
         error: "Login failed",
         message:
-          process.env.NODE_ENV === "production"
+          env.isProduction
             ? "An error occurred during login"
             : err instanceof Error
               ? err.message
@@ -226,24 +254,36 @@ export async function authRoutes(app: FastifyInstance) {
   );
 
   app.post("/refresh", { config: { rateLimit: AUTH_RATE } }, async (request, reply) => {
-    const schema = z.object({ refreshToken: z.string().min(1) });
-    const parsed = schema.safeParse(request.body);
+    const parsed = refreshBodySchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Validation error",
-        message: "refreshToken is required",
+        message: "Invalid refresh request",
       });
     }
 
-    const result = await refreshAccessToken(parsed.data.refreshToken, refreshMeta(request));
+    if (!assertCsrfForCookieAuth(request)) {
+      return csrfForbidden(reply);
+    }
+
+    const refreshTokenValue = readRefreshTokenFromRequest(request);
+    if (!refreshTokenValue) {
+      return reply.code(401).send({
+        error: "Invalid refresh token",
+        message: "Refresh token is required",
+      });
+    }
+
+    const result = await refreshAccessToken(refreshTokenValue, refreshMeta(request));
     if (!result) {
+      clearAuthCookies(reply);
       return reply.code(401).send({
         error: "Invalid refresh token",
         message: "Token is invalid or expired",
       });
     }
 
-    return reply.send(result);
+    return sendAuthSuccess(reply, result);
   });
 
   app.get("/me", { preHandler: [authMiddleware] }, async (request, reply) => {
@@ -261,12 +301,17 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.post("/logout", { preHandler: [authMiddleware] }, async (request, reply) => {
-    const body = request.body as { refreshToken?: string } | undefined;
-    const refreshToken =
-      typeof body?.refreshToken === "string" ? body.refreshToken : undefined;
-    if (request.user?.sub) {
-      await logoutUser(request.user.sub, refreshToken);
+    if (!assertCsrfForCookieAuth(request)) {
+      return csrfForbidden(reply);
     }
+
+    const refreshTokenValue = readRefreshTokenFromRequest(request);
+
+    if (request.user?.sub || refreshTokenValue) {
+      await logoutUser(request.user?.sub, refreshTokenValue);
+    }
+
+    clearAuthCookies(reply);
     return reply.send({ message: "Logged out successfully" });
   });
 }

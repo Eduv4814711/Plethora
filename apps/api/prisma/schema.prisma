@@ -375,14 +375,16 @@ model Attendance {
 }
 
 model PayrollRun {
-  id          String        @id @default(cuid())
-  companyId   String
-  periodStart DateTime
-  periodEnd   DateTime
-  status      PayrollStatus
-  lockedAt    DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id                   String        @id @default(cuid())
+  companyId            String
+  periodStart          DateTime
+  periodEnd            DateTime
+  status               PayrollStatus
+  lockedAt             DateTime?
+  calculatedAt         DateTime?
+  calculationSnapshot  Json?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
   company    Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   items      PayrollItem[]

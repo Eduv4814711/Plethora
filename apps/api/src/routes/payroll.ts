@@ -14,6 +14,11 @@ import { buildIrp5DataForTaxYear, irp5ToCsv } from "../services/irp5.service.js"
 import { fetchPayslipData, buildPayslipTemplateData } from "../services/payslip-data.service.js";
 import { generatePayslipPDFFromTemplate } from "../services/payslip-pdf.service.js";
 import { createAuditLog } from "../lib/audit.js";
+import {
+  auditPayrollApproval,
+  auditPayrollCalculation,
+  auditPayrollLock,
+} from "../lib/payroll-audit.js";
 import { format } from "date-fns";
 
 const createPayrollRunSchema = z.object({
@@ -130,8 +135,9 @@ export async function payrollRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const companyId = request.user!.companyId;
 
+    let calcResult;
     try {
-      await calculatePayroll(id, companyId);
+      calcResult = await calculatePayroll(id, companyId);
     } catch (err) {
       if (err instanceof PayrollServiceError) {
         return reply.code(400).send({
@@ -142,16 +148,19 @@ export async function payrollRoutes(app: FastifyInstance) {
       throw err;
     }
 
-    const run = await prisma.payrollRun.findUnique({
-      where: { id },
+    const run = await prisma.payrollRun.findFirst({
+      where: { id, companyId },
     });
 
-    await createAuditLog({
+    if (!run) {
+      return reply.code(404).send({ error: "Payroll run not found" });
+    }
+
+    await auditPayrollCalculation({
       userId: request.user!.sub,
       companyId,
-      action: "payroll_run.calculate",
-      entityType: "payroll_run",
-      entityId: id,
+      payrollRunId: id,
+      snapshot: calcResult.snapshot,
     });
 
     return reply.send(run);
@@ -176,9 +185,33 @@ export async function payrollRoutes(app: FastifyInstance) {
       });
     }
 
-    const updated = await prisma.payrollRun.update({
-      where: { id },
-      data: { status: "approved", lockedAt: new Date() },
+    const lockTime = new Date();
+    const updatedCount = await prisma.payrollRun.updateMany({
+      where: { id, companyId: user.companyId },
+      data: { status: "approved", lockedAt: lockTime },
+    });
+    if (updatedCount.count === 0) {
+      return reply.code(404).send({ error: "Payroll run not found" });
+    }
+
+    const updated = await prisma.payrollRun.findFirst({
+      where: { id, companyId: user.companyId },
+    });
+
+    const lockedAtIso = lockTime.toISOString();
+
+    await auditPayrollApproval({
+      userId: user.sub,
+      companyId: user.companyId,
+      payrollRunId: id,
+      lockedAt: lockedAtIso,
+      previousStatus: run.status,
+    });
+    await auditPayrollLock({
+      userId: user.sub,
+      companyId: user.companyId,
+      payrollRunId: id,
+      lockedAt: lockedAtIso,
     });
 
     await createAuditLog({
@@ -187,9 +220,43 @@ export async function payrollRoutes(app: FastifyInstance) {
       action: "payroll_run.approve",
       entityType: "payroll_run",
       entityId: id,
+      metadata: { lockedAt: lockedAtIso },
     });
 
     return reply.send(updated);
+  });
+
+  app.get("/runs/:id/calculation-snapshot", { preHandler: protect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const user = request.user!;
+
+    const run = await prisma.payrollRun.findFirst({
+      where: { id, companyId: user.companyId },
+      select: {
+        id: true,
+        status: true,
+        calculatedAt: true,
+        calculationSnapshot: true,
+      },
+    });
+
+    if (!run) {
+      return reply.code(404).send({ error: "Payroll run not found" });
+    }
+
+    if (!run.calculationSnapshot) {
+      return reply.code(404).send({
+        error: "No snapshot",
+        message: "Payroll has not been calculated yet.",
+      });
+    }
+
+    return reply.send({
+      payrollRunId: run.id,
+      status: run.status,
+      calculatedAt: run.calculatedAt,
+      snapshot: run.calculationSnapshot,
+    });
   });
 
   app.post("/runs/:id/mark-paid", { preHandler: protect }, async (request, reply) => {
@@ -211,9 +278,16 @@ export async function payrollRoutes(app: FastifyInstance) {
       });
     }
 
-    const updated = await prisma.payrollRun.update({
-      where: { id },
+    const updatedCount = await prisma.payrollRun.updateMany({
+      where: { id, companyId: user.companyId },
       data: { status: "paid" },
+    });
+    if (updatedCount.count === 0) {
+      return reply.code(404).send({ error: "Payroll run not found" });
+    }
+
+    const updated = await prisma.payrollRun.findFirst({
+      where: { id, companyId: user.companyId },
     });
 
     await updateSdlTrackingOnPayrollPaid(user.companyId, id);
