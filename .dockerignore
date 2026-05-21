@@ -1,0 +1,37 @@
+# Dependencies and build artifacts
+node_modules
+**/node_modules
+apps/api/dist
+apps/web/.next
+apps/web/out
+
+# Local env and secrets (mount at runtime)
+.env
+.env.*
+!.env.example
+apps/api/.env
+apps/web/.env.local
+
+# Git and editor
+.git
+.gitignore
+.cursor
+**/.cursor
+*.md
+!README.md
+
+# Tests and coverage
+**/__tests__
+**/*.test.ts
+**/*.spec.ts
+coverage
+
+# Uploads and runtime data
+apps/api/uploads
+**/uploads
+
+# Misc
+terminals
+agent-transcripts
+*.log
+.DS_Store
