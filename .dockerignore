@@ -1,11 +1,11 @@
-# Dependencies and build artifacts
+# Dependencies and build artifacts (reinstalled or rebuilt in image)
 node_modules
 **/node_modules
 apps/api/dist
 apps/web/.next
 apps/web/out
 
-# Local env and secrets (mount at runtime)
+# Local env and secrets (inject at runtime via ECS task definition)
 .env
 .env.*
 !.env.example
@@ -17,8 +17,15 @@ apps/web/.env.local
 .gitignore
 .cursor
 **/.cursor
+
+# Documentation and CI (not needed in container images)
 *.md
 !README.md
+docs
+.github
+cloudbuild.yaml
+DEPLOYMENT.md
+**/railway.toml
 
 # Tests and coverage
 **/__tests__
@@ -26,11 +33,14 @@ apps/web/.env.local
 **/*.spec.ts
 coverage
 
-# Uploads and runtime data
+# Uploads and runtime data (use EFS/S3 in production)
 apps/api/uploads
 **/uploads
 
-# Misc
+# Archived migrations (not used by prisma migrate deploy)
+apps/api/prisma/migrations_archived
+
+# Misc local artifacts
 terminals
 agent-transcripts
 *.log

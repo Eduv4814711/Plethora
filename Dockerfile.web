@@ -1,14 +1,16 @@
 # Plethora Web — Next.js 14 (npm workspace monorepo)
 #
 # Build from repository root (NEXT_PUBLIC_* are baked in at build time):
+#   NEXT_PUBLIC_API_URL=https://api.example.com npm run docker:build:web
 #   docker build -f Dockerfile.web \
 #     --build-arg NEXT_PUBLIC_API_URL=https://api.example.com \
 #     -t plethora-web .
 #
 # Run:
-#   docker run --rm -p 3000:3000 plethora-web
+#   npm run docker:run:web
 #
 # Browser calls use /api/*; Next rewrites to NEXT_PUBLIC_API_URL (see next.config.js).
+# ECS Fargate: map container port 3000 (or PORT) to the ALB target group.
 # Requires Node 24.x (see package.json engines).
 
 # syntax=docker/dockerfile:1
@@ -16,7 +18,7 @@
 FROM node:24-bookworm-slim AS base
 
 # -----------------------------------------------------------------------------
-# Install dependencies
+# Install dependencies (web workspace only)
 # -----------------------------------------------------------------------------
 FROM base AS deps
 
@@ -34,7 +36,6 @@ FROM base AS build
 
 WORKDIR /app
 
-# Build-time public env (embedded in client bundle and rewrite config)
 ARG NEXT_PUBLIC_API_URL=http://localhost:3001
 ARG NEXT_PUBLIC_API_PATH_PREFIX=
 
@@ -65,7 +66,6 @@ ENV NODE_ENV=production \
 RUN groupadd --system plethora \
   && useradd --system --gid plethora --home-dir /app --shell /usr/sbin/nologin plethora
 
-# Standalone trace root is the monorepo; server.js lives under apps/web/
 COPY --from=build /app/apps/web/.next/standalone ./
 COPY --from=build /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build /app/apps/web/public ./apps/web/public
@@ -79,6 +79,6 @@ WORKDIR /app/apps/web
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "const p=process.env.PORT||3000;fetch('http://127.0.0.1:'+p+'/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "server.js"]

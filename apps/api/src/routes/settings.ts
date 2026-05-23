@@ -1,13 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
-import { unlink } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename } from "node:path";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
-import { uploadsRoot } from "../lib/uploads-root.js";
+import { storage } from "../lib/storage.js";
 const businessDetailsSchema = z.object({
   legalName: z.string().optional(),
   registrationNumber: z.string().optional(),
@@ -63,10 +62,6 @@ const factoryResetSchema = z.object({
 const COMPANY_LOGO_EXTENSIONS = ["jpeg", "jpg", "png", "gif", "webp"] as const;
 const SAFE_FILENAME_RE = /^[A-Za-z0-9._-]+$/;
 
-function isErrnoException(err: unknown): err is NodeJS.ErrnoException {
-  return typeof err === "object" && err !== null && "code" in err;
-}
-
 function buildKnownCompanyLogoFilenames(companyId: string, logoUrl?: string | null): string[] {
   const filenames = new Set<string>();
 
@@ -90,18 +85,13 @@ async function cleanupKnownCompanyLogoFiles(
   logoUrl: string | null | undefined,
   log: FastifyInstance["log"]
 ) {
-  const uploadDir = join(uploadsRoot, "logos");
   const filenames = buildKnownCompanyLogoFilenames(companyId, logoUrl);
 
   for (const filename of filenames) {
-    const filepath = join(uploadDir, filename);
     try {
-      await unlink(filepath);
+      await storage.deleteFile(`logos/${filename}`);
     } catch (err) {
-      if (isErrnoException(err) && err.code === "ENOENT") {
-        continue;
-      }
-      log.error({ err, filepath, companyId }, "Failed logo cleanup after full factory reset");
+      log.error({ err, filename, companyId }, "Failed logo cleanup after full factory reset");
     }
   }
 }

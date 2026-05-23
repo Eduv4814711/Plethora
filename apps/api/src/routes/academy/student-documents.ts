@@ -1,11 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { createWriteStream } from "fs";
-import { mkdir, stat } from "fs/promises";
-import { join } from "path";
-import { pipeline } from "stream/promises";
 import { randomUUID } from "crypto";
-import { unlink } from "fs/promises";
 import type { AcademyStudentDocumentType } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
@@ -14,9 +9,7 @@ import {
   ACADEMY_DOCUMENT_ALLOWED_TYPES,
   ACADEMY_MAX_FILE_BYTES,
 } from "./constants.js";
-import { uploadsRoot } from "../../lib/uploads-root.js";
-
-const UPLOADS_BASE = join(uploadsRoot, "academy");
+import { readStreamToBuffer, storage } from "../../lib/storage.js";
 
 const documentTypeSchema = z.enum([
   "id_copy",
@@ -88,34 +81,34 @@ export async function academyStudentDocumentsRoutes(app: FastifyInstance) {
 
     const ext = mimetype.split("/")[1]?.replace("jpeg", "jpg") || "bin";
     const filename = `${randomUUID()}.${ext}`;
-    const dir = join(UPLOADS_BASE, companyId, studentId);
-    await mkdir(dir, { recursive: true });
-    const filepath = join(dir, filename);
     const storagePath = `academy/${companyId}/${studentId}/${filename}`;
 
+    let fileBuffer: Buffer;
     try {
-      const writeStream = createWriteStream(filepath);
-      await pipeline(data.file, writeStream);
+      fileBuffer = await readStreamToBuffer(data.file, ACADEMY_MAX_FILE_BYTES);
+    } catch (err) {
+      if (err instanceof Error && err.message === "FILE_TOO_LARGE") {
+        return reply.code(400).send({
+          error: "File too large",
+          message: "Maximum file size is 10MB",
+        });
+      }
+      request.log.error(err);
+      return reply.code(500).send({ error: "Upload failed", message: "Could not read the file" });
+    }
+
+    try {
+      await storage.uploadFile({
+        key: storagePath,
+        body: fileBuffer,
+        contentType: mimetype,
+      });
     } catch (err) {
       request.log.error(err);
       return reply.code(500).send({ error: "Upload failed", message: "Could not save the file" });
     }
 
-    let size: number;
-    try {
-      const st = await stat(filepath);
-      size = st.size;
-    } catch {
-      size = 0;
-    }
-
-    if (size > ACADEMY_MAX_FILE_BYTES) {
-      await unlink(filepath).catch(() => {});
-      return reply.code(400).send({
-        error: "File too large",
-        message: "Maximum file size is 10MB",
-      });
-    }
+    const size = fileBuffer.length;
 
     const originalName = data.filename || filename;
     const doc = await prisma.studentDocument.create({

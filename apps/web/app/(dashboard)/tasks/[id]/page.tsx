@@ -503,7 +503,7 @@ export default function TaskDetailPage() {
           {(task.attachments || []).map((a) => (
             <div key={a.id} className="flex items-center justify-between bg-white rounded p-2 border border-gray-200">
               <a
-                href={`/api${a.url}`}
+                href={a.url.startsWith("http") ? a.url : `/api${a.url}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-sm text-blue-600 hover:underline"

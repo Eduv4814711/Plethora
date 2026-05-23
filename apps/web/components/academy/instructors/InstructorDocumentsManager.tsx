@@ -28,7 +28,10 @@ function statusLabel(status: string): string {
 }
 
 function fileHref(fileUrl: string): string {
-  const path = fileUrl.startsWith("/uploads/") ? fileUrl.slice("/uploads/".length) : fileUrl.replace(/^\/+/, "");
+  if (/^https?:\/\//i.test(fileUrl)) return fileUrl;
+  const path = fileUrl.startsWith("/uploads/")
+    ? fileUrl.slice("/uploads/".length)
+    : fileUrl.replace(/^\/+/, "");
   return `/api/uploads/${path}`;
 }
 

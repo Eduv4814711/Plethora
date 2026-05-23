@@ -1,27 +1,37 @@
 import type { Post } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { getCompanyTimezone, getShiftTimes } from "../lib/timezone.js";
-import {
-  buildGuardPatternSchedule,
-  meetsSiteShiftGenderRule,
-  type CustomBlock,
-} from "./rostering.service.js";
+import { meetsSiteShiftGenderRule, type CustomBlock } from "./rostering.service.js";
 import { auditRosterGeneration } from "../lib/roster-audit.js";
 import {
   buildCalendarDays,
+  buildPatternPreferenceGrid,
+  buildRosterReadinessDiagnostics,
+  buildSiteDemandSlots,
   computeFairnessSpread,
+  computeFairnessTargets,
   computeStaggerOffsets,
+  countPatternBreaksForEntries,
   createInitialGuardStats,
   dualPatternCycleLength,
   formatDateKey,
+  isGuardEligibleForSlot,
   patternBlocks,
+  pickBestGuardForDemandSlot,
   recordOffDayInStats,
   recordShiftInStats,
   validateDailyCoverage,
   type FairnessSpread,
+  type GuardCandidate,
+  type GuardRuntimeState,
+  type RosterReadinessDiagnostic,
   type ShiftStaffingRequirements,
 } from "./roster-scheduler.js";
-import { resolveSiteShiftStaffing } from "./site-shift-staffing.js";
+import { normalizeEmployeeGenderForRoster } from "./rostering.service.js";
+import {
+  minRosterableGuardsForStaffing,
+  resolveSiteShiftStaffing,
+} from "./site-shift-staffing.js";
 
 const ROSTERABLE_STATUSES = ["active", "training", "hired", "reliever"] as const;
 const MAX_PLAN_ENTRIES = 1000;
@@ -77,9 +87,15 @@ export type RosterPlan = {
     skippedGuardDays: number;
     uncoveredDays: number;
     fairnessSpread: FairnessSpread;
+    demandSlotsTotal?: number;
+    uncoveredSlots?: number;
+    coveragePercent?: number;
+    relieversUsed?: number;
+    patternBreaks?: number;
   };
   guardCycleOffsets: RosterPlanGuardOffset[];
   guardStats?: RosterPlanGuardStat[];
+  readiness?: RosterReadinessDiagnostic[];
   warnings: RosterPlanWarning[];
   conflicts: RosterPlanConflict[];
 };
@@ -176,7 +192,7 @@ function buildPatternCoverageHints(params: {
   const { pattern, guardCount, cycleLength, staggerGuards, customBlocks, staffing } = params;
   const hints: RosterPlanWarning[] = [];
 
-  const minGuardsForStaffing = staffing.day + staffing.night;
+  const minGuardsForStaffing = minRosterableGuardsForStaffing(staffing);
   if (guardCount < minGuardsForStaffing) {
     hints.push({
       code: "PATTERN_COVERAGE_HINT",
@@ -317,8 +333,6 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
   const postsWithAssignments = site.posts as PostWithAssignments[];
   const dayPosts = postsWithAssignments.filter((p) => (p.shiftType ?? "day") === "day");
   const nightPosts = postsWithAssignments.filter((p) => p.shiftType === "night");
-  const postAssignmentByEmployee = buildEmployeePostAssignmentMap(postsWithAssignments);
-
   if (dayPosts.length === 0 || nightPosts.length === 0) {
     return emptyPlan([
       {
@@ -361,7 +375,7 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
   }
 
   const warnings: RosterPlanWarning[] = [];
-  const minGuardsNeeded = shiftStaffing.day + shiftStaffing.night;
+  const minGuardsNeeded = minRosterableGuardsForStaffing(shiftStaffing);
   if (rosterableGuards.length < minGuardsNeeded) {
     warnings.push({
       code: "INSUFFICIENT_GUARDS",
@@ -396,95 +410,177 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
     offsetDays: staggerOffsetList[i] ?? 0,
   }));
 
+  const { slots: demandSlots, warnings: demandWarnings } = buildSiteDemandSlots({
+    siteId,
+    calendarDays,
+    dayPosts,
+    nightPosts,
+    staffing: shiftStaffing,
+    siteGenderRules,
+  });
+  for (const w of demandWarnings) {
+    warnings.push(w);
+  }
+
+  const fairnessTargets = computeFairnessTargets(rosterableGuards.length, calendarDays);
+  const staggerOffsetsByGuard = new Map<string, number>();
+  for (let i = 0; i < sortedGuards.length; i++) {
+    staggerOffsetsByGuard.set(sortedGuards[i]!.id, staggerOffsetList[i] ?? 0);
+  }
+  const preferenceGrid = buildPatternPreferenceGrid({
+    guardIds,
+    calendarDays,
+    patternStartDate: startDate,
+    pattern,
+    customBlocks,
+    staggerOffsets: staggerOffsetsByGuard,
+  });
+
+  const postById = new Map(postsWithAssignments.map((p) => [p.id, p]));
+  const postAssignedGuardIdsByPost = new Map<string, Set<string>>();
+  for (const post of postsWithAssignments) {
+    postAssignedGuardIdsByPost.set(
+      post.id,
+      new Set((post.assignedGuards ?? []).map((a) => a.employeeId))
+    );
+  }
+
+  const siteAssignedGuardIds = new Set(guardIds);
+  const candidates: GuardCandidate[] = rosterableGuards.map((g) => ({
+    id: g.id,
+    gender: g.gender,
+    status: g.status,
+    employeeType: g.employeeType,
+  }));
+
   const statsByGuard = createInitialGuardStats(guardIds);
-  const plannedByGuard = new Map<string, { start: Date; end: Date }[]>();
-  const workedDaysByGuard = new Map<string, Set<string>>();
+  const runtimeByGuard = new Map<string, GuardRuntimeState>();
   for (const id of guardIds) {
-    plannedByGuard.set(id, []);
-    workedDaysByGuard.set(id, new Set());
+    runtimeByGuard.set(id, {
+      stats: statsByGuard.get(id)!,
+      planned: [],
+      workedDateKeys: new Set(),
+      shiftTypeByDateKey: new Map(),
+    });
   }
 
   const entries: RosterPlanEntry[] = [];
   const conflicts: RosterPlanConflict[] = [];
   const postsUsedSet = new Set<string>();
   let skippedGuardDays = 0;
-  const roundRobin = { day: 0, night: 0 };
+  let uncoveredSlots = 0;
 
-  type GuardRow = (typeof rosterableGuards)[number];
-  const guardById = new Map<string, GuardRow>(rosterableGuards.map((g) => [g.id, g]));
+  const sortedDemandSlots = [...demandSlots].sort(
+    (a, b) => b.difficultyScore - a.difficultyScore || a.dateKey.localeCompare(b.dateKey)
+  );
 
-  for (let i = 0; i < sortedGuards.length; i++) {
-    const guard = sortedGuards[i]!;
-    const offsetDays = staggerOffsetList[i] ?? 0;
-    const schedule = buildGuardPatternSchedule(startDate, endDate, blocks, offsetDays);
+  const dayIndexByDateKey = new Map(calendarDays.map((d, i) => [formatDateKey(d), i]));
 
-    for (const { date, shiftType } of schedule) {
-      const dateKey = formatDateKey(date);
-      const post = resolvePostForShiftSlot({
-        employeeId: guard.id,
-        shiftType,
-        dayPosts,
-        nightPosts,
-        assignmentByEmployee: postAssignmentByEmployee,
-        roundRobin,
+  for (const slot of sortedDemandSlots) {
+    const post = postById.get(slot.postId);
+    if (!post) continue;
+
+    const { shiftStart, shiftEnd } = getShiftTimes(slot.date, slot.shiftType, timeZone);
+    const dayIndex = dayIndexByDateKey.get(slot.dateKey) ?? 0;
+    const prevDateKey =
+      dayIndex > 0 ? formatDateKey(calendarDays[dayIndex - 1]!) : null;
+
+    const eligible = candidates.filter((guard) =>
+      isGuardEligibleForSlot({
+        guard,
+        slot,
+        siteGenderRules,
+        postShiftType: post.shiftType,
+        siteAssignedGuardIds,
+        existingShifts,
+        runtime: runtimeByGuard.get(guard.id)!,
+        shiftStart,
+        shiftEnd,
+        calendarDays,
+        dayIndex,
+        prevDateKey,
+      })
+    );
+
+    const best = pickBestGuardForDemandSlot({
+      candidates: eligible,
+      slot,
+      date: slot.date,
+      dayIndex,
+      statsByGuard,
+      runtimeByGuard,
+      targets: fairnessTargets,
+      preferenceGrid,
+      postAssignedGuardIds: postAssignedGuardIdsByPost.get(slot.postId) ?? new Set(),
+      prevDateKey,
+    });
+
+    if (!best) {
+      uncoveredSlots++;
+      warnings.push({
+        code: "UNCOVERED_SLOT",
+        date: slot.dateKey,
+        postId: slot.postId,
+        message: `No guard matches pattern and rest rules for ${slot.shiftType} shift on ${slot.dateKey} (post ${post.name}).`,
       });
-
-      const { shiftStart, shiftEnd } = getShiftTimes(date, shiftType, timeZone);
-
-      if (!meetsSiteShiftGenderRule(guard.gender, siteGenderRules, post.shiftType)) {
-        conflicts.push({
-          employeeId: guard.id,
-          date: dateKey,
-          reason: `Does not meet site ${shiftType} shift staffing rules`,
-        });
-        skippedGuardDays++;
-        continue;
-      }
-
-      const guardPlanned = plannedByGuard.get(guard.id)!;
-      const overlapsExisting = existingShifts.some(
-        (s) =>
-          s.employeeId === guard.id &&
-          shiftsOverlap(shiftStart, shiftEnd, s.startTime, s.endTime)
-      );
-      const overlapsSelf = guardPlanned.some((p) =>
-        shiftsOverlap(shiftStart, shiftEnd, p.start, p.end)
-      );
-
-      if (overlapsExisting || overlapsSelf) {
-        conflicts.push({
-          employeeId: guard.id,
-          date: dateKey,
-          reason: overlapsExisting
-            ? "Overlaps an existing shift"
-            : "Overlaps another planned shift",
-        });
-        skippedGuardDays++;
-        continue;
-      }
-
-      entries.push({
-        employeeId: guard.id,
-        postId: post.id,
-        startTime: shiftStart.toISOString(),
-        endTime: shiftEnd.toISOString(),
-        shiftType,
-      });
-      postsUsedSet.add(post.id);
-      guardPlanned.push({ start: shiftStart, end: shiftEnd });
-      workedDaysByGuard.get(guard.id)!.add(dateKey);
-      recordShiftInStats(statsByGuard.get(guard.id)!, shiftType, date);
+      continue;
     }
+
+    entries.push({
+      employeeId: best.id,
+      postId: slot.postId,
+      startTime: shiftStart.toISOString(),
+      endTime: shiftEnd.toISOString(),
+      shiftType: slot.shiftType,
+    });
+    postsUsedSet.add(slot.postId);
+
+    const runtime = runtimeByGuard.get(best.id)!;
+    runtime.planned.push({ start: shiftStart, end: shiftEnd });
+    runtime.workedDateKeys.add(slot.dateKey);
+    runtime.shiftTypeByDateKey.set(slot.dateKey, slot.shiftType);
+    recordShiftInStats(runtime.stats, slot.shiftType, slot.date);
   }
 
   for (const guardId of guardIds) {
-    const worked = workedDaysByGuard.get(guardId)!;
+    const worked = runtimeByGuard.get(guardId)!.workedDateKeys;
     for (const day of calendarDays) {
       if (!worked.has(formatDateKey(day))) {
         recordOffDayInStats(statsByGuard.get(guardId)!);
       }
     }
   }
+
+  const relieversUsed = new Set(
+    entries
+      .filter((e) => candidates.find((c) => c.id === e.employeeId)?.status === "reliever")
+      .map((e) => e.employeeId)
+  ).size;
+
+  const patternBreaks = countPatternBreaksForEntries(entries, preferenceGrid);
+  const demandSlotsTotal = demandSlots.length;
+  const coveragePercent =
+    demandSlotsTotal > 0
+      ? Math.round((entries.length / demandSlotsTotal) * 100)
+      : 100;
+
+  const guardsMissingGender = rosterableGuards.filter(
+    (g) => normalizeEmployeeGenderForRoster(g.gender) === null
+  ).length;
+
+  const readiness = buildRosterReadinessDiagnostics({
+    dayPostCount: dayPosts.length,
+    nightPostCount: nightPosts.length,
+    staffing: shiftStaffing,
+    rosterableGuardCount: rosterableGuards.length,
+    relieverCount: rosterableGuards.filter((g) => g.status === "reliever").length,
+    guardsMissingGender,
+    hasRestrictiveGenderRules:
+      siteGenderRules.rosterDayShiftGender === "male" ||
+      siteGenderRules.rosterDayShiftGender === "female" ||
+      siteGenderRules.rosterNightShiftGender === "male" ||
+      siteGenderRules.rosterNightShiftGender === "female",
+  });
 
   warnings.push(
     ...buildPatternCoverageHints({
@@ -541,9 +637,15 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
       skippedGuardDays,
       uncoveredDays: uncovered.length,
       fairnessSpread,
+      demandSlotsTotal,
+      uncoveredSlots,
+      coveragePercent,
+      relieversUsed,
+      patternBreaks,
     },
     guardCycleOffsets,
     guardStats,
+    readiness,
     warnings,
     conflicts,
   };

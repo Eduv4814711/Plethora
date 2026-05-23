@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { canManageSitesModule } from "@/lib/permissions";
 import { rosterSiteRulesLines } from "@/lib/roster-site-rules-defaults";
+import { buildSiteRosterReadinessHints } from "@/lib/roster-readiness-hints";
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
   guarding: "Guarding",
@@ -467,6 +468,8 @@ function SiteGuardsAssignment({
     removeGuard(guard.id);
   };
 
+  const rosterReadiness = useMemo(() => buildSiteRosterReadinessHints(site), [site]);
+
   return (
     <div>
       <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
@@ -482,6 +485,24 @@ function SiteGuardsAssignment({
         </Link>{" "}
         on this site. You can still assign guards to individual posts below.
       </p>
+      {rosterReadiness.length > 0 && (
+        <ul className="mb-4 space-y-1 text-xs max-w-2xl">
+          {rosterReadiness.map((h, i) => (
+            <li
+              key={`${h.code}-${i}`}
+              className={
+                h.level === "error"
+                  ? "text-red-700 dark:text-red-300"
+                  : h.level === "warning"
+                    ? "text-amber-800 dark:text-amber-200"
+                    : "text-neutral-500 dark:text-neutral-400"
+              }
+            >
+              • {h.message}
+            </li>
+          ))}
+        </ul>
+      )}
       {error && (
         <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
           {error}
@@ -635,6 +656,7 @@ function SiteRosterSheetFields({
   const [nightGuardsRequired, setNightGuardsRequired] = useState(
     String(site.rosterNightShiftGuardsRequired ?? 1)
   );
+  const rosterReadiness = useMemo(() => buildSiteRosterReadinessHints(site), [site]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -833,6 +855,24 @@ function SiteRosterSheetFields({
         <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-1.5">
           Used when generating the auto-roster plan. Each calendar day must reach these counts (pattern and gender rules still apply).
         </p>
+        {rosterReadiness.filter((h) => h.level !== "ok").length > 0 && (
+          <ul className="mt-2 space-y-1 text-[11px]">
+            {rosterReadiness
+              .filter((h) => h.level !== "ok")
+              .map((h, i) => (
+                <li
+                  key={`${h.code}-${i}`}
+                  className={
+                    h.level === "error"
+                      ? "text-red-700 dark:text-red-300"
+                      : "text-amber-800 dark:text-amber-200"
+                  }
+                >
+                  • {h.message}
+                </li>
+              ))}
+          </ul>
+        )}
       </div>
       <div>
         <label htmlFor="roster-site-rules-extra" className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">

@@ -11,6 +11,7 @@ import rateLimit from "@fastify/rate-limit";
 import fastifyStatic from "@fastify/static";
 import multipart from "@fastify/multipart";
 import cookie from "@fastify/cookie";
+import { isLocalStorage } from "./lib/storage.js";
 import { uploadsRoot } from "./lib/uploads-root.js";
 import { registerRequestId } from "./lib/request-id.js";
 import { authRoutes } from "./routes/auth.js";
@@ -57,9 +58,11 @@ function isValidationError(err: unknown): boolean {
 }
 
 export async function buildApp(): Promise<FastifyInstance> {
-  await mkdir(join(uploadsRoot, "logos"), { recursive: true });
-  await mkdir(join(uploadsRoot, "tasks"), { recursive: true });
-  await mkdir(join(uploadsRoot, "academy"), { recursive: true });
+  if (isLocalStorage()) {
+    await mkdir(join(uploadsRoot, "logos"), { recursive: true });
+    await mkdir(join(uploadsRoot, "tasks"), { recursive: true });
+    await mkdir(join(uploadsRoot, "academy"), { recursive: true });
+  }
 
   const app = Fastify({
     logger: true,
@@ -103,10 +106,12 @@ export async function buildApp(): Promise<FastifyInstance> {
     limits: { fileSize: 10 * 1024 * 1024 },
   });
 
-  await app.register(fastifyStatic, {
-    root: uploadsRoot,
-    prefix: "/uploads/",
-  });
+  if (isLocalStorage()) {
+    await app.register(fastifyStatic, {
+      root: uploadsRoot,
+      prefix: "/uploads/",
+    });
+  }
 
   app.setErrorHandler((err, request, reply) => {
     const statusCode =

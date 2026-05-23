@@ -1,17 +1,12 @@
 import type { FastifyInstance } from "fastify";
-import { createWriteStream } from "fs";
-import { mkdir, stat } from "fs/promises";
-import { join } from "path";
-import { pipeline } from "stream/promises";
 import { randomUUID } from "crypto";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
-import { uploadsRoot } from "../lib/uploads-root.js";
+import { readStreamToBuffer, storage } from "../lib/storage.js";
 
 const TASK_ROLES = ["admin", "operations_manager", "hr_payroll", "supervisor"] as const;
 
-const UPLOADS_BASE = join(uploadsRoot, "tasks");
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = [
   "image/jpeg",
@@ -60,15 +55,33 @@ export async function taskAttachmentsRoutes(app: FastifyInstance) {
       });
     }
 
+    let fileBuffer: Buffer;
+    try {
+      fileBuffer = await readStreamToBuffer(data.file, MAX_FILE_SIZE);
+    } catch (err) {
+      if (err instanceof Error && err.message === "FILE_TOO_LARGE") {
+        return reply.code(400).send({
+          error: "File too large",
+          message: "Maximum file size is 10MB",
+        });
+      }
+      request.log.error(err);
+      return reply.code(500).send({
+        error: "Upload failed",
+        message: "Could not read the file",
+      });
+    }
+
     const ext = mimetype.split("/")[1]?.replace("jpeg", "jpg") || "bin";
     const filename = `${randomUUID()}.${ext}`;
-    const dir = join(UPLOADS_BASE, user.companyId, taskId);
-    await mkdir(dir, { recursive: true });
-    const filepath = join(dir, filename);
+    const key = `tasks/${user.companyId}/${taskId}/${filename}`;
 
     try {
-      const writeStream = createWriteStream(filepath);
-      await pipeline(data.file, writeStream);
+      await storage.uploadFile({
+        key,
+        body: fileBuffer,
+        contentType: mimetype,
+      });
     } catch (err) {
       request.log.error(err);
       return reply.code(500).send({
@@ -77,31 +90,14 @@ export async function taskAttachmentsRoutes(app: FastifyInstance) {
       });
     }
 
-    let size: number;
-    try {
-      const st = await stat(filepath);
-      size = st.size;
-    } catch {
-      size = 0;
-    }
-
-    if (size > MAX_FILE_SIZE) {
-      const { unlink } = await import("fs/promises");
-      await unlink(filepath).catch(() => {});
-      return reply.code(400).send({
-        error: "File too large",
-        message: "Maximum file size is 10MB",
-      });
-    }
-
-    const url = `/uploads/tasks/${user.companyId}/${taskId}/${filename}`;
+    const url = storage.getAssetUrl(key);
 
     const attachment = await prisma.taskAttachment.create({
       data: {
         taskId,
         filename: data.filename || filename,
         mimeType: mimetype,
-        size,
+        size: fileBuffer.length,
         url,
         uploadedById: userId,
       },
@@ -123,15 +119,13 @@ export async function taskAttachmentsRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Not found", message: "Attachment not found" });
     }
 
-    const pathParts = attachment.url.split("/");
-    const filename = pathParts[pathParts.length - 1];
-    const filepath = join(UPLOADS_BASE, user.companyId, attachment.taskId, filename);
-
-    try {
-      const { unlink } = await import("fs/promises");
-      await unlink(filepath);
-    } catch {
-      // Ignore if file doesn't exist
+    const key = storage.resolveKeyFromUrl(attachment.url);
+    if (key) {
+      try {
+        await storage.deleteFile(key);
+      } catch {
+        // Ignore missing objects
+      }
     }
 
     await prisma.taskAttachment.delete({ where: { id } });

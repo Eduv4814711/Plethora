@@ -31,6 +31,12 @@ export type RosterPlanFairnessSpread = {
   maxSundayMinusMinSunday: number;
 };
 
+export type RosterReadinessDiagnostic = {
+  code: string;
+  level: "ok" | "warning" | "error";
+  message: string;
+};
+
 export type RosterPlan = {
   siteId: string;
   pattern: "3_on_3_off" | "custom_builder";
@@ -44,8 +50,14 @@ export type RosterPlan = {
     skippedGuardDays: number;
     uncoveredDays?: number;
     fairnessSpread?: RosterPlanFairnessSpread;
+    demandSlotsTotal?: number;
+    uncoveredSlots?: number;
+    coveragePercent?: number;
+    relieversUsed?: number;
+    patternBreaks?: number;
   };
   guardCycleOffsets?: { employeeId: string; offsetDays: number }[];
+  readiness?: RosterReadinessDiagnostic[];
   guardStats?: {
     employeeId: string;
     dayCount: number;
@@ -170,8 +182,12 @@ export function RosterPlanPreview({
 
   const hasSkippedConflicts = plan.conflicts.length > 0;
   const uncoveredDays = plan.summary.uncoveredDays ?? 0;
+  const uncoveredSlots = plan.summary.uncoveredSlots ?? 0;
   const hasUncoveredDays = uncoveredDays > 0;
   const fairness = plan.summary.fairnessSpread;
+  const coveragePercent = plan.summary.coveragePercent;
+  const patternBreaks = plan.summary.patternBreaks ?? 0;
+  const relieversUsed = plan.summary.relieversUsed ?? 0;
   const canApply = plan.entries.length > 0 && !applying && !hasUncoveredDays;
 
   return (
@@ -200,8 +216,34 @@ export function RosterPlanPreview({
 
       <div className="shrink-0 px-6 py-4 border-b border-neutral-200/80 dark:border-neutral-700">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <SummaryCard label="Guards" value={plan.summary.guardsConsidered} />
+          <SummaryCard
+            label="Coverage"
+            value={coveragePercent != null ? `${coveragePercent}%` : "—"}
+            tone={
+              coveragePercent != null && coveragePercent >= 100
+                ? "success"
+                : coveragePercent != null && coveragePercent < 100
+                  ? "warning"
+                  : "neutral"
+            }
+          />
+          <SummaryCard label="Guards considered" value={plan.summary.guardsConsidered} />
           <SummaryCard label="Shifts planned" value={plan.summary.shiftsPlanned} tone="success" />
+          <SummaryCard
+            label="Uncovered slots"
+            value={uncoveredSlots}
+            tone={uncoveredSlots > 0 ? "danger" : "success"}
+          />
+          <SummaryCard
+            label="Relievers used"
+            value={relieversUsed}
+            tone={relieversUsed > 0 ? "warning" : "neutral"}
+          />
+          <SummaryCard
+            label="Pattern breaks"
+            value={patternBreaks}
+            tone={patternBreaks > 0 ? "warning" : "success"}
+          />
           <SummaryCard
             label="Uncovered days"
             value={uncoveredDays}
@@ -245,6 +287,29 @@ export function RosterPlanPreview({
             {uncoveredDays} day{uncoveredDays !== 1 ? "s are" : " is"} missing day or night coverage. Fix
             warnings before applying.
           </p>
+        )}
+        {(plan.readiness?.length ?? 0) > 0 && (
+          <div className="mt-3 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50/80 dark:bg-neutral-900/50 px-3 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500 dark:text-neutral-400 mb-1.5">
+              Site readiness
+            </p>
+            <ul className="space-y-1 text-xs">
+              {plan.readiness!.map((d, i) => (
+                <li
+                  key={`${d.code}-${i}`}
+                  className={
+                    d.level === "error"
+                      ? "text-red-800 dark:text-red-200"
+                      : d.level === "warning"
+                        ? "text-amber-800 dark:text-amber-200"
+                        : "text-neutral-600 dark:text-neutral-400"
+                  }
+                >
+                  • {d.message}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         {plan.warnings.length > 0 && (
           <ul className="mt-3 space-y-1 text-xs text-amber-800 dark:text-amber-200">

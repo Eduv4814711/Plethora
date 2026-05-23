@@ -871,7 +871,7 @@ export default function RosteringPage() {
                 Step 4: Generate Roster
               </h3>
               <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-snug">
-                Build a site-wide plan for all guards assigned to this site, preview it, then apply in one step.
+                Generate a coverage-first roster plan for all guards on this site, preview diagnostics, then apply in one step.
               </p>
               <label className="flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300 cursor-pointer">
                 <input
@@ -888,7 +888,7 @@ export default function RosteringPage() {
                 disabled={!canGenerateRosterPlan || generatingPlan}
                 className="w-full btn-primary py-2.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {generatingPlan ? "Generating…" : "Generate roster plan"}
+                {generatingPlan ? "Generating…" : "Generate coverage-first roster plan"}
               </button>
               {!canGenerateRosterPlan && siteAssignedGuards.length === 0 && (
                 <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
