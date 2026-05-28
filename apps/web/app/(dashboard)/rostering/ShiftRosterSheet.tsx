@@ -281,23 +281,30 @@ function GenderMarker({ gender }: { gender: string | null | undefined }) {
   if (isFemale) {
     return (
       <span
-        className="mx-auto block h-4 w-4 rounded border border-black/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] dark:border-white/10 bg-orange-500"
+        className="mx-auto inline-flex h-5 w-[26px] items-center justify-center rounded border border-black/10 text-[11px] font-bold text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] dark:border-white/10 bg-orange-500"
         title="Female"
-      />
+        aria-label="Female"
+      >
+        F
+      </span>
     );
   }
   if (isMale) {
     return (
       <span
-        className="mx-auto block h-4 w-4 rounded border border-black/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] dark:border-white/10 bg-blue-600"
+        className="mx-auto inline-flex h-5 w-[26px] items-center justify-center rounded border border-black/10 text-[11px] font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] dark:border-white/10 bg-blue-600"
         title="Male"
-      />
+        aria-label="Male"
+      >
+        M
+      </span>
     );
   }
   return (
     <span
       className="mx-auto block h-4 w-4 rounded border border-dashed border-neutral-400 bg-neutral-100 dark:border-neutral-500 dark:bg-neutral-800"
-      title="—"
+      title="Gender not set"
+      aria-label="Gender not set"
     />
   );
 }

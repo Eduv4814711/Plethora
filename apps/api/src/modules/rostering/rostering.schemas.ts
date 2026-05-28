@@ -85,11 +85,6 @@ export const rosterPreviewSchema = z.object({
   endDate: z.string(),
   pattern: z.enum(["3_on_3_off", "custom_builder"]),
   customBlocks: z.array(customBlockSchema).optional(),
-  options: z
-    .object({
-      staggerGuards: z.boolean().optional(),
-    })
-    .optional(),
 });
 
 export const rosterPlanEntrySchema = z.object({
@@ -113,6 +108,9 @@ export const rosterPlanSchema = z.object({
       postsUsed: z.number(),
       skippedGuardDays: z.number(),
       uncoveredDays: z.number().optional(),
+      demandSlotsTotal: z.number().optional(),
+      uncoveredSlots: z.number().optional(),
+      coveragePercent: z.number().optional(),
       fairnessSpread: z
         .object({
           maxDayMinusMinDay: z.number(),
@@ -169,7 +167,6 @@ export const rosterApplySchema = z.object({
   options: z
     .object({
       replaceExisting: z.boolean().optional(),
-      force: z.boolean().optional(),
     })
     .optional(),
 });

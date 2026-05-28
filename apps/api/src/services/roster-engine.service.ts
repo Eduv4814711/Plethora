@@ -1,7 +1,7 @@
 import type { Post } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { getCompanyTimezone, getShiftTimes } from "../lib/timezone.js";
-import { meetsSiteShiftGenderRule, type CustomBlock } from "./rostering.service.js";
+import { meetsSiteShiftGenderRule, normalizeEmployeeGenderForRoster, type CustomBlock } from "./rostering.service.js";
 import { auditRosterGeneration } from "../lib/roster-audit.js";
 import {
   buildCalendarDays,
@@ -27,7 +27,6 @@ import {
   type RosterReadinessDiagnostic,
   type ShiftStaffingRequirements,
 } from "./roster-scheduler.js";
-import { normalizeEmployeeGenderForRoster } from "./rostering.service.js";
 import {
   minRosterableGuardsForStaffing,
   resolveSiteShiftStaffing,
@@ -158,10 +157,6 @@ export function resolvePostForShiftSlot(params: {
   return sitePool[idx % sitePool.length]!;
 }
 
-export type GenerateRosterPlanOptions = {
-  staggerGuards?: boolean;
-};
-
 export type GenerateRosterPlanInput = {
   companyId: string;
   siteId: string;
@@ -169,7 +164,6 @@ export type GenerateRosterPlanInput = {
   endDate: Date;
   pattern: RosterDualPattern;
   customBlocks?: CustomBlock[];
-  options?: GenerateRosterPlanOptions;
 };
 
 function shiftsOverlap(
@@ -185,11 +179,10 @@ function buildPatternCoverageHints(params: {
   pattern: RosterDualPattern;
   guardCount: number;
   cycleLength: number;
-  staggerGuards: boolean;
   customBlocks?: CustomBlock[];
   staffing: ShiftStaffingRequirements;
 }): RosterPlanWarning[] {
-  const { pattern, guardCount, cycleLength, staggerGuards, customBlocks, staffing } = params;
+  const { pattern, guardCount, cycleLength, customBlocks, staffing } = params;
   const hints: RosterPlanWarning[] = [];
 
   const minGuardsForStaffing = minRosterableGuardsForStaffing(staffing);
@@ -200,11 +193,11 @@ function buildPatternCoverageHints(params: {
     });
   }
 
-  if ((staffing.day > 1 || staffing.night > 1) && staggerGuards && guardCount > 0) {
+  if ((staffing.day > 1 || staffing.night > 1) && guardCount > 0 && guardCount < staffing.day + staffing.night) {
     hints.push({
       code: "PATTERN_COVERAGE_HINT",
       message:
-        "Multiple guards per shift need enough team members on the same cycle phase. Turn off stagger or add guards so pattern day/night blocks can fill each shift slot.",
+        "Multiple guards per shift need enough team members on staggered cycle phases. Add guards so pattern day/night blocks can fill each shift slot.",
     });
   }
 
@@ -213,13 +206,7 @@ function buildPatternCoverageHints(params: {
       hints.push({
         code: "PATTERN_COVERAGE_HINT",
         message:
-          "3D3N3O needs at least 3 rosterable guards on this site with stagger enabled so day and night blocks align across the team.",
-      });
-    } else if (!staggerGuards && guardCount > 1) {
-      hints.push({
-        code: "PATTERN_COVERAGE_HINT",
-        message:
-          "Enable stagger to spread each guard's cycle across the full pattern (e.g. offsets 0, 3, 6 for 3 guards). Without stagger, day and night coverage will not align.",
+          "3D3N3O needs at least 3 rosterable guards on this site so day and night blocks align across the team (automatic phase spreading).",
       });
     }
     return hints;
@@ -233,18 +220,12 @@ function buildPatternCoverageHints(params: {
         hints.push({
           code: "PATTERN_COVERAGE_HINT",
           message:
-            "This custom pattern includes day and night blocks. Assign at least 2 guards with stagger enabled for daily coverage.",
+            "This custom pattern includes day and night blocks. Assign at least 2 guards for daily coverage.",
         });
-      } else if (!staggerGuards && guardCount > 1) {
+      } else if (guardCount < cycleLength) {
         hints.push({
           code: "PATTERN_COVERAGE_HINT",
-          message:
-            "Enable stagger to phase-shift guards across the pattern cycle so day and night slots can be covered each day.",
-        });
-      } else if (staggerGuards && guardCount < cycleLength) {
-        hints.push({
-          code: "PATTERN_COVERAGE_HINT",
-          message: `For reliable daily coverage with a ${cycleLength}-day cycle, consider at least ${cycleLength} guards with stagger enabled.`,
+          message: `For reliable daily coverage with a ${cycleLength}-day cycle, consider at least ${cycleLength} guards (phases spread automatically).`,
         });
       }
     }
@@ -264,9 +245,7 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
     endDate,
     pattern,
     customBlocks,
-    options = {},
   } = input;
-  const staggerGuards = options.staggerGuards !== false;
 
   const startDateStr = formatDateKey(startDate);
   const endDateStr = formatDateKey(endDate);
@@ -384,26 +363,45 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
   }
 
   const postIds = site.posts.map((p) => p.id);
-  const existingShifts = await prisma.shift.findMany({
-    where: {
-      companyId,
-      postId: { in: postIds },
-      startTime: { lt: endDate },
-      endTime: { gt: startDate },
-    },
-    select: { employeeId: true, startTime: true, endTime: true },
-  });
+  const guardIds = rosterableGuards.map((g) => g.id);
+
+  const [blockingExistingShifts, sameSiteShiftsInPeriod] = await Promise.all([
+    prisma.shift.findMany({
+      where: {
+        companyId,
+        employeeId: { in: guardIds },
+        postId: { notIn: postIds },
+        startTime: { lt: endDate },
+        endTime: { gt: startDate },
+      },
+      select: { employeeId: true, startTime: true, endTime: true },
+    }),
+    prisma.shift.count({
+      where: {
+        companyId,
+        postId: { in: postIds },
+        status: { in: ["created", "assigned"] },
+        startTime: { lt: endDate },
+        endTime: { gt: startDate },
+      },
+    }),
+  ]);
+  const existingShifts = blockingExistingShifts;
+
+  if (sameSiteShiftsInPeriod > 0) {
+    warnings.push({
+      code: "REPLAN_REPLACES_EXISTING",
+      message: `${sameSiteShiftsInPeriod} existing shift(s) on this site in the period will be replaced when you apply this plan.`,
+    });
+  }
 
   const timeZone = await getCompanyTimezone(companyId);
   const blocks = patternBlocks(pattern, customBlocks);
   const cycleLength = dualPatternCycleLength(pattern, customBlocks);
   const calendarDays = buildCalendarDays(startDate, endDate);
-  const guardIds = rosterableGuards.map((g) => g.id);
 
   const sortedGuards = [...rosterableGuards].sort((a, b) => a.id.localeCompare(b.id));
-  const staggerOffsetList = staggerGuards
-    ? computeStaggerOffsets(sortedGuards.length, cycleLength)
-    : sortedGuards.map(() => 0);
+  const staggerOffsetList = computeStaggerOffsets(sortedGuards.length, cycleLength);
 
   const guardCycleOffsets: RosterPlanGuardOffset[] = sortedGuards.map((guard, i) => ({
     employeeId: guard.id,
@@ -517,11 +515,25 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
 
     if (!best) {
       uncoveredSlots++;
+      const patternAligned = candidates.filter(
+        (g) => (preferenceGrid.get(g.id)?.get(slot.dateKey) ?? "off") === slot.shiftType
+      );
+      let reason: string;
+      if (patternAligned.length === 0) {
+        reason = `No guard on ${slot.shiftType} pattern phase for post ${post.name}`;
+      } else {
+        reason = `Pattern-aligned guards blocked by rest, gender, or overlap rules for post ${post.name}`;
+      }
       warnings.push({
         code: "UNCOVERED_SLOT",
         date: slot.dateKey,
         postId: slot.postId,
-        message: `No guard matches pattern and rest rules for ${slot.shiftType} shift on ${slot.dateKey} (post ${post.name}).`,
+        message: `${slot.dateKey}: ${reason}.`,
+      });
+      conflicts.push({
+        employeeId: "",
+        date: slot.dateKey,
+        reason: `${slot.shiftType} · ${post.name}: ${reason}`,
       });
       continue;
     }
@@ -547,6 +559,20 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
     for (const day of calendarDays) {
       if (!worked.has(formatDateKey(day))) {
         recordOffDayInStats(statsByGuard.get(guardId)!);
+      }
+    }
+  }
+
+  const datesWithUncoveredSlots = new Set(
+    warnings.filter((w) => w.code === "UNCOVERED_SLOT" && w.date).map((w) => w.date!)
+  );
+  for (const guardId of guardIds) {
+    for (const day of calendarDays) {
+      const dateKey = formatDateKey(day);
+      if (!datesWithUncoveredSlots.has(dateKey)) continue;
+      const pref = preferenceGrid.get(guardId)?.get(dateKey) ?? "off";
+      if (pref === "off") {
+        skippedGuardDays++;
       }
     }
   }
@@ -587,7 +613,6 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
       pattern,
       guardCount: rosterableGuards.length,
       cycleLength,
-      staggerGuards,
       customBlocks,
       staffing: shiftStaffing,
     })
@@ -657,7 +682,6 @@ export type ApplyRosterPlanInput = {
   plan: RosterPlan;
   options?: {
     replaceExisting?: boolean;
-    force?: boolean;
   };
 };
 
@@ -692,7 +716,9 @@ async function loadApplyValidationContext(
   siteId: string,
   plan: RosterPlan,
   rangeStart: Date,
-  rangeEnd: Date
+  rangeEnd: Date,
+  sitePostIds: string[],
+  replaceExisting: boolean
 ): Promise<ApplyValidationContext> {
   const employeeIds = [...new Set(plan.entries.map((e) => e.employeeId))];
   const postIds = [...new Set(plan.entries.map((e) => e.postId))];
@@ -724,6 +750,14 @@ async function loadApplyValidationContext(
         employeeId: { in: employeeIds },
         startTime: { lt: rangeEnd },
         endTime: { gt: rangeStart },
+        ...(replaceExisting
+          ? {
+              NOT: {
+                postId: { in: sitePostIds },
+                status: { in: ["created", "assigned"] },
+              },
+            }
+          : {}),
       },
       select: { employeeId: true, startTime: true, endTime: true },
     }),
@@ -825,7 +859,9 @@ export async function applyRosterPlan(input: ApplyRosterPlanInput): Promise<Appl
     plan.siteId,
     plan,
     start,
-    end
+    end,
+    [...sitePostIds],
+    replaceExisting
   );
   const shiftsToCreate: {
     companyId: string;

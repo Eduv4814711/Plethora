@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, type ReactElement } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
-import { format, addDays, startOfMonth, endOfMonth, isSameDay, parseISO, startOfDay } from "date-fns";
+import { format, addDays, startOfMonth, endOfMonth, parseISO, startOfDay } from "date-fns";
 
 type BulkPattern =
   | "all_days"
@@ -22,7 +22,7 @@ import { CustomPatternBuilder } from "./CustomPatternBuilder";
 import type { CustomBlock } from "./CustomPatternBuilder";
 import { RosterPlanPreview, type RosterPlan } from "./RosterPlanPreview";
 import { ShiftRosterSheet } from "./ShiftRosterSheet";
-import { buildShiftSheetRows, type ShiftSheetRow } from "@/lib/shift-sheet-matrix";
+import { buildShiftSheetRows, mergeSheetEmployeeLookup, type ShiftSheetRow } from "@/lib/shift-sheet-matrix";
 import { DateInput } from "@/components/date-input";
 import { generateGuardRosterPDF, generateShiftRosterSheetPDF } from "@/lib/roster-pdf";
 import {
@@ -30,6 +30,7 @@ import {
   meetsSiteShiftGenderRule,
   siteHasRestrictiveShiftGenderRules,
 } from "@/lib/site-shift-gender-rules";
+import { buildSiteRosterReadinessHints } from "@/lib/roster-readiness-hints";
 
 const DASHBOARD_MAIN_ID = "dashboard-main";
 
@@ -67,7 +68,7 @@ interface Shift {
   startTime: string;
   endTime: string;
   status: string;
-  employee: { id: string; firstName: string; lastName: string };
+  employee: { id: string; firstName: string; lastName: string; gender?: string | null; phone?: string | null };
   post: { id: string; name: string; shiftType: string | null; site: { id: string; name: string } };
 }
 
@@ -85,6 +86,7 @@ interface Post {
   id: string;
   name: string;
   shiftType?: string | null;
+  assignedGuards?: { employee: { id: string; firstName?: string; lastName?: string } }[];
 }
 
 interface SiteAssignedGuard {
@@ -147,16 +149,9 @@ export default function RosteringPage() {
   const [dragOverPostId, setDragOverPostId] = useState<string | null>(null);
   const [dragOverSiteId, setDragOverSiteId] = useState<string | null>(null);
   const [guardSearch, setGuardSearch] = useState("");
-  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
-  const [shiftContextMenu, setShiftContextMenu] = useState<{
-    shift: Shift;
-    x: number;
-    y: number;
-  } | null>(null);
 
   const isDualPattern = pattern === "3_on_3_off" || pattern === "custom_builder";
   const [bulkError, setBulkError] = useState<string | null>(null);
-  const [deletingShiftId, setDeletingShiftId] = useState<string | null>(null);
   const [showResetMenu, setShowResetMenu] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [showPdfMenu, setShowPdfMenu] = useState(false);
@@ -166,14 +161,11 @@ export default function RosteringPage() {
   const [pdfPeriodStart, setPdfPeriodStart] = useState("");
   const [pdfPeriodEnd, setPdfPeriodEnd] = useState("");
   const [pdfPeriodError, setPdfPeriodError] = useState<string | null>(null);
-  const [rosterView, setRosterView] = useState<"calendar" | "sheet">("calendar");
   const [rosterPlan, setRosterPlan] = useState<RosterPlan | null>(null);
   const [showRosterPlanModal, setShowRosterPlanModal] = useState(false);
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [applyingPlan, setApplyingPlan] = useState(false);
   const [rosterPlanApplyError, setRosterPlanApplyError] = useState<string | null>(null);
-  const [staggerGuards, setStaggerGuards] = useState(true);
-
   const rosteredEmployees = useMemo(() => {
     const seen = new Set<string>();
     const list: { id: string; firstName: string; lastName: string }[] = [];
@@ -324,7 +316,7 @@ export default function RosteringPage() {
         shifts: periodShifts,
         calendarDays: pdfCalendarDays,
         siteId: selectedSiteId,
-        employees: pdfEmployees,
+        employees: mergeSheetEmployeeLookup(pdfEmployees, siteForPdf?.assignedGuards),
       });
       return generateShiftRosterSheetPDF({
         siteName,
@@ -383,25 +375,6 @@ export default function RosteringPage() {
     setShowPdfPeriodModal(false);
   };
 
-  const handleRemoveShift = async (shift: Shift) => {
-    if (!token) return;
-    const name = `${shift.employee.firstName} ${shift.employee.lastName}`;
-    if (!confirm(`Remove ${name} from this shift?`)) return;
-    setDeletingShiftId(shift.id);
-    try {
-      const res = await authFetch(`/shifts/${shift.id}`, token, { method: "DELETE" });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.message || "Failed to remove shift");
-      }
-      await refresh();
-    } catch (err) {
-      setBulkError(err instanceof Error ? err.message : "Failed to remove shift");
-    } finally {
-      setDeletingShiftId(null);
-    }
-  };
-
   const getDateRangeParams = () => {
     const start = startOfDay(parseISO(periodStart));
     const end = new Date(parseISO(periodEnd));
@@ -418,7 +391,7 @@ export default function RosteringPage() {
 
   const getMonthRangeForReset = () => getDateRangeParams();
 
-  const { calendarDays, displayCells } = useMemo(() => {
+  const calendarDays = useMemo(() => {
     const start = startOfDay(parseISO(periodStart));
     const end = new Date(parseISO(periodEnd));
     end.setHours(23, 59, 59, 999);
@@ -428,42 +401,32 @@ export default function RosteringPage() {
       days.push(new Date(d));
       d = addDays(d, 1);
     }
-    const firstDay = days[0]?.getDay() ?? 1;
-    const startPad = (firstDay - 1 + 7) % 7;
-    const endPad = (7 - ((startPad + days.length) % 7)) % 7;
-    const cells: (Date | null)[] = [
-      ...Array(startPad).fill(null),
-      ...days,
-      ...Array(endPad).fill(null),
-    ];
-    return { calendarDays: days, displayCells: cells };
+    return days;
   }, [periodStart, periodEnd]);
 
-  const shiftsByDay = useMemo(() => {
-    const map = new Map<string, Shift[]>();
-    for (const day of calendarDays) {
-      const key = format(day, "yyyy-MM-dd");
-      map.set(key, []);
-    }
-    for (const shift of shifts) {
-      const start = parseISO(shift.startTime);
-      const key = format(start, "yyyy-MM-dd");
-      if (map.has(key)) {
-        map.get(key)!.push(shift);
-      }
-    }
-    return map;
-  }, [shifts, calendarDays]);
+  const filteredShifts = useMemo(() => {
+    if (!selectedSiteId) return shifts;
+    return shifts.filter((s) => s.post.site.id === selectedSiteId);
+  }, [shifts, selectedSiteId]);
+
+  const sheetEmployeeLookup = useMemo(
+    () =>
+      mergeSheetEmployeeLookup(
+        employees,
+        selectedSiteId ? sites.find((s) => s.id === selectedSiteId)?.assignedGuards : undefined
+      ),
+    [employees, sites, selectedSiteId]
+  );
 
   const sheetRows = useMemo((): ShiftSheetRow[] => {
     if (!selectedSiteId) return [];
     return buildShiftSheetRows({
-      shifts,
+      shifts: filteredShifts,
       calendarDays,
       siteId: selectedSiteId,
-      employees,
+      employees: sheetEmployeeLookup,
     });
-  }, [selectedSiteId, shifts, calendarDays, employees]);
+  }, [selectedSiteId, filteredShifts, calendarDays, sheetEmployeeLookup]);
 
   const siteAssignedGuards = useMemo((): Employee[] => {
     if (!selectedSiteId) return [];
@@ -516,10 +479,27 @@ export default function RosteringPage() {
     return site?.posts ?? [];
   }, [sites, selectedSiteId]);
 
+  const postPrefsByGuardId = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const post of postsForSelectedSite) {
+      for (const assignment of post.assignedGuards ?? []) {
+        const list = map.get(assignment.employee.id) ?? [];
+        list.push(post.name);
+        map.set(assignment.employee.id, list);
+      }
+    }
+    return map;
+  }, [postsForSelectedSite]);
+
   const selectedSite = useMemo(
     () => (selectedSiteId ? sites.find((s) => s.id === selectedSiteId) : undefined),
     [sites, selectedSiteId]
   );
+
+  const rosterReadinessHints = useMemo(() => {
+    if (!selectedSite) return [];
+    return buildSiteRosterReadinessHints(selectedSite);
+  }, [selectedSite]);
 
   /** Shift kinds actually used by the dual-pattern bulk flow (site drop). */
   const siteDualPatternShiftKinds = useMemo((): ("day" | "night")[] | null => {
@@ -535,17 +515,6 @@ export default function RosteringPage() {
     }
     return null;
   }, [isDualPattern, pattern, customBlocks]);
-
-  useEffect(() => {
-    if (calendarDays.length === 0) {
-      setSelectedDayKey(null);
-      return;
-    }
-    const dayKeys = new Set(calendarDays.map((d) => format(d, "yyyy-MM-dd")));
-    if (selectedDayKey && dayKeys.has(selectedDayKey)) return;
-    const todayKey = format(new Date(), "yyyy-MM-dd");
-    setSelectedDayKey(dayKeys.has(todayKey) ? todayKey : format(calendarDays[0], "yyyy-MM-dd"));
-  }, [calendarDays, selectedDayKey]);
 
   const handleBulkDrop = async (employeeId: string, postId: string) => {
     if (!token) return;
@@ -599,7 +568,6 @@ export default function RosteringPage() {
       pattern,
     };
     if (pattern === "custom_builder") body.customBlocks = customBlocks;
-    body.options = { staggerGuards };
     try {
       const res = await authFetch("/shifts/roster/preview", token, {
         method: "POST",
@@ -716,20 +684,6 @@ export default function RosteringPage() {
     if (token) refresh();
   }, [token, periodStart, periodEnd]);
 
-  useEffect(() => {
-    if (!shiftContextMenu) return;
-    const close = () => setShiftContextMenu(null);
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    window.addEventListener("click", close);
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("click", close);
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [shiftContextMenu]);
-
   if (loading) {
     return (
       <div className="animate-pulse mx-auto w-full max-w-[1760px] h-[calc(100dvh-7.5rem)] rounded-[28px] bg-gradient-to-b from-neutral-50 via-white to-orange-50/30 dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900 p-3">
@@ -760,20 +714,25 @@ export default function RosteringPage() {
         ? format(calendarDays[0], "d MMM yyyy")
         : format(calendarDays[0], "d MMM") + " – " + format(calendarDays[calendarDays.length - 1], "d MMM yyyy")
       : "";
-  const calendarWeeks = Array.from(
-    { length: Math.max(1, Math.ceil(displayCells.length / 7)) },
-    (_, index) => displayCells.slice(index * 7, index * 7 + 7)
-  );
   const selectedSiteName = selectedSiteId
     ? sites.find((s) => s.id === selectedSiteId)?.name ?? "Unknown site"
     : "All sites";
   const totalPostsForSummary = selectedSiteId
     ? postsForSelectedSite.length
     : sites.reduce((sum, site) => sum + site.posts.length, 0);
-  const totalShiftsForSummary = shifts.length;
-  const dayShiftCount = shifts.filter((s) => (s.post.shiftType ?? "day") === "day").length;
-  const nightShiftCount = shifts.filter((s) => s.post.shiftType === "night").length;
-  const expectedShiftSlots = totalPostsForSummary * calendarDays.length;
+  const dayStaffRequired = selectedSite
+    ? Math.min(50, Math.max(1, Math.floor(selectedSite.rosterDayShiftGuardsRequired ?? 1)))
+    : 0;
+  const nightStaffRequired = selectedSite
+    ? Math.min(50, Math.max(1, Math.floor(selectedSite.rosterNightShiftGuardsRequired ?? 1)))
+    : 0;
+  const totalShiftsForSummary = filteredShifts.length;
+  const dayShiftCount = filteredShifts.filter((s) => (s.post.shiftType ?? "day") === "day").length;
+  const nightShiftCount = filteredShifts.filter((s) => s.post.shiftType === "night").length;
+  const expectedShiftSlots =
+    selectedSiteId && selectedSite
+      ? (dayStaffRequired + nightStaffRequired) * calendarDays.length
+      : totalPostsForSummary * calendarDays.length;
   const openShiftCount = Math.max(expectedShiftSlots - totalShiftsForSummary, 0);
   const coveragePercent =
     expectedShiftSlots > 0
@@ -873,15 +832,24 @@ export default function RosteringPage() {
               <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-snug">
                 Generate a coverage-first roster plan for all guards on this site, preview diagnostics, then apply in one step.
               </p>
-              <label className="flex items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={staggerGuards}
-                  onChange={(e) => setStaggerGuards(e.target.checked)}
-                  className="rounded border-neutral-300 dark:border-neutral-600"
-                />
-                Stagger guard cycles (spread phases across the full pattern, e.g. 0 / 3 / 6 days for 3D3N3O)
-              </label>
+              {rosterReadinessHints.length > 0 && (
+                <ul className="space-y-1 text-[11px] rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/50 px-2.5 py-2">
+                  {rosterReadinessHints.map((hint, i) => (
+                    <li
+                      key={`${hint.code}-${i}`}
+                      className={
+                        hint.level === "error"
+                          ? "text-red-700 dark:text-red-300"
+                          : hint.level === "warning"
+                            ? "text-amber-800 dark:text-amber-200"
+                            : "text-neutral-600 dark:text-neutral-400"
+                      }
+                    >
+                      • {hint.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
               <button
                 type="button"
                 onClick={handleGenerateRosterPlan}
@@ -1018,7 +986,13 @@ export default function RosteringPage() {
                   Site Guards
                 </h4>
                 <p className="text-[10px] text-neutral-500 dark:text-neutral-400 mb-2 leading-snug">
-                  Only guards assigned to this site in Sites appear here.
+                  Only guards assigned to this site in Sites appear here.{" "}
+                  <Link
+                    href={selectedSiteId ? `/sites/${selectedSiteId}` : "/sites"}
+                    className="text-orange-700 dark:text-orange-300 underline hover:no-underline"
+                  >
+                    Configure posts
+                  </Link>
                 </p>
                 {isDualPattern && selectedSite && siteHasRestrictiveShiftGenderRules(selectedSite) && (
                   <p className="text-[10px] text-neutral-500 dark:text-neutral-400 mb-2 leading-snug">
@@ -1085,7 +1059,14 @@ export default function RosteringPage() {
                           : "opacity-55 cursor-not-allowed bg-neutral-100/80 dark:bg-neutral-800/30"
                       }`}
                     >
-                      {g.firstName} {g.lastName}
+                      <span className="font-medium">
+                        {g.firstName} {g.lastName}
+                      </span>
+                      {(postPrefsByGuardId.get(g.id)?.length ?? 0) > 0 && (
+                        <span className="block text-[10px] text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">
+                          Pref: {postPrefsByGuardId.get(g.id)!.join(", ")}
+                        </span>
+                      )}
                     </div>
                     );
                   })}
@@ -1133,44 +1114,16 @@ export default function RosteringPage() {
           <div className="flex flex-wrap items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 flex items-center justify-center shrink-0">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18M10 3v18M14 3v18M4 6h16a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V7a1 1 0 011-1z" />
               </svg>
             </div>
             <div className="min-w-0">
               <h1 className="text-[1.75rem] leading-none font-bold text-neutral-900 dark:text-neutral-100 tracking-tight">
-                {rosterView === "sheet" ? "Shift sheet" : "Roster Calendar"}
+                Shift sheet
               </h1>
               <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-                {rosterView === "sheet" ? "Staff × day matrix for the selected site" : "Security workforce scheduling view"}
+                Staff × day matrix for the selected site
               </p>
-            </div>
-            <div
-              className="flex h-11 shrink-0 rounded-xl border border-neutral-200 dark:border-neutral-700 overflow-hidden bg-white dark:bg-neutral-900"
-              role="group"
-              aria-label="Roster view"
-            >
-              <button
-                type="button"
-                onClick={() => setRosterView("calendar")}
-                className={`px-3.5 text-sm font-semibold transition-colors ${
-                  rosterView === "calendar"
-                    ? "bg-orange-500 text-black"
-                    : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                }`}
-              >
-                Calendar
-              </button>
-              <button
-                type="button"
-                onClick={() => setRosterView("sheet")}
-                className={`px-3.5 text-sm font-semibold border-l border-neutral-200 dark:border-neutral-700 transition-colors ${
-                  rosterView === "sheet"
-                    ? "bg-orange-500 text-black"
-                    : "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                }`}
-              >
-                Shift sheet
-              </button>
             </div>
           </div>
           <div className="hidden xl:flex justify-center" />
@@ -1635,177 +1588,7 @@ export default function RosteringPage() {
             emphasize
           />
         </div>
-        {rosterView === "calendar" ? (
-        <div className="flex-1 min-h-0 rounded-2xl border border-neutral-200/90 dark:border-neutral-700 relative overflow-hidden bg-neutral-100/45 dark:bg-neutral-900/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_8px_30px_-20px_rgba(15,23,42,0.35)]">
-          <div className="sticky top-0 z-20 border-b border-neutral-200/80 dark:border-neutral-700 bg-white/90 dark:bg-neutral-900/90 backdrop-blur">
-            <div className="grid grid-cols-7 gap-2 px-3 py-2.5">
-              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((wd, i) => (
-                <div
-                  key={wd}
-                  className={`rounded-lg py-2 text-center text-[11px] font-semibold uppercase tracking-[0.12em] ${
-                    i >= 5
-                      ? "text-neutral-500 dark:text-neutral-400 bg-neutral-100/80 dark:bg-neutral-800/60"
-                      : "text-neutral-700 dark:text-neutral-300 bg-white dark:bg-neutral-800/40"
-                  }`}
-                >
-                  {wd}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div key={`${periodStart}-${periodEnd}`} className="h-[calc(100%-64px)] px-3 pb-3 pt-2 animate-fade-in">
-            <div className="h-full flex flex-col gap-2">
-              {calendarWeeks.map((week, weekIndex) => (
-                <div
-                  key={`week-${weekIndex}`}
-                  className={`grid grid-cols-7 gap-2 flex-1 min-h-0 rounded-xl p-1 ${
-                    weekIndex % 2 === 0
-                      ? "bg-white/55 dark:bg-neutral-900/25"
-                      : "bg-neutral-50/65 dark:bg-neutral-900/40"
-                  }`}
-                >
-                  {week.map((day, dayIdx) => {
-                    if (!day) {
-                      return (
-                        <div
-                          key={`empty-${weekIndex}-${dayIdx}`}
-                          className="min-h-0 rounded-xl border border-dashed border-neutral-200 dark:border-neutral-700 bg-neutral-50/80 dark:bg-neutral-900/35"
-                        />
-                      );
-                    }
-                    const key = format(day, "yyyy-MM-dd");
-                    const dayShifts = shiftsByDay.get(key) ?? [];
-                    const isToday = isSameDay(day, new Date());
-                    const isSelected = selectedDayKey === key;
-                    const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-
-                    return (
-                      <div
-                        key={key}
-                        className={`group/day min-h-0 rounded-xl border p-2.5 flex flex-col transition-all duration-200 ${
-                          isSelected
-                            ? "border-orange-300 dark:border-orange-500 ring-2 ring-orange-200/60 dark:ring-orange-500/40 bg-white dark:bg-neutral-900/80 shadow-sm"
-                            : isToday
-                              ? "border-orange-200 dark:border-orange-700 bg-orange-50/70 dark:bg-orange-900/20"
-                              : isWeekend
-                                ? "border-neutral-200 dark:border-neutral-700 bg-neutral-50/85 dark:bg-neutral-900/55 hover:border-neutral-300 dark:hover:border-neutral-600"
-                                : "border-neutral-200 dark:border-neutral-700 bg-white/90 dark:bg-neutral-900/65 hover:border-neutral-300 dark:hover:border-neutral-600"
-                        }`}
-                        onClick={() => setSelectedDayKey(key)}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div
-                            className={`inline-flex items-center gap-2 rounded-lg px-2 py-1 ${
-                              isToday
-                                ? "bg-orange-100 dark:bg-orange-900/40 text-orange-900 dark:text-orange-200"
-                                : "bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
-                            }`}
-                          >
-                            <span className="text-sm font-semibold leading-none">{format(day, "d")}</span>
-                            <span className="text-[10px] font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-                              {format(day, "MMM")}
-                            </span>
-                          </div>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400">
-                            {dayShifts.length}
-                          </span>
-                        </div>
-
-                        <div className="mt-2 flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-0.5">
-                          {dayShifts.length === 0 ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedDayKey(key);
-                                setSelectedDayForShift(day);
-                                setShowForm(true);
-                              }}
-                              className="w-full h-full min-h-[86px] rounded-lg border border-dashed border-neutral-300 dark:border-neutral-600 bg-white/60 dark:bg-neutral-900/40 text-neutral-500 dark:text-neutral-400 hover:border-orange-300 dark:hover:border-orange-500/60 hover:text-orange-700 dark:hover:text-orange-300 transition-colors flex flex-col items-center justify-center gap-1.5"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                              </svg>
-                              <span className="text-[11px] font-medium">Drop shift here</span>
-                            </button>
-                          ) : (
-                            dayShifts.map((s) => {
-                              const isNightShift = s.post.shiftType === "night";
-                              const shiftTone = isNightShift
-                                ? "bg-slate-100/95 dark:bg-slate-900/45 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200"
-                                : "bg-orange-50/95 dark:bg-orange-900/30 border-orange-200 dark:border-orange-800/60 text-orange-900 dark:text-orange-200";
-                              const shiftLabel = isNightShift ? "Night shift" : "Day shift";
-                              const timeLabel = `${format(parseISO(s.startTime), "HH:mm")}–${format(parseISO(s.endTime), "HH:mm")}`;
-
-                              return (
-                                <div
-                                  key={s.id}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRemoveShift(s);
-                                  }}
-                                  onContextMenu={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    setSelectedDayKey(key);
-                                    setShiftContextMenu({ shift: s, x: e.clientX, y: e.clientY });
-                                  }}
-                                  className={`group/shift rounded-xl border px-2.5 py-2 text-[11px] cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
-                                    deletingShiftId === s.id
-                                      ? "opacity-60 pointer-events-none"
-                                      : "hover:border-rose-300 dark:hover:border-rose-500/60"
-                                  } ${shiftTone}`}
-                                  title={`${s.employee.firstName} ${s.employee.lastName} • ${shiftLabel} • ${timeLabel}`}
-                                >
-                                  <div className="flex items-start justify-between gap-2">
-                                    <p className="font-semibold truncate">
-                                      {s.employee.firstName} {s.employee.lastName}
-                                    </p>
-                                    <span className="text-[10px] opacity-0 group-hover/shift:opacity-100 transition-opacity text-rose-500 dark:text-rose-300">
-                                      remove
-                                    </span>
-                                  </div>
-                                  <p className="mt-0.5 text-[10px] opacity-90">
-                                    {shiftLabel} · {timeLabel}
-                                  </p>
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedDayKey(key);
-                            setSelectedDayForShift(day);
-                            setShowForm(true);
-                          }}
-                          className="mt-2 h-7 rounded-lg border border-dashed border-neutral-300 dark:border-neutral-600 text-[11px] text-neutral-500 dark:text-neutral-400 hover:border-orange-300 dark:hover:border-orange-500/60 hover:text-orange-700 dark:hover:text-orange-300 transition-colors opacity-0 group-hover/day:opacity-100"
-                        >
-                          + Add shift
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          </div>
-          {shifts.length === 0 && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-neutral-900/90 pointer-events-none rounded-sm">
-              <div className="text-center px-8">
-                <div className="w-20 h-20 mx-auto mb-4 rounded-sm bg-gradient-to-br from-neutral-100 to-neutral-50 dark:from-neutral-800 dark:to-neutral-800/50 flex items-center justify-center ring-1 ring-neutral-200/50 dark:ring-neutral-700/50">
-                  <svg className="w-10 h-10 text-neutral-400 dark:text-neutral-500" fill="none" stroke="currentColor" strokeWidth={1.25} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <p className="text-neutral-600 dark:text-neutral-400 font-semibold">No shifts scheduled</p>
-                <p className="text-sm text-neutral-400 dark:text-neutral-500 mt-1">Click on a day to add a shift</p>
-              </div>
-            </div>
-          )}
-        </div>
-        ) : selectedSiteId ? (
+        {selectedSiteId ? (
           <div className="flex-1 min-h-0 overflow-auto rounded-2xl border border-neutral-200/90 dark:border-neutral-700 bg-neutral-50/80 dark:bg-neutral-900/50 p-3 md:p-4">
             <ShiftRosterSheet
               siteName={sites.find((s) => s.id === selectedSiteId)?.name ?? "Site"}
@@ -1835,54 +1618,6 @@ export default function RosteringPage() {
             </p>
           </div>
         )}
-        {rosterView === "calendar" && (
-        <div className="print:hidden flex items-center flex-wrap gap-6 mt-3 pl-1">
-          <span className="flex items-center gap-2 text-xs text-neutral-600 dark:text-neutral-400">
-            <span className="w-3.5 h-3.5 rounded-md bg-orange-100 dark:bg-orange-900/30 border border-orange-200 dark:border-orange-800/60" />
-            <span className="font-medium">Day shift</span>
-          </span>
-          <span className="flex items-center gap-2 text-xs text-neutral-600 dark:text-neutral-400">
-            <span className="w-3.5 h-3.5 rounded-md bg-slate-100 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700" />
-            <span className="font-medium">Night shift</span>
-          </span>
-          <span className="flex items-center gap-2 text-xs text-neutral-600 dark:text-neutral-400">
-            <span className="w-3.5 h-3.5 rounded-md border border-dashed border-neutral-400 dark:border-neutral-500 bg-white/80 dark:bg-neutral-900/60" />
-            <span className="font-medium">Open slot</span>
-          </span>
-        </div>
-        )}
-        {shiftContextMenu && (
-          <div
-            className="fixed z-50 w-48 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 shadow-xl p-1"
-            style={{ left: shiftContextMenu.x, top: shiftContextMenu.y }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-200"
-              onClick={async () => {
-                const day = parseISO(shiftContextMenu.shift.startTime);
-                setSelectedDayKey(format(day, "yyyy-MM-dd"));
-                setSelectedDayForShift(day);
-                setShowForm(true);
-                setShiftContextMenu(null);
-              }}
-            >
-              Add another shift this day
-            </button>
-            <button
-              type="button"
-              className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-rose-50 dark:hover:bg-rose-900/25 text-rose-600 dark:text-rose-300"
-              onClick={async () => {
-                const shift = shiftContextMenu.shift;
-                setShiftContextMenu(null);
-                await handleRemoveShift(shift);
-              }}
-            >
-              Remove shift
-            </button>
-          </div>
-        )}
       </div>
       </div>
     </div>
@@ -1898,7 +1633,7 @@ function RosterKpiCard({
 }: {
   label: string;
   value: string | number;
-  icon: JSX.Element;
+  icon: ReactElement;
   tone: "neutral" | "day" | "night" | "coverage";
   emphasize?: boolean;
 }) {

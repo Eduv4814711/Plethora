@@ -27,9 +27,7 @@ const nextConfig = {
   // Set DOCKER_BUILD=1 in Dockerfile.web so the image can run node server.js (standalone).
   ...(process.env.DOCKER_BUILD === "1" ? { output: "standalone" } : {}),
   // npm workspaces hoist dependencies to the repo root; include them in the server bundle trace.
-  experimental: {
-    ...(useTracingRoot ? { outputFileTracingRoot: monorepoRoot } : {}),
-  },
+  ...(useTracingRoot ? { outputFileTracingRoot: monorepoRoot } : {}),
   async rewrites() {
     const apiUrl = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL);
     const prefix = (process.env.NEXT_PUBLIC_API_PATH_PREFIX ?? "").replace(

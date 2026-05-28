@@ -64,7 +64,7 @@ notifications without ever opening the web app.
 | **Tenancy**           | Onboards a new company plus its first admin in a single transaction; every record is scoped by `companyId`.                                              |
 | **People**            | Tracks security guards (PSIRA fields) and office staff (BCEA fields) with full HR profile, next-of-kin, banking and tax data.                            |
 | **Sites & Posts**     | Models physical sites, posts within a site, and geofences for GPS-validated clock-in.                                                                    |
-| **Rostering**         | Builds weekly/monthly rosters, supports custom recurrence patterns, assigns guards to posts, and exports printable roster PDFs.                          |
+| **Rostering**         | Builds weekly/monthly rosters, supports custom recurrence patterns, assigns guards to posts, and exports printable roster PDFs. See [docs/ROSTER_ENGINE.md](./docs/ROSTER_ENGINE.md) for auto-roster (Site → Post → Shift) behavior. |
 | **Attendance**        | Records clock-in/out from WhatsApp or web, validates against site geofence, and aggregates into timesheets.                                              |
 | **Pay Configuration** | Per-company and per-group pay grades, overtime/Sunday/public-holiday multipliers, recurring earnings (transport, allowances) and deductions.             |
 | **Payroll**           | Calculates timesheets → payroll items → payslips with PAYE, UIF, SDL, IRP5 and EMP201 numbers aligned with SARS rules.                                   |
@@ -169,7 +169,7 @@ notifications without ever opening the web app.
 | Framework       | `next` 14 (App Router)               |
 | UI / Styling    | Tailwind CSS, custom design tokens   |
 | Charts          | `recharts`                           |
-| Date pickers    | `react-day-picker` via shared `DateInput` (`apps/web/components/date-input.tsx`) |
+| Date pickers    | `@daypicker/react` via shared `DateInput` (`apps/web/components/date-input.tsx`) |
 | PDFs (client)   | `jspdf`, `jspdf-autotable`           |
 | Utilities       | `clsx`, `date-fns`                   |
 

@@ -6,8 +6,8 @@ export type RosterReadinessHint = {
 
 /** Client-side roster readiness hints (mirrors API diagnostics wording). */
 export function buildSiteRosterReadinessHints(site: {
-  posts: { shiftType: string | null }[];
-  assignedGuards: { employee: { status: string; gender?: string | null } }[];
+  posts: { shiftType?: string | null }[];
+  assignedGuards?: { employee: { status: string; gender?: string | null } }[];
   rosterDayShiftGender?: string | null;
   rosterNightShiftGender?: string | null;
   rosterDayShiftGuardsRequired?: number;
@@ -17,7 +17,7 @@ export function buildSiteRosterReadinessHints(site: {
   const nightPosts = site.posts.filter((p) => p.shiftType === "night");
   const dayStaff = Math.min(50, Math.max(1, Math.floor(site.rosterDayShiftGuardsRequired ?? 1)));
   const nightStaff = Math.min(50, Math.max(1, Math.floor(site.rosterNightShiftGuardsRequired ?? 1)));
-  const rosterable = site.assignedGuards.filter((a) =>
+  const rosterable = (site.assignedGuards ?? []).filter((a) =>
     ["active", "training", "hired", "reliever"].includes(a.employee.status)
   );
   const relievers = rosterable.filter((a) => a.employee.status === "reliever");
@@ -41,7 +41,13 @@ export function buildSiteRosterReadinessHints(site: {
     });
   }
 
-  if (nightPosts.length === 0) {
+  if (nightPosts.length > 0) {
+    hints.push({
+      code: "OK_NIGHT_POSTS_EXIST",
+      level: "ok",
+      message: `${nightPosts.length} night post(s) configured.`,
+    });
+  } else {
     hints.push({
       code: "ERROR_MISSING_NIGHT_POSTS",
       level: "error",

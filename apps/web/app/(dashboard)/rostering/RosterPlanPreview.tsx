@@ -282,6 +282,13 @@ export function RosterPlanPreview({
             </>
           )}
         </div>
+        {coveragePercent != null && coveragePercent < 100 && (
+          <p className="mt-3 text-xs text-amber-800 dark:text-amber-200 rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
+            Coverage is below 100% because the engine keeps strict pattern rules (guards are not assigned on off days or
+            when rest/gender/overlap rules block them). Add rosterable guards, ensure day and night posts exist, fix
+            gender data, and match guard count to the pattern cycle length.
+          </p>
+        )}
         {hasUncoveredDays && (
           <p className="mt-3 text-xs font-medium text-red-700 dark:text-red-300 rounded-lg border border-red-200 dark:border-red-800/60 bg-red-50 dark:bg-red-950/30 px-3 py-2">
             {uncoveredDays} day{uncoveredDays !== 1 ? "s are" : " is"} missing day or night coverage. Fix

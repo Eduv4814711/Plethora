@@ -320,7 +320,13 @@ export function buildRosterReadinessDiagnostics(params: {
     });
   }
 
-  if (nightPostCount === 0) {
+  if (nightPostCount > 0) {
+    diagnostics.push({
+      code: "OK_NIGHT_POSTS_EXIST",
+      level: "ok",
+      message: `${nightPostCount} night post(s) configured.`,
+    });
+  } else {
     diagnostics.push({
       code: "ERROR_MISSING_NIGHT_POSTS",
       level: "error",
@@ -596,17 +602,16 @@ export function buildPatternPreferenceGrid(params: {
 
   for (const guardId of guardIds) {
     const offsetDays = staggerOffsets.get(guardId) ?? 0;
-    const guardCycleStart = addDays(patternStartDate, offsetDays);
     const byDate = new Map<string, ShiftPreference>();
 
     for (const day of calendarDays) {
       const dateKey = formatDateKey(day);
-      const daysSinceStart = differenceInCalendarDays(day, guardCycleStart);
-      if (daysSinceStart < 0) {
-        byDate.set(dateKey, "off");
-      } else {
-        byDate.set(dateKey, getPatternShiftAtOffset(daysSinceStart, pattern, customBlocks));
-      }
+      const daysSincePatternStart = differenceInCalendarDays(day, patternStartDate);
+      // Offset rotates phase within the shared pattern timeline (e.g. 0/3/6 → day/night/off on same day).
+      byDate.set(
+        dateKey,
+        getPatternShiftAtOffset(daysSincePatternStart + offsetDays, pattern, customBlocks)
+      );
     }
     grid.set(guardId, byDate);
   }

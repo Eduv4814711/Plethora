@@ -12,7 +12,13 @@ export type ShiftSheetRow = {
 /** Minimal shift shape for building the staff × day matrix (API + roster page). */
 export type MatrixShift = {
   startTime: string;
-  employee: { id: string; firstName: string; lastName: string };
+  employee: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    gender?: string | null;
+    phone?: string | null;
+  };
   post: { shiftType: string | null; site: { id: string } };
 };
 
@@ -29,6 +35,25 @@ export function shiftCellLetter(s: MatrixShift): "D" | "N" {
   const h = parseISO(s.startTime).getHours();
   if (h >= 18 || h < 6) return "N";
   return "D";
+}
+
+export function mergeSheetEmployeeLookup(
+  employees: MatrixEmployee[],
+  assignedGuards?: { employee: { id: string; gender?: string | null; phone?: string | null } }[]
+): MatrixEmployee[] {
+  const byId = new Map<string, MatrixEmployee>();
+  for (const e of employees) {
+    byId.set(e.id, e);
+  }
+  for (const a of assignedGuards ?? []) {
+    const existing = byId.get(a.employee.id);
+    byId.set(a.employee.id, {
+      id: a.employee.id,
+      gender: existing?.gender ?? a.employee.gender ?? null,
+      phone: existing?.phone ?? a.employee.phone ?? null,
+    });
+  }
+  return [...byId.values()];
 }
 
 export function buildShiftSheetRows({
@@ -82,8 +107,8 @@ export function buildShiftSheetRows({
       employeeId,
       firstName: sample.employee.firstName,
       lastName: sample.employee.lastName,
-      gender: empMeta?.gender ?? null,
-      phone: empMeta?.phone ?? null,
+      gender: empMeta?.gender ?? sample.employee.gender ?? null,
+      phone: empMeta?.phone ?? sample.employee.phone ?? null,
       cells,
     };
   });

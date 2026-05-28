@@ -2,7 +2,7 @@ import type { Prisma, ShiftStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 
 const shiftListInclude = {
-  employee: { select: { id: true, firstName: true, lastName: true } },
+  employee: { select: { id: true, firstName: true, lastName: true, gender: true, phone: true } },
   post: { include: { site: true } },
 } satisfies Prisma.ShiftInclude;
 

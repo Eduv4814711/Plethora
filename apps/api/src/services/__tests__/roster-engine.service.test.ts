@@ -3,9 +3,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../../lib/prisma.js", () => ({
   prisma: {
     site: { findFirst: vi.fn() },
-    shift: { findMany: vi.fn() },
+    shift: { findMany: vi.fn(), count: vi.fn(), deleteMany: vi.fn(), createMany: vi.fn() },
+    employee: { findMany: vi.fn() },
+    post: { findMany: vi.fn() },
+    siteAssignment: { findMany: vi.fn() },
     company: { findUnique: vi.fn() },
+    $transaction: vi.fn(),
   },
+}));
+
+vi.mock("../../lib/roster-audit.js", () => ({
+  auditRosterGeneration: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../../lib/timezone.js", () => ({
@@ -21,9 +29,11 @@ vi.mock("../../lib/timezone.js", () => ({
 
 import { prisma } from "../../lib/prisma.js";
 import {
+  applyRosterPlan,
   buildEmployeePostAssignmentMap,
   generateRosterPlan,
   resolvePostForShiftSlot,
+  type RosterPlan,
 } from "../roster-engine.service.js";
 import { buildSiteDemandSlots, buildCalendarDays } from "../roster-scheduler.js";
 import type { PostWithAssignments } from "../roster-engine.service.js";
@@ -88,7 +98,9 @@ describe("generateRosterPlan", () => {
   beforeEach(() => {
     vi.mocked(prisma.site.findFirst).mockReset();
     vi.mocked(prisma.shift.findMany).mockReset();
+    vi.mocked(prisma.shift.count).mockReset();
     vi.mocked(prisma.shift.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.shift.count).mockResolvedValue(0);
   });
 
   it("returns empty plan with warning when no site guards", async () => {
@@ -126,6 +138,23 @@ describe("generateRosterPlan", () => {
     const g1Starts = plan.entries.filter((e) => e.employeeId === "g1").map((e) => e.startTime);
     const g2Starts = plan.entries.filter((e) => e.employeeId === "g2").map((e) => e.startTime);
     expect(g1Starts[0]).not.toBe(g2Starts[0]);
+  });
+
+  it("plans over existing same-site shifts in the period (replan)", async () => {
+    vi.mocked(prisma.site.findFirst).mockResolvedValue(mockSite() as never);
+    vi.mocked(prisma.shift.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.shift.count).mockResolvedValue(62);
+
+    const plan = await generateRosterPlan({
+      companyId,
+      siteId,
+      startDate,
+      endDate,
+      pattern: "3_on_3_off",
+    });
+
+    expect(plan.summary.shiftsPlanned).toBeGreaterThan(0);
+    expect(plan.warnings.some((w) => w.code === "REPLAN_REPLACES_EXISTING")).toBe(true);
   });
 
   it("leaves day slots uncovered when gender rules block all day candidates", async () => {
@@ -180,7 +209,6 @@ describe("generateRosterPlan", () => {
       startDate,
       endDate,
       pattern: "3_on_3_off",
-      options: { staggerGuards: true },
     });
 
     const dayPostIds = new Set(
@@ -255,7 +283,6 @@ describe("generateRosterPlan", () => {
       startDate,
       endDate,
       pattern: "3_on_3_off",
-      options: { staggerGuards: true },
     });
 
     const offsets = [...plan.guardCycleOffsets].sort(
@@ -277,7 +304,6 @@ describe("generateRosterPlan", () => {
       startDate,
       endDate,
       pattern: "3_on_3_off",
-      options: { staggerGuards: true },
     });
 
     const offsets = [...plan.guardCycleOffsets]
@@ -316,7 +342,6 @@ describe("generateRosterPlan", () => {
       startDate,
       endDate: weekEnd,
       pattern: "3_on_3_off",
-      options: { staggerGuards: true },
     });
 
     expect(plan.summary.demandSlotsTotal).toBe(70);
@@ -351,7 +376,6 @@ describe("generateRosterPlan", () => {
       startDate,
       endDate: weekEnd,
       pattern: "3_on_3_off",
-      options: { staggerGuards: true },
     });
 
     expect(plan.summary.demandSlotsTotal).toBe(28);
@@ -390,7 +414,6 @@ describe("generateRosterPlan", () => {
       startDate,
       endDate: monthEnd,
       pattern: "3_on_3_off",
-      options: { staggerGuards: true },
     });
 
     expect(plan.summary.patternBreaks).toBe(0);
@@ -423,7 +446,6 @@ describe("generateRosterPlan", () => {
       startDate,
       endDate: threeCycleEnd,
       pattern: "3_on_3_off",
-      options: { staggerGuards: true },
     });
 
     expect(plan.summary.patternBreaks).toBe(0);
@@ -460,7 +482,6 @@ describe("generateRosterPlan", () => {
       startDate,
       endDate: monthEnd,
       pattern: "3_on_3_off",
-      options: { staggerGuards: true },
     });
 
     const byGuard = new Map<string, { dateKey: string; shiftType: string }[]>();
@@ -495,7 +516,6 @@ describe("generateRosterPlan", () => {
       startDate,
       endDate: monthEnd,
       pattern: "3_on_3_off",
-      options: { staggerGuards: true },
     });
 
     const byGuardDay = new Map<string, Set<string>>();
@@ -521,7 +541,6 @@ describe("generateRosterPlan", () => {
       startDate,
       endDate,
       pattern: "3_on_3_off",
-      options: { staggerGuards: true },
     });
 
     expect(plan.summary.patternBreaks).toBe(0);
@@ -604,7 +623,6 @@ describe("generateRosterPlan", () => {
       startDate,
       endDate,
       pattern: "3_on_3_off",
-      options: { staggerGuards: true },
     });
 
     const relieverEntries = plan.entries.filter((e) => e.employeeId === "g-reliever");
@@ -656,6 +674,31 @@ describe("generateRosterPlan", () => {
     expect(plan.entries.filter((e) => e.shiftType === "day").length).toBe(0);
     expect(plan.entries.filter((e) => e.shiftType === "night").length).toBeGreaterThan(0);
   });
+
+  it("populates conflicts and skippedGuardDays when slots cannot be filled", async () => {
+    vi.mocked(prisma.site.findFirst).mockResolvedValue(
+      mockSite({
+        rosterDayShiftGender: "female",
+        rosterNightShiftGender: "any",
+        assignedGuards: makeGuards(2).map((a) => ({
+          employee: { ...a.employee, gender: "M" },
+        })),
+      }) as never
+    );
+
+    const plan = await generateRosterPlan({
+      companyId,
+      siteId,
+      startDate,
+      endDate,
+      pattern: "3_on_3_off",
+    });
+
+    expect(plan.conflicts.length).toBeGreaterThan(0);
+    expect(plan.conflicts.some((c) => c.reason.includes("day"))).toBe(true);
+    expect(plan.summary.skippedGuardDays).toBeGreaterThan(0);
+    expect(plan.summary.demandSlotsTotal).toBeGreaterThan(0);
+  });
 });
 
 describe("resolvePostForShiftSlot", () => {
@@ -680,5 +723,133 @@ describe("resolvePostForShiftSlot", () => {
     });
 
     expect(post.id).toBe("day-a");
+  });
+});
+
+describe("applyRosterPlan", () => {
+  const basePlan: RosterPlan = {
+    siteId,
+    pattern: "3_on_3_off",
+    startDate: "2026-05-01",
+    endDate: "2026-05-07",
+    entries: [
+      {
+        employeeId: "g1",
+        postId: "post-day",
+        startTime: "2026-05-01T04:00:00.000Z",
+        endTime: "2026-05-01T16:00:00.000Z",
+        shiftType: "day",
+      },
+    ],
+    summary: {
+      guardsConsidered: 1,
+      shiftsPlanned: 1,
+      postsUsed: 1,
+      skippedGuardDays: 0,
+      uncoveredDays: 0,
+      fairnessSpread: {
+        maxDayMinusMinDay: 0,
+        maxNightMinusMinNight: 0,
+        maxSundayMinusMinSunday: 0,
+      },
+    },
+    guardCycleOffsets: [],
+    warnings: [],
+    conflicts: [],
+  };
+
+  beforeEach(() => {
+    vi.mocked(prisma.site.findFirst).mockReset();
+    vi.mocked(prisma.employee.findMany).mockReset();
+    vi.mocked(prisma.post.findMany).mockReset();
+    vi.mocked(prisma.siteAssignment.findMany).mockReset();
+    vi.mocked(prisma.shift.findMany).mockReset();
+    vi.mocked(prisma.$transaction).mockReset();
+
+    vi.mocked(prisma.site.findFirst).mockResolvedValue({
+      id: siteId,
+      companyId,
+      posts: [{ id: "post-day" }, { id: "post-night" }],
+    } as never);
+
+    vi.mocked(prisma.employee.findMany).mockResolvedValue([
+      { id: "g1", status: "active", gender: "M" },
+    ] as never);
+
+    vi.mocked(prisma.post.findMany).mockResolvedValue([
+      {
+        id: "post-day",
+        siteId,
+        shiftType: "day",
+        site: { companyId, rosterDayShiftGender: null, rosterNightShiftGender: null },
+      },
+    ] as never);
+
+    vi.mocked(prisma.siteAssignment.findMany).mockResolvedValue([
+      { employeeId: "g1" },
+    ] as never);
+
+    vi.mocked(prisma.shift.findMany).mockResolvedValue([]);
+
+    vi.mocked(prisma.$transaction).mockImplementation(async (fn) => {
+      const tx = {
+        shift: {
+          deleteMany: vi.fn().mockResolvedValue({ count: 2 }),
+          createMany: vi.fn().mockResolvedValue({ count: 1 }),
+        },
+      };
+      return fn(tx as never);
+    });
+  });
+
+  it("creates shifts and replaces existing when replaceExisting is true", async () => {
+    const result = await applyRosterPlan({
+      companyId,
+      userId: "user-1",
+      plan: basePlan,
+      options: { replaceExisting: true },
+    });
+
+    expect(result.deleted).toBe(2);
+    expect(result.created).toBe(1);
+    expect(result.skipped).toBe(0);
+    expect(prisma.$transaction).toHaveBeenCalled();
+  });
+
+  it("throws PLAN_EMPTY when plan has no entries", async () => {
+    await expect(
+      applyRosterPlan({
+        companyId,
+        userId: "user-1",
+        plan: { ...basePlan, entries: [] },
+      })
+    ).rejects.toThrow("PLAN_EMPTY");
+  });
+
+  it("throws INVALID_POST when entry post is not on site", async () => {
+    await expect(
+      applyRosterPlan({
+        companyId,
+        userId: "user-1",
+        plan: {
+          ...basePlan,
+          entries: [{ ...basePlan.entries[0]!, postId: "unknown-post" }],
+        },
+      })
+    ).rejects.toThrow("INVALID_POST");
+  });
+
+  it("skips entries that fail validation", async () => {
+    vi.mocked(prisma.siteAssignment.findMany).mockResolvedValue([] as never);
+
+    const result = await applyRosterPlan({
+      companyId,
+      userId: "user-1",
+      plan: basePlan,
+    });
+
+    expect(result.created).toBe(0);
+    expect(result.skipped).toBe(1);
+    expect(result.errors?.length).toBe(1);
   });
 });

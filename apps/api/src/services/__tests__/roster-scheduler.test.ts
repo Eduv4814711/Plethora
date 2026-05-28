@@ -65,23 +65,25 @@ describe("roster-scheduler", () => {
     expect(getPatternShiftAtOffset(9, "3_on_3_off")).toBe("day");
   });
 
-  it("preference grid respects stagger offsets", () => {
+  it("preference grid rotates stagger offsets within shared pattern timeline", () => {
     const start = new Date("2026-05-01T00:00:00.000Z");
     const end = new Date("2026-05-05T23:59:59.999Z");
     const days = buildCalendarDays(start, end);
     const grid = buildPatternPreferenceGrid({
-      guardIds: ["g1", "g2"],
+      guardIds: ["g1", "g2", "g3"],
       calendarDays: days,
       patternStartDate: start,
       pattern: "3_on_3_off",
       staggerOffsets: new Map([
         ["g1", 0],
-        ["g2", 1],
+        ["g2", 3],
+        ["g3", 6],
       ]),
     });
     expect(grid.get("g1")!.get("2026-05-01")).toBe("day");
-    expect(grid.get("g2")!.get("2026-05-01")).toBe("off");
-    expect(grid.get("g2")!.get("2026-05-02")).toBe("day");
+    expect(grid.get("g2")!.get("2026-05-01")).toBe("night");
+    expect(grid.get("g3")!.get("2026-05-01")).toBe("off");
+    expect(grid.get("g2")!.get("2026-05-02")).toBe("night");
   });
 
   it("scoreGuardForSlot prefers guard below day target", () => {

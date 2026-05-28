@@ -490,7 +490,6 @@ export const rosteringModuleService = {
         endDate: end,
         pattern: input.pattern,
         customBlocks: input.customBlocks,
-        options: input.options,
       });
       return { plan };
     } catch (err) {

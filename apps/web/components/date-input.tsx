@@ -2,8 +2,8 @@
 
 import { useRef, useEffect, useState, useCallback } from "react";
 import { format, parse, isValid, addMonths, subDays, getYear, getMonth, setMonth as setMonthOfDate, setYear as setYearOfDate } from "date-fns";
-import { DayPicker } from "react-day-picker";
-import "react-day-picker/style.css";
+import { DayPicker } from "@daypicker/react";
+import "@daypicker/react/style.css";
 
 const DISPLAY_FORMAT = "dd/MM/yyyy";
 const ISO_FORMAT = "yyyy-MM-dd";
@@ -175,7 +175,7 @@ export function DateInput({
         <button
           type="button"
           onClick={() => setIsOpen((o) => !o)}
-          className={`shrink-0 px-2.5 rounded-security border-2 border-neutral-300 bg-white text-black hover:bg-neutral-50 transition-all duration-150 outline-none focus:ring-2 focus:ring-security-navy-200 focus:border-security-navy-500 disabled:opacity-50 disabled:cursor-not-allowed ${className.includes("input-compact") ? "py-2" : "py-2.5"}`}
+          className={`shrink-0 px-2.5 rounded-security border-2 border-security-navy-200 bg-security-navy-50 text-security-navy-800 hover:bg-security-navy-100 hover:border-security-navy-300 transition-all duration-150 outline-none focus:ring-2 focus:ring-security-navy-200 focus:border-security-navy-500 disabled:opacity-50 disabled:cursor-not-allowed dark:border-security-navy-800 dark:bg-security-navy-900/40 dark:text-security-navy-300 dark:hover:bg-security-navy-900/60 ${className.includes("input-compact") ? "py-2" : "py-2.5"} ${isOpen ? "border-security-navy-500 bg-security-navy-100 dark:bg-security-navy-900/70" : ""}`}
           aria-label="Open calendar"
           disabled={disabled}
         >
@@ -192,10 +192,11 @@ export function DateInput({
         <div
           role="dialog"
           aria-label="Choose date"
-          className="absolute left-0 top-full z-50 mt-1 w-max max-w-[min(calc(100vw-1.5rem),340px)] min-w-0 p-3 rounded-security-lg border-2 border-neutral-300 bg-white shadow-security-card sm:min-w-[300px]"
+          className="absolute left-0 top-full z-50 mt-1 w-max max-w-[min(calc(100vw-1.5rem),340px)] min-w-0 p-3 rounded-security-lg border-2 border-security-navy-200 bg-white shadow-security-card dark:border-security-navy-800 dark:bg-neutral-950 sm:min-w-[300px]"
         >
           <div className="rdp-root">
             <DayPicker
+              animate
               mode="single"
               selected={selectedValid ? selectedDate : undefined}
               onSelect={handleSelect}
@@ -210,13 +211,13 @@ export function DateInput({
               autoFocus
             />
           </div>
-          <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t-2 border-neutral-300">
+          <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t-2 border-security-navy-100 dark:border-security-navy-900">
             <div className="w-full flex gap-2 items-center">
               <span className="text-[10px] font-medium uppercase tracking-wider text-black shrink-0">Go to</span>
               <select
                 value={getMonth(month)}
                 onChange={handleGoToMonth}
-                className="flex-1 min-w-0 px-2 py-1 text-xs rounded-security border-2 border-neutral-300 bg-white"
+                className="flex-1 min-w-0 px-2 py-1 text-xs rounded-security border-2 border-security-navy-200 bg-white dark:border-security-navy-800 dark:bg-neutral-900"
                 aria-label="Jump to month"
               >
                 {MONTH_NAMES.map((name, i) => (
@@ -228,7 +229,7 @@ export function DateInput({
               <select
                 value={getYear(month)}
                 onChange={handleGoToYear}
-                className="flex-1 min-w-0 px-2 py-1 text-xs rounded-security border-2 border-neutral-300 bg-white"
+                className="flex-1 min-w-0 px-2 py-1 text-xs rounded-security border-2 border-security-navy-200 bg-white dark:border-security-navy-800 dark:bg-neutral-900"
                 aria-label="Jump to year"
               >
                 {years.map((y) => (
@@ -242,7 +243,7 @@ export function DateInput({
               <button
                 type="button"
                 onClick={handleToday}
-                className="flex-1 min-w-[4rem] py-1.5 text-xs font-medium rounded-security border-2 border-neutral-300 bg-white hover:bg-neutral-50 transition-colors"
+                className="flex-1 min-w-[4rem] py-1.5 text-xs font-medium rounded-security border-2 border-security-navy-200 bg-security-navy-50 text-security-navy-800 hover:bg-security-navy-100 transition-colors dark:border-security-navy-800 dark:bg-security-navy-900/40 dark:text-security-navy-200 dark:hover:bg-security-navy-900/60"
               >
                 Today
               </button>
@@ -251,7 +252,7 @@ export function DateInput({
               <button
                 type="button"
                 onClick={handleYesterday}
-                className="flex-1 min-w-[4rem] py-1.5 text-xs font-medium rounded-security border-2 border-neutral-300 bg-white hover:bg-neutral-50 transition-colors"
+                className="flex-1 min-w-[4rem] py-1.5 text-xs font-medium rounded-security border-2 border-security-navy-200 bg-white hover:bg-security-navy-50 transition-colors dark:border-security-navy-800 dark:bg-neutral-900 dark:hover:bg-security-navy-900/40"
               >
                 Yesterday
               </button>
@@ -260,7 +261,7 @@ export function DateInput({
               <button
                 type="button"
                 onClick={handleNextMonth}
-                className="flex-1 min-w-[4rem] py-1.5 text-xs font-medium rounded-security border-2 border-neutral-300 bg-white hover:bg-neutral-50 transition-colors"
+                className="flex-1 min-w-[4rem] py-1.5 text-xs font-medium rounded-security border-2 border-security-navy-200 bg-white hover:bg-security-navy-50 transition-colors dark:border-security-navy-800 dark:bg-neutral-900 dark:hover:bg-security-navy-900/40"
               >
                 Next month
               </button>
@@ -268,7 +269,7 @@ export function DateInput({
             <button
               type="button"
               onClick={handleClear}
-              className="flex-1 min-w-[4rem] py-1.5 text-xs font-medium rounded-security border-2 border-neutral-300 bg-white hover:bg-neutral-50 transition-colors"
+              className="flex-1 min-w-[4rem] py-1.5 text-xs font-medium rounded-security border-2 border-security-navy-200 bg-white hover:bg-security-navy-50 transition-colors dark:border-security-navy-800 dark:bg-neutral-900 dark:hover:bg-security-navy-900/40"
             >
               Clear
             </button>

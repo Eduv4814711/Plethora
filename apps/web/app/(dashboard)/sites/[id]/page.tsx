@@ -261,15 +261,24 @@ export default function SiteDetailPage() {
             </div>
           )}
           <div className="card-elevated p-6">
+            <h2 className="section-title text-neutral-900 dark:text-neutral-100 mb-1">Auto-roster readiness</h2>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
+              Before generating a roster plan, confirm staffing, posts, and site-assigned guards.
+            </p>
+            <SiteAutoRosterChecklist site={site} />
+          </div>
+
+          <div className="card-elevated p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="section-title text-neutral-900 dark:text-neutral-100">Posts</h2>
                 <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
-                  Shift assignments are created on{" "}
+                  Drag guards onto posts to set <strong className="font-medium">preferred posts for auto-roster scoring</strong>{" "}
+                  (not a hard lock). Shift assignments are created on{" "}
                   <Link href="/rostering" className="font-medium text-orange-600 dark:text-orange-400 hover:underline">
                     Rostering
                   </Link>
-                  . You can still move guards between posts here.
+                  .
                 </p>
               </div>
               {canManage && (
@@ -404,18 +413,28 @@ function SiteGuardsAssignment({
   const allGuards = useSecurityGuards(token);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [dragOverZone, setDragOverZone] = useState<"site" | "pool" | null>(null);
-  const [dragged, setDragged] = useState<{ guard: Guard; source: "site" | "pool" } | null>(null);
+  const [dragOverZone, setDragOverZone] = useState<"site" | "pool" | "relieverPool" | null>(null);
+  const [dragged, setDragged] = useState<{ guard: Guard; source: "site" | "pool" | "relieverPool" } | null>(null);
   const [guardSearch, setGuardSearch] = useState("");
+  const [relieverSearch, setRelieverSearch] = useState("");
 
   const assignedIds = new Set(site.assignedGuards?.map((a) => a.employee.id) ?? []);
   const assignedGuards: Guard[] = (site.assignedGuards ?? []).map((a) => a.employee);
+  const assignedRelievers = assignedGuards.filter((g) => g.status === "reliever");
+  const assignedRegularGuards = assignedGuards.filter((g) => g.status !== "reliever");
   const availableGuards = allGuards.filter((g) => !assignedIds.has(g.id));
+  const availableRegularGuards = availableGuards.filter((g) => g.status !== "reliever");
+  const availableRelievers = availableGuards.filter((g) => g.status === "reliever");
   const filteredAvailableGuards = useMemo(
-    () => availableGuards.filter((g) => guardMatchesSearch(g, guardSearch)),
-    [availableGuards, guardSearch]
+    () => availableRegularGuards.filter((g) => guardMatchesSearch(g, guardSearch)),
+    [availableRegularGuards, guardSearch]
+  );
+  const filteredAvailableRelievers = useMemo(
+    () => availableRelievers.filter((g) => guardMatchesSearch(g, relieverSearch)),
+    [availableRelievers, relieverSearch]
   );
   const guardSearchActive = guardSearch.trim().length > 0;
+  const relieverSearchActive = relieverSearch.trim().length > 0;
 
   const persistAssignment = async (employeeIds: string[]) => {
     setError(null);
@@ -458,14 +477,14 @@ function SiteGuardsAssignment({
     addGuard(guard.id);
   };
 
-  const handleDropOnPool = (e: React.DragEvent) => {
+  const handleDropOnUnassignedPool = (e: React.DragEvent, zone: "pool" | "relieverPool") => {
     e.preventDefault();
     setDragOverZone(null);
     if (!dragged || !canManage) return;
     const { guard, source } = dragged;
     setDragged(null);
-    if (source === "pool") return;
-    removeGuard(guard.id);
+    if (source === zone) return;
+    if (source === "site") removeGuard(guard.id);
   };
 
   const rosterReadiness = useMemo(() => buildSiteRosterReadinessHints(site), [site]);
@@ -483,7 +502,8 @@ function SiteGuardsAssignment({
         <Link href="/rostering" className="font-medium text-orange-600 dark:text-orange-400 hover:underline">
           auto-rostering
         </Link>{" "}
-        on this site. You can still assign guards to individual posts below.
+        on this site. Use the reliever pool for guards with reliever status — they are used as fallback when
+        regular guards cannot fill a slot. You can still assign guards to individual posts below.
       </p>
       {rosterReadiness.length > 0 && (
         <ul className="mb-4 space-y-1 text-xs max-w-2xl">
@@ -512,78 +532,164 @@ function SiteGuardsAssignment({
       {!canManage ? (
         <div className="min-h-[72px] rounded-lg border border-dashed border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 p-3">
           {assignedGuards.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {assignedGuards.map((g) => (
-                <GuardChip key={g.id} guard={g} draggable={false} onDragStart={() => {}} onDragEnd={() => {}} />
-              ))}
+            <div className="space-y-3">
+              {assignedRegularGuards.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {assignedRegularGuards.map((g) => (
+                    <GuardChip key={g.id} guard={g} draggable={false} onDragStart={() => {}} onDragEnd={() => {}} />
+                  ))}
+                </div>
+              )}
+              {assignedRelievers.length > 0 && (
+                <div>
+                  {assignedRegularGuards.length > 0 && (
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-300 mb-2">
+                      Relievers
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {assignedRelievers.map((g) => (
+                      <GuardChip key={g.id} guard={g} draggable={false} onDragStart={() => {}} onDragEnd={() => {}} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <p className="text-sm text-neutral-500 dark:text-neutral-400">No guards assigned to this site.</p>
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div>
-            <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
-              Available guards (
-              {guardSearchActive
-                ? `${filteredAvailableGuards.length} of ${availableGuards.length}`
-                : availableGuards.length}
-              )
-            </p>
-            <input
-              type="search"
-              value={guardSearch}
-              onChange={(e) => setGuardSearch(e.target.value)}
-              placeholder="Search by name or phone…"
-              className="input-modern w-full text-sm mb-2"
-              aria-label="Search available guards"
-            />
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-                setDragOverZone("pool");
-              }}
-              onDragLeave={() => setDragOverZone(null)}
-              onDrop={handleDropOnPool}
-              className={`min-h-[120px] max-h-52 overflow-y-auto rounded-lg p-3 transition-colors ${
-                dragOverZone === "pool"
-                  ? "bg-neutral-100 dark:bg-neutral-800 border-2 border-dashed border-neutral-400 dark:border-neutral-500"
-                  : "bg-neutral-50 dark:bg-neutral-800/50 border border-dashed border-neutral-200 dark:border-neutral-700"
-              }`}
-            >
-              {availableGuards.length === 0 ? (
-                <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                  All rosterable guards are assigned to this site.
-                </p>
-              ) : filteredAvailableGuards.length === 0 ? (
-                <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                  No guards match &quot;{guardSearch.trim()}&quot;.
-                </p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {filteredAvailableGuards.map((g) => (
-                    <GuardChip
-                      key={g.id}
-                      guard={g}
-                      draggable
-                      isDragging={dragged?.guard.id === g.id}
-                      onDragStart={() => setDragged({ guard: g, source: "pool" })}
-                      onDragEnd={() => {
-                        setDragged(null);
-                        setDragOverZone(null);
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                Available guards (
+                {guardSearchActive
+                  ? `${filteredAvailableGuards.length} of ${availableRegularGuards.length}`
+                  : availableRegularGuards.length}
+                )
+              </p>
+              <input
+                type="search"
+                value={guardSearch}
+                onChange={(e) => setGuardSearch(e.target.value)}
+                placeholder="Search by name or phone…"
+                className="input-modern w-full text-sm mb-2"
+                aria-label="Search available guards"
+              />
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  setDragOverZone("pool");
+                }}
+                onDragLeave={() => setDragOverZone(null)}
+                onDrop={(e) => handleDropOnUnassignedPool(e, "pool")}
+                className={`min-h-[120px] max-h-52 overflow-y-auto rounded-lg p-3 transition-colors ${
+                  dragOverZone === "pool"
+                    ? "bg-neutral-100 dark:bg-neutral-800 border-2 border-dashed border-neutral-400 dark:border-neutral-500"
+                    : "bg-neutral-50 dark:bg-neutral-800/50 border border-dashed border-neutral-200 dark:border-neutral-700"
+                }`}
+              >
+                {availableRegularGuards.length === 0 ? (
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                    All regular rosterable guards are assigned to this site.
+                  </p>
+                ) : filteredAvailableGuards.length === 0 ? (
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                    No guards match &quot;{guardSearch.trim()}&quot;.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {filteredAvailableGuards.map((g) => (
+                      <GuardChip
+                        key={g.id}
+                        guard={g}
+                        draggable
+                        isDragging={dragged?.guard.id === g.id}
+                        onDragStart={() => setDragged({ guard: g, source: "pool" })}
+                        onDragEnd={() => {
+                          setDragged(null);
+                          setDragOverZone(null);
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                Available relievers (
+                {relieverSearchActive
+                  ? `${filteredAvailableRelievers.length} of ${availableRelievers.length}`
+                  : availableRelievers.length}
+                )
+              </p>
+              <input
+                type="search"
+                value={relieverSearch}
+                onChange={(e) => setRelieverSearch(e.target.value)}
+                placeholder="Search relievers…"
+                className="input-modern w-full text-sm mb-2"
+                aria-label="Search available relievers"
+              />
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  setDragOverZone("relieverPool");
+                }}
+                onDragLeave={() => setDragOverZone(null)}
+                onDrop={(e) => handleDropOnUnassignedPool(e, "relieverPool")}
+                className={`min-h-[120px] max-h-52 overflow-y-auto rounded-lg p-3 transition-colors ${
+                  dragOverZone === "relieverPool"
+                    ? "bg-violet-50 dark:bg-violet-950/30 border-2 border-dashed border-violet-400 dark:border-violet-600"
+                    : "bg-violet-50/40 dark:bg-violet-950/15 border border-dashed border-violet-200 dark:border-violet-800/60"
+                }`}
+              >
+                {availableRelievers.length === 0 ? (
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                    No unassigned relievers. Mark guards as reliever on the{" "}
+                    <Link href="/employees" className="font-medium text-orange-600 dark:text-orange-400 hover:underline">
+                      Employees
+                    </Link>{" "}
+                    page, or all relievers are already on this site.
+                  </p>
+                ) : filteredAvailableRelievers.length === 0 ? (
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                    No relievers match &quot;{relieverSearch.trim()}&quot;.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {filteredAvailableRelievers.map((g) => (
+                      <GuardChip
+                        key={g.id}
+                        guard={g}
+                        draggable
+                        isDragging={dragged?.guard.id === g.id}
+                        onDragStart={() => setDragged({ guard: g, source: "relieverPool" })}
+                        onDragEnd={() => {
+                          setDragged(null);
+                          setDragOverZone(null);
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          <div>
+          <div className="xl:col-span-2">
             <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
-              Assigned to this site ({assignedGuards.length})
+              Assigned to this site ({assignedGuards.length}
+              {assignedRelievers.length > 0
+                ? ` · ${assignedRegularGuards.length} regular, ${assignedRelievers.length} reliever${assignedRelievers.length === 1 ? "" : "s"}`
+                : ""}
+              )
             </p>
             <div
               onDragOver={(e) => {
@@ -593,32 +699,68 @@ function SiteGuardsAssignment({
               }}
               onDragLeave={() => setDragOverZone(null)}
               onDrop={handleDropOnSite}
-              className={`min-h-[120px] rounded-lg p-3 transition-colors ${
+              className={`min-h-[280px] rounded-lg p-3 transition-colors ${
                 dragOverZone === "site"
                   ? "bg-orange-50 dark:bg-orange-950/30 border-2 border-dashed border-orange-400 dark:border-orange-600"
                   : "bg-orange-50/50 dark:bg-orange-950/20 border border-dashed border-orange-200 dark:border-orange-800/60"
               }`}
             >
               {assignedGuards.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {assignedGuards.map((g) => (
-                    <GuardChip
-                      key={g.id}
-                      guard={g}
-                      draggable
-                      isDragging={dragged?.guard.id === g.id}
-                      onDragStart={() => setDragged({ guard: g, source: "site" })}
-                      onDragEnd={() => {
-                        setDragged(null);
-                        setDragOverZone(null);
-                      }}
-                      onRemove={() => removeGuard(g.id)}
-                    />
-                  ))}
+                <div className="space-y-4">
+                  {assignedRegularGuards.length > 0 && (
+                    <div>
+                      {assignedRelievers.length > 0 && (
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
+                          Regular guards
+                        </p>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {assignedRegularGuards.map((g) => (
+                          <GuardChip
+                            key={g.id}
+                            guard={g}
+                            draggable
+                            isDragging={dragged?.guard.id === g.id}
+                            onDragStart={() => setDragged({ guard: g, source: "site" })}
+                            onDragEnd={() => {
+                              setDragged(null);
+                              setDragOverZone(null);
+                            }}
+                            onRemove={() => removeGuard(g.id)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {assignedRelievers.length > 0 && (
+                    <div>
+                      {assignedRegularGuards.length > 0 && (
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-600 dark:text-violet-300 mb-2">
+                          Relievers
+                        </p>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {assignedRelievers.map((g) => (
+                          <GuardChip
+                            key={g.id}
+                            guard={g}
+                            draggable
+                            isDragging={dragged?.guard.id === g.id}
+                            onDragStart={() => setDragged({ guard: g, source: "site" })}
+                            onDragEnd={() => {
+                              setDragged(null);
+                              setDragOverZone(null);
+                            }}
+                            onRemove={() => removeGuard(g.id)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                  Drop guards here to assign them to this site.
+                  Drop guards or relievers here to assign them to this site.
                 </p>
               )}
             </div>
@@ -692,6 +834,17 @@ function SiteRosterSheetFields({
       nightCount > 50
     ) {
       setError("Guards per shift must be a whole number from 1 to 50.");
+      setSaving(false);
+      return;
+    }
+    const minRosterable = Math.max(dayCount, nightCount);
+    const rosterableCount = site.assignedGuards.filter((a) =>
+      ["active", "training", "hired", "reliever"].includes(a.employee.status)
+    ).length;
+    if (rosterableCount < minRosterable) {
+      setError(
+        `This site has ${rosterableCount} rosterable guard(s) but staffing requires at least ${minRosterable} per day. Assign more guards to the site first.`
+      );
       setSaving(false);
       return;
     }
@@ -914,6 +1067,42 @@ function SiteRosterSheetFields({
   );
 }
 
+function SiteAutoRosterChecklist({ site }: { site: Site }) {
+  const hints = useMemo(() => buildSiteRosterReadinessHints(site), [site]);
+  const dayPosts = site.posts.filter((p) => (p.shiftType ?? "day") !== "night");
+  const nightPosts = site.posts.filter((p) => p.shiftType === "night");
+  const dayStaff = Math.max(1, Math.floor(site.rosterDayShiftGuardsRequired ?? 1));
+  const nightStaff = Math.max(1, Math.floor(site.rosterNightShiftGuardsRequired ?? 1));
+
+  return (
+    <ul className="space-y-2 text-sm">
+      <li className={dayPosts.length > 0 ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300"}>
+        {dayPosts.length > 0 ? "✓" : "✗"} At least one day post ({dayPosts.length})
+      </li>
+      <li className={nightPosts.length > 0 ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300"}>
+        {nightPosts.length > 0 ? "✓" : "✗"} At least one night post ({nightPosts.length})
+      </li>
+      <li className="text-neutral-700 dark:text-neutral-300">
+        Staffing: {dayStaff} day + {nightStaff} night guard(s) required each calendar day
+      </li>
+      {hints
+        .filter((h) => h.level !== "ok")
+        .map((h, i) => (
+          <li
+            key={`${h.code}-${i}`}
+            className={
+              h.level === "error"
+                ? "text-red-700 dark:text-red-300"
+                : "text-amber-800 dark:text-amber-200"
+            }
+          >
+            • {h.message}
+          </li>
+        ))}
+    </ul>
+  );
+}
+
 function PostCard({
   post,
   siteId,
@@ -1034,6 +1223,9 @@ function PostCard({
               : "bg-neutral-50 dark:bg-neutral-800/50 border border-dashed border-neutral-200 dark:border-neutral-700"
           }`}
         >
+          <p className="text-[10px] text-neutral-500 dark:text-neutral-400 mb-2">
+            Preferred for auto-roster when multiple guards qualify
+          </p>
           <div className="flex flex-wrap gap-2">
             {guards.map((g) => (
               <GuardChip
@@ -1176,10 +1368,26 @@ function GuardChip({
         isDragging ? "opacity-50 scale-95" : "hover:shadow-md hover:border-neutral-300 dark:hover:border-neutral-600"
       } ${draggable ? "" : "cursor-default"}`}
     >
-      <span className={`w-2 h-2 rounded-full shrink-0 ${guard.status === "active" ? "bg-emerald-500" : guard.status === "training" ? "bg-amber-500" : "bg-neutral-400"}`} title={guard.status} />
+      <span
+        className={`w-2 h-2 rounded-full shrink-0 ${
+          guard.status === "active"
+            ? "bg-emerald-500"
+            : guard.status === "training"
+              ? "bg-amber-500"
+              : guard.status === "reliever"
+                ? "bg-violet-500"
+                : "bg-neutral-400"
+        }`}
+        title={guard.status}
+      />
       <span className="text-neutral-700 dark:text-neutral-300">
         {guard.firstName} {guard.lastName}
       </span>
+      {guard.status === "reliever" && (
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+          Reliever
+        </span>
+      )}
       {onRemove && (
         <button
           type="button"
