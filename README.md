@@ -44,7 +44,7 @@ Plethora is structured as a **monorepo** with two deployable workspaces:
 | Workspace  | Role                                         | Stack                                |
 | ---------- | -------------------------------------------- | ------------------------------------ |
 | `apps/api` | Stateless HTTP API and business logic        | Fastify · Prisma · PostgreSQL · Zod  |
-| `apps/web` | Operator UI (multi-page dashboard)           | Next.js 14 (App Router) · Tailwind   |
+| `apps/web` | Operator UI (multi-page dashboard)           | Next.js 16 (App Router) · React 19 · Tailwind |
 
 Both apps are built with TypeScript end-to-end. The API exposes a domain
 model rooted at `Company`, providing strict tenant isolation. The web app is a
@@ -71,6 +71,7 @@ notifications without ever opening the web app.
 | **Compliance**        | A pluggable compliance rule engine flags missing tax IDs, zero-pay actives, abnormal overtime, missing UIF fields, etc.                                  |
 | **Leave**             | Self-service leave requests with approval workflow plus authoritative leave-record ledger consumed by payroll.                                           |
 | **Tasks**             | Lightweight project/task tracker with comments, attachments, recurrences and reminders for ops handovers.                                                |
+| **Academy**           | Training-academy management: branches, students, instructors, courses & runs, classrooms, enrolments, attendance, assessments, certificates, compliance documents, invoices/payments and renewals. |
 | **Reports**           | Operational and statutory reports (payroll registers, contract labour cost, SDL tracking, etc.).                                                         |
 | **Audit**             | Append-only audit log keyed on company, entity and user; visible to administrators only.                                                                 |
 | **WhatsApp**          | Two-way messaging, templated outbound notifications, contact management, geofence-aware clock-in flow.                                                   |
@@ -82,7 +83,7 @@ notifications without ever opening the web app.
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                                Browser (Operator)                           │
-│   Next.js 14 App Router · Tailwind · React 18 · client-side auth context    │
+│   Next.js 16 App Router · Tailwind · React 19 · client-side auth context    │
 └──────────────┬──────────────────────────────────────────────────────────────┘
                │ /api/*  (Next.js rewrite)
                ▼
@@ -153,6 +154,7 @@ notifications without ever opening the web app.
 | HTTP framework       | `fastify` 4                                                    |
 | Security             | `@fastify/helmet`, `@fastify/cors`, `@fastify/rate-limit`      |
 | File uploads         | `@fastify/multipart`, `@fastify/static`                        |
+| Object storage       | `@aws-sdk/client-s3` (+ presigner) for S3, or local disk       |
 | ORM / DB             | `@prisma/client` 5 + `prisma` migrate/seed                     |
 | Validation           | `zod`                                                          |
 | AuthN                | `jsonwebtoken`, `bcrypt`                                       |
@@ -166,7 +168,7 @@ notifications without ever opening the web app.
 
 | Concern         | Library                              |
 | --------------- | ------------------------------------ |
-| Framework       | `next` 14 (App Router)               |
+| Framework       | `next` 16 (App Router) · React 19    |
 | UI / Styling    | Tailwind CSS, custom design tokens   |
 | Charts          | `recharts`                           |
 | Date pickers    | `@daypicker/react` via shared `DateInput` (`apps/web/components/date-input.tsx`) |
@@ -183,29 +185,39 @@ plethora/
 │   ├── api/                       # Fastify backend
 │   │   ├── prisma/                # schema.prisma + migrations + seeds
 │   │   ├── src/
-│   │   │   ├── index.ts           # Fastify bootstrap & route registration
-│   │   │   ├── lib/               # prisma, config, types, audit, geo, tz
+│   │   │   ├── index.ts           # bootstrap: builds the app and listens
+│   │   │   ├── app.ts             # buildApp(): Fastify + plugins + route registration
+│   │   │   ├── lib/               # prisma, env, storage (local/S3), audit, geo, tz
 │   │   │   ├── middleware/        # authMiddleware, requireRole (RBAC)
-│   │   │   ├── routes/            # one file per resource (33 modules)
+│   │   │   ├── modules/           # feature modules (e.g. rostering → /shifts)
+│   │   │   ├── routes/            # one file per resource (incl. routes/academy/*)
 │   │   │   ├── services/          # domain logic (payroll, tax, rostering…)
 │   │   │   │   └── payroll-compliance/
 │   │   │   │       └── rules/     # pluggable compliance checks
 │   │   │   └── whatsapp/          # webhook + send/contacts/messages/templates
-│   │   ├── uploads/               # runtime upload root (logos, task files)
+│   │   ├── uploads/               # local upload root (when STORAGE_DRIVER=local)
 │   │   ├── package.json
 │   │   └── tsconfig.json
 │   └── web/                       # Next.js frontend
 │       ├── app/
 │       │   ├── (auth)/            # login, register, setup-password
-│       │   └── (dashboard)/       # operator UI: employees, rostering, …
+│       │   └── (dashboard)/       # operator UI: employees, rostering, academy, …
 │       ├── components/            # layout, search, WhatsApp widget, etc.
 │       ├── lib/                   # api client, auth-context, permissions
 │       ├── next.config.js         # /api/* → API rewrite
 │       └── tailwind.config.ts
 ├── docs/
-│   ├── PLETHORA-USER-MANUAL.md    # end-user manual
-│   └── WHATSAPP_PRODUCTION.md     # Meta WhatsApp Cloud API setup
-├── package.json                   # root workspace + dev scripts
+│   ├── PLETHORA-USER-MANUAL.md            # end-user manual
+│   ├── WHATSAPP_PRODUCTION.md             # Meta WhatsApp Cloud API setup
+│   ├── ROSTER_ENGINE.md                   # auto-roster (Site → Post → Shift) behaviour
+│   ├── SECURITY.md                        # security model & hardening notes
+│   ├── AWS_EC2_NON_DOCKER_DEPLOYMENT.md   # EC2 + PM2 + ALB + RDS + S3 guide
+│   ├── AWS_EC2_DEPLOYMENT_CHECKLIST.md    # go-live checklist for the EC2 path
+│   ├── AWS_S3_STORAGE.md                  # S3 upload storage reference
+│   ├── AWS_ENVIRONMENT_VARIABLES.md       # AWS env-var reference
+│   └── AWS_DEPLOYMENT_READINESS.md        # readiness assessment
+├── ecosystem.config.cjs           # PM2 process config for the EC2 deployment
+├── package.json                   # root workspace + dev/prod scripts
 └── README.md
 ```
 
@@ -329,7 +341,8 @@ with the backend:
 ## 8. API Surface
 
 The API is composed of small, resource-oriented Fastify route modules
-registered in `apps/api/src/index.ts`. All routes (except `/health`,
+registered in `apps/api/src/app.ts` (via `buildApp()`, which `src/index.ts`
+then starts). All routes (except `/health`,
 `/auth/onboard`, `/auth/login`, `/auth/refresh` and the WhatsApp webhook) sit
 behind `authMiddleware` and a `requireRole(...)` guard.
 
@@ -354,7 +367,7 @@ behind `authMiddleware` and a `requireRole(...)` guard.
 | `/companies`                          | `routes/companies.ts`             | Company profile, branding, SARS references                                  |
 | `/employees`                          | `routes/employees.ts`             | Reads allow `anyOfModules: ["/employees","/rostering"]`                     |
 | `/sites`                              | `routes/sites.ts`                 | Reads allow `anyOfModules: ["/sites","/rostering"]`                         |
-| `/shifts`                             | `routes/shifts.ts`                | Roster management                                                          |
+| `/shifts`                             | `modules/rostering/rostering.routes.ts` | Roster management                                                    |
 | `/attendance`                         | `routes/attendance.ts`            | Clock-in/out + manual corrections                                           |
 | `/payroll` (and sub-routes)           | `routes/payroll*.ts`              | Runs, items, intelligence, intelligence reports                             |
 | `/payroll/pay-grades`                 | `routes/pay-grades.ts`            | Reads allow `anyOfModules: ["/payroll","/employees"]`                       |
@@ -374,18 +387,21 @@ behind `authMiddleware` and a `requireRole(...)` guard.
 | `/migrations`                         | `routes/migrations.ts`            | Tenant-side data import (CSV)                                              |
 | `/reports`                            | `routes/reports.ts`               | Operational + statutory PDFs/exports                                       |
 | `/task-projects`, `/tasks`, `/task-comments`, `/task-attachments`, `/task-reminders` | `routes/task*.ts` | Task manager |
+| `/academy/*`                          | `routes/academy/*.ts`             | Training academy: students, instructors, courses, certificates, invoices, etc. |
 | `/whatsapp/{send,contacts,messages,templates}` | `whatsapp/routes/*.ts`  | Authenticated WhatsApp operations                                          |
 
 ### Cross-cutting plugins
 
-Registered globally in `apps/api/src/index.ts`:
+Registered globally in `apps/api/src/app.ts`:
 
 - **CORS** — origin(s) from `CORS_ORIGIN` (comma-separated allowed), credentials enabled.
-- **Helmet** — secure HTTP headers (CSP disabled because the web app
+- **Helmet** — secure HTTP headers (CSP enabled in production; the web app
   proxies through `/api/*`).
+- **Cookie** — used for the HttpOnly refresh-token cookie.
 - **Rate limit** — 100 requests/minute per IP by default.
 - **Multipart** — file uploads up to 10 MB.
-- **Static** — serves `uploads/*` (logos, task attachments, etc.).
+- **Static** — serves `uploads/*` only when `STORAGE_DRIVER=local` (S3 serves its own URLs).
+- **Trust proxy** — enabled when `TRUST_PROXY=true` (required behind a load balancer such as AWS ALB).
 
 ---
 
@@ -406,6 +422,7 @@ Routes under `apps/web/app/(dashboard)`:
 | `/payroll/leave-requests`          | Leave approvals queue                                        |
 | `/tasks`, `/tasks/[id]`            | Task manager                                                 |
 | `/tasks/projects`, `/.../[id]`     | Task projects                                                |
+| `/academy/*`                       | Training academy hub (students, instructors, courses, certificates, finance, …) |
 | `/whatsapp`                        | Conversation centre                                          |
 | `/reports`                         | Operational + statutory reports                              |
 | `/audit`                           | Audit log viewer (admin only)                                |
@@ -560,26 +577,40 @@ The Next.js app rewrites `/api/*` to `http://localhost:3001/*`
 
 ## 13. Environment Variables
 
-`apps/api/.env` — see `apps/api/.env.example` for the complete template.
+`apps/api/.env` — see `apps/api/.env.example` (local dev) and
+`apps/api/.env.production.example` (AWS EC2) for complete templates.
 
 | Variable                    | Required | Purpose                                                            |
 | --------------------------- | -------- | ------------------------------------------------------------------ |
 | `DATABASE_URL`              | yes      | PostgreSQL connection string used by Prisma                        |
-| `JWT_SECRET`                | yes      | Signing secret for access tokens                                   |
-| `JWT_REFRESH_SECRET`        | yes      | Signing secret for refresh tokens                                  |
+| `JWT_SECRET`                | yes      | Signing secret for access tokens (≥32 chars in production)         |
+| `JWT_REFRESH_SECRET`        | yes      | Signing secret for refresh tokens (≥32 chars, different from above) |
 | `CORS_ORIGIN`               | yes      | Allowed origin(s) for browser calls; comma-separated list supported (e.g. preview + production URLs) |
 | `FRONTEND_URL`              | yes      | Used when building absolute URLs (password setup links, etc.)      |
 | `PORT`                      | no       | Defaults to `3001`                                                 |
 | `HOST`                      | no       | Defaults to `0.0.0.0`                                              |
+| `TRUST_PROXY`               | no       | `true`/`false` (default `false`). Set `true` behind a load balancer (AWS ALB) to trust `X-Forwarded-*` |
+| `STORAGE_DRIVER`            | no       | `local` (default) or `s3`                                          |
+| `AWS_REGION`                | s3       | AWS region of the S3 bucket (required when `STORAGE_DRIVER=s3`)     |
+| `S3_BUCKET_NAME`            | s3       | S3 bucket for uploads (required when `STORAGE_DRIVER=s3`)           |
+| `S3_PUBLIC_BASE_URL`        | no       | Optional CDN/custom base URL for public S3 objects                 |
 | `WHATSAPP_PHONE_NUMBER_ID`  | prod     | Meta phone number ID                                               |
 | `WHATSAPP_ACCESS_TOKEN`     | prod     | Permanent system-user token                                        |
 | `WHATSAPP_VERIFY_TOKEN`     | prod     | Webhook verify string configured in Meta                           |
 | `WHATSAPP_API_VERSION`      | no       | Defaults to `v21.0`                                                |
 | `CLOCK_IN_WINDOW_MINUTES`   | no       | Tolerance window for shift clock-in (default 15)                   |
 | `ENCRYPTION_KEY`            | no       | Encryption key for stored SMTP/email credentials                   |
+| `PUPPETEER_EXECUTABLE_PATH` | no       | Path to Chromium/Chrome for PDF generation (e.g. on EC2)           |
 
-`apps/web` — typically only needs `NEXT_PUBLIC_API_URL` if the API is hosted
-separately from the web app (the local default is `http://localhost:3001`).
+> S3 uploads use the default AWS credential chain — on EC2 attach an **IAM role**
+> rather than putting `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` in `.env`.
+
+`apps/web` — see `apps/web/.env.example` and `apps/web/.env.production.example`:
+
+| Variable                      | Purpose                                                            |
+| ----------------------------- | ------------------------------------------------------------------ |
+| `NEXT_PUBLIC_API_URL`         | Public API origin the browser/Next.js rewrite proxies to (local default `http://localhost:3001`) |
+| `NEXT_PUBLIC_API_PATH_PREFIX` | Optional path prefix; leave empty when the API serves at the origin root |
 
 ---
 
@@ -622,7 +653,7 @@ A handful of one-off scripts also live in `apps/api/prisma/`:
    business logic.
 3. Create a route file in `apps/api/src/routes/<resource>.ts`. Use Zod for
    request validation and `requireRole(roles, { module })` for authorization.
-4. Register the route in `apps/api/src/index.ts` with its prefix.
+4. Register the route in `apps/api/src/app.ts` (inside `buildApp()`) with its prefix.
 5. If the resource is exposed in the UI, add it to `NAV_ITEMS` in
    `apps/web/lib/permissions.ts` and create a page under
    `apps/web/app/(dashboard)/<resource>/page.tsx`.
@@ -654,22 +685,31 @@ Next.js production build.
 ### Run in production
 
 ```bash
-# API
-cd apps/api
-npm run db:migrate:deploy
-node dist/index.js
+# From the repo root: apply migrations, then build both apps
+npm run prod:migrate     # = prisma migrate deploy (never use db:push in prod)
+npm run prod:build       # = build:api && build:web
 
-# Web
-cd apps/web
-npm run start    # next start --port 3000
+# Manual start (single host):
+node apps/api/dist/index.js          # API on :3001
+npm run start --workspace=web        # Web on :3000 (next start)
 ```
+
+Production process management is handled by **PM2** (`ecosystem.config.cjs`):
+
+| Script                      | Action                                  |
+| --------------------------- | --------------------------------------- |
+| `npm run prod:build`        | Build API then web                      |
+| `npm run prod:migrate`      | `prisma migrate deploy`                 |
+| `npm run prod:start:pm2`    | `pm2 start ecosystem.config.cjs`        |
+| `npm run prod:restart:pm2`  | `pm2 restart ecosystem.config.cjs`      |
+| `npm run prod:logs`         | `pm2 logs`                              |
+| `npm run prod:status`       | `pm2 status`                            |
 
 Both apps are stateless and horizontally scalable, provided:
 
-- A single shared PostgreSQL instance is reachable by all API replicas.
-- The `uploads/` directory is backed by shared storage (NFS, EFS, S3-mounted
-  fs, etc.) if you scale beyond one API replica, **or** the upload route is
-  swapped for object storage.
+- A single shared PostgreSQL instance (e.g. AWS RDS) is reachable by all API replicas.
+- Uploads use object storage (`STORAGE_DRIVER=s3`) so files are shared across
+  replicas and survive instance replacement.
 - All replicas share the same `JWT_SECRET` / `JWT_REFRESH_SECRET`.
 
 ### Reverse proxy
@@ -679,6 +719,23 @@ If hosting `web` and `api` on different origins, set
 `/api/*` rewrite in `next.config.js` will continue to proxy through the
 Next.js runtime in production. Step-by-step hosting (e.g. **Railway**) is in
 [`DEPLOYMENT.md`](DEPLOYMENT.md).
+
+### AWS EC2 non-Docker deployment
+
+For a production AWS deployment without Docker containers, use:
+
+- `docs/AWS_EC2_NON_DOCKER_DEPLOYMENT.md`
+- `docs/AWS_EC2_DEPLOYMENT_CHECKLIST.md`
+
+This deployment path runs:
+
+- Next.js on EC2 port `3000`
+- Fastify API on EC2 port `3001`
+- PostgreSQL on AWS RDS
+- File uploads on S3
+- HTTPS through AWS ALB + ACM
+- DNS through Route 53
+- Process management through PM2
 
 ---
 
@@ -719,12 +776,13 @@ will perform interactive ESLint setup.
   Use `module` for ownership-style checks and `anyOfModules` for legitimate
   cross-module reads.
 - **Rate limiting** is configured at the framework level (100 req/min by IP).
-  Adjust in `apps/api/src/index.ts` for behind-load-balancer deployments.
-- **Helmet** ships secure default headers; CSP is intentionally disabled
-  because the API is consumed only via the Next.js proxy.
-- **Uploads** are size-limited (10 MB) and served from `/uploads/*`. For
-  internet-facing deployments, consider scanning uploads and serving from
-  a signed CDN.
+  Adjust in `apps/api/src/app.ts`. Set `TRUST_PROXY=true` behind a load
+  balancer so the real client IP (not the ALB's) is used.
+- **Helmet** ships secure default headers; a strict CSP is enabled in
+  production. The API is consumed via the Next.js `/api/*` proxy.
+- **Uploads** are size-limited (10 MB). In production use `STORAGE_DRIVER=s3`
+  so files live in S3 (private bucket, IAM-role access); local disk under
+  `/uploads/*` is the development default.
 - **WhatsApp webhook** must be verified using `WHATSAPP_VERIFY_TOKEN` and
   ideally signature-validated using Meta's app secret (see
   `docs/WHATSAPP_PRODUCTION.md`).
@@ -741,6 +799,12 @@ will perform interactive ESLint setup.
 - [`docs/WHATSAPP_PRODUCTION.md`](docs/WHATSAPP_PRODUCTION.md) — Meta
   WhatsApp Cloud API onboarding (phone number, permanent token, webhook,
   template approval).
+- [`docs/ROSTER_ENGINE.md`](docs/ROSTER_ENGINE.md) — auto-roster (Site → Post → Shift) behaviour.
+- [`docs/SECURITY.md`](docs/SECURITY.md) — security model and hardening notes.
+- [`docs/AWS_EC2_NON_DOCKER_DEPLOYMENT.md`](docs/AWS_EC2_NON_DOCKER_DEPLOYMENT.md)
+  and [`docs/AWS_EC2_DEPLOYMENT_CHECKLIST.md`](docs/AWS_EC2_DEPLOYMENT_CHECKLIST.md)
+  — production AWS EC2 (non-Docker) deployment guide and checklist.
+- [`docs/AWS_S3_STORAGE.md`](docs/AWS_S3_STORAGE.md) — S3 upload storage reference.
 - `apps/api/prisma/schema.prisma` — authoritative data model.
 - `apps/api/src/middleware/rbac.ts` and `apps/web/lib/permissions.ts` —
   authoritative RBAC behaviour for backend and frontend respectively.

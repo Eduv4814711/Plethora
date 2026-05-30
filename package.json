@@ -20,10 +20,12 @@
     "db:push": "npm run db:push --workspace=api",
     "db:add-module-access": "npm run db:add-module-access --workspace=api",
     "db:seed": "npm run db:seed --workspace=api",
-    "docker:build:api": "docker build -f Dockerfile.api -t plethora-api .",
-    "docker:build:web": "docker build -f Dockerfile.web --build-arg NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3001} --build-arg NEXT_PUBLIC_API_PATH_PREFIX=${NEXT_PUBLIC_API_PATH_PREFIX:-} -t plethora-web .",
-    "docker:run:api": "docker run --rm -p 3001:3001 --env-file apps/api/.env -e RUN_MIGRATIONS=true -v plethora-uploads:/app/apps/api/uploads plethora-api",
-    "docker:run:web": "docker run --rm -p 3000:3000 plethora-web"
+    "prod:build": "npm run build:api && npm run build:web",
+    "prod:migrate": "npm run db:migrate:deploy",
+    "prod:start:pm2": "pm2 start ecosystem.config.cjs",
+    "prod:restart:pm2": "pm2 restart ecosystem.config.cjs",
+    "prod:logs": "pm2 logs",
+    "prod:status": "pm2 status"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

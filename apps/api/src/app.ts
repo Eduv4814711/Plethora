@@ -68,6 +68,9 @@ export async function buildApp(): Promise<FastifyInstance> {
     logger: true,
     genReqId: () => randomUUID(),
     requestIdHeader: "x-request-id",
+    // Trust X-Forwarded-* headers when running behind AWS ALB (TRUST_PROXY=true)
+    // so real client IP, protocol, rate limiting, and secure cookies work.
+    trustProxy: env.trustProxy,
   });
 
   await registerRequestId(app);

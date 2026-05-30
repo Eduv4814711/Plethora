@@ -25,6 +25,18 @@ function parseCorsOrigins(value: unknown): string[] {
   return value.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
+/** Coerce a "true"/"false" (case-insensitive) string env var into a boolean. */
+function parseBooleanFlag(value: unknown): boolean | undefined {
+  const trimmed = emptyToUndefined(value);
+  if (trimmed === undefined) return undefined;
+  if (typeof trimmed === "string") {
+    const lower = trimmed.trim().toLowerCase();
+    if (lower === "true") return true;
+    if (lower === "false") return false;
+  }
+  return undefined;
+}
+
 const nodeEnvSchema = z.enum(["development", "production", "test"]).default("development");
 
 const rawEnvSchema = z.object({
@@ -44,6 +56,7 @@ const rawEnvSchema = z.object({
     z.number().int().min(1).max(65535).optional()
   ),
   HOST: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  TRUST_PROXY: z.preprocess(parseBooleanFlag, z.boolean().optional()),
   WHATSAPP_PHONE_NUMBER_ID: z.preprocess(emptyToUndefined, z.string().optional()),
   WHATSAPP_ACCESS_TOKEN: z.preprocess(emptyToUndefined, z.string().optional()),
   WHATSAPP_VERIFY_TOKEN: z.preprocess(emptyToUndefined, z.string().optional()),
@@ -76,6 +89,7 @@ export type Env = {
   frontendUrl: string | undefined;
   port: number;
   host: string;
+  trustProxy: boolean;
   whatsapp: {
     enabled: boolean;
     phoneNumberId: string;
@@ -111,6 +125,7 @@ function pickRawEnv(source: NodeJS.ProcessEnv): Record<string, unknown> {
     FRONTEND_URL: source.FRONTEND_URL,
     PORT: source.PORT,
     HOST: source.HOST,
+    TRUST_PROXY: source.TRUST_PROXY,
     WHATSAPP_PHONE_NUMBER_ID: source.WHATSAPP_PHONE_NUMBER_ID,
     WHATSAPP_ACCESS_TOKEN: source.WHATSAPP_ACCESS_TOKEN,
     WHATSAPP_VERIFY_TOKEN: source.WHATSAPP_VERIFY_TOKEN,
@@ -218,6 +233,7 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     frontendUrl: raw.FRONTEND_URL,
     port: raw.PORT ?? 3001,
     host: raw.HOST ?? "0.0.0.0",
+    trustProxy: raw.TRUST_PROXY ?? false,
     whatsapp: {
       enabled: !!(phoneNumberId && accessToken && verifyToken),
       phoneNumberId,
