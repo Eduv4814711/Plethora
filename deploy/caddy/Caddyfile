@@ -1,18 +1,24 @@
-# Plethora ERP — production Caddy reverse proxy
+# Plethora ERP — production Caddy reverse proxy (SINGLE public domain)
 #
 # Deploy: copy this file to /opt/plethora/caddy/Caddyfile, then replace the
-# example domains with your real domains and restart Caddy:
+# example domain with your real domain and email, and restart Caddy:
 #
 #   cp /opt/plethora/apps/Plethora/deploy/caddy/Caddyfile /opt/plethora/caddy/Caddyfile
-#   # edit /opt/plethora/caddy/Caddyfile  (set your domains + email)
+#   # edit /opt/plethora/caddy/Caddyfile  (set your domain + email)
 #   docker compose restart caddy
 #
-# Caddy automatically obtains and renews Let's Encrypt TLS certificates for the
-# domains below. The two domains MUST already point (A record) at this VM's
-# public IP (102.211.186.94) before Caddy can issue certificates.
+# Only ONE public domain is used: app.example.co.za
+#   https://app.example.co.za/        -> web:3000   (Next.js frontend)
+#   https://app.example.co.za/api/*   -> api:3001   (Fastify backend)
+#
+# `handle_path /api/*` STRIPS the /api prefix before proxying, so:
+#   public  https://app.example.co.za/api/health
+#   backend receives                  GET /health
 #
 # `web` and `api` are the internal Docker service names on plethora_network;
 # Caddy reaches them by container port (3000 / 3001), never via the host.
+# A single DNS A record (app -> 102.211.186.94) is all that is required;
+# do NOT create an api.* record for this deployment.
 
 {
 	# Email used by Let's Encrypt for expiry notices. Replace with a real address.
@@ -23,20 +29,21 @@
 	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
 }
 
-# Frontend (Next.js)
 app.example.co.za {
 	encode zstd gzip
-	reverse_proxy web:3000
-}
 
-# Backend API (Fastify)
-api.example.co.za {
-	encode zstd gzip
-
-	# Upload endpoints accept files up to ~10MB; allow some headroom.
-	request_body {
-		max_size 25MB
+	# API traffic: strip the /api prefix, then forward to the backend container.
+	# Uploads also flow through here (frontend uses /api/uploads/... URLs), so
+	# allow some headroom above the API's ~10MB upload limit.
+	handle_path /api/* {
+		request_body {
+			max_size 25MB
+		}
+		reverse_proxy api:3001
 	}
 
-	reverse_proxy api:3001
+	# Everything else: the Next.js frontend container.
+	handle {
+		reverse_proxy web:3000
+	}
 }

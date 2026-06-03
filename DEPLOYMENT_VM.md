@@ -24,6 +24,27 @@ Persistent data (bind mounts):
   /opt/plethora/caddy/Caddyfile -> reverse proxy config
 ```
 
+### Single public domain
+
+This deployment uses **one** public domain only (no separate `api.*` domain):
+
+```
+https://app.example.co.za/        -> web:3000   (Next.js frontend)
+https://app.example.co.za/api/*   -> api:3001   (Fastify backend, /api stripped by Caddy)
+```
+
+- Only **one** DNS A record is needed: `app.example.co.za -> 102.211.186.94`.
+- **No** `api.example.co.za` DNS record is needed for this deployment.
+- API traffic is routed through `https://app.example.co.za/api`.
+- Caddy sends `/api/*` to the internal service `api:3001` (stripping the `/api`
+  prefix, so `/api/health` reaches the backend as `/health`).
+- Caddy sends all other traffic to `web:3000`.
+- The database stays internal at `postgres:5432`; Redis stays internal at
+  `redis:6379`. Neither is published to the host.
+
+Because the browser calls the API on the same origin (`/api/...`), there is no
+cross-origin request and no separate API certificate to manage.
+
 ---
 
 ## 1. Required VM specs
@@ -102,25 +123,75 @@ Fill in **real** values. At minimum set:
 - `DATABASE_URL` — keep host `postgres` and match the POSTGRES_* values above
 - `JWT_SECRET` and `JWT_REFRESH_SECRET` — two **different** random strings, each
   ≥ 32 chars. Generate with `openssl rand -base64 48`
-- `FRONTEND_URL`, `CORS_ORIGIN`, `API_URL`, `NEXT_PUBLIC_API_URL` — your real
-  domains (e.g. `https://app.example.co.za` / `https://api.example.co.za`)
+- The public-URL block — **single domain** (replace `example.co.za` with your
+  real domain, keep the `app.` host and the `/api` prefix exactly):
+
+  ```bash
+  FRONTEND_URL=https://app.<real-domain>
+  API_URL=https://app.<real-domain>/api
+  CORS_ORIGIN=https://app.<real-domain>
+  NEXT_PUBLIC_API_URL=https://app.<real-domain>
+  NEXT_PUBLIC_API_PATH_PREFIX=/api
+  ```
+
+  Keep internal service URLs as Docker service names (the defaults are correct):
+
+  ```bash
+  DATABASE_URL=postgresql://plethora_admin:change_me@postgres:5432/plethora_prod?schema=public
+  REDIS_URL=redis://redis:6379
+  ```
+
+> Do **not** set `NEXT_PUBLIC_API_URL` to an `api.<domain>` host — this is a
+> single-domain deployment. The frontend calls the API on the same origin at
+> `/api`, and Caddy routes `/api/*` to the backend.
 
 > The API will **refuse to start** if the JWT secrets are weak/placeholder/equal
 > or if `DATABASE_URL` / `CORS_ORIGIN` are missing. This is intentional.
 
-> `NEXT_PUBLIC_API_URL` is baked into the frontend at **build time**, so if you
-> change it later you must `docker compose build web` again.
+> `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_API_PATH_PREFIX` are baked into the
+> frontend at **build time**, so if you change them later you must
+> `docker compose build web` again.
 
-## 6. Configure Caddy
+## 6. DNS (Afrihost) and Caddy
+
+### 6a. Create the single DNS record
+
+In the **Afrihost DNS Editor**, create only this A record:
+
+| Field                | Value          |
+| -------------------- | -------------- |
+| Host / Name          | `app`          |
+| Type                 | `A`            |
+| Value / Content / IP | `102.211.186.94` |
+| TTL                  | `7200`         |
+
+Do **not** create `api.yourdomain.co.za` for this deployment — there is no
+separate API domain. The A record above must resolve to `102.211.186.94`
+**before** starting Caddy, otherwise Let's Encrypt cannot issue a certificate.
+
+### 6b. Configure Caddy
 
 ```bash
 cp /opt/plethora/apps/Plethora/deploy/caddy/Caddyfile /opt/plethora/caddy/Caddyfile
 nano /opt/plethora/caddy/Caddyfile
 ```
 
-Replace the example domains and the `email` with your real values. **DNS A
-records for both domains must already point at `102.211.186.94`** before Caddy
-can obtain Let's Encrypt certificates.
+Set your real domain and `email`. The single-domain block looks like this:
+
+```caddy
+app.<real-domain> {
+    handle_path /api/* {
+        reverse_proxy api:3001
+    }
+
+    handle {
+        reverse_proxy web:3000
+    }
+}
+```
+
+`handle_path /api/*` strips the `/api` prefix, so `https://app.<real-domain>/api/health`
+reaches the backend as `GET /health`.
 
 ## 7. Start the stack
 
@@ -141,7 +212,42 @@ before starting, creating the schema in the fresh PostgreSQL database.
 Then browse to:
 
 - https://app.example.co.za  (frontend)
-- https://api.example.co.za/health  → `{"status":"ok","service":"plethora-api"}`
+- https://app.example.co.za/api/health  → `{"status":"ok","service":"plethora-api"}`
+
+(The `/api/health` request is routed by Caddy to the backend `/health` route.)
+
+## 7b. Validate the configuration
+
+Before and after starting, confirm the single-domain wiring is correct.
+
+**Config / DNS checks (before or after start):**
+
+```bash
+# Caddy must show app.<domain> with handle_path /api/* -> api:3001
+cat /opt/plethora/caddy/Caddyfile
+
+# All five URL vars must use the SINGLE app domain (+ /api prefix)
+grep -E '^(FRONTEND_URL|API_URL|CORS_ORIGIN|NEXT_PUBLIC_API_URL|NEXT_PUBLIC_API_PATH_PREFIX)=' /opt/plethora/.env
+
+# The app domain must resolve to this VM's public IP
+dig app.example.co.za +short      # expect: 102.211.186.94
+
+# Compose must interpolate cleanly with no errors/empty required vars
+cd /opt/plethora
+docker compose config
+```
+
+**Smoke tests (after the stack is running):**
+
+```bash
+curl -I https://app.example.co.za            # frontend  -> expect HTTP 200
+curl -I https://app.example.co.za/api/health # backend    -> expect HTTP 200
+curl    https://app.example.co.za/api/health # -> {"status":"ok","service":"plethora-api"}
+```
+
+`https://app.example.co.za/api/health` must reach the backend `/health`
+endpoint (Caddy strips the `/api` prefix). If it returns the Next.js 404 page
+instead, the Caddyfile `handle_path /api/*` block is missing or misordered.
 
 ## 8. View logs
 
@@ -256,7 +362,7 @@ Usually a missing/weak env var. Check `JWT_SECRET`, `JWT_REFRESH_SECRET`
 (≥32 chars, different), `DATABASE_URL`, `CORS_ORIGIN` in `/opt/plethora/.env`.
 
 **Caddy can't get a certificate**
-- DNS A records for both domains must resolve to `102.211.186.94`.
+- The single A record (`app.<domain>`) must resolve to `102.211.186.94`.
 - Ports 80 and 443 must be open in UFW and not used by another process.
 - For testing, enable the staging CA line in the Caddyfile to avoid rate limits.
 ```bash
@@ -267,8 +373,16 @@ docker compose logs -f caddy
 - Confirm `DATABASE_URL` host is `postgres` (the service name), not `localhost`.
 - Check Postgres health: `docker compose ps` / `docker compose logs postgres`.
 
+**`/api/...` returns the Next.js 404 page instead of API data**
+- The Caddyfile must contain a `handle_path /api/* { reverse_proxy api:3001 }`
+  block **before** the catch-all `handle { reverse_proxy web:3000 }`.
+- `cat /opt/plethora/caddy/Caddyfile` and `docker compose restart caddy`.
+
 **Frontend calls the wrong API URL**
-- `NEXT_PUBLIC_API_URL` is inlined at build time. After changing it:
+- The frontend calls the API on the same origin at `/api` (relative). For
+  production this needs no host — Caddy routes `/api/*` to the backend.
+- `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_API_PATH_PREFIX` are inlined at build
+  time and used by the Next.js dev/SSR rewrite fallback. After changing them:
   `docker compose build web && docker compose up -d web`.
 
 **Migrations didn't apply**
@@ -293,6 +407,10 @@ sudo ss -tlnp
 
 ### Notes / manual confirmations
 
+- **Single domain:** this VM deployment uses one public domain
+  (`app.<domain>`). The API is reached at `app.<domain>/api`. There is no
+  `api.<domain>` and no second TLS certificate. The browser talks to the API on
+  the same origin, so there is no cross-origin (CORS) request in normal use.
 - **Node version:** the containers build on **Node 24** because the repo pins
   `"node": "24.x"` with `engine-strict=true`. The VM's Node 20 (via nvm) is only
   for occasional host-side commands and does not affect the Docker builds. If

@@ -1,10 +1,12 @@
 # Plethora Web (Next.js 16) — production image (standalone output)
 # Build context: REPO ROOT (npm-workspaces monorepo with a shared lockfile).
 #   docker build -f apps/web/Dockerfile \
-#     --build-arg NEXT_PUBLIC_API_URL=https://api.example.co.za -t plethora-web .
+#     --build-arg NEXT_PUBLIC_API_URL=https://app.example.co.za \
+#     --build-arg NEXT_PUBLIC_API_PATH_PREFIX=/api -t plethora-web .
 #
-# NEXT_PUBLIC_* values are inlined at BUILD time, so the public API URL must be
-# passed as a build arg (see docker-compose.yml -> web.build.args).
+# Single public domain: the API is served under /api on the SAME host as the
+# app. NEXT_PUBLIC_* values are inlined at BUILD time, so they must be passed as
+# build args (see docker-compose.yml -> web.build.args).
 #
 # NOTE on Node version: the repo pins Node 24.x (engines + engine-strict), so
 # this image uses node:24 even though the VM host runs Node 20 via nvm.

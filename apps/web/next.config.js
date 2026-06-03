@@ -30,14 +30,13 @@ const nextConfig = {
   ...(useTracingRoot ? { outputFileTracingRoot: monorepoRoot } : {}),
   async rewrites() {
     const apiUrl = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL);
-    const prefix = (process.env.NEXT_PUBLIC_API_PATH_PREFIX ?? "").replace(
-      /\/$/,
-      ""
-    );
-    const destination =
-      prefix === ""
-        ? `${apiUrl}/:path*`
-        : `${apiUrl}${prefix}/:path*`;
+    // Normalize the prefix to a single leading slash and no trailing slash so
+    // "api", "/api", and "/api/" all become "/api". Guards against broken URLs
+    // like `${host}api/...` (missing slash) or `${host}/api//...` (double slash).
+    const rawPrefix = (process.env.NEXT_PUBLIC_API_PATH_PREFIX ?? "").trim();
+    const prefix =
+      rawPrefix === "" ? "" : `/${rawPrefix.replace(/^\/+/, "").replace(/\/+$/, "")}`;
+    const destination = `${apiUrl}${prefix}/:path*`;
     return [{ source: "/api/:path*", destination }];
   },
 };

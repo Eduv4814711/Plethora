@@ -48,7 +48,8 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?Set NEXT_PUBLIC_API_URL in /opt/plethora/.env}
-        NEXT_PUBLIC_API_PATH_PREFIX: ${NEXT_PUBLIC_API_PATH_PREFIX:-}
+        # Single public domain: the API is served under /api on the same host.
+        NEXT_PUBLIC_API_PATH_PREFIX: ${NEXT_PUBLIC_API_PATH_PREFIX:-/api}
     image: plethora-web:latest
     container_name: plethora_web
     restart: unless-stopped
