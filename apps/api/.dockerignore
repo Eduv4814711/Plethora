@@ -1,0 +1,15 @@
+# Fallback .dockerignore if apps/api is ever used directly as a build context.
+# NOTE: The production images use the REPO ROOT as the build context, so the
+# repo-root /.dockerignore is what actually applies for `docker compose build`.
+node_modules
+dist
+uploads
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+!.env.production.example
+*.log
+coverage
+.DS_Store
+.vercel

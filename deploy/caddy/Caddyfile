@@ -1,0 +1,42 @@
+# Plethora ERP — production Caddy reverse proxy
+#
+# Deploy: copy this file to /opt/plethora/caddy/Caddyfile, then replace the
+# example domains with your real domains and restart Caddy:
+#
+#   cp /opt/plethora/apps/Plethora/deploy/caddy/Caddyfile /opt/plethora/caddy/Caddyfile
+#   # edit /opt/plethora/caddy/Caddyfile  (set your domains + email)
+#   docker compose restart caddy
+#
+# Caddy automatically obtains and renews Let's Encrypt TLS certificates for the
+# domains below. The two domains MUST already point (A record) at this VM's
+# public IP (102.211.186.94) before Caddy can issue certificates.
+#
+# `web` and `api` are the internal Docker service names on plethora_network;
+# Caddy reaches them by container port (3000 / 3001), never via the host.
+
+{
+	# Email used by Let's Encrypt for expiry notices. Replace with a real address.
+	email admin@example.co.za
+
+	# For first-time testing against fake certs, uncomment the staging CA to avoid
+	# hitting Let's Encrypt rate limits, then comment it out again for real certs:
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+# Frontend (Next.js)
+app.example.co.za {
+	encode zstd gzip
+	reverse_proxy web:3000
+}
+
+# Backend API (Fastify)
+api.example.co.za {
+	encode zstd gzip
+
+	# Upload endpoints accept files up to ~10MB; allow some headroom.
+	request_body {
+		max_size 25MB
+	}
+
+	reverse_proxy api:3001
+}

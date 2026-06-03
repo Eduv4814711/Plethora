@@ -158,7 +158,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     });
   });
 
-  app.get("/health", async () => ({ status: "ok" }));
+  app.get("/health", async () => ({ status: "ok", service: "plethora-api" }));
 
   await app.register(registerWhatsApp);
   await app.register(authRoutes, { prefix: "/auth" });
