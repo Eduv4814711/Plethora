@@ -24,12 +24,12 @@ function normalizeApiBaseUrl(raw) {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Set DOCKER_BUILD=1 in Dockerfile.web so the image can run node server.js (standalone).
-  ...(process.env.DOCKER_BUILD === "1" ? { output: "standalone" } : {}),
   // npm workspaces hoist dependencies to the repo root; include them in the server bundle trace.
   ...(useTracingRoot ? { outputFileTracingRoot: monorepoRoot } : {}),
   async rewrites() {
     const apiUrl = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL);
+    // Keep /api as a local/backward-compatible proxy. Railway production browser
+    // calls use NEXT_PUBLIC_API_URL directly via apps/web/lib/api.ts.
     // Normalize the prefix to a single leading slash and no trailing slash so
     // "api", "/api", and "/api/" all become "/api". Guards against broken URLs
     // like `${host}api/...` (missing slash) or `${host}/api//...` (double slash).

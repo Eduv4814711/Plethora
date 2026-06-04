@@ -15,7 +15,7 @@
   - `HttpOnly: true` — not readable by JavaScript (mitigates XSS token theft).
   - `SameSite=Strict` — mitigates cross-site request forgery for cookie-authenticated requests.
   - `Secure: true` in production (`NODE_ENV=production`) — HTTPS only.
-  - `Path=/` — sent to all API routes on the same site (including `/api/*` via the Next.js proxy).
+  - `Path=/` — sent to API routes on the configured API domain.
 
 The JSON response from `/auth/login`, `/auth/onboard`, and `/auth/refresh` **does not include** `refreshToken`.
 

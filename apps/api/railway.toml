@@ -1,4 +1,4 @@
-# Railway API service — Nixpacks at monorepo root (see DEPLOYMENT.md).
+# Railway API service — Nixpacks at monorepo root (see DEPLOYMENT_RAILWAY.md).
 # Settings → Root Directory: blank or "/"
 # Settings → Config-as-code path: apps/api/railway.toml
 
@@ -14,9 +14,8 @@ watchPatterns = [
 ]
 
 [deploy]
-# Migrations run before the new container starts so the API can listen immediately for /health.
-preDeployCommand = "cd apps/api && npm run db:migrate:deploy"
-startCommand = "cd apps/api && npm run start:server"
+# The start script applies committed Prisma migrations, then starts Fastify.
+startCommand = "cd apps/api && npm run start:with-migrate"
 healthcheckPath = "/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"

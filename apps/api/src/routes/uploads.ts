@@ -66,7 +66,7 @@ export async function uploadsRoutes(app: FastifyInstance) {
         });
       }
 
-      const url = storage.getAssetUrl(key, { proxied: true });
+      const url = storage.getAssetUrl(key);
       return reply.send({ url });
     }
   );

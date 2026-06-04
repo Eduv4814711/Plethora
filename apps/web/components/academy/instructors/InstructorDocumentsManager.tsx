@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { InstructorDocument } from "./types";
 import { DateInput } from "@/components/date-input";
+import { buildApiUrl } from "@/lib/api";
 
 const DOCUMENT_TYPES = [
   { value: "instructor_certificate", label: "Instructor Certificate" },
@@ -32,7 +33,7 @@ function fileHref(fileUrl: string): string {
   const path = fileUrl.startsWith("/uploads/")
     ? fileUrl.slice("/uploads/".length)
     : fileUrl.replace(/^\/+/, "");
-  return `/api/uploads/${path}`;
+  return buildApiUrl(`/uploads/${path}`);
 }
 
 export function InstructorDocumentsManager({

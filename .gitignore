@@ -7,16 +7,10 @@ coverage
 .turbo
 uploads
 .cursor/
-.vercel
 
 # Environment files — never commit real secrets. Keep example templates only.
 .env
 .env.*
-.env.local
-.env.*.local
-.env*.local
 !.env.example
-!.env.*.example
-
-# Deploy-time symlink created on the VM at /opt/plethora (kept out of the repo)
-/docker-compose.override.yml
+!.env.railway.api.example
+!.env.railway.web.example

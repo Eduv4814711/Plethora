@@ -71,10 +71,6 @@ const rawEnvSchema = z.object({
     z.number().int().min(1).max(24 * 60).optional()
   ),
   ENCRYPTION_KEY: z.preprocess(emptyToUndefined, z.string().min(16).optional()),
-  STORAGE_DRIVER: z.preprocess(emptyToUndefined, z.enum(["local", "s3"]).optional()),
-  AWS_REGION: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
-  S3_BUCKET_NAME: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
-  S3_PUBLIC_BASE_URL: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
 });
 
 type RawEnv = z.infer<typeof rawEnvSchema>;
@@ -99,12 +95,6 @@ export type Env = {
   };
   clockInWindowMinutes: number;
   encryptionKey: string | undefined;
-  storage: {
-    driver: "local" | "s3";
-    awsRegion: string | undefined;
-    s3BucketName: string | undefined;
-    s3PublicBaseUrl: string | undefined;
-  };
 };
 
 export function formatEnvValidationError(error: z.ZodError): string {
@@ -132,10 +122,6 @@ function pickRawEnv(source: NodeJS.ProcessEnv): Record<string, unknown> {
     WHATSAPP_API_VERSION: source.WHATSAPP_API_VERSION,
     CLOCK_IN_WINDOW_MINUTES: source.CLOCK_IN_WINDOW_MINUTES,
     ENCRYPTION_KEY: source.ENCRYPTION_KEY,
-    STORAGE_DRIVER: source.STORAGE_DRIVER,
-    AWS_REGION: source.AWS_REGION,
-    S3_BUCKET_NAME: source.S3_BUCKET_NAME,
-    S3_PUBLIC_BASE_URL: source.S3_PUBLIC_BASE_URL,
   };
 }
 
@@ -243,12 +229,6 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     },
     clockInWindowMinutes: raw.CLOCK_IN_WINDOW_MINUTES ?? 15,
     encryptionKey: raw.ENCRYPTION_KEY,
-    storage: {
-      driver: raw.STORAGE_DRIVER ?? "local",
-      awsRegion: raw.AWS_REGION,
-      s3BucketName: raw.S3_BUCKET_NAME,
-      s3PublicBaseUrl: raw.S3_PUBLIC_BASE_URL,
-    },
   };
 }
 

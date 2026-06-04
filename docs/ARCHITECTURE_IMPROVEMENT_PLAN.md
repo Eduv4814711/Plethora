@@ -13,7 +13,7 @@
 | Workspace | Stack | Role |
 |-----------|-------|------|
 | `apps/api` | Fastify 4, Prisma 5, PostgreSQL, Zod, Vitest | REST API, WhatsApp webhook/integration, payroll/roster/attendance domain logic |
-| `apps/web` | Next.js (App Router), React, Tailwind | Dashboard UI; proxies `/api/*` to the API |
+| `apps/web` | Next.js (App Router), React, Tailwind | Dashboard UI; calls the configured API origin |
 
 Root scripts (`package.json`): `npm run build` builds all workspaces; `npm run test --workspace=api` runs Vitest in the API only. **The web app has no automated test suite.**
 
@@ -37,7 +37,7 @@ Client (browser / WhatsApp)
 ### Web architecture
 
 - **Routing:** Next.js App Router under `app/(dashboard)/*` and `app/(auth)/*`.
-- **API access:** Large typed client in `lib/api.ts` (~1,500+ lines) calling `/api` (rewritten to backend).
+- **API access:** Large typed client in `lib/api.ts` (~1,500+ lines) calling the configured API origin.
 - **Auth state:** `lib/auth-context.tsx` (localStorage tokens, proactive refresh).
 - **Permissions (client-only):** `lib/permissions.ts` mirrors server module paths for nav and route guards; **must stay aligned with** `middleware/rbac.ts`.
 

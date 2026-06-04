@@ -68,8 +68,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     logger: true,
     genReqId: () => randomUUID(),
     requestIdHeader: "x-request-id",
-    // Trust X-Forwarded-* headers when running behind AWS ALB (TRUST_PROXY=true)
-    // so real client IP, protocol, rate limiting, and secure cookies work.
+    // Trust Railway's X-Forwarded-* headers when deployed behind its edge proxy.
     trustProxy: env.trustProxy,
   });
 

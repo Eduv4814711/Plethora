@@ -6,7 +6,7 @@ This guide explains how to configure WhatsApp Cloud API for your production envi
 
 ## Prerequisites
 
-- API deployed with a **public HTTPS URL** (e.g. Railway, Render, VPS)
+- API deployed with a **public Railway HTTPS URL**
 - Meta Developer account with WhatsApp Business API access
 - WhatsApp Business phone number (or test number for development)
 
@@ -14,11 +14,8 @@ This guide explains how to configure WhatsApp Cloud API for your production envi
 
 ## Step 1: Deploy Your API
 
-Ensure your API is deployed and reachable at a stable HTTPS URL, for example:
-
-- **Railway**: `https://your-api.up.railway.app`
-- **Render**: `https://your-api.onrender.com`
-- **Custom domain**: `https://api.yourdomain.com`
+Ensure your API is deployed on Railway and reachable at a stable HTTPS URL,
+for example `https://your-api.up.railway.app` or `https://api.yourdomain.com`.
 
 Test the health endpoint: `https://YOUR-API-URL/health` should return `{"status":"ok"}`.
 
@@ -26,7 +23,7 @@ Test the health endpoint: `https://YOUR-API-URL/health` should return `{"status"
 
 ## Step 2: Set Production Environment Variables
 
-On your API host (Railway, Render, etc.), add these variables:
+On the Railway API service, add these variables:
 
 | Variable | Description | Example |
 |----------|-------------|---------|

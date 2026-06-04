@@ -1,8 +1,8 @@
-# Railway Web service — Nixpacks at monorepo root (see DEPLOYMENT.md).
+# Railway Web service — Nixpacks at monorepo root (see DEPLOYMENT_RAILWAY.md).
 # Settings → Root Directory: blank or "/"
 # Settings → Config-as-code path: apps/web/railway.toml
 #
-# Set NEXT_PUBLIC_API_URL before the first build so Next.js rewrites and the client bundle are correct.
+# Set NEXT_PUBLIC_API_URL before the first build so browser calls target the API service.
 
 [build]
 builder = "NIXPACKS"
@@ -12,7 +12,6 @@ watchPatterns = [
   "apps/web/**",
   "package.json",
   "package-lock.json",
-  "apps/web/next.config.js",
 ]
 
 [deploy]

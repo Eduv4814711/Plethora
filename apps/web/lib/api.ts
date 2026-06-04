@@ -1,5 +1,39 @@
-// Use /api proxy to avoid CORS - Next.js rewrites /api/* to the backend
-const API_BASE = "/api";
+function trimSlashes(value: string): string {
+  return value.replace(/^\/+|\/+$/g, "");
+}
+
+function normalizeApiOrigin(raw: string | undefined): string {
+  const trimmed = (raw ?? "").trim().replace(/\/+$/, "");
+  if (!trimmed) return "http://localhost:3001";
+  if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith("/")) return trimmed;
+  const isLocal =
+    /^localhost\b/i.test(trimmed) ||
+    /^127\.\d+\.\d+\.\d+(?::\d+)?$/i.test(trimmed) ||
+    /^\[::1\](?::\d+)?$/i.test(trimmed) ||
+    /^::1(?::\d+)?$/i.test(trimmed);
+  return `${isLocal ? "http" : "https"}://${trimmed}`;
+}
+
+function originAlreadyIncludesPrefix(origin: string, prefix: string): boolean {
+  if (!prefix) return false;
+  try {
+    const pathname = trimSlashes(new URL(origin).pathname);
+    return pathname === prefix || pathname.endsWith(`/${prefix}`);
+  } catch {
+    return trimSlashes(origin) === prefix || trimSlashes(origin).endsWith(`/${prefix}`);
+  }
+}
+
+export function buildApiUrl(endpointPath: string): string {
+  const origin = normalizeApiOrigin(process.env.NEXT_PUBLIC_API_URL);
+  const configuredPrefix = trimSlashes(process.env.NEXT_PUBLIC_API_PATH_PREFIX ?? "");
+  const prefix = originAlreadyIncludesPrefix(origin, configuredPrefix) ? "" : configuredPrefix;
+  const endpoint = trimSlashes(endpointPath);
+  const path = [prefix, endpoint].filter(Boolean).join("/");
+  return path ? `${origin}/${path}` : origin;
+}
+
+const API_BASE = buildApiUrl("");
 
 export interface AuthUser {
   id: string;
