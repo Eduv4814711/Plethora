@@ -86,7 +86,7 @@ function formatMoney(fmt: Intl.NumberFormat, raw: string): string {
 
 function ChevronRight() {
   return (
-    <svg className="h-4 w-4 shrink-0 text-base-content/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+    <svg className="h-4 w-4 shrink-0 text-black/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
     </svg>
   );
@@ -94,7 +94,7 @@ function ChevronRight() {
 
 function MortarboardIcon() {
   return (
-    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-2xl" aria-hidden>
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-security-navy-50 text-2xl" aria-hidden>
       <span>🎓</span>
     </div>
   );
@@ -216,7 +216,7 @@ export default function AcademyHubPage() {
   return (
     <div className="w-full min-w-0">
       {error && (
-        <div className="mb-4 rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-sm text-error" role="alert">
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
           {error}
         </div>
       )}
@@ -226,8 +226,8 @@ export default function AcademyHubPage() {
           <MortarboardIcon />
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-security-navy-900">Academy</h1>
-            <p className="mt-1 text-sm text-base-content/70">
-              Manage students, courses, intakes, and enrolments in one place. Grant the <code className="rounded bg-base-200 px-1 text-xs">/academy</code> module to
+            <p className="mt-1 text-sm text-neutral-600">
+              Manage students, courses, intakes, and enrolments in one place. Grant the <code className="rounded bg-neutral-100 px-1 text-xs">/academy</code> module to
               give users access.
             </p>
           </div>
@@ -236,16 +236,16 @@ export default function AcademyHubPage() {
 
       <div className="grid gap-8 lg:grid-cols-[1fr_17.5rem] lg:items-start">
         <div className="min-w-0 space-y-6">
-          <div className="overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/10 via-amber-50/40 to-base-100 shadow-sm">
+          <div className="overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/10 via-amber-50/40 to-white shadow-sm">
             <div className="grid gap-4 p-5 sm:grid-cols-[1fr_minmax(9rem,11rem)] sm:items-center">
               <div>
                 <h2 className="text-lg font-semibold text-security-navy-900">New student intake</h2>
-                <p className="mt-2 text-sm text-base-content/80">
+                <p className="mt-2 text-sm text-neutral-700">
                   Walk through details, admin fee, and enrolment in open course runs — best for front desk.
                 </p>
                 <Link
                   href="/academy/intake"
-                  className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-content shadow-sm transition hover:brightness-105"
+                  className="mt-4 inline-flex items-center gap-2 rounded-full bg-security-navy px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-105"
                 >
                   Start new intake
                   <span className="text-base leading-none" aria-hidden>
@@ -272,19 +272,19 @@ export default function AcademyHubPage() {
             {profileReadiness && !profileReadiness.compliant && (
               <div className="mb-4 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm">
                 <p className="font-semibold">Academy profile setup incomplete</p>
-                <p className="mt-1 text-base-content/80">Some workflows are blocked until profile compliance is complete.</p>
-                <Link href="/academy/profile" className="mt-2 inline-flex text-primary underline">
+                <p className="mt-1 text-neutral-700">Some workflows are blocked until profile compliance is complete.</p>
+                <Link href="/academy/profile" className="mt-2 inline-flex text-security-navy-700 underline">
                   Complete profile setup
                 </Link>
               </div>
             )}
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Quick access</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Quick access</h3>
             <ul className="mt-3 grid gap-3 sm:grid-cols-2">
               {quickLinks.map((item, i) => (
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    className="group flex items-start gap-3 rounded-2xl border border-base-300/90 bg-base-100 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow"
+                    className="group flex items-start gap-3 rounded-2xl border border-neutral-300/90 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow"
                   >
                     <span
                       className={clsx(
@@ -297,8 +297,8 @@ export default function AcademyHubPage() {
                       </span>
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="font-medium text-primary">{item.label}</span>
-                      <span className="mt-0.5 block text-sm text-base-content/70">{item.description}</span>
+                      <span className="font-medium text-security-navy-700">{item.label}</span>
+                      <span className="mt-0.5 block text-sm text-neutral-600">{item.description}</span>
                     </span>
                     <ChevronRight />
                   </Link>
@@ -308,15 +308,15 @@ export default function AcademyHubPage() {
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Shortcuts</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Shortcuts</h3>
             <div className="mt-3 flex flex-wrap gap-2">
               {shortcuts.map((s) => (
                 <Link
                   key={s.href + s.label}
                   href={s.href}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-base-300 bg-base-100/90 px-3.5 py-2 text-sm font-medium text-security-navy-800 shadow-sm transition hover:border-primary/40 hover:bg-base-200/50"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white/90 px-3.5 py-2 text-sm font-medium text-security-navy-800 shadow-sm transition hover:border-primary/40 hover:bg-neutral-100/50"
                 >
-                  <span className="text-primary">+</span>
+                  <span className="text-security-navy-700">+</span>
                   {s.label}
                 </Link>
               ))}
@@ -326,7 +326,7 @@ export default function AcademyHubPage() {
 
         <div className="shrink-0 space-y-6 min-w-0 w-full max-w-sm lg:max-w-none lg:w-auto mx-auto lg:mx-0">
           <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-base-content/50">At a glance</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">At a glance</h3>
             <ul className="mt-3 space-y-3">
               {summary ? (
                 <>
@@ -356,21 +356,21 @@ export default function AcademyHubPage() {
 
           <div>
             <div className="flex items-baseline justify-between gap-2">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-base-content/50">Recent activity</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Recent activity</h3>
               <Link
                 href="/academy/activity"
-                className="shrink-0 text-xs font-medium text-primary hover:underline"
+                className="shrink-0 text-xs font-medium text-security-navy-700 hover:underline"
               >
                 View all
               </Link>
             </div>
             {activityPreview.length === 0 && summary ? (
-              <p className="mt-3 text-sm text-base-content/50">No activity yet.</p>
+              <p className="mt-3 text-sm text-neutral-500">No activity yet.</p>
             ) : (
               <ul className="mt-3 space-y-1.5">
                 {activityPreview.length === 0
                   ? [0, 1, 2].map((i) => (
-                      <li key={i} className="h-12 animate-pulse rounded-lg bg-base-200/60" />
+                      <li key={i} className="h-12 animate-pulse rounded-lg bg-neutral-100" />
                     ))
                   : activityPreview.map((a) => (
                       <li key={a.id}>
@@ -390,7 +390,7 @@ function KpiRowSkeleton() {
   return (
     <>
       {[0, 1, 2, 3].map((i) => (
-        <li key={i} className="h-16 rounded-xl border border-base-200 bg-base-100/60 animate-pulse" />
+        <li key={i} className="h-16 rounded-xl border border-neutral-200 bg-white/60 animate-pulse" />
       ))}
     </>
   );
@@ -427,16 +427,16 @@ function Kpi({
         {delta.text}
       </span>
     ) : delta ? (
-      <span className="ml-auto text-xs text-base-content/50">{delta.text}</span>
+      <span className="ml-auto text-xs text-neutral-500">{delta.text}</span>
     ) : null;
   return (
-    <li className="rounded-xl border border-base-200/80 bg-gradient-to-b from-base-100 to-base-200/20 p-3.5 shadow-sm">
+    <li className="rounded-xl border border-neutral-200/80 bg-gradient-to-b from-white to-neutral-100/40 p-3.5 shadow-sm">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs text-base-content/60">{label}</p>
+        <p className="text-xs text-neutral-500">{label}</p>
         {chip}
       </div>
       <p className="mt-1 text-xl font-semibold tabular-nums text-security-navy-900">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-base-content/50">{sub}</p>}
+      {sub && <p className="mt-0.5 text-xs text-neutral-500">{sub}</p>}
     </li>
   );
 }

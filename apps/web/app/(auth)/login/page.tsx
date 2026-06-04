@@ -111,9 +111,9 @@ function LoginForm() {
           </div>
 
           {error && (
-            <div className="p-4 text-sm text-security-navy bg-security-amber-50 border-2 border-security-amber-200 rounded-security space-y-2">
+            <div className="p-4 text-sm text-security-navy bg-security-amber-50 border-2 border-security-amber-200 rounded-security space-y-2" role="alert">
               <p className="font-medium">{error}</p>
-              {(error === "Login failed" || error.includes("connect") || error.includes("server") || error.includes("404")) && (
+              {process.env.NODE_ENV !== "production" && (error === "Login failed" || error.includes("connect") || error.includes("server") || error.includes("404")) && (
                 <p className="text-xs mt-2 text-security-navy-600">
                   Run <code className="bg-security-navy-100 px-1.5 py-0.5 rounded text-security-navy-700 font-mono">npm run dev:all</code> (or <code className="bg-security-navy-100 px-1.5 py-0.5 rounded text-security-navy-700 font-mono">npm run dev:api</code> in a separate terminal). Web on port 3000, API on 3001. First-time: <code className="bg-security-navy-100 px-1.5 py-0.5 rounded text-security-navy-700 font-mono">npm run db:push</code> and <code className="bg-security-navy-100 px-1.5 py-0.5 rounded text-security-navy-700 font-mono">npm run db:seed</code>.
                 </p>

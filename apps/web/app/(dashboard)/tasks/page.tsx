@@ -13,6 +13,7 @@ import {
   type TaskPriority,
 } from "@/lib/api";
 import { AssigneePicker } from "@/components/assignee-picker";
+import { AlertBanner, EmptyState } from "@/components/ui";
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
   todo: "To Do",
@@ -28,10 +29,10 @@ const PRIORITY_LABELS: Record<TaskPriority, string> = {
 };
 
 const PRIORITY_COLORS: Record<TaskPriority, string> = {
-  low: "bg-gray-200 text-gray-700",
-  medium: "bg-blue-100 text-blue-800",
-  high: "bg-orange-100 text-orange-800",
-  urgent: "bg-red-100 text-red-800",
+  low: "badge-neutral",
+  medium: "badge-warning",
+  high: "badge-warning",
+  urgent: "badge-error",
 };
 
 function TaskCard({ task }: { task: Task }) {
@@ -41,27 +42,27 @@ function TaskCard({ task }: { task: Task }) {
   return (
     <Link
       href={`/tasks/${task.id}`}
-      className="block bg-gray-100 border border-gray-300 rounded-lg p-4 hover:border-gray-400 transition-colors"
+      className="card-dashboard block p-4 transition-colors hover:border-security-navy-200"
     >
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-semibold text-black truncate flex-1">{task.title}</h3>
         <span
-          className={`shrink-0 px-2 py-0.5 text-xs font-medium rounded ${PRIORITY_COLORS[task.priority]}`}
+          className={`shrink-0 ${PRIORITY_COLORS[task.priority]}`}
         >
           {PRIORITY_LABELS[task.priority]}
         </span>
       </div>
-      <div className="mt-2 flex flex-wrap gap-2 text-sm text-gray-600">
+      <div className="mt-2 flex flex-wrap gap-2 text-sm text-neutral-600">
         <span>{STATUS_LABELS[task.status]}</span>
         {task.project && (
-          <span className="text-gray-500">• {task.project.name}</span>
+          <span className="text-neutral-500">• {task.project.name}</span>
         )}
         {task.assigneeDisplayName && (
-          <span className="text-gray-500">• {task.assigneeDisplayName}</span>
+          <span className="text-neutral-500">• {task.assigneeDisplayName}</span>
         )}
       </div>
       {dueStr && (
-        <p className={`mt-1 text-xs ${isOverdue ? "text-red-600 font-medium" : "text-gray-500"}`}>
+        <p className={`mt-1 text-xs ${isOverdue ? "text-red-600 font-medium" : "text-neutral-500"}`}>
           Due {dueStr}
         </p>
       )}
@@ -86,30 +87,41 @@ export default function TasksPage() {
     id: null,
   });
   const [formError, setFormError] = useState("");
+  const [fetchError, setFetchError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const refresh = () => {
+  const refresh = async () => {
     if (!token) return;
     const params: { projectId?: string; status?: TaskStatus } = {};
     if (projectFilter !== "all") params.projectId = projectFilter;
     if (statusFilter !== "all") params.status = statusFilter as TaskStatus;
 
-    listTasks(token, { ...params, limit: 100 })
-      .then((r) => {
-        setTasks(r.data);
-        setTotal(r.total);
-      })
-      .catch(console.error);
-
-    listTaskProjects(token)
-      .then((r) => setProjects(r.data))
-      .catch(console.error);
+    setFetchError("");
+    try {
+      const [taskResult, projectResult] = await Promise.all([
+        listTasks(token, { ...params, limit: 100 }),
+        listTaskProjects(token),
+      ]);
+      setTasks(taskResult.data);
+      setTotal(taskResult.total);
+      setProjects(projectResult.data);
+    } catch (err) {
+      console.error(err);
+      setTasks([]);
+      setFetchError("Unable to load tasks. Check the connection and try again.");
+    }
   };
 
   useEffect(() => {
     if (!token) return;
-    refresh();
-    setLoading(false);
+    let cancelled = false;
+    setLoading(true);
+    refresh().finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [token, projectFilter, statusFilter]);
 
   const handleCreateTask = async (e: React.FormEvent) => {
@@ -144,10 +156,10 @@ export default function TasksPage() {
   if (loading) {
     return (
       <div className="animate-pulse space-y-6">
-        <div className="h-9 w-48 bg-gray-200 rounded-lg" />
+        <div className="h-9 w-48 bg-neutral-200 rounded-lg" />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="h-32 bg-gray-200 rounded-lg" />
+            <div key={i} className="h-32 bg-neutral-200 rounded-lg" />
           ))}
         </div>
       </div>
@@ -157,9 +169,14 @@ export default function TasksPage() {
   return (
     <div className="animate-fade-in max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-black">Tasks</h1>
-        <div className="flex items-center gap-3">
+        <div>
+          <h1 className="page-title">Tasks</h1>
+          <p className="mt-1 text-sm text-neutral-600">Track operational work, assignments, and follow-ups.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <label htmlFor="tasks-project-filter" className="sr-only">Filter tasks by project</label>
           <select
+            id="tasks-project-filter"
             value={projectFilter}
             onChange={(e) => setProjectFilter(e.target.value)}
             className="input-compact w-auto"
@@ -171,7 +188,9 @@ export default function TasksPage() {
               </option>
             ))}
           </select>
+          <label htmlFor="tasks-status-filter" className="sr-only">Filter tasks by status</label>
           <select
+            id="tasks-status-filter"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="input-compact w-auto"
@@ -193,11 +212,15 @@ export default function TasksPage() {
         </div>
       </div>
 
+      {fetchError && <AlertBanner variant="error" className="mb-6">{fetchError}</AlertBanner>}
+
       {showForm && (
-        <div className="mb-6 bg-gray-100 border border-gray-300 rounded-lg p-4">
-          <h2 className="font-bold text-black mb-3">Create Task</h2>
+        <div className="card-dashboard mb-6 p-4">
+          <h2 className="section-title mb-3">Create task</h2>
           <form onSubmit={handleCreateTask} className="space-y-3">
+            <label htmlFor="task-title" className="label-text block">Task title</label>
             <input
+              id="task-title"
               type="text"
               value={formTitle}
               onChange={(e) => setFormTitle(e.target.value)}
@@ -232,7 +255,7 @@ export default function TasksPage() {
                 <AssigneePicker value={formAssignee} onChange={setFormAssignee} />
               </div>
             </div>
-            {formError && <p className="text-sm text-red-600">{formError}</p>}
+            {formError && <p className="text-sm text-red-600" role="alert">{formError}</p>}
             <div className="flex gap-2">
               <button type="submit" disabled={submitting} className="btn-primary">
                 Create
@@ -259,9 +282,20 @@ export default function TasksPage() {
       </div>
 
       {tasks.length === 0 && (
-        <div className="text-center py-12 text-gray-500">
-          No tasks yet. Create one to get started.
-        </div>
+        <EmptyState
+          className="mt-6"
+          title={projectFilter !== "all" || statusFilter !== "all" ? "No tasks match these filters" : "No tasks created yet"}
+          description={
+            projectFilter !== "all" || statusFilter !== "all"
+              ? "Adjust the project or status filters to find operational work."
+              : "Create tasks to assign work, track follow-ups, and keep operations moving."
+          }
+          action={
+            <button type="button" className="btn-primary px-3 py-1.5 text-xs" onClick={() => setShowForm(true)}>
+              New task
+            </button>
+          }
+        />
       )}
     </div>
   );

@@ -158,27 +158,27 @@ export function InstructorDrawer({
               <h2 className="text-lg font-semibold text-security-navy-900">
                 {mode === "create" ? "Add Instructor" : instructor?.fullName || "Instructor details"}
               </h2>
-              <p className="text-sm text-base-content/70">
+              <p className="text-sm text-neutral-600">
                 Manage accredited instructors, contracts, certificates, compliance, and assignments.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {mode === "view" && canEdit && (
-                <button type="button" className="btn btn-outline btn-sm rounded-xl" onClick={onStartEdit}>
+                <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-xl" onClick={onStartEdit}>
                   Edit
                 </button>
               )}
               {editable && (
                 <>
-                  <button type="button" className="btn btn-ghost btn-sm rounded-xl" onClick={onSaveDraft} disabled={saving}>
+                  <button type="button" className="btn-ghost px-3 py-1.5 text-xs rounded-xl" onClick={onSaveDraft} disabled={saving}>
                     Save Draft
                   </button>
-                  <button type="button" className="btn btn-primary btn-sm rounded-xl" onClick={onSave} disabled={saving}>
+                  <button type="button" className="btn-primary px-3 py-1.5 text-xs rounded-xl" onClick={onSave} disabled={saving}>
                     {saving ? "Saving..." : mode === "create" ? "Create Instructor" : "Save Changes"}
                   </button>
                 </>
               )}
-              <button type="button" className="btn btn-ghost btn-sm rounded-xl" onClick={onClose}>
+              <button type="button" className="btn-ghost px-3 py-1.5 text-xs rounded-xl" onClick={onClose}>
                 Close
               </button>
             </div>
@@ -192,7 +192,7 @@ export function InstructorDrawer({
                   className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
                     activeTab === tab.key
                       ? "bg-security-navy-900 text-white"
-                      : "bg-slate-100 text-base-content/80 hover:bg-slate-200"
+                      : "bg-slate-100 text-neutral-700 hover:bg-slate-200"
                   }`}
                   onClick={() => onTabChange(tab.key)}
                 >
@@ -220,7 +220,7 @@ export function InstructorDrawer({
                       </span>
                     </div>
                   </div>
-                  <div className="grid gap-2 text-xs text-base-content/80">
+                  <div className="grid gap-2 text-xs text-neutral-700">
                     <div>PSIRA No: {instructor?.psiraInstructorNumber || form.psiraInstructorNumber || "—"}</div>
                     <div>Branch: {instructor?.assignedBranch?.name || branchName(form.assignedBranchId, branches) || "—"}</div>
                     <div>Courses: {instructor?.assignedCourses.length || form.assignedCourseIds.length || 0}</div>
@@ -232,27 +232,27 @@ export function InstructorDrawer({
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {canEdit && (
-                    <button type="button" className="btn btn-outline btn-sm rounded-xl" onClick={onStartEdit}>
+                    <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-xl" onClick={onStartEdit}>
                       Edit
                     </button>
                   )}
                   {canEditCompliance && (
-                    <button type="button" className="btn btn-outline btn-sm rounded-xl" onClick={() => onTabChange("documents")}>
+                    <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-xl" onClick={() => onTabChange("documents")}>
                       Upload Document
                     </button>
                   )}
                   {canEdit && (
-                    <button type="button" className="btn btn-outline btn-sm rounded-xl" onClick={onRenewContract}>
+                    <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-xl" onClick={onRenewContract}>
                       Renew Contract
                     </button>
                   )}
                   {canArchive && (
-                    <button type="button" className="btn btn-outline btn-sm rounded-xl" onClick={onSuspend}>
+                    <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-xl" onClick={onSuspend}>
                       Suspend Instructor
                     </button>
                   )}
                   {canArchive && (
-                    <button type="button" className="btn btn-outline btn-sm rounded-xl" onClick={onArchive}>
+                    <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-xl" onClick={onArchive}>
                       Archive Instructor
                     </button>
                   )}
@@ -348,7 +348,7 @@ export function InstructorDrawer({
                 <div className="text-sm font-medium">Compliance Health Indicator</div>
                 <div className="mt-2 flex items-center gap-2">
                   <span className={`h-3 w-3 rounded-full ${health.cls}`} />
-                  <span className="text-sm text-base-content/80">{health.label}</span>
+                  <span className="text-sm text-neutral-700">{health.label}</span>
                 </div>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
@@ -501,7 +501,7 @@ export function InstructorDrawer({
               </div>
               <div className="rounded-xl border border-slate-200 p-4">
                 <h4 className="text-sm font-semibold text-security-navy-900">Assigned Courses</h4>
-                <p className="mt-1 text-xs text-base-content/70">
+                <p className="mt-1 text-xs text-neutral-600">
                   Assign courses, remove courses, and rebalance instructor allocation.
                 </p>
                 <div className="mt-3 grid gap-2 md:grid-cols-2">
@@ -516,7 +516,7 @@ export function InstructorDrawer({
                     >
                       <input
                         type="checkbox"
-                        className="checkbox checkbox-sm"
+                        className="h-4 w-4 rounded border-neutral-300 text-security-navy-600 focus:ring-security-navy-500"
                         checked={form.assignedCourseIds.includes(course.id)}
                         disabled={!editable}
                         onChange={() => toggleCourse(course.id)}
@@ -549,16 +549,16 @@ export function InstructorDrawer({
           {activeTab === "activity" && (
             <div className="rounded-2xl border border-slate-200 bg-white">
               {activity.length === 0 ? (
-                <div className="p-6 text-sm text-base-content/60">No activity recorded yet.</div>
+                <div className="p-6 text-sm text-neutral-500">No activity recorded yet.</div>
               ) : (
                 <ul className="divide-y divide-slate-100">
                   {activity.map((item) => (
                     <li key={item.id} className="flex items-start justify-between gap-3 p-4">
                       <div>
                         <div className="text-sm font-medium text-security-navy-900">{prettyAction(item.action)}</div>
-                        <div className="text-xs text-base-content/70">{item.userName || "System user"}</div>
+                        <div className="text-xs text-neutral-600">{item.userName || "System user"}</div>
                       </div>
-                      <div className="text-xs text-base-content/60">{new Date(item.at).toLocaleString()}</div>
+                      <div className="text-xs text-neutral-500">{new Date(item.at).toLocaleString()}</div>
                     </li>
                   ))}
                 </ul>
@@ -571,17 +571,17 @@ export function InstructorDrawer({
           <div className="border-t border-slate-200 bg-white px-4 py-3 md:px-6">
             <div className="flex flex-wrap items-center justify-end gap-2">
               {canArchive && (
-                <button type="button" className="btn btn-outline btn-sm rounded-xl" onClick={onArchive}>
+                <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-xl" onClick={onArchive}>
                   Archive
                 </button>
               )}
               {canDelete && (
-                <button type="button" className="btn btn-error btn-sm rounded-xl" onClick={() => onDelete(false)}>
+                <button type="button" className="btn-destructive px-3 py-1.5 text-xs rounded-xl" onClick={() => onDelete(false)}>
                   Delete
                 </button>
               )}
               {canPermanentDelete && (
-                <button type="button" className="btn btn-error btn-sm rounded-xl" onClick={() => onDelete(true)}>
+                <button type="button" className="btn-destructive px-3 py-1.5 text-xs rounded-xl" onClick={() => onDelete(true)}>
                   Permanent Delete
                 </button>
               )}
@@ -612,17 +612,17 @@ function TextField({
 }) {
   return (
     <label className="w-full">
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">
+      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">
         {label} {required ? "*" : ""}
       </span>
       <input
-        className={`input input-bordered w-full rounded-xl ${error ? "input-error" : ""}`}
+        className={`input-modern w-full rounded-xl ${error ? "input-error" : ""}`}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         placeholder={placeholder}
       />
-      {error ? <span className="mt-1 block text-xs text-error">{error}</span> : null}
+      {error ? <span className="mt-1 block text-xs text-red-700">{error}</span> : null}
     </label>
   );
 }
@@ -644,7 +644,7 @@ function DateField({
 }) {
   return (
     <label className="w-full">
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">
+      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">
         {label} {required ? "*" : ""}
       </span>
       <DateInput
@@ -656,7 +656,7 @@ function DateField({
         ariaLabel={label}
         showToday
       />
-      {error ? <span className="mt-1 block text-xs text-error">{error}</span> : null}
+      {error ? <span className="mt-1 block text-xs text-red-700">{error}</span> : null}
     </label>
   );
 }
@@ -680,11 +680,11 @@ function SelectField({
 }) {
   return (
     <label className="w-full">
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">
+      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">
         {label} {required ? "*" : ""}
       </span>
       <select
-        className={`select select-bordered w-full rounded-xl ${error ? "select-error" : ""}`}
+        className={`input-modern w-full rounded-xl ${error ? "select-error" : ""}`}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
@@ -695,7 +695,7 @@ function SelectField({
           </option>
         ))}
       </select>
-      {error ? <span className="mt-1 block text-xs text-error">{error}</span> : null}
+      {error ? <span className="mt-1 block text-xs text-red-700">{error}</span> : null}
     </label>
   );
 }
@@ -715,9 +715,9 @@ function TextAreaField({
 }) {
   return (
     <label className={className}>
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">{label}</span>
+      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">{label}</span>
       <textarea
-        className="textarea textarea-bordered min-h-[90px] w-full rounded-xl"
+        className="input-modern min-h-[90px] w-full rounded-xl"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
@@ -729,7 +729,7 @@ function TextAreaField({
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-      <div className="text-xs uppercase tracking-wide text-base-content/60">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-neutral-500">{label}</div>
       <div className="mt-1 text-sm font-medium text-security-navy-900">{value}</div>
     </div>
   );

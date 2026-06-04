@@ -26,6 +26,7 @@ import {
 } from "@/lib/api";
 import { AssigneePicker } from "@/components/assignee-picker";
 import { DateInput } from "@/components/date-input";
+import { useConfirmDialog } from "@/components/ui";
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
   todo: "To Do",
@@ -44,6 +45,7 @@ export default function TaskDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { token } = useAuth();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const id = params.id as string;
 
   const [task, setTask] = useState<Task | null>(null);
@@ -166,7 +168,13 @@ export default function TaskDetailPage() {
   };
 
   const handleDelete = async () => {
-    if (!token || !task || !confirm("Delete this task?")) return;
+    if (!token || !task) return;
+    const confirmed = await confirm({
+      title: "Delete task?",
+      message: "This removes the task and its activity from the task list.",
+      confirmLabel: "Delete task",
+    });
+    if (!confirmed) return;
     try {
       await deleteTask(token, task.id);
       router.push("/tasks");
@@ -283,6 +291,7 @@ export default function TaskDetailPage() {
 
   return (
     <div className="animate-fade-in max-w-4xl mx-auto">
+      {confirmDialog}
       <div className="mb-4">
         <Link href="/tasks" className="text-sm text-gray-600 hover:text-black">
           ← Back to Tasks

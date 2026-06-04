@@ -480,7 +480,7 @@ export default function PayrollPage() {
                   </p>
                 </>
               ) : (
-                <p className="text-sm text-security-navy-500 mt-1">No data</p>
+                <p className="text-sm text-security-navy-500 mt-1">No compliance checks yet</p>
               )}
             </div>
             <div className={`w-10 h-10 rounded-security-lg flex items-center justify-center ${
@@ -503,7 +503,7 @@ export default function PayrollPage() {
 
       {runs.length === 0 && (
         <div className="card-wireframe p-12 text-center">
-          <p className="text-security-navy-600 mb-4">No payroll runs yet</p>
+          <p className="text-security-navy-600 mb-4">No payroll runs have been created yet. Create a run to calculate wages, compliance checks, and exports.</p>
           <button onClick={() => setShowForm(true)} className="btn-primary">
             Create your first payroll run
           </button>

@@ -6,7 +6,11 @@ dist
 coverage
 .turbo
 uploads
-.cursor/
+.cursor/*
+!.cursor/skills/
+.cursor/skills/*
+!.cursor/skills/plethora-front-end-ui-design/
+!.cursor/skills/plethora-front-end-ui-design/SKILL.md
 
 # Environment files — never commit real secrets. Keep example templates only.
 .env

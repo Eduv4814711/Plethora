@@ -13,6 +13,7 @@ import {
   isFullAdmin,
 } from "@/lib/permissions";
 import { DateInput } from "@/components/date-input";
+import { useConfirmDialog } from "@/components/ui";
 import { clsx } from "clsx";
 
 type Tab = "profile" | "business" | "settings" | "users" | "migrate" | "factory_reset";
@@ -568,6 +569,7 @@ function BusinessSettingsSection({
 }
 
 function UsersSection({ token, currentUserId }: { token: string; currentUserId?: string }) {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [users, setUsers] = useState<UserListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -778,7 +780,12 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
   };
 
   const handleDeleteUser = async (userId: string, userName: string) => {
-    if (!confirm(`Delete user "${userName}"? This cannot be undone.`)) return;
+    const confirmed = await confirm({
+      title: "Delete user?",
+      message: `This permanently removes "${userName}" from Plethora.`,
+      confirmLabel: "Delete user",
+    });
+    if (!confirmed) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -822,6 +829,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
 
   return (
     <div>
+      {confirmDialog}
       <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Users & Roles</h3>
       <div className="text-sm text-neutral-600 dark:text-neutral-400 mb-6 leading-relaxed max-w-3xl space-y-3">
         <p>

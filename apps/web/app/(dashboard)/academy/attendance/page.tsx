@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
 import { DateInput } from "@/components/date-input";
+import { useConfirmDialog } from "@/components/ui";
 
 interface Session {
   id: string;
@@ -22,6 +23,7 @@ interface EnrolmentOption {
 
 export default function AcademyAttendancePage() {
   const { token, user } = useAuth();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const canManage = user?.role === "admin";
   const [rows, setRows] = useState<Session[]>([]);
   const [enrolments, setEnrolments] = useState<EnrolmentOption[]>([]);
@@ -84,7 +86,12 @@ export default function AcademyAttendancePage() {
 
   const remove = async (id: string) => {
     if (!token || !canManage) return;
-    if (!confirm("Delete this session and its attendance records?")) return;
+    const confirmed = await confirm({
+      title: "Delete attendance session?",
+      message: "This deletes the session and its attendance records.",
+      confirmLabel: "Delete session",
+    });
+    if (!confirmed) return;
     setSaving(true);
     try {
       await academyApi.deleteAttendanceSession(token, id);
@@ -117,30 +124,31 @@ export default function AcademyAttendancePage() {
 
   return (
     <div className="w-full min-w-0 space-y-6">
+      {confirmDialog}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-security-navy-900">Attendance</h1>
-        <p className="mt-1 text-sm text-base-content/70">Track session attendance and maintain compliance thresholds.</p>
+        <p className="mt-1 text-sm text-neutral-600">Track session attendance and maintain compliance thresholds.</p>
       </div>
 
       {!canManage && (
-        <div className="rounded-lg border border-base-300 bg-base-200/50 px-3 py-2 text-sm">
+        <div className="rounded-lg border border-neutral-300 bg-neutral-100/50 px-3 py-2 text-sm">
           Read-only: only admins can create sessions, mark attendance, or delete sessions.
         </div>
       )}
 
-      <div className="rounded-2xl border border-base-200 bg-base-100 p-4 shadow-sm">
-        <p className="text-sm text-base-content/70">Overall attendance rate</p>
+      <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+        <p className="text-sm text-neutral-600">Overall attendance rate</p>
         <p className="mt-1 text-2xl font-semibold text-security-navy-900">{kpi.toFixed(1)}%</p>
       </div>
 
-      {error && <div className="rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>}
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-base-200 bg-base-100 p-5 shadow-sm">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-base-content/60">Create session</h2>
+        <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Create session</h2>
           <form onSubmit={create} className="mt-3 flex items-end gap-2">
             <label>
-              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">Session date</span>
+              <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">Session date</span>
               <DateInput
                 value={date}
                 onChange={setDate}
@@ -150,15 +158,15 @@ export default function AcademyAttendancePage() {
                 ariaLabel="Session date"
               />
             </label>
-            <button className="btn btn-primary rounded-xl" disabled={!canManage || saving}>Create</button>
+            <button className="btn-primary rounded-xl" disabled={!canManage || saving}>Create</button>
           </form>
         </div>
 
-        <div className="rounded-2xl border border-base-200 bg-base-100 p-5 shadow-sm">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-base-content/60">Mark attendance</h2>
+        <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Mark attendance</h2>
           <form onSubmit={mark} className="mt-3 grid gap-2 md:grid-cols-2">
             <select
-              className="select select-bordered rounded-xl"
+              className="input-modern rounded-xl"
               value={markSessionId}
               onChange={(e) => setMarkSessionId(e.target.value)}
               disabled={!canManage || saving}
@@ -171,7 +179,7 @@ export default function AcademyAttendancePage() {
               ))}
             </select>
             <select
-              className="select select-bordered rounded-xl"
+              className="input-modern rounded-xl"
               value={markEnrolmentId}
               onChange={(e) => setMarkEnrolmentId(e.target.value)}
               disabled={!canManage || saving}
@@ -183,28 +191,28 @@ export default function AcademyAttendancePage() {
                 </option>
               ))}
             </select>
-            <select className="select select-bordered rounded-xl" value={status} onChange={(e) => setStatus(e.target.value)}>
+            <select className="input-modern rounded-xl" value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="present">Present</option><option value="absent">Absent</option><option value="late">Late</option><option value="excused">Excused</option>
             </select>
-            <button className="btn btn-primary rounded-xl" disabled={!canManage || saving}>Mark</button>
+            <button className="btn-primary rounded-xl" disabled={!canManage || saving}>Mark</button>
           </form>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-base-200 bg-base-100 shadow-sm">
-        <div className="border-b border-base-200/80 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">All sessions</h2></div>
+      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+        <div className="border-b border-neutral-200/80 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">All sessions</h2></div>
         <div className="overflow-x-auto">
-          <table className="table table-sm">
-            <thead><tr className="text-[11px] uppercase tracking-wide text-base-content/60"><th>Date</th><th>Records</th><th className="text-right">Action</th></tr></thead>
+          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+            <thead><tr className="text-[11px] uppercase tracking-wide text-neutral-500"><th>Date</th><th>Records</th><th className="text-right">Action</th></tr></thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={3} className="py-8 text-center text-sm text-base-content/60">Loading sessions...</td>
+                  <td colSpan={3} className="py-8 text-center text-sm text-neutral-500">Loading sessions...</td>
                 </tr>
-              ) : rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{String(r.sessionDate).slice(0,10)}</td><td>{getRecordCount(r)}</td><td className="text-right">{canManage && <button className="btn btn-xs btn-error" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}</td></tr>)}
+              ) : rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{String(r.sessionDate).slice(0,10)}</td><td>{getRecordCount(r)}</td><td className="text-right">{canManage && <button className="btn-destructive px-2 py-1 text-xs" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}</td></tr>)}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="py-8 text-center text-sm text-base-content/60">No sessions yet.</td>
+                  <td colSpan={3} className="py-8 text-center text-sm text-neutral-500">No sessions yet.</td>
                 </tr>
               )}
             </tbody>

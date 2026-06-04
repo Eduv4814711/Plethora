@@ -28,21 +28,27 @@ interface ReportsData {
   hoursBySite: { name: string; hours: number }[];
 }
 
-const COLORS = ["#3b82f6", "#22c55e", "#eab308", "#ef4444", "#8b5cf6", "#ec4899"];
+const COLORS = ["#F57C00", "#f59e0b", "#10b981", "#ef4444", "#64748b", "#92400e"];
 
 export default function ReportsPage() {
   const { token } = useAuth();
   const [data, setData] = useState<ReportsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [months, setMonths] = useState(6);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
     setLoading(true);
+    setError(null);
     authFetch(`/reports?months=${months}`, token)
       .then((r) => r.json())
       .then(setData)
-      .catch(console.error)
+      .catch((err) => {
+        console.error(err);
+        setError("Unable to load reports. Check the connection and try again.");
+        setData(null);
+      })
       .finally(() => setLoading(false));
   }, [token, months]);
 
@@ -69,11 +75,12 @@ export default function ReportsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-sm text-neutral-600 dark:text-neutral-400">Period:</label>
+          <label htmlFor="reports-period" className="text-sm text-neutral-600 dark:text-neutral-400">Period:</label>
           <select
+            id="reports-period"
             value={months}
             onChange={(e) => setMonths(Number(e.target.value))}
-            className="px-3 py-2 text-sm border-2 border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-900"
+            className="input-compact w-auto"
           >
             <option value={3}>3 months</option>
             <option value={6}>6 months</option>
@@ -82,6 +89,12 @@ export default function ReportsPage() {
           </select>
         </div>
       </div>
+
+      {error && (
+        <div className="mb-6 rounded-security border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Payroll by status - Pie */}
@@ -111,7 +124,7 @@ export default function ReportsPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-neutral-500 dark:text-neutral-400 py-12 text-center">No payroll data</p>
+            <p className="text-neutral-500 dark:text-neutral-400 py-12 text-center">No payroll runs have been calculated for this period.</p>
           )}
         </div>
 
@@ -142,7 +155,7 @@ export default function ReportsPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-neutral-500 dark:text-neutral-400 py-12 text-center">No employee data</p>
+            <p className="text-neutral-500 dark:text-neutral-400 py-12 text-center">No team status data is available for this period.</p>
           )}
         </div>
 
@@ -163,12 +176,12 @@ export default function ReportsPage() {
                       borderRadius: "4px",
                     }}
                   />
-                  <Bar dataKey="shifts" fill="#3b82f6" name="Shifts" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="shifts" fill="#F57C00" name="Shifts" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-neutral-500 dark:text-neutral-400 py-12 text-center">No shift data for this period</p>
+            <p className="text-neutral-500 dark:text-neutral-400 py-12 text-center">No shifts were scheduled during this period.</p>
           )}
         </div>
 
@@ -191,13 +204,13 @@ export default function ReportsPage() {
                     }}
                   />
                   <Legend />
-                  <Line type="monotone" dataKey="gross" stroke="#3b82f6" name="Gross Pay" strokeWidth={2} dot={{ r: 4 }} />
+                  <Line type="monotone" dataKey="gross" stroke="#F57C00" name="Gross Pay" strokeWidth={2} dot={{ r: 4 }} />
                   <Line type="monotone" dataKey="net" stroke="#22c55e" name="Net Pay" strokeWidth={2} dot={{ r: 4 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-neutral-500 dark:text-neutral-400 py-12 text-center">No payroll data for this period</p>
+            <p className="text-neutral-500 dark:text-neutral-400 py-12 text-center">No payroll totals are available for this period.</p>
           )}
         </div>
 
@@ -218,12 +231,12 @@ export default function ReportsPage() {
                       borderRadius: "4px",
                     }}
                   />
-                  <Bar dataKey="value" fill="#8b5cf6" name="Shifts" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="value" fill="#F57C00" name="Shifts" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-neutral-500 dark:text-neutral-400 py-12 text-center">No shift data</p>
+            <p className="text-neutral-500 dark:text-neutral-400 py-12 text-center">No site hour totals are available for this period.</p>
           )}
         </div>
 
@@ -250,7 +263,7 @@ export default function ReportsPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-neutral-500 dark:text-neutral-400 py-12 text-center">No attendance data for this period</p>
+            <p className="text-neutral-500 dark:text-neutral-400 py-12 text-center">No attendance trend data is available for this period.</p>
           )}
         </div>
       </div>

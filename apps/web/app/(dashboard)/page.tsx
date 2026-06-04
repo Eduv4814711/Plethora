@@ -57,9 +57,9 @@ const defaultGuardsByDay = [
   { name: "Sun", value: 0 },
 ];
 
-const defaultRosteredData = [{ name: "No data", value: 1 }];
+const defaultRosteredData = [{ name: "No rostered shifts", value: 1 }];
 
-const defaultStatusData = [{ name: "No data", value: 1 }];
+const defaultStatusData = [{ name: "No attendance records", value: 1 }];
 
 const defaultShiftData = [
   { name: "Dec", value: 0 },

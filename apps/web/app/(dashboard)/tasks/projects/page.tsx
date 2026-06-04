@@ -10,9 +10,11 @@ import {
   deleteTaskProject,
   type TaskProject,
 } from "@/lib/api";
+import { useConfirmDialog } from "@/components/ui";
 
 export default function TaskProjectsPage() {
   const { token } = useAuth();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [projects, setProjects] = useState<TaskProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -73,7 +75,13 @@ export default function TaskProjectsPage() {
   };
 
   const handleDelete = async (p: TaskProject) => {
-    if (!token || !confirm(`Delete project "${p.name}"? Tasks will be unassigned.`)) return;
+    if (!token) return;
+    const confirmed = await confirm({
+      title: "Delete project?",
+      message: `Tasks in "${p.name}" will be unassigned.`,
+      confirmLabel: "Delete project",
+    });
+    if (!confirmed) return;
     try {
       await deleteTaskProject(token, p.id);
       refresh();
@@ -97,6 +105,7 @@ export default function TaskProjectsPage() {
 
   return (
     <div className="animate-fade-in max-w-4xl mx-auto">
+      {confirmDialog}
       <div className="mb-4">
         <Link href="/tasks" className="text-sm text-gray-600 hover:text-black">
           ← Back to Tasks

@@ -89,24 +89,24 @@ export default function AcademyCourseRunsPage() {
   return (
     <div className="space-y-6 p-4 md:p-6">
       <div>
-        <Link href="/academy" className="text-sm text-primary hover:underline lg:hidden">
+        <Link href="/academy" className="text-sm text-security-navy-700 hover:underline lg:hidden">
           ← Academy
         </Link>
         <h1 className="mt-1 text-2xl font-semibold">Course runs</h1>
       </div>
 
       {error && (
-        <div className="rounded-md border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
-      <form onSubmit={create} className="grid gap-3 rounded-lg border border-base-300 p-4 sm:grid-cols-2 lg:grid-cols-3">
+      <form onSubmit={create} className="grid gap-3 rounded-lg border border-neutral-300 p-4 sm:grid-cols-2 lg:grid-cols-3">
         <div>
-          <label className="label py-0 text-xs">Run code</label>
-          <input className="input input-bordered input-sm w-full" value={runCode} onChange={(e) => setRunCode(e.target.value)} />
+          <label className="label-text mb-1 block">Run code</label>
+          <input className="input-compact w-full" value={runCode} onChange={(e) => setRunCode(e.target.value)} />
         </div>
         <div>
-          <label className="label py-0 text-xs">Course</label>
-          <select className="select select-bordered select-sm w-full" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
+          <label className="label-text mb-1 block">Course</label>
+          <select className="input-compact w-full" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
             {courses.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.code} — {c.title}
@@ -115,8 +115,8 @@ export default function AcademyCourseRunsPage() {
           </select>
         </div>
         <div>
-          <label className="label py-0 text-xs">Branch</label>
-          <select className="select select-bordered select-sm w-full" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+          <label className="label-text mb-1 block">Branch</label>
+          <select className="input-compact w-full" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
             {branches.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
@@ -125,31 +125,31 @@ export default function AcademyCourseRunsPage() {
           </select>
         </div>
         <div>
-          <label className="label py-0 text-xs">Start date</label>
+          <label className="label-text mb-1 block">Start date</label>
           <DateInput value={startDate} onChange={setStartDate} className="input-compact" showToday ariaLabel="Course run start date" />
         </div>
         <div>
-          <label className="label py-0 text-xs">End date</label>
+          <label className="label-text mb-1 block">End date</label>
           <DateInput value={endDate} onChange={setEndDate} className="input-compact" showToday ariaLabel="Course run end date" />
         </div>
         <div>
-          <label className="label py-0 text-xs">Capacity (0 = unlimited)</label>
-          <input className="input input-bordered input-sm w-full" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
+          <label className="label-text mb-1 block">Capacity (0 = unlimited)</label>
+          <input className="input-compact w-full" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
         </div>
         <div className="sm:col-span-2 lg:col-span-3">
-          <button type="submit" className="btn btn-primary btn-sm" disabled={!runCode.trim() || !courses.length || !branches.length}>
+          <button type="submit" className="btn-primary px-3 py-1.5 text-xs" disabled={!runCode.trim() || !courses.length || !branches.length}>
             Create run
           </button>
         </div>
       </form>
 
       {loading ? (
-        <p className="text-sm text-base-content/60">Loading…</p>
+        <p className="text-sm text-neutral-500">Loading…</p>
       ) : runs.length === 0 ? (
-        <p className="text-sm text-base-content/60">No course runs yet.</p>
+        <p className="text-sm text-neutral-500">No course runs yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-base-300">
-          <table className="table table-sm">
+        <div className="overflow-x-auto rounded-lg border border-neutral-300">
+          <table className="min-w-full divide-y divide-neutral-200 text-sm">
             <thead>
               <tr>
                 <th>Run</th>
@@ -176,7 +176,7 @@ export default function AcademyCourseRunsPage() {
                     {r.capacity > 0 ? ` / ${r.capacity}` : ""}
                   </td>
                   <td>
-                    <Link href={`/academy/course-runs/${r.id}`} className="link link-primary text-xs">
+                    <Link href={`/academy/course-runs/${r.id}`} className="font-semibold text-security-navy-700 hover:underline text-xs">
                       View
                     </Link>
                   </td>

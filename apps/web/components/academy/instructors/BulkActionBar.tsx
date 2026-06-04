@@ -49,7 +49,7 @@ export function BulkActionBar({
           {selectedCount} selected
         </span>
         <select
-          className="select select-bordered select-sm min-w-56 rounded-xl"
+          className="input-compact min-w-56 rounded-xl"
           value={action}
           onChange={(e) => setAction(e.target.value as BulkActionType)}
         >
@@ -63,7 +63,7 @@ export function BulkActionBar({
         </select>
         {needsBranch && (
           <select
-            className="select select-bordered select-sm min-w-52 rounded-xl"
+            className="input-compact min-w-52 rounded-xl"
             value={branchId}
             onChange={(e) => setBranchId(e.target.value)}
           >
@@ -77,7 +77,7 @@ export function BulkActionBar({
         )}
         {needsCourse && (
           <select
-            className="select select-bordered select-sm min-w-52 rounded-xl"
+            className="input-compact min-w-52 rounded-xl"
             value={courseId}
             onChange={(e) => setCourseId(e.target.value)}
           >
@@ -91,13 +91,13 @@ export function BulkActionBar({
         )}
         <button
           type="button"
-          className="btn btn-primary btn-sm rounded-xl"
+          className="btn-primary px-3 py-1.5 text-xs rounded-xl"
           disabled={actionDisabled}
           onClick={() => onApply({ action, branchId, courseId })}
         >
           Apply
         </button>
-        <button type="button" className="btn btn-ghost btn-sm rounded-xl" onClick={onClear} disabled={disabled}>
+        <button type="button" className="btn-ghost px-3 py-1.5 text-xs rounded-xl" onClick={onClear} disabled={disabled}>
           Clear selection
         </button>
       </div>

@@ -8,6 +8,7 @@ import { authFetch } from "@/lib/api";
 import { canManageSitesModule } from "@/lib/permissions";
 import { rosterSiteRulesLines } from "@/lib/roster-site-rules-defaults";
 import { buildSiteRosterReadinessHints } from "@/lib/roster-readiness-hints";
+import { useConfirmDialog } from "@/components/ui";
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
   guarding: "Guarding",
@@ -1136,6 +1137,7 @@ function PostCard({
   onError?: (msg: string | null) => void;
   onEdit?: (post: Post) => void;
 }) {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const shiftLabel = post.shiftType ? SHIFT_LABELS[post.shiftType] : "Shift";
 
   return (
@@ -1164,6 +1166,7 @@ function PostCard({
         canManage && onEdit ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-neutral-600 focus:ring-offset-2 dark:focus:ring-offset-neutral-900" : ""
       }`}
     >
+      {confirmDialog}
       <div className="flex items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-3">
         <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
@@ -1190,7 +1193,12 @@ function PostCard({
           <button
             onClick={async (e) => {
               e.stopPropagation();
-              if (!confirm("Delete this post?")) return;
+              const confirmed = await confirm({
+                title: "Delete post?",
+                message: "This removes the site post if it is not currently in use.",
+                confirmLabel: "Delete post",
+              });
+              if (!confirmed) return;
               onError?.(null);
               try {
                 const res = await authFetch(`/sites/${siteId}/posts/${post.id}`, token, { method: "DELETE" });

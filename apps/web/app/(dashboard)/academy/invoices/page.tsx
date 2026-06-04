@@ -40,9 +40,9 @@ function statusBadgeClass(status: string): string {
     case "overdue":
       return "badge-error";
     case "cancelled":
-      return "badge-ghost border border-base-300";
+      return "badge-neutral border border-neutral-300";
     default:
-      return "badge-ghost border border-base-300";
+      return "badge-neutral border border-neutral-300";
   }
 }
 
@@ -131,27 +131,27 @@ export default function AcademyInvoicesPage() {
   return (
     <div className="space-y-6 p-4 md:p-6">
       <div>
-        <Link href="/academy" className="text-sm text-primary hover:underline lg:hidden">
+        <Link href="/academy" className="text-sm text-security-navy-700 hover:underline lg:hidden">
           ← Academy
         </Link>
         <h1 className="mt-1 text-2xl font-semibold">Invoices</h1>
       </div>
 
       {!canManage && (
-        <div className="rounded-lg border border-base-300 bg-base-200/50 px-3 py-2 text-sm">
+        <div className="rounded-lg border border-neutral-300 bg-neutral-100/50 px-3 py-2 text-sm">
           Read-only: only admins can create invoices.
         </div>
       )}
 
       {error && (
-        <div className="rounded-md border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
-      <form onSubmit={create} className="grid gap-3 rounded-lg border border-base-300 p-4 sm:grid-cols-2 lg:grid-cols-3">
+      <form onSubmit={create} className="grid gap-3 rounded-lg border border-neutral-300 p-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="sm:col-span-2">
-          <label className="label py-0 text-xs">Student</label>
+          <label className="label-text mb-1 block">Student</label>
           <select
-            className="select select-bordered select-sm w-full"
+            className="input-compact w-full"
             value={studentId}
             onChange={(e) => setStudentId(e.target.value)}
             disabled={!canManage || saving}
@@ -164,9 +164,9 @@ export default function AcademyInvoicesPage() {
           </select>
         </div>
         <div className="sm:col-span-2">
-          <label className="label py-0 text-xs">Enrolment (optional)</label>
+          <label className="label-text mb-1 block">Enrolment (optional)</label>
           <select
-            className="select select-bordered select-sm w-full"
+            className="input-compact w-full"
             value={enrolmentId}
             onChange={(e) => setEnrolmentId(e.target.value)}
             disabled={!canManage || saving}
@@ -180,7 +180,7 @@ export default function AcademyInvoicesPage() {
           </select>
         </div>
         <div>
-          <label className="label py-0 text-xs">Invoice date</label>
+          <label className="label-text mb-1 block">Invoice date</label>
           <DateInput
             value={invoiceDate}
             onChange={setInvoiceDate}
@@ -191,7 +191,7 @@ export default function AcademyInvoicesPage() {
           />
         </div>
         <div>
-          <label className="label py-0 text-xs">Due date</label>
+          <label className="label-text mb-1 block">Due date</label>
           <DateInput
             value={dueDate}
             onChange={setDueDate}
@@ -202,27 +202,27 @@ export default function AcademyInvoicesPage() {
           />
         </div>
         <div>
-          <label className="label py-0 text-xs">Discount</label>
+          <label className="label-text mb-1 block">Discount</label>
           <input
-            className="input input-bordered input-sm w-full"
+            className="input-compact w-full"
             value={discount}
             onChange={(e) => setDiscount(e.target.value)}
             disabled={!canManage || saving}
           />
         </div>
         <div className="sm:col-span-2">
-          <label className="label py-0 text-xs">Line description</label>
+          <label className="label-text mb-1 block">Line description</label>
           <input
-            className="input input-bordered input-sm w-full"
+            className="input-compact w-full"
             value={lineDesc}
             onChange={(e) => setLineDesc(e.target.value)}
             disabled={!canManage || saving}
           />
         </div>
         <div>
-          <label className="label py-0 text-xs">Amount (excl. discount)</label>
+          <label className="label-text mb-1 block">Amount (excl. discount)</label>
           <input
-            className="input input-bordered input-sm w-full"
+            className="input-compact w-full"
             value={unitAmount}
             onChange={(e) => setUnitAmount(e.target.value)}
             placeholder="0.00"
@@ -230,20 +230,20 @@ export default function AcademyInvoicesPage() {
           />
         </div>
         <div className="flex items-end sm:col-span-2 lg:col-span-3">
-          <button type="submit" className="btn btn-primary btn-sm" disabled={!canManage || !students.length || saving}>
+          <button type="submit" className="btn-primary px-3 py-1.5 text-xs" disabled={!canManage || !students.length || saving}>
             Create draft invoice
           </button>
         </div>
       </form>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-base-300 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-300 p-3">
         <div className="text-sm">
           <span className="font-medium">{total}</span> invoice{total === 1 ? "" : "s"} found
         </div>
         <label className="flex items-center gap-2 text-sm">
           <span>Status</span>
           <select
-            className="select select-bordered select-sm"
+            className="input-compact"
             value={statusFilter}
             onChange={(e) => {
               setOffset(0);
@@ -261,8 +261,8 @@ export default function AcademyInvoicesPage() {
         </label>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-base-300">
-        <table className="table table-sm">
+      <div className="overflow-x-auto rounded-lg border border-neutral-300">
+        <table className="min-w-full divide-y divide-neutral-200 text-sm">
           <thead>
             <tr>
               <th>Number</th>
@@ -276,7 +276,7 @@ export default function AcademyInvoicesPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-sm text-base-content/60">
+                <td colSpan={6} className="py-8 text-center text-sm text-neutral-500">
                   Loading invoices...
                 </td>
               </tr>
@@ -287,14 +287,14 @@ export default function AcademyInvoicesPage() {
                   {inv.student.firstName} {inv.student.lastName}
                 </td>
                 <td>
-                  <span className={`badge badge-sm ${statusBadgeClass(inv.status)}`}>
+                  <span className={`badge-neutral ${statusBadgeClass(inv.status)}`}>
                     {inv.status.replace(/_/g, " ")}
                   </span>
                 </td>
                 <td className="font-mono text-xs">{inv.totalAmount}</td>
                 <td className="text-xs">{String(inv.dueDate).slice(0, 10)}</td>
                 <td>
-                  <Link href={`/academy/invoices/${inv.id}`} className="link link-primary text-xs">
+                  <Link href={`/academy/invoices/${inv.id}`} className="font-semibold text-security-navy-700 hover:underline text-xs">
                     Open
                   </Link>
                 </td>
@@ -302,13 +302,13 @@ export default function AcademyInvoicesPage() {
             ))}
           </tbody>
         </table>
-        {!loading && invoices.length === 0 && <p className="p-4 text-sm text-base-content/60">No invoices yet.</p>}
+        {!loading && invoices.length === 0 && <p className="p-4 text-sm text-neutral-500">No invoices yet.</p>}
       </div>
 
       <div className="flex items-center justify-end gap-2">
         <button
           type="button"
-          className="btn btn-sm"
+          className="btn-secondary px-3 py-1.5 text-xs"
           disabled={offset <= 0 || loading}
           onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
         >
@@ -316,7 +316,7 @@ export default function AcademyInvoicesPage() {
         </button>
         <button
           type="button"
-          className="btn btn-sm"
+          className="btn-secondary px-3 py-1.5 text-xs"
           disabled={loading || offset + PAGE_SIZE >= total}
           onClick={() => setOffset((o) => o + PAGE_SIZE)}
         >

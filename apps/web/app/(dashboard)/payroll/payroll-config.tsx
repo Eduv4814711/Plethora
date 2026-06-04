@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { authFetch } from "@/lib/api";
+import { useConfirmDialog } from "@/components/ui";
 
 export interface PayGrade {
   id: string;
@@ -177,6 +178,7 @@ function PayGradesSection({
   const [name, setName] = useState("");
   const [hourlyRate, setHourlyRate] = useState("");
   const [saving, setSaving] = useState(false);
+  const { confirm, confirmDialog } = useConfirmDialog();
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,7 +203,12 @@ function PayGradesSection({
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this pay grade?")) return;
+    const confirmed = await confirm({
+      title: "Delete pay grade?",
+      message: "This removes the pay grade if it is not currently in use.",
+      confirmLabel: "Delete pay grade",
+    });
+    if (!confirmed) return;
     try {
       const res = await authFetch(`/payroll/pay-grades/${id}`, token, { method: "DELETE" });
       if (res.ok) onRefresh();
@@ -214,6 +221,7 @@ function PayGradesSection({
 
   return (
     <div className="p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800/30">
+      {confirmDialog}
       <h3 className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Pay Grades</h3>
       <form onSubmit={handleAdd} className="flex gap-2 mb-3">
         <input
@@ -465,6 +473,7 @@ function EarningsRulesSection({
   const [rate, setRate] = useState("");
   const [appliesTo, setAppliesTo] = useState("all");
   const [saving, setSaving] = useState(false);
+  const { confirm, confirmDialog } = useConfirmDialog();
 
   const baseUrl = groupId
     ? `/payroll/groups/${groupId}/earnings-rules`
@@ -499,7 +508,12 @@ function EarningsRulesSection({
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this earnings rule?")) return;
+    const confirmed = await confirm({
+      title: "Delete earnings rule?",
+      message: "This removes the earnings rule if it is not currently in use.",
+      confirmLabel: "Delete rule",
+    });
+    if (!confirmed) return;
     try {
       const res = await authFetch(`${baseUrl}/${id}`, token, { method: "DELETE" });
       if (res.ok) onRefresh();
@@ -512,6 +526,7 @@ function EarningsRulesSection({
 
   return (
     <div className="p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800/30">
+      {confirmDialog}
       <h3 className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Earnings</h3>
       <form onSubmit={handleAdd} className="flex gap-2 mb-3 flex-wrap">
         <input
@@ -571,6 +586,7 @@ function DeductionRulesSection({
   const [rate, setRate] = useState("");
   const [appliesTo, setAppliesTo] = useState("all");
   const [saving, setSaving] = useState(false);
+  const { confirm, confirmDialog } = useConfirmDialog();
 
   const baseUrl = groupId
     ? `/payroll/groups/${groupId}/deduction-rules`
@@ -605,7 +621,12 @@ function DeductionRulesSection({
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this deduction rule?")) return;
+    const confirmed = await confirm({
+      title: "Delete deduction rule?",
+      message: "This removes the deduction rule if it is not currently in use.",
+      confirmLabel: "Delete rule",
+    });
+    if (!confirmed) return;
     try {
       const res = await authFetch(`${baseUrl}/${id}`, token, { method: "DELETE" });
       if (res.ok) onRefresh();
@@ -618,6 +639,7 @@ function DeductionRulesSection({
 
   return (
     <div className="p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800/30">
+      {confirmDialog}
       <h3 className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Deductions</h3>
       <form onSubmit={handleAdd} className="flex gap-2 mb-3 flex-wrap">
         <input

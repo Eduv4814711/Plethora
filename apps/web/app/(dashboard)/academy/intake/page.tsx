@@ -171,17 +171,17 @@ export default function AcademyIntakePage() {
 
   const stepClass = (n: Step) =>
     `flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
-      step >= n ? "bg-primary text-primary-content" : "bg-base-300 text-base-content/60"
+      step >= n ? "bg-security-navy text-white" : "bg-neutral-200 text-neutral-500"
     }`;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-6">
       <div>
-        <Link href="/academy" className="text-sm text-primary hover:underline lg:hidden">
+        <Link href="/academy" className="text-sm text-security-navy-700 hover:underline lg:hidden">
           ← Academy
         </Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">New student intake</h1>
-        <p className="mt-1 text-sm text-base-content/70">
+        <p className="mt-1 text-sm text-neutral-600">
           Capture details, record the admin fee, then enrol into available course runs.
         </p>
       </div>
@@ -189,26 +189,26 @@ export default function AcademyIntakePage() {
       <ol className="flex flex-wrap items-center gap-3 text-sm">
         <li className="flex items-center gap-2">
           <span className={stepClass(1)}>1</span>
-          <span className={step === 1 ? "font-medium" : "text-base-content/70"}>Details</span>
+          <span className={step === 1 ? "font-medium" : "text-neutral-600"}>Details</span>
         </li>
-        <span className="text-base-content/30">→</span>
+        <span className="text-black/30">→</span>
         <li className="flex items-center gap-2">
           <span className={stepClass(2)}>2</span>
-          <span className={step === 2 ? "font-medium" : "text-base-content/70"}>Admin fee</span>
+          <span className={step === 2 ? "font-medium" : "text-neutral-600"}>Admin fee</span>
         </li>
-        <span className="text-base-content/30">→</span>
+        <span className="text-black/30">→</span>
         <li className="flex items-center gap-2">
           <span className={stepClass(3)}>3</span>
-          <span className={step === 3 ? "font-medium" : "text-base-content/70"}>Enrol</span>
+          <span className={step === 3 ? "font-medium" : "text-neutral-600"}>Enrol</span>
         </li>
       </ol>
 
       {error && (
-        <div className="rounded-md border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
       {step === 1 && (
-        <form onSubmit={submitProfile} className="space-y-4 rounded-lg border border-base-300 bg-base-100 p-5 shadow-sm">
+        <form onSubmit={submitProfile} className="space-y-4 rounded-lg border border-neutral-300 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-medium">Personal details</h2>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="First name *" value={firstName} onChange={setFirstName} required />
@@ -217,7 +217,7 @@ export default function AcademyIntakePage() {
             <Field label="Phone" value={phone} onChange={setPhone} />
             <Field label="ID number" value={idNumber} onChange={setIdNumber} />
             <div>
-              <label className="label py-0 text-xs">Date of birth</label>
+              <label className="label-text mb-1 block">Date of birth</label>
               <DateInput
                 value={dateOfBirth}
                 onChange={setDateOfBirth}
@@ -228,9 +228,9 @@ export default function AcademyIntakePage() {
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="label py-0 text-xs">Address line 1</label>
+              <label className="label-text mb-1 block">Address line 1</label>
               <input
-                className="input input-bordered input-sm w-full"
+                className="input-compact w-full"
                 value={addressLine1}
                 onChange={(e) => setAddressLine1(e.target.value)}
               />
@@ -239,7 +239,7 @@ export default function AcademyIntakePage() {
             <Field label="Province" value={province} onChange={setProvince} />
             <Field label="Postal code" value={postalCode} onChange={setPostalCode} />
           </div>
-          <button type="submit" className="btn btn-primary btn-sm" disabled={submitting || !firstName.trim() || !lastName.trim()}>
+          <button type="submit" className="btn-primary px-3 py-1.5 text-xs" disabled={submitting || !firstName.trim() || !lastName.trim()}>
             {submitting ? "Saving…" : "Continue"}
           </button>
         </form>
@@ -247,41 +247,41 @@ export default function AcademyIntakePage() {
 
       {step === 2 && studentId && (
         <div className="space-y-6">
-          <div className="rounded-lg border border-base-300 bg-base-100 p-5 shadow-sm">
+          <div className="rounded-lg border border-neutral-300 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-medium">Record admin fee (paid)</h2>
             <form onSubmit={recordPaid} className="mt-3 grid gap-3 sm:grid-cols-2">
               <Field label="Amount *" value={feeAmount} onChange={setFeeAmount} placeholder="e.g. 350" required />
               <Field label="Method" value={feeMethod} onChange={setFeeMethod} />
               <div className="sm:col-span-2">
-                <label className="label py-0 text-xs">Reference (optional)</label>
+                <label className="label-text mb-1 block">Reference (optional)</label>
                 <input
-                  className="input input-bordered input-sm w-full"
+                  className="input-compact w-full"
                   value={feeReference}
                   onChange={(e) => setFeeReference(e.target.value)}
                   placeholder="EFT reference or receipt no."
                 />
               </div>
               <div className="sm:col-span-2">
-                <button type="submit" className="btn btn-primary btn-sm" disabled={submitting || !feeAmount.trim()}>
+                <button type="submit" className="btn-primary px-3 py-1.5 text-xs" disabled={submitting || !feeAmount.trim()}>
                   {submitting ? "Recording…" : "Mark fee as paid"}
                 </button>
               </div>
             </form>
           </div>
-          <div className="rounded-lg border border-base-300 bg-base-100 p-5 shadow-sm">
+          <div className="rounded-lg border border-neutral-300 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-medium">Or waive the admin fee</h2>
-            <p className="mt-1 text-xs text-base-content/60">A short reason is required for audit.</p>
+            <p className="mt-1 text-xs text-neutral-500">A short reason is required for audit.</p>
             <form onSubmit={recordWaived} className="mt-3 space-y-3">
               <div>
-                <label className="label py-0 text-xs">Reason *</label>
+                <label className="label-text mb-1 block">Reason *</label>
                 <textarea
-                  className="textarea textarea-bordered textarea-sm w-full min-h-[80px]"
+                  className="input-modern w-full min-h-[80px]"
                   value={waiveNotes}
                   onChange={(e) => setWaiveNotes(e.target.value)}
                   placeholder="e.g. Sponsored intake, staff dependant, promotion…"
                 />
               </div>
-              <button type="submit" className="btn btn-outline btn-sm" disabled={submitting || !waiveNotes.trim()}>
+              <button type="submit" className="btn-secondary px-3 py-1.5 text-xs" disabled={submitting || !waiveNotes.trim()}>
                 {submitting ? "Saving…" : "Waive admin fee"}
               </button>
             </form>
@@ -290,13 +290,13 @@ export default function AcademyIntakePage() {
       )}
 
       {step === 3 && studentId && (
-        <div className="rounded-lg border border-base-300 bg-base-100 p-5 shadow-sm">
+        <div className="rounded-lg border border-neutral-300 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-medium">Enrol in course runs</h2>
-          <p className="mt-1 text-sm text-base-content/70">
+          <p className="mt-1 text-sm text-neutral-600">
             Only runs that are open for intake and have capacity are listed.
           </p>
           {loadingRuns ? (
-            <p className="mt-4 text-sm text-base-content/60">Loading runs…</p>
+            <p className="mt-4 text-sm text-neutral-500">Loading runs…</p>
           ) : runs.length === 0 ? (
             <p className="mt-4 text-sm text-amber-800">
               No enrolable course runs right now. Create a run with status planned or open and available seats, then
@@ -308,14 +308,14 @@ export default function AcademyIntakePage() {
                 const checked = selectedRunIds.has(r.id);
                 return (
                   <li key={r.id}>
-                    <label className="flex cursor-pointer gap-3 rounded-md border border-base-200 p-3 hover:bg-base-200/40">
-                      <input type="checkbox" className="checkbox checkbox-sm mt-0.5" checked={checked} onChange={() => toggleRun(r.id)} />
+                    <label className="flex cursor-pointer gap-3 rounded-md border border-neutral-200 p-3 hover:bg-neutral-100/40">
+                      <input type="checkbox" className="h-4 w-4 rounded border-neutral-300 text-security-navy-600 focus:ring-security-navy-500 mt-0.5" checked={checked} onChange={() => toggleRun(r.id)} />
                       <span className="min-w-0 flex-1 text-sm">
                         <span className="font-mono text-xs font-semibold">{r.runCode}</span>
-                        <span className="ml-2 text-base-content/80">
+                        <span className="ml-2 text-neutral-700">
                           {r.course.code} — {r.course.title}
                         </span>
-                        <span className="mt-0.5 block text-xs text-base-content/60">
+                        <span className="mt-0.5 block text-xs text-neutral-500">
                           {r.branch.name} · {formatDate(r.startDate)} – {formatDate(r.endDate)} · {r.status} ·{" "}
                           {seatsLeft(r)}
                         </span>
@@ -329,7 +329,7 @@ export default function AcademyIntakePage() {
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
-              className="btn btn-primary btn-sm"
+              className="btn-primary px-3 py-1.5 text-xs"
               disabled={submitting || selectedRunIds.size === 0 || runs.length === 0}
               onClick={() => void submitEnrolments()}
             >
@@ -337,7 +337,7 @@ export default function AcademyIntakePage() {
             </button>
             <button
               type="button"
-              className="btn btn-ghost btn-sm"
+              className="btn-ghost px-3 py-1.5 text-xs"
               disabled={submitting}
               onClick={() => studentId && (window.location.href = `/academy/students/${studentId}`)}
             >
@@ -367,10 +367,10 @@ function Field({
 }) {
   return (
     <div>
-      <label className="label py-0 text-xs">{label}</label>
+      <label className="label-text mb-1 block">{label}</label>
       <input
         type={type}
-        className="input input-bordered input-sm w-full"
+        className="input-compact w-full"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}

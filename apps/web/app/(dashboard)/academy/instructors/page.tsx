@@ -1144,21 +1144,21 @@ export default function AcademyInstructorsPage() {
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-security-navy-900">Instructors</h1>
-            <p className="mt-0.5 text-sm text-base-content/70">
+            <p className="mt-0.5 text-sm text-neutral-600">
               Manage accredited instructors, contracts, certificates, compliance, and assignments.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className="btn btn-primary btn-sm rounded-lg"
+              className="btn-primary px-3 py-1.5 text-xs rounded-lg"
               onClick={openCreateDrawer}
               disabled={!canEditRecords}
             >
               Add Instructor
             </button>
             <details className="dropdown dropdown-end">
-              <summary className="btn btn-outline btn-sm rounded-lg">Actions</summary>
+              <summary className="btn-secondary px-3 py-1.5 text-xs rounded-lg">Actions</summary>
               <ul className="menu dropdown-content z-[50] mt-1 w-52 rounded-box border border-slate-200 bg-white p-2 shadow">
                 <li>
                   <button type="button" onClick={() => exportCurrent(false)}>
@@ -1218,7 +1218,7 @@ export default function AcademyInstructorsPage() {
         <div className="mt-2 lg:hidden">
           <button
             type="button"
-            className="btn btn-outline btn-sm w-full rounded-lg"
+            className="btn-secondary px-3 py-1.5 text-xs w-full rounded-lg"
             onClick={() => setMobileFiltersOpen(true)}
           >
             Filters, Search & Sort
@@ -1227,13 +1227,13 @@ export default function AcademyInstructorsPage() {
       </section>
 
       {!canEditRecords && (
-        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-base-content/75">
+        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-neutral-700">
           Read-only access for your role. You can review instructor data but cannot create or update records.
         </div>
       )}
 
       {error && (
-        <div className="rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </div>
       )}
@@ -1314,13 +1314,13 @@ export default function AcademyInstructorsPage() {
             />
 
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2">
-              <div className="text-sm text-base-content/70">
+              <div className="text-sm text-neutral-600">
                 Page {currentPage} of {totalPages} · {total} records
               </div>
               <div className="flex gap-2">
                 <button
                   type="button"
-                  className="btn btn-sm rounded-lg"
+                  className="btn-secondary px-3 py-1.5 text-xs rounded-lg"
                   disabled={!canGoPrevious}
                   onClick={() => setOffset((current) => Math.max(0, current - PAGE_SIZE))}
                 >
@@ -1328,7 +1328,7 @@ export default function AcademyInstructorsPage() {
                 </button>
                 <button
                   type="button"
-                  className="btn btn-sm rounded-lg"
+                  className="btn-secondary px-3 py-1.5 text-xs rounded-lg"
                   disabled={!canGoNext}
                   onClick={() => setOffset((current) => current + PAGE_SIZE)}
                 >
@@ -1351,7 +1351,7 @@ export default function AcademyInstructorsPage() {
 
       <button
         type="button"
-        className="btn btn-primary fixed bottom-4 right-4 z-40 rounded-full px-4 py-2 shadow-xl lg:hidden"
+        className="btn-primary fixed bottom-4 right-4 z-40 rounded-full px-4 py-2 shadow-xl lg:hidden"
         onClick={openCreateDrawer}
         disabled={!canEditRecords}
       >
@@ -1363,7 +1363,7 @@ export default function AcademyInstructorsPage() {
           <div className="ml-auto h-full w-full max-w-sm overflow-y-auto bg-white p-4 shadow-xl">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-semibold text-security-navy-900">Filters</h3>
-              <button type="button" className="btn btn-ghost btn-sm rounded-lg" onClick={() => setMobileFiltersOpen(false)}>
+              <button type="button" className="btn-ghost px-3 py-1.5 text-xs rounded-lg" onClick={() => setMobileFiltersOpen(false)}>
                 Close
               </button>
             </div>

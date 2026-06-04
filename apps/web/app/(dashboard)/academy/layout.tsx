@@ -46,8 +46,8 @@ function NavGroup({
       className={clsx(
         "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",
         isActive
-          ? "bg-primary/12 text-primary shadow-sm"
-          : "text-security-navy-600 hover:bg-base-200/80 hover:text-security-navy-800"
+          ? "bg-security-navy-50 text-security-navy-700 shadow-sm"
+          : "text-security-navy-600 hover:bg-neutral-100 hover:text-security-navy-800"
       )}
     >
       {children}
@@ -156,7 +156,7 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
         <span className="text-sm font-semibold text-security-navy-800">Academy</span>
         <button
           type="button"
-          className="btn btn-ghost btn-sm"
+          className="btn-ghost px-3 py-1.5 text-xs"
           onClick={() => setMobileOpen((o) => !o)}
           aria-expanded={mobileOpen}
           aria-controls="academy-side-nav"
@@ -168,7 +168,7 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
       <aside
         id="academy-side-nav"
         className={clsx(
-          "flex w-full shrink-0 flex-col border border-base-300/60 bg-base-100/80 shadow-[0_1px_2px_rgba(15,23,42,0.06)]",
+          "flex w-full shrink-0 flex-col border border-neutral-200 bg-white/90 shadow-[0_1px_2px_rgba(15,23,42,0.06)]",
           "rounded-xl p-3",
           "max-lg:max-h-[min(32rem,70vh)] max-lg:overflow-y-auto",
           "lg:h-full lg:min-h-0 lg:max-w-[15rem] lg:overflow-hidden lg:self-stretch",
@@ -177,7 +177,7 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
         )}
       >
         <div className="shrink-0">
-          <p className="text-xs font-semibold uppercase tracking-wider text-base-content/50">Academy</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Academy</p>
         </div>
         <nav className="mt-2 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-0.5 lg:min-h-0" aria-label="Academy">
           {navItems.map((item) => {
@@ -213,19 +213,12 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
             </NavGroup>
           )}
         </nav>
-        <div className="mt-3 shrink-0 rounded-lg border border-base-200 bg-gradient-to-b from-primary/5 to-base-100 p-2.5 lg:mt-auto">
+        <div className="mt-3 shrink-0 rounded-lg border border-neutral-200 bg-gradient-to-b from-security-navy-50 to-white p-2.5 lg:mt-auto">
           <p className="text-sm font-medium text-security-navy-800">Need help?</p>
-          <p className="mt-1 text-xs text-base-content/60">Module access and billing questions? Contact an administrator.</p>
-          <button
-            type="button"
-            className="mt-2 inline-flex h-7 items-center justify-center gap-1.5 rounded-lg border border-base-300 bg-white px-3 text-xs font-semibold text-security-navy-800 transition hover:border-base-400 hover:bg-base-200/60"
-          >
-            Contact support
-            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h4m0 0v4m0-4l-6 6" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h3a2 2 0 012 2v3" />
-            </svg>
-          </button>
+          <p className="mt-1 text-xs text-neutral-500">Module access and billing questions? Contact an administrator.</p>
+          <p className="mt-2 rounded-security border border-neutral-200 bg-white px-3 py-2 text-xs text-neutral-600">
+            Ask an administrator to update module access or billing details.
+          </p>
         </div>
       </aside>
 

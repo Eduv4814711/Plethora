@@ -71,13 +71,14 @@ export function InstructorTable({
     <div className="space-y-3">
       <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:block">
         <div className="overflow-x-auto">
-          <table className="table table-sm">
+          <table className="min-w-full divide-y divide-neutral-200 text-sm">
             <thead>
-              <tr className="text-[11px] uppercase tracking-wide text-base-content/60">
+              <tr className="text-[11px] uppercase tracking-wide text-neutral-500">
                 <th className="w-8">
                   <input
                     type="checkbox"
-                    className="checkbox checkbox-sm rounded-md"
+                    className="h-4 w-4 rounded border-neutral-300 text-security-navy-600 focus:ring-security-navy-500 rounded-md"
+                    aria-label="Select all instructors"
                     checked={allSelected}
                     onChange={(e) => onToggleSelectAll(e.target.checked)}
                   />
@@ -99,13 +100,13 @@ export function InstructorTable({
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={13} className="py-10 text-center text-sm text-base-content/60">
+                  <td colSpan={13} className="py-10 text-center text-sm text-neutral-500">
                     Loading instructors...
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="py-10 text-center text-sm text-base-content/60">
+                  <td colSpan={13} className="py-10 text-center text-sm text-neutral-500">
                     No instructors match the selected filters.
                   </td>
                 </tr>
@@ -115,7 +116,8 @@ export function InstructorTable({
                     <td onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
-                        className="checkbox checkbox-sm rounded-md"
+                        className="h-4 w-4 rounded border-neutral-300 text-security-navy-600 focus:ring-security-navy-500 rounded-md"
+                        aria-label={`Select ${row.fullName}`}
                         checked={selectedIds.has(row.id)}
                         onChange={(e) => onToggleSelect(row.id, e.target.checked)}
                       />
@@ -127,7 +129,7 @@ export function InstructorTable({
                         </div>
                         <div>
                           <div className="font-medium text-security-navy-900">{row.fullName}</div>
-                          <div className="text-xs text-base-content/70">
+                          <div className="text-xs text-neutral-600">
                             {row.email || "No email"} · {row.phone || "No phone"}
                           </div>
                         </div>
@@ -138,12 +140,12 @@ export function InstructorTable({
                     <td>
                       <div className="text-xs">
                         <div>{row.qualification || "—"}</div>
-                        <div className="text-base-content/60">{row.instructorGrade || "—"}</div>
+                        <div className="text-neutral-500">{row.instructorGrade || "—"}</div>
                       </div>
                     </td>
                     <td>{row.assignedBranch?.name || "—"}</td>
                     <td>
-                      <div className="max-w-[220px] text-xs text-base-content/80">
+                      <div className="max-w-[220px] text-xs text-neutral-700">
                         {row.assignedCourses.length
                           ? row.assignedCourses
                               .slice(0, 2)
@@ -172,12 +174,13 @@ export function InstructorTable({
                     <td>
                       <InstructorStatusBadge status={row.archivedAt ? "archived" : row.status} />
                     </td>
-                    <td className="text-xs text-base-content/70">
+                    <td className="text-xs text-neutral-600">
                       {new Date(row.updatedAt).toLocaleDateString()}
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <select
-                        className="select select-bordered select-xs w-40 rounded-lg"
+                        className="input-compact text-xs w-40 rounded-lg"
+                        aria-label={`Actions for ${row.fullName}`}
                         value=""
                         onChange={(e) => {
                           const value = e.target.value as RowAction;
@@ -204,11 +207,11 @@ export function InstructorTable({
 
       <div className="space-y-3 lg:hidden">
         {loading ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-base-content/70 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-neutral-600 shadow-sm">
             Loading instructors...
           </div>
         ) : rows.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-base-content/70 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-neutral-600 shadow-sm">
             No instructors match the selected filters.
           </div>
         ) : (
@@ -222,25 +225,26 @@ export function InstructorTable({
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    className="checkbox checkbox-sm rounded-md"
+                    className="h-4 w-4 rounded border-neutral-300 text-security-navy-600 focus:ring-security-navy-500 rounded-md"
+                    aria-label={`Select ${row.fullName}`}
                     checked={selectedIds.has(row.id)}
                     onClick={(e) => e.stopPropagation()}
                     onChange={(e) => onToggleSelect(row.id, e.target.checked)}
                   />
                   <div>
                     <div className="font-medium text-security-navy-900">{row.fullName}</div>
-                    <div className="text-xs text-base-content/70">{row.psiraInstructorNumber || "No PSIRA number"}</div>
+                    <div className="text-xs text-neutral-600">{row.psiraInstructorNumber || "No PSIRA number"}</div>
                   </div>
                 </div>
                 <InstructorStatusBadge status={row.archivedAt ? "archived" : row.status} />
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <span className="text-base-content/60">Branch</span>
+                  <span className="text-neutral-500">Branch</span>
                   <div>{row.assignedBranch?.name || "—"}</div>
                 </div>
                 <div>
-                  <span className="text-base-content/60">Courses</span>
+                  <span className="text-neutral-500">Courses</span>
                   <div>{row.assignedCourses.length || 0}</div>
                 </div>
                 <div className="col-span-2">
@@ -260,7 +264,8 @@ export function InstructorTable({
               </div>
               <div className="mt-3" onClick={(e) => e.stopPropagation()}>
                 <select
-                  className="select select-bordered select-sm w-full rounded-xl"
+                  className="input-compact w-full rounded-xl"
+                  aria-label={`Actions for ${row.fullName}`}
                   value=""
                   onChange={(e) => {
                     const value = e.target.value as RowAction;

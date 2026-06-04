@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
+import { useConfirmDialog } from "@/components/ui";
 
 interface StudentOpt {
   id: string;
@@ -31,6 +32,7 @@ interface EnrolRow {
 
 export default function AcademyEnrolmentsPage() {
   const { token } = useAuth();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [enrolments, setEnrolments] = useState<EnrolRow[]>([]);
   const [students, setStudents] = useState<StudentOpt[]>([]);
   const [runs, setRuns] = useState<RunOpt[]>([]);
@@ -93,7 +95,13 @@ export default function AcademyEnrolmentsPage() {
   };
 
   const remove = async (enrolId: string) => {
-    if (!token || !confirm("Remove this enrolment?")) return;
+    if (!token) return;
+    const confirmed = await confirm({
+      title: "Remove enrolment?",
+      message: "This removes the learner from the selected course run.",
+      confirmLabel: "Remove enrolment",
+    });
+    if (!confirmed) return;
     setError(null);
     try {
       await academyApi.deleteEnrolment(token, enrolId);
@@ -105,29 +113,30 @@ export default function AcademyEnrolmentsPage() {
 
   return (
     <div className="space-y-6 p-4 md:p-6">
+      {confirmDialog}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Link href="/academy" className="text-sm text-primary hover:underline lg:hidden">
+          <Link href="/academy" className="text-sm text-security-navy-700 hover:underline lg:hidden">
             ← Academy
           </Link>
           <h1 className="mt-1 text-2xl font-semibold">Enrolments</h1>
-          <p className="mt-1 text-sm text-base-content/70">
+          <p className="mt-1 text-sm text-neutral-600">
             Course runs below are limited to intakes that still accept enrolments and have capacity.
           </p>
         </div>
-        <Link href="/academy/intake" className="btn btn-outline btn-sm">
+        <Link href="/academy/intake" className="btn-secondary px-3 py-1.5 text-xs">
           Guided intake
         </Link>
       </div>
 
       {error && (
-        <div className="rounded-md border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
-      <form onSubmit={create} className="grid gap-3 rounded-lg border border-base-300 p-4 sm:grid-cols-2 lg:grid-cols-4">
+      <form onSubmit={create} className="grid gap-3 rounded-lg border border-neutral-300 p-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <label className="label py-0 text-xs">Student</label>
-          <select className="select select-bordered select-sm w-full" value={studentId} onChange={(e) => setStudentId(e.target.value)}>
+          <label className="label-text mb-1 block">Student</label>
+          <select className="input-compact w-full" value={studentId} onChange={(e) => setStudentId(e.target.value)}>
             {students.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.studentNumber} — {s.firstName} {s.lastName}
@@ -137,8 +146,8 @@ export default function AcademyEnrolmentsPage() {
           </select>
         </div>
         <div className="sm:col-span-2">
-          <label className="label py-0 text-xs">Course run</label>
-          <select className="select select-bordered select-sm w-full" value={courseRunId} onChange={(e) => setCourseRunId(e.target.value)}>
+          <label className="label-text mb-1 block">Course run</label>
+          <select className="input-compact w-full" value={courseRunId} onChange={(e) => setCourseRunId(e.target.value)}>
             {runs.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.runCode} — {r.course.code} {r.course.title} ({r.status}
@@ -148,8 +157,8 @@ export default function AcademyEnrolmentsPage() {
           </select>
         </div>
         <div>
-          <label className="label py-0 text-xs">Fee plan (optional)</label>
-          <select className="select select-bordered select-sm w-full" value={feePlanId} onChange={(e) => setFeePlanId(e.target.value)}>
+          <label className="label-text mb-1 block">Fee plan (optional)</label>
+          <select className="input-compact w-full" value={feePlanId} onChange={(e) => setFeePlanId(e.target.value)}>
             <option value="">—</option>
             {feePlans.map((fp) => (
               <option key={fp.id} value={fp.id}>
@@ -162,11 +171,11 @@ export default function AcademyEnrolmentsPage() {
           {!adminFeeOk && students.length > 0 && studentId ? (
             <p className="text-xs text-amber-800">
               Selected student must have admin fee <strong>paid</strong> or <strong>waived</strong> before enrolment. Use{" "}
-              <Link href={`/academy/students/${studentId}`} className="link">
+              <Link href={`/academy/students/${studentId}`} className="font-semibold text-security-navy-700 hover:underline">
                 student profile
               </Link>{" "}
               or{" "}
-              <Link href="/academy/intake" className="link">
+              <Link href="/academy/intake" className="font-semibold text-security-navy-700 hover:underline">
                 guided intake
               </Link>
               .
@@ -174,7 +183,7 @@ export default function AcademyEnrolmentsPage() {
           ) : null}
           <button
             type="submit"
-            className="btn btn-primary btn-sm w-fit"
+            className="btn-primary px-3 py-1.5 text-xs w-fit"
             disabled={!students.length || !runs.length || !adminFeeOk}
           >
             Enrol
@@ -190,12 +199,12 @@ export default function AcademyEnrolmentsPage() {
       ) : null}
 
       {loading ? (
-        <p className="text-sm text-base-content/60">Loading…</p>
+        <p className="text-sm text-neutral-500">Loading…</p>
       ) : enrolments.length === 0 ? (
-        <p className="text-sm text-base-content/60">No enrolments yet.</p>
+        <p className="text-sm text-neutral-500">No enrolments yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-base-300">
-          <table className="table table-sm">
+        <div className="overflow-x-auto rounded-lg border border-neutral-300">
+          <table className="min-w-full divide-y divide-neutral-200 text-sm">
             <thead>
               <tr>
                 <th>Student</th>
@@ -208,20 +217,20 @@ export default function AcademyEnrolmentsPage() {
               {enrolments.map((en) => (
                 <tr key={en.id}>
                   <td>
-                    <Link href={`/academy/students/${en.student.id}`} className="link">
+                    <Link href={`/academy/students/${en.student.id}`} className="font-semibold text-security-navy-700 hover:underline">
                       {en.student.firstName} {en.student.lastName}
                     </Link>
-                    <div className="font-mono text-xs text-base-content/60">{en.student.studentNumber}</div>
+                    <div className="font-mono text-xs text-neutral-500">{en.student.studentNumber}</div>
                   </td>
                   <td>
                     <span className="font-mono text-xs">{en.courseRun.runCode}</span>{" "}
-                    <span className="text-xs text-base-content/70">
+                    <span className="text-xs text-neutral-600">
                       {en.courseRun.course.code} — {en.courseRun.course.title}
                     </span>
                   </td>
                   <td>{en.financialStatus}</td>
                   <td>
-                    <button type="button" className="btn btn-ghost btn-xs text-error" onClick={() => remove(en.id)}>
+                    <button type="button" className="btn-ghost px-2 py-1 text-xs text-red-700" onClick={() => remove(en.id)}>
                       Remove
                     </button>
                   </td>

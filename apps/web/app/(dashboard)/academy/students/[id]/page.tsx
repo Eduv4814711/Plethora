@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi, uploadAcademyStudentDocument } from "@/lib/api";
 import { DateInput } from "@/components/date-input";
+import { useConfirmDialog } from "@/components/ui";
 
 interface Student {
   id: string;
@@ -73,6 +74,7 @@ export default function AcademyStudentDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const { token } = useAuth();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [student, setStudent] = useState<Student | null>(null);
   const [documents, setDocuments] = useState<DocRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -158,7 +160,13 @@ export default function AcademyStudentDetailPage() {
   };
 
   const removeDoc = async (docId: string) => {
-    if (!token || !confirm("Remove this document from the profile?")) return;
+    if (!token) return;
+    const confirmed = await confirm({
+      title: "Remove document?",
+      message: "This removes the uploaded document from the learner profile.",
+      confirmLabel: "Remove document",
+    });
+    if (!confirmed) return;
     setError(null);
     try {
       await academyApi.deleteStudentDocument(token, id, docId);
@@ -171,7 +179,7 @@ export default function AcademyStudentDetailPage() {
   if (loading && !student) {
     return (
       <div className="p-6">
-        <p className="text-sm text-base-content/60">Loading…</p>
+        <p className="text-sm text-neutral-500">Loading…</p>
       </div>
     );
   }
@@ -179,8 +187,8 @@ export default function AcademyStudentDetailPage() {
   if (!student) {
     return (
       <div className="p-6">
-        <p className="text-error">{error ?? "Student not found"}</p>
-        <Link href="/academy/students" className="link mt-2 inline-block">
+        <p className="text-red-700">{error ?? "Student not found"}</p>
+        <Link href="/academy/students" className="mt-2 inline-block font-semibold text-security-navy-700 hover:underline">
           Back to students
         </Link>
       </div>
@@ -189,65 +197,66 @@ export default function AcademyStudentDetailPage() {
 
   return (
     <div className="space-y-8 p-4 md:p-6">
+      {confirmDialog}
       <div>
-        <Link href="/academy/students" className="text-sm text-primary hover:underline">
+        <Link href="/academy/students" className="text-sm text-security-navy-700 hover:underline">
           ← Students
         </Link>
         <h1 className="mt-1 text-2xl font-semibold">
           {student.firstName} {student.lastName}
         </h1>
-        <p className="font-mono text-sm text-base-content/70">{student.studentNumber}</p>
+        <p className="font-mono text-sm text-neutral-600">{student.studentNumber}</p>
       </div>
 
       {error && (
-        <div className="rounded-md border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
-      <section className="rounded-lg border border-base-300 p-4">
+      <section className="rounded-lg border border-neutral-300 p-4">
         <h2 className="font-medium">Admin fee</h2>
-        <p className="mt-1 text-xs text-base-content/60">
+        <p className="mt-1 text-xs text-neutral-500">
           Students must have the admin fee <strong>paid</strong> or <strong>waived</strong> before they can be enrolled
           in course runs.
         </p>
         {student && (
           <dl className="mt-3 grid gap-1 text-sm sm:grid-cols-2">
             <div>
-              <dt className="text-xs text-base-content/60">Status</dt>
+              <dt className="text-xs text-neutral-500">Status</dt>
               <dd className="font-medium capitalize">{student.adminFeeStatus ?? "unpaid"}</dd>
             </div>
             {student.adminFeePaidAt ? (
               <div>
-                <dt className="text-xs text-base-content/60">Paid at</dt>
+                <dt className="text-xs text-neutral-500">Paid at</dt>
                 <dd>{new Date(student.adminFeePaidAt).toLocaleString()}</dd>
               </div>
             ) : null}
             {student.adminFeeAmount ? (
               <div>
-                <dt className="text-xs text-base-content/60">Amount</dt>
+                <dt className="text-xs text-neutral-500">Amount</dt>
                 <dd>{student.adminFeeAmount}</dd>
               </div>
             ) : null}
             {student.adminFeeMethod ? (
               <div>
-                <dt className="text-xs text-base-content/60">Method</dt>
+                <dt className="text-xs text-neutral-500">Method</dt>
                 <dd>{student.adminFeeMethod}</dd>
               </div>
             ) : null}
             {student.adminFeeReference ? (
               <div>
-                <dt className="text-xs text-base-content/60">Reference</dt>
+                <dt className="text-xs text-neutral-500">Reference</dt>
                 <dd className="break-all">{student.adminFeeReference}</dd>
               </div>
             ) : null}
             {student.adminFeeNotes ? (
               <div className="sm:col-span-2">
-                <dt className="text-xs text-base-content/60">Notes</dt>
+                <dt className="text-xs text-neutral-500">Notes</dt>
                 <dd>{student.adminFeeNotes}</dd>
               </div>
             ) : null}
           </dl>
         )}
-        <div className="mt-4 grid gap-4 border-t border-base-200 pt-4 md:grid-cols-2">
+        <div className="mt-4 grid gap-4 border-t border-neutral-200 pt-4 md:grid-cols-2">
           <form
             className="space-y-2"
             onSubmit={async (e) => {
@@ -272,26 +281,26 @@ export default function AcademyStudentDetailPage() {
               }
             }}
           >
-            <p className="text-xs font-medium text-base-content/80">Record payment</p>
+            <p className="text-xs font-medium text-neutral-700">Record payment</p>
             <input
-              className="input input-bordered input-sm w-full"
+              className="input-compact w-full"
               placeholder="Amount"
               value={feeAmount}
               onChange={(e) => setFeeAmount(e.target.value)}
             />
             <input
-              className="input input-bordered input-sm w-full"
+              className="input-compact w-full"
               placeholder="Method (e.g. EFT, cash)"
               value={feeMethod}
               onChange={(e) => setFeeMethod(e.target.value)}
             />
             <input
-              className="input input-bordered input-sm w-full"
+              className="input-compact w-full"
               placeholder="Reference (optional)"
               value={feeReference}
               onChange={(e) => setFeeReference(e.target.value)}
             />
-            <button type="submit" className="btn btn-primary btn-sm" disabled={feeSaving || !feeAmount.trim()}>
+            <button type="submit" className="btn-primary px-3 py-1.5 text-xs" disabled={feeSaving || !feeAmount.trim()}>
               {feeSaving ? "Saving…" : "Mark paid"}
             </button>
           </form>
@@ -316,14 +325,14 @@ export default function AcademyStudentDetailPage() {
               }
             }}
           >
-            <p className="text-xs font-medium text-base-content/80">Waive fee</p>
+            <p className="text-xs font-medium text-neutral-700">Waive fee</p>
             <textarea
-              className="textarea textarea-bordered textarea-sm w-full min-h-[72px]"
+              className="input-modern w-full min-h-[72px]"
               placeholder="Reason (required)"
               value={waiveNotes}
               onChange={(e) => setWaiveNotes(e.target.value)}
             />
-            <button type="submit" className="btn btn-outline btn-sm" disabled={feeSaving || !waiveNotes.trim()}>
+            <button type="submit" className="btn-secondary px-3 py-1.5 text-xs" disabled={feeSaving || !waiveNotes.trim()}>
               {feeSaving ? "Saving…" : "Waive"}
             </button>
           </form>
@@ -331,10 +340,16 @@ export default function AcademyStudentDetailPage() {
         <div className="mt-3">
           <button
             type="button"
-            className="btn btn-ghost btn-xs text-base-content/60"
+            className="btn-ghost px-2 py-1 text-xs text-neutral-500"
             disabled={feeSaving || !token}
             onClick={async () => {
-              if (!token || !confirm("Reset admin fee to unpaid?")) return;
+              if (!token) return;
+              const confirmed = await confirm({
+                title: "Reset admin fee?",
+                message: "This changes the learner admin fee status back to unpaid.",
+                confirmLabel: "Reset fee",
+              });
+              if (!confirmed) return;
               setFeeSaving(true);
               setError(null);
               try {
@@ -352,7 +367,7 @@ export default function AcademyStudentDetailPage() {
         </div>
       </section>
 
-      <form onSubmit={save} className="space-y-4 rounded-lg border border-base-300 p-4">
+      <form onSubmit={save} className="space-y-4 rounded-lg border border-neutral-300 p-4">
         <h2 className="font-medium">Profile</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="First name" value={student.firstName} onChange={(v) => setStudent({ ...student, firstName: v })} />
@@ -361,7 +376,7 @@ export default function AcademyStudentDetailPage() {
           <Field label="Phone" value={student.phone ?? ""} onChange={(v) => setStudent({ ...student, phone: v })} />
           <Field label="ID number" value={student.idNumber ?? ""} onChange={(v) => setStudent({ ...student, idNumber: v })} />
           <div>
-            <label className="label py-0 text-xs">Date of birth</label>
+            <label className="label-text mb-1 block">Date of birth</label>
             <DateInput
               value={dateInput(student.dateOfBirth)}
               onChange={(iso) =>
@@ -377,9 +392,9 @@ export default function AcademyStudentDetailPage() {
             />
           </div>
           <div>
-            <label className="label py-0 text-xs">Status</label>
+            <label className="label-text mb-1 block">Status</label>
             <select
-              className="select select-bordered select-sm w-full"
+              className="input-compact w-full"
               value={student.status}
               onChange={(e) => setStudent({ ...student, status: e.target.value })}
             >
@@ -391,9 +406,9 @@ export default function AcademyStudentDetailPage() {
             </select>
           </div>
           <div>
-            <label className="label py-0 text-xs">PSIRA pre-registration</label>
+            <label className="label-text mb-1 block">PSIRA pre-registration</label>
             <select
-              className="select select-bordered select-sm w-full"
+              className="input-compact w-full"
               value={student.psiraPreRegistrationStatus}
               onChange={(e) => setStudent({ ...student, psiraPreRegistrationStatus: e.target.value })}
             >
@@ -405,18 +420,18 @@ export default function AcademyStudentDetailPage() {
             </select>
           </div>
         </div>
-        <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>
+        <button type="submit" className="btn-primary px-3 py-1.5 text-xs" disabled={saving}>
           {saving ? "Saving…" : "Save changes"}
         </button>
       </form>
 
-      <section className="rounded-lg border border-base-300 p-4">
+      <section className="rounded-lg border border-neutral-300 p-4">
         <h2 className="font-medium">Documents</h2>
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <div>
-            <label className="label py-0 text-xs">Type</label>
+            <label className="label-text mb-1 block">Type</label>
             <select
-              className="select select-bordered select-sm"
+              className="input-compact"
               value={docType}
               onChange={(e) => setDocType(e.target.value)}
             >
@@ -428,26 +443,26 @@ export default function AcademyStudentDetailPage() {
             </select>
           </div>
           <div>
-            <label className="label py-0 text-xs">File</label>
+            <label className="label-text mb-1 block">File</label>
             <input
               type="file"
-              className="file-input file-input-bordered file-input-sm"
+              className="block w-full text-sm text-neutral-700 file:mr-3 file:rounded-security file:border-0 file:bg-security-navy file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-security-navy-800"
               disabled={uploading}
               onChange={onUpload}
             />
           </div>
         </div>
         {documents.length === 0 ? (
-          <p className="mt-3 text-sm text-base-content/60">No documents uploaded.</p>
+          <p className="mt-3 text-sm text-neutral-500">No documents uploaded.</p>
         ) : (
-          <ul className="mt-3 divide-y divide-base-200">
+          <ul className="mt-3 divide-y divide-neutral-200">
             {documents.map((d) => (
               <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
                 <span>
                   <span className="font-medium">{d.documentType}</span> — {d.fileName}{" "}
-                  <span className="text-base-content/50">({Math.round(d.sizeBytes / 1024)} KB)</span>
+                  <span className="text-neutral-500">({Math.round(d.sizeBytes / 1024)} KB)</span>
                 </span>
-                <button type="button" className="btn btn-ghost btn-xs text-error" onClick={() => removeDoc(d.id)}>
+                <button type="button" className="btn-ghost px-2 py-1 text-xs text-red-700" onClick={() => removeDoc(d.id)}>
                   Remove
                 </button>
               </li>
@@ -470,8 +485,8 @@ function Field({
 }) {
   return (
     <div>
-      <label className="label py-0 text-xs">{label}</label>
-      <input className="input input-bordered input-sm w-full" value={value} onChange={(e) => onChange(e.target.value)} />
+      <label className="label-text mb-1 block">{label}</label>
+      <input className="input-compact w-full" value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }

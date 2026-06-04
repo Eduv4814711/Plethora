@@ -42,7 +42,7 @@ export default function AcademyCourseRunDetailPage() {
   if (loading && !run) {
     return (
       <div className="p-6">
-        <p className="text-sm text-base-content/60">Loading…</p>
+        <p className="text-sm text-neutral-500">Loading…</p>
       </div>
     );
   }
@@ -50,8 +50,8 @@ export default function AcademyCourseRunDetailPage() {
   if (!run) {
     return (
       <div className="p-6">
-        <p className="text-error">{error ?? "Not found"}</p>
-        <Link href="/academy/course-runs" className="link mt-2 inline-block">
+        <p className="text-red-700">{error ?? "Not found"}</p>
+        <Link href="/academy/course-runs" className="mt-2 inline-block font-semibold text-security-navy-700 hover:underline">
           Back
         </Link>
       </div>
@@ -63,25 +63,25 @@ export default function AcademyCourseRunDetailPage() {
   return (
     <div className="space-y-6 p-4 md:p-6">
       <div>
-        <Link href="/academy/course-runs" className="text-sm text-primary hover:underline">
+        <Link href="/academy/course-runs" className="text-sm text-security-navy-700 hover:underline">
           ← Course runs
         </Link>
         <h1 className="mt-1 font-mono text-2xl font-semibold">{String(run.runCode)}</h1>
         {course && (
-          <p className="text-sm text-base-content/70">
+          <p className="text-sm text-neutral-600">
             {String(course.code)} — {String(course.title)}
           </p>
         )}
       </div>
 
       {error && (
-        <div className="rounded-md border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
-      <div className="flex flex-wrap items-end gap-2 rounded-lg border border-base-300 p-4">
+      <div className="flex flex-wrap items-end gap-2 rounded-lg border border-neutral-300 p-4">
         <div>
-          <label className="label py-0 text-xs">Status</label>
-          <select className="select select-bordered select-sm" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <label className="label-text mb-1 block">Status</label>
+          <select className="input-compact" value={status} onChange={(e) => setStatus(e.target.value)}>
             {["planned", "open", "in_progress", "completed", "reported", "closed"].map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -89,12 +89,12 @@ export default function AcademyCourseRunDetailPage() {
             ))}
           </select>
         </div>
-        <button type="button" className="btn btn-primary btn-sm" onClick={saveStatus}>
+        <button type="button" className="btn-primary px-3 py-1.5 text-xs" onClick={saveStatus}>
           Update status
         </button>
       </div>
 
-      <p className="text-sm text-base-content/60">
+      <p className="text-sm text-neutral-500">
         Start: {String(run.startDate).slice(0, 10)} · End: {String(run.endDate).slice(0, 10)} · Enrolled:{" "}
         {String(run.enrolledCount)}
         {Number(run.capacity) > 0 ? ` / ${String(run.capacity)}` : ""}

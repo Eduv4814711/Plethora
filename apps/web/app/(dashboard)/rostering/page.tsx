@@ -31,6 +31,7 @@ import {
   siteHasRestrictiveShiftGenderRules,
 } from "@/lib/site-shift-gender-rules";
 import { buildSiteRosterReadinessHints } from "@/lib/roster-readiness-hints";
+import { useConfirmDialog } from "@/components/ui";
 
 const DASHBOARD_MAIN_ID = "dashboard-main";
 
@@ -162,6 +163,7 @@ const statusColors: Record<string, string> = {
 
 export default function RosteringPage() {
   const { token, user } = useAuth();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
@@ -219,7 +221,12 @@ export default function RosteringPage() {
     if (!token) return;
     const emp = rosteredEmployees.find((e) => e.id === employeeId);
     const name = emp ? `${emp.firstName} ${emp.lastName}` : "this person";
-    if (!confirm(`Reset all rostered shifts for ${name} in this period only?`)) return;
+    const confirmed = await confirm({
+      title: "Reset this guard's roster?",
+      message: `This removes all rostered shifts for ${name} in the visible period only.`,
+      confirmLabel: "Reset shifts",
+    });
+    if (!confirmed) return;
     setShowResetMenu(false);
     setResetting(true);
     setBulkError(null);
@@ -251,7 +258,12 @@ export default function RosteringPage() {
 
   const handleResetAll = async () => {
     if (!token) return;
-    if (!confirm("Reset the entire roster for this period only? This will remove all created/assigned shifts in the visible period.")) return;
+    const confirmed = await confirm({
+      title: "Reset entire roster?",
+      message: "This removes all created or assigned shifts in the visible period only.",
+      confirmLabel: "Reset roster",
+    });
+    if (!confirmed) return;
     setShowResetMenu(false);
     setResetting(true);
     setBulkError(null);
@@ -771,6 +783,7 @@ export default function RosteringPage() {
 
   return (
     <div className="mx-auto flex h-[calc(100dvh-7.5rem)] min-h-[620px] w-full max-w-[1760px] flex-col xl:flex-row gap-5 rounded-[28px] bg-gradient-to-b from-neutral-50/85 via-white to-orange-50/35 dark:from-neutral-900 dark:via-neutral-950 dark:to-neutral-900 p-2 xl:p-3 print:min-h-0 print:h-auto print:max-w-none print:rounded-none print:bg-white print:p-4 print:gap-0">
+      {confirmDialog}
       <aside className="print:hidden xl:w-[18.75rem] w-full xl:h-full min-h-0 max-h-[48vh] xl:max-h-none shrink-0 flex flex-col overflow-hidden rounded-2xl border border-neutral-200/90 dark:border-neutral-700 bg-white/95 dark:bg-neutral-900/80 shadow-[0_10px_30px_-18px_rgba(15,23,42,0.35)]">
         <div
           className="flex-1 min-h-0 overflow-y-scroll overflow-x-hidden overscroll-y-contain touch-pan-y [scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:theme(colors.neutral.400)_transparent] dark:[scrollbar-color:theme(colors.neutral.600)_transparent]"

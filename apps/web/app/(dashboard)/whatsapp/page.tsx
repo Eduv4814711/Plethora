@@ -14,6 +14,7 @@ import {
   type WhatsAppMessage,
 } from "@/lib/api";
 import { ConversationView } from "@/components/whatsapp/conversation-view";
+import { AlertBanner, EmptyState, PageHeader } from "@/components/ui";
 
 export default function WhatsAppPage() {
   const { token } = useAuth();
@@ -26,6 +27,7 @@ export default function WhatsAppPage() {
   const [messageInput, setMessageInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [requiresTemplate, setRequiresTemplate] = useState(false);
   const [templates, setTemplates] = useState<{ name: string; language: string }[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState("");
@@ -33,12 +35,14 @@ export default function WhatsAppPage() {
   const fetchContacts = useCallback(async () => {
     if (!token) return;
     setLoadingContacts(true);
+    setFetchError(null);
     try {
       const { data } = await getWhatsAppContacts(token, { limit: 50 });
       setContacts(data);
     } catch (e) {
       console.error(e);
       setContacts([]);
+      setFetchError("Unable to load WhatsApp contacts. Check the connection and try again.");
     } finally {
       setLoadingContacts(false);
     }
@@ -47,12 +51,14 @@ export default function WhatsAppPage() {
   const fetchMessages = useCallback(async () => {
     if (!token || !selectedContact) return;
     setLoadingMessages(true);
+    setFetchError(null);
     try {
       const { data } = await getWhatsAppMessages(token, selectedContact.id, { limit: 50 });
       setMessages(data);
     } catch (e) {
       console.error(e);
       setMessages([]);
+      setFetchError("Unable to load this conversation. Try refreshing the messages.");
     } finally {
       setLoadingMessages(false);
     }
@@ -131,12 +137,13 @@ export default function WhatsAppPage() {
 
   return (
     <div className="animate-fade-in max-w-5xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-black tracking-tight">WhatsApp</h1>
-        <p className="text-sm text-neutral-500 mt-0.5">
-          Message team members and view conversation history
-        </p>
-      </div>
+      <PageHeader
+        title="WhatsApp"
+        description="Message team members and view conversation history."
+        className="mb-6"
+      />
+
+      {fetchError && <AlertBanner variant="error" className="mb-6">{fetchError}</AlertBanner>}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Contact list */}
@@ -179,9 +186,15 @@ export default function WhatsAppPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-neutral-500 py-4 text-center">
-                  No team members with WhatsApp numbers. Add phone numbers in Team.
-                </p>
+                <EmptyState
+                  title="No WhatsApp contacts yet"
+                  description="Add team member phone numbers to start WhatsApp conversations from Plethora."
+                  action={
+                    <Link href="/employees" className="btn-primary px-3 py-1.5 text-xs">
+                      Manage team
+                    </Link>
+                  }
+                />
               )}
               <Link
                 href="/employees"
@@ -213,6 +226,7 @@ export default function WhatsAppPage() {
                   type="button"
                   onClick={() => setSelectedContact(null)}
                   className="ml-auto text-sm text-neutral-500 hover:text-black"
+                  aria-label="Close conversation"
                 >
                   Close
                 </button>
@@ -231,11 +245,12 @@ export default function WhatsAppPage() {
                     <p className="text-sm text-neutral-600">
                       Free-form messages require the contact to have messaged recently. Send a template instead:
                     </p>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row">
                       <select
                         value={selectedTemplate}
                         onChange={(e) => setSelectedTemplate(e.target.value)}
-                        className="flex-1 px-3 py-2 border border-neutral-300 rounded-security text-sm"
+                        className="input-compact flex-1"
+                        aria-label="Template message"
                       >
                         <option value="">Select template</option>
                         {templates.map((t) => (
@@ -248,7 +263,7 @@ export default function WhatsAppPage() {
                         type="button"
                         onClick={handleSendTemplate}
                         disabled={!selectedTemplate || sending}
-                        className="px-4 py-2 bg-security-navy-700 text-white rounded-security text-sm font-medium disabled:opacity-50 hover:bg-security-navy-800 transition-colors"
+                        className="btn-primary px-4 py-2 text-sm"
                       >
                         {sending ? "Sending..." : "Send Template"}
                       </button>
@@ -262,20 +277,21 @@ export default function WhatsAppPage() {
                     </button>
                   </div>
                 ) : (
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <textarea
                       value={messageInput}
                       onChange={(e) => setMessageInput(e.target.value)}
                       placeholder="Type your message..."
                       rows={2}
-                      className="flex-1 px-3 py-2 text-sm border border-neutral-300 rounded-security resize-none focus:outline-none focus:ring-2 focus:ring-black"
+                      className="input-modern min-h-20 flex-1 resize-none"
+                      aria-label="Message"
                       disabled={sending}
                     />
                     <button
                       type="button"
                       onClick={handleSendMessage}
                       disabled={!messageInput.trim() || sending}
-                      className="px-4 py-2 bg-security-navy-700 text-white rounded-security text-sm font-medium self-end disabled:opacity-50 hover:bg-security-navy-800 transition-colors"
+                      className="btn-primary self-end px-4 py-2 text-sm"
                     >
                       {sending ? "Sending..." : "Send"}
                     </button>

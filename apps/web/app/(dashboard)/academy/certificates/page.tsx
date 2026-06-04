@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
 import { DateInput } from "@/components/date-input";
+import { useConfirmDialog } from "@/components/ui";
 
 interface StudentOption {
   id: string;
@@ -38,12 +39,13 @@ function statusBadgeClass(status: string): string {
     case "void":
       return "badge-error";
     default:
-      return "badge-ghost border border-base-300";
+      return "badge-neutral border border-neutral-300";
   }
 }
 
 export default function AcademyCertificatesPage() {
   const { token, user } = useAuth();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const canManage = user?.role === "admin";
   const [rows, setRows] = useState<Certificate[]>([]);
   const [students, setStudents] = useState<StudentOption[]>([]);
@@ -100,7 +102,13 @@ export default function AcademyCertificatesPage() {
 
   const reprint = async (id: string) => {
     if (!token || !canManage) return;
-    if (!confirm("Mark this certificate as reprinted?")) return;
+    const confirmed = await confirm({
+      title: "Mark certificate as reprinted?",
+      message: "This records a certificate reprint event in the register.",
+      confirmLabel: "Mark reprinted",
+      danger: false,
+    });
+    if (!confirmed) return;
     setSaving(true);
     try {
       await academyApi.reprintCertificate(token, id);
@@ -114,7 +122,12 @@ export default function AcademyCertificatesPage() {
 
   const revoke = async (id: string) => {
     if (!token || !canManage) return;
-    if (!confirm("Revoke this certificate?")) return;
+    const confirmed = await confirm({
+      title: "Revoke certificate?",
+      message: "This marks the certificate as revoked.",
+      confirmLabel: "Revoke certificate",
+    });
+    if (!confirmed) return;
     setSaving(true);
     try {
       await academyApi.revokeCertificate(token, id);
@@ -128,7 +141,12 @@ export default function AcademyCertificatesPage() {
 
   const remove = async (id: string) => {
     if (!token || !canManage) return;
-    if (!confirm("Delete this certificate permanently?")) return;
+    const confirmed = await confirm({
+      title: "Delete certificate permanently?",
+      message: "This permanently removes the certificate record.",
+      confirmLabel: "Delete certificate",
+    });
+    if (!confirmed) return;
     setSaving(true);
     try {
       await academyApi.deleteCertificate(token, id);
@@ -142,24 +160,25 @@ export default function AcademyCertificatesPage() {
 
   return (
     <div className="w-full min-w-0 space-y-6">
+      {confirmDialog}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-security-navy-900">Certificates</h1>
-        <p className="mt-1 text-sm text-base-content/70">Issue and manage learner certificate lifecycle with verification codes.</p>
+        <p className="mt-1 text-sm text-neutral-600">Issue and manage learner certificate lifecycle with verification codes.</p>
       </div>
 
       {!canManage && (
-        <div className="rounded-lg border border-base-300 bg-base-200/50 px-3 py-2 text-sm">
+        <div className="rounded-lg border border-neutral-300 bg-neutral-100/50 px-3 py-2 text-sm">
           Read-only: only admins can issue, reprint, revoke, or delete certificates.
         </div>
       )}
 
-      {error && <div className="rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>}
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
-      <div className="rounded-2xl border border-base-200 bg-base-100 p-5 shadow-sm">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-base-content/60">Issue certificate</h2>
+      <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Issue certificate</h2>
         <form onSubmit={create} className="mt-3 grid gap-2 md:grid-cols-4">
           <select
-            className="select select-bordered rounded-xl"
+            className="input-modern rounded-xl"
             value={learnerId}
             onChange={(e) => setLearnerId(e.target.value)}
             disabled={!canManage || saving}
@@ -172,7 +191,7 @@ export default function AcademyCertificatesPage() {
             ))}
           </select>
           <select
-            className="select select-bordered rounded-xl"
+            className="input-modern rounded-xl"
             value={courseId}
             onChange={(e) => setCourseId(e.target.value)}
             disabled={!canManage || saving}
@@ -192,21 +211,21 @@ export default function AcademyCertificatesPage() {
             disabled={!canManage || saving}
             ariaLabel="Certificate issue date"
           />
-          <button className="btn btn-primary rounded-xl" disabled={!canManage || saving || !learnerId || !courseId || !issueDate}>
+          <button className="btn-primary rounded-xl" disabled={!canManage || saving || !learnerId || !courseId || !issueDate}>
             Issue
           </button>
         </form>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-base-200 bg-base-100 shadow-sm">
-        <div className="border-b border-base-200/80 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">Certificate register</h2></div>
+      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+        <div className="border-b border-neutral-200/80 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">Certificate register</h2></div>
         <div className="overflow-x-auto">
-          <table className="table table-sm">
-            <thead><tr className="text-[11px] uppercase tracking-wide text-base-content/60"><th>Certificate #</th><th>Learner</th><th>Status</th><th>Verification</th><th className="text-right">Actions</th></tr></thead>
+          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+            <thead><tr className="text-[11px] uppercase tracking-wide text-neutral-500"><th>Certificate #</th><th>Learner</th><th>Status</th><th>Verification</th><th className="text-right">Actions</th></tr></thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-sm text-base-content/60">
+                  <td colSpan={5} className="py-8 text-center text-sm text-neutral-500">
                     Loading certificates...
                   </td>
                 </tr>
@@ -215,21 +234,21 @@ export default function AcademyCertificatesPage() {
                   <td className="font-medium text-security-navy-900">{r.certificateNumber}</td>
                   <td>{r.learner ? `${r.learner.firstName} ${r.learner.lastName}` : r.learnerId}</td>
                   <td>
-                    <span className={`badge badge-sm ${statusBadgeClass(r.status)}`}>
+                    <span className={`badge-neutral ${statusBadgeClass(r.status)}`}>
                       {r.status}
                     </span>
                   </td>
                   <td className="font-mono text-xs">{r.verificationCode}</td>
                   <td className="text-right space-x-1">
-                    <button className="btn btn-xs" onClick={() => reprint(r.id)} disabled={!canManage || saving}>Reprint</button>
-                    <button className="btn btn-xs btn-warning" onClick={() => revoke(r.id)} disabled={!canManage || saving}>Revoke</button>
-                    {canManage && <button className="btn btn-xs btn-error" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}
+                    <button className="btn-secondary px-2 py-1 text-xs" onClick={() => reprint(r.id)} disabled={!canManage || saving}>Reprint</button>
+                    <button className="btn-amber px-2 py-1 text-xs" onClick={() => revoke(r.id)} disabled={!canManage || saving}>Revoke</button>
+                    {canManage && <button className="btn-destructive px-2 py-1 text-xs" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}
                   </td>
                 </tr>
               ))}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-sm text-base-content/60">
+                  <td colSpan={5} className="py-8 text-center text-sm text-neutral-500">
                     No certificates yet.
                   </td>
                 </tr>

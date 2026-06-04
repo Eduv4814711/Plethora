@@ -124,12 +124,12 @@ export default function AcademyProfilePage() {
       </div>
 
       {!canEdit && (
-        <div className="rounded-lg border border-base-300 bg-base-200/50 px-3 py-2 text-sm">
+        <div className="rounded-lg border border-neutral-300 bg-neutral-100/50 px-3 py-2 text-sm">
           Read-only: only admins can update academy profile.
         </div>
       )}
 
-      {error && <div className="rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>}
+      {error && <div className="rounded-lg border border-error/30 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
       {saveMessage && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-300/80 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
           <span>{saveMessage}</span>

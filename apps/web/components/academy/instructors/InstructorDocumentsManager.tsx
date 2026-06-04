@@ -85,9 +85,9 @@ export function InstructorDocumentsManager({
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
         <div className="grid gap-3 md:grid-cols-5">
           <label className="md:col-span-2">
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">Document Type</span>
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">Document Type</span>
             <select
-              className="select select-bordered w-full rounded-xl"
+              className="input-modern w-full rounded-xl"
               value={documentType}
               onChange={(e) => setDocumentType(e.target.value)}
               disabled={!canEdit || uploading}
@@ -100,7 +100,7 @@ export function InstructorDocumentsManager({
             </select>
           </label>
           <label>
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">Issue Date</span>
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">Issue Date</span>
             <DateInput
               value={issueDate}
               onChange={setIssueDate}
@@ -111,7 +111,7 @@ export function InstructorDocumentsManager({
             />
           </label>
           <label>
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">Expiry Date</span>
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">Expiry Date</span>
             <DateInput
               value={expiryDate}
               onChange={setExpiryDate}
@@ -122,19 +122,19 @@ export function InstructorDocumentsManager({
             />
           </label>
           <label>
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">File</span>
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">File</span>
             <input
               type="file"
-              className="file-input file-input-bordered w-full rounded-xl"
+              className="block w-full rounded-security border-2 border-neutral-300 bg-white text-sm text-neutral-700 file:mr-3 file:rounded-security file:border-0 file:bg-security-navy file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-security-navy-800"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               disabled={!canEdit || uploading}
             />
           </label>
         </div>
         <label className="mt-3 block">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-base-content/60">Notes</span>
+          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">Notes</span>
           <textarea
-            className="textarea textarea-bordered w-full rounded-xl"
+            className="input-modern w-full rounded-xl"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             disabled={!canEdit || uploading}
@@ -144,7 +144,7 @@ export function InstructorDocumentsManager({
         <div className="mt-3">
           <button
             type="button"
-            className="btn btn-primary btn-sm rounded-xl"
+            className="btn-primary px-3 py-1.5 text-xs rounded-xl"
             disabled={!canEdit || uploading || !file}
             onClick={upload}
           >
@@ -154,9 +154,9 @@ export function InstructorDocumentsManager({
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200">
-        <table className="table table-sm">
+        <table className="min-w-full divide-y divide-neutral-200 text-sm">
           <thead>
-            <tr className="text-[11px] uppercase tracking-wide text-base-content/60">
+            <tr className="text-[11px] uppercase tracking-wide text-neutral-500">
               <th>File Name</th>
               <th>Type</th>
               <th>Upload Date</th>
@@ -169,7 +169,7 @@ export function InstructorDocumentsManager({
           <tbody>
             {documents.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-6 text-center text-sm text-base-content/60">
+                <td colSpan={7} className="py-6 text-center text-sm text-neutral-500">
                   No supporting documents uploaded yet.
                 </td>
               </tr>
@@ -196,15 +196,15 @@ export function InstructorDocumentsManager({
                         href={fileHref(doc.fileUrl)}
                         target="_blank"
                         rel="noreferrer"
-                        className="btn btn-ghost btn-xs rounded-lg"
+                        className="btn-ghost px-2 py-1 text-xs rounded-lg"
                       >
                         Preview
                       </a>
-                      <a href={fileHref(doc.fileUrl)} download className="btn btn-ghost btn-xs rounded-lg">
+                      <a href={fileHref(doc.fileUrl)} download className="btn-ghost px-2 py-1 text-xs rounded-lg">
                         Download
                       </a>
                       {canEdit && (
-                        <label className="btn btn-ghost btn-xs rounded-lg">
+                        <label className="btn-ghost px-2 py-1 text-xs rounded-lg">
                           Replace
                           <input
                             type="file"
@@ -221,14 +221,14 @@ export function InstructorDocumentsManager({
                       {canEdit && doc.verificationStatus !== "verified" && (
                         <button
                           type="button"
-                          className="btn btn-ghost btn-xs rounded-lg"
+                          className="btn-ghost px-2 py-1 text-xs rounded-lg"
                           onClick={() => onMarkVerified(doc.id)}
                         >
                           Mark Verified
                         </button>
                       )}
                       {canEdit && (
-                        <button type="button" className="btn btn-ghost btn-xs rounded-lg text-red-600" onClick={() => onDelete(doc.id)}>
+                        <button type="button" className="btn-ghost px-2 py-1 text-xs rounded-lg text-red-600" onClick={() => onDelete(doc.id)}>
                           Delete
                         </button>
                       )}

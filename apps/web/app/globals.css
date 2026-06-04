@@ -11,8 +11,8 @@
   --bg-nav: #F57C00;
   --bg-nav-hover: #EF6C00;
   --text-primary: #000000;
-  --text-secondary: #000000;
-  --text-muted: #000000;
+  --text-secondary: #374151;
+  --text-muted: #6b7280;
   --accent-primary: #FF9800;
   --accent-amber: #f59e0b;
   --accent-emerald: #FF9800;
@@ -49,10 +49,13 @@ html {
     @apply px-5 py-2.5 font-medium rounded-security border-2 border-neutral-300 bg-white text-black hover:bg-neutral-50 hover:border-neutral-400 active:scale-[0.98] transition-all duration-150 outline-none focus:ring-2 focus:ring-security-navy focus:ring-offset-2;
   }
   .btn-ghost {
-    @apply px-4 py-2 font-medium rounded-security text-black border border-transparent hover:border-neutral-300 hover:bg-neutral-50 transition-colors duration-150 outline-none;
+    @apply px-4 py-2 font-medium rounded-security text-black border border-transparent hover:border-neutral-300 hover:bg-neutral-50 transition-colors duration-150 outline-none focus:ring-2 focus:ring-security-navy focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-amber {
     @apply px-5 py-2.5 font-semibold rounded-security border-2 border-security-amber-500 bg-security-amber-500 text-white hover:bg-security-amber-600 active:scale-[0.98] transition-all duration-150 outline-none focus:ring-2 focus:ring-security-amber focus:ring-offset-2;
+  }
+  .btn-destructive {
+    @apply px-5 py-2.5 font-semibold rounded-security border-2 border-red-600 bg-red-600 text-white hover:bg-red-700 active:scale-[0.98] transition-all duration-150 outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
   }
 
   /* Inputs - clean, readable */
@@ -99,7 +102,7 @@ html {
     @apply badge bg-neutral-100 text-black border border-neutral-200;
   }
   .badge-success {
-    @apply badge bg-security-emerald-50 text-security-emerald-600 border border-security-emerald-200;
+    @apply badge bg-emerald-50 text-emerald-700 border border-emerald-200;
   }
   .badge-warning {
     @apply badge bg-security-amber-100 text-security-amber-700 border border-security-amber-200;
@@ -108,7 +111,7 @@ html {
     @apply badge bg-red-50 text-red-700 border border-red-200;
   }
   .badge-on-duty {
-    @apply badge bg-security-emerald-50 text-security-emerald-600 border border-security-emerald-200;
+    @apply badge bg-emerald-50 text-emerald-700 border border-emerald-200;
   }
   .badge-off-duty {
     @apply badge bg-neutral-100 text-black border border-neutral-200;
@@ -218,10 +221,4 @@ html {
   fill: #FFB74D;
 }
 
-/* Global: all text solid black (excludes text-white on buttons/nav) */
-.text-neutral-400, .text-neutral-500, .text-neutral-600, .text-neutral-700, .text-neutral-800, .text-neutral-900,
-.text-security-navy, .text-security-navy-500, .text-security-navy-600, .text-security-navy-700,
-.text-security-emerald-600, .text-security-amber-700,
-.text-gray-500, .text-gray-600, .text-gray-700 {
-  color: #000000 !important;
-}
+/* Keep semantic Tailwind text utilities available for helper text, badges, and status states. */

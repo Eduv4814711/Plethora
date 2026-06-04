@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
 import { DateInput } from "@/components/date-input";
+import { useConfirmDialog } from "@/components/ui";
 
 interface StudentOption {
   id: string;
@@ -29,6 +30,7 @@ interface Row {
 
 export default function AcademyAssessmentsPage() {
   const { token, user } = useAuth();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const canManage = user?.role === "admin";
   const [rows, setRows] = useState<Row[]>([]);
   const [students, setStudents] = useState<StudentOption[]>([]);
@@ -82,7 +84,12 @@ export default function AcademyAssessmentsPage() {
 
   const remove = async (id: string) => {
     if (!token || !canManage) return;
-    if (!confirm("Delete this assessment record?")) return;
+    const confirmed = await confirm({
+      title: "Delete assessment record?",
+      message: "This removes the learner assessment result from the register.",
+      confirmLabel: "Delete record",
+    });
+    if (!confirmed) return;
     setSaving(true);
     try {
       await academyApi.deleteAssessment(token, id);
@@ -96,24 +103,25 @@ export default function AcademyAssessmentsPage() {
 
   return (
     <div className="w-full min-w-0 space-y-6">
+      {confirmDialog}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-security-navy-900">Assessments</h1>
-        <p className="mt-1 text-sm text-base-content/70">Capture assessment outcomes, attempts, and result statuses.</p>
+        <p className="mt-1 text-sm text-neutral-600">Capture assessment outcomes, attempts, and result statuses.</p>
       </div>
 
       {!canManage && (
-        <div className="rounded-lg border border-base-300 bg-base-200/50 px-3 py-2 text-sm">
+        <div className="rounded-lg border border-neutral-300 bg-neutral-100/50 px-3 py-2 text-sm">
           Read-only: only admins can add or delete assessments.
         </div>
       )}
 
-      {error && <div className="rounded-lg border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">{error}</div>}
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
-      <div className="rounded-2xl border border-base-200 bg-base-100 p-5 shadow-sm">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-base-content/60">New assessment</h2>
+      <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">New assessment</h2>
         <form onSubmit={create} className="mt-3 grid gap-2 md:grid-cols-5">
           <select
-            className="select select-bordered rounded-xl"
+            className="input-modern rounded-xl"
             value={learnerId}
             onChange={(e) => setLearnerId(e.target.value)}
             disabled={!canManage || saving}
@@ -126,7 +134,7 @@ export default function AcademyAssessmentsPage() {
             ))}
           </select>
           <select
-            className="select select-bordered rounded-xl"
+            className="input-modern rounded-xl"
             value={courseId}
             onChange={(e) => setCourseId(e.target.value)}
             disabled={!canManage || saving}
@@ -139,7 +147,7 @@ export default function AcademyAssessmentsPage() {
             ))}
           </select>
           <input
-            className="input input-bordered rounded-xl"
+            className="input-modern rounded-xl"
             placeholder="Type"
             value={assessmentType}
             onChange={(e) => setAssessmentType(e.target.value)}
@@ -153,24 +161,24 @@ export default function AcademyAssessmentsPage() {
             disabled={!canManage || saving}
             ariaLabel="Assessment date"
           />
-          <button className="btn btn-primary rounded-xl" disabled={!canManage || saving}>Add</button>
+          <button className="btn-primary rounded-xl" disabled={!canManage || saving}>Add</button>
         </form>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-base-200 bg-base-100 shadow-sm">
-        <div className="border-b border-base-200/80 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">Assessment register</h2></div>
+      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+        <div className="border-b border-neutral-200/80 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">Assessment register</h2></div>
         <div className="overflow-x-auto">
-          <table className="table table-sm">
-            <thead><tr className="text-[11px] uppercase tracking-wide text-base-content/60"><th>Learner</th><th>Type</th><th>Date</th><th>Result</th><th className="text-right">Action</th></tr></thead>
+          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+            <thead><tr className="text-[11px] uppercase tracking-wide text-neutral-500"><th>Learner</th><th>Type</th><th>Date</th><th>Result</th><th className="text-right">Action</th></tr></thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-sm text-base-content/60">Loading assessments...</td>
+                  <td colSpan={5} className="py-8 text-center text-sm text-neutral-500">Loading assessments...</td>
                 </tr>
-              ) : rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{r.learner ? `${r.learner.firstName} ${r.learner.lastName}` : r.learnerId}</td><td>{r.assessmentType}</td><td>{String(r.assessmentDate).slice(0,10)}</td><td><span className={`badge badge-sm ${r.result === "pass" || r.result === "competent" ? "badge-success" : r.result ? "badge-warning" : "badge-ghost border border-base-300"}`}>{r.result ?? "pending"}</span></td><td className="text-right">{canManage && <button className="btn btn-xs btn-error" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}</td></tr>)}
+              ) : rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{r.learner ? `${r.learner.firstName} ${r.learner.lastName}` : r.learnerId}</td><td>{r.assessmentType}</td><td>{String(r.assessmentDate).slice(0,10)}</td><td><span className={`badge-neutral ${r.result === "pass" || r.result === "competent" ? "badge-success" : r.result ? "badge-warning" : "badge-neutral border border-neutral-300"}`}>{r.result ?? "pending"}</span></td><td className="text-right">{canManage && <button className="btn-destructive px-2 py-1 text-xs" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}</td></tr>)}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-sm text-base-content/60">No assessments yet.</td>
+                  <td colSpan={5} className="py-8 text-center text-sm text-neutral-500">No assessments yet.</td>
                 </tr>
               )}
             </tbody>

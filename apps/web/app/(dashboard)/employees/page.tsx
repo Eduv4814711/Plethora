@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { isFullAdmin } from "@/lib/permissions";
 import { DateInput } from "@/components/date-input";
+import { useConfirmDialog } from "@/components/ui";
 import { clsx } from "clsx";
 
 const SA_MAJOR_BANKS = [
@@ -106,6 +107,7 @@ export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [groups, setGroups] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showManageGroups, setShowManageGroups] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -143,14 +145,14 @@ export default function EmployeesPage() {
     return sections;
   }, [employees, groups]);
 
-  const fetchEmployees = () => {
+  const fetchEmployees = async () => {
     if (!token) return;
     const pageSize = 100;
     const baseParams = new URLSearchParams();
     if (statusFilter !== "all") baseParams.set("status", statusFilter);
     if (searchQuery.trim().length >= 2) baseParams.set("q", searchQuery.trim());
 
-    (async () => {
+    try {
       const all: Employee[] = [];
       let offset = 0;
       let total = Number.POSITIVE_INFINITY;
@@ -169,25 +171,36 @@ export default function EmployeesPage() {
       }
 
       setEmployees(all);
-    })().catch((err) => {
+    } catch (err) {
       console.error(err);
       setEmployees([]);
-    });
+      setFetchError("Unable to load team members. Check the connection and try again.");
+    }
   };
 
-  const fetchGroups = () => {
+  const fetchGroups = async () => {
     if (!token) return;
-    authFetch("/employee-groups", token)
-      .then((r) => r.json())
-      .then((d) => setGroups(d.data || []))
-      .catch(console.error);
+    try {
+      const response = await authFetch("/employee-groups", token);
+      const data = await response.json();
+      setGroups(data.data || []);
+    } catch (err) {
+      console.error(err);
+      setFetchError("Unable to load team groups. Check the connection and try again.");
+    }
   };
 
   useEffect(() => {
     if (!token) return;
-    fetchEmployees();
-    fetchGroups();
-    setLoading(false);
+    let cancelled = false;
+    setLoading(true);
+    setFetchError(null);
+    Promise.all([fetchEmployees(), fetchGroups()]).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [token, statusFilter, searchQuery]);
 
   if (loading) {
@@ -239,6 +252,12 @@ export default function EmployeesPage() {
           </button>
         </div>
       </div>
+
+      {fetchError && (
+        <div className="mb-4 rounded-security border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+          {fetchError}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-4 mb-8 p-4 sm:p-5 rounded-security-lg bg-gradient-to-br from-white via-neutral-50/80 to-security-navy-50/30 border-2 border-neutral-200 shadow-security-card">
         <span className="text-xs font-bold uppercase tracking-widest text-neutral-600 shrink-0">
@@ -655,6 +674,7 @@ function ManageGroupsSection({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
+  const { confirm, confirmDialog } = useConfirmDialog();
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -687,7 +707,12 @@ function ManageGroupsSection({
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this group? Team members in this group will be unassigned.")) return;
+    const confirmed = await confirm({
+      title: "Delete group?",
+      message: "Team members in this group will be unassigned.",
+      confirmLabel: "Delete group",
+    });
+    if (!confirmed) return;
     try {
       const res = await authFetch(`/employee-groups/${id}`, token, { method: "DELETE" });
       if (res.ok) onRefresh();
@@ -700,6 +725,7 @@ function ManageGroupsSection({
 
   return (
     <div className="card-wireframe mb-6 p-4">
+      {confirmDialog}
       <h3 className="text-sm font-medium text-neutral-700 mb-4">Manage Groups</h3>
       <form onSubmit={handleAdd} className="flex flex-wrap gap-2 mb-4">
         <input
@@ -1170,6 +1196,7 @@ function EditModal({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [employeeType, setEmployeeType] = useState<"office" | "security">("security");
   const [employeeNumber, setEmployeeNumber] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -1358,6 +1385,7 @@ function EditModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      {confirmDialog}
       <div className="card-elevated w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         <div className="p-6 border-b-2 border-neutral-200 shrink-0 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-neutral-900">Edit Team Member</h3>
@@ -1633,8 +1661,12 @@ function EditModal({
                 <button
                   type="button"
                   onClick={async () => {
-                    if (!confirm(`Permanently delete ${firstName} ${lastName} from the system? This cannot be undone.`))
-                      return;
+                    const confirmed = await confirm({
+                      title: "Delete team member permanently?",
+                      message: `This permanently deletes ${firstName} ${lastName} from the system.`,
+                      confirmLabel: "Delete team member",
+                    });
+                    if (!confirmed) return;
                     setError("");
                     setDeleting(true);
                     try {

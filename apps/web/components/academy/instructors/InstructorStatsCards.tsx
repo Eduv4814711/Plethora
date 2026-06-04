@@ -80,7 +80,7 @@ export function InstructorStatsCards({
             onClick={() => onFilterSelect(card.filter)}
             className={`rounded-lg border px-3 py-2 text-left transition hover:shadow-sm ${card.tone}`}
           >
-            <div className="truncate text-[10px] font-semibold uppercase tracking-wide text-base-content/55">{card.label}</div>
+            <div className="truncate text-[10px] font-semibold uppercase tracking-wide text-black/55">{card.label}</div>
             <div className="mt-1 text-lg font-semibold text-security-navy-900">{card.value}</div>
           </button>
         ))}
