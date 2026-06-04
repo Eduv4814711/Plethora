@@ -175,6 +175,8 @@ export default function RosteringPage() {
   const thisMonthEnd = endOfMonth(now);
   const [periodStart, setPeriodStart] = useState(() => format(thisMonthStart, "yyyy-MM-dd"));
   const [periodEnd, setPeriodEnd] = useState(() => format(thisMonthEnd, "yyyy-MM-dd"));
+  const [draftPeriodStart, setDraftPeriodStart] = useState(() => format(thisMonthStart, "yyyy-MM-dd"));
+  const [draftPeriodEnd, setDraftPeriodEnd] = useState(() => format(thisMonthEnd, "yyyy-MM-dd"));
   const [showPeriodModal, setShowPeriodModal] = useState(false);
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
   const [pattern, setPattern] = useState<BulkPattern>("3_on_3_off");
@@ -436,6 +438,12 @@ export default function RosteringPage() {
   };
 
   const getMonthRangeForReset = () => getDateRangeParams();
+
+  const openPeriodModal = () => {
+    setDraftPeriodStart(periodStart);
+    setDraftPeriodEnd(periodEnd);
+    setShowPeriodModal(true);
+  };
 
   const calendarDays = useMemo(() => {
     const start = startOfDay(parseISO(periodStart));
@@ -798,7 +806,7 @@ export default function RosteringPage() {
             <p className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">{periodLabel || "—"}</p>
             <button
               type="button"
-              onClick={() => setShowPeriodModal(true)}
+              onClick={openPeriodModal}
               className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 underline"
             >
               Change period
@@ -1174,7 +1182,7 @@ export default function RosteringPage() {
             <div className="flex flex-wrap items-center gap-2.5 xl:flex-nowrap xl:justify-end">
               <button
                 type="button"
-                onClick={() => setShowPeriodModal(true)}
+                onClick={openPeriodModal}
                 className="h-11 px-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm font-semibold text-neutral-800 dark:text-neutral-200 hover:border-neutral-300 dark:hover:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors flex items-center gap-2 xl:hidden"
                 title="Choose time period to roster"
               >
@@ -1368,7 +1376,7 @@ export default function RosteringPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setShowPeriodModal(true)}
+                onClick={openPeriodModal}
                 className="hidden h-11 w-[230px] px-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-sm font-semibold text-neutral-800 dark:text-neutral-200 hover:border-neutral-300 dark:hover:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors xl:flex items-center gap-2"
                 title="Choose time period to roster"
               >
@@ -1396,8 +1404,8 @@ export default function RosteringPage() {
                       Start date
                     </label>
                     <DateInput
-                      value={periodStart}
-                      onChange={setPeriodStart}
+                      value={draftPeriodStart}
+                      onChange={setDraftPeriodStart}
                       className="input-modern w-full"
                       showToday
                     />
@@ -1407,8 +1415,8 @@ export default function RosteringPage() {
                       End date
                     </label>
                     <DateInput
-                      value={periodEnd}
-                      onChange={setPeriodEnd}
+                      value={draftPeriodEnd}
+                      onChange={setDraftPeriodEnd}
                       className="input-modern w-full"
                       showToday
                     />
@@ -1417,14 +1425,24 @@ export default function RosteringPage() {
                 <div className="flex gap-2 mb-4">
                   <button
                     type="button"
-                    onClick={() => setPeriodToMonth(new Date())}
+                    onClick={() => {
+                      const start = startOfMonth(new Date());
+                      const end = endOfMonth(new Date());
+                      setDraftPeriodStart(format(start, "yyyy-MM-dd"));
+                      setDraftPeriodEnd(format(end, "yyyy-MM-dd"));
+                    }}
                     className="flex-1 py-2 text-sm font-medium rounded-md border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
                   >
                     This month
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPeriodToMonth(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1))}
+                    onClick={() => {
+                      const start = startOfMonth(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1));
+                      const end = endOfMonth(start);
+                      setDraftPeriodStart(format(start, "yyyy-MM-dd"));
+                      setDraftPeriodEnd(format(end, "yyyy-MM-dd"));
+                    }}
                     className="flex-1 py-2 text-sm font-medium rounded-md border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
                   >
                     Next month
@@ -1441,9 +1459,13 @@ export default function RosteringPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (parseISO(periodEnd) >= parseISO(periodStart)) setShowPeriodModal(false);
+                      if (parseISO(draftPeriodEnd) >= parseISO(draftPeriodStart)) {
+                        setPeriodStart(draftPeriodStart);
+                        setPeriodEnd(draftPeriodEnd);
+                        setShowPeriodModal(false);
+                      }
                     }}
-                    disabled={!periodStart || !periodEnd || parseISO(periodEnd) < parseISO(periodStart)}
+                    disabled={!draftPeriodStart || !draftPeriodEnd || parseISO(draftPeriodEnd) < parseISO(draftPeriodStart)}
                     className="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Apply
