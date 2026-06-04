@@ -8,6 +8,9 @@ import { DateInput } from "@/components/date-input";
 interface Session {
   id: string;
   sessionDate: string;
+  recordsCount?: number;
+  recordStatusCounts?: Record<string, number>;
+  _count?: { records?: number };
   records?: Array<{ attendanceStatus: string }>;
 }
 
@@ -93,10 +96,23 @@ export default function AcademyAttendancePage() {
     }
   };
 
+  const getRecordCount = (session: Session) =>
+    session.recordsCount ?? session._count?.records ?? session.records?.length ?? 0;
+
   const kpi = useMemo(() => {
-    const records = rows.flatMap((r) => r.records ?? []);
-    const presentLike = records.filter((r) => r.attendanceStatus === "present" || r.attendanceStatus === "late").length;
-    return records.length ? (presentLike / records.length) * 100 : 0;
+    let totalRecords = 0;
+    let presentLike = 0;
+    for (const row of rows) {
+      if (row.recordStatusCounts) {
+        totalRecords += getRecordCount(row);
+        presentLike += (row.recordStatusCounts.present ?? 0) + (row.recordStatusCounts.late ?? 0);
+      } else {
+        const records = row.records ?? [];
+        totalRecords += records.length;
+        presentLike += records.filter((r) => r.attendanceStatus === "present" || r.attendanceStatus === "late").length;
+      }
+    }
+    return totalRecords ? (presentLike / totalRecords) * 100 : 0;
   }, [rows]);
 
   return (
@@ -150,7 +166,7 @@ export default function AcademyAttendancePage() {
               <option value="">Select session</option>
               {rows.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {String(s.sessionDate).slice(0, 10)} ({s.records?.length ?? 0} records)
+                  {String(s.sessionDate).slice(0, 10)} ({getRecordCount(s)} records)
                 </option>
               ))}
             </select>
@@ -185,7 +201,7 @@ export default function AcademyAttendancePage() {
                 <tr>
                   <td colSpan={3} className="py-8 text-center text-sm text-base-content/60">Loading sessions...</td>
                 </tr>
-              ) : rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{String(r.sessionDate).slice(0,10)}</td><td>{r.records?.length ?? 0}</td><td className="text-right">{canManage && <button className="btn btn-xs btn-error" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}</td></tr>)}
+              ) : rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{String(r.sessionDate).slice(0,10)}</td><td>{getRecordCount(r)}</td><td className="text-right">{canManage && <button className="btn btn-xs btn-error" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}</td></tr>)}
               {!loading && rows.length === 0 && (
                 <tr>
                   <td colSpan={3} className="py-8 text-center text-sm text-base-content/60">No sessions yet.</td>

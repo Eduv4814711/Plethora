@@ -1013,6 +1013,7 @@ model Student {
 
   @@unique([companyId, studentNumber])
   @@index([companyId])
+  @@index([companyId, createdAt])
   @@index([employeeId])
   @@index([status])
 }
@@ -1094,6 +1095,7 @@ model CourseRun {
 
   @@unique([companyId, runCode])
   @@index([companyId])
+  @@index([companyId, createdAt])
   @@index([courseId])
   @@index([academyBranchId])
   @@index([instructorEmployeeId])
@@ -1140,6 +1142,7 @@ model Enrolment {
 
   @@unique([studentId, courseRunId])
   @@index([companyId])
+  @@index([companyId, enrolmentDate])
   @@index([courseRunId])
   @@index([studentId])
 }
@@ -1214,6 +1217,7 @@ model AcademyPayment {
   @@index([invoiceId])
   @@index([studentId])
   @@index([verificationStatus])
+  @@index([companyId, verificationStatus, invoiceId])
 }
 
 model AcademyReceipt {
@@ -1444,6 +1448,8 @@ model AcademyAttendanceSession {
   records      AcademyAttendanceRecord[]
 
   @@index([companyId])
+  @@index([companyId, sessionDate])
+  @@index([courseRunId])
   @@index([sessionDate])
 }
 
@@ -1467,6 +1473,8 @@ model AcademyAttendanceRecord {
 
   @@unique([sessionId, enrolmentId])
   @@index([companyId])
+  @@index([companyId, attendanceStatus])
+  @@index([sessionId])
   @@index([attendanceStatus])
 }
 

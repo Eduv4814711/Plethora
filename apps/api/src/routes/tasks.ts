@@ -73,7 +73,49 @@ async function resolveAssigneeDisplayName(
   return null;
 }
 
-const taskInclude = {
+async function resolveAssigneeDisplayNames(
+  tasks: { assigneeType: string | null; assigneeId: string | null }[],
+  companyId: string
+): Promise<Map<string, string>> {
+  const userIds = new Set<string>();
+  const employeeIds = new Set<string>();
+
+  for (const task of tasks) {
+    if (!task.assigneeId) continue;
+    if (task.assigneeType === "user") userIds.add(task.assigneeId);
+    if (task.assigneeType === "employee") employeeIds.add(task.assigneeId);
+  }
+
+  const [users, employees] = await Promise.all([
+    userIds.size
+      ? prisma.user.findMany({
+          where: { companyId, id: { in: [...userIds] } },
+          select: { id: true, name: true },
+        })
+      : [],
+    employeeIds.size
+      ? prisma.employee.findMany({
+          where: { companyId, id: { in: [...employeeIds] } },
+          select: { id: true, firstName: true, lastName: true },
+        })
+      : [],
+  ]);
+
+  const names = new Map<string, string>();
+  for (const user of users) names.set(`user:${user.id}`, user.name);
+  for (const employee of employees) {
+    names.set(`employee:${employee.id}`, `${employee.firstName} ${employee.lastName}`);
+  }
+  return names;
+}
+
+const taskListInclude = {
+  project: { select: { id: true, name: true, color: true } },
+  createdBy: { select: { id: true, name: true, email: true } },
+  _count: { select: { comments: true, attachments: true, reminders: true } },
+} as const;
+
+const taskDetailInclude = {
   project: { select: { id: true, name: true, color: true } },
   createdBy: { select: { id: true, name: true, email: true } },
   comments: {
@@ -139,7 +181,7 @@ export async function tasksRoutes(app: FastifyInstance) {
     const [tasks, total] = await Promise.all([
       prisma.task.findMany({
         where,
-        include: taskInclude,
+        include: taskListInclude,
         take: limit,
         skip: offset,
         orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
@@ -147,12 +189,14 @@ export async function tasksRoutes(app: FastifyInstance) {
       prisma.task.count({ where }),
     ]);
 
-    const tasksWithAssignee = await Promise.all(
-      tasks.map(async (t) => ({
-        ...t,
-        assigneeDisplayName: await resolveAssigneeDisplayName(t.assigneeType, t.assigneeId, user.companyId),
-      }))
-    );
+    const assigneeNames = await resolveAssigneeDisplayNames(tasks, user.companyId);
+    const tasksWithAssignee = tasks.map((t) => ({
+      ...t,
+      assigneeDisplayName:
+        t.assigneeType && t.assigneeId
+          ? assigneeNames.get(`${t.assigneeType}:${t.assigneeId}`) ?? null
+          : null,
+    }));
 
     return reply.send({ data: tasksWithAssignee, total, limit, offset });
   });
@@ -220,7 +264,7 @@ export async function tasksRoutes(app: FastifyInstance) {
         assigneeId: d.assigneeId ?? undefined,
         recurrenceRule: d.recurrenceRule as object | undefined,
       },
-      include: taskInclude,
+      include: taskDetailInclude,
     });
 
     const assigneeDisplayName = await resolveAssigneeDisplayName(
@@ -247,7 +291,7 @@ export async function tasksRoutes(app: FastifyInstance) {
 
     const task = await prisma.task.findFirst({
       where: { id, companyId: user.companyId },
-      include: taskInclude,
+      include: taskDetailInclude,
     });
 
     if (!task) {
@@ -342,7 +386,7 @@ export async function tasksRoutes(app: FastifyInstance) {
 
     const task = await prisma.task.findFirst({
       where: { id, companyId: user.companyId },
-      include: taskInclude,
+      include: taskDetailInclude,
     });
     if (!task) {
       return reply.code(404).send({ error: "Not found", message: "Task not found" });
@@ -422,7 +466,7 @@ export async function tasksRoutes(app: FastifyInstance) {
 
     const task = await prisma.task.findFirst({
       where: { id, companyId: user.companyId },
-      include: taskInclude,
+      include: taskDetailInclude,
     });
     if (!task) {
       return reply.code(404).send({ error: "Not found", message: "Task not found" });
@@ -505,7 +549,7 @@ export async function tasksRoutes(app: FastifyInstance) {
 
     const task = await prisma.task.findFirst({
       where: { id, companyId: user.companyId },
-      include: taskInclude,
+      include: taskDetailInclude,
     });
     if (!task) {
       return reply.code(404).send({ error: "Not found", message: "Task not found" });

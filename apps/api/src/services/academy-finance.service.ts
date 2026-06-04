@@ -7,6 +7,10 @@ export function startOfUtcDay(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
+function toDecimal(value: Prisma.Decimal | string | number | null | undefined): Prisma.Decimal {
+  return new Prisma.Decimal(value ?? 0);
+}
+
 /**
  * Billed, collected, and outstanding (remaining on active invoices) for dashboard + hub.
  * Mirrors the logic in finance dashboard so figures stay consistent.
@@ -20,59 +24,53 @@ export async function getAcademyReceivablesSummary(companyId: string): Promise<{
 }> {
   const today = startOfUtcDay(new Date());
 
-  const activeInvoices = await prisma.academyInvoice.findMany({
-    where: {
-      companyId,
-      status: { notIn: ["draft", "cancelled"] },
-    },
-    select: {
-      id: true,
-      totalAmount: true,
-      dueDate: true,
-    },
-  });
-
-  const invoiceIds = activeInvoices.map((i) => i.id);
-  const verifiedByInvoice = invoiceIds.length
-    ? await prisma.academyPayment.groupBy({
-        by: ["invoiceId"],
-        where: {
-          companyId,
-          invoiceId: { in: invoiceIds },
-          verificationStatus: "verified",
-        },
-        _sum: { amount: true },
-      })
-    : [];
-
-  const paidMap = new Map<string, Prisma.Decimal>();
-  for (const row of verifiedByInvoice) {
-    paidMap.set(row.invoiceId, row._sum.amount ?? new Prisma.Decimal(0));
-  }
-
-  let totalBilled = new Prisma.Decimal(0);
-  let totalCollected = new Prisma.Decimal(0);
-  let outstanding = new Prisma.Decimal(0);
-  let overdueCount = 0;
-
-  for (const inv of activeInvoices) {
-    totalBilled = totalBilled.add(inv.totalAmount);
-    const paid = paidMap.get(inv.id) ?? new Prisma.Decimal(0);
-    totalCollected = totalCollected.add(paid);
-    const remaining = inv.totalAmount.sub(paid);
-    if (remaining.gt(0)) {
-      outstanding = outstanding.add(remaining);
-      const due = startOfUtcDay(new Date(inv.dueDate));
-      if (due < today) overdueCount += 1;
-    }
-  }
+  const [summary] = await prisma.$queryRaw<
+    {
+      totalBilled: Prisma.Decimal | string | null;
+      totalCollected: Prisma.Decimal | string | null;
+      outstanding: Prisma.Decimal | string | null;
+      overdueInvoiceCount: bigint;
+      activeInvoiceCount: bigint;
+    }[]
+  >(Prisma.sql`
+    WITH active_invoices AS (
+      SELECT id, "totalAmount", "dueDate"
+      FROM "AcademyInvoice"
+      WHERE "companyId" = ${companyId}
+        AND "status" NOT IN ('draft', 'cancelled')
+    ),
+    verified_payments AS (
+      SELECT "invoiceId", COALESCE(SUM(amount), 0) AS paid
+      FROM "AcademyPayment"
+      WHERE "companyId" = ${companyId}
+        AND "verificationStatus" = 'verified'
+      GROUP BY "invoiceId"
+    ),
+    invoice_balances AS (
+      SELECT
+        ai.id,
+        ai."totalAmount",
+        ai."dueDate",
+        COALESCE(vp.paid, 0) AS paid,
+        ai."totalAmount" - COALESCE(vp.paid, 0) AS remaining
+      FROM active_invoices ai
+      LEFT JOIN verified_payments vp ON vp."invoiceId" = ai.id
+    )
+    SELECT
+      COALESCE(SUM("totalAmount"), 0) AS "totalBilled",
+      COALESCE(SUM(paid), 0) AS "totalCollected",
+      COALESCE(SUM(CASE WHEN remaining > 0 THEN remaining ELSE 0 END), 0) AS "outstanding",
+      COUNT(*) FILTER (WHERE remaining > 0 AND "dueDate" < ${today}::date)::bigint AS "overdueInvoiceCount",
+      COUNT(*)::bigint AS "activeInvoiceCount"
+    FROM invoice_balances
+  `);
 
   return {
-    totalBilled,
-    totalCollected,
-    outstanding,
-    overdueInvoiceCount: overdueCount,
-    activeInvoiceCount: activeInvoices.length,
+    totalBilled: toDecimal(summary?.totalBilled),
+    totalCollected: toDecimal(summary?.totalCollected),
+    outstanding: toDecimal(summary?.outstanding),
+    overdueInvoiceCount: Number(summary?.overdueInvoiceCount ?? 0),
+    activeInvoiceCount: Number(summary?.activeInvoiceCount ?? 0),
   };
 }
 

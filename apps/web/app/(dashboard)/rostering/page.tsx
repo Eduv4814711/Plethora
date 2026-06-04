@@ -115,6 +115,43 @@ interface Site {
   rosterNightShiftGuardsRequired?: number;
 }
 
+const SHIFT_PAGE_SIZE = 1000;
+
+async function fetchAllShifts(
+  token: string,
+  params: { startDate: string; endDate: string; employeeId?: string; siteId?: string }
+): Promise<Shift[]> {
+  const all: Shift[] = [];
+  let offset = 0;
+  let total = Number.POSITIVE_INFINITY;
+
+  while (all.length < total) {
+    const q = new URLSearchParams({
+      startDate: params.startDate,
+      endDate: params.endDate,
+      limit: String(SHIFT_PAGE_SIZE),
+      offset: String(offset),
+    });
+    if (params.employeeId) q.set("employeeId", params.employeeId);
+    if (params.siteId) q.set("siteId", params.siteId);
+
+    const res = await authFetch(`/shifts?${q.toString()}`, token);
+    const data = await parseApiJsonResponse(res);
+    if (!res.ok) {
+      throw new Error(String(data.message || data.error || "Failed to load shifts"));
+    }
+
+    const page = Array.isArray(data.data) ? (data.data as Shift[]) : [];
+    all.push(...page);
+    total = Number(data.total ?? all.length);
+    const limit = Number(data.limit ?? SHIFT_PAGE_SIZE);
+    if (page.length === 0 || all.length >= total) break;
+    offset += limit;
+  }
+
+  return all;
+}
+
 const statusColors: Record<string, string> = {
   created: "border-2 border-neutral-200 bg-wireframe-accent text-black",
   assigned: "border-2 border-neutral-200 bg-neutral-100 text-black",
@@ -279,16 +316,13 @@ export default function RosteringPage() {
     let pdfEmployees: Employee[] = employees;
 
     if (pdfEmployeeId) {
-      const shiftsRes = await authFetch(`/shifts?startDate=${startDate}&endDate=${endDate}&limit=5000`, token);
-      const shiftsData = await shiftsRes.json();
-      periodShifts = shiftsData.data || [];
+      periodShifts = await fetchAllShifts(token, { startDate, endDate, employeeId: pdfEmployeeId });
     } else {
-      const [shiftsRes, empRes] = await Promise.all([
-        authFetch(`/shifts?startDate=${startDate}&endDate=${endDate}&limit=5000`, token),
+      const [pagedShifts, empRes] = await Promise.all([
+        fetchAllShifts(token, { startDate, endDate, siteId: selectedSiteId }),
         authFetch("/employees?limit=100", token),
       ]);
-      const shiftsData = await shiftsRes.json();
-      periodShifts = shiftsData.data || [];
+      periodShifts = pagedShifts;
       if (empRes.ok) {
         const empData = await empRes.json();
         pdfEmployees = empData.data || [];
@@ -662,12 +696,12 @@ export default function RosteringPage() {
     if (!token) return Promise.resolve();
     const { startDate, endDate } = getDateRangeParams();
     return Promise.all([
-      authFetch(`/shifts?startDate=${startDate}&endDate=${endDate}&limit=5000`, token).then((r) => r.json()),
+      fetchAllShifts(token, { startDate, endDate }),
       authFetch("/employees?limit=100", token).then((r) => r.json()),
       authFetch("/sites?limit=100", token).then((r) => r.json()),
     ])
       .then(([shiftsRes, empRes, sitesRes]) => {
-        setShifts(shiftsRes.data || []);
+        setShifts(shiftsRes);
         setEmployees(empRes.data || []);
         setSites(sitesRes.data || []);
       })
@@ -676,12 +710,8 @@ export default function RosteringPage() {
 
   useEffect(() => {
     if (!token) return;
-    refresh();
-    setLoading(false);
-  }, [token]);
-
-  useEffect(() => {
-    if (token) refresh();
+    setLoading(true);
+    refresh().finally(() => setLoading(false));
   }, [token, periodStart, periodEnd]);
 
   if (loading) {

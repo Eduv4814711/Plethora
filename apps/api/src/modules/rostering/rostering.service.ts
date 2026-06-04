@@ -32,6 +32,8 @@ import type {
 import { rosterPlanSchema } from "./rostering.schemas.js";
 import type { z } from "zod";
 
+const MAX_SHIFT_LIST_LIMIT = 1000;
+
 export type RosteringServiceError = {
   status: number;
   body: Record<string, unknown>;
@@ -88,7 +90,7 @@ function buildShiftListWhere(
 
 export const rosteringModuleService = {
   async listShifts(companyId: string, query: Record<string, string | undefined>) {
-    const limit = Math.min(Number(query.limit) || 50, 5000);
+    const limit = Math.min(Number(query.limit) || 50, MAX_SHIFT_LIST_LIMIT);
     const offset = Number(query.offset) || 0;
     const where = buildShiftListWhere(companyId, query);
     const [shifts, total] = await Promise.all([

@@ -90,10 +90,44 @@ export async function academyAttendanceRoutes(app: FastifyInstance) {
     const offset = Number(q.offset) || 0;
     const where = { companyId, ...(q.courseRunId ? { courseRunId: q.courseRunId } : {}) };
     const [sessions, total] = await Promise.all([
-      prisma.academyAttendanceSession.findMany({ where, include: { classroom: true, instructor: true, courseRun: true, records: true }, orderBy: { sessionDate: "desc" }, take: limit, skip: offset }),
+      prisma.academyAttendanceSession.findMany({
+        where,
+        include: {
+          classroom: true,
+          instructor: true,
+          courseRun: true,
+          _count: { select: { records: true } },
+        },
+        orderBy: { sessionDate: "desc" },
+        take: limit,
+        skip: offset,
+      }),
       prisma.academyAttendanceSession.count({ where }),
     ]);
-    return { sessions, total, limit, offset };
+    const sessionIds = sessions.map((session) => session.id);
+    const recordStatusRows = sessionIds.length
+      ? await prisma.academyAttendanceRecord.groupBy({
+          by: ["sessionId", "attendanceStatus"],
+          where: { companyId, sessionId: { in: sessionIds } },
+          _count: { id: true },
+        })
+      : [];
+    const statusCountsBySession = new Map<string, Record<string, number>>();
+    for (const row of recordStatusRows) {
+      const counts = statusCountsBySession.get(row.sessionId) ?? {};
+      counts[row.attendanceStatus] = row._count.id;
+      statusCountsBySession.set(row.sessionId, counts);
+    }
+    return {
+      sessions: sessions.map((session) => ({
+        ...session,
+        recordsCount: session._count.records,
+        recordStatusCounts: statusCountsBySession.get(session.id) ?? {},
+      })),
+      total,
+      limit,
+      offset,
+    };
   });
 
   app.get("/sessions/:id", { preHandler: academyProtect }, async (request, reply) => {

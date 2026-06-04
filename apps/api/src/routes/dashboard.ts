@@ -34,6 +34,46 @@ function parseDateRange(q: Record<string, string | undefined>): { start: Date; e
   };
 }
 
+async function getGuardsOnDutyByDay(
+  companyId: string,
+  siteIds: string[] | undefined,
+  weekStart: Date,
+  dayNames: string[]
+): Promise<{ name: string; value: number }[]> {
+  const rows = siteIds?.length
+    ? await prisma.$queryRaw<{ dayIndex: number; count: bigint }[]>(Prisma.sql`
+        SELECT d.day_index::int AS "dayIndex", count(s.id)::bigint AS count
+        FROM generate_series(0, 6) AS d(day_index)
+        LEFT JOIN "Shift" s
+          ON s."companyId" = ${companyId}
+          AND s."status" IN ('assigned', 'active', 'completed', 'verified')
+          AND s."startTime" <= (${weekStart}::timestamp + ((d.day_index + 1) * interval '1 day') - interval '1 millisecond')
+          AND s."endTime" >= (${weekStart}::timestamp + (d.day_index * interval '1 day'))
+          AND EXISTS (
+            SELECT 1
+            FROM "Post" p
+            WHERE p.id = s."postId"
+              AND p."siteId" IN (${Prisma.join(siteIds)})
+          )
+        GROUP BY d.day_index
+        ORDER BY d.day_index ASC
+      `)
+    : await prisma.$queryRaw<{ dayIndex: number; count: bigint }[]>(Prisma.sql`
+        SELECT d.day_index::int AS "dayIndex", count(s.id)::bigint AS count
+        FROM generate_series(0, 6) AS d(day_index)
+        LEFT JOIN "Shift" s
+          ON s."companyId" = ${companyId}
+          AND s."status" IN ('assigned', 'active', 'completed', 'verified')
+          AND s."startTime" <= (${weekStart}::timestamp + ((d.day_index + 1) * interval '1 day') - interval '1 millisecond')
+          AND s."endTime" >= (${weekStart}::timestamp + (d.day_index * interval '1 day'))
+        GROUP BY d.day_index
+        ORDER BY d.day_index ASC
+      `);
+
+  const counts = new Map(rows.map((row) => [Number(row.dayIndex), Number(row.count)]));
+  return dayNames.map((name, index) => ({ name, value: counts.get(index) ?? 0 }));
+}
+
 export async function dashboardRoutes(app: FastifyInstance) {
   app.get("/", {
     preHandler: [
@@ -63,23 +103,6 @@ export async function dashboardRoutes(app: FastifyInstance) {
     startOfWeek.setHours(0, 0, 0, 0);
 
     const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const guardsOnDutyByDay = await Promise.all(
-      dayNames.map(async (_, i) => {
-        const dayStart = new Date(startOfWeek);
-        dayStart.setDate(startOfWeek.getDate() + i);
-        const dayEnd = new Date(dayStart);
-        dayEnd.setHours(23, 59, 59, 999);
-        const count = await prisma.shift.count({
-          where: {
-            ...shiftWhereBase,
-            status: { in: ["assigned", "active", "completed", "verified"] },
-            startTime: { lte: dayEnd },
-            endTime: { gte: dayStart },
-          },
-        });
-        return { name: dayNames[i], value: count };
-      })
-    );
 
     const months = 4;
     const reportStart = startOfMonth(subMonths(now, months - 1));
@@ -88,8 +111,9 @@ export async function dashboardRoutes(app: FastifyInstance) {
       ? { companyId, id: { in: siteIds } }
       : { companyId };
 
-    const [guardsOnDuty, activeSitesCount, activeSitesLastMonth, payrollStatus, missedShifts, pendingApprovals, employeesByStatus, shiftsByStatus] =
+    const [guardsOnDutyByDay, guardsOnDuty, activeSitesCount, activeSitesLastMonth, payrollStatus, missedShifts, pendingApprovals, employeesByStatus, shiftsByStatus] =
       await Promise.all([
+        getGuardsOnDutyByDay(companyId, siteIds, startOfWeek, dayNames),
         prisma.shift.count({
           where: {
             ...shiftWhereBase,
