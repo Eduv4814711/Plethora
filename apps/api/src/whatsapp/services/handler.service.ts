@@ -776,27 +776,7 @@ async function deliverProcessResult(from: string, result: ProcessResult): Promis
 }
 
 export async function processAndSend(from: string, text: string): Promise<void> {
-  const employee = await findEmployeeByPhone(from);
   const result = await processIncomingMessage(from, text);
-  // #region agent log
-  fetch("http://127.0.0.1:7660/ingest/9bfc1ce4-07b7-42be-b006-8b46257a3ce2", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "5e86f2" },
-    body: JSON.stringify({
-      sessionId: "5e86f2",
-      runId: "pre-fix",
-      hypothesisId: "D",
-      location: "handler.service.ts:processAndSend",
-      message: "Message processed — employee lookup result",
-      data: {
-        employeeFound: !!employee,
-        resultType: "sendInteractiveList" in result ? "interactive" : "reply",
-        fromSuffix: from.slice(-4),
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
   await deliverProcessResult(from, result);
 }
 
