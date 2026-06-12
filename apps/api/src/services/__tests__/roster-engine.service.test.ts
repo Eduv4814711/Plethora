@@ -699,6 +699,30 @@ describe("generateRosterPlan", () => {
     expect(plan.summary.skippedGuardDays).toBeGreaterThan(0);
     expect(plan.summary.demandSlotsTotal).toBeGreaterThan(0);
   });
+
+  it("gap-fills day slots with off-pattern guards when only one guard is on day phase", async () => {
+    const weekEnd = new Date("2026-05-07T23:59:59.999Z");
+    vi.mocked(prisma.site.findFirst).mockResolvedValue(
+      mockSite({
+        rosterDayShiftGuardsRequired: 2,
+        rosterNightShiftGuardsRequired: 1,
+        assignedGuards: makeGuards(2),
+      }) as never
+    );
+
+    const plan = await generateRosterPlan({
+      companyId,
+      siteId,
+      startDate,
+      endDate: weekEnd,
+      pattern: "3_on_3_off",
+    });
+
+    expect(plan.summary.shiftsPlanned).toBeGreaterThan(0);
+    expect(plan.warnings.some((w) => w.code === "PATTERN_BREAK_FILL")).toBe(true);
+    expect(plan.summary.patternBreaks).toBeGreaterThan(0);
+    expect(plan.summary.coveragePercent).toBeGreaterThan(50);
+  });
 });
 
 describe("resolvePostForShiftSlot", () => {

@@ -18,8 +18,8 @@ import {
   isGuardEligibleForSlot,
   patternBlocks,
   pickBestGuardForDemandSlot,
-  recordOffDayInStats,
   recordShiftInStats,
+  seedOffDaysFromPattern,
   validateDailyCoverage,
   type FairnessSpread,
   type GuardCandidate,
@@ -468,21 +468,38 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
   let skippedGuardDays = 0;
   let uncoveredSlots = 0;
 
+  seedOffDaysFromPattern(guardIds, calendarDays, preferenceGrid, statsByGuard);
+
   const sortedDemandSlots = [...demandSlots].sort(
-    (a, b) => b.difficultyScore - a.difficultyScore || a.dateKey.localeCompare(b.dateKey)
+    (a, b) =>
+      b.difficultyScore - a.difficultyScore ||
+      a.dateKey.localeCompare(b.dateKey) ||
+      a.shiftType.localeCompare(b.shiftType)
   );
 
   const dayIndexByDateKey = new Map(calendarDays.map((d, i) => [formatDateKey(d), i]));
 
-  for (const slot of sortedDemandSlots) {
-    const post = postById.get(slot.postId);
-    if (!post) continue;
+  type UnfilledSlot = {
+    slot: (typeof sortedDemandSlots)[number];
+    post: PostWithAssignments;
+    shiftStart: Date;
+    shiftEnd: Date;
+    dayIndex: number;
+    prevDateKey: string | null;
+    reason: string;
+  };
 
-    const { shiftStart, shiftEnd } = getShiftTimes(slot.date, slot.shiftType, timeZone);
-    const dayIndex = dayIndexByDateKey.get(slot.dateKey) ?? 0;
-    const prevDateKey =
-      dayIndex > 0 ? formatDateKey(calendarDays[dayIndex - 1]!) : null;
+  const unfilledSlots: UnfilledSlot[] = [];
 
+  const tryAssignSlot = (
+    slot: (typeof sortedDemandSlots)[number],
+    post: PostWithAssignments,
+    shiftStart: Date,
+    shiftEnd: Date,
+    dayIndex: number,
+    prevDateKey: string | null,
+    requirePatternMatch: boolean
+  ): boolean => {
     const eligible = candidates.filter((guard) =>
       isGuardEligibleForSlot({
         guard,
@@ -511,32 +528,10 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
       preferenceGrid,
       postAssignedGuardIds: postAssignedGuardIdsByPost.get(slot.postId) ?? new Set(),
       prevDateKey,
+      requirePatternMatch,
     });
 
-    if (!best) {
-      uncoveredSlots++;
-      const patternAligned = candidates.filter(
-        (g) => (preferenceGrid.get(g.id)?.get(slot.dateKey) ?? "off") === slot.shiftType
-      );
-      let reason: string;
-      if (patternAligned.length === 0) {
-        reason = `No guard on ${slot.shiftType} pattern phase for post ${post.name}`;
-      } else {
-        reason = `Pattern-aligned guards blocked by rest, gender, or overlap rules for post ${post.name}`;
-      }
-      warnings.push({
-        code: "UNCOVERED_SLOT",
-        date: slot.dateKey,
-        postId: slot.postId,
-        message: `${slot.dateKey}: ${reason}.`,
-      });
-      conflicts.push({
-        employeeId: "",
-        date: slot.dateKey,
-        reason: `${slot.shiftType} · ${post.name}: ${reason}`,
-      });
-      continue;
-    }
+    if (!best) return false;
 
     entries.push({
       employeeId: best.id,
@@ -552,15 +547,83 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
     runtime.workedDateKeys.add(slot.dateKey);
     runtime.shiftTypeByDateKey.set(slot.dateKey, slot.shiftType);
     recordShiftInStats(runtime.stats, slot.shiftType, slot.date);
+    return true;
+  };
+
+  for (const slot of sortedDemandSlots) {
+    const post = postById.get(slot.postId);
+    if (!post) continue;
+
+    const { shiftStart, shiftEnd } = getShiftTimes(slot.date, slot.shiftType, timeZone);
+    const dayIndex = dayIndexByDateKey.get(slot.dateKey) ?? 0;
+    const prevDateKey =
+      dayIndex > 0 ? formatDateKey(calendarDays[dayIndex - 1]!) : null;
+
+    if (tryAssignSlot(slot, post, shiftStart, shiftEnd, dayIndex, prevDateKey, true)) {
+      continue;
+    }
+
+    const patternAligned = candidates.filter(
+      (g) => (preferenceGrid.get(g.id)?.get(slot.dateKey) ?? "off") === slot.shiftType
+    );
+    let reason: string;
+    if (patternAligned.length === 0) {
+      reason = `No guard on ${slot.shiftType} pattern phase for post ${post.name}`;
+    } else {
+      reason = `Pattern-aligned guards blocked by rest, gender, or overlap rules for post ${post.name}`;
+    }
+
+    unfilledSlots.push({
+      slot,
+      post,
+      shiftStart,
+      shiftEnd,
+      dayIndex,
+      prevDateKey,
+      reason,
+    });
+  }
+
+  // Second pass: fill remaining slots with pattern-relaxed assignment (rest/gender/overlap still enforced).
+  let gapFillCount = 0;
+  for (const unfilled of unfilledSlots) {
+    const { slot, post, shiftStart, shiftEnd, dayIndex, prevDateKey, reason } = unfilled;
+    if (tryAssignSlot(slot, post, shiftStart, shiftEnd, dayIndex, prevDateKey, false)) {
+      gapFillCount++;
+      warnings.push({
+        code: "PATTERN_BREAK_FILL",
+        date: slot.dateKey,
+        postId: slot.postId,
+        employeeId: entries[entries.length - 1]?.employeeId,
+        message: `${slot.dateKey}: Filled ${slot.shiftType} at ${post.name} with a guard off-pattern (${reason}).`,
+      });
+    } else {
+      uncoveredSlots++;
+      warnings.push({
+        code: "UNCOVERED_SLOT",
+        date: slot.dateKey,
+        postId: slot.postId,
+        message: `${slot.dateKey}: ${reason}.`,
+      });
+      conflicts.push({
+        employeeId: "",
+        date: slot.dateKey,
+        reason: `${slot.shiftType} · ${post.name}: ${reason}`,
+      });
+    }
+  }
+
+  if (gapFillCount > 0) {
+    warnings.push({
+      code: "GAP_FILL_SUMMARY",
+      message: `${gapFillCount} slot(s) filled by relaxing pattern rules (guards assigned on off-phase days). Review pattern breaks before applying.`,
+    });
   }
 
   for (const guardId of guardIds) {
+    const stats = statsByGuard.get(guardId)!;
     const worked = runtimeByGuard.get(guardId)!.workedDateKeys;
-    for (const day of calendarDays) {
-      if (!worked.has(formatDateKey(day))) {
-        recordOffDayInStats(statsByGuard.get(guardId)!);
-      }
-    }
+    stats.offCount = calendarDays.length - worked.size;
   }
 
   const datesWithUncoveredSlots = new Set(

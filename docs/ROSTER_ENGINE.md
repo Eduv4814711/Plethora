@@ -26,9 +26,10 @@ Implemented in `apps/api/src/services/roster-engine.service.ts` and `roster-sche
 2. **Build demand slots** — for each calendar day: `dayStaff` day slots + `nightStaff` night slots; posts rotate when staffing exceeds post count.
 3. **Phase spreading** — multiple guards get automatic cycle offsets via `computeStaggerOffsets` (not user-configurable). Example for `3_on_3_off` with 3 guards: offsets 0, 3, 6 days so day/night blocks align across the team.
 4. **Pattern grid** — per guard and date, preference is `day`, `night`, or `off` from the pattern + offset.
-5. **Greedy assign** — demand slots sorted by difficulty; `pickBestGuardForDemandSlot` only considers guards whose pattern phase **matches** the slot type (strict — no filling off-days).
-6. **Coverage validation** — `validateDailyCoverage` flags days missing required day/night counts.
-7. **Apply** — optional replace of `created`/`assigned` shifts on site posts in range, then `createMany` planned entries.
+5. **Greedy assign** — demand slots sorted by difficulty, then date; `pickBestGuardForDemandSlot` only considers guards whose pattern phase **matches** the slot type (strict — no filling off-days).
+6. **Gap-fill pass** — slots still uncovered after step 5 are retried with pattern matching relaxed (rest, gender, and overlap rules still apply). Filled slots emit `PATTERN_BREAK_FILL` warnings and increment `patternBreaks`.
+7. **Coverage validation** — `validateDailyCoverage` flags days missing required day/night counts.
+8. **Apply** — optional replace of `created`/`assigned` shifts on site posts in range, then `createMany` planned entries.
 
 ## Bulk create vs auto-roster
 

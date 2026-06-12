@@ -16,6 +16,15 @@ const host = env.host;
 try {
   await app.listen({ port, host });
   console.log(`Plethora API running at http://${host}:${port}`);
+  if (env.whatsapp.enabled) {
+    console.log(
+      `[WhatsApp] Enabled (phone number ID ${env.whatsapp.phoneNumberId}, API ${env.whatsapp.apiVersion})`
+    );
+  } else if (env.isProduction) {
+    console.warn(
+      "[WhatsApp] Not configured — set WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_ACCESS_TOKEN, and WHATSAPP_VERIFY_TOKEN to enable inbound replies"
+    );
+  }
 } catch (err) {
   app.log.error(err);
   process.exit(1);

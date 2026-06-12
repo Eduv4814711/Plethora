@@ -17,6 +17,7 @@ import {
   pickBestGuardForDemandSlot,
   scoreGuardForDemandSlot,
   scoreGuardForSlot,
+  seedOffDaysFromPattern,
   validateDailyCoverage,
   wouldViolateRestRules,
   type GuardCandidate,
@@ -337,6 +338,34 @@ describe("roster-scheduler", () => {
     ).toBe(true);
   });
 
+  it("seedOffDaysFromPattern preloads off counts from the pattern grid", () => {
+    const start = new Date("2026-05-01T00:00:00.000Z");
+    const end = new Date("2026-05-09T23:59:59.999Z");
+    const days = buildCalendarDays(start, end);
+    const grid = buildPatternPreferenceGrid({
+      guardIds: ["g1"],
+      calendarDays: days,
+      patternStartDate: start,
+      pattern: "3_on_3_off",
+      staggerOffsets: new Map([["g1", 0]]),
+    });
+    const stats = new Map([
+      [
+        "g1",
+        {
+          employeeId: "g1",
+          dayCount: 0,
+          nightCount: 0,
+          offCount: 0,
+          sundayCount: 0,
+          weekendCount: 0,
+        },
+      ],
+    ]);
+    seedOffDaysFromPattern(["g1"], days, grid, stats);
+    expect(stats.get("g1")!.offCount).toBe(3);
+  });
+
   it("pickBestGuardForDemandSlot returns null when only pattern-misaligned candidates exist", () => {
     const start = new Date("2026-05-01T00:00:00.000Z");
     const end = new Date("2026-05-05T23:59:59.999Z");
@@ -386,6 +415,57 @@ describe("roster-scheduler", () => {
       prevDateKey: null,
     });
     expect(picked).toBeNull();
+  });
+
+  it("pickBestGuardForDemandSlot selects misaligned guard when pattern match is relaxed", () => {
+    const start = new Date("2026-05-01T00:00:00.000Z");
+    const end = new Date("2026-05-05T23:59:59.999Z");
+    const calendarDays = buildCalendarDays(start, end);
+    const grid = buildPatternPreferenceGrid({
+      guardIds: ["g1"],
+      calendarDays,
+      patternStartDate: start,
+      pattern: "3_on_3_off",
+      staggerOffsets: new Map([["g1", 0]]),
+    });
+    const guard: GuardCandidate = { id: "g1", gender: "M", status: "active", employeeType: "security" };
+    const statsByGuard = new Map([
+      [
+        "g1",
+        {
+          employeeId: "g1",
+          dayCount: 0,
+          nightCount: 0,
+          offCount: 0,
+          sundayCount: 0,
+          weekendCount: 0,
+        },
+      ],
+    ]);
+    const runtimeByGuard = new Map([["g1", emptyRuntime({ stats: statsByGuard.get("g1")! })]]);
+    const slot = {
+      siteId: "s",
+      postId: "p",
+      date: new Date("2026-05-01T00:00:00.000Z"),
+      dateKey: "2026-05-01",
+      shiftType: "night" as const,
+      requiredGender: null,
+      difficultyScore: 0,
+    };
+    const picked = pickBestGuardForDemandSlot({
+      candidates: [guard],
+      slot,
+      date: slot.date,
+      dayIndex: 0,
+      statsByGuard,
+      runtimeByGuard,
+      targets: computeFairnessTargets(1, calendarDays),
+      preferenceGrid: grid,
+      postAssignedGuardIds: new Set(),
+      prevDateKey: null,
+      requirePatternMatch: false,
+    });
+    expect(picked?.id).toBe("g1");
   });
 
   it("buildRosterReadinessDiagnostics warns strict rest when day+night staffing exceeds guards", () => {

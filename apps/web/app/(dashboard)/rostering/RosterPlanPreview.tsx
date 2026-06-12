@@ -181,6 +181,10 @@ export function RosterPlanPreview({
   }, [plan.entries, plan.conflicts, guards, offsetByGuard]);
 
   const hasSkippedConflicts = plan.conflicts.length > 0;
+  const siteLevelConflicts = useMemo(
+    () => plan.conflicts.filter((c) => !c.employeeId),
+    [plan.conflicts]
+  );
   const uncoveredDays = plan.summary.uncoveredDays ?? 0;
   const uncoveredSlots = plan.summary.uncoveredSlots ?? 0;
   const hasUncoveredDays = uncoveredDays > 0;
@@ -188,7 +192,8 @@ export function RosterPlanPreview({
   const coveragePercent = plan.summary.coveragePercent;
   const patternBreaks = plan.summary.patternBreaks ?? 0;
   const relieversUsed = plan.summary.relieversUsed ?? 0;
-  const canApply = plan.entries.length > 0 && !applying && !hasUncoveredDays;
+  const gapFillWarnings = plan.warnings.filter((w) => w.code === "PATTERN_BREAK_FILL");
+  const canApply = plan.entries.length > 0 && !applying;
 
   return (
     <div className="flex flex-col max-h-[min(90vh,880px)]">
@@ -291,9 +296,36 @@ export function RosterPlanPreview({
         )}
         {hasUncoveredDays && (
           <p className="mt-3 text-xs font-medium text-red-700 dark:text-red-300 rounded-lg border border-red-200 dark:border-red-800/60 bg-red-50 dark:bg-red-950/30 px-3 py-2">
-            {uncoveredDays} day{uncoveredDays !== 1 ? "s are" : " is"} missing day or night coverage. Fix
-            warnings before applying.
+            {uncoveredDays} day{uncoveredDays !== 1 ? "s are" : " is"} missing day or night coverage. You can still
+            apply the {plan.entries.length} planned shift{plan.entries.length !== 1 ? "s" : ""}, but gaps will remain
+            until you add guards or adjust site rules.
           </p>
+        )}
+        {gapFillWarnings.length > 0 && (
+          <p className="mt-3 text-xs text-amber-800 dark:text-amber-200 rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
+            {gapFillWarnings.length} slot{gapFillWarnings.length !== 1 ? "s were" : " was"} filled by assigning guards
+            outside their pattern phase ({patternBreaks} pattern break{patternBreaks !== 1 ? "s" : ""}). Review before
+            applying.
+          </p>
+        )}
+        {siteLevelConflicts.length > 0 && (
+          <div className="mt-3 rounded-lg border border-red-200 dark:border-red-800/60 bg-red-50/80 dark:bg-red-950/30 px-3 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-red-700 dark:text-red-300 mb-1.5">
+              Uncovered slots ({siteLevelConflicts.length})
+            </p>
+            <ul className="space-y-1 text-xs text-red-800 dark:text-red-200 max-h-28 overflow-y-auto [scrollbar-width:thin]">
+              {siteLevelConflicts.slice(0, 12).map((c, i) => (
+                <li key={`${c.date}-${i}`}>
+                  {format(parseISO(`${c.date}T12:00:00`), "d MMM yyyy")}: {c.reason}
+                </li>
+              ))}
+              {siteLevelConflicts.length > 12 && (
+                <li className="text-red-600 dark:text-red-400">
+                  …and {siteLevelConflicts.length - 12} more
+                </li>
+              )}
+            </ul>
+          </div>
         )}
         {(plan.readiness?.length ?? 0) > 0 && (
           <div className="mt-3 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50/80 dark:bg-neutral-900/50 px-3 py-2">
@@ -453,9 +485,15 @@ export function RosterPlanPreview({
             type="button"
             onClick={onApply}
             disabled={!canApply}
-            className="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed ${
+              hasUncoveredDays ? "ring-2 ring-amber-400/60 dark:ring-amber-600/50" : ""
+            }`}
           >
-            {applying ? "Applying…" : `Apply roster (${plan.entries.length})`}
+            {applying
+              ? "Applying…"
+              : hasUncoveredDays
+                ? `Apply partial roster (${plan.entries.length})`
+                : `Apply roster (${plan.entries.length})`}
           </button>
         </div>
       </div>

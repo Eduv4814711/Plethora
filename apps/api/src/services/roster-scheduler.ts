@@ -270,18 +270,53 @@ export function scoreGuardForDemandSlot(params: {
   preference: ShiftPreference;
   assignedToPost: boolean;
   workedPreviousDay: boolean;
+  /** When false, pattern preference is ignored (gap-fill pass). */
+  requirePatternMatch?: boolean;
 }): number {
-  const { guard, slot, date, stats, targets, preference, assignedToPost, workedPreviousDay } =
-    params;
+  const {
+    guard,
+    slot,
+    date,
+    stats,
+    targets,
+    preference,
+    assignedToPost,
+    workedPreviousDay,
+    requirePatternMatch = true,
+  } = params;
 
-  let score = scoreGuardForSlot(stats, slot.shiftType, date, targets, preference);
+  // Pattern preference is scored separately below to avoid double-counting PREFERENCE_BONUS.
+  let score = scoreGuardForSlot(stats, slot.shiftType, date, targets, "off");
 
   if (assignedToPost) score += SCORE_ASSIGNED_TO_POST;
-  if (preference === slot.shiftType) score += SCORE_PREFERENCE_MATCH;
+  if (requirePatternMatch && preference === slot.shiftType) score += SCORE_PREFERENCE_MATCH;
+  if (!requirePatternMatch && preference !== slot.shiftType && preference !== "off") {
+    // Discourage pattern breaks unless no other option exists.
+    score += 18;
+  }
   if (workedPreviousDay) score += SCORE_WORKED_PREVIOUS_DAY;
   if (guard.status === "reliever") score += SCORE_RELIEVER;
 
   return score;
+}
+
+/** Seed off-day counts from the pattern grid before greedy assignment. */
+export function seedOffDaysFromPattern(
+  guardIds: string[],
+  calendarDays: Date[],
+  preferenceGrid: Map<string, Map<string, ShiftPreference>>,
+  statsByGuard: Map<string, GuardStats>
+): void {
+  for (const guardId of guardIds) {
+    const stats = statsByGuard.get(guardId);
+    const prefs = preferenceGrid.get(guardId);
+    if (!stats || !prefs) continue;
+    for (const day of calendarDays) {
+      if (prefs.get(formatDateKey(day)) === "off") {
+        recordOffDayInStats(stats);
+      }
+    }
+  }
 }
 
 export type RosterReadinessDiagnostic = {
@@ -409,6 +444,8 @@ export function pickBestGuardForDemandSlot(params: {
   preferenceGrid: Map<string, Map<string, ShiftPreference>>;
   postAssignedGuardIds: Set<string>;
   prevDateKey: string | null;
+  /** When false, any eligible guard may be chosen (gap-fill pass). */
+  requirePatternMatch?: boolean;
 }): GuardCandidate | null {
   const {
     candidates,
@@ -421,16 +458,21 @@ export function pickBestGuardForDemandSlot(params: {
     preferenceGrid,
     postAssignedGuardIds,
     prevDateKey,
+    requirePatternMatch = true,
   } = params;
 
   const dateKey = slot.dateKey;
 
-  const patternAligned = candidates.filter(
-    (g) => (preferenceGrid.get(g.id)?.get(dateKey) ?? "off") === slot.shiftType
-  );
-  if (patternAligned.length === 0) return null;
+  const pool = requirePatternMatch
+    ? candidates.filter(
+        (g) => (preferenceGrid.get(g.id)?.get(dateKey) ?? "off") === slot.shiftType
+      )
+    : candidates;
+  if (pool.length === 0) return null;
 
-  const ranked = [...patternAligned].sort((a, b) => {
+  const rotationIndex = new Map(pool.map((g, i) => [g.id, i]));
+
+  const ranked = [...pool].sort((a, b) => {
     const statsA = statsByGuard.get(a.id)!;
     const statsB = statsByGuard.get(b.id)!;
     const prefA = preferenceGrid.get(a.id)?.get(dateKey) ?? "off";
@@ -448,6 +490,7 @@ export function pickBestGuardForDemandSlot(params: {
       preference: prefA,
       assignedToPost: postAssignedGuardIds.has(a.id),
       workedPreviousDay: workedPrevA,
+      requirePatternMatch,
     });
     const scoreB = scoreGuardForDemandSlot({
       guard: b,
@@ -458,10 +501,11 @@ export function pickBestGuardForDemandSlot(params: {
       preference: prefB,
       assignedToPost: postAssignedGuardIds.has(b.id),
       workedPreviousDay: workedPrevB,
+      requirePatternMatch,
     });
     if (scoreA !== scoreB) return scoreA - scoreB;
-    const rotA = (patternAligned.indexOf(a) + dayIndex) % patternAligned.length;
-    const rotB = (patternAligned.indexOf(b) + dayIndex) % patternAligned.length;
+    const rotA = ((rotationIndex.get(a.id) ?? 0) + dayIndex) % pool.length;
+    const rotB = ((rotationIndex.get(b.id) ?? 0) + dayIndex) % pool.length;
     return rotA - rotB;
   });
 

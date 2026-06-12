@@ -737,17 +737,47 @@ async function handleRoster(
   };
 }
 
-export async function processAndSend(from: string, text: string): Promise<void> {
-  const result = await processIncomingMessage(from, text);
+const UNSUPPORTED_TYPE_REPLY =
+  "I can only read text messages and menu selections. Send *help* for available commands.";
+
+async function deliverProcessResult(from: string, result: ProcessResult): Promise<void> {
   if ("sendInteractiveList" in result && result.sendInteractiveList) {
     const { body, buttonText, rows } = result.sendInteractiveList;
-    await sendInteractiveList(from, body, buttonText, rows);
-  } else if ("reply" in result) {
-    await sendText(from, result.reply);
+    const interactive = await sendInteractiveList(from, body, buttonText, rows);
+    if (!interactive.success) {
+      console.error(
+        "[WhatsApp] Interactive list failed, falling back to text:",
+        interactive.error
+      );
+      const fallback = await sendText(from, HELP_TEXT);
+      if (!fallback.success) {
+        throw new Error(fallback.error ?? "Failed to send WhatsApp reply");
+      }
+    }
+    return;
+  }
+
+  if ("reply" in result) {
+    const sent = await sendText(from, result.reply);
+    if (!sent.success) {
+      throw new Error(sent.error ?? "Failed to send WhatsApp reply");
+    }
     if (result.sendDocument) {
-      await sendDocument(from, result.sendDocument.buffer, result.sendDocument.filename);
+      const docSent = await sendDocument(
+        from,
+        result.sendDocument.buffer,
+        result.sendDocument.filename
+      );
+      if (!docSent) {
+        throw new Error("Failed to send WhatsApp document");
+      }
     }
   }
+}
+
+export async function processAndSend(from: string, text: string): Promise<void> {
+  const result = await processIncomingMessage(from, text);
+  await deliverProcessResult(from, result);
 }
 
 export async function processLocationAndSend(
@@ -756,13 +786,12 @@ export async function processLocationAndSend(
   longitude: number
 ): Promise<void> {
   const result = await processIncomingLocation(from, latitude, longitude);
-  if ("sendInteractiveList" in result && result.sendInteractiveList) {
-    const { body, buttonText, rows } = result.sendInteractiveList;
-    await sendInteractiveList(from, body, buttonText, rows);
-  } else if ("reply" in result) {
-    await sendText(from, result.reply);
-    if (result.sendDocument) {
-      await sendDocument(from, result.sendDocument.buffer, result.sendDocument.filename);
-    }
+  await deliverProcessResult(from, result);
+}
+
+export async function sendUnsupportedTypeReply(from: string): Promise<void> {
+  const sent = await sendText(from, UNSUPPORTED_TYPE_REPLY);
+  if (!sent.success) {
+    throw new Error(sent.error ?? "Failed to send WhatsApp reply");
   }
 }
