@@ -35,6 +35,27 @@ export async function sendText(to: string, text: string): Promise<SendTextResult
 
   const resText = await res.text();
 
+  // #region agent log
+  fetch("http://127.0.0.1:7660/ingest/9bfc1ce4-07b7-42be-b006-8b46257a3ce2", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "5e86f2" },
+    body: JSON.stringify({
+      sessionId: "5e86f2",
+      runId: "pre-fix",
+      hypothesisId: "E",
+      location: "send.service.ts:sendText",
+      message: "Meta Graph API sendText response",
+      data: {
+        ok: res.ok,
+        status: res.status,
+        toSuffix: to.replace(/\D/g, "").slice(-4),
+        errorSnippet: res.ok ? null : resText.slice(0, 120),
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+
   if (!res.ok) {
     console.error("[WhatsApp] Send failed:", res.status, resText);
     let userError = "Failed to send message";

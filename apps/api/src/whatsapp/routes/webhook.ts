@@ -109,11 +109,45 @@ export async function webhookRoutes(app: FastifyInstance) {
     "/webhook",
     WEBHOOK_ROUTE_CONFIG,
     async (request: FastifyRequest<{ Body: WhatsAppWebhookBody }>, reply: FastifyReply) => {
+      // #region agent log
+      fetch("http://127.0.0.1:7660/ingest/9bfc1ce4-07b7-42be-b006-8b46257a3ce2", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "5e86f2" },
+        body: JSON.stringify({
+          sessionId: "5e86f2",
+          runId: "pre-fix",
+          hypothesisId: "A",
+          location: "webhook.ts:POST_entry",
+          message: "Webhook POST received",
+          data: {
+            object: request.body?.object ?? null,
+            entryCount: request.body?.entry?.length ?? 0,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+
       if (request.body?.object !== "whatsapp_business_account") {
         return reply.code(404).send();
       }
 
       if (!config.whatsapp.enabled) {
+        // #region agent log
+        fetch("http://127.0.0.1:7660/ingest/9bfc1ce4-07b7-42be-b006-8b46257a3ce2", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "5e86f2" },
+          body: JSON.stringify({
+            sessionId: "5e86f2",
+            runId: "pre-fix",
+            hypothesisId: "B",
+            location: "webhook.ts:whatsapp_disabled",
+            message: "WhatsApp not configured — skipping all replies",
+            data: { enabled: false },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion
         request.log.warn("WhatsApp webhook received but WhatsApp is not configured");
         return reply.code(200).send();
       }
@@ -128,6 +162,24 @@ export async function webhookRoutes(app: FastifyInstance) {
           if (!value) continue;
 
           if (!isWebhookForConfiguredNumber(value.metadata)) {
+            // #region agent log
+            fetch("http://127.0.0.1:7660/ingest/9bfc1ce4-07b7-42be-b006-8b46257a3ce2", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "5e86f2" },
+              body: JSON.stringify({
+                sessionId: "5e86f2",
+                runId: "pre-fix",
+                hypothesisId: "C",
+                location: "webhook.ts:phone_number_mismatch",
+                message: "Webhook ignored — phone_number_id mismatch",
+                data: {
+                  incomingId: value.metadata?.phone_number_id ?? null,
+                  configuredId: config.whatsapp.phoneNumberId || null,
+                },
+                timestamp: Date.now(),
+              }),
+            }).catch(() => {});
+            // #endregion
             request.log.warn(
               { phoneNumberId: value.metadata?.phone_number_id },
               "Ignoring WhatsApp webhook for unconfigured phone number"
@@ -208,7 +260,40 @@ export async function webhookRoutes(app: FastifyInstance) {
 
             try {
               await processAndSend(from, text);
+              // #region agent log
+              fetch("http://127.0.0.1:7660/ingest/9bfc1ce4-07b7-42be-b006-8b46257a3ce2", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "5e86f2" },
+                body: JSON.stringify({
+                  sessionId: "5e86f2",
+                  runId: "pre-fix",
+                  hypothesisId: "E",
+                  location: "webhook.ts:processAndSend_ok",
+                  message: "processAndSend completed without error",
+                  data: { fromSuffix: from.slice(-4), textLen: text.length },
+                  timestamp: Date.now(),
+                }),
+              }).catch(() => {});
+              // #endregion
             } catch (err) {
+              // #region agent log
+              fetch("http://127.0.0.1:7660/ingest/9bfc1ce4-07b7-42be-b006-8b46257a3ce2", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "5e86f2" },
+                body: JSON.stringify({
+                  sessionId: "5e86f2",
+                  runId: "pre-fix",
+                  hypothesisId: "E",
+                  location: "webhook.ts:processAndSend_error",
+                  message: "processAndSend threw",
+                  data: {
+                    fromSuffix: from.slice(-4),
+                    error: err instanceof Error ? err.message : String(err),
+                  },
+                  timestamp: Date.now(),
+                }),
+              }).catch(() => {});
+              // #endregion
               request.log.error(err, "WhatsApp message processing failed");
             }
           }
