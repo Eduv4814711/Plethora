@@ -57,7 +57,7 @@ interface WhatsAppWebhookBody {
   entry?: WhatsAppEntry[];
 }
 
-const WEBHOOK_ROUTE_CONFIG = { config: { rateLimit: false } };
+const WEBHOOK_ROUTE_CONFIG = { config: { rateLimit: false } } as const;
 
 function isWebhookForConfiguredNumber(metadata?: { phone_number_id?: string }): boolean {
   const configuredId = config.whatsapp.phoneNumberId;
