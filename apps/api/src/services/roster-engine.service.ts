@@ -1,6 +1,6 @@
 import type { Post } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
-import { getCompanyTimezone, getShiftTimes } from "../lib/timezone.js";
+import { getCompanyTimezone, getShiftTimes, dateKeyInTimeZone } from "../lib/timezone.js";
 import { meetsSiteShiftGenderRule, normalizeEmployeeGenderForRoster, type CustomBlock } from "./rostering.service.js";
 import { auditRosterGeneration } from "../lib/roster-audit.js";
 import {
@@ -21,6 +21,7 @@ import {
   recordShiftInStats,
   seedOffDaysFromPattern,
   validateDailyCoverage,
+  violatesAdjacentShiftRestRules,
   type FairnessSpread,
   type GuardCandidate,
   type GuardRuntimeState,
@@ -741,7 +742,7 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
 
 export type ApplyRosterPlanInput = {
   companyId: string;
-  userId: string;
+  userId?: string;
   plan: RosterPlan;
   options?: {
     replaceExisting?: boolean;
@@ -772,6 +773,7 @@ type ApplyValidationContext = {
   >;
   siteAssignedEmployeeIds: Set<string>;
   existingShiftsByEmployee: Map<string, { startTime: Date; endTime: Date }[]>;
+  existingRestByEmployee: Map<string, Map<string, "day" | "night">>;
 };
 
 async function loadApplyValidationContext(
@@ -781,7 +783,8 @@ async function loadApplyValidationContext(
   rangeStart: Date,
   rangeEnd: Date,
   sitePostIds: string[],
-  replaceExisting: boolean
+  replaceExisting: boolean,
+  timeZone: string
 ): Promise<ApplyValidationContext> {
   const employeeIds = [...new Set(plan.entries.map((e) => e.employeeId))];
   const postIds = [...new Set(plan.entries.map((e) => e.postId))];
@@ -822,15 +825,26 @@ async function loadApplyValidationContext(
             }
           : {}),
       },
-      select: { employeeId: true, startTime: true, endTime: true },
+      select: { employeeId: true, startTime: true, endTime: true, post: { select: { shiftType: true } } },
     }),
   ]);
 
   const existingShiftsByEmployee = new Map<string, { startTime: Date; endTime: Date }[]>();
+  const existingRestByEmployee = new Map<string, Map<string, "day" | "night">>();
   for (const shift of existingShifts) {
     const list = existingShiftsByEmployee.get(shift.employeeId) ?? [];
     list.push({ startTime: shift.startTime, endTime: shift.endTime });
     existingShiftsByEmployee.set(shift.employeeId, list);
+
+    const dateKey = dateKeyInTimeZone(shift.startTime, timeZone);
+    const shiftType =
+      (shift.post.shiftType ?? "day").toLowerCase() === "night" ? "night" : "day";
+    let restMap = existingRestByEmployee.get(shift.employeeId);
+    if (!restMap) {
+      restMap = new Map();
+      existingRestByEmployee.set(shift.employeeId, restMap);
+    }
+    restMap.set(dateKey, shiftType);
   }
 
   return {
@@ -838,6 +852,7 @@ async function loadApplyValidationContext(
     postById: new Map(posts.map((p) => [p.id, p])),
     siteAssignedEmployeeIds: new Set(siteAssignments.map((a) => a.employeeId)),
     existingShiftsByEmployee,
+    existingRestByEmployee,
   };
 }
 
@@ -916,6 +931,8 @@ export async function applyRosterPlan(input: ApplyRosterPlanInput): Promise<Appl
   let created = 0;
   const errors: string[] = [];
   const plannedByEmployee = new Map<string, { start: Date; end: Date }[]>();
+  const plannedRestByEmployee = new Map<string, Map<string, "day" | "night">>();
+  const timeZone = await getCompanyTimezone(companyId);
 
   const validationCtx = await loadApplyValidationContext(
     companyId,
@@ -924,7 +941,8 @@ export async function applyRosterPlan(input: ApplyRosterPlanInput): Promise<Appl
     start,
     end,
     [...sitePostIds],
-    replaceExisting
+    replaceExisting,
+    timeZone
   );
   const shiftsToCreate: {
     companyId: string;
@@ -938,6 +956,24 @@ export async function applyRosterPlan(input: ApplyRosterPlanInput): Promise<Appl
   for (const entry of plan.entries) {
     const startTime = new Date(entry.startTime);
     const endTime = new Date(entry.endTime);
+    const dateKey = dateKeyInTimeZone(startTime, timeZone);
+
+    let restMap = plannedRestByEmployee.get(entry.employeeId);
+    if (!restMap) {
+      restMap = new Map(validationCtx.existingRestByEmployee.get(entry.employeeId));
+      plannedRestByEmployee.set(entry.employeeId, restMap);
+    }
+    if (
+      violatesAdjacentShiftRestRules(restMap, {
+        dateKey,
+        shiftType: entry.shiftType,
+      })
+    ) {
+      errors.push(
+        `${dateKey}: Rest rule violation (day after night or both types same day)`
+      );
+      continue;
+    }
 
     const employeePlanned = plannedByEmployee.get(entry.employeeId) ?? [];
     const overlapsBatch = employeePlanned.some((p) =>
@@ -972,6 +1008,7 @@ export async function applyRosterPlan(input: ApplyRosterPlanInput): Promise<Appl
     });
     employeePlanned.push({ start: startTime, end: endTime });
     plannedByEmployee.set(entry.employeeId, employeePlanned);
+    restMap.set(dateKey, entry.shiftType);
   }
 
   await prisma.$transaction(
@@ -1008,6 +1045,7 @@ export async function applyRosterPlan(input: ApplyRosterPlanInput): Promise<Appl
       plan,
       created,
       deleted,
+      source: userId ? undefined : "auto_roster",
     });
   }
 

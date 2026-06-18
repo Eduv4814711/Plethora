@@ -1,5 +1,7 @@
 import { addDays, differenceInCalendarDays, getDay } from "date-fns";
 import { prisma } from "../lib/prisma.js";
+import { dateKeyInTimeZone, getCompanyTimezone } from "../lib/timezone.js";
+import { violatesAdjacentShiftRestRules } from "./roster-scheduler.js";
 
 export class RosteringValidationError extends Error {
   constructor(message: string) {
@@ -362,6 +364,45 @@ export async function validateShiftAssignment(params: {
   if (overlapping) {
     throw new RosteringValidationError(
       "Employee has an overlapping shift in this time range"
+    );
+  }
+
+  const timeZone = await getCompanyTimezone(companyId);
+  const candidateDateKey = dateKeyInTimeZone(startTime, timeZone);
+  const candidateShiftType =
+    (post.shiftType ?? "day").toLowerCase() === "night" ? "night" : "day";
+
+  const restRangeStart = addDays(new Date(`${candidateDateKey}T00:00:00.000Z`), -2);
+  const restRangeEnd = addDays(new Date(`${candidateDateKey}T00:00:00.000Z`), 2);
+  restRangeEnd.setUTCHours(23, 59, 59, 999);
+
+  const nearbyShifts = await prisma.shift.findMany({
+    where: {
+      employeeId,
+      companyId,
+      id: excludeShiftId ? { not: excludeShiftId } : undefined,
+      startTime: { lt: restRangeEnd },
+      endTime: { gt: restRangeStart },
+    },
+    include: { post: { select: { shiftType: true } } },
+  });
+
+  const assignmentsByDate = new Map<string, "day" | "night">();
+  for (const s of nearbyShifts) {
+    const key = dateKeyInTimeZone(s.startTime, timeZone);
+    const kind =
+      (s.post.shiftType ?? "day").toLowerCase() === "night" ? "night" : "day";
+    assignmentsByDate.set(key, kind);
+  }
+
+  if (
+    violatesAdjacentShiftRestRules(assignmentsByDate, {
+      dateKey: candidateDateKey,
+      shiftType: candidateShiftType,
+    })
+  ) {
+    throw new RosteringValidationError(
+      "Rest rule violation: a guard cannot work a day shift the day after a night shift, or both day and night on the same day."
     );
   }
 }

@@ -5,7 +5,7 @@ import type { PayrollStatus } from "@prisma/client";
 import { aggregateTimesheets } from "./timesheet.service.js";
 import { calculateDeductions } from "./deductions.service.js";
 import type { PayPeriod } from "./tax.service.js";
-import { getCompanyTimezone } from "../lib/timezone.js";
+import { getCompanyTimezone, dateKeyInTimeZone } from "../lib/timezone.js";
 import {
   buildPayrollCalculationSnapshot,
   computePayrollLines,
@@ -75,7 +75,7 @@ export async function calculatePayroll(
     ]);
 
   const publicHolidayDates = holidays.map((h) =>
-    new Date(h.date).toISOString().slice(0, 10)
+    dateKeyInTimeZone(new Date(h.date), timezone)
   );
 
   const groupIds = [...new Set(employees.map((e) => e.groupId).filter(Boolean))] as string[];

@@ -63,4 +63,63 @@ Preview surfaces `UNCOVERED_SLOT` warnings, `conflicts[]`, `skippedGuardDays` (g
 3. Optional: `PostAssignment` for preferred post scoring.
 4. Rostering: select site → pattern → generate plan → review coverage % and warnings → apply.
 
+## Continuous auto-roster (payroll calendar)
+
+Automated rostering runs on a **daily schedule** and maintains shifts from **today** through the end of the configured payroll horizon (default **2 pay periods**). It reuses the same preview/apply engine as manual rostering.
+
+### Company settings (`Company.settings` JSON)
+
+| Field | Purpose |
+|-------|---------|
+| `payrollPeriod` | `weekly` \| `biweekly` \| `monthly` — **PAYE tax frequency only** |
+| `payPeriodStartDay` | Day of month each pay/roster period starts (default `26`) |
+| `payPeriodEndDay` | Day of month each period ends (default `25`, typically in the following month) |
+| `autoRosterHorizonPeriods` | How many pay periods ahead auto-roster maintains (default `2`) |
+
+**Pay period rule:** spanning month boundaries. Example with start **26** and end **25**:
+
+- 18 Jun 2026 → period **26 May – 25 Jun** → labelled **June Pay/Roster Period**
+- 26 Jun – 25 Jul → labelled **July Pay/Roster Period**
+
+Labels always use the **month/year of `periodEnd`**. Period key: `YYYY-MM` of the end date.
+
+`getRosterWindow` uses `autoRosterHorizonPeriods` and clips `startDate` to **today or later** — past shifts are never rewritten.
+
+### Pay periods API
+
+- `GET /pay-periods` — list generated periods (`before` / `after` query params)
+- `GET /pay-periods/current` — current period bounds and labels
+
+### Site settings
+
+| Field | Default | Purpose |
+|-------|---------|---------|
+| `autoRosterEnabled` | false | Master toggle |
+| `autoRosterPattern` | null | `3_on_3_off` or `custom_builder` |
+| `autoRosterCustomBlocks` | null | Required when pattern is `custom_builder` |
+| `autoRosterMinCoveragePercent` | 100 | Auto-apply threshold |
+| `autoRosterLastRunAt` / `autoRosterLastStatus` | null | Last automation outcome |
+
+### Decision flow
+
+1. Daily cron → `POST /internal/cron/auto-roster` (Bearer `CRON_SECRET`).
+2. For each auto-enabled site: `generateRosterPlan` for the roster window.
+3. If `coveragePercent >= autoRosterMinCoveragePercent` → `applyRosterPlan` with `replaceExisting: true` (only `created`/`assigned` shifts in range).
+4. Otherwise → `RosterAutomationRun` with `status: pending_review` and full `planSnapshot` for manager review.
+
+Immediate triggers (v1): enabling auto-roster on a site, or changing payroll calendar settings.
+
+### Review queue API
+
+- `GET /shifts/roster/automation` — pending/failed runs
+- `POST /shifts/roster/automation/:id/apply` — manager applies queued plan
+- `POST /shifts/roster/automation/:id/dismiss` — discard without applying
+
+### Operator checklist (automation)
+
+1. **Settings → Business:** set pay period start/end days and roster horizon.
+2. **Site detail:** complete readiness (guards, day/night posts, staffing), enable auto-roster, choose pattern and threshold.
+3. **Rostering:** review **Auto-roster queue** banner when coverage was below threshold.
+4. **Railway:** configure `CRON_SECRET` and a daily cron job hitting `/internal/cron/auto-roster`.
+
 See also [PLETHORA-USER-MANUAL.md](./PLETHORA-USER-MANUAL.md) for UI workflows.

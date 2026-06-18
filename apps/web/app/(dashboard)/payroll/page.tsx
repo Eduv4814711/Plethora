@@ -4,7 +4,8 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { useAuth } from "@/lib/auth-context";
-import { authFetch } from "@/lib/api";
+import { authFetch, fetchCurrentPayPeriod, fetchPayPeriods, type PayPeriodOption } from "@/lib/api";
+import { PayPeriodSelect } from "@/components/pay-period-select";
 import { DateInput } from "@/components/date-input";
 
 function formatCurrency(n: number): string {
@@ -694,9 +695,9 @@ function ReserveSummaryPanel({ token, onRefresh }: { token: string; onRefresh: (
 }
 
 function ContractLabourCostPanel({ token }: { token: string }) {
-  const now = new Date();
-  const [periodStart, setPeriodStart] = useState(format(new Date(now.getFullYear(), now.getMonth(), 1), "yyyy-MM-dd"));
-  const [periodEnd, setPeriodEnd] = useState(format(now, "yyyy-MM-dd"));
+  const [periodKey, setPeriodKey] = useState("");
+  const [periodStart, setPeriodStart] = useState("");
+  const [periodEnd, setPeriodEnd] = useState("");
   const [data, setData] = useState<ContractLabourResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -704,7 +705,10 @@ function ContractLabourCostPanel({ token }: { token: string }) {
   const handleLoad = () => {
     setLoading(true);
     setLoaded(false);
-    authFetch(`/payroll/contracts/labour-cost?periodStart=${periodStart}&periodEnd=${periodEnd}`, token)
+    const qs = periodKey
+      ? `periodKey=${encodeURIComponent(periodKey)}`
+      : `periodStart=${periodStart}&periodEnd=${periodEnd}`;
+    authFetch(`/payroll/contracts/labour-cost?${qs}`, token)
       .then((r) => {
         if (!r.ok) throw new Error("Failed to load");
         return r.json();
@@ -719,16 +723,22 @@ function ContractLabourCostPanel({ token }: { token: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2">
-          <span className="text-sm font-medium text-security-navy-600">From</span>
-          <DateInput value={periodStart} onChange={setPeriodStart} className="input-modern text-sm w-40" showToday ariaLabel="Period start" />
-        </label>
-        <label className="flex items-center gap-2">
-          <span className="text-sm font-medium text-security-navy-600">To</span>
-          <DateInput value={periodEnd} onChange={setPeriodEnd} className="input-modern text-sm w-40" showToday ariaLabel="Period end" />
-        </label>
-        <button onClick={handleLoad} disabled={loading} className="btn-primary text-sm disabled:opacity-50">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[14rem]">
+          <label className="block text-sm font-medium text-security-navy-600 mb-1">Pay period</label>
+          <PayPeriodSelect
+            token={token}
+            variant="pay"
+            value={periodKey}
+            onChange={(p) => {
+              setPeriodKey(p.periodKey);
+              setPeriodStart(p.periodStart);
+              setPeriodEnd(p.periodEnd);
+            }}
+            className="input-modern text-sm w-full"
+          />
+        </div>
+        <button onClick={handleLoad} disabled={loading || !periodKey} className="btn-primary text-sm disabled:opacity-50">
           {loading ? "Loading…" : "Load"}
         </button>
       </div>
@@ -883,16 +893,19 @@ function EmployeeCostSummaryPanel({ token, runs }: { token: string; runs: Payrol
 }
 
 function PayrollRunForm({ token, onSuccess }: { token: string; onSuccess: () => void }) {
+  const [periodKey, setPeriodKey] = useState("");
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
+  const [periodLabel, setPeriodLabel] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!periodStart || !periodEnd) return;
     await authFetch("/payroll/runs", token, {
       method: "POST",
       body: JSON.stringify({
-        periodStart: new Date(periodStart).toISOString(),
-        periodEnd: new Date(periodEnd).toISOString(),
+        periodStart: new Date(`${periodStart}T00:00:00.000Z`).toISOString(),
+        periodEnd: new Date(`${periodEnd}T23:59:59.999Z`).toISOString(),
       }),
     });
     onSuccess();
@@ -901,17 +914,28 @@ function PayrollRunForm({ token, onSuccess }: { token: string; onSuccess: () => 
   return (
     <form onSubmit={handleSubmit} className="card-wireframe mb-8 p-6">
       <h3 className="font-semibold text-security-navy mb-4">New Payroll Run</h3>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="label-text block mb-1">Period start</label>
-          <DateInput value={periodStart} onChange={setPeriodStart} className="input-modern" showToday required />
-        </div>
-        <div>
-          <label className="label-text block mb-1">Period end</label>
-          <DateInput value={periodEnd} onChange={setPeriodEnd} className="input-modern" showToday required />
-        </div>
+      <div className="max-w-md space-y-2">
+        <label className="label-text block">Pay period</label>
+        <PayPeriodSelect
+          token={token}
+          variant="pay"
+          value={periodKey}
+          onChange={(p) => {
+            setPeriodKey(p.periodKey);
+            setPeriodStart(p.periodStart);
+            setPeriodEnd(p.periodEnd);
+            setPeriodLabel(p.label);
+          }}
+        />
+        {periodLabel && (
+          <p className="text-xs text-security-navy-600">
+            {periodLabel}: {periodStart} – {periodEnd}
+          </p>
+        )}
       </div>
-      <button type="submit" className="mt-4 btn-primary">Create</button>
+      <button type="submit" className="mt-4 btn-primary" disabled={!periodKey}>
+        Create
+      </button>
     </form>
   );
 }

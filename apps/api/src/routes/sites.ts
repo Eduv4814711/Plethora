@@ -1,9 +1,11 @@
 import type { FastifyInstance } from "fastify";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
+import { runAutoRosterForSite } from "../services/auto-roster.service.js";
 
 const SERVICE_TYPES = [
   "guarding",
@@ -38,6 +40,11 @@ function refineSiteGeofenceThreeOrNone(data: {
 
 const ROSTER_SHIFT_GENDER = z.enum(["male", "female", "any"]).nullable().optional();
 const ROSTER_SHIFT_GUARDS_REQUIRED = z.number().int().min(1).max(50).optional();
+const AUTO_ROSTER_PATTERN = z.enum(["3_on_3_off", "custom_builder"]).nullable().optional();
+const autoRosterBlockSchema = z.object({
+  type: z.enum(["day", "night", "off"]),
+  count: z.number().min(1).max(14),
+});
 
 const createSiteSchema = z
   .object({
@@ -62,6 +69,10 @@ const createSiteSchema = z
     rosterNightShiftGender: ROSTER_SHIFT_GENDER,
     rosterDayShiftGuardsRequired: ROSTER_SHIFT_GUARDS_REQUIRED,
     rosterNightShiftGuardsRequired: ROSTER_SHIFT_GUARDS_REQUIRED,
+    autoRosterEnabled: z.boolean().optional(),
+    autoRosterPattern: AUTO_ROSTER_PATTERN,
+    autoRosterCustomBlocks: z.array(autoRosterBlockSchema).nullable().optional(),
+    autoRosterMinCoveragePercent: z.number().int().min(0).max(100).optional(),
   })
   .superRefine((data, ctx) => {
     const g = refineSiteGeofenceThreeOrNone(data);
@@ -93,6 +104,10 @@ const updateSiteSchema = z
     rosterNightShiftGender: ROSTER_SHIFT_GENDER,
     rosterDayShiftGuardsRequired: ROSTER_SHIFT_GUARDS_REQUIRED,
     rosterNightShiftGuardsRequired: ROSTER_SHIFT_GUARDS_REQUIRED,
+    autoRosterEnabled: z.boolean().optional(),
+    autoRosterPattern: AUTO_ROSTER_PATTERN,
+    autoRosterCustomBlocks: z.array(autoRosterBlockSchema).nullable().optional(),
+    autoRosterMinCoveragePercent: z.number().int().min(0).max(100).optional(),
   })
   .superRefine((data, ctx) => {
     const g = refineSiteGeofenceThreeOrNone(data);
@@ -229,6 +244,13 @@ export async function sitesRoutes(app: FastifyInstance) {
         rosterNightShiftGender: d.rosterNightShiftGender ?? undefined,
         rosterDayShiftGuardsRequired: d.rosterDayShiftGuardsRequired ?? undefined,
         rosterNightShiftGuardsRequired: d.rosterNightShiftGuardsRequired ?? undefined,
+        autoRosterEnabled: d.autoRosterEnabled ?? undefined,
+        autoRosterPattern: d.autoRosterPattern ?? undefined,
+        autoRosterCustomBlocks:
+          d.autoRosterCustomBlocks === null
+            ? Prisma.JsonNull
+            : d.autoRosterCustomBlocks ?? undefined,
+        autoRosterMinCoveragePercent: d.autoRosterMinCoveragePercent ?? undefined,
       },
     });
 
@@ -293,6 +315,17 @@ export async function sitesRoutes(app: FastifyInstance) {
       entityType: "site",
       entityId: site.id,
     });
+
+    if (siteWithAssigned?.autoRosterEnabled) {
+      void runAutoRosterForSite({
+        companyId,
+        siteId: site.id,
+        triggeredBy: "site_enabled",
+        userId: request.user!.sub,
+      }).catch((err) => {
+        request.log.error({ err }, "auto-roster after site create failed");
+      });
+    }
 
     return reply.code(201).send(siteWithAssigned);
   });
@@ -379,6 +412,10 @@ export async function sitesRoutes(app: FastifyInstance) {
       rosterNightShiftGender,
       rosterDayShiftGuardsRequired,
       rosterNightShiftGuardsRequired,
+      autoRosterEnabled,
+      autoRosterPattern,
+      autoRosterCustomBlocks,
+      autoRosterMinCoveragePercent,
       ...rest
     } = d;
 
@@ -406,6 +443,17 @@ export async function sitesRoutes(app: FastifyInstance) {
     if (rosterNightShiftGuardsRequired !== undefined) {
       rosterPatch.rosterNightShiftGuardsRequired = rosterNightShiftGuardsRequired;
     }
+    if (autoRosterEnabled !== undefined) rosterPatch.autoRosterEnabled = autoRosterEnabled;
+    if (autoRosterPattern !== undefined) rosterPatch.autoRosterPattern = autoRosterPattern;
+    if (autoRosterCustomBlocks !== undefined) {
+      rosterPatch.autoRosterCustomBlocks =
+        autoRosterCustomBlocks === null ? Prisma.JsonNull : autoRosterCustomBlocks;
+    }
+    if (autoRosterMinCoveragePercent !== undefined) {
+      rosterPatch.autoRosterMinCoveragePercent = autoRosterMinCoveragePercent;
+    }
+
+    const wasAutoEnabled = existing.autoRosterEnabled;
 
     const siteUpdate = await prisma.site.updateMany({
       where: { id, companyId },
@@ -483,6 +531,23 @@ export async function sitesRoutes(app: FastifyInstance) {
       entityType: "site",
       entityId: id,
     });
+
+    const nowEnabled = siteWithAssigned.autoRosterEnabled;
+    const autoConfigChanged =
+      autoRosterEnabled !== undefined ||
+      autoRosterPattern !== undefined ||
+      autoRosterCustomBlocks !== undefined ||
+      autoRosterMinCoveragePercent !== undefined;
+    if (nowEnabled && (!wasAutoEnabled || autoConfigChanged)) {
+      void runAutoRosterForSite({
+        companyId,
+        siteId: id,
+        triggeredBy: wasAutoEnabled ? "manual" : "site_enabled",
+        userId: request.user!.sub,
+      }).catch((err) => {
+        request.log.error({ err }, "auto-roster after site update failed");
+      });
+    }
 
     return reply.send(siteWithAssigned);
   });

@@ -378,9 +378,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           "flex min-h-0 flex-1 flex-col box-border bg-gradient-to-b from-[var(--bg-canvas)] via-white to-security-navy-50/35",
           /* Reserve space for fixed header: safe area + min-h-14 row + match previous vertical rhythm */
           "pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1rem)] pb-5 pl-4 pr-4 sm:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.5rem)] sm:pb-6 sm:pl-6 sm:pr-6 md:pb-8 md:pl-8 md:pr-8 lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+2.5rem)] lg:pb-10 lg:pl-10 lg:pr-10",
+          isDashboardHome &&
+            "lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.25rem)] lg:pb-4 xl:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.5rem)] xl:pb-5 [@media(max-height:860px)]:lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+0.75rem)] [@media(max-height:860px)]:lg:pb-3",
           "overscroll-y-contain",
           isDashboardHome
-            ? "overflow-y-auto"
+            ? "overflow-y-auto lg:overflow-hidden"
             : isWhatsAppPage
               ? "overflow-hidden"
               : isAcademyPage
@@ -388,7 +390,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 : "overflow-y-auto",
         )}
       >
-        {hasAccess ? (isAcademyPage ? <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col lg:h-full">{children}</div> : children) : null}
+        {hasAccess ? (
+          isAcademyPage || isDashboardHome ? (
+            <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col lg:h-full">{children}</div>
+          ) : (
+            children
+          )
+        ) : null}
       </main>
     </div>
   );

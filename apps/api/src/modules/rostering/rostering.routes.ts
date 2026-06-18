@@ -2,6 +2,12 @@ import type { FastifyInstance } from "fastify";
 import { authMiddleware } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
 import {
+  applyAutomationRun,
+  dismissAutomationRun,
+  listAutomationRuns,
+  serializeAutomationRun,
+} from "../../services/auto-roster.service.js";
+import {
   bulkCreateSchema,
   bulkVerifySchema,
   createShiftSchema,
@@ -142,6 +148,31 @@ export async function rosteringRoutes(app: FastifyInstance) {
         message: err instanceof Error ? err.message : "Failed to apply roster plan",
       });
     }
+  });
+
+  app.get("/roster/automation", { preHandler: protect }, async (request, reply) => {
+    const user = request.user!;
+    const q = request.query as { status?: string };
+    const runs = await listAutomationRuns(user.companyId, q.status as never);
+    return reply.send({ data: runs.map(serializeAutomationRun) });
+  });
+
+  app.post("/roster/automation/:id/apply", { preHandler: protect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const result = await applyAutomationRun(request.user!.companyId, id, request.user!.sub);
+    if ("error" in result) {
+      return reply.code(400).send({ error: result.error });
+    }
+    return reply.code(201).send(result);
+  });
+
+  app.post("/roster/automation/:id/dismiss", { preHandler: protect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const result = await dismissAutomationRun(request.user!.companyId, id, request.user!.sub);
+    if ("error" in result) {
+      return reply.code(400).send({ error: result.error });
+    }
+    return reply.send(result);
   });
 
   app.get("/:id/available-relievers", { preHandler: protect }, async (request, reply) => {

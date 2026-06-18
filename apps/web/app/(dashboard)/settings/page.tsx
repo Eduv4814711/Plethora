@@ -452,7 +452,7 @@ function BusinessSettingsSection({
   settings: ReturnType<typeof useSettings>["settings"];
   saving: boolean;
   saveError: string | null;
-  onSave: (data: Record<string, string>) => Promise<void>;
+  onSave: (data: Record<string, string | number | null>) => Promise<void>;
   readOnly?: boolean;
 }) {
   const bizSettings = settings?.settings ?? {};
@@ -462,6 +462,9 @@ function BusinessSettingsSection({
     timezone: "Africa/Johannesburg",
     payrollPeriod: "monthly",
     employeeIdPrefix: "EMP",
+    payPeriodStartDay: "26",
+    payPeriodEndDay: "25",
+    autoRosterHorizonPeriods: "2",
   });
 
   useEffect(() => {
@@ -473,13 +476,28 @@ function BusinessSettingsSection({
         timezone: s.timezone ?? "Africa/Johannesburg",
         payrollPeriod: s.payrollPeriod ?? "monthly",
         employeeIdPrefix: s.employeeIdPrefix ?? "EMP",
+        payPeriodStartDay: String(s.payPeriodStartDay ?? 26),
+        payPeriodEndDay: String(s.payPeriodEndDay ?? 25),
+        autoRosterHorizonPeriods: String(s.autoRosterHorizonPeriods ?? 2),
       });
     }
   }, [settings?.settings]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(form);
+    const horizon = parseInt(form.autoRosterHorizonPeriods, 10);
+    const startDay = parseInt(form.payPeriodStartDay, 10);
+    const endDay = parseInt(form.payPeriodEndDay, 10);
+    onSave({
+      currency: form.currency,
+      dateFormat: form.dateFormat,
+      timezone: form.timezone,
+      payrollPeriod: form.payrollPeriod,
+      employeeIdPrefix: form.employeeIdPrefix,
+      payPeriodStartDay: Number.isFinite(startDay) ? startDay : 26,
+      payPeriodEndDay: Number.isFinite(endDay) ? endDay : 25,
+      autoRosterHorizonPeriods: Number.isFinite(horizon) && horizon >= 1 ? horizon : 2,
+    });
   };
 
   return (
@@ -528,7 +546,7 @@ function BusinessSettingsSection({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Payroll Period</label>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">PAYE calculation frequency</label>
           <select
             value={form.payrollPeriod}
             onChange={(e) => setForm((f) => ({ ...f, payrollPeriod: e.target.value }))}
@@ -539,6 +557,60 @@ function BusinessSettingsSection({
             <option value="biweekly">Bi-weekly</option>
             <option value="monthly">Monthly</option>
           </select>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+            Used for PAYE tax calculations only. Pay and roster period dates are configured below.
+          </p>
+        </div>
+        <div className="rounded-xl border border-orange-200/80 dark:border-orange-800/40 bg-orange-50/40 dark:bg-orange-950/20 p-4 space-y-3">
+          <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100">Pay & roster period calendar</p>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            Example: start 26, end 25 → 26 Jun–25 Jul is labelled <strong>July</strong> pay/roster period.
+            Auto-roster maintains shifts through N pay periods ahead.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                Period start day (1–31)
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={31}
+                value={form.payPeriodStartDay}
+                onChange={(e) => setForm((f) => ({ ...f, payPeriodStartDay: e.target.value }))}
+                className="input-modern w-full"
+                disabled={readOnly}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                Period end day (1–31)
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={31}
+                value={form.payPeriodEndDay}
+                onChange={(e) => setForm((f) => ({ ...f, payPeriodEndDay: e.target.value }))}
+                className="input-modern w-full"
+                disabled={readOnly}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              Roster horizon (pay periods)
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={6}
+              value={form.autoRosterHorizonPeriods}
+              onChange={(e) => setForm((f) => ({ ...f, autoRosterHorizonPeriods: e.target.value }))}
+              className="input-modern max-w-[8rem]"
+              disabled={readOnly}
+            />
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Team Member ID Prefix</label>

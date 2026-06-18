@@ -3,8 +3,10 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
-import { format, startOfMonth, endOfMonth, subMonths, addMonths } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { DateInput } from "@/components/date-input";
+import { fetchCurrentPayPeriod, fetchPayPeriods, type PayPeriodOption } from "@/lib/api";
+import { PayPeriodSelect } from "@/components/pay-period-select";
 import { clsx } from "clsx";
 
 interface ShiftForClockIn {
@@ -58,12 +60,9 @@ interface MissedShift {
   post: { name: string; site: { id: string; name: string } };
 }
 
-function getDefaultDateRange() {
+function emptyDateRange() {
   const now = new Date();
-  return {
-    start: startOfMonth(now),
-    end: endOfMonth(now),
-  };
+  return { start: now, end: now };
 }
 
 export default function AttendancePage() {
@@ -77,7 +76,10 @@ export default function AttendancePage() {
   const [sites, setSites] = useState<SiteOption[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [dateRange, setDateRange] = useState(getDefaultDateRange);
+  const [dateRange, setDateRange] = useState(emptyDateRange);
+  const [periodKey, setPeriodKey] = useState("");
+  const [periodLabel, setPeriodLabel] = useState("");
+  const [payPeriodOptions, setPayPeriodOptions] = useState<PayPeriodOption[]>([]);
   const [employeeId, setEmployeeId] = useState<string>("");
   const [siteId, setSiteId] = useState<string>("");
 
@@ -140,6 +142,24 @@ export default function AttendancePage() {
 
   useEffect(() => {
     if (!token) return;
+    Promise.all([
+      fetchCurrentPayPeriod(token),
+      fetchPayPeriods(token, { before: 12, after: 3 }),
+    ])
+      .then(([current, periods]) => {
+        setPayPeriodOptions(periods);
+        setPeriodKey(current.periodKey);
+        setPeriodLabel(current.label);
+        setDateRange({
+          start: parseISO(current.periodStart),
+          end: parseISO(current.periodEnd),
+        });
+      })
+      .catch(console.error);
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
     authFetch("/employees?limit=200", token)
       .then((r) => r.json())
       .then((d) => setEmployees(d.data || []))
@@ -179,20 +199,26 @@ export default function AttendancePage() {
     );
   }
 
-  const goPrevMonth = () => {
-    setDateRange((prev) => ({
-      start: subMonths(prev.start, 1),
-      end: endOfMonth(subMonths(prev.start, 1)),
-    }));
+  const applyPayPeriod = (period: PayPeriodOption) => {
+    setPeriodKey(period.periodKey);
+    setPeriodLabel(period.label);
+    setDateRange({
+      start: parseISO(period.periodStart),
+      end: parseISO(period.periodEnd),
+    });
   };
-  const goNextMonth = () => {
-    setDateRange((prev) => ({
-      start: addMonths(prev.start, 1),
-      end: endOfMonth(addMonths(prev.start, 1)),
-    }));
+
+  const shiftPayPeriod = (direction: -1 | 1) => {
+    const idx = payPeriodOptions.findIndex((p) => p.periodKey === periodKey);
+    const next = payPeriodOptions[idx + direction];
+    if (next) applyPayPeriod(next);
   };
+
+  const goPrevMonth = () => shiftPayPeriod(-1);
+  const goNextMonth = () => shiftPayPeriod(1);
   const goCurrentMonth = () => {
-    setDateRange(getDefaultDateRange());
+    const current = payPeriodOptions.find((p) => p.isCurrent);
+    if (current) applyPayPeriod(current);
   };
 
   return (
@@ -206,34 +232,33 @@ export default function AttendancePage() {
         <div className="flex flex-wrap gap-6 items-end">
           <div className="space-y-2">
             <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-              Date range
+              Pay period
             </label>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={goPrevMonth}
-                className="btn-secondary text-sm"
-              >
+            <div className="flex flex-wrap items-center gap-2">
+              {token && (
+                <PayPeriodSelect
+                  token={token}
+                  variant="pay"
+                  value={periodKey}
+                  onChange={applyPayPeriod}
+                  className="input-modern min-w-[14rem]"
+                />
+              )}
+              <button type="button" onClick={goPrevMonth} className="btn-secondary text-sm">
                 Prev
               </button>
-              <span className="text-sm font-medium min-w-[120px] px-3 py-2 rounded-md border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 text-neutral-800 dark:text-neutral-200">
-                {format(dateRange.start, "MMM yyyy")}
-              </span>
-              <button
-                type="button"
-                onClick={goNextMonth}
-                className="btn-secondary text-sm"
-              >
+              <button type="button" onClick={goNextMonth} className="btn-secondary text-sm">
                 Next
               </button>
-              <button
-                type="button"
-                onClick={goCurrentMonth}
-                className="btn-secondary text-sm"
-              >
-                This month
+              <button type="button" onClick={goCurrentMonth} className="btn-secondary text-sm">
+                Current
               </button>
             </div>
+            {periodLabel && (
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                {periodLabel} · {format(dateRange.start, "d MMM yyyy")} – {format(dateRange.end, "d MMM yyyy")}
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">

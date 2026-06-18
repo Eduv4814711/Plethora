@@ -5,6 +5,7 @@ import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { aggregateTimesheets } from "../services/timesheet.service.js";
 import { createAuditLog } from "../lib/audit.js";
+import { resolveCompanyPeriodRange } from "../lib/resolve-company-period.js";
 
 const updateTimesheetSchema = z.object({
   basicHours: z.number().min(0).optional(),
@@ -23,24 +24,21 @@ export async function timesheetsRoutes(app: FastifyInstance) {
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as Record<string, string | undefined>;
-    const periodStart = q.periodStart ?? q.startDate;
-    const periodEnd = q.periodEnd ?? q.endDate;
     const employeeId = q.employeeId;
 
-    if (!periodStart || !periodEnd) {
-      return reply.code(400).send({
-        error: "Validation error",
-        message: "periodStart and periodEnd (or startDate and endDate) are required",
-      });
+    const resolved = await resolveCompanyPeriodRange(user.companyId, {
+      periodStart: q.periodStart ?? q.startDate,
+      periodEnd: q.periodEnd ?? q.endDate,
+      periodKey: q.periodKey,
+    });
+    if ("error" in resolved) {
+      return reply.code(400).send({ error: "Validation error", message: resolved.error });
     }
-
-    const start = new Date(periodStart);
-    const end = new Date(periodEnd);
 
     const where: Record<string, unknown> = {
       companyId: user.companyId,
-      periodStart: start,
-      periodEnd: end,
+      periodStart: resolved.periodStart,
+      periodEnd: resolved.periodEnd,
     };
     if (employeeId) where.employeeId = employeeId;
 
@@ -60,20 +58,21 @@ export async function timesheetsRoutes(app: FastifyInstance) {
   app.get("/preview", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as Record<string, string | undefined>;
-    const periodStart = q.periodStart ?? q.startDate;
-    const periodEnd = q.periodEnd ?? q.endDate;
 
-    if (!periodStart || !periodEnd) {
-      return reply.code(400).send({
-        error: "Validation error",
-        message: "periodStart and periodEnd are required",
-      });
+    const resolved = await resolveCompanyPeriodRange(user.companyId, {
+      periodStart: q.periodStart ?? q.startDate,
+      periodEnd: q.periodEnd ?? q.endDate,
+      periodKey: q.periodKey,
+    });
+    if ("error" in resolved) {
+      return reply.code(400).send({ error: "Validation error", message: resolved.error });
     }
 
-    const start = new Date(periodStart);
-    const end = new Date(periodEnd);
-
-    const aggregates = await aggregateTimesheets(user.companyId, start, end);
+    const aggregates = await aggregateTimesheets(
+      user.companyId,
+      resolved.periodStart,
+      resolved.periodEnd
+    );
 
     const employees = await prisma.employee.findMany({
       where: { companyId: user.companyId, id: { in: aggregates.map((a) => a.employeeId) } },

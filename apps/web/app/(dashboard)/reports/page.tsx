@@ -34,14 +34,14 @@ export default function ReportsPage() {
   const { token } = useAuth();
   const [data, setData] = useState<ReportsData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [months, setMonths] = useState(6);
+  const [payPeriodCount, setPayPeriodCount] = useState(6);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
     setLoading(true);
     setError(null);
-    authFetch(`/reports?months=${months}`, token)
+    authFetch(`/reports?payPeriodCount=${payPeriodCount}`, token)
       .then((r) => r.json())
       .then(setData)
       .catch((err) => {
@@ -50,7 +50,7 @@ export default function ReportsPage() {
         setData(null);
       })
       .finally(() => setLoading(false));
-  }, [token, months]);
+  }, [token, payPeriodCount]);
 
   if (loading) {
     return (
@@ -75,17 +75,17 @@ export default function ReportsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <label htmlFor="reports-period" className="text-sm text-neutral-600 dark:text-neutral-400">Period:</label>
+          <label htmlFor="reports-period" className="text-sm text-neutral-600 dark:text-neutral-400">Pay periods:</label>
           <select
             id="reports-period"
-            value={months}
-            onChange={(e) => setMonths(Number(e.target.value))}
+            value={payPeriodCount}
+            onChange={(e) => setPayPeriodCount(Number(e.target.value))}
             className="input-compact w-auto"
           >
-            <option value={3}>3 months</option>
-            <option value={6}>6 months</option>
-            <option value={12}>12 months</option>
-            <option value={24}>24 months</option>
+            <option value={3}>Last 3 periods</option>
+            <option value={6}>Last 6 periods</option>
+            <option value={12}>Last 12 periods</option>
+            <option value={24}>Last 24 periods</option>
           </select>
         </div>
       </div>

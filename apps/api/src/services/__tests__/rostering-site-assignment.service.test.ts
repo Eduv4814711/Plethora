@@ -2,10 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../../lib/prisma.js", () => ({
   prisma: {
+    company: { findUnique: vi.fn() },
     employee: { findFirst: vi.fn() },
     post: { findFirst: vi.fn() },
     siteAssignment: { findFirst: vi.fn() },
-    shift: { findFirst: vi.fn() },
+    shift: { findFirst: vi.fn(), findMany: vi.fn() },
   },
 }));
 
@@ -24,10 +25,16 @@ const endTime = new Date("2026-05-10T16:00:00.000Z");
 
 describe("validateShiftAssignment site assignment", () => {
   beforeEach(() => {
+    vi.mocked(prisma.company.findUnique).mockReset();
     vi.mocked(prisma.employee.findFirst).mockReset();
     vi.mocked(prisma.post.findFirst).mockReset();
     vi.mocked(prisma.siteAssignment.findFirst).mockReset();
     vi.mocked(prisma.shift.findFirst).mockReset();
+    vi.mocked(prisma.shift.findMany).mockReset();
+
+    vi.mocked(prisma.company.findUnique).mockResolvedValue({
+      settings: { timezone: "Africa/Johannesburg" },
+    } as never);
 
     vi.mocked(prisma.employee.findFirst).mockResolvedValue({
       id: employeeId,
@@ -49,6 +56,7 @@ describe("validateShiftAssignment site assignment", () => {
     } as never);
 
     vi.mocked(prisma.shift.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.shift.findMany).mockResolvedValue([]);
   });
 
   it("requires SiteAssignment by default", async () => {

@@ -18,6 +18,7 @@ vi.mock("../../lib/roster-audit.js", () => ({
 
 vi.mock("../../lib/timezone.js", () => ({
   getCompanyTimezone: vi.fn().mockResolvedValue("Africa/Johannesburg"),
+  dateKeyInTimeZone: (d: Date) => d.toISOString().slice(0, 10),
   getShiftTimes: vi.fn((date: Date, shiftType: "day" | "night") => {
     const start = new Date(date);
     start.setUTCHours(shiftType === "day" ? 4 : 16, 0, 0, 0);

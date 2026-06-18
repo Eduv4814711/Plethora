@@ -74,12 +74,19 @@ export interface UIFResult {
   employer: number;
 }
 
+/** Monthly UIF ceiling prorated to the pay period. */
+export function uifEarningsCeilingForPeriod(payPeriod: PayPeriod): number {
+  const periodsPerYear = PERIODS_PER_YEAR[payPeriod];
+  return Math.round(((UIF_EARNINGS_CEILING * 12) / periodsPerYear) * 100) / 100;
+}
+
 /**
  * Calculate UIF contributions (employee and employer portions).
- * Capped at UIF_EARNINGS_CEILING (R17,712/month).
+ * Capped at the monthly ceiling prorated to the pay period.
  */
-export function calculateUIF(grossPay: number): UIFResult {
-  const leviableAmount = Math.min(grossPay, UIF_EARNINGS_CEILING);
+export function calculateUIF(grossPay: number, payPeriod: PayPeriod = "monthly"): UIFResult {
+  const ceiling = uifEarningsCeilingForPeriod(payPeriod);
+  const leviableAmount = Math.min(grossPay, ceiling);
   const contribution = leviableAmount * 0.01; // 1% each
   const amount = Math.round(contribution * 100) / 100;
   return { employee: amount, employer: amount };

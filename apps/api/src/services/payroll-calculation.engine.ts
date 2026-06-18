@@ -282,7 +282,7 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
 
     const taxableEarnings = grossPay;
     const paye = calculatePAYE(taxableEarnings, ctx.payPeriod, emp);
-    const { employee: uifEmployee, employer: uifEmployer } = calculateUIF(grossPay);
+    const { employee: uifEmployee, employer: uifEmployer } = calculateUIF(grossPay, ctx.payPeriod);
     const sdl = calculateSDL(grossPay, ctx.isSdlLiable);
 
     const ded = ctx.deductionsByEmployee.get(emp.id) ?? { total: 0, lines: [] };

@@ -311,34 +311,51 @@ describe("roster-scheduler", () => {
     ).toBe(false);
   });
 
-  it("rejects assignment on 7th consecutive work day", () => {
-    const start = new Date("2026-05-01T00:00:00.000Z");
-    const end = new Date("2026-05-10T23:59:59.999Z");
-    const calendarDays = buildCalendarDays(start, end);
-    const worked = new Set<string>();
-    const shiftTypes = new Map<string, "day" | "night">();
-    for (let i = 0; i < MAX_CONSECUTIVE_WORK_DAYS; i++) {
-      const key = calendarDays[i]!.toISOString().slice(0, 10);
-      worked.add(key);
-      shiftTypes.set(key, "day");
-    }
-    const dayIndex = MAX_CONSECUTIVE_WORK_DAYS;
-    const dateKey = calendarDays[dayIndex]!.toISOString().slice(0, 10);
-    expect(getConsecutiveWorkDaysBefore(worked, calendarDays, dayIndex)).toBe(
-      MAX_CONSECUTIVE_WORK_DAYS
+  it("isGuardEligibleForSlot rejects night when the next calendar day already has day", () => {
+    const guard: GuardCandidate = {
+      id: "g1",
+      gender: "M",
+      status: "active",
+      employeeType: "security",
+    };
+    const calendarDays = buildCalendarDays(
+      new Date("2026-05-01T00:00:00.000Z"),
+      new Date("2026-05-03T23:59:59.999Z")
     );
+    const runtime = emptyRuntime({
+      workedDateKeys: new Set(["2026-05-02"]),
+      shiftTypeByDateKey: new Map([["2026-05-02", "day"]]),
+    });
+    const nightSlot = {
+      siteId: "site-1",
+      postId: "p-night",
+      date: new Date("2026-05-01T00:00:00.000Z"),
+      dateKey: "2026-05-01",
+      shiftType: "night" as const,
+      requiredGender: null,
+      difficultyScore: 0,
+    };
+    const shiftStart = new Date("2026-05-01T16:00:00.000Z");
+    const shiftEnd = new Date("2026-05-02T04:00:00.000Z");
     expect(
-      wouldViolateRestRules({
-        slot: { dateKey, shiftType: "day" },
-        runtime: emptyRuntime({ workedDateKeys: worked, shiftTypeByDateKey: shiftTypes }),
-        prevDateKey: calendarDays[dayIndex - 1]!.toISOString().slice(0, 10),
+      isGuardEligibleForSlot({
+        guard,
+        slot: nightSlot,
+        siteGenderRules: { rosterDayShiftGender: null, rosterNightShiftGender: null },
+        postShiftType: "night",
+        siteAssignedGuardIds: new Set(["g1"]),
+        existingShifts: [],
+        runtime,
+        shiftStart,
+        shiftEnd,
         calendarDays,
-        dayIndex,
+        dayIndex: 0,
+        prevDateKey: null,
       })
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("seedOffDaysFromPattern preloads off counts from the pattern grid", () => {
+  it("rejects assignment on 7th consecutive work day", () => {
     const start = new Date("2026-05-01T00:00:00.000Z");
     const end = new Date("2026-05-09T23:59:59.999Z");
     const days = buildCalendarDays(start, end);

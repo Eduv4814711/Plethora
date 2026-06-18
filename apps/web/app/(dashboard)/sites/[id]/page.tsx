@@ -8,6 +8,7 @@ import { authFetch } from "@/lib/api";
 import { canManageSitesModule } from "@/lib/permissions";
 import { rosterSiteRulesLines } from "@/lib/roster-site-rules-defaults";
 import { buildSiteRosterReadinessHints } from "@/lib/roster-readiness-hints";
+import { CustomPatternBuilder, type CustomBlock } from "@/app/(dashboard)/rostering/CustomPatternBuilder";
 import { useConfirmDialog } from "@/components/ui";
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
@@ -58,6 +59,12 @@ interface Site {
   rosterNightShiftGender?: string | null;
   rosterDayShiftGuardsRequired?: number;
   rosterNightShiftGuardsRequired?: number;
+  autoRosterEnabled?: boolean;
+  autoRosterPattern?: string | null;
+  autoRosterCustomBlocks?: CustomBlock[] | null;
+  autoRosterMinCoveragePercent?: number;
+  autoRosterLastRunAt?: string | null;
+  autoRosterLastStatus?: string | null;
   latitude?: number | string | null;
   longitude?: number | string | null;
   geofenceRadiusMeters?: number | null;
@@ -262,11 +269,13 @@ export default function SiteDetailPage() {
             </div>
           )}
           <div className="card-elevated p-6">
-            <h2 className="section-title text-neutral-900 dark:text-neutral-100 mb-1">Auto-roster readiness</h2>
-            <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
-              Before generating a roster plan, confirm staffing, posts, and site-assigned guards.
-            </p>
-            <SiteAutoRosterChecklist site={site} />
+            <SiteAutoRosterSettings
+              site={site}
+              siteId={siteId}
+              token={token!}
+              canManage={canManage}
+              onSaved={refresh}
+            />
           </div>
 
           <div className="card-elevated p-6">
@@ -1064,6 +1073,231 @@ function SiteRosterSheetFields({
       >
         {saving ? "Saving…" : "Save roster settings"}
       </button>
+    </div>
+  );
+}
+
+function siteAutoRosterReady(site: Site): boolean {
+  const hints = buildSiteRosterReadinessHints(site);
+  const hasDay = site.posts.some((p) => (p.shiftType ?? "day") !== "night");
+  const hasNight = site.posts.some((p) => p.shiftType === "night");
+  return hasDay && hasNight && !hints.some((h) => h.level === "error");
+}
+
+function SiteAutoRosterSettings({
+  site,
+  siteId,
+  token,
+  canManage,
+  onSaved,
+}: {
+  site: Site;
+  siteId: string;
+  token: string;
+  canManage: boolean;
+  onSaved: () => void;
+}) {
+  const [enabled, setEnabled] = useState(Boolean(site.autoRosterEnabled));
+  const [pattern, setPattern] = useState<"3_on_3_off" | "custom_builder" | "">(
+    site.autoRosterPattern === "3_on_3_off" || site.autoRosterPattern === "custom_builder"
+      ? site.autoRosterPattern
+      : ""
+  );
+  const [customBlocks, setCustomBlocks] = useState<CustomBlock[]>(
+    site.autoRosterCustomBlocks?.length
+      ? site.autoRosterCustomBlocks
+      : [
+          { type: "day", count: 3 },
+          { type: "night", count: 3 },
+          { type: "off", count: 3 },
+        ]
+  );
+  const [minCoverage, setMinCoverage] = useState(String(site.autoRosterMinCoveragePercent ?? 100));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedFlash, setSavedFlash] = useState(false);
+  const ready = useMemo(() => siteAutoRosterReady(site), [site]);
+
+  useEffect(() => {
+    setEnabled(Boolean(site.autoRosterEnabled));
+    setPattern(
+      site.autoRosterPattern === "3_on_3_off" || site.autoRosterPattern === "custom_builder"
+        ? site.autoRosterPattern
+        : ""
+    );
+    if (site.autoRosterCustomBlocks?.length) {
+      setCustomBlocks(site.autoRosterCustomBlocks);
+    }
+    setMinCoverage(String(site.autoRosterMinCoveragePercent ?? 100));
+  }, [
+    site.id,
+    site.autoRosterEnabled,
+    site.autoRosterPattern,
+    site.autoRosterCustomBlocks,
+    site.autoRosterMinCoveragePercent,
+  ]);
+
+  const save = async () => {
+    setError(null);
+    const coverage = parseInt(minCoverage, 10);
+    if (!Number.isFinite(coverage) || coverage < 0 || coverage > 100) {
+      setError("Coverage threshold must be 0–100.");
+      return;
+    }
+    if (enabled && !pattern) {
+      setError("Choose a roster pattern before enabling auto-roster.");
+      return;
+    }
+    if (enabled && pattern === "custom_builder" && customBlocks.length === 0) {
+      setError("Add at least one block to the custom pattern.");
+      return;
+    }
+    if (enabled && !ready) {
+      setError("Complete the readiness checklist before enabling auto-roster.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await authFetch(`/sites/${siteId}`, token, {
+        method: "PUT",
+        body: JSON.stringify({
+          autoRosterEnabled: enabled,
+          autoRosterPattern: enabled ? pattern : null,
+          autoRosterCustomBlocks: enabled && pattern === "custom_builder" ? customBlocks : null,
+          autoRosterMinCoveragePercent: coverage,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof data.message === "string" ? data.message : data.error || "Failed to save"
+        );
+      }
+      onSaved();
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 2500);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const lastRunLabel =
+    site.autoRosterLastRunAt && site.autoRosterLastStatus
+      ? `${site.autoRosterLastStatus.replace(/_/g, " ")} · ${new Date(site.autoRosterLastRunAt).toLocaleString()}`
+      : null;
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="section-title text-neutral-900 dark:text-neutral-100 mb-1">Automatic rostering</h2>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 max-w-2xl">
+          When enabled, a daily job maintains shifts through your company payroll horizon. Plans meeting the
+          coverage threshold apply automatically; others queue for review on{" "}
+          <Link href="/rostering" className="font-medium text-orange-600 dark:text-orange-400 hover:underline">
+            Rostering
+          </Link>
+          .
+        </p>
+      </div>
+      {lastRunLabel && (
+        <p className="text-xs text-neutral-500 dark:text-neutral-400">Last run: {lastRunLabel}</p>
+      )}
+      {!canManage ? (
+        <div className="text-sm text-neutral-600 dark:text-neutral-400 space-y-2">
+          <p>
+            Auto-roster:{" "}
+            <span className="font-medium">{site.autoRosterEnabled ? "Enabled" : "Disabled"}</span>
+          </p>
+          {site.autoRosterEnabled && site.autoRosterPattern && (
+            <p>
+              Pattern:{" "}
+              {site.autoRosterPattern === "3_on_3_off" ? "3 days, 3 nights, 3 off" : "Custom pattern"} ·
+              threshold {site.autoRosterMinCoveragePercent ?? 100}%
+            </p>
+          )}
+          <SiteAutoRosterChecklist site={site} />
+        </div>
+      ) : (
+        <>
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
+              {error}
+            </div>
+          )}
+          {savedFlash && (
+            <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
+              Saved. Auto-roster will run for the current payroll horizon.
+            </p>
+          )}
+          <label className="flex items-center gap-2 text-sm font-medium text-neutral-800 dark:text-neutral-100">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(e) => setEnabled(e.target.checked)}
+              className="rounded"
+            />
+            Enable automatic rostering for this site
+          </label>
+          {enabled && (
+            <div className="space-y-4 pl-0 sm:pl-6 border-l-0 sm:border-l-2 border-orange-200 dark:border-orange-800/60">
+              <div>
+                <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+                  Pattern
+                </label>
+                <select
+                  value={pattern}
+                  onChange={(e) =>
+                    setPattern(e.target.value as "3_on_3_off" | "custom_builder" | "")
+                  }
+                  className="input-modern w-full max-w-md text-sm"
+                >
+                  <option value="">Select pattern</option>
+                  <option value="3_on_3_off">3 days, 3 nights, 3 off</option>
+                  <option value="custom_builder">Build custom pattern</option>
+                </select>
+              </div>
+              {pattern === "custom_builder" && (
+                <CustomPatternBuilder blocks={customBlocks} onChange={setCustomBlocks} />
+              )}
+              <div className="max-w-xs">
+                <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+                  Auto-apply when coverage ≥
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={minCoverage}
+                    onChange={(e) => setMinCoverage(e.target.value)}
+                    className="input-modern w-24 text-sm"
+                  />
+                  <span className="text-sm text-neutral-500">%</span>
+                </div>
+                <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-1">
+                  Default 100%. Lower values auto-apply partial coverage; otherwise plans queue for manager review.
+                </p>
+              </div>
+            </div>
+          )}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
+              Readiness checklist
+            </p>
+            <SiteAutoRosterChecklist site={site} />
+          </div>
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="btn-primary text-sm py-2 disabled:opacity-60"
+          >
+            {saving ? "Saving…" : "Save auto-roster settings"}
+          </button>
+        </>
+      )}
     </div>
   );
 }

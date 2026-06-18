@@ -191,6 +191,7 @@ async function completeWhatsAppClockOut(
 
   const now = new Date();
   const { hoursWorked, overtimeHours } = calculateHours(
+    attendance.clockIn!,
     now,
     attendance.shift.startTime,
     attendance.shift.endTime

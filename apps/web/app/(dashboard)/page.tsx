@@ -154,19 +154,25 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="animate-pulse space-y-8 max-w-[1600px] mx-auto">
-        <div className="space-y-3">
-          <div className="h-4 w-24 bg-security-navy-200/80 rounded-full" />
-          <div className="h-10 w-64 bg-neutral-200 rounded-xl" />
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-[1600px] animate-pulse flex-col overflow-hidden">
+        <div className="flex shrink-0 flex-col gap-3 border-b border-neutral-200/80 pb-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-2">
+            <div className="h-3 w-32 rounded-full bg-security-navy-200/80" />
+            <div className="h-8 w-44 rounded-xl bg-neutral-200" />
+          </div>
+          <div className="flex gap-2">
+            <div className="h-9 w-36 rounded-xl bg-neutral-200" />
+            <div className="h-9 w-48 rounded-full bg-neutral-200" />
+          </div>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+        <div className="grid shrink-0 grid-cols-2 gap-2 py-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={`kpi-${i}`} className="h-24 bg-white border border-neutral-200/80 rounded-2xl shadow-sm" />
+            <div key={`kpi-${i}`} className="h-[4.25rem] rounded-security-lg border border-neutral-200/80 bg-white shadow-sm" />
           ))}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-4 xl:grid-rows-2 xl:gap-3">
           {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-            <div key={i} className="h-72 bg-white border border-neutral-200/80 rounded-2xl shadow-sm" />
+            <div key={i} className="min-h-0 rounded-security-lg border border-neutral-200/80 bg-white shadow-sm" />
           ))}
         </div>
       </div>
@@ -180,50 +186,47 @@ export default function DashboardPage() {
   const taskUrgentCount = (data?.taskStats?.overdue ?? 0) + (data?.taskStats?.dueToday ?? 0);
   const alertTally = (data?.alerts ?? []).reduce((sum, a) => sum + (typeof a.count === "number" ? a.count : 1), 0);
 
-  const DashboardCard = ({ title, children, className = "", icons }: { title?: string; children: React.ReactNode; className?: string; icons?: React.ReactNode }) => (
-    <div
-      className={`group relative flex min-h-0 min-w-0 flex-col rounded-2xl border border-neutral-200/70 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-8px_rgba(245,124,0,0.07)] transition-shadow duration-300 hover:shadow-[0_4px_12px_rgba(15,23,42,0.06),0_20px_40px_-12px_rgba(245,124,0,0.12)] md:p-4 ${className}`}
-    >
-      {title && (
-        <div className="flex items-start justify-between gap-3 mb-2.5">
-          <h2 className="font-semibold text-[0.875rem] text-neutral-900 tracking-tight leading-snug flex items-center gap-2">
-            <span className="w-1 h-4 rounded-full bg-gradient-to-b from-security-navy-400 to-security-navy-700 shrink-0 shadow-sm" />
-            {title}
-          </h2>
-          {icons}
-        </div>
-      )}
-      <div className="flex-1 w-full min-h-0 flex flex-col">{children}</div>
+  const DashboardCard = ({ title, children, className = "", action }: { title: string; children: React.ReactNode; className?: string; action?: React.ReactNode }) => (
+    <article className={`card-dashboard flex h-full min-h-0 flex-col overflow-hidden p-3 lg:p-3.5 ${className}`}>
+      <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
+        <h2 className="truncate text-xs font-semibold uppercase tracking-wide text-neutral-800">{title}</h2>
+        {action}
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+    </article>
+  );
+
+  const KpiTile = ({ label, value, hint, accent }: { label: string; value: string | number; hint?: string; accent?: "default" | "alert" }) => (
+    <div className={`card-dashboard min-w-0 px-3 py-2.5 lg:py-2 ${accent === "alert" && Number(value) > 0 ? "border-security-navy-200 bg-security-navy-50/40" : ""}`}>
+      <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-neutral-500">{label}</p>
+      <p className="mt-0.5 text-xl font-bold tabular-nums tracking-tight text-neutral-900 lg:text-lg">{value}</p>
+      {hint ? <p className="mt-0.5 truncate text-[10px] text-neutral-500">{hint}</p> : null}
     </div>
   );
 
-  const KpiTile = ({ label, value, hint }: { label: string; value: string | number; hint?: string }) => (
-    <div className="min-w-0 rounded-2xl border border-neutral-200/60 bg-white/90 px-3 py-2.5 shadow-sm backdrop-blur-sm">
-      <p className="text-xs font-medium uppercase tracking-wider text-neutral-600 [overflow-wrap:anywhere]">{label}</p>
-      <p className="mt-1 text-xl font-bold tabular-nums text-neutral-900 tracking-tight">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-neutral-600">{hint}</p> : null}
-    </div>
+  const ChartWrap = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
+    <div className={`relative min-h-[5rem] w-full flex-1 ${className}`}>{children}</div>
   );
 
   return (
-    <div className="animate-fade-in max-w-[1600px] mx-auto flex min-h-0 w-full min-w-0 flex-col lg:h-full lg:min-h-0 lg:overflow-hidden">
-      <header className="flex shrink-0 flex-col gap-4 border-b border-neutral-200/80 pb-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-widest text-security-navy-700">
+    <div className="animate-fade-in mx-auto flex h-full min-h-0 w-full min-w-0 max-w-[1600px] flex-col overflow-hidden max-lg:overflow-y-auto max-lg:pb-6">
+      <header className="flex shrink-0 flex-col gap-3 border-b border-neutral-200/80 pb-3 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:pb-2.5">
+        <div className="min-w-0 shrink-0 lg:flex-1">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-security-navy-700 lg:text-xs">
             {format(new Date(), "EEEE, MMMM d, yyyy")}
           </p>
-          <h1 className="text-2xl font-bold text-neutral-900 tracking-tight md:text-[1.75rem]">Dashboard</h1>
-          <p className="text-xs md:text-sm text-neutral-600 max-w-xl">
-            Live snapshot of guards, sites, shifts, and tasks—filtered by your selection below.
+          <h1 className="text-xl font-bold tracking-tight text-neutral-900 lg:text-2xl">Dashboard</h1>
+          <p className="mt-1 hidden text-sm text-neutral-600 max-lg:block">
+            Live snapshot of guards, sites, shifts, and tasks.
           </p>
         </div>
-        <div className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
           {canSites && (
             <div className="relative w-full min-w-0 sm:w-auto" ref={siteFilterRef}>
               <button
                 type="button"
                 onClick={() => setSiteFilterOpen((o) => !o)}
-                className="flex w-full min-w-0 items-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-left text-sm font-medium text-neutral-900 shadow-sm transition-all hover:border-security-navy-300 hover:shadow-md sm:min-w-[220px] sm:w-auto"
+                className="flex w-full min-w-0 items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-left text-sm font-medium text-neutral-900 shadow-sm transition-all hover:border-security-navy-300 hover:shadow-md sm:min-w-[200px] sm:w-auto"
               >
                 <span className="truncate">
                   {selectedSiteIds.length === 0
@@ -275,7 +278,7 @@ export default function DashboardPage() {
                 key={r.value}
                 type="button"
                 onClick={() => setDateRange(r.value)}
-                className={`min-w-0 flex-1 px-3 py-2 text-sm font-semibold rounded-full transition-all sm:flex-none sm:px-5 ${dateRange === r.value ? "bg-security-navy-700 text-white shadow-md" : "text-neutral-700 hover:text-neutral-900 hover:bg-white/80"}`}
+                className={`min-w-0 flex-1 px-3 py-1.5 text-sm font-semibold rounded-full transition-all sm:flex-none sm:px-4 ${dateRange === r.value ? "bg-security-navy-700 text-white shadow-md" : "text-neutral-700 hover:text-neutral-900 hover:bg-white/80"}`}
               >
                 {r.label}
               </button>
@@ -284,61 +287,67 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <section
-        className="grid shrink-0 grid-cols-1 gap-2.5 py-3 min-[380px]:grid-cols-2 md:gap-3 md:py-4 lg:grid-cols-4"
-        aria-label="Key metrics"
-      >
-        <KpiTile label="Peak on duty (week)" value={peakGuardsThisWeek} hint="From roster trend" />
+      <section className="grid shrink-0 grid-cols-2 gap-2 py-2 lg:grid-cols-4 lg:gap-2.5 lg:py-2.5" aria-label="Key metrics">
+        <KpiTile label="Peak on duty" value={peakGuardsThisWeek} hint="This week" />
         <KpiTile label="Active sites" value={data?.activeSitesCount ?? 0} />
-        <KpiTile label="Tasks needing attention" value={taskUrgentCount} hint="Overdue + due today" />
-        <KpiTile label="Open alerts" value={alertTally} />
+        <KpiTile label="Tasks urgent" value={taskUrgentCount} hint="Overdue + today" accent={taskUrgentCount > 0 ? "alert" : "default"} />
+        <KpiTile label="Open alerts" value={alertTally} accent={alertTally > 0 ? "alert" : "default"} />
       </section>
 
-      <div className="grid min-h-0 min-w-0 grid-cols-1 gap-3 pb-4 max-lg:auto-rows-auto md:grid-cols-2 md:gap-4 xl:grid-cols-4 lg:flex-1 lg:auto-rows-fr lg:overflow-hidden lg:pb-1">
-        {/* Row 1 */}
-        <DashboardCard title="Guards On Duty" className="min-h-0 max-lg:min-h-[220px] lg:h-full">
-          <div className="min-h-[160px] w-full flex-1 max-lg:min-h-[200px] lg:min-h-[120px]">
+      <section
+        className="grid min-h-0 flex-1 grid-cols-1 gap-2.5 overflow-hidden max-lg:auto-rows-auto md:grid-cols-2 md:gap-3 xl:grid-cols-4 xl:grid-rows-2 xl:gap-3"
+        aria-label="Dashboard widgets"
+      >
+        <DashboardCard title="Guards on duty">
+          <ChartWrap>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={guardsByDay} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <BarChart data={guardsByDay} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-              <XAxis dataKey="name" tick={{ fill: "#525252", fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis domain={[0, "auto"]} tick={{ fill: "#525252", fontSize: 12 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="name" tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis domain={[0, "auto"]} tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
               <Bar dataKey="value" fill="#FF9800" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-          </div>
+          </ChartWrap>
         </DashboardCard>
 
-        <DashboardCard title="Active Sites" className="min-h-0 max-lg:min-h-[220px] lg:h-full">
-          <div className="flex flex-col items-center justify-center flex-1 gap-2 py-1">
-            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-security-navy-50 to-white border border-security-navy-100 shadow-inner">
-              <span className="text-3xl font-bold tabular-nums text-neutral-900 tracking-tight">{data?.activeSitesCount ?? 0}</span>
+        <DashboardCard
+          title="Active sites"
+          action={
+            canSites ? (
+              <Link href="/sites" className="text-xs font-semibold text-security-navy-800 hover:text-security-navy-900">
+                Manage →
+              </Link>
+            ) : undefined
+          }
+        >
+          <div className="flex flex-1 flex-col justify-between gap-2">
+            <div>
+              <p className="text-3xl font-bold tabular-nums tracking-tight text-neutral-900 lg:text-2xl">{data?.activeSitesCount ?? 0}</p>
+              <p className="mt-0.5 text-xs text-neutral-600 lg:text-sm">Sites active</p>
+              {typeof data?.activeSitesDelta === "number" && (
+                <p className="mt-1 text-xs text-neutral-600">
+                  <span className={`font-semibold ${data.activeSitesDelta >= 0 ? "text-security-navy-800" : "text-red-700"}`}>
+                    {data.activeSitesDelta >= 0 ? "+" : ""}{data.activeSitesDelta}
+                  </span>
+                  {" "}since last month
+                </p>
+              )}
             </div>
-            {typeof data?.activeSitesDelta === "number" && (
-              <p className="text-sm text-neutral-600 text-center">
-                <span className={`font-semibold ${data.activeSitesDelta >= 0 ? "text-security-navy-800" : "text-red-700"}`}>
-                  {data.activeSitesDelta >= 0 ? "+" : ""}{data.activeSitesDelta}
-                </span>
-                {" "}since last month
-              </p>
-            )}
             {canSites && (
-              <Link
-                href="/sites"
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-security-navy-700 text-white text-sm font-semibold hover:bg-security-navy-800 transition-colors shadow-sm hover:shadow-md"
-              >
+              <Link href="/sites" className="btn-primary inline-flex w-full items-center justify-center gap-1 py-2 text-xs lg:text-sm">
                 Add site
-                <span className="text-lg leading-none">+</span>
+                <span className="text-base leading-none" aria-hidden>+</span>
               </Link>
             )}
           </div>
         </DashboardCard>
 
-        <DashboardCard title="Active Guards Rostered" className="min-h-0 max-lg:min-h-[260px] lg:h-full">
-          <div className="flex h-full flex-col gap-2">
-            <div className="min-h-[140px] w-full flex-1 max-lg:min-h-[180px] lg:min-h-[100px]">
+        <DashboardCard title="Active guards rostered">
+          <div className="flex flex-1 flex-col">
+          <ChartWrap>
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={shiftsOverTimeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <AreaChart data={shiftsOverTimeData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#FF9800" stopOpacity={0.3} />
@@ -346,49 +355,46 @@ export default function DashboardPage() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                  <XAxis dataKey="name" tick={{ fill: "#525252", fontSize: 12 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "#525252", fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="name" tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
                   <Area type="monotone" dataKey="value" stroke="#FF9800" strokeWidth={2} fill="url(#areaFill)" />
                 </AreaChart>
               </ResponsiveContainer>
-            </div>
+          </ChartWrap>
             {canRostering && (
-              <Link
-                href="/rostering"
-                className="w-full py-2 rounded-xl border border-neutral-200 bg-neutral-50/80 text-center text-sm font-semibold text-neutral-900 hover:bg-white hover:border-security-navy-200 hover:text-security-navy-900 transition-all shrink-0"
-              >
+              <Link href="/rostering" className="btn-secondary mt-1.5 w-full shrink-0 py-1.5 text-center text-xs lg:text-sm">
                 View schedule
               </Link>
             )}
           </div>
         </DashboardCard>
 
-        <DashboardCard title="My Tasks" className="min-h-0 max-lg:min-h-[220px] lg:h-full">
-          <div className="space-y-2 text-sm flex-1">
-            <div className="flex justify-between items-center rounded-xl bg-red-50/80 border border-red-100 px-3 py-2">
-              <span className="font-medium text-neutral-900">Overdue</span>
-              <span className="font-bold tabular-nums text-neutral-900">{data?.taskStats?.overdue ?? 0}</span>
+        <DashboardCard
+          title="My tasks"
+          action={
+            <Link href="/tasks" className="text-xs font-semibold text-security-navy-800 hover:text-security-navy-900">
+              View all →
+            </Link>
+          }
+        >
+          <div className="flex flex-1 flex-col gap-2">
+            <div className="flex items-center justify-between rounded-security border border-red-100 bg-red-50/80 px-3 py-2">
+              <span className="text-xs font-medium text-neutral-900 lg:text-sm">Overdue</span>
+              <span className="text-base font-bold tabular-nums text-neutral-900">{data?.taskStats?.overdue ?? 0}</span>
             </div>
-            <div className="flex justify-between items-center rounded-xl bg-security-navy-50/80 border border-security-navy-100 px-3 py-2">
-              <span className="font-medium text-neutral-900">Due today</span>
-              <span className="font-bold tabular-nums text-neutral-900">{data?.taskStats?.dueToday ?? 0}</span>
+            <div className="flex items-center justify-between rounded-security border border-security-navy-100 bg-security-navy-50/80 px-3 py-2">
+              <span className="text-xs font-medium text-neutral-900 lg:text-sm">Due today</span>
+              <span className="text-base font-bold tabular-nums text-neutral-900">{data?.taskStats?.dueToday ?? 0}</span>
             </div>
           </div>
-          <Link
-            href="/tasks"
-            className="mt-auto pt-2 flex items-center justify-center gap-2 w-full px-4 py-2 font-semibold rounded-xl border border-neutral-200 bg-white text-neutral-900 hover:border-security-navy-300 hover:bg-security-navy-50/50 text-sm transition-all shadow-sm"
-          >
-            View Tasks
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
+          <Link href="/tasks" className="btn-secondary mt-auto w-full shrink-0 py-1.5 text-center text-xs lg:text-sm">
+            Open tasks
           </Link>
         </DashboardCard>
 
-        {/* Row 2 */}
-        <DashboardCard title="Team Member By Status" className="min-h-0 max-lg:min-h-[280px] lg:h-full">
-          <div className="relative flex w-full flex-1 flex-col gap-2">
-            <div className="relative flex min-h-[160px] flex-1 items-center justify-center max-lg:min-h-[200px] lg:min-h-[120px]">
+        <DashboardCard title="Team by status">
+          <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+            <ChartWrap>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -398,8 +404,8 @@ export default function DashboardPage() {
                     })()}
                     cx="50%"
                     cy="50%"
-                    innerRadius={40}
-                    outerRadius={56}
+                    innerRadius="55%"
+                    outerRadius="78%"
                     fill="#8884d8"
                     dataKey="value"
                     paddingAngle={2}
@@ -414,22 +420,22 @@ export default function DashboardPage() {
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="text-xl font-bold text-neutral-900">{employeesTotal || 0}</span>
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="text-lg font-bold text-neutral-900">{employeesTotal || 0}</span>
               </div>
-            </div>
-            <div className="flex flex-wrap gap-x-3 gap-y-1 justify-center border-t border-neutral-100/90 pt-2">
+            </ChartWrap>
+            <div className="grid shrink-0 grid-cols-2 gap-x-2 gap-y-1 border-t border-neutral-100 pt-1.5 text-[10px] lg:text-xs">
               {(() => {
                 const raw = data?.employeesByStatus ?? [];
                 const chartData = raw.some((d) => d.value > 0) ? raw : defaultStatusData;
                 return chartData.map((item, index) => (
-                  <div key={item.name} className="flex items-center gap-1.5 text-xs">
+                  <div key={item.name} className="flex min-w-0 items-center gap-1.5">
                     <span
-                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
                       style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
                     />
-                    <span className="text-neutral-600">{item.name}</span>
-                    <span className="text-neutral-400">({item.value})</span>
+                    <span className="truncate text-neutral-600">{item.name}</span>
+                    <span className="ml-auto shrink-0 font-medium tabular-nums text-neutral-900">{item.value}</span>
                   </div>
                 ));
               })()}
@@ -437,152 +443,127 @@ export default function DashboardPage() {
           </div>
         </DashboardCard>
 
-        <DashboardCard title="Shift Scheduled Over Time" className="min-h-0 max-lg:min-h-[220px] lg:h-full">
-          <div className="min-h-[160px] w-full flex-1 max-lg:min-h-[200px] lg:min-h-[120px]">
+        <DashboardCard title="Shifts over time">
+          <ChartWrap>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={shiftsOverTimeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} barSize={40}>
+            <BarChart data={shiftsOverTimeData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barSize={28}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis dataKey="name" tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
               <Bar dataKey="value" fill="#F57C00" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-          </div>
+          </ChartWrap>
         </DashboardCard>
 
-        <DashboardCard title="Payroll Status" className="min-h-0 max-lg:min-h-[220px] lg:h-full">
-          <div className="flex flex-col gap-2 flex-1">
+        <DashboardCard
+          title="Payroll status"
+          action={
+            canPayroll ? (
+              <Link href="/payroll" className="text-xs font-semibold text-security-navy-800 hover:text-security-navy-900">
+                Open →
+              </Link>
+            ) : undefined
+          }
+        >
+          <div className="flex min-h-0 flex-1 flex-col gap-1.5">
             {canPayroll ? (
               <>
-                <Link
-                  href="/payroll"
-                  className="flex items-center justify-between w-full bg-neutral-50 hover:bg-white py-2.5 px-3 rounded-xl border border-neutral-200/90 transition-all hover:border-security-navy-200 shadow-sm hover:shadow-md"
-                >
-                  <span className="flex items-center gap-3">
-                    <span className="w-5 h-5 rounded-full border-2 border-neutral-400 flex items-center justify-center bg-white" />
-                    <span className="font-semibold text-sm text-neutral-900">Draft</span>
-                  </span>
-                  <span className="font-bold tabular-nums text-neutral-900">{data?.payrollStatus?.draft ?? 0}</span>
-                </Link>
-                <Link
-                  href="/payroll"
-                  className="flex items-center justify-between w-full bg-neutral-50 hover:bg-white py-2.5 px-3 rounded-xl border border-neutral-200/90 transition-all hover:border-security-navy-200 shadow-sm hover:shadow-md"
-                >
-                  <span className="flex items-center gap-3">
-                    <span className="w-5 h-5 rounded-full border-2 border-neutral-400 flex items-center justify-center bg-white" />
-                    <span className="font-semibold text-sm text-neutral-900">Calc.</span>
-                  </span>
-                  <span className="font-bold tabular-nums text-neutral-900">{data?.payrollStatus?.calculated ?? 0}</span>
-                </Link>
-                <Link
-                  href="/payroll"
-                  className="flex items-center justify-between w-full bg-security-navy-50/60 hover:bg-security-navy-50 py-2.5 px-3 rounded-xl border border-security-navy-100 transition-all shadow-sm hover:shadow-md"
-                >
-                  <span className="flex items-center gap-3">
-                    <span className="w-5 h-5 rounded-full border-2 border-security-navy-700 bg-security-navy-700 flex items-center justify-center">
-                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </span>
-                    <span className="font-semibold text-sm text-neutral-900">Paid</span>
-                  </span>
-                  <span className="font-bold tabular-nums text-neutral-900">{data?.payrollStatus?.paid ?? 0}</span>
-                </Link>
-                <Link
-                  href="/payroll"
-                  className="mt-1 w-full py-2 px-3 text-center font-semibold text-sm bg-security-navy-700 hover:bg-security-navy-800 text-white rounded-xl transition-all shadow-md hover:shadow-lg"
-                >
-                  Generate Payrun
+                {[
+                  { key: "draft", label: "Draft", href: "/payroll" },
+                  { key: "calculated", label: "Calculated", href: "/payroll" },
+                  { key: "paid", label: "Paid", href: "/payroll", highlight: true },
+                ].map((row) => (
+                  <Link
+                    key={row.key}
+                    href={row.href}
+                    className={`flex shrink-0 items-center justify-between rounded-security border px-3 py-1.5 transition-colors hover:shadow-sm lg:py-2 ${
+                      row.highlight
+                        ? "border-security-navy-100 bg-security-navy-50/60 hover:bg-security-navy-50"
+                        : "border-neutral-200 bg-neutral-50 hover:bg-white"
+                    }`}
+                  >
+                    <span className="text-xs font-medium text-neutral-900 lg:text-sm">{row.label}</span>
+                    <span className="text-base font-bold tabular-nums text-neutral-900">{data?.payrollStatus?.[row.key as keyof typeof data.payrollStatus] ?? 0}</span>
+                  </Link>
+                ))}
+                <Link href="/payroll" className="btn-primary mt-auto w-full shrink-0 py-1.5 text-center text-xs lg:text-sm">
+                  Generate payrun
                 </Link>
               </>
             ) : (
-              <div className="flex flex-col gap-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-neutral-600">Draft</span>
-                  <span className="font-bold text-neutral-900">{data?.payrollStatus?.draft ?? 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-neutral-600">Calc.</span>
-                  <span className="font-bold text-neutral-900">{data?.payrollStatus?.calculated ?? 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-neutral-600">Paid</span>
-                  <span className="font-bold text-neutral-900">{data?.payrollStatus?.paid ?? 0}</span>
-                </div>
+              <div className="space-y-2 text-sm">
+                {(["draft", "calculated", "paid"] as const).map((key) => (
+                  <div key={key} className="flex justify-between border-b border-neutral-100 py-2 last:border-0">
+                    <span className="capitalize text-neutral-600">{key}</span>
+                    <span className="font-bold tabular-nums text-neutral-900">{data?.payrollStatus?.[key] ?? 0}</span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
         </DashboardCard>
 
         {canWhatsApp ? (
-          <DashboardCard title="WhatsApp" className="min-h-0 max-lg:min-h-[240px] lg:h-full">
-            <p className="text-xs text-neutral-600 mb-2 leading-relaxed">Message team members directly</p>
-            <div className="space-y-1 flex-1 min-h-0 overflow-hidden">
+          <DashboardCard
+            title="WhatsApp"
+            action={
+              whatsappContacts.length > 0 ? (
+                <Link href="/whatsapp" className="text-xs font-semibold text-security-navy-800 hover:text-security-navy-900">
+                  View all ({whatsappContacts.length}) →
+                </Link>
+              ) : undefined
+            }
+          >
+            <p className="mb-1.5 shrink-0 text-[10px] text-neutral-600 lg:text-xs">Message team directly</p>
+            <div className="min-h-0 flex-1 overflow-hidden">
               {whatsappContacts.length > 0 ? (
-                whatsappContacts.slice(0, 3).map((contact) => (
-                  <div
+                whatsappContacts.slice(0, 2).map((contact) => (
+                  <button
                     key={contact.id}
-                    role="button"
-                    tabIndex={0}
+                    type="button"
                     onClick={() => router.push(`/whatsapp?contact=${contact.id}`)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        router.push(`/whatsapp?contact=${contact.id}`);
-                      }
-                    }}
-                    className="flex items-center gap-2 py-2 border-b border-neutral-100 last:border-0 cursor-pointer transition-colors hover:bg-security-navy-50/60 rounded-xl px-2 -mx-1"
+                    className="flex w-full items-center gap-2 rounded-security border border-transparent px-1 py-1 text-left transition-colors hover:bg-neutral-50 lg:gap-2.5 lg:py-1.5"
                   >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-neutral-900 truncate">
-                        {contact.firstName?.charAt(0)}{contact.lastName?.charAt(0)} {contact.firstName}...
-                      </p>
-                      <p className="text-xs text-neutral-500 truncate">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-security-navy-100 text-[10px] font-semibold text-security-navy-900 lg:h-8 lg:w-8">
+                      {contact.firstName?.charAt(0)}
+                      {contact.lastName?.charAt(0)}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-medium text-neutral-900">
+                        {contact.firstName} {contact.lastName}
+                      </span>
+                      <span className="block truncate text-[10px] text-neutral-500">
                         {contact.phone
                           ? (() => {
                               const digits = contact.phone!.replace(/\D/g, "");
                               const national = digits.startsWith("27") ? "0" + digits.slice(2) : digits;
-                              return `${national.slice(0, 10)}${national.length > 10 ? "..." : ""}`;
+                              return national;
                             })()
-                          : "-"}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                      <button className="p-1.5 rounded text-neutral-500 hover:bg-neutral-100" title="More">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
+                          : "No phone"}
+                      </span>
+                    </span>
+                  </button>
                 ))
               ) : (
-                <p className="text-sm text-neutral-500 py-4">No contacts</p>
+                <p className="py-3 text-center text-xs text-neutral-500">No contacts yet</p>
               )}
             </div>
-            {whatsappContacts.length > 3 && (
-              <Link href="/whatsapp" className="text-sm font-semibold text-security-navy-800 hover:text-security-navy-900 mt-2 inline-flex items-center gap-1">
-                View all ({whatsappContacts.length})
-                <span aria-hidden>→</span>
-              </Link>
-            )}
-            <Link
-              href="/whatsapp"
-              className="mt-auto pt-2 flex items-center justify-center gap-2 w-full px-4 py-2 font-semibold rounded-xl border border-security-navy-500 bg-security-navy-500 text-white hover:bg-security-navy-600 text-sm transition-all shadow-md hover:shadow-lg"
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <Link href="/whatsapp" className="btn-primary mt-auto flex w-full shrink-0 items-center justify-center gap-1.5 py-1.5 text-xs lg:text-sm">
+              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
                 <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
               </svg>
-              WhatsApp
+              Open WhatsApp
             </Link>
           </DashboardCard>
         ) : (
-          <DashboardCard title="WhatsApp" className="min-h-0 max-lg:min-h-[240px] lg:h-full">
-            <p className="text-xs text-neutral-600 mb-3">Message team members directly</p>
-            <p className="text-sm text-neutral-600 py-6 text-center rounded-xl bg-neutral-50 border border-dashed border-neutral-200">No access</p>
+          <DashboardCard title="WhatsApp">
+            <p className="rounded-security border border-dashed border-neutral-200 bg-neutral-50 py-6 text-center text-xs text-neutral-600 lg:text-sm">
+              No WhatsApp access
+            </p>
           </DashboardCard>
         )}
-      </div>
+      </section>
     </div>
   );
 }

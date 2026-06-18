@@ -38,6 +38,7 @@ import { leaveRequestsRoutes } from "./routes/leave-requests.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { auditRoutes } from "./routes/audit.js";
 import { settingsRoutes } from "./routes/settings.js";
+import { payPeriodsRoutes } from "./routes/pay-periods.js";
 import { uploadsRoutes } from "./routes/uploads.js";
 import { searchRoutes } from "./routes/search.js";
 import { migrationsRoutes } from "./routes/migrations.js";
@@ -49,6 +50,7 @@ import { taskCommentsRoutes } from "./routes/task-comments.js";
 import { taskAttachmentsRoutes } from "./routes/task-attachments.js";
 import { taskRemindersRoutes } from "./routes/task-reminders.js";
 import { academyRoutes } from "./routes/academy/index.js";
+import { internalCronRoutes } from "./routes/internal-cron.js";
 import { corsOriginFromEnv, env } from "./lib/env.js";
 
 function isValidationError(err: unknown): boolean {
@@ -184,6 +186,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(dashboardRoutes, { prefix: "/dashboard" });
   await app.register(auditRoutes, { prefix: "/audit" });
   await app.register(settingsRoutes, { prefix: "/settings" });
+  await app.register(payPeriodsRoutes, { prefix: "/pay-periods" });
   await app.register(uploadsRoutes, { prefix: "/uploads" });
   await app.register(searchRoutes, { prefix: "/search" });
   await app.register(migrationsRoutes, { prefix: "/migrations" });
@@ -194,6 +197,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(taskAttachmentsRoutes, { prefix: "/task-attachments" });
   await app.register(taskRemindersRoutes, { prefix: "/task-reminders" });
   await app.register(academyRoutes, { prefix: "/academy" });
+  await app.register(internalCronRoutes, { prefix: "/internal" });
 
   return app;
 }

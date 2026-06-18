@@ -58,24 +58,29 @@ export async function validateClockIn(
   return { shift };
 }
 
+/**
+ * Compute standard and overtime hours from clock times.
+ * Standard hours = time from max(clockIn, shiftStart) to min(clockOut, shiftEnd).
+ * Overtime = time worked after scheduled shift end.
+ */
 export function calculateHours(
+  clockIn: Date,
   clockOut: Date,
   shiftStartTime: Date,
   shiftEndTime: Date
 ): { hoursWorked: number; overtimeHours: number } {
-  const shiftDurationMs = shiftEndTime.getTime() - shiftStartTime.getTime();
-  const shiftDurationHours = shiftDurationMs / (1000 * 60 * 60);
-
-  const standardEnd = shiftEndTime.getTime();
-  const clockOutMs = clockOut.getTime();
+  const msPerHour = 1000 * 60 * 60;
+  const payableStartMs = Math.max(clockIn.getTime(), shiftStartTime.getTime());
+  const standardEndMs = Math.min(clockOut.getTime(), shiftEndTime.getTime());
+  const standardHours = Math.max(0, (standardEndMs - payableStartMs) / msPerHour);
 
   let overtimeHours = 0;
-  if (clockOutMs > standardEnd) {
-    overtimeHours = (clockOutMs - standardEnd) / (1000 * 60 * 60);
+  if (clockOut.getTime() > shiftEndTime.getTime()) {
+    overtimeHours = (clockOut.getTime() - shiftEndTime.getTime()) / msPerHour;
   }
 
   return {
-    hoursWorked: Math.round(shiftDurationHours * 100) / 100,
+    hoursWorked: Math.round(standardHours * 100) / 100,
     overtimeHours: Math.round(overtimeHours * 100) / 100,
   };
 }

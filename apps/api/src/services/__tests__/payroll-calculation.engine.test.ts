@@ -281,4 +281,25 @@ describe("computePayrollLines", () => {
     );
     expect(lines[0]!.grossPay).toBe(11000);
   });
+
+  it("computes net pay as gross minus deductions, PAYE, and UIF", () => {
+    const emp = baseEmployee({
+      hourlyRate: 100,
+      grade: { id: "g1", name: "G", hourlyRate: 100, companyId: "co-1" } as PayGrade,
+      dateOfBirth: new Date("1990-01-01"),
+    });
+    const { lines } = computePayrollLines(
+      ctx({
+        employees: [emp],
+        aggregates: new Map([["emp-1", agg({ basicHours: 160 })]]),
+        deductionsByEmployee: new Map([
+          ["emp-1", { total: 200, lines: [{ name: "Pension", amount: 200 }] }],
+        ]),
+      })
+    );
+    const line = lines[0]!;
+    expect(line.grossPay).toBe(16000);
+    expect(line.deductions).toBeGreaterThan(200);
+    expect(line.netPay).toBe(Math.round((line.grossPay - line.deductions) * 100) / 100);
+  });
 });

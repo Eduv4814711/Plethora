@@ -4,7 +4,8 @@ import { useEffect, useState, useMemo, type ReactElement } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useAuth } from "@/lib/auth-context";
-import { authFetch } from "@/lib/api";
+import { authFetch, fetchCurrentPayPeriod, fetchPayPeriods, type PayPeriodOption } from "@/lib/api";
+import { PayPeriodSelect } from "@/components/pay-period-select";
 import { format, addDays, startOfMonth, endOfMonth, parseISO, startOfDay } from "date-fns";
 
 type BulkPattern =
@@ -25,11 +26,6 @@ import { ShiftRosterSheet } from "./ShiftRosterSheet";
 import { buildShiftSheetRows, mergeSheetEmployeeLookup, type ShiftSheetRow } from "@/lib/shift-sheet-matrix";
 import { DateInput } from "@/components/date-input";
 import { generateGuardRosterPDF, generateShiftRosterSheetPDF } from "@/lib/roster-pdf";
-import {
-  meetsSiteDualShiftRosterRules,
-  meetsSiteShiftGenderRule,
-  siteHasRestrictiveShiftGenderRules,
-} from "@/lib/site-shift-gender-rules";
 import { buildSiteRosterReadinessHints } from "@/lib/roster-readiness-hints";
 import { useConfirmDialog } from "@/components/ui";
 
@@ -175,8 +171,10 @@ export default function RosteringPage() {
   const thisMonthEnd = endOfMonth(now);
   const [periodStart, setPeriodStart] = useState(() => format(thisMonthStart, "yyyy-MM-dd"));
   const [periodEnd, setPeriodEnd] = useState(() => format(thisMonthEnd, "yyyy-MM-dd"));
-  const [draftPeriodStart, setDraftPeriodStart] = useState(() => format(thisMonthStart, "yyyy-MM-dd"));
-  const [draftPeriodEnd, setDraftPeriodEnd] = useState(() => format(thisMonthEnd, "yyyy-MM-dd"));
+  const [periodKey, setPeriodKey] = useState("");
+  const [rosterPeriodLabel, setRosterPeriodLabel] = useState("");
+  const [payPeriodOptions, setPayPeriodOptions] = useState<PayPeriodOption[]>([]);
+  const [draftPeriodKey, setDraftPeriodKey] = useState("");
   const [showPeriodModal, setShowPeriodModal] = useState(false);
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
   const [pattern, setPattern] = useState<BulkPattern>("3_on_3_off");
@@ -186,10 +184,6 @@ export default function RosteringPage() {
     { type: "night", count: 3 },
     { type: "off", count: 3 },
   ]);
-  const [draggedGuard, setDraggedGuard] = useState<Employee | null>(null);
-  const [dragOverPostId, setDragOverPostId] = useState<string | null>(null);
-  const [dragOverSiteId, setDragOverSiteId] = useState<string | null>(null);
-  const [guardSearch, setGuardSearch] = useState("");
 
   const isDualPattern = pattern === "3_on_3_off" || pattern === "custom_builder";
   const [bulkError, setBulkError] = useState<string | null>(null);
@@ -207,6 +201,51 @@ export default function RosteringPage() {
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [applyingPlan, setApplyingPlan] = useState(false);
   const [rosterPlanApplyError, setRosterPlanApplyError] = useState<string | null>(null);
+  type AutomationRun = {
+    id: string;
+    siteId: string;
+    siteName?: string;
+    periodStart: string;
+    periodEnd: string;
+    status: string;
+    coveragePercent: number | null;
+    plan: RosterPlan | null;
+    errorMessage: string | null;
+    createdAt: string;
+  };
+  const [automationRuns, setAutomationRuns] = useState<AutomationRun[]>([]);
+  const [automationRun, setAutomationRun] = useState<AutomationRun | null>(null);
+  const [showAutomationModal, setShowAutomationModal] = useState(false);
+  const [automationApplying, setAutomationApplying] = useState(false);
+  const [automationApplyError, setAutomationApplyError] = useState<string | null>(null);
+  const pendingAutomationCount = automationRuns.filter((r) => r.status === "pending_review").length;
+  const applyPayPeriod = (period: PayPeriodOption) => {
+    setPeriodKey(period.periodKey);
+    setPeriodStart(period.periodStart);
+    setPeriodEnd(period.periodEnd);
+    setRosterPeriodLabel(period.rosterLabel);
+  };
+
+  const shiftPayPeriod = (direction: -1 | 1) => {
+    if (!periodKey || payPeriodOptions.length === 0) return;
+    const idx = payPeriodOptions.findIndex((p) => p.periodKey === periodKey);
+    const next = payPeriodOptions[idx + direction];
+    if (next) applyPayPeriod(next);
+  };
+
+  useEffect(() => {
+    if (!token) return;
+    Promise.all([
+      fetchCurrentPayPeriod(token),
+      fetchPayPeriods(token, { before: 12, after: 6 }),
+    ])
+      .then(([current, periods]) => {
+        setPayPeriodOptions(periods);
+        if (!periodKey) applyPayPeriod(current);
+      })
+      .catch(console.error);
+  }, [token]);
+
   const rosteredEmployees = useMemo(() => {
     const seen = new Set<string>();
     const list: { id: string; firstName: string; lastName: string }[] = [];
@@ -440,8 +479,7 @@ export default function RosteringPage() {
   const getMonthRangeForReset = () => getDateRangeParams();
 
   const openPeriodModal = () => {
-    setDraftPeriodStart(periodStart);
-    setDraftPeriodEnd(periodEnd);
+    setDraftPeriodKey(periodKey);
     setShowPeriodModal(true);
   };
 
@@ -514,36 +552,11 @@ export default function RosteringPage() {
     return ids.size;
   }, [selectedSiteId, shifts, rosteredEmployees.length]);
 
-  const filteredAvailableGuards = useMemo(() => {
-    const term = guardSearch.trim().toLowerCase();
-    if (!term) return siteAssignedGuards;
-    return siteAssignedGuards.filter((g) => {
-      const fullName = `${g.firstName} ${g.lastName}`.toLowerCase();
-      return (
-        fullName.includes(term) ||
-        g.firstName.toLowerCase().includes(term) ||
-        g.lastName.toLowerCase().includes(term)
-      );
-    });
-  }, [siteAssignedGuards, guardSearch]);
-
   const postsForSelectedSite = useMemo(() => {
     if (!selectedSiteId) return [];
     const site = sites.find((s) => s.id === selectedSiteId);
     return site?.posts ?? [];
   }, [sites, selectedSiteId]);
-
-  const postPrefsByGuardId = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const post of postsForSelectedSite) {
-      for (const assignment of post.assignedGuards ?? []) {
-        const list = map.get(assignment.employee.id) ?? [];
-        list.push(post.name);
-        map.set(assignment.employee.id, list);
-      }
-    }
-    return map;
-  }, [postsForSelectedSite]);
 
   const selectedSite = useMemo(
     () => (selectedSiteId ? sites.find((s) => s.id === selectedSiteId) : undefined),
@@ -554,52 +567,6 @@ export default function RosteringPage() {
     if (!selectedSite) return [];
     return buildSiteRosterReadinessHints(selectedSite);
   }, [selectedSite]);
-
-  /** Shift kinds actually used by the dual-pattern bulk flow (site drop). */
-  const siteDualPatternShiftKinds = useMemo((): ("day" | "night")[] | null => {
-    if (!isDualPattern) return null;
-    if (pattern === "3_on_3_off") return ["day", "night"];
-    if (pattern === "custom_builder") {
-      const kinds = new Set<"day" | "night">();
-      for (const b of customBlocks) {
-        if (b.type === "day") kinds.add("day");
-        if (b.type === "night") kinds.add("night");
-      }
-      return [...kinds];
-    }
-    return null;
-  }, [isDualPattern, pattern, customBlocks]);
-
-  const handleBulkDrop = async (employeeId: string, postId: string) => {
-    if (!token) return;
-    setBulkError(null);
-    const { startDate, endDate } = getDateRangeParams();
-    const body: Record<string, unknown> = {
-      employeeId,
-      postId,
-      startDate: startDate.slice(0, 10),
-      endDate: endDate.slice(0, 10),
-      pattern,
-    };
-    if (pattern === "custom") body.customDays = customDays;
-    try {
-      const res = await authFetch("/shifts/bulk", token, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to create shifts");
-      refresh();
-      if (data.deleted > 0 && data.created > 0) {
-        setBulkError(`Replaced ${data.deleted} shift(s), created ${data.created} for the period.`);
-        setTimeout(() => setBulkError(null), 4000);
-      } else if (data.errors?.length) {
-        setBulkError(`Created ${data.created}. Some skipped: ${data.errors.slice(0, 3).join("; ")}`);
-      }
-    } catch (err) {
-      setBulkError(err instanceof Error ? err.message : "Failed to create shifts");
-    }
-  };
 
   const canGenerateRosterPlan =
     !!selectedSiteId &&
@@ -681,34 +648,64 @@ export default function RosteringPage() {
     }
   };
 
-  const handleBulkDropOnSite = async (employeeId: string, siteId: string) => {
-    if (!token) return;
-    setBulkError(null);
-    const { startDate, endDate } = getDateRangeParams();
-    const body: Record<string, unknown> = {
-      employeeId,
-      siteId,
-      startDate: startDate.slice(0, 10),
-      endDate: endDate.slice(0, 10),
-      pattern,
-    };
-    if (pattern === "custom_builder") body.customBlocks = customBlocks;
+  const refreshAutomationRuns = () => {
+    if (!token) return Promise.resolve();
+    return authFetch("/shifts/roster/automation", token)
+      .then((r) => r.json())
+      .then((data) => setAutomationRuns(Array.isArray(data.data) ? data.data : []))
+      .catch(console.error);
+  };
+
+  const openAutomationRun = (run: AutomationRun) => {
+    if (!run.plan) return;
+    setAutomationRun(run);
+    setAutomationApplyError(null);
+    setShowAutomationModal(true);
+  };
+
+  const handleApplyAutomationRun = async () => {
+    if (!token || !automationRun) return;
+    setAutomationApplying(true);
+    setAutomationApplyError(null);
     try {
-      const res = await authFetch("/shifts/bulk", token, {
+      const res = await authFetch(`/shifts/roster/automation/${automationRun.id}/apply`, token, {
         method: "POST",
-        body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || data.error || "Failed to create shifts");
-      refresh();
-      if (data.deleted > 0 && data.created > 0) {
-        setBulkError(`Replaced ${data.deleted} shift(s), created ${data.created} for the period.`);
-        setTimeout(() => setBulkError(null), 4000);
-      } else if (data.errors?.length) {
-        setBulkError(`Created ${data.created}. Some skipped: ${data.errors.slice(0, 3).join("; ")}`);
-      }
+      const data = await parseApiJsonResponse(res);
+      if (!res.ok) throw new Error(String(data.error || data.message || "Failed to apply"));
+      setShowAutomationModal(false);
+      setAutomationRun(null);
+      await Promise.all([refresh(), refreshAutomationRuns()]);
+      setBulkError(`Applied auto-roster plan (${Number(data.created ?? 0)} shift(s) created).`);
+      setTimeout(() => setBulkError(null), 5000);
     } catch (err) {
-      setBulkError(err instanceof Error ? err.message : "Failed to create shifts");
+      setAutomationApplyError(err instanceof Error ? err.message : "Failed to apply");
+    } finally {
+      setAutomationApplying(false);
+    }
+  };
+
+  const handleDismissAutomationRun = async (runId: string) => {
+    if (!token) return;
+    const confirmed = await confirm({
+      title: "Dismiss queued plan?",
+      message: "This removes the plan from the review queue without applying shifts.",
+      confirmLabel: "Dismiss",
+    });
+    if (!confirmed) return;
+    try {
+      const res = await authFetch(`/shifts/roster/automation/${runId}/dismiss`, token, {
+        method: "POST",
+      });
+      const data = await parseApiJsonResponse(res);
+      if (!res.ok) throw new Error(String(data.error || "Failed to dismiss"));
+      if (automationRun?.id === runId) {
+        setShowAutomationModal(false);
+        setAutomationRun(null);
+      }
+      await refreshAutomationRuns();
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : "Failed to dismiss");
     }
   };
 
@@ -731,7 +728,7 @@ export default function RosteringPage() {
   useEffect(() => {
     if (!token) return;
     setLoading(true);
-    refresh().finally(() => setLoading(false));
+    Promise.all([refresh(), refreshAutomationRuns()]).finally(() => setLoading(false));
   }, [token, periodStart, periodEnd]);
 
   if (loading) {
@@ -759,11 +756,12 @@ export default function RosteringPage() {
   }
 
   const periodLabel =
-    calendarDays.length > 0
+    rosterPeriodLabel ||
+    (calendarDays.length > 0
       ? calendarDays.length === 1
         ? format(calendarDays[0], "d MMM yyyy")
         : format(calendarDays[0], "d MMM") + " – " + format(calendarDays[calendarDays.length - 1], "d MMM yyyy")
-      : "";
+      : "");
   const selectedSiteName = selectedSiteId
     ? sites.find((s) => s.id === selectedSiteId)?.name ?? "Unknown site"
     : "All sites";
@@ -804,6 +802,9 @@ export default function RosteringPage() {
               Roster Period
             </p>
             <p className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">{periodLabel || "—"}</p>
+            {rosterPeriodLabel && (
+              <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">{periodStart} – {periodEnd}</p>
+            )}
             <button
               type="button"
               onClick={openPeriodModal}
@@ -812,6 +813,50 @@ export default function RosteringPage() {
               Change period
             </button>
           </div>
+
+          {pendingAutomationCount > 0 && (
+            <div className="rounded-xl border border-amber-300/90 dark:border-amber-700/60 bg-amber-50/80 dark:bg-amber-950/30 p-3.5 space-y-2">
+              <p className="text-xs font-semibold text-amber-900 dark:text-amber-100">
+                Auto-roster queue ({pendingAutomationCount} pending)
+              </p>
+              <ul className="space-y-1.5 max-h-40 overflow-y-auto text-xs">
+                {automationRuns
+                  .filter((r) => r.status === "pending_review")
+                  .map((run) => (
+                    <li
+                      key={run.id}
+                      className="flex items-start justify-between gap-2 rounded-lg border border-amber-200/80 dark:border-amber-800/50 bg-white/70 dark:bg-neutral-900/50 px-2 py-1.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-neutral-800 dark:text-neutral-100 truncate">
+                          {run.siteName ?? "Site"}
+                        </p>
+                        <p className="text-neutral-500 dark:text-neutral-400">
+                          {run.periodStart} – {run.periodEnd}
+                          {run.coveragePercent != null ? ` · ${run.coveragePercent}% coverage` : ""}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => openAutomationRun(run)}
+                          className="text-[11px] font-medium text-orange-700 dark:text-orange-300 hover:underline"
+                        >
+                          Review
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDismissAutomationRun(run.id)}
+                          className="text-[11px] text-neutral-500 hover:underline"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
 
           <div className="rounded-xl border border-neutral-200/90 dark:border-neutral-700 bg-white dark:bg-neutral-900/70 p-3.5 space-y-2">
             <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-600 dark:text-neutral-300">
@@ -953,204 +998,6 @@ export default function RosteringPage() {
             </div>
           </div>
           </div>
-          <div className="p-4 space-y-4 bg-neutral-50/40 dark:bg-neutral-900/30">
-          {selectedSiteId ? (
-            <>
-              <div>
-                <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-600 dark:text-neutral-300 mb-2">
-                  Step 3: Assign Guard
-                </h3>
-                {isDualPattern && (
-                  <p className="text-[10px] text-neutral-500 dark:text-neutral-400 mb-2 leading-snug">
-                    Or use Step 4 to roster all site guards at once. Drag-and-drop below still works for one guard.
-                  </p>
-                )}
-              </div>
-              {isDualPattern ? (
-                <div className="rounded-xl border border-dashed border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900/50 p-3">
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">
-                    Drag a guard onto this site to auto-fill the selected period for that guard only.
-                  </p>
-                  <div
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = "move";
-                      setDragOverSiteId(selectedSiteId);
-                    }}
-                    onDragLeave={() => setDragOverSiteId(null)}
-                    onDrop={async (e) => {
-                      e.preventDefault();
-                      setDragOverSiteId(null);
-                      const guardId = e.dataTransfer.getData("guardId");
-                      if (guardId) {
-                        await handleBulkDropOnSite(guardId, selectedSiteId);
-                      }
-                      setDraggedGuard(null);
-                    }}
-                    className={`min-h-[56px] rounded-lg border-2 border-dashed flex items-center justify-center text-sm font-medium transition-colors ${
-                      dragOverSiteId === selectedSiteId
-                        ? "border-orange-400 dark:border-orange-300 bg-orange-50/70 dark:bg-orange-900/20 text-orange-800 dark:text-orange-300"
-                        : "border-neutral-300 dark:border-neutral-600 text-neutral-600 dark:text-neutral-400 bg-neutral-50/70 dark:bg-neutral-800/40"
-                    }`}
-                  >
-                    {sites.find((s) => s.id === selectedSiteId)?.name ?? "Site"}
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900/50 p-3">
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-2">
-                    Drag a guard onto a post to auto-fill the selected period.
-                  </p>
-                  <div className="space-y-2">
-                    {postsForSelectedSite.map((post) => (
-                      <div
-                        key={post.id}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          e.dataTransfer.dropEffect = "move";
-                          setDragOverPostId(post.id);
-                        }}
-                        onDragLeave={() => setDragOverPostId(null)}
-                        onDrop={async (e) => {
-                          e.preventDefault();
-                          setDragOverPostId(null);
-                          const guardId = e.dataTransfer.getData("guardId");
-                          if (guardId) {
-                            await handleBulkDrop(guardId, post.id);
-                          }
-                          setDraggedGuard(null);
-                        }}
-                        className={`min-h-[46px] px-3 py-2 rounded-lg border-2 border-dashed flex items-center justify-center text-sm font-medium transition-colors ${
-                          dragOverPostId === post.id
-                            ? "border-orange-400 dark:border-orange-300 bg-orange-50/70 dark:bg-orange-900/20 text-orange-800 dark:text-orange-300"
-                            : "border-neutral-300 dark:border-neutral-600 text-neutral-600 dark:text-neutral-400 bg-neutral-50/70 dark:bg-neutral-800/40"
-                        }`}
-                      >
-                        {post.name} {post.shiftType ? `(${post.shiftType})` : ""}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className="rounded-xl border border-neutral-200/90 dark:border-neutral-700 bg-white dark:bg-neutral-900/60 p-3">
-                <h4 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-600 dark:text-neutral-300 mb-2">
-                  Site Guards
-                </h4>
-                <p className="text-[10px] text-neutral-500 dark:text-neutral-400 mb-2 leading-snug">
-                  Only guards assigned to this site in Sites appear here.{" "}
-                  <Link
-                    href={selectedSiteId ? `/sites/${selectedSiteId}` : "/sites"}
-                    className="text-orange-700 dark:text-orange-300 underline hover:no-underline"
-                  >
-                    Configure posts
-                  </Link>
-                </p>
-                {isDualPattern && selectedSite && siteHasRestrictiveShiftGenderRules(selectedSite) && (
-                  <p className="text-[10px] text-neutral-500 dark:text-neutral-400 mb-2 leading-snug">
-                    {pattern === "custom_builder" ? (
-                      <>
-                        Custom patterns only roster the shift types in your blocks (e.g. day only). Guards must match
-                        this site&apos;s staffing rules for those types only; set M/F on the employee profile where a
-                        rule applies.
-                      </>
-                    ) : (
-                      <>
-                        This pattern uses day and night posts. Guards must fit this site&apos;s day and night staffing
-                        rules; set M/F on the employee profile where rules apply.
-                      </>
-                    )}
-                  </p>
-                )}
-                <input
-                  type="text"
-                  value={guardSearch}
-                  onChange={(e) => setGuardSearch(e.target.value)}
-                  placeholder="Search guards..."
-                  className="input-modern py-2 text-sm w-full mb-2"
-                  aria-label="Search available guards"
-                />
-                <div className="space-y-1.5 overflow-y-auto pr-1 max-h-[min(280px,40vh)] sm:max-h-[min(320px,35vh)] [scrollbar-width:thin] [scrollbar-color:theme(colors.neutral.400)_transparent] dark:[scrollbar-color:theme(colors.neutral.600)_transparent]">
-                  {filteredAvailableGuards.map((g) => {
-                    const dualDragOk =
-                      !isDualPattern ||
-                      !selectedSite ||
-                      (pattern === "custom_builder"
-                        ? (siteDualPatternShiftKinds ?? []).every((kind) =>
-                            meetsSiteShiftGenderRule(g.gender, selectedSite, kind)
-                          )
-                        : meetsSiteDualShiftRosterRules(g.gender, selectedSite));
-                    return (
-                    <div
-                      key={g.id}
-                      draggable={dualDragOk}
-                      onDragStart={(e) => {
-                        if (!dualDragOk) {
-                          e.preventDefault();
-                          return;
-                        }
-                        setDraggedGuard(g);
-                        e.dataTransfer.setData("guardId", g.id);
-                        e.dataTransfer.effectAllowed = "move";
-                      }}
-                      onDragEnd={() => setDraggedGuard(null)}
-                      title={
-                        dualDragOk
-                          ? undefined
-                          : pattern === "custom_builder"
-                            ? "Does not match this site's staffing rules for the shift types in your custom pattern. Update the guard's gender (M/F) or the site's shift staffing settings."
-                            : "Does not match this site's day and night staffing rules. Update the guard's gender (M/F) or the site's shift staffing settings."
-                      }
-                      className={`px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 text-sm transition-colors ${
-                        dualDragOk
-                          ? `cursor-grab active:cursor-grabbing ${
-                              draggedGuard?.id === g.id
-                                ? "opacity-50"
-                                : "bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                            }`
-                          : "opacity-55 cursor-not-allowed bg-neutral-100/80 dark:bg-neutral-800/30"
-                      }`}
-                    >
-                      <span className="font-medium">
-                        {g.firstName} {g.lastName}
-                      </span>
-                      {(postPrefsByGuardId.get(g.id)?.length ?? 0) > 0 && (
-                        <span className="block text-[10px] text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">
-                          Pref: {postPrefsByGuardId.get(g.id)!.join(", ")}
-                        </span>
-                      )}
-                    </div>
-                    );
-                  })}
-                  {filteredAvailableGuards.length === 0 && (
-                    <p className="text-xs text-neutral-500 py-2">
-                      {guardSearch.trim() ? (
-                        "No guards match your search"
-                      ) : siteAssignedGuards.length === 0 ? (
-                        <>
-                          No guards assigned to this site.{" "}
-                          <Link
-                            href="/sites"
-                            className="text-orange-700 dark:text-orange-300 underline hover:no-underline"
-                          >
-                            Assign guards in Sites
-                          </Link>
-                        </>
-                      ) : (
-                        "No guards available"
-                      )}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="py-10 text-center rounded-xl border border-dashed border-neutral-300 dark:border-neutral-600 bg-white/70 dark:bg-neutral-900/40">
-              <p className="text-sm text-neutral-600 dark:text-neutral-400 font-medium">
-                Select a site in Step 1 to assign guards.
-              </p>
-            </div>
-          )}
-          </div>
           {bulkError && (
             <div className="mx-4 mb-4 rounded-lg border border-red-200 dark:border-red-800/60 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-xs">
               {bulkError}
@@ -1192,15 +1039,7 @@ export default function RosteringPage() {
               <div className="flex items-center h-11 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 overflow-hidden">
                 <button
                   type="button"
-                  onClick={() => {
-                    const start = parseISO(periodStart);
-                    const end = parseISO(periodEnd);
-                    const days = Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
-                    const newStart = addDays(start, -days);
-                    const newEnd = addDays(end, -days);
-                    setPeriodStart(format(newStart, "yyyy-MM-dd"));
-                    setPeriodEnd(format(newEnd, "yyyy-MM-dd"));
-                  }}
+                  onClick={() => shiftPayPeriod(-1)}
                   className="h-full px-3 flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-600 dark:text-neutral-400"
                   aria-label="Previous period"
                 >
@@ -1210,29 +1049,17 @@ export default function RosteringPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPeriodToMonth(new Date())}
+                  onClick={() => {
+                    const current = payPeriodOptions.find((p) => p.isCurrent);
+                    if (current) applyPayPeriod(current);
+                  }}
                   className="h-full px-4 text-sm font-medium border-x border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-700 dark:text-neutral-300"
                 >
-                  This month
+                  Current period
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPeriodToMonth(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1))}
-                  className="h-full px-3 text-sm font-medium border-r border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-700 dark:text-neutral-300"
-                >
-                  Next month
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const start = parseISO(periodStart);
-                    const end = parseISO(periodEnd);
-                    const days = Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
-                    const newStart = addDays(start, days);
-                    const newEnd = addDays(end, days);
-                    setPeriodStart(format(newStart, "yyyy-MM-dd"));
-                    setPeriodEnd(format(newEnd, "yyyy-MM-dd"));
-                  }}
+                  onClick={() => shiftPayPeriod(1)}
                   className="h-full px-3 flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-600 dark:text-neutral-400"
                   aria-label="Next period"
                 >
@@ -1396,57 +1223,17 @@ export default function RosteringPage() {
                   Choose roster period
                 </h3>
                 <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
-                  Select the start and end dates for the period you want to roster. All rostering happens within this period.
+                  Select the pay period you want to roster. Periods are labelled by the month in which they end.
                 </p>
                 <div className="space-y-4 mb-6">
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">
-                      Start date
-                    </label>
-                    <DateInput
-                      value={draftPeriodStart}
-                      onChange={setDraftPeriodStart}
-                      className="input-modern w-full"
-                      showToday
+                  {token && (
+                    <PayPeriodSelect
+                      token={token}
+                      variant="roster"
+                      value={draftPeriodKey}
+                      onChange={(p) => setDraftPeriodKey(p.periodKey)}
                     />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">
-                      End date
-                    </label>
-                    <DateInput
-                      value={draftPeriodEnd}
-                      onChange={setDraftPeriodEnd}
-                      className="input-modern w-full"
-                      showToday
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-2 mb-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const start = startOfMonth(new Date());
-                      const end = endOfMonth(new Date());
-                      setDraftPeriodStart(format(start, "yyyy-MM-dd"));
-                      setDraftPeriodEnd(format(end, "yyyy-MM-dd"));
-                    }}
-                    className="flex-1 py-2 text-sm font-medium rounded-md border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-                  >
-                    This month
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const start = startOfMonth(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1));
-                      const end = endOfMonth(start);
-                      setDraftPeriodStart(format(start, "yyyy-MM-dd"));
-                      setDraftPeriodEnd(format(end, "yyyy-MM-dd"));
-                    }}
-                    className="flex-1 py-2 text-sm font-medium rounded-md border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-                  >
-                    Next month
-                  </button>
+                  )}
                 </div>
                 <div className="flex gap-3">
                   <button
@@ -1459,13 +1246,13 @@ export default function RosteringPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (parseISO(draftPeriodEnd) >= parseISO(draftPeriodStart)) {
-                        setPeriodStart(draftPeriodStart);
-                        setPeriodEnd(draftPeriodEnd);
+                      const picked = payPeriodOptions.find((p) => p.periodKey === draftPeriodKey);
+                      if (picked) {
+                        applyPayPeriod(picked);
                         setShowPeriodModal(false);
                       }
                     }}
-                    disabled={!draftPeriodStart || !draftPeriodEnd || parseISO(draftPeriodEnd) < parseISO(draftPeriodStart)}
+                    disabled={!draftPeriodKey}
                     className="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Apply
@@ -1558,8 +1345,8 @@ export default function RosteringPage() {
         {showRosterPlanModal &&
           rosterPlan &&
           createPortal(
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-              <div className="card-wireframe w-full max-w-2xl shadow-xl overflow-hidden">
+            <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4 bg-black/50 backdrop-blur-sm overscroll-y-contain">
+              <div className="card-wireframe flex w-full max-w-2xl max-h-[min(90vh,880px)] flex-col overflow-hidden shadow-xl my-auto">
                 <RosterPlanPreview
                   plan={rosterPlan}
                   siteName={selectedSite?.name ?? "Site"}
@@ -1576,6 +1363,39 @@ export default function RosteringPage() {
                   onApply={handleApplyRosterPlan}
                   applying={applyingPlan}
                   applyError={rosterPlanApplyError}
+                />
+              </div>
+            </div>,
+            getRosteringModalContainer()
+          )}
+
+        {showAutomationModal &&
+          automationRun?.plan &&
+          createPortal(
+            <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4 bg-black/50 backdrop-blur-sm overscroll-y-contain">
+              <div className="card-wireframe flex w-full max-w-2xl max-h-[min(90vh,880px)] flex-col overflow-hidden shadow-xl my-auto">
+                <RosterPlanPreview
+                  plan={automationRun.plan}
+                  siteName={automationRun.siteName ?? "Site"}
+                  periodLabel={`${automationRun.periodStart} – ${automationRun.periodEnd}`}
+                  guards={
+                    sites.find((s) => s.id === automationRun.siteId)?.assignedGuards?.map((a) => ({
+                      id: a.employee.id,
+                      firstName: a.employee.firstName,
+                      lastName: a.employee.lastName,
+                    })) ?? []
+                  }
+                  posts={sites.find((s) => s.id === automationRun.siteId)?.posts ?? []}
+                  onCancel={() => {
+                    if (!automationApplying) {
+                      setShowAutomationModal(false);
+                      setAutomationRun(null);
+                      setAutomationApplyError(null);
+                    }
+                  }}
+                  onApply={handleApplyAutomationRun}
+                  applying={automationApplying}
+                  applyError={automationApplyError}
                 />
               </div>
             </div>,

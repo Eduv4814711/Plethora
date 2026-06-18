@@ -223,6 +223,9 @@ export interface CompanySettings {
     timezone?: string;
     payrollPeriod?: "weekly" | "biweekly" | "monthly";
     employeeIdPrefix?: string;
+    payPeriodStartDay?: number;
+    payPeriodEndDay?: number;
+    autoRosterHorizonPeriods?: number;
   } | null;
 }
 
@@ -267,6 +270,9 @@ export async function updateSettings(
       timezone: string;
       payrollPeriod: "weekly" | "biweekly" | "monthly";
       employeeIdPrefix: string;
+      payPeriodStartDay?: number;
+      payPeriodEndDay?: number;
+      autoRosterHorizonPeriods?: number;
     }>;
   }>
 ): Promise<CompanySettings> {
@@ -282,6 +288,41 @@ export async function updateSettings(
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || "Failed to update settings");
   }
+  return res.json();
+}
+
+export type PayPeriodOption = {
+  periodKey: string;
+  label: string;
+  rosterLabel: string;
+  periodStart: string;
+  periodEnd: string;
+  isCurrent?: boolean;
+};
+
+export async function fetchPayPeriods(
+  token: string,
+  opts?: { around?: string; before?: number; after?: number; periodKey?: string }
+): Promise<PayPeriodOption[]> {
+  const params = new URLSearchParams();
+  if (opts?.around) params.set("around", opts.around);
+  if (opts?.before != null) params.set("before", String(opts.before));
+  if (opts?.after != null) params.set("after", String(opts.after));
+  if (opts?.periodKey) params.set("periodKey", opts.periodKey);
+  const qs = params.toString();
+  const res = await fetch(`${API_BASE}/pay-periods${qs ? `?${qs}` : ""}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to fetch pay periods");
+  const body = await res.json();
+  return body.data ?? [];
+}
+
+export async function fetchCurrentPayPeriod(token: string): Promise<PayPeriodOption> {
+  const res = await fetch(`${API_BASE}/pay-periods/current`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to fetch current pay period");
   return res.json();
 }
 

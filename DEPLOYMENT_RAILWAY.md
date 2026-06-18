@@ -278,3 +278,43 @@ PDF generation:
 
 - Puppeteer may require additional system packages in the Railway build/runtime.
 - Check API runtime logs for Chromium or executable-path errors if PDF features fail.
+
+## Scheduled auto-roster (cron)
+
+The API exposes an internal endpoint for daily automatic rostering:
+
+```http
+POST /internal/cron/auto-roster
+Authorization: Bearer <CRON_SECRET>
+```
+
+### API service variables
+
+Add to the **api** service:
+
+| Variable | Purpose |
+|----------|---------|
+| `CRON_SECRET` | Shared secret (min 16 chars). Requests without a matching `Authorization: Bearer` token receive `401`. If unset, the endpoint returns `503`. |
+
+Generate a strong random value, e.g. `openssl rand -hex 32`.
+
+### Railway Cron Job
+
+1. In the Railway project, add a **Cron** service (or use Railway's cron trigger on a lightweight worker).
+2. Schedule: daily at 02:00 UTC (adjust per company timezone later).
+3. Command / HTTP job: `POST` to `https://api.<your-domain>/internal/cron/auto-roster` with header `Authorization: Bearer $CRON_SECRET`.
+4. Use the same `CRON_SECRET` value on the API service.
+
+The job calls `runGlobalAutoRoster()`, which processes all companies and every site with `autoRosterEnabled`.
+
+### Verify
+
+```bash
+curl -sS -X POST "https://api.example.com/internal/cron/auto-roster" \
+  -H "Authorization: Bearer YOUR_CRON_SECRET"
+```
+
+Expect `200` with `{ "ok": true, "companiesProcessed": N, "result": ... }`.
+
+See [docs/ROSTER_ENGINE.md](./docs/ROSTER_ENGINE.md) for payroll calendar and coverage-threshold behaviour.
+

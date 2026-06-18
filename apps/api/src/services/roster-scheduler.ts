@@ -162,6 +162,42 @@ export function getConsecutiveWorkDaysBefore(
   return count;
 }
 
+/** Shift date key (yyyy-MM-dd) plus or minus calendar days (UTC calendar). */
+export function addCalendarDayToDateKey(dateKey: string, deltaDays: number): string {
+  const d = new Date(`${dateKey}T00:00:00.000Z`);
+  return formatDateKey(addDays(d, deltaDays));
+}
+
+/**
+ * Adjacent-day rest rules between day and night shifts.
+ * - No day + night (or night + day) on the same calendar day.
+ * - No day shift on the calendar day immediately after a night shift.
+ * - No night shift on the calendar day immediately before a day shift.
+ */
+export function violatesAdjacentShiftRestRules(
+  assignmentsByDate: Map<string, "day" | "night">,
+  candidate: { dateKey: string; shiftType: "day" | "night" }
+): boolean {
+  const { dateKey, shiftType } = candidate;
+
+  const existingSameDay = assignmentsByDate.get(dateKey);
+  if (existingSameDay != null && existingSameDay !== shiftType) {
+    return true;
+  }
+
+  const prevDateKey = addCalendarDayToDateKey(dateKey, -1);
+  if (shiftType === "day" && assignmentsByDate.get(prevDateKey) === "night") {
+    return true;
+  }
+
+  const nextDateKey = addCalendarDayToDateKey(dateKey, 1);
+  if (shiftType === "night" && assignmentsByDate.get(nextDateKey) === "day") {
+    return true;
+  }
+
+  return false;
+}
+
 /** True if assigning slot.shiftType on dateKey would break human rest rules. */
 export function wouldViolateRestRules(params: {
   slot: Pick<RosterDemandSlot, "dateKey" | "shiftType">;
@@ -170,18 +206,14 @@ export function wouldViolateRestRules(params: {
   calendarDays: Date[];
   dayIndex: number;
 }): boolean {
-  const { slot, runtime, prevDateKey, calendarDays, dayIndex } = params;
+  const { slot, runtime, calendarDays, dayIndex } = params;
   const { dateKey, shiftType } = slot;
 
-  const existingSameDay = runtime.shiftTypeByDateKey.get(dateKey);
-  if (existingSameDay != null && existingSameDay !== shiftType) {
-    return true;
-  }
-
   if (
-    shiftType === "day" &&
-    prevDateKey != null &&
-    runtime.shiftTypeByDateKey.get(prevDateKey) === "night"
+    violatesAdjacentShiftRestRules(runtime.shiftTypeByDateKey, {
+      dateKey,
+      shiftType,
+    })
   ) {
     return true;
   }

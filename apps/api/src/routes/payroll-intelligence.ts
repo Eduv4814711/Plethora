@@ -15,6 +15,7 @@ import {
   estimateTaxReserve,
 } from "../services/payroll-statutory.service.js";
 import { getContractLabourCost } from "../services/contract-labour-cost.service.js";
+import { resolveCompanyPeriodRange } from "../lib/resolve-company-period.js";
 import {
   runPayrollComplianceChecks,
   complianceResultsToRiskFlags,
@@ -122,19 +123,18 @@ export async function payrollIntelligenceRoutes(app: FastifyInstance) {
 
   app.get("/contracts/labour-cost", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
-    const q = request.query as { periodStart?: string; periodEnd?: string };
+    const q = request.query as { periodStart?: string; periodEnd?: string; periodKey?: string };
 
-    const periodStart = q.periodStart ? new Date(q.periodStart) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    const periodEnd = q.periodEnd ? new Date(q.periodEnd) : new Date();
-
-    if (periodStart >= periodEnd) {
-      return reply.code(400).send({
-        error: "Invalid period",
-        message: "periodEnd must be after periodStart",
-      });
+    const resolved = await resolveCompanyPeriodRange(user.companyId, q);
+    if ("error" in resolved) {
+      return reply.code(400).send({ error: "Invalid period", message: resolved.error });
     }
 
-    const result = await getContractLabourCost(user.companyId, periodStart, periodEnd);
+    const result = await getContractLabourCost(
+      user.companyId,
+      resolved.periodStart,
+      resolved.periodEnd
+    );
 
     return reply.send(result);
   });

@@ -1,4 +1,4 @@
-import { fromZonedTime } from "date-fns-tz";
+import { fromZonedTime, toZonedTime } from "date-fns-tz";
 import { addDays } from "date-fns";
 import { prisma } from "./prisma.js";
 
@@ -18,6 +18,15 @@ export function parseDateOnly(dateStr: string): Date {
 export function parseDateOnlyEnd(dateStr: string): Date {
   const [y, m, d] = dateStr.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999));
+}
+
+/** Calendar date key (yyyy-MM-dd) for a timestamp in the given timezone. */
+export function dateKeyInTimeZone(d: Date, timeZone: string): string {
+  const z = toZonedTime(d, timeZone);
+  const y = z.getFullYear();
+  const m = String(z.getMonth() + 1).padStart(2, "0");
+  const day = String(z.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 /**

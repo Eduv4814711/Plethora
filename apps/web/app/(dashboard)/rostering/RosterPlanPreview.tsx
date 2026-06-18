@@ -196,7 +196,7 @@ export function RosterPlanPreview({
   const canApply = plan.entries.length > 0 && !applying;
 
   return (
-    <div className="flex flex-col max-h-[min(90vh,880px)]">
+    <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 border-b border-neutral-200 dark:border-neutral-700 px-6 py-5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -219,7 +219,8 @@ export function RosterPlanPreview({
         </div>
       </div>
 
-      <div className="shrink-0 px-6 py-4 border-b border-neutral-200/80 dark:border-neutral-700">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain [scrollbar-width:thin] [scrollbar-color:theme(colors.neutral.400)_transparent] dark:[scrollbar-color:theme(colors.neutral.600)_transparent]">
+      <div className="px-6 py-4 border-b border-neutral-200/80 dark:border-neutral-700">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <SummaryCard
             label="Coverage"
@@ -376,7 +377,7 @@ export function RosterPlanPreview({
         )}
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 [scrollbar-width:thin]">
+      <div className="px-6 py-4">
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="text-left text-[11px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400 border-b border-neutral-200 dark:border-neutral-700">
@@ -465,6 +466,7 @@ export function RosterPlanPreview({
             )}
           </tbody>
         </table>
+      </div>
       </div>
 
       <div className="shrink-0 border-t border-neutral-200 dark:border-neutral-700 px-6 py-4 space-y-3">

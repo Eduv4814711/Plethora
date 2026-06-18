@@ -187,8 +187,9 @@ export async function attendanceRoutes(app: FastifyInstance) {
     }
 
     const { hoursWorked, overtimeHours } = calculateHours(
-      clockOut,
       clockIn,
+      clockOut,
+      shift.startTime,
       shift.endTime
     );
 
@@ -357,6 +358,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
     const now = new Date();
     const { hoursWorked, overtimeHours } = calculateHours(
+      attendance.clockIn,
       now,
       attendance.shift.startTime,
       attendance.shift.endTime
@@ -446,8 +448,16 @@ export async function attendanceRoutes(app: FastifyInstance) {
       }
     }
 
+    if (!attendance.clockIn) {
+      return reply.code(400).send({
+        error: "Invalid state",
+        message: "Cannot clock out without clock in",
+      });
+    }
+
     const now = new Date();
     const { hoursWorked, overtimeHours } = calculateHours(
+      attendance.clockIn,
       now,
       attendance.shift.startTime,
       attendance.shift.endTime
@@ -531,7 +541,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
       });
     }
 
-    const { hoursWorked, overtimeHours } = calculateHours(clockOut, clockIn, clockOut);
+    const { hoursWorked, overtimeHours } = calculateHours(clockIn, clockOut, clockIn, clockOut);
 
     const shift = await prisma.shift.create({
       data: {
@@ -684,6 +694,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
     if (newClockIn && newClockOut) {
       const { hoursWorked, overtimeHours } = calculateHours(
+        newClockIn,
         newClockOut,
         attendance.shift.startTime,
         attendance.shift.endTime

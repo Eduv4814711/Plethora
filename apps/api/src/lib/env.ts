@@ -71,6 +71,7 @@ const rawEnvSchema = z.object({
     z.number().int().min(1).max(24 * 60).optional()
   ),
   ENCRYPTION_KEY: z.preprocess(emptyToUndefined, z.string().min(16).optional()),
+  CRON_SECRET: z.preprocess(emptyToUndefined, z.string().min(16).optional()),
 });
 
 type RawEnv = z.infer<typeof rawEnvSchema>;
@@ -95,6 +96,7 @@ export type Env = {
   };
   clockInWindowMinutes: number;
   encryptionKey: string | undefined;
+  cronSecret: string | undefined;
 };
 
 export function formatEnvValidationError(error: z.ZodError): string {
@@ -122,6 +124,7 @@ function pickRawEnv(source: NodeJS.ProcessEnv): Record<string, unknown> {
     WHATSAPP_API_VERSION: source.WHATSAPP_API_VERSION,
     CLOCK_IN_WINDOW_MINUTES: source.CLOCK_IN_WINDOW_MINUTES,
     ENCRYPTION_KEY: source.ENCRYPTION_KEY,
+    CRON_SECRET: source.CRON_SECRET,
   };
 }
 
@@ -229,6 +232,7 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     },
     clockInWindowMinutes: raw.CLOCK_IN_WINDOW_MINUTES ?? 15,
     encryptionKey: raw.ENCRYPTION_KEY,
+    cronSecret: raw.CRON_SECRET,
   };
 }
 

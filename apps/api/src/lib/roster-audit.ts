@@ -14,6 +14,7 @@ export async function auditRosterGeneration(params: {
   plan: Pick<RosterPlan, "pattern" | "startDate" | "endDate" | "summary">;
   created: number;
   deleted: number;
+  source?: string;
 }) {
   await createAuditLog({
     userId: params.userId,
@@ -28,6 +29,7 @@ export async function auditRosterGeneration(params: {
       created: params.created,
       deleted: params.deleted,
       summary: params.plan.summary,
+      ...(params.source ? { source: params.source } : {}),
     },
   });
 }

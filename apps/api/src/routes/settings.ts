@@ -6,6 +6,8 @@ import { authMiddleware } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
+import { runAutoRosterForCompany } from "../services/auto-roster.service.js";
+import { parsePayrollCalendarSettings } from "../lib/payroll-calendar-settings.js";
 import { storage } from "../lib/storage.js";
 const businessDetailsSchema = z.object({
   legalName: z.string().optional(),
@@ -29,6 +31,9 @@ const businessSettingsSchema = z.object({
   timezone: z.string().optional(),
   payrollPeriod: z.enum(["weekly", "biweekly", "monthly"]).optional(),
   employeeIdPrefix: z.string().max(20).optional(),
+  payPeriodStartDay: z.number().int().min(1).max(31).optional(),
+  payPeriodEndDay: z.number().int().min(1).max(31).optional(),
+  autoRosterHorizonPeriods: z.number().int().min(1).max(6).optional(),
 });
 
 const updateSettingsSchema = z.object({
@@ -168,8 +173,25 @@ export async function settingsRoutes(app: FastifyInstance) {
         select: { settings: true },
       });
       const currentSettings = { ...((companyBefore?.settings as Record<string, unknown>) ?? {}) };
+      const beforeCalendar = parsePayrollCalendarSettings(currentSettings);
       Object.assign(currentSettings, data.businessSettings);
       updateData.settings = currentSettings;
+
+      const afterCalendar = parsePayrollCalendarSettings(currentSettings);
+      const calendarChanged =
+        beforeCalendar.payrollPeriod !== afterCalendar.payrollPeriod ||
+        beforeCalendar.payPeriodStartDay !== afterCalendar.payPeriodStartDay ||
+        beforeCalendar.payPeriodEndDay !== afterCalendar.payPeriodEndDay ||
+        beforeCalendar.autoRosterHorizonPeriods !== afterCalendar.autoRosterHorizonPeriods;
+
+      if (calendarChanged) {
+        void runAutoRosterForCompany(companyId, {
+          triggeredBy: "settings_changed",
+          userId: request.user!.sub,
+        }).catch((err) => {
+          request.log.error({ err }, "auto-roster after settings change failed");
+        });
+      }
     }
 
     const company = await prisma.company.update({
@@ -254,6 +276,9 @@ export async function settingsRoutes(app: FastifyInstance) {
       timezone: "Africa/Johannesburg",
       payrollPeriod: "monthly" as const,
       employeeIdPrefix: "EMP",
+      payPeriodStartDay: 26,
+      payPeriodEndDay: 25,
+      autoRosterHorizonPeriods: 2,
     };
 
     const DEFAULT_PAY_RULES = [
@@ -363,24 +388,8 @@ export async function settingsRoutes(app: FastifyInstance) {
         await tx.site.deleteMany({ where: { companyId } });
       }
 
-      // Payroll: Payslip, PayrollItem, PayrollRun
+      // Payroll: cascade deletes Payslip + PayrollItem via PayrollRun
       if (has("payroll")) {
-        const payrollRuns = await tx.payrollRun.findMany({
-          where: { companyId },
-          select: { id: true },
-        });
-        const payrollRunIds = payrollRuns.map((r) => r.id);
-        if (payrollRunIds.length > 0) {
-          const payrollItems = await tx.payrollItem.findMany({
-            where: { payrollRunId: { in: payrollRunIds } },
-            select: { id: true },
-          });
-          const payrollItemIds = payrollItems.map((i) => i.id);
-          if (payrollItemIds.length > 0) {
-            await tx.payslip.deleteMany({ where: { payrollItemId: { in: payrollItemIds } } });
-          }
-          await tx.payrollItem.deleteMany({ where: { payrollRunId: { in: payrollRunIds } } });
-        }
         await tx.payrollRun.deleteMany({ where: { companyId } });
       }
 
@@ -398,22 +407,7 @@ export async function settingsRoutes(app: FastifyInstance) {
           await tx.siteAssignment.deleteMany({ where: { siteId: { in: siteIds } } });
         }
         await tx.shift.deleteMany({ where: { companyId } });
-        const payrollRuns = await tx.payrollRun.findMany({
-          where: { companyId },
-          select: { id: true },
-        });
-        const payrollRunIds = payrollRuns.map((r) => r.id);
-        if (payrollRunIds.length > 0) {
-          const payrollItems = await tx.payrollItem.findMany({
-            where: { payrollRunId: { in: payrollRunIds } },
-            select: { id: true },
-          });
-          const payrollItemIds = payrollItems.map((i) => i.id);
-          if (payrollItemIds.length > 0) {
-            await tx.payslip.deleteMany({ where: { payrollItemId: { in: payrollItemIds } } });
-          }
-          await tx.payrollItem.deleteMany({ where: { payrollRunId: { in: payrollRunIds } } });
-        }
+        await tx.payrollRun.deleteMany({ where: { companyId } });
         await tx.timesheet.deleteMany({ where: { companyId } });
         if (employeeIds.length > 0) {
           await tx.leaveRecord.deleteMany({ where: { employeeId: { in: employeeIds } } });
@@ -506,7 +500,7 @@ export async function settingsRoutes(app: FastifyInstance) {
           },
         });
       }
-    });
+    }, { maxWait: 10000, timeout: 120000 });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Factory reset failed";
       return reply.code(400).send({ error: "Factory reset failed", message: msg });

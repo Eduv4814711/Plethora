@@ -1,6 +1,6 @@
 import { toZonedTime } from "date-fns-tz";
 import { prisma } from "../lib/prisma.js";
-import { getCompanyTimezone } from "../lib/timezone.js";
+import { dateKeyInTimeZone, getCompanyTimezone } from "../lib/timezone.js";
 
 export interface TimesheetAggregate {
   employeeId: string;
@@ -62,8 +62,7 @@ export async function aggregateTimesheets(
     },
   });
   for (const h of holidays) {
-    const d = new Date(h.date);
-    holidayDates.add(d.toISOString().slice(0, 10));
+    holidayDates.add(dateKeyInTimeZone(new Date(h.date), timeZone));
   }
 
   const shiftsWithAttendance = await prisma.shift.findMany({

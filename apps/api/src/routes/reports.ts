@@ -1,9 +1,13 @@
 import type { FastifyInstance } from "fastify";
-import { Prisma } from "@prisma/client";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
-import { startOfMonth, subMonths, format } from "date-fns";
+import { parsePayrollCalendarSettings } from "../lib/payroll-calendar-settings.js";
+import {
+  formatPayPeriodLabel,
+  getPayPeriodContaining,
+  listPayPeriods,
+} from "../services/payroll-period.service.js";
 
 export async function reportsRoutes(app: FastifyInstance) {
   const protect = [
@@ -17,16 +21,29 @@ export async function reportsRoutes(app: FastifyInstance) {
     const user = request.user!;
     const companyId = user.companyId;
     const q = request.query as Record<string, string | undefined>;
-    const months = Math.min(Math.max(Number(q.months) || 6, 1), 24);
+    const payPeriodCount = Math.min(Math.max(Number(q.payPeriodCount ?? q.months) || 6, 1), 24);
 
-    const now = new Date();
-    const start = startOfMonth(subMonths(now, months - 1));
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { settings: true },
+    });
+    const calendar = parsePayrollCalendarSettings(company?.settings);
+    const periods = listPayPeriods(calendar, {
+      before: payPeriodCount - 1,
+      after: 0,
+    });
+    const start = periods[0].periodStart;
+    const end = periods[periods.length - 1].periodEnd;
+
+    const periodLabelByKey = new Map(
+      periods.map((p) => [p.periodKey, formatPayPeriodLabel(p.periodEnd, "pay").replace(" Pay Period", "")])
+    );
 
     const [
       payrollByStatus,
       employeesByStatus,
       shiftsByStatus,
-      shiftsByMonth,
+      shiftsInRange,
       payrollByMonth,
       hoursBySite,
     ] = await Promise.all([
@@ -44,24 +61,21 @@ export async function reportsRoutes(app: FastifyInstance) {
         by: ["status"],
         where: {
           companyId,
-          startTime: { gte: start },
+          startTime: { gte: start, lte: end },
         },
         _count: { id: true },
       }),
-      prisma.$queryRaw<
-        { month: string; count: bigint }[]
-      >(Prisma.sql`
-        SELECT to_char(date_trunc('month', "startTime")::date, 'YYYY-MM') as month, count(*)::bigint
-        FROM "Shift"
-        WHERE "companyId" = ${companyId}
-          AND "startTime" >= ${start}
-        GROUP BY date_trunc('month', "startTime")
-        ORDER BY month ASC
-      `),
+      prisma.shift.findMany({
+        where: {
+          companyId,
+          startTime: { gte: start, lte: end },
+        },
+        select: { startTime: true },
+      }),
       prisma.payrollRun.findMany({
         where: {
           companyId,
-          periodStart: { gte: start },
+          periodEnd: { gte: start, lte: end },
           status: { in: ["calculated", "approved", "paid"] },
         },
         include: {
@@ -74,7 +88,7 @@ export async function reportsRoutes(app: FastifyInstance) {
         where: {
           shift: {
             companyId,
-            startTime: { gte: start },
+            startTime: { gte: start, lte: end },
           },
           clockIn: { not: null },
           clockOut: { not: null },
@@ -111,39 +125,44 @@ export async function reportsRoutes(app: FastifyInstance) {
       value: Number(s._count.id),
     }));
 
-    const shiftsByMonthMap = new Map<string, number>();
-    for (let i = 0; i < months; i++) {
-      const m = format(subMonths(now, months - 1 - i), "yyyy-MM");
-      shiftsByMonthMap.set(m, 0);
+    const shiftsByPeriodKey = new Map<string, number>();
+    for (const p of periods) {
+      shiftsByPeriodKey.set(p.periodKey, 0);
     }
-    for (const row of shiftsByMonth) {
-      shiftsByMonthMap.set(row.month, Number(row.count));
+    for (const shift of shiftsInRange) {
+      const key = getPayPeriodContaining(calendar, shift.startTime).periodKey;
+      if (shiftsByPeriodKey.has(key)) {
+        shiftsByPeriodKey.set(key, (shiftsByPeriodKey.get(key) ?? 0) + 1);
+      }
     }
-    const shiftsOverTime = Array.from(shiftsByMonthMap.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([month, count]) => ({
-        month: format(new Date(month + "-01"), "MMM yyyy"),
-        shifts: count,
-      }));
+    const shiftsOverTime = periods.map((p) => ({
+      month: periodLabelByKey.get(p.periodKey) ?? p.periodKey,
+      shifts: shiftsByPeriodKey.get(p.periodKey) ?? 0,
+    }));
 
-    const payrollByMonthMap = new Map<string, { gross: number; net: number }>();
+    const payrollByPeriodKey = new Map<string, { gross: number; net: number }>();
+    for (const p of periods) {
+      payrollByPeriodKey.set(p.periodKey, { gross: 0, net: 0 });
+    }
     for (const run of payrollByMonth) {
-      const m = format(run.periodStart, "yyyy-MM");
+      const key = getPayPeriodContaining(calendar, run.periodEnd).periodKey;
+      if (!payrollByPeriodKey.has(key)) continue;
       const gross = run.items.reduce((s, i) => s + Number(i.grossPay), 0);
       const net = run.items.reduce((s, i) => s + Number(i.netPay), 0);
-      const existing = payrollByMonthMap.get(m) ?? { gross: 0, net: 0 };
-      payrollByMonthMap.set(m, {
+      const existing = payrollByPeriodKey.get(key)!;
+      payrollByPeriodKey.set(key, {
         gross: existing.gross + gross,
         net: existing.net + net,
       });
     }
-    const payrollOverTime = Array.from(payrollByMonthMap.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([month, { gross, net }]) => ({
-        month: format(new Date(month + "-01"), "MMM yyyy"),
-        gross,
-        net,
-      }));
+    const payrollOverTime = periods.map((p) => {
+      const totals = payrollByPeriodKey.get(p.periodKey) ?? { gross: 0, net: 0 };
+      return {
+        month: periodLabelByKey.get(p.periodKey) ?? p.periodKey,
+        gross: totals.gross,
+        net: totals.net,
+      };
+    });
 
     const siteHours = new Map<string, number>();
     for (const a of hoursBySite) {

@@ -45,6 +45,7 @@ model Company {
   shifts                Shift[]
   payrollRuns           PayrollRun[]
   auditLogs             AuditLog[]
+  rosterAutomationRuns RosterAutomationRun[]
   payRules              PayRule[]
   payGrades             PayGrade[]
   employeeGroups        EmployeeGroup[]
@@ -265,14 +266,46 @@ model Site {
   rosterNightShiftGuardsRequired Int @default(1)
   /// Extra lines on the shift roster sheet / PDF (operational notes).
   rosterSheetNotes           String?  @db.Text
+  /// Automatic roster generation from payroll calendar.
+  autoRosterEnabled            Boolean   @default(false)
+  autoRosterPattern            String?
+  autoRosterCustomBlocks       Json?
+  autoRosterMinCoveragePercent Int       @default(100)
+  autoRosterLastRunAt          DateTime?
+  autoRosterLastStatus         String?
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
   company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   posts          Post[]           @relation("SitePosts")
   assignedGuards SiteAssignment[]
+  rosterAutomationRuns RosterAutomationRun[]
 
   @@index([companyId])
+}
+
+model RosterAutomationRun {
+  id              String    @id @default(cuid())
+  companyId       String
+  siteId          String
+  periodStart     DateTime
+  periodEnd       DateTime
+  status          String
+  coveragePercent Int?
+  planSnapshot    Json?
+  warnings        Json?
+  errorMessage    String?
+  appliedAt       DateTime?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site    Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, status])
+  @@index([siteId, createdAt])
 }
 
 model SiteAssignment {
