@@ -6,12 +6,12 @@ describe("resolveSiteShiftStaffing", () => {
     expect(resolveSiteShiftStaffing({})).toEqual({ day: 1, night: 1 });
   });
 
-  it("clamps values to 1–50", () => {
+  it("clamps values to 0–50", () => {
     expect(
       resolveSiteShiftStaffing({
         rosterDayShiftGuardsRequired: 0,
         rosterNightShiftGuardsRequired: 99,
       })
-    ).toEqual({ day: 1, night: 50 });
+    ).toEqual({ day: 0, night: 50 });
   });
 });

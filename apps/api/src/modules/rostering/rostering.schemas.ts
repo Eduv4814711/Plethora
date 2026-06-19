@@ -83,8 +83,6 @@ export const rosterPreviewSchema = z.object({
   siteId: z.string().min(1),
   startDate: z.string(),
   endDate: z.string(),
-  pattern: z.enum(["3_on_3_off", "custom_builder"]),
-  customBlocks: z.array(customBlockSchema).optional(),
 });
 
 export const rosterPlanEntrySchema = z.object({
@@ -97,7 +95,6 @@ export const rosterPlanEntrySchema = z.object({
 
 export const rosterPlanSchema = z.object({
   siteId: z.string().min(1),
-  pattern: z.enum(["3_on_3_off", "custom_builder"]),
   startDate: z.string(),
   endDate: z.string(),
   entries: z.array(rosterPlanEntrySchema),
@@ -116,6 +113,7 @@ export const rosterPlanSchema = z.object({
           maxDayMinusMinDay: z.number(),
           maxNightMinusMinNight: z.number(),
           maxSundayMinusMinSunday: z.number(),
+          maxDayNightImbalance: z.number().optional(),
         })
         .optional(),
     })
@@ -152,14 +150,6 @@ export const rosterPlanSchema = z.object({
       })
     )
     .default([]),
-  guardCycleOffsets: z
-    .array(
-      z.object({
-        employeeId: z.string(),
-        offsetDays: z.number(),
-      })
-    )
-    .optional(),
 });
 
 export const rosterApplySchema = z.object({

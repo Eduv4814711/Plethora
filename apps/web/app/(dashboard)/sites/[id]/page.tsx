@@ -8,7 +8,6 @@ import { authFetch } from "@/lib/api";
 import { canManageSitesModule } from "@/lib/permissions";
 import { rosterSiteRulesLines } from "@/lib/roster-site-rules-defaults";
 import { buildSiteRosterReadinessHints } from "@/lib/roster-readiness-hints";
-import { CustomPatternBuilder, type CustomBlock } from "@/app/(dashboard)/rostering/CustomPatternBuilder";
 import { useConfirmDialog } from "@/components/ui";
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
@@ -60,8 +59,6 @@ interface Site {
   rosterDayShiftGuardsRequired?: number;
   rosterNightShiftGuardsRequired?: number;
   autoRosterEnabled?: boolean;
-  autoRosterPattern?: string | null;
-  autoRosterCustomBlocks?: CustomBlock[] | null;
   autoRosterMinCoveragePercent?: number;
   autoRosterLastRunAt?: string | null;
   autoRosterLastStatus?: string | null;
@@ -80,6 +77,37 @@ interface Guard {
   phone: string | null;
 }
 
+const ROSTERABLE_GUARD_STATUSES = ["active", "training", "hired", "reliever"] as const;
+
+function validateSiteShiftStaffing(
+  dayGuardsRequired: string,
+  nightGuardsRequired: string,
+  rosterableCount: number
+): { error: string } | { dayCount: number; nightCount: number } {
+  const dayCount = parseInt(dayGuardsRequired, 10);
+  const nightCount = parseInt(nightGuardsRequired, 10);
+  if (
+    !Number.isFinite(dayCount) ||
+    dayCount < 0 ||
+    dayCount > 50 ||
+    !Number.isFinite(nightCount) ||
+    nightCount < 0 ||
+    nightCount > 50
+  ) {
+    return { error: "Guards per shift must be a whole number from 0 to 50." };
+  }
+  if (dayCount === 0 && nightCount === 0) {
+    return { error: "At least one shift must require at least 1 guard." };
+  }
+  const minRosterable = Math.max(dayCount, nightCount);
+  if (rosterableCount < minRosterable) {
+    return {
+      error: `This site has ${rosterableCount} rosterable guard(s) but staffing requires at least ${minRosterable} per day. Assign more guards to the site first.`,
+    };
+  }
+  return { dayCount, nightCount };
+}
+
 export default function SiteDetailPage() {
   const params = useParams();
   const { token, user } = useAuth();
@@ -91,6 +119,11 @@ export default function SiteDetailPage() {
   const [draggedGuard, setDraggedGuard] = useState<{ guard: Guard; source: string } | null>(null);
   const [dragOverPost, setDragOverPost] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [dayGuardsRequired, setDayGuardsRequired] = useState("1");
+  const [nightGuardsRequired, setNightGuardsRequired] = useState("1");
+  const [staffingSaving, setStaffingSaving] = useState(false);
+  const [staffingError, setStaffingError] = useState<string | null>(null);
+  const [staffingSavedFlash, setStaffingSavedFlash] = useState(false);
   const canManage = user ? canManageSitesModule(user) : false;
 
   const refresh = () => {
@@ -105,6 +138,57 @@ export default function SiteDetailPage() {
     refresh();
     setLoading(false);
   }, [token, siteId]);
+
+  useEffect(() => {
+    if (!site) return;
+    setDayGuardsRequired(String(site.rosterDayShiftGuardsRequired ?? 1));
+    setNightGuardsRequired(String(site.rosterNightShiftGuardsRequired ?? 1));
+  }, [site?.id, site?.rosterDayShiftGuardsRequired, site?.rosterNightShiftGuardsRequired]);
+
+  const staffingReadinessHints = useMemo(
+    () => (site ? buildSiteRosterReadinessHints(site).filter((h) => h.level !== "ok") : []),
+    [site]
+  );
+
+  const hasDayPost = site?.posts.some((p) => (p.shiftType ?? "day") !== "night") ?? false;
+  const hasNightPost = site?.posts.some((p) => p.shiftType === "night") ?? false;
+
+  const saveSiteShiftStaffing = async () => {
+    if (!token || !site) return;
+    setStaffingError(null);
+    const rosterableCount = site.assignedGuards.filter((a) =>
+      ROSTERABLE_GUARD_STATUSES.includes(a.employee.status as (typeof ROSTERABLE_GUARD_STATUSES)[number])
+    ).length;
+    const validated = validateSiteShiftStaffing(dayGuardsRequired, nightGuardsRequired, rosterableCount);
+    if ("error" in validated) {
+      setStaffingError(validated.error);
+      return;
+    }
+    const { dayCount, nightCount } = validated;
+    setStaffingSaving(true);
+    try {
+      const res = await authFetch(`/sites/${siteId}`, token, {
+        method: "PUT",
+        body: JSON.stringify({
+          rosterDayShiftGuardsRequired: dayCount,
+          rosterNightShiftGuardsRequired: nightCount,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof data.message === "string" ? data.message : data.error || "Failed to save staffing"
+        );
+      }
+      refresh();
+      setStaffingSavedFlash(true);
+      setTimeout(() => setStaffingSavedFlash(false), 2000);
+    } catch (e) {
+      setStaffingError(e instanceof Error ? e.message : "Failed to save staffing");
+    } finally {
+      setStaffingSaving(false);
+    }
+  };
 
   const getGuardsInPost = (postId: string): Guard[] => {
     const post = site?.posts.find((p) => p.id === postId);
@@ -306,12 +390,33 @@ export default function SiteDetailPage() {
 
             {showAddPost && canManage && (
               <div className="mb-6">
-                <AddPostForm siteId={siteId} token={token!} onSuccess={() => { setShowAddPost(false); refresh(); }} />
+                <AddPostForm
+                  siteId={siteId}
+                  token={token!}
+                  site={site}
+                  dayGuardsRequired={dayGuardsRequired}
+                  nightGuardsRequired={nightGuardsRequired}
+                  onSuccess={() => {
+                    setShowAddPost(false);
+                    refresh();
+                  }}
+                />
               </div>
             )}
 
             <div className="space-y-4">
-            {site.posts.map((post) => (
+            {!hasDayPost && (
+              <ShiftStaffingFallbackCard
+                shiftType="day"
+                guardsRequired={dayGuardsRequired}
+                onGuardsRequiredChange={setDayGuardsRequired}
+                canManage={canManage}
+                readOnlyValue={site.rosterDayShiftGuardsRequired ?? 1}
+              />
+            )}
+            {site.posts.map((post) => {
+              const staffingEditor = (post.shiftType ?? "day") === "night" ? "night" : "day";
+              return (
               <PostCard
                 key={post.id}
                 post={post}
@@ -320,6 +425,16 @@ export default function SiteDetailPage() {
                 guards={getGuardsInPost(post.id)}
                 isDragOver={dragOverPost === post.id}
                 canManage={canManage}
+                staffingEditor={staffingEditor}
+                guardsRequired={staffingEditor === "day" ? dayGuardsRequired : nightGuardsRequired}
+                onGuardsRequiredChange={
+                  staffingEditor === "day" ? setDayGuardsRequired : setNightGuardsRequired
+                }
+                staffingReadOnly={
+                  staffingEditor === "day"
+                    ? site.rosterDayShiftGuardsRequired ?? 1
+                    : site.rosterNightShiftGuardsRequired ?? 1
+                }
                 onDragOver={(e) => handleDragOver(e, post.id)}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, post.id)}
@@ -330,10 +445,64 @@ export default function SiteDetailPage() {
                 onError={(msg) => setDeleteError(msg || null)}
                 onEdit={canManage ? (nextPost) => setEditingPost(nextPost) : undefined}
               />
-            ))}
+            );
+            })}
+            {!hasNightPost && (
+              <ShiftStaffingFallbackCard
+                shiftType="night"
+                guardsRequired={nightGuardsRequired}
+                onGuardsRequiredChange={setNightGuardsRequired}
+                canManage={canManage}
+                readOnlyValue={site.rosterNightShiftGuardsRequired ?? 1}
+              />
+            )}
           </div>
 
-            {site.posts.length === 0 && (
+            {(canManage || site.posts.length > 0 || !hasDayPost || !hasNightPost) && (
+              <div className="mt-5 space-y-3 border-t border-neutral-200 dark:border-neutral-700 pt-5">
+                {staffingError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
+                    {staffingError}
+                  </div>
+                )}
+                {staffingSavedFlash && (
+                  <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Staffing saved.</p>
+                )}
+                {staffingReadinessHints.length > 0 && (
+                  <ul className="space-y-1 text-[11px]">
+                    {staffingReadinessHints.map((h, i) => (
+                      <li
+                        key={`${h.code}-${i}`}
+                        className={
+                          h.level === "error"
+                            ? "text-red-700 dark:text-red-300"
+                            : "text-amber-800 dark:text-amber-200"
+                        }
+                      >
+                        • {h.message}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {canManage && (
+                  <>
+                    <p className="text-[11px] text-neutral-400 dark:text-neutral-500">
+                      Set guards required per shift on each post. Use 0 for day-only or night-only sites.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={saveSiteShiftStaffing}
+                      disabled={staffingSaving}
+                      className="btn-primary text-sm py-2 disabled:opacity-60"
+                    >
+                      {staffingSaving ? "Saving…" : "Save staffing"}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {site.posts.length === 0 && !canManage && (
               <div className="card-wireframe text-center py-12 px-6 rounded-lg">
                 <div className="w-14 h-14 mx-auto rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-4">
                   <svg className="w-7 h-7 text-neutral-500 dark:text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -374,8 +543,6 @@ export default function SiteDetailPage() {
 }
 
 type RosterShiftGenderUi = "" | "male" | "female" | "any";
-
-const ROSTERABLE_GUARD_STATUSES = ["active", "training", "hired", "reliever"] as const;
 
 function guardMatchesSearch(guard: Guard, query: string): boolean {
   const term = query.trim().toLowerCase();
@@ -802,13 +969,6 @@ function SiteRosterSheetFields({
   );
   const [rules, setRules] = useState(site.rosterSiteRules ?? "");
   const [notes, setNotes] = useState(site.rosterSheetNotes ?? "");
-  const [dayGuardsRequired, setDayGuardsRequired] = useState(
-    String(site.rosterDayShiftGuardsRequired ?? 1)
-  );
-  const [nightGuardsRequired, setNightGuardsRequired] = useState(
-    String(site.rosterNightShiftGuardsRequired ?? 1)
-  );
-  const rosterReadiness = useMemo(() => buildSiteRosterReadinessHints(site), [site]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -818,46 +978,17 @@ function SiteRosterSheetFields({
     setNightGender((site.rosterNightShiftGender as RosterShiftGenderUi) || "");
     setRules(site.rosterSiteRules ?? "");
     setNotes(site.rosterSheetNotes ?? "");
-    setDayGuardsRequired(String(site.rosterDayShiftGuardsRequired ?? 1));
-    setNightGuardsRequired(String(site.rosterNightShiftGuardsRequired ?? 1));
   }, [
     site.id,
     site.rosterSiteRules,
     site.rosterSheetNotes,
     site.rosterDayShiftGender,
     site.rosterNightShiftGender,
-    site.rosterDayShiftGuardsRequired,
-    site.rosterNightShiftGuardsRequired,
   ]);
 
   const save = async () => {
     setError(null);
     setSaving(true);
-    const dayCount = parseInt(dayGuardsRequired, 10);
-    const nightCount = parseInt(nightGuardsRequired, 10);
-    if (
-      !Number.isFinite(dayCount) ||
-      dayCount < 1 ||
-      dayCount > 50 ||
-      !Number.isFinite(nightCount) ||
-      nightCount < 1 ||
-      nightCount > 50
-    ) {
-      setError("Guards per shift must be a whole number from 1 to 50.");
-      setSaving(false);
-      return;
-    }
-    const minRosterable = Math.max(dayCount, nightCount);
-    const rosterableCount = site.assignedGuards.filter((a) =>
-      ["active", "training", "hired", "reliever"].includes(a.employee.status)
-    ).length;
-    if (rosterableCount < minRosterable) {
-      setError(
-        `This site has ${rosterableCount} rosterable guard(s) but staffing requires at least ${minRosterable} per day. Assign more guards to the site first.`
-      );
-      setSaving(false);
-      return;
-    }
     try {
       const res = await authFetch(`/sites/${siteId}`, token, {
         method: "PUT",
@@ -866,8 +997,6 @@ function SiteRosterSheetFields({
           rosterSheetNotes: notes,
           rosterDayShiftGender: dayGender === "" ? null : dayGender,
           rosterNightShiftGender: nightGender === "" ? null : nightGender,
-          rosterDayShiftGuardsRequired: dayCount,
-          rosterNightShiftGuardsRequired: nightCount,
         }),
       });
       if (!res.ok) {
@@ -940,7 +1069,7 @@ function SiteRosterSheetFields({
       )}
       <div>
         <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
-          Shift staffing (shift roster & PDF)
+          Shift gender rules (shift roster & PDF)
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
@@ -977,65 +1106,8 @@ function SiteRosterSheetFields({
           </div>
         </div>
         <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-1.5">
-          Choose a requirement per shift. &quot;Not specified&quot; skips gender lines on the sheet. Extra rules below are added after these lines.
+          Choose a requirement per shift. &quot;Not specified&quot; skips gender lines on the sheet. Guards required per shift are configured on Posts below.
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-          <div>
-            <label
-              htmlFor="roster-day-guards-required"
-              className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1"
-            >
-              Day shift — guards required
-            </label>
-            <input
-              id="roster-day-guards-required"
-              type="number"
-              min={1}
-              max={50}
-              value={dayGuardsRequired}
-              onChange={(e) => setDayGuardsRequired(e.target.value)}
-              className="input-modern w-full text-sm"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="roster-night-guards-required"
-              className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1"
-            >
-              Night shift — guards required
-            </label>
-            <input
-              id="roster-night-guards-required"
-              type="number"
-              min={1}
-              max={50}
-              value={nightGuardsRequired}
-              onChange={(e) => setNightGuardsRequired(e.target.value)}
-              className="input-modern w-full text-sm"
-            />
-          </div>
-        </div>
-        <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-1.5">
-          Used when generating the auto-roster plan. Each calendar day must reach these counts (pattern and gender rules still apply).
-        </p>
-        {rosterReadiness.filter((h) => h.level !== "ok").length > 0 && (
-          <ul className="mt-2 space-y-1 text-[11px]">
-            {rosterReadiness
-              .filter((h) => h.level !== "ok")
-              .map((h, i) => (
-                <li
-                  key={`${h.code}-${i}`}
-                  className={
-                    h.level === "error"
-                      ? "text-red-700 dark:text-red-300"
-                      : "text-amber-800 dark:text-amber-200"
-                  }
-                >
-                  • {h.message}
-                </li>
-              ))}
-          </ul>
-        )}
       </div>
       <div>
         <label htmlFor="roster-site-rules-extra" className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
@@ -1098,20 +1170,6 @@ function SiteAutoRosterSettings({
   onSaved: () => void;
 }) {
   const [enabled, setEnabled] = useState(Boolean(site.autoRosterEnabled));
-  const [pattern, setPattern] = useState<"3_on_3_off" | "custom_builder" | "">(
-    site.autoRosterPattern === "3_on_3_off" || site.autoRosterPattern === "custom_builder"
-      ? site.autoRosterPattern
-      : ""
-  );
-  const [customBlocks, setCustomBlocks] = useState<CustomBlock[]>(
-    site.autoRosterCustomBlocks?.length
-      ? site.autoRosterCustomBlocks
-      : [
-          { type: "day", count: 3 },
-          { type: "night", count: 3 },
-          { type: "off", count: 3 },
-        ]
-  );
   const [minCoverage, setMinCoverage] = useState(String(site.autoRosterMinCoveragePercent ?? 100));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1120,20 +1178,10 @@ function SiteAutoRosterSettings({
 
   useEffect(() => {
     setEnabled(Boolean(site.autoRosterEnabled));
-    setPattern(
-      site.autoRosterPattern === "3_on_3_off" || site.autoRosterPattern === "custom_builder"
-        ? site.autoRosterPattern
-        : ""
-    );
-    if (site.autoRosterCustomBlocks?.length) {
-      setCustomBlocks(site.autoRosterCustomBlocks);
-    }
     setMinCoverage(String(site.autoRosterMinCoveragePercent ?? 100));
   }, [
     site.id,
     site.autoRosterEnabled,
-    site.autoRosterPattern,
-    site.autoRosterCustomBlocks,
     site.autoRosterMinCoveragePercent,
   ]);
 
@@ -1142,14 +1190,6 @@ function SiteAutoRosterSettings({
     const coverage = parseInt(minCoverage, 10);
     if (!Number.isFinite(coverage) || coverage < 0 || coverage > 100) {
       setError("Coverage threshold must be 0–100.");
-      return;
-    }
-    if (enabled && !pattern) {
-      setError("Choose a roster pattern before enabling auto-roster.");
-      return;
-    }
-    if (enabled && pattern === "custom_builder" && customBlocks.length === 0) {
-      setError("Add at least one block to the custom pattern.");
       return;
     }
     if (enabled && !ready) {
@@ -1162,8 +1202,6 @@ function SiteAutoRosterSettings({
         method: "PUT",
         body: JSON.stringify({
           autoRosterEnabled: enabled,
-          autoRosterPattern: enabled ? pattern : null,
-          autoRosterCustomBlocks: enabled && pattern === "custom_builder" ? customBlocks : null,
           autoRosterMinCoveragePercent: coverage,
         }),
       });
@@ -1210,11 +1248,9 @@ function SiteAutoRosterSettings({
             Auto-roster:{" "}
             <span className="font-medium">{site.autoRosterEnabled ? "Enabled" : "Disabled"}</span>
           </p>
-          {site.autoRosterEnabled && site.autoRosterPattern && (
+          {site.autoRosterEnabled && (
             <p>
-              Pattern:{" "}
-              {site.autoRosterPattern === "3_on_3_off" ? "3 days, 3 nights, 3 off" : "Custom pattern"} ·
-              threshold {site.autoRosterMinCoveragePercent ?? 100}%
+              Coverage threshold: {site.autoRosterMinCoveragePercent ?? 100}%
             </p>
           )}
           <SiteAutoRosterChecklist site={site} />
@@ -1242,25 +1278,6 @@ function SiteAutoRosterSettings({
           </label>
           {enabled && (
             <div className="space-y-4 pl-0 sm:pl-6 border-l-0 sm:border-l-2 border-orange-200 dark:border-orange-800/60">
-              <div>
-                <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
-                  Pattern
-                </label>
-                <select
-                  value={pattern}
-                  onChange={(e) =>
-                    setPattern(e.target.value as "3_on_3_off" | "custom_builder" | "")
-                  }
-                  className="input-modern w-full max-w-md text-sm"
-                >
-                  <option value="">Select pattern</option>
-                  <option value="3_on_3_off">3 days, 3 nights, 3 off</option>
-                  <option value="custom_builder">Build custom pattern</option>
-                </select>
-              </div>
-              {pattern === "custom_builder" && (
-                <CustomPatternBuilder blocks={customBlocks} onChange={setCustomBlocks} />
-              )}
               <div className="max-w-xs">
                 <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
                   Auto-apply when coverage ≥
@@ -1306,16 +1323,30 @@ function SiteAutoRosterChecklist({ site }: { site: Site }) {
   const hints = useMemo(() => buildSiteRosterReadinessHints(site), [site]);
   const dayPosts = site.posts.filter((p) => (p.shiftType ?? "day") !== "night");
   const nightPosts = site.posts.filter((p) => p.shiftType === "night");
-  const dayStaff = Math.max(1, Math.floor(site.rosterDayShiftGuardsRequired ?? 1));
-  const nightStaff = Math.max(1, Math.floor(site.rosterNightShiftGuardsRequired ?? 1));
+  const dayStaff = Math.min(50, Math.max(0, Math.floor(site.rosterDayShiftGuardsRequired ?? 1)));
+  const nightStaff = Math.min(50, Math.max(0, Math.floor(site.rosterNightShiftGuardsRequired ?? 1)));
 
   return (
     <ul className="space-y-2 text-sm">
-      <li className={dayPosts.length > 0 ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300"}>
-        {dayPosts.length > 0 ? "✓" : "✗"} At least one day post ({dayPosts.length})
+      <li
+        className={
+          dayPosts.length > 0 || dayStaff === 0
+            ? "text-emerald-700 dark:text-emerald-300"
+            : "text-red-700 dark:text-red-300"
+        }
+      >
+        {dayPosts.length > 0 || dayStaff === 0 ? "✓" : "✗"} At least one day post ({dayPosts.length})
+        {dayStaff === 0 ? " — day shift not staffed" : ""}
       </li>
-      <li className={nightPosts.length > 0 ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300"}>
-        {nightPosts.length > 0 ? "✓" : "✗"} At least one night post ({nightPosts.length})
+      <li
+        className={
+          nightPosts.length > 0 || nightStaff === 0
+            ? "text-emerald-700 dark:text-emerald-300"
+            : "text-red-700 dark:text-red-300"
+        }
+      >
+        {nightPosts.length > 0 || nightStaff === 0 ? "✓" : "✗"} At least one night post ({nightPosts.length})
+        {nightStaff === 0 ? " — night shift not staffed" : ""}
       </li>
       <li className="text-neutral-700 dark:text-neutral-300">
         Staffing: {dayStaff} day + {nightStaff} night guard(s) required each calendar day
@@ -1338,6 +1369,96 @@ function SiteAutoRosterChecklist({ site }: { site: Site }) {
   );
 }
 
+function ShiftStaffingFallbackCard({
+  shiftType,
+  guardsRequired,
+  onGuardsRequiredChange,
+  canManage,
+  readOnlyValue,
+}: {
+  shiftType: "day" | "night";
+  guardsRequired: string;
+  onGuardsRequiredChange: (v: string) => void;
+  canManage: boolean;
+  readOnlyValue: number;
+}) {
+  const label = shiftType === "day" ? "Day shift" : "Night shift";
+  const inputId = shiftType === "day" ? "roster-day-guards-required-fallback" : "roster-night-guards-required-fallback";
+
+  return (
+    <div className="p-4 rounded-lg border-2 border-dashed border-neutral-200 dark:border-neutral-700 bg-neutral-50/80 dark:bg-neutral-900/40">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <p className="font-medium text-sm text-neutral-800 dark:text-neutral-200">{label} — no post yet</p>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+            Configure staffing here, or add a {label.toLowerCase()} post.
+          </p>
+        </div>
+        <ShiftStaffingField
+          inputId={inputId}
+          value={guardsRequired}
+          onChange={onGuardsRequiredChange}
+          canManage={canManage}
+          readOnlyValue={readOnlyValue}
+          shiftType={shiftType}
+        />
+      </div>
+    </div>
+  );
+}
+
+function shiftStaffingLabel(shiftType: "day" | "night"): string {
+  return shiftType === "night" ? "Guards required per Night" : "Guards required per day";
+}
+
+function shiftStaffingReadOnlyText(count: number, shiftType: "day" | "night"): string {
+  if (count === 0) return "Not staffed (0)";
+  const period = shiftType === "night" ? "night" : "day";
+  return `${count} guard(s) required per ${period}`;
+}
+
+function ShiftStaffingField({
+  inputId,
+  value,
+  onChange,
+  canManage,
+  readOnlyValue,
+  shiftType,
+}: {
+  inputId: string;
+  value: string;
+  onChange?: (v: string) => void;
+  canManage: boolean;
+  readOnlyValue?: number;
+  shiftType: "day" | "night";
+}) {
+  if (!canManage) {
+    const count = readOnlyValue ?? parseInt(value, 10);
+    return (
+      <p className="text-xs text-neutral-600 dark:text-neutral-400 shrink-0">
+        {shiftStaffingReadOnlyText(count, shiftType)}
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex w-fit max-w-full items-center gap-2">
+      <label htmlFor={inputId} className="text-xs font-medium text-neutral-600 dark:text-neutral-400 whitespace-nowrap">
+        {shiftStaffingLabel(shiftType)}
+      </label>
+      <input
+        id={inputId}
+        type="number"
+        min={0}
+        max={50}
+        value={value}
+        onChange={(e) => onChange?.(e.target.value)}
+        className="input-modern !w-[4.5rem] shrink-0 px-2.5 py-1.5 text-sm text-center tabular-nums [appearance:textfield] [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      />
+    </div>
+  );
+}
+
 function PostCard({
   post,
   siteId,
@@ -1354,6 +1475,10 @@ function PostCard({
   onDelete,
   onError,
   onEdit,
+  staffingEditor,
+  guardsRequired,
+  onGuardsRequiredChange,
+  staffingReadOnly,
 }: {
   post: Post;
   siteId: string;
@@ -1370,9 +1495,15 @@ function PostCard({
   onDelete: () => void;
   onError?: (msg: string | null) => void;
   onEdit?: (post: Post) => void;
+  staffingEditor: "day" | "night";
+  guardsRequired: string;
+  onGuardsRequiredChange: (v: string) => void;
+  staffingReadOnly?: number;
 }) {
   const { confirm, confirmDialog } = useConfirmDialog();
   const shiftLabel = post.shiftType ? SHIFT_LABELS[post.shiftType] : "Shift";
+  const staffingInputId =
+    staffingEditor === "day" ? "roster-day-guards-required" : "roster-night-guards-required";
 
   return (
     <div
@@ -1456,6 +1587,23 @@ function PostCard({
           </button>
         )}
       </div>
+
+      {staffingEditor && (
+        <div
+          className="mb-4 pb-4 border-b border-neutral-100 dark:border-neutral-800"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <ShiftStaffingField
+            inputId={`${staffingInputId}-${post.id}`}
+            value={guardsRequired}
+            onChange={onGuardsRequiredChange}
+            canManage={canManage}
+            readOnlyValue={staffingReadOnly}
+            shiftType={staffingEditor}
+          />
+        </div>
+      )}
 
       {guards.length > 0 && (
         <div
@@ -1649,32 +1797,76 @@ function GuardChip({
 function AddPostForm({
   siteId,
   token,
+  site,
+  dayGuardsRequired,
+  nightGuardsRequired,
   onSuccess,
 }: {
   siteId: string;
   token: string;
+  site: Site;
+  dayGuardsRequired: string;
+  nightGuardsRequired: string;
   onSuccess: () => void;
 }) {
   const [name, setName] = useState("");
   const [shiftType, setShiftType] = useState<"day" | "night">("day");
+  const [guardsRequired, setGuardsRequired] = useState(dayGuardsRequired);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setGuardsRequired(shiftType === "night" ? nightGuardsRequired : dayGuardsRequired);
+  }, [shiftType, dayGuardsRequired, nightGuardsRequired]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setError("Post name is required.");
+      return;
+    }
+
+    const nextDay = shiftType === "day" ? guardsRequired : dayGuardsRequired;
+    const nextNight = shiftType === "night" ? guardsRequired : nightGuardsRequired;
+    const rosterableCount = site.assignedGuards.filter((a) =>
+      ROSTERABLE_GUARD_STATUSES.includes(a.employee.status as (typeof ROSTERABLE_GUARD_STATUSES)[number])
+    ).length;
+    const validated = validateSiteShiftStaffing(nextDay, nextNight, rosterableCount);
+    if ("error" in validated) {
+      setError(validated.error);
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await authFetch(`/sites/${siteId}/posts`, token, {
         method: "POST",
-        body: JSON.stringify({ name, shiftType }),
+        body: JSON.stringify({ name: trimmedName, shiftType }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.message || "Failed to create post");
       }
+
+      const staffingRes = await authFetch(`/sites/${siteId}`, token, {
+        method: "PUT",
+        body: JSON.stringify({
+          rosterDayShiftGuardsRequired: validated.dayCount,
+          rosterNightShiftGuardsRequired: validated.nightCount,
+        }),
+      });
+      if (!staffingRes.ok) {
+        const data = await staffingRes.json().catch(() => ({}));
+        throw new Error(
+          typeof data.message === "string" ? data.message : data.error || "Post created but staffing failed to save"
+        );
+      }
+
       setName("");
       setShiftType("day");
+      setGuardsRequired(dayGuardsRequired);
       onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed");
@@ -1707,6 +1899,15 @@ function AddPostForm({
           <option value="day">Day Shift (06:00 – 18:00)</option>
           <option value="night">Night Shift (18:00 – 06:00)</option>
         </select>
+      </div>
+      <div className="mt-4">
+        <ShiftStaffingField
+          inputId="add-post-guards-required"
+          value={guardsRequired}
+          onChange={setGuardsRequired}
+          canManage
+          shiftType={shiftType}
+        />
       </div>
       <div className="mt-4 flex gap-3">
         <button type="submit" disabled={submitting} className="btn-primary">

@@ -50,19 +50,28 @@ const defaultFairnessSpread: RosterPlan["summary"]["fairnessSpread"] = {
   maxDayMinusMinDay: 0,
   maxNightMinusMinNight: 0,
   maxSundayMinusMinSunday: 0,
+  maxDayNightImbalance: 0,
 };
 
 function normalizeRosterPlanSummary(
   summary: z.infer<typeof rosterPlanSchema>["summary"],
   entryCount: number
 ): RosterPlan["summary"] {
+  const spread = summary?.fairnessSpread;
   return {
     guardsConsidered: summary?.guardsConsidered ?? 0,
     shiftsPlanned: summary?.shiftsPlanned ?? entryCount,
     postsUsed: summary?.postsUsed ?? 0,
     skippedGuardDays: summary?.skippedGuardDays ?? 0,
     uncoveredDays: summary?.uncoveredDays ?? 0,
-    fairnessSpread: summary?.fairnessSpread ?? defaultFairnessSpread,
+    fairnessSpread: spread
+      ? {
+          maxDayMinusMinDay: spread.maxDayMinusMinDay,
+          maxNightMinusMinNight: spread.maxNightMinusMinNight,
+          maxSundayMinusMinSunday: spread.maxSundayMinusMinSunday,
+          maxDayNightImbalance: spread.maxDayNightImbalance ?? 0,
+        }
+      : defaultFairnessSpread,
   };
 }
 
@@ -461,12 +470,6 @@ export const rosteringModuleService = {
         body: { error: "Validation error", message: "endDate must be on or after startDate" },
       };
     }
-    if (input.pattern === "custom_builder" && (!input.customBlocks || input.customBlocks.length === 0)) {
-      return {
-        status: 400,
-        body: { error: "Validation error", message: "customBlocks required when pattern is custom_builder" },
-      };
-    }
     const site = await rosteringRepository.findSiteWithAssignedGuards(input.siteId, companyId);
     if (!site) {
       return { status: 404, body: { error: "Site not found" } };
@@ -490,8 +493,6 @@ export const rosteringModuleService = {
         siteId: input.siteId,
         startDate: start,
         endDate: end,
-        pattern: input.pattern,
-        customBlocks: input.customBlocks,
       });
       return { plan };
     } catch (err) {
@@ -515,7 +516,6 @@ export const rosteringModuleService = {
         plan: {
           ...plan,
           summary: normalizeRosterPlanSummary(plan.summary, plan.entries.length),
-          guardCycleOffsets: plan.guardCycleOffsets ?? [],
           warnings: plan.warnings ?? [],
         },
         options,

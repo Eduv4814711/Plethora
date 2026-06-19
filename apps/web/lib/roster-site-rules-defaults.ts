@@ -24,7 +24,10 @@ function lineForShift(shiftLabel: "Day" | "Night", g: RosterShiftGender): string
  * Falls back to defaults only when nothing is configured.
  */
 function clampStaffing(n: number | null | undefined): number {
-  return Math.min(50, Math.max(1, Math.floor(Number(n) || 1)));
+  if (n == null) return 1;
+  const v = Math.floor(Number(n));
+  if (!Number.isFinite(v)) return 1;
+  return Math.min(50, Math.max(0, v));
 }
 
 export function rosterSiteRulesLines(

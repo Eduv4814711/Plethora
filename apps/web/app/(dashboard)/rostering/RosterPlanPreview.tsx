@@ -29,6 +29,7 @@ export type RosterPlanFairnessSpread = {
   maxDayMinusMinDay: number;
   maxNightMinusMinNight: number;
   maxSundayMinusMinSunday: number;
+  maxDayNightImbalance?: number;
 };
 
 export type RosterReadinessDiagnostic = {
@@ -37,9 +38,18 @@ export type RosterReadinessDiagnostic = {
   message: string;
 };
 
+export type RotationRecommendationSummary = {
+  recommendedPatternLabel: string;
+  strategy: string;
+  reason: string;
+  canFullyCover: boolean;
+  coreGuardCount: number;
+  relieverGuardCount: number;
+  warnings: string[];
+};
+
 export type RosterPlan = {
   siteId: string;
-  pattern: "3_on_3_off" | "custom_builder";
   startDate: string;
   endDate: string;
   entries: RosterPlanEntry[];
@@ -54,9 +64,9 @@ export type RosterPlan = {
     uncoveredSlots?: number;
     coveragePercent?: number;
     relieversUsed?: number;
-    patternBreaks?: number;
+    rotationPattern?: string;
+    rotationRecommendation?: RotationRecommendationSummary;
   };
-  guardCycleOffsets?: { employeeId: string; offsetDays: number }[];
   readiness?: RosterReadinessDiagnostic[];
   guardStats?: {
     employeeId: string;
@@ -72,11 +82,6 @@ export type RosterPlan = {
 
 type GuardRef = { id: string; firstName: string; lastName: string };
 type PostRef = { id: string; name: string; shiftType?: string | null };
-
-const PATTERN_LABELS: Record<RosterPlan["pattern"], string> = {
-  "3_on_3_off": "3 days, 3 nights, 3 off",
-  custom_builder: "Custom pattern",
-};
 
 function SummaryCard({
   label,
@@ -136,14 +141,6 @@ export function RosterPlanPreview({
     return p ? p.name : "Post";
   };
 
-  const offsetByGuard = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const o of plan.guardCycleOffsets ?? []) {
-      map.set(o.employeeId, o.offsetDays);
-    }
-    return map;
-  }, [plan.guardCycleOffsets]);
-
   const guardRows = useMemo(() => {
     const byGuard = new Map<
       string,
@@ -171,14 +168,13 @@ export function RosterPlanPreview({
       .map(([employeeId, data]) => ({
         employeeId,
         name: guardName(employeeId),
-        cycleOffsetDays: offsetByGuard.get(employeeId) ?? 0,
         entries: data.entries.sort(
           (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
         ),
         conflicts: data.conflicts.sort((a, b) => a.date.localeCompare(b.date)),
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [plan.entries, plan.conflicts, guards, offsetByGuard]);
+  }, [plan.entries, plan.conflicts, guards]);
 
   const hasSkippedConflicts = plan.conflicts.length > 0;
   const siteLevelConflicts = useMemo(
@@ -190,10 +186,19 @@ export function RosterPlanPreview({
   const hasUncoveredDays = uncoveredDays > 0;
   const fairness = plan.summary.fairnessSpread;
   const coveragePercent = plan.summary.coveragePercent;
-  const patternBreaks = plan.summary.patternBreaks ?? 0;
   const relieversUsed = plan.summary.relieversUsed ?? 0;
-  const gapFillWarnings = plan.warnings.filter((w) => w.code === "PATTERN_BREAK_FILL");
+  const rotationPattern = plan.summary.rotationPattern;
+  const rotationRec = plan.summary.rotationRecommendation;
   const canApply = plan.entries.length > 0 && !applying;
+
+  const strategyLabel: Record<string, string> = {
+    equal_rotation: "Equal rotation",
+    core_with_relievers: "Core + relievers",
+    day_only: "Day only",
+    night_only: "Night only",
+    understaffed: "Understaffed",
+    custom: "Custom",
+  };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -202,7 +207,7 @@ export function RosterPlanPreview({
           <div className="min-w-0">
             <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Roster plan preview</h3>
             <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-              {siteName} · {PATTERN_LABELS[plan.pattern]} · {periodLabel}
+              {siteName} · {periodLabel}
             </p>
           </div>
           <button
@@ -246,15 +251,13 @@ export function RosterPlanPreview({
             tone={relieversUsed > 0 ? "warning" : "neutral"}
           />
           <SummaryCard
-            label="Pattern breaks"
-            value={patternBreaks}
-            tone={patternBreaks > 0 ? "warning" : "success"}
-          />
-          <SummaryCard
             label="Uncovered days"
             value={uncoveredDays}
             tone={hasUncoveredDays ? "danger" : "success"}
           />
+          {rotationPattern ? (
+            <SummaryCard label="Rotation pattern" value={rotationPattern} tone="neutral" />
+          ) : null}
           {fairness ? (
             <>
               <SummaryCard
@@ -265,8 +268,15 @@ export function RosterPlanPreview({
               <SummaryCard
                 label="Night balance (max-min)"
                 value={fairness.maxNightMinusMinNight}
-                tone={fairness.maxNightMinusMinNight <= 1 ? "success" : "warning"}
+                tone={fairness.maxNightMinusMinNight <= 2 ? "success" : fairness.maxNightMinusMinNight <= 4 ? "warning" : "danger"}
               />
+              {fairness.maxDayNightImbalance != null && (
+                <SummaryCard
+                  label="Day/night mix (max imbalance)"
+                  value={fairness.maxDayNightImbalance}
+                  tone={fairness.maxDayNightImbalance <= 2 ? "success" : "warning"}
+                />
+              )}
               <SummaryCard
                 label="Sunday balance (max-min)"
                 value={fairness.maxSundayMinusMinSunday}
@@ -288,11 +298,50 @@ export function RosterPlanPreview({
             </>
           )}
         </div>
+        {rotationRec ? (
+          <div className="mt-3 rounded-lg border border-blue-200 dark:border-blue-800/60 bg-blue-50/80 dark:bg-blue-950/30 px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-blue-700 dark:text-blue-300 mb-1.5">
+              Recommended rotation
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2 text-xs text-blue-900 dark:text-blue-100">
+              <p>
+                <span className="font-medium">Pattern:</span>{" "}
+                {rotationRec.recommendedPatternLabel || rotationPattern || "—"}
+              </p>
+              <p>
+                <span className="font-medium">Strategy:</span>{" "}
+                {strategyLabel[rotationRec.strategy] ?? rotationRec.strategy}
+              </p>
+              <p>
+                <span className="font-medium">Full coverage:</span>{" "}
+                {rotationRec.canFullyCover ? "Yes" : "No — add guards or relievers"}
+              </p>
+              <p>
+                <span className="font-medium">Core / relievers:</span>{" "}
+                {rotationRec.coreGuardCount} core
+                {rotationRec.relieverGuardCount > 0
+                  ? ` · ${rotationRec.relieverGuardCount} reliever${rotationRec.relieverGuardCount !== 1 ? "s" : ""}`
+                  : " · no reliever pool"}
+              </p>
+            </div>
+            <p className="mt-2 text-xs text-blue-800 dark:text-blue-200">{rotationRec.reason}</p>
+            {rotationRec.warnings.length > 0 && (
+              <ul className="mt-2 space-y-1 text-xs text-amber-800 dark:text-amber-200">
+                {rotationRec.warnings.map((w, i) => (
+                  <li key={`rot-warn-${i}`}>• {w}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : rotationPattern ? (
+          <p className="mt-3 text-xs text-neutral-600 dark:text-neutral-400">
+            Rotation pattern: <span className="font-medium">{rotationPattern}</span>
+          </p>
+        ) : null}
         {coveragePercent != null && coveragePercent < 100 && (
           <p className="mt-3 text-xs text-amber-800 dark:text-amber-200 rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
-            Coverage is below 100% because the engine keeps strict pattern rules (guards are not assigned on off days or
-            when rest/gender/overlap rules block them). Add rosterable guards, ensure day and night posts exist, fix
-            gender data, and match guard count to the pattern cycle length.
+            Coverage is below 100%. See uncovered slots below for per-guard blocking reasons (rest, gender,
+            overlap, or staffing rules).
           </p>
         )}
         {hasUncoveredDays && (
@@ -300,13 +349,6 @@ export function RosterPlanPreview({
             {uncoveredDays} day{uncoveredDays !== 1 ? "s are" : " is"} missing day or night coverage. You can still
             apply the {plan.entries.length} planned shift{plan.entries.length !== 1 ? "s" : ""}, but gaps will remain
             until you add guards or adjust site rules.
-          </p>
-        )}
-        {gapFillWarnings.length > 0 && (
-          <p className="mt-3 text-xs text-amber-800 dark:text-amber-200 rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
-            {gapFillWarnings.length} slot{gapFillWarnings.length !== 1 ? "s were" : " was"} filled by assigning guards
-            outside their pattern phase ({patternBreaks} pattern break{patternBreaks !== 1 ? "s" : ""}). Review before
-            applying.
           </p>
         )}
         {siteLevelConflicts.length > 0 && (
@@ -359,9 +401,7 @@ export function RosterPlanPreview({
                 className={
                   w.code === "UNCOVERED_DAY"
                     ? "font-medium text-red-800 dark:text-red-200"
-                    : w.code === "PATTERN_COVERAGE_HINT"
-                      ? "font-medium text-amber-900 dark:text-amber-100"
-                      : ""
+                    : ""
                 }
               >
                 • {w.message}
@@ -399,11 +439,6 @@ export function RosterPlanPreview({
                   >
                     <td className="py-2.5 pr-3 font-medium text-neutral-900 dark:text-neutral-100">
                       {row.name}
-                      {(plan.guardCycleOffsets?.length ?? 0) > 0 && (
-                        <span className="ml-2 text-[10px] font-normal text-neutral-500 dark:text-neutral-400">
-                          +{row.cycleOffsetDays}d offset
-                        </span>
-                      )}
                       {hasConflict && (
                         <span className="ml-2 text-[10px] font-semibold uppercase text-red-600 dark:text-red-400">
                           {row.conflicts.length} conflict{row.conflicts.length !== 1 ? "s" : ""}

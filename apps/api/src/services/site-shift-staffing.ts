@@ -1,10 +1,14 @@
-/** Clamp site staffing fields to valid roster engine range (1–50 per shift). */
+/** Clamp site staffing fields to valid roster engine range (0–50 per shift). */
 export function resolveSiteShiftStaffing(site: {
   rosterDayShiftGuardsRequired?: number | null;
   rosterNightShiftGuardsRequired?: number | null;
 }): { day: number; night: number } {
-  const clamp = (n: number | null | undefined) =>
-    Math.min(50, Math.max(1, Math.floor(Number(n) || 1)));
+  const clamp = (n: number | null | undefined) => {
+    if (n == null) return 1;
+    const v = Math.floor(Number(n));
+    if (!Number.isFinite(v)) return 1;
+    return Math.min(50, Math.max(0, v));
+  };
 
   return {
     day: clamp(site.rosterDayShiftGuardsRequired),

@@ -39,13 +39,26 @@ function refineSiteGeofenceThreeOrNone(data: {
 }
 
 const ROSTER_SHIFT_GENDER = z.enum(["male", "female", "any"]).nullable().optional();
-const ROSTER_SHIFT_GUARDS_REQUIRED = z.number().int().min(1).max(50).optional();
-const AUTO_ROSTER_PATTERN = z.enum(["3_on_3_off", "custom_builder"]).nullable().optional();
-const autoRosterBlockSchema = z.object({
-  type: z.enum(["day", "night", "off"]),
-  count: z.number().min(1).max(14),
-});
+const ROSTER_SHIFT_GUARDS_REQUIRED = z.number().int().min(0).max(50).optional();
 
+function refineShiftGuardsNotBothZero(
+  data: {
+    rosterDayShiftGuardsRequired?: number;
+    rosterNightShiftGuardsRequired?: number;
+  },
+  ctx: z.RefinementCtx
+) {
+  if (
+    data.rosterDayShiftGuardsRequired === 0 &&
+    data.rosterNightShiftGuardsRequired === 0
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "At least one shift must require at least 1 guard.",
+      path: ["rosterDayShiftGuardsRequired"],
+    });
+  }
+}
 const createSiteSchema = z
   .object({
     name: z.string().min(1),
@@ -70,8 +83,6 @@ const createSiteSchema = z
     rosterDayShiftGuardsRequired: ROSTER_SHIFT_GUARDS_REQUIRED,
     rosterNightShiftGuardsRequired: ROSTER_SHIFT_GUARDS_REQUIRED,
     autoRosterEnabled: z.boolean().optional(),
-    autoRosterPattern: AUTO_ROSTER_PATTERN,
-    autoRosterCustomBlocks: z.array(autoRosterBlockSchema).nullable().optional(),
     autoRosterMinCoveragePercent: z.number().int().min(0).max(100).optional(),
   })
   .superRefine((data, ctx) => {
@@ -79,6 +90,7 @@ const createSiteSchema = z
     if (!g.ok) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: g.message, path: ["latitude"] });
     }
+    refineShiftGuardsNotBothZero(data, ctx);
   });
 
 const updateSiteSchema = z
@@ -105,8 +117,6 @@ const updateSiteSchema = z
     rosterDayShiftGuardsRequired: ROSTER_SHIFT_GUARDS_REQUIRED,
     rosterNightShiftGuardsRequired: ROSTER_SHIFT_GUARDS_REQUIRED,
     autoRosterEnabled: z.boolean().optional(),
-    autoRosterPattern: AUTO_ROSTER_PATTERN,
-    autoRosterCustomBlocks: z.array(autoRosterBlockSchema).nullable().optional(),
     autoRosterMinCoveragePercent: z.number().int().min(0).max(100).optional(),
   })
   .superRefine((data, ctx) => {
@@ -114,6 +124,7 @@ const updateSiteSchema = z
     if (!g.ok) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: g.message, path: ["latitude"] });
     }
+    refineShiftGuardsNotBothZero(data, ctx);
   });
 
 const POST_SHIFT_TYPES = ["day", "night"] as const;
@@ -245,11 +256,6 @@ export async function sitesRoutes(app: FastifyInstance) {
         rosterDayShiftGuardsRequired: d.rosterDayShiftGuardsRequired ?? undefined,
         rosterNightShiftGuardsRequired: d.rosterNightShiftGuardsRequired ?? undefined,
         autoRosterEnabled: d.autoRosterEnabled ?? undefined,
-        autoRosterPattern: d.autoRosterPattern ?? undefined,
-        autoRosterCustomBlocks:
-          d.autoRosterCustomBlocks === null
-            ? Prisma.JsonNull
-            : d.autoRosterCustomBlocks ?? undefined,
         autoRosterMinCoveragePercent: d.autoRosterMinCoveragePercent ?? undefined,
       },
     });
@@ -413,8 +419,6 @@ export async function sitesRoutes(app: FastifyInstance) {
       rosterDayShiftGuardsRequired,
       rosterNightShiftGuardsRequired,
       autoRosterEnabled,
-      autoRosterPattern,
-      autoRosterCustomBlocks,
       autoRosterMinCoveragePercent,
       ...rest
     } = d;
@@ -443,24 +447,34 @@ export async function sitesRoutes(app: FastifyInstance) {
     if (rosterNightShiftGuardsRequired !== undefined) {
       rosterPatch.rosterNightShiftGuardsRequired = rosterNightShiftGuardsRequired;
     }
-    if (autoRosterEnabled !== undefined) rosterPatch.autoRosterEnabled = autoRosterEnabled;
-    if (autoRosterPattern !== undefined) rosterPatch.autoRosterPattern = autoRosterPattern;
-    if (autoRosterCustomBlocks !== undefined) {
-      rosterPatch.autoRosterCustomBlocks =
-        autoRosterCustomBlocks === null ? Prisma.JsonNull : autoRosterCustomBlocks;
+    const effectiveDayGuards =
+      rosterDayShiftGuardsRequired ?? existing.rosterDayShiftGuardsRequired;
+    const effectiveNightGuards =
+      rosterNightShiftGuardsRequired ?? existing.rosterNightShiftGuardsRequired;
+    if (effectiveDayGuards === 0 && effectiveNightGuards === 0) {
+      return reply.code(400).send({
+        error: "Invalid shift staffing",
+        message: "At least one shift must require at least 1 guard.",
+      });
     }
+    if (autoRosterEnabled !== undefined) rosterPatch.autoRosterEnabled = autoRosterEnabled;
     if (autoRosterMinCoveragePercent !== undefined) {
       rosterPatch.autoRosterMinCoveragePercent = autoRosterMinCoveragePercent;
     }
 
     const wasAutoEnabled = existing.autoRosterEnabled;
 
-    const siteUpdate = await prisma.site.updateMany({
-      where: { id, companyId },
-      data: { ...rest, ...geoPatch, ...rosterPatch },
-    });
-    if (siteUpdate.count === 0) {
-      return reply.code(404).send({ error: "Site not found" });
+    const updateData = { ...rest, ...geoPatch, ...rosterPatch };
+    const hasSiteFieldUpdates = Object.keys(updateData).length > 0;
+
+    if (hasSiteFieldUpdates) {
+      const siteUpdate = await prisma.site.updateMany({
+        where: { id, companyId },
+        data: updateData,
+      });
+      if (siteUpdate.count === 0) {
+        return reply.code(404).send({ error: "Site not found" });
+      }
     }
 
     if (assignedGuardIds !== undefined) {
@@ -535,8 +549,6 @@ export async function sitesRoutes(app: FastifyInstance) {
     const nowEnabled = siteWithAssigned.autoRosterEnabled;
     const autoConfigChanged =
       autoRosterEnabled !== undefined ||
-      autoRosterPattern !== undefined ||
-      autoRosterCustomBlocks !== undefined ||
       autoRosterMinCoveragePercent !== undefined;
     if (nowEnabled && (!wasAutoEnabled || autoConfigChanged)) {
       void runAutoRosterForSite({

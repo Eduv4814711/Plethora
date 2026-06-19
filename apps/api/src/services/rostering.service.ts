@@ -402,7 +402,7 @@ export async function validateShiftAssignment(params: {
     })
   ) {
     throw new RosteringValidationError(
-      "Rest rule violation: a guard cannot work a day shift the day after a night shift, or both day and night on the same day."
+      "Rest rule violation: a guard cannot work day and night on the same date, or a day shift immediately after a night shift."
     );
   }
 }

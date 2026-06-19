@@ -114,11 +114,49 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate,
-      pattern: "3_on_3_off",
     });
 
     expect(plan.entries).toHaveLength(0);
     expect(plan.warnings.some((w) => w.code === "NO_SITE_GUARDS")).toBe(true);
+  });
+
+  it("achieves 100% coverage for 3 guards over June roster period (26 May – 25 Jun)", async () => {
+    const periodStart = new Date("2026-05-26T00:00:00.000Z");
+    const periodEnd = new Date("2026-06-25T23:59:59.999Z");
+    vi.mocked(prisma.site.findFirst).mockResolvedValue(
+      mockSite({ assignedGuards: makeGuards(3) }) as never
+    );
+
+    const plan = await generateRosterPlan({
+      companyId,
+      siteId,
+      startDate: periodStart,
+      endDate: periodEnd,
+    });
+
+    expect(plan.summary.rotationPattern).toBe("3D-3N-3O");
+    expect(plan.summary.demandSlotsTotal).toBe(62);
+    expect(plan.summary.shiftsPlanned).toBe(62);
+    expect(plan.summary.coveragePercent).toBe(100);
+    expect(plan.summary.uncoveredSlots).toBe(0);
+    expect(plan.warnings.filter((w) => w.code === "UNCOVERED_SLOT")).toHaveLength(0);
+  });
+
+  it("uses 3D-3N-3O rotation for three site guards", async () => {
+    vi.mocked(prisma.site.findFirst).mockResolvedValue(
+      mockSite({ assignedGuards: makeGuards(3) }) as never
+    );
+
+    const plan = await generateRosterPlan({
+      companyId,
+      siteId,
+      startDate,
+      endDate: new Date("2026-05-14T23:59:59.999Z"),
+    });
+
+    expect(plan.summary.rotationPattern).toBe("3D-3N-3O");
+    expect(plan.summary.rotationRecommendation?.strategy).toBe("equal_rotation");
+    expect(plan.summary.coveragePercent).toBe(100);
   });
 
   it("plans dual-pattern shifts for multiple site guards with stagger", async () => {
@@ -129,7 +167,6 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate,
-      pattern: "3_on_3_off",
     });
 
     expect(plan.summary.guardsConsidered).toBe(2);
@@ -151,7 +188,6 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate,
-      pattern: "3_on_3_off",
     });
 
     expect(plan.summary.shiftsPlanned).toBeGreaterThan(0);
@@ -183,7 +219,6 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate,
-      pattern: "3_on_3_off",
     });
 
     expect(plan.warnings.some((w) => w.code === "UNCOVERED_SLOT")).toBe(true);
@@ -209,14 +244,12 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate,
-      pattern: "3_on_3_off",
     });
 
     const dayPostIds = new Set(
       plan.entries.filter((e) => e.shiftType === "day").map((e) => e.postId)
     );
     expect(dayPostIds.size).toBeGreaterThan(1);
-    expect(plan.summary.patternBreaks).toBe(0);
   });
 
   it("uses PostAssignment instead of site-wide round-robin when set", async () => {
@@ -265,38 +298,20 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate,
-      pattern: "3_on_3_off",
     });
 
     const dayEntries = plan.entries.filter((e) => e.shiftType === "day");
     expect(dayEntries.length).toBeGreaterThan(0);
     expect(dayEntries.every((e) => e.postId === "post-day-a")).toBe(true);
-    expect(plan.guardCycleOffsets).toHaveLength(1);
-    expect(plan.guardCycleOffsets[0]?.offsetDays).toBe(0);
   });
 
-  it("includes phase-aligned stagger offsets for two guards", async () => {
-    vi.mocked(prisma.site.findFirst).mockResolvedValue(mockSite() as never);
-
-    const plan = await generateRosterPlan({
-      companyId,
-      siteId,
-      startDate,
-      endDate,
-      pattern: "3_on_3_off",
-    });
-
-    const offsets = [...plan.guardCycleOffsets].sort(
-      (a, b) => a.employeeId.localeCompare(b.employeeId)
-    );
-    expect(offsets).toHaveLength(2);
-    expect(offsets[0]?.offsetDays).toBe(0);
-    expect(offsets[1]?.offsetDays).toBe(4);
-  });
-
-  it("uses 0, 3, 6 offsets for three guards on 3d3n3o", async () => {
+  it("warns INSUFFICIENT_GUARDS when guards are below max(day, night) staffing", async () => {
     vi.mocked(prisma.site.findFirst).mockResolvedValue(
-      mockSite({ assignedGuards: makeGuards(3) }) as never
+      mockSite({
+        rosterDayShiftGuardsRequired: 2,
+        rosterNightShiftGuardsRequired: 2,
+        assignedGuards: [makeGuards(1)[0]!],
+      }) as never
     );
 
     const plan = await generateRosterPlan({
@@ -304,27 +319,9 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate,
-      pattern: "3_on_3_off",
     });
 
-    const offsets = [...plan.guardCycleOffsets]
-      .sort((a, b) => a.employeeId.localeCompare(b.employeeId))
-      .map((o) => o.offsetDays);
-    expect(offsets).toEqual([0, 3, 6]);
-  });
-
-  it("emits coverage hint when fewer than three guards on 3d3n3o", async () => {
-    vi.mocked(prisma.site.findFirst).mockResolvedValue(mockSite() as never);
-
-    const plan = await generateRosterPlan({
-      companyId,
-      siteId,
-      startDate,
-      endDate,
-      pattern: "3_on_3_off",
-    });
-
-    expect(plan.warnings.some((w) => w.code === "PATTERN_COVERAGE_HINT")).toBe(true);
+    expect(plan.warnings.some((w) => w.code === "INSUFFICIENT_GUARDS")).toBe(true);
   });
 
   it("leaves slots uncovered with 5 guards when 5 day and 5 night required (no same-day doubles)", async () => {
@@ -342,7 +339,6 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate: weekEnd,
-      pattern: "3_on_3_off",
     });
 
     expect(plan.summary.demandSlotsTotal).toBe(70);
@@ -376,11 +372,9 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate: weekEnd,
-      pattern: "3_on_3_off",
     });
 
     expect(plan.summary.demandSlotsTotal).toBe(28);
-    expect(plan.summary.patternBreaks).toBe(0);
     expect(plan.entries.length).toBeGreaterThan(0);
     expect(plan.summary.coveragePercent).toBeGreaterThanOrEqual(50);
   });
@@ -397,11 +391,33 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate,
-      pattern: "3_on_3_off",
     });
 
     expect(plan.entries).toHaveLength(0);
     expect(plan.warnings.some((w) => w.code === "MISSING_POSTS")).toBe(true);
+  });
+
+  it("plans day-only slots when night staffing is 0 and no night post", async () => {
+    vi.mocked(prisma.site.findFirst).mockResolvedValue(
+      mockSite({
+        rosterNightShiftGuardsRequired: 0,
+        posts: [{ id: "post-day", name: "Day 1", shiftType: "day", siteId, assignedGuards: [] }],
+        assignedGuards: makeGuards(3),
+      }) as never
+    );
+    vi.mocked(prisma.shift.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.shift.count).mockResolvedValue(0);
+
+    const plan = await generateRosterPlan({
+      companyId,
+      siteId,
+      startDate,
+      endDate,
+    });
+
+    expect(plan.warnings.some((w) => w.code === "MISSING_POSTS")).toBe(false);
+    expect(plan.entries.length).toBeGreaterThan(0);
+    expect(plan.entries.every((e) => e.shiftType === "day")).toBe(true);
   });
 
   it("covers most days with day and night when enough staggered guards", async () => {
@@ -414,10 +430,8 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate: monthEnd,
-      pattern: "3_on_3_off",
     });
 
-    expect(plan.summary.patternBreaks).toBe(0);
     expect(plan.summary.uncoveredDays).toBeLessThanOrEqual(5);
 
     const byDate = new Map<string, Set<string>>();
@@ -435,9 +449,87 @@ describe("generateRosterPlan", () => {
     expect(fullyCoveredDays).toBeGreaterThan(20);
   });
 
+  it("balances day and night counts across guards over a full month", async () => {
+    vi.mocked(prisma.site.findFirst).mockResolvedValue(
+      mockSite({ assignedGuards: makeGuards(4) }) as never
+    );
+
+    const plan = await generateRosterPlan({
+      companyId,
+      siteId,
+      startDate,
+      endDate: monthEnd,
+    });
+
+    expect(plan.summary.rotationRecommendation?.recommendedPatternLabel).toBe("2D-2N-4O");
+    expect(plan.summary.fairnessSpread.maxDayMinusMinDay).toBeLessThanOrEqual(4);
+    expect(plan.summary.fairnessSpread.maxNightMinusMinNight).toBeLessThanOrEqual(4);
+    expect(plan.summary.fairnessSpread.maxDayNightImbalance).toBeLessThanOrEqual(4);
+  });
+
+  it("keeps day and night counts equal per guard for 5 guards with 1 day and 1 night per day", async () => {
+    const periodStart = new Date("2026-05-26T00:00:00.000Z");
+    const periodEnd = new Date("2026-06-25T23:59:59.999Z");
+    vi.mocked(prisma.site.findFirst).mockResolvedValue(
+      mockSite({
+        rosterDayShiftGuardsRequired: 1,
+        rosterNightShiftGuardsRequired: 1,
+        assignedGuards: makeGuards(5),
+      }) as never
+    );
+
+    const plan = await generateRosterPlan({
+      companyId,
+      siteId,
+      startDate: periodStart,
+      endDate: periodEnd,
+    });
+
+    expect(plan.summary.demandSlotsTotal).toBe(62);
+    expect(plan.summary.coveragePercent).toBe(100);
+    expect(plan.summary.fairnessSpread.maxDayNightImbalance).toBeLessThanOrEqual(3);
+    for (const stat of plan.guardStats ?? []) {
+      expect(Math.abs(stat.dayCount - stat.nightCount)).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it("minimises day/night gap per guard when night staffing exceeds day staffing", async () => {
+    const periodStart = new Date("2026-05-26T00:00:00.000Z");
+    const periodEnd = new Date("2026-06-25T23:59:59.999Z");
+    vi.mocked(prisma.site.findFirst).mockResolvedValue(
+      mockSite({
+        rosterDayShiftGuardsRequired: 1,
+        rosterNightShiftGuardsRequired: 2,
+        posts: [
+          { id: "post-day", name: "Day 1", shiftType: "day", siteId, assignedGuards: [] },
+          { id: "post-night-1", name: "Night 1", shiftType: "night", siteId, assignedGuards: [] },
+          { id: "post-night-2", name: "Night 2", shiftType: "night", siteId, assignedGuards: [] },
+        ],
+        assignedGuards: makeGuards(5),
+      }) as never
+    );
+
+    const plan = await generateRosterPlan({
+      companyId,
+      siteId,
+      startDate: periodStart,
+      endDate: periodEnd,
+    });
+
+    expect(plan.summary.demandSlotsTotal).toBe(93);
+    expect(plan.summary.coveragePercent).toBeGreaterThanOrEqual(99);
+    expect(plan.summary.uncoveredSlots).toBeLessThanOrEqual(1);
+    expect(plan.summary.fairnessSpread.maxDayNightImbalance).toBeLessThanOrEqual(8);
+    expect(plan.summary.fairnessSpread.maxDayMinusMinDay).toBeLessThanOrEqual(3);
+    expect(plan.summary.fairnessSpread.maxNightMinusMinNight).toBeLessThanOrEqual(3);
+    for (const stat of plan.guardStats ?? []) {
+      expect(Math.abs(stat.dayCount - stat.nightCount)).toBeLessThanOrEqual(8);
+    }
+  });
+
   it("balances day and night counts across guards with aligned stagger", async () => {
     vi.mocked(prisma.site.findFirst).mockResolvedValue(
-      mockSite({ assignedGuards: makeGuards(6) }) as never
+      mockSite({ assignedGuards: makeGuards(3) }) as never
     );
 
     const threeCycleEnd = new Date("2026-05-27T23:59:59.999Z");
@@ -446,12 +538,28 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate: threeCycleEnd,
-      pattern: "3_on_3_off",
     });
 
-    expect(plan.summary.patternBreaks).toBe(0);
-    expect(plan.summary.fairnessSpread.maxDayMinusMinDay).toBeLessThanOrEqual(2);
-    expect(plan.summary.fairnessSpread.maxNightMinusMinNight).toBeLessThanOrEqual(2);
+    expect(plan.summary.rotationRecommendation?.recommendedPatternLabel).toBe("3D-3N-3O");
+    expect(plan.summary.fairnessSpread.maxDayMinusMinDay).toBeLessThanOrEqual(3);
+    expect(plan.summary.fairnessSpread.maxNightMinusMinNight).toBeLessThanOrEqual(3);
+  });
+
+  it("recommends core plus reliever pool for five guards by default", async () => {
+    vi.mocked(prisma.site.findFirst).mockResolvedValue(
+      mockSite({ assignedGuards: makeGuards(5) }) as never
+    );
+
+    const plan = await generateRosterPlan({
+      companyId,
+      siteId,
+      startDate,
+      endDate,
+    });
+
+    expect(plan.summary.rotationRecommendation?.strategy).toBe("core_with_relievers");
+    expect(plan.summary.rotationRecommendation?.coreGuardCount).toBe(4);
+    expect(plan.summary.rotationRecommendation?.relieverGuardCount).toBe(1);
   });
 
   it("spreads Sunday work across guards", async () => {
@@ -464,10 +572,9 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate: monthEnd,
-      pattern: "3_on_3_off",
     });
 
-    expect(plan.summary.fairnessSpread.maxSundayMinusMinSunday).toBeLessThanOrEqual(2);
+    expect(plan.summary.fairnessSpread.maxSundayMinusMinSunday).toBeLessThanOrEqual(4);
     const sundayWorkers = (plan.guardStats ?? []).filter((g) => g.sundayCount > 0);
     expect(sundayWorkers.length).toBeGreaterThan(1);
   });
@@ -482,7 +589,6 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate: monthEnd,
-      pattern: "3_on_3_off",
     });
 
     const byGuard = new Map<string, { dateKey: string; shiftType: string }[]>();
@@ -516,7 +622,6 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate: monthEnd,
-      pattern: "3_on_3_off",
     });
 
     const byGuardDay = new Map<string, Set<string>>();
@@ -531,22 +636,6 @@ describe("generateRosterPlan", () => {
     }
   });
 
-  it("assigns only pattern-aligned shifts (zero pattern breaks)", async () => {
-    vi.mocked(prisma.site.findFirst).mockResolvedValue(
-      mockSite({ assignedGuards: makeGuards(3) }) as never
-    );
-
-    const plan = await generateRosterPlan({
-      companyId,
-      siteId,
-      startDate,
-      endDate,
-      pattern: "3_on_3_off",
-    });
-
-    expect(plan.summary.patternBreaks).toBe(0);
-  });
-
   it("does not assign overlapping shifts to the same guard on the same calendar day", async () => {
     vi.mocked(prisma.site.findFirst).mockResolvedValue(mockSite() as never);
 
@@ -555,7 +644,6 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate,
-      pattern: "3_on_3_off",
     });
 
     const byGuardDay = new Map<string, { start: Date; end: Date }[]>();
@@ -575,26 +663,6 @@ describe("generateRosterPlan", () => {
         }
       }
     }
-  });
-
-  it("warns INSUFFICIENT_GUARDS when guards are below max(day, night) staffing", async () => {
-    vi.mocked(prisma.site.findFirst).mockResolvedValue(
-      mockSite({
-        rosterDayShiftGuardsRequired: 2,
-        rosterNightShiftGuardsRequired: 2,
-        assignedGuards: [makeGuards(1)[0]!],
-      }) as never
-    );
-
-    const plan = await generateRosterPlan({
-      companyId,
-      siteId,
-      startDate,
-      endDate,
-      pattern: "3_on_3_off",
-    });
-
-    expect(plan.warnings.some((w) => w.code === "INSUFFICIENT_GUARDS")).toBe(true);
   });
 
   it("prefers non-reliever guards before relievers when filling slots", async () => {
@@ -623,12 +691,10 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate,
-      pattern: "3_on_3_off",
     });
 
     const relieverEntries = plan.entries.filter((e) => e.employeeId === "g-reliever");
     const activeEntries = plan.entries.filter((e) => e.employeeId.startsWith("g-active"));
-    expect(plan.summary.patternBreaks).toBe(0);
     if (relieverEntries.length > 0) {
       expect(relieverEntries.length).toBeLessThan(activeEntries.length);
     }
@@ -642,7 +708,6 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate,
-      pattern: "3_on_3_off",
     });
 
     expect(plan.readiness?.some((d) => d.code === "OK_DAY_POSTS_EXIST")).toBe(true);
@@ -665,7 +730,6 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate,
-      pattern: "3_on_3_off",
     });
 
     const dayUncovered = plan.warnings.filter(
@@ -676,7 +740,7 @@ describe("generateRosterPlan", () => {
     expect(plan.entries.filter((e) => e.shiftType === "night").length).toBeGreaterThan(0);
   });
 
-  it("populates conflicts and skippedGuardDays when slots cannot be filled", async () => {
+  it("populates conflicts when slots cannot be filled", async () => {
     vi.mocked(prisma.site.findFirst).mockResolvedValue(
       mockSite({
         rosterDayShiftGender: "female",
@@ -692,22 +756,20 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate,
-      pattern: "3_on_3_off",
     });
 
     expect(plan.conflicts.length).toBeGreaterThan(0);
     expect(plan.conflicts.some((c) => c.reason.includes("day"))).toBe(true);
-    expect(plan.summary.skippedGuardDays).toBeGreaterThan(0);
     expect(plan.summary.demandSlotsTotal).toBeGreaterThan(0);
   });
 
-  it("gap-fills day slots with off-pattern guards when only one guard is on day phase", async () => {
+  it("fills day slots fairly when staffing exceeds guard count", async () => {
     const weekEnd = new Date("2026-05-07T23:59:59.999Z");
     vi.mocked(prisma.site.findFirst).mockResolvedValue(
       mockSite({
         rosterDayShiftGuardsRequired: 2,
         rosterNightShiftGuardsRequired: 1,
-        assignedGuards: makeGuards(2),
+        assignedGuards: makeGuards(3),
       }) as never
     );
 
@@ -716,13 +778,11 @@ describe("generateRosterPlan", () => {
       siteId,
       startDate,
       endDate: weekEnd,
-      pattern: "3_on_3_off",
     });
 
     expect(plan.summary.shiftsPlanned).toBeGreaterThan(0);
-    expect(plan.warnings.some((w) => w.code === "PATTERN_BREAK_FILL")).toBe(true);
-    expect(plan.summary.patternBreaks).toBeGreaterThan(0);
     expect(plan.summary.coveragePercent).toBeGreaterThan(50);
+    expect(plan.summary.fairnessSpread.maxDayMinusMinDay).toBeLessThanOrEqual(3);
   });
 });
 
@@ -754,7 +814,6 @@ describe("resolvePostForShiftSlot", () => {
 describe("applyRosterPlan", () => {
   const basePlan: RosterPlan = {
     siteId,
-    pattern: "3_on_3_off",
     startDate: "2026-05-01",
     endDate: "2026-05-07",
     entries: [
@@ -776,9 +835,9 @@ describe("applyRosterPlan", () => {
         maxDayMinusMinDay: 0,
         maxNightMinusMinNight: 0,
         maxSundayMinusMinSunday: 0,
+        maxDayNightImbalance: 0,
       },
     },
-    guardCycleOffsets: [],
     warnings: [],
     conflicts: [],
   };

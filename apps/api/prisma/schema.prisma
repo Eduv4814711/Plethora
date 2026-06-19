@@ -268,8 +268,6 @@ model Site {
   rosterSheetNotes           String?  @db.Text
   /// Automatic roster generation from payroll calendar.
   autoRosterEnabled            Boolean   @default(false)
-  autoRosterPattern            String?
-  autoRosterCustomBlocks       Json?
   autoRosterMinCoveragePercent Int       @default(100)
   autoRosterLastRunAt          DateTime?
   autoRosterLastStatus         String?

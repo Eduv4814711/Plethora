@@ -15,8 +15,14 @@ export function buildSiteRosterReadinessHints(site: {
 }): RosterReadinessHint[] {
   const dayPosts = site.posts.filter((p) => (p.shiftType ?? "day") !== "night");
   const nightPosts = site.posts.filter((p) => p.shiftType === "night");
-  const dayStaff = Math.min(50, Math.max(1, Math.floor(site.rosterDayShiftGuardsRequired ?? 1)));
-  const nightStaff = Math.min(50, Math.max(1, Math.floor(site.rosterNightShiftGuardsRequired ?? 1)));
+  const clampStaffing = (n: number | null | undefined) => {
+    if (n == null) return 1;
+    const v = Math.floor(Number(n));
+    if (!Number.isFinite(v)) return 1;
+    return Math.min(50, Math.max(0, v));
+  };
+  const dayStaff = clampStaffing(site.rosterDayShiftGuardsRequired);
+  const nightStaff = clampStaffing(site.rosterNightShiftGuardsRequired);
   const rosterable = (site.assignedGuards ?? []).filter((a) =>
     ["active", "training", "hired", "reliever"].includes(a.employee.status)
   );
@@ -39,6 +45,12 @@ export function buildSiteRosterReadinessHints(site: {
       level: "ok",
       message: `${dayPosts.length} day post(s) configured.`,
     });
+  } else if (dayStaff > 0) {
+    hints.push({
+      code: "ERROR_MISSING_DAY_POSTS",
+      level: "error",
+      message: "No day post on this site. Day demand slots cannot be filled.",
+    });
   }
 
   if (nightPosts.length > 0) {
@@ -47,7 +59,7 @@ export function buildSiteRosterReadinessHints(site: {
       level: "ok",
       message: `${nightPosts.length} night post(s) configured.`,
     });
-  } else {
+  } else if (nightStaff > 0) {
     hints.push({
       code: "ERROR_MISSING_NIGHT_POSTS",
       level: "error",

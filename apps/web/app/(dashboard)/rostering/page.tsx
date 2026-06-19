@@ -8,19 +8,6 @@ import { authFetch, fetchCurrentPayPeriod, fetchPayPeriods, type PayPeriodOption
 import { PayPeriodSelect } from "@/components/pay-period-select";
 import { format, addDays, startOfMonth, endOfMonth, parseISO, startOfDay } from "date-fns";
 
-type BulkPattern =
-  | "all_days"
-  | "weekdays"
-  | "2_on_2_off"
-  | "4_on_4_off"
-  | "5_on_2_off"
-  | "6_on_3_off"
-  | "3_on_3_off"
-  | "custom"
-  | "custom_builder";
-
-import { CustomPatternBuilder } from "./CustomPatternBuilder";
-import type { CustomBlock } from "./CustomPatternBuilder";
 import { RosterPlanPreview, type RosterPlan } from "./RosterPlanPreview";
 import { ShiftRosterSheet } from "./ShiftRosterSheet";
 import { buildShiftSheetRows, mergeSheetEmployeeLookup, type ShiftSheetRow } from "@/lib/shift-sheet-matrix";
@@ -47,18 +34,6 @@ async function parseApiJsonResponse(res: Response): Promise<Record<string, unkno
 function getRosteringModalContainer(): Element {
   return document.getElementById(DASHBOARD_MAIN_ID) ?? document.body;
 }
-
-const PATTERN_LABELS: Record<BulkPattern, string> = {
-  all_days: "All days",
-  weekdays: "Weekdays (Mon-Fri)",
-  "2_on_2_off": "2 on 2 off",
-  "4_on_4_off": "4 on 4 off",
-  "5_on_2_off": "5 on 2 off",
-  "6_on_3_off": "6 on 3 off",
-  "3_on_3_off": "3 days, 3 nights, 3 off",
-  custom: "Custom days",
-  custom_builder: "Build custom pattern",
-};
 
 interface Shift {
   id: string;
@@ -177,15 +152,6 @@ export default function RosteringPage() {
   const [draftPeriodKey, setDraftPeriodKey] = useState("");
   const [showPeriodModal, setShowPeriodModal] = useState(false);
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
-  const [pattern, setPattern] = useState<BulkPattern>("3_on_3_off");
-  const [customDays, setCustomDays] = useState<number[]>([1, 2, 3, 4, 5]);
-  const [customBlocks, setCustomBlocks] = useState<CustomBlock[]>([
-    { type: "day", count: 3 },
-    { type: "night", count: 3 },
-    { type: "off", count: 3 },
-  ]);
-
-  const isDualPattern = pattern === "3_on_3_off" || pattern === "custom_builder";
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [showResetMenu, setShowResetMenu] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -570,25 +536,22 @@ export default function RosteringPage() {
 
   const canGenerateRosterPlan =
     !!selectedSiteId &&
-    isDualPattern &&
     siteAssignedGuards.length > 0 &&
     !!periodStart &&
     !!periodEnd &&
     parseISO(periodEnd) >= parseISO(periodStart);
 
   const handleGenerateRosterPlan = async () => {
-    if (!token || !selectedSiteId || !isDualPattern) return;
+    if (!token || !selectedSiteId) return;
     setGeneratingPlan(true);
     setBulkError(null);
     setRosterPlanApplyError(null);
     const { startDate, endDate } = getDateRangeParams();
-    const body: Record<string, unknown> = {
+    const body = {
       siteId: selectedSiteId,
       startDate: startDate.slice(0, 10),
       endDate: endDate.slice(0, 10),
-      pattern,
     };
-    if (pattern === "custom_builder") body.customBlocks = customBlocks;
     try {
       const res = await authFetch("/shifts/roster/preview", token, {
         method: "POST",
@@ -769,10 +732,20 @@ export default function RosteringPage() {
     ? postsForSelectedSite.length
     : sites.reduce((sum, site) => sum + site.posts.length, 0);
   const dayStaffRequired = selectedSite
-    ? Math.min(50, Math.max(1, Math.floor(selectedSite.rosterDayShiftGuardsRequired ?? 1)))
+    ? (() => {
+        const n = selectedSite.rosterDayShiftGuardsRequired;
+        if (n == null) return 1;
+        const v = Math.floor(Number(n));
+        return Number.isFinite(v) ? Math.min(50, Math.max(0, v)) : 1;
+      })()
     : 0;
   const nightStaffRequired = selectedSite
-    ? Math.min(50, Math.max(1, Math.floor(selectedSite.rosterNightShiftGuardsRequired ?? 1)))
+    ? (() => {
+        const n = selectedSite.rosterNightShiftGuardsRequired;
+        if (n == null) return 1;
+        const v = Math.floor(Number(n));
+        return Number.isFinite(v) ? Math.min(50, Math.max(0, v)) : 1;
+      })()
     : 0;
   const totalShiftsForSummary = filteredShifts.length;
   const dayShiftCount = filteredShifts.filter((s) => (s.post.shiftType ?? "day") === "day").length;
@@ -876,57 +849,13 @@ export default function RosteringPage() {
             </select>
           </div>
 
-          <div className="rounded-xl border border-neutral-200/90 dark:border-neutral-700 bg-white dark:bg-neutral-900/70 p-3.5 space-y-2">
-            <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-600 dark:text-neutral-300">
-              Step 2: Choose Pattern
-            </h3>
-            <select
-              value={pattern}
-              onChange={(e) => setPattern(e.target.value as BulkPattern)}
-              className="input-modern py-2.5 text-sm w-full"
-            >
-              {(Object.keys(PATTERN_LABELS) as BulkPattern[]).map((p) => (
-                <option key={p} value={p}>
-                  {PATTERN_LABELS[p]}
-                </option>
-              ))}
-            </select>
-            {pattern === "custom" && (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, i) => (
-                  <label key={day} className="flex items-center gap-1 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={customDays.includes(i)}
-                      onChange={(e) =>
-                        setCustomDays((prev) =>
-                          e.target.checked ? [...prev, i] : prev.filter((d) => d !== i)
-                        )
-                      }
-                      className="rounded"
-                    />
-                    {day}
-                  </label>
-                ))}
-              </div>
-            )}
-            {pattern === "custom_builder" && (
-              <CustomPatternBuilder
-                blocks={customBlocks}
-                onChange={setCustomBlocks}
-                periodStart={periodStart}
-                periodEnd={periodEnd}
-              />
-            )}
-          </div>
-
-          {isDualPattern && selectedSiteId && (
+          {selectedSiteId && (
             <div className="rounded-xl border border-orange-200/90 dark:border-orange-800/50 bg-orange-50/50 dark:bg-orange-950/20 p-3.5 space-y-2">
               <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700 dark:text-neutral-200">
-                Step 4: Generate Roster
+                Step 2: Generate Roster
               </h3>
               <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-snug">
-                Generate a coverage-first roster plan for all guards on this site, preview diagnostics, then apply in one step.
+                Generate a fair monthly roster for all guards on this site from staffing requirements, then preview and apply.
               </p>
               {rosterReadinessHints.length > 0 && (
                 <ul className="space-y-1 text-[11px] rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white/80 dark:bg-neutral-900/50 px-2.5 py-2">
@@ -952,7 +881,7 @@ export default function RosteringPage() {
                 disabled={!canGenerateRosterPlan || generatingPlan}
                 className="w-full btn-primary py-2.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {generatingPlan ? "Generating…" : "Generate coverage-first roster plan"}
+                {generatingPlan ? "Generating…" : "Generate fair monthly roster"}
               </button>
               {!canGenerateRosterPlan && siteAssignedGuards.length === 0 && (
                 <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
@@ -974,10 +903,6 @@ export default function RosteringPage() {
               <div className="flex items-center justify-between gap-2">
                 <span className="text-neutral-500 dark:text-neutral-400">Selected site</span>
                 <span className="font-medium text-neutral-800 dark:text-neutral-100 text-right">{selectedSiteName}</span>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-neutral-500 dark:text-neutral-400">Pattern</span>
-                <span className="font-medium text-neutral-800 dark:text-neutral-100">{PATTERN_LABELS[pattern]}</span>
               </div>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-neutral-500 dark:text-neutral-400">Guards on site</span>

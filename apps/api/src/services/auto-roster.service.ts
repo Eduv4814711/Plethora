@@ -4,7 +4,6 @@ import { parsePayrollCalendarSettings } from "../lib/payroll-calendar-settings.j
 import {
   applyRosterPlan,
   generateRosterPlan,
-  type RosterDualPattern,
   type RosterPlan,
 } from "./roster-engine.service.js";
 import {
@@ -12,7 +11,6 @@ import {
   getPayrollCalendarFromCompanySettings,
   getRosterWindow,
 } from "./payroll-period.service.js";
-import type { CustomBlock } from "./rostering.service.js";
 
 export type RosterAutomationStatus =
   | "applied"
@@ -41,11 +39,6 @@ export type AutoRosterCompanyResult = {
 export type AutoRosterGlobalResult = {
   companies: AutoRosterCompanyResult[];
 };
-
-function parseCustomBlocks(raw: unknown): CustomBlock[] | undefined {
-  if (!Array.isArray(raw)) return undefined;
-  return raw as CustomBlock[];
-}
 
 function planMeetsThreshold(plan: RosterPlan, minCoveragePercent: number): boolean {
   const coverage = plan.summary.coveragePercent;
@@ -146,40 +139,6 @@ export async function runAutoRosterForSite(params: {
     };
   }
 
-  const pattern = site.autoRosterPattern as RosterDualPattern | null;
-  if (pattern !== "3_on_3_off" && pattern !== "custom_builder") {
-    await prisma.site.update({
-      where: { id: site.id },
-      data: { autoRosterLastRunAt: new Date(), autoRosterLastStatus: "failed" },
-    });
-    return {
-      siteId: site.id,
-      siteName: site.name,
-      status: "failed",
-      coveragePercent: null,
-      automationRunId: null,
-      created: 0,
-      message: "Auto-roster pattern not configured",
-    };
-  }
-
-  const customBlocks = parseCustomBlocks(site.autoRosterCustomBlocks);
-  if (pattern === "custom_builder" && (!customBlocks || customBlocks.length === 0)) {
-    await prisma.site.update({
-      where: { id: site.id },
-      data: { autoRosterLastRunAt: new Date(), autoRosterLastStatus: "failed" },
-    });
-    return {
-      siteId: site.id,
-      siteName: site.name,
-      status: "failed",
-      coveragePercent: null,
-      automationRunId: null,
-      created: 0,
-      message: "Custom pattern blocks required",
-    };
-  }
-
   const hasDayPost = site.posts.some((p) => p.shiftType === "day");
   const hasNightPost = site.posts.some((p) => p.shiftType === "night");
   const rosterableGuards = site.assignedGuards.filter((a) => {
@@ -230,8 +189,6 @@ export async function runAutoRosterForSite(params: {
       siteId: site.id,
       startDate: window.startDate,
       endDate: window.endDate,
-      pattern,
-      customBlocks,
     });
 
     const coveragePercent = plan.summary.coveragePercent ?? null;

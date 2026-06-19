@@ -10,15 +10,22 @@ import {
   buildRosterReadinessDiagnostics,
   buildSiteDemandSlots,
   computeFairnessTargets,
+  computePatternFairnessTargets,
+  deriveSiteRotationBlocks,
+  dayNightBalanceDelta,
+  formatRotationPatternLabel,
+  buildSiteRotationPlan,
+  maxConsecutiveShiftTypeInPattern,
   computeStaggerOffsets,
   getConsecutiveWorkDaysBefore,
   getPatternShiftAtOffset,
   isGuardEligibleForSlot,
   pickBestGuardForDemandSlot,
+  scoreGuardFairness,
   scoreGuardForDemandSlot,
   scoreGuardForSlot,
-  seedOffDaysFromPattern,
   validateDailyCoverage,
+  violatesAdjacentShiftRestRules,
   wouldViolateRestRules,
   type GuardCandidate,
   type GuardRuntimeState,
@@ -51,10 +58,19 @@ describe("roster-scheduler", () => {
     expect(days[2]!.toISOString().slice(0, 10)).toBe("2026-05-03");
   });
 
-  it("computeStaggerOffsets spaces phases across the cycle", () => {
+  it("computeStaggerOffsets spaces phases across the cycle (legacy)", () => {
     expect(computeStaggerOffsets(3, 9)).toEqual([0, 3, 6]);
     expect(computeStaggerOffsets(2, 9)).toEqual([0, 4]);
     expect(computeStaggerOffsets(5, 9)).toEqual([0, 1, 3, 5, 7]);
+  });
+
+  it("computeStaggerOffsets optimizes for staffing when options provided", () => {
+    const offsets = computeStaggerOffsets(5, 9, {
+      pattern: "3_on_3_off",
+      staffing: { day: 1, night: 2 },
+    });
+    expect(offsets).toHaveLength(5);
+    expect(new Set(offsets).size).toBe(5);
   });
 
   it("getPatternShiftAtOffset follows 3_on_3_off cycle", () => {
@@ -85,6 +101,56 @@ describe("roster-scheduler", () => {
     expect(grid.get("g2")!.get("2026-05-01")).toBe("night");
     expect(grid.get("g3")!.get("2026-05-01")).toBe("off");
     expect(grid.get("g2")!.get("2026-05-02")).toBe("night");
+  });
+
+  it("computePatternFairnessTargets reflects staggered 3D3N3O workload per guard", () => {
+    const start = new Date("2026-05-01T00:00:00.000Z");
+    const end = new Date("2026-05-31T23:59:59.999Z");
+    const days = buildCalendarDays(start, end);
+    const guardIds = ["g1", "g2", "g3"];
+    const grid = buildPatternPreferenceGrid({
+      guardIds,
+      calendarDays: days,
+      patternStartDate: start,
+      pattern: "3_on_3_off",
+      staggerOffsets: new Map([
+        ["g1", 0],
+        ["g2", 3],
+        ["g3", 6],
+      ]),
+    });
+    const targets = computePatternFairnessTargets(guardIds, days, grid);
+    expect(targets.targetDay).toBeGreaterThan(9);
+    expect(targets.targetNight).toBeGreaterThan(9);
+    expect(targets.targetOff).toBeGreaterThan(8);
+    expect(Math.abs(targets.targetDay - targets.targetNight)).toBeLessThanOrEqual(1);
+  });
+
+  it("scoreGuardForSlot prefers guard with more nights when filling a day slot (equal staffing)", () => {
+    const targets = computeFairnessTargets(2, buildCalendarDays(
+      new Date("2026-05-01T00:00:00.000Z"),
+      new Date("2026-05-14T23:59:59.999Z")
+    ));
+    const moreNights: import("../roster-scheduler.js").GuardStats = {
+      employeeId: "a",
+      dayCount: 2,
+      nightCount: 8,
+      offCount: 0,
+      sundayCount: 0,
+      weekendCount: 0,
+    };
+    const moreDays: import("../roster-scheduler.js").GuardStats = {
+      employeeId: "b",
+      dayCount: 8,
+      nightCount: 2,
+      offCount: 0,
+      sundayCount: 0,
+      weekendCount: 0,
+    };
+    const date = new Date("2026-05-05T00:00:00.000Z");
+    const scoreMoreNights = scoreGuardForSlot(moreNights, "day", date, targets, "day", { day: 1, night: 1 });
+    const scoreMoreDays = scoreGuardForSlot(moreDays, "day", date, targets, "day", { day: 1, night: 1 });
+    expect(scoreMoreNights).toBeLessThan(scoreMoreDays);
   });
 
   it("scoreGuardForSlot prefers guard below day target", () => {
@@ -173,6 +239,42 @@ describe("roster-scheduler", () => {
       siteGenderRules: { rosterDayShiftGender: null, rosterNightShiftGender: null },
     });
     expect(exceeds.warnings.some((w) => w.code === "STAFFING_EXCEEDS_POSTS")).toBe(true);
+  });
+
+  it("buildSiteDemandSlots skips night slots when night staffing is 0", () => {
+    const days = buildCalendarDays(
+      new Date("2026-05-01T00:00:00.000Z"),
+      new Date("2026-05-03T23:59:59.999Z")
+    );
+    const dayOnly = buildSiteDemandSlots({
+      siteId: "site-1",
+      calendarDays: days,
+      dayPosts: [{ id: "d1" }],
+      nightPosts: [],
+      staffing: { day: 2, night: 0 },
+      siteGenderRules: { rosterDayShiftGender: null, rosterNightShiftGender: null },
+    });
+    expect(dayOnly.warnings.some((w) => w.code === "MISSING_NIGHT_POSTS")).toBe(false);
+    expect(dayOnly.slots).toHaveLength(6);
+    expect(dayOnly.slots.every((s) => s.shiftType === "day")).toBe(true);
+  });
+
+  it("buildSiteDemandSlots skips day slots when day staffing is 0", () => {
+    const days = buildCalendarDays(
+      new Date("2026-05-01T00:00:00.000Z"),
+      new Date("2026-05-03T23:59:59.999Z")
+    );
+    const nightOnly = buildSiteDemandSlots({
+      siteId: "site-1",
+      calendarDays: days,
+      dayPosts: [],
+      nightPosts: [{ id: "n1" }],
+      staffing: { day: 0, night: 2 },
+      siteGenderRules: { rosterDayShiftGender: null, rosterNightShiftGender: null },
+    });
+    expect(nightOnly.warnings.some((w) => w.code === "MISSING_DAY_POSTS")).toBe(false);
+    expect(nightOnly.slots).toHaveLength(6);
+    expect(nightOnly.slots.every((s) => s.shiftType === "night")).toBe(true);
   });
 
   it("isGuardEligibleForSlot rejects overlapping planned shifts on the same day", () => {
@@ -355,60 +457,221 @@ describe("roster-scheduler", () => {
     ).toBe(false);
   });
 
-  it("rejects assignment on 7th consecutive work day", () => {
+  it("isGuardEligibleForSlot allows night after day on previous calendar day (3D-3N-3O transition)", () => {
+    const guard: GuardCandidate = {
+      id: "g1",
+      gender: "M",
+      status: "active",
+      employeeType: "security",
+    };
+    const calendarDays = buildCalendarDays(
+      new Date("2026-05-01T00:00:00.000Z"),
+      new Date("2026-05-03T23:59:59.999Z")
+    );
+    const runtime = emptyRuntime({
+      workedDateKeys: new Set(["2026-05-01"]),
+      shiftTypeByDateKey: new Map([["2026-05-01", "day"]]),
+    });
+    const nightSlot = {
+      siteId: "site-1",
+      postId: "p-night",
+      date: new Date("2026-05-02T00:00:00.000Z"),
+      dateKey: "2026-05-02",
+      shiftType: "night" as const,
+      requiredGender: null,
+      difficultyScore: 0,
+    };
+    const shiftStart = new Date("2026-05-02T16:00:00.000Z");
+    const shiftEnd = new Date("2026-05-03T04:00:00.000Z");
+    expect(
+      isGuardEligibleForSlot({
+        guard,
+        slot: nightSlot,
+        siteGenderRules: { rosterDayShiftGender: null, rosterNightShiftGender: null },
+        postShiftType: "night",
+        siteAssignedGuardIds: new Set(["g1"]),
+        existingShifts: [],
+        runtime,
+        shiftStart,
+        shiftEnd,
+        calendarDays,
+        dayIndex: 1,
+        prevDateKey: "2026-05-01",
+      })
+    ).toBe(true);
+  });
+
+  it("isGuardEligibleForSlot allows day when the next calendar day already has night", () => {
+    const guard: GuardCandidate = {
+      id: "g1",
+      gender: "M",
+      status: "active",
+      employeeType: "security",
+    };
+    const calendarDays = buildCalendarDays(
+      new Date("2026-05-01T00:00:00.000Z"),
+      new Date("2026-05-03T23:59:59.999Z")
+    );
+    const runtime = emptyRuntime({
+      workedDateKeys: new Set(["2026-05-02"]),
+      shiftTypeByDateKey: new Map([["2026-05-02", "night"]]),
+    });
+    const daySlot = {
+      siteId: "site-1",
+      postId: "p-day",
+      date: new Date("2026-05-01T00:00:00.000Z"),
+      dateKey: "2026-05-01",
+      shiftType: "day" as const,
+      requiredGender: null,
+      difficultyScore: 0,
+    };
+    const shiftStart = new Date("2026-05-01T04:00:00.000Z");
+    const shiftEnd = new Date("2026-05-01T16:00:00.000Z");
+    expect(
+      isGuardEligibleForSlot({
+        guard,
+        slot: daySlot,
+        siteGenderRules: { rosterDayShiftGender: null, rosterNightShiftGender: null },
+        postShiftType: "day",
+        siteAssignedGuardIds: new Set(["g1"]),
+        existingShifts: [],
+        runtime,
+        shiftStart,
+        shiftEnd,
+        calendarDays,
+        dayIndex: 0,
+        prevDateKey: null,
+      })
+    ).toBe(true);
+  });
+
+  it("violatesAdjacentShiftRestRules blocks night-then-day but allows day-then-night", () => {
+    const dayThenNight = new Map<string, "day" | "night">([["2026-05-01", "day"]]);
+    expect(
+      violatesAdjacentShiftRestRules(dayThenNight, { dateKey: "2026-05-02", shiftType: "night" })
+    ).toBe(false);
+
+    const nightThenDay = new Map<string, "day" | "night">([["2026-05-01", "night"]]);
+    expect(
+      violatesAdjacentShiftRestRules(nightThenDay, { dateKey: "2026-05-02", shiftType: "day" })
+    ).toBe(true);
+  });
+
+  it("deriveSiteRotationBlocks picks 3D-3N-3O for three guards at equal staffing", () => {
+    const blocks = deriveSiteRotationBlocks(3, { day: 1, night: 1 });
+    expect(formatRotationPatternLabel(blocks)).toBe("3D-3N-3O");
+  });
+
+  it("deriveSiteRotationBlocks picks proportional cycle for unequal staffing", () => {
+    const blocks = deriveSiteRotationBlocks(5, { day: 1, night: 2 });
+    expect(formatRotationPatternLabel(blocks)).toBe("1D-2N-2O");
+  });
+
+  it("buildSiteRotationPlan staggers three guards on 3D-3N-3O", () => {
     const start = new Date("2026-05-01T00:00:00.000Z");
     const end = new Date("2026-05-09T23:59:59.999Z");
     const days = buildCalendarDays(start, end);
-    const grid = buildPatternPreferenceGrid({
-      guardIds: ["g1"],
+    const plan = buildSiteRotationPlan({
+      guardIds: ["g1", "g2", "g3"],
       calendarDays: days,
-      patternStartDate: start,
-      pattern: "3_on_3_off",
-      staggerOffsets: new Map([["g1", 0]]),
-    });
-    const stats = new Map([
-      [
-        "g1",
-        {
-          employeeId: "g1",
-          dayCount: 0,
-          nightCount: 0,
-          offCount: 0,
-          sundayCount: 0,
-          weekendCount: 0,
-        },
+      staffing: { day: 1, night: 1 },
+      blocks: [
+        { type: "day", count: 3 },
+        { type: "night", count: 3 },
+        { type: "off", count: 3 },
       ],
-    ]);
-    seedOffDaysFromPattern(["g1"], days, grid, stats);
-    expect(stats.get("g1")!.offCount).toBe(3);
+    });
+    expect(plan?.patternLabel).toBe("3D-3N-3O");
+    expect([...plan!.staggerOffsets.values()].sort((a, b) => a - b)).toEqual([0, 3, 6]);
+    expect(plan?.preferenceGrid.get("g1")?.get("2026-05-01")).toBe("day");
+    expect(plan?.preferenceGrid.get("g2")?.get("2026-05-01")).toBe("night");
+    expect(plan?.preferenceGrid.get("g3")?.get("2026-05-01")).toBe("off");
   });
 
-  it("pickBestGuardForDemandSlot returns null when only pattern-misaligned candidates exist", () => {
+  it("dayNightBalanceDelta prefers guards below on the shift type being filled", () => {
+    const balanced = { employeeId: "a", dayCount: 6, nightCount: 6, offCount: 0, sundayCount: 0, weekendCount: 0 };
+    const dayHeavy = { employeeId: "b", dayCount: 10, nightCount: 4, offCount: 0, sundayCount: 0, weekendCount: 0 };
+    expect(dayNightBalanceDelta(balanced, "day")).toBeCloseTo(0);
+    expect(dayNightBalanceDelta(balanced, "night")).toBeCloseTo(0);
+    expect(dayNightBalanceDelta(dayHeavy, "day")).toBeGreaterThan(0);
+    expect(dayNightBalanceDelta(dayHeavy, "night")).toBeLessThan(0);
+  });
+
+  it("scoreGuardFairness prefers guard below shift-type target", () => {
+    const targets = computeFairnessTargets(2, buildCalendarDays(
+      new Date("2026-05-01T00:00:00.000Z"),
+      new Date("2026-05-14T23:59:59.999Z")
+    ), { day: 1, night: 1 });
+    const underTarget = {
+      employeeId: "g1",
+      dayCount: 0,
+      nightCount: 0,
+      offCount: 0,
+      sundayCount: 0,
+      weekendCount: 0,
+    };
+    const overTarget = {
+      employeeId: "g2",
+      dayCount: 8,
+      nightCount: 0,
+      offCount: 0,
+      sundayCount: 0,
+      weekendCount: 0,
+    };
+    const slot = {
+      siteId: "s",
+      postId: "p",
+      date: new Date("2026-05-05T00:00:00.000Z"),
+      dateKey: "2026-05-05",
+      shiftType: "day" as const,
+      requiredGender: null,
+      difficultyScore: 0,
+    };
+    const guard: GuardCandidate = { id: "g1", gender: "M", status: "active", employeeType: "security" };
+    const staffing = { day: 1, night: 1 };
+    const low = scoreGuardFairness({
+      guard,
+      slot,
+      date: slot.date,
+      stats: underTarget,
+      targets,
+      assignedToPost: false,
+      workedPreviousDay: false,
+      staffing,
+      consecutiveSameShiftBefore: 0,
+    });
+    const high = scoreGuardFairness({
+      guard: { ...guard, id: "g2" },
+      slot,
+      date: slot.date,
+      stats: overTarget,
+      targets,
+      assignedToPost: false,
+      workedPreviousDay: false,
+      staffing,
+      consecutiveSameShiftBefore: 0,
+    });
+    expect(low).toBeLessThan(high);
+  });
+
+  it("maxConsecutiveShiftTypeInPattern returns 3 for 3D3N3O", () => {
+    expect(maxConsecutiveShiftTypeInPattern("3_on_3_off")).toEqual({ day: 3, night: 3 });
+  });
+
+  it("pickBestGuardForDemandSlot selects guard with fewer night shifts for night slot", () => {
     const start = new Date("2026-05-01T00:00:00.000Z");
     const end = new Date("2026-05-05T23:59:59.999Z");
     const calendarDays = buildCalendarDays(start, end);
-    const grid = buildPatternPreferenceGrid({
-      guardIds: ["g1"],
-      calendarDays,
-      patternStartDate: start,
-      pattern: "3_on_3_off",
-      staggerOffsets: new Map([["g1", 0]]),
-    });
-    const guard: GuardCandidate = { id: "g1", gender: "M", status: "active", employeeType: "security" };
+    const guardA: GuardCandidate = { id: "g1", gender: "M", status: "active", employeeType: "security" };
+    const guardB: GuardCandidate = { id: "g2", gender: "F", status: "active", employeeType: "security" };
     const statsByGuard = new Map([
-      [
-        "g1",
-        {
-          employeeId: "g1",
-          dayCount: 0,
-          nightCount: 0,
-          offCount: 0,
-          sundayCount: 0,
-          weekendCount: 0,
-        },
-      ],
+      ["g1", { employeeId: "g1", dayCount: 2, nightCount: 0, offCount: 0, sundayCount: 0, weekendCount: 0 }],
+      ["g2", { employeeId: "g2", dayCount: 2, nightCount: 3, offCount: 0, sundayCount: 0, weekendCount: 0 }],
     ]);
-    const runtimeByGuard = new Map([["g1", emptyRuntime({ stats: statsByGuard.get("g1")! })]]);
+    const runtimeByGuard = new Map([
+      ["g1", emptyRuntime({ stats: statsByGuard.get("g1")! })],
+      ["g2", emptyRuntime({ stats: statsByGuard.get("g2")! })],
+    ]);
     const slot = {
       siteId: "s",
       postId: "p",
@@ -418,74 +681,23 @@ describe("roster-scheduler", () => {
       requiredGender: null,
       difficultyScore: 0,
     };
-    expect(grid.get("g1")!.get("2026-05-01")).toBe("day");
     const picked = pickBestGuardForDemandSlot({
-      candidates: [guard],
+      candidates: [guardA, guardB],
       slot,
       date: slot.date,
       dayIndex: 0,
       statsByGuard,
       runtimeByGuard,
-      targets: computeFairnessTargets(1, calendarDays),
-      preferenceGrid: grid,
+      targets: computeFairnessTargets(2, calendarDays, { day: 1, night: 1 }),
       postAssignedGuardIds: new Set(),
       prevDateKey: null,
-    });
-    expect(picked).toBeNull();
-  });
-
-  it("pickBestGuardForDemandSlot selects misaligned guard when pattern match is relaxed", () => {
-    const start = new Date("2026-05-01T00:00:00.000Z");
-    const end = new Date("2026-05-05T23:59:59.999Z");
-    const calendarDays = buildCalendarDays(start, end);
-    const grid = buildPatternPreferenceGrid({
-      guardIds: ["g1"],
+      staffing: { day: 1, night: 1 },
       calendarDays,
-      patternStartDate: start,
-      pattern: "3_on_3_off",
-      staggerOffsets: new Map([["g1", 0]]),
-    });
-    const guard: GuardCandidate = { id: "g1", gender: "M", status: "active", employeeType: "security" };
-    const statsByGuard = new Map([
-      [
-        "g1",
-        {
-          employeeId: "g1",
-          dayCount: 0,
-          nightCount: 0,
-          offCount: 0,
-          sundayCount: 0,
-          weekendCount: 0,
-        },
-      ],
-    ]);
-    const runtimeByGuard = new Map([["g1", emptyRuntime({ stats: statsByGuard.get("g1")! })]]);
-    const slot = {
-      siteId: "s",
-      postId: "p",
-      date: new Date("2026-05-01T00:00:00.000Z"),
-      dateKey: "2026-05-01",
-      shiftType: "night" as const,
-      requiredGender: null,
-      difficultyScore: 0,
-    };
-    const picked = pickBestGuardForDemandSlot({
-      candidates: [guard],
-      slot,
-      date: slot.date,
-      dayIndex: 0,
-      statsByGuard,
-      runtimeByGuard,
-      targets: computeFairnessTargets(1, calendarDays),
-      preferenceGrid: grid,
-      postAssignedGuardIds: new Set(),
-      prevDateKey: null,
-      requirePatternMatch: false,
     });
     expect(picked?.id).toBe("g1");
   });
 
-  it("buildRosterReadinessDiagnostics warns strict rest when day+night staffing exceeds guards", () => {
+  it("pickBestGuardForDemandSlot deprioritizes relievers among eligible guards", () => {
     const diagnostics = buildRosterReadinessDiagnostics({
       dayPostCount: 2,
       nightPostCount: 1,
@@ -498,20 +710,10 @@ describe("roster-scheduler", () => {
     expect(diagnostics.some((d) => d.code === "WARNING_STRICT_REST_STAFFING")).toBe(true);
   });
 
-  it("pickBestGuardForDemandSlot deprioritizes relievers among pattern-aligned guards", () => {
+  it("pickBestGuardForDemandSlot deprioritizes relievers among eligible guards", () => {
     const start = new Date("2026-05-01T00:00:00.000Z");
     const end = new Date("2026-05-14T23:59:59.999Z");
     const calendarDays = buildCalendarDays(start, end);
-    const grid = buildPatternPreferenceGrid({
-      guardIds: ["g-active", "g-reliever"],
-      calendarDays,
-      patternStartDate: start,
-      pattern: "3_on_3_off",
-      staggerOffsets: new Map([
-        ["g-active", 0],
-        ["g-reliever", 0],
-      ]),
-    });
     const dateKey = "2026-05-01";
     const stats = {
       employeeId: "x",
@@ -550,7 +752,6 @@ describe("roster-scheduler", () => {
       status: "reliever",
       employeeType: "security",
     };
-    expect(grid.get("g-active")!.get(dateKey)).toBe("day");
     const picked = pickBestGuardForDemandSlot({
       candidates: [reliever, active],
       slot,
@@ -558,15 +759,16 @@ describe("roster-scheduler", () => {
       dayIndex: 0,
       statsByGuard,
       runtimeByGuard,
-      targets: computeFairnessTargets(2, calendarDays),
-      preferenceGrid: grid,
+      targets: computeFairnessTargets(2, calendarDays, { day: 1, night: 1 }),
       postAssignedGuardIds: new Set(),
       prevDateKey: null,
+      staffing: { day: 1, night: 1 },
+      calendarDays,
     });
     expect(picked?.id).toBe("g-active");
   });
 
-  it("scoreGuardForDemandSlot prefers assigned post and pattern match", () => {
+  it("scoreGuardForDemandSlot prefers assigned post", () => {
     const targets = computeFairnessTargets(2, buildCalendarDays(
       new Date("2026-05-01T00:00:00.000Z"),
       new Date("2026-05-14T23:59:59.999Z")
@@ -589,6 +791,7 @@ describe("roster-scheduler", () => {
       difficultyScore: 0,
     };
     const guard: GuardCandidate = { id: "g1", gender: "M", status: "active", employeeType: "security" };
+    const staffing = { day: 1, night: 1 };
     const base = scoreGuardForDemandSlot({
       guard,
       slot,
@@ -598,6 +801,8 @@ describe("roster-scheduler", () => {
       preference: "off",
       assignedToPost: false,
       workedPreviousDay: false,
+      staffing,
+      consecutiveSameShiftBefore: 0,
     });
     const assigned = scoreGuardForDemandSlot({
       guard,
@@ -608,6 +813,8 @@ describe("roster-scheduler", () => {
       preference: "day",
       assignedToPost: true,
       workedPreviousDay: false,
+      staffing,
+      consecutiveSameShiftBefore: 0,
     });
     expect(assigned).toBeLessThan(base);
   });

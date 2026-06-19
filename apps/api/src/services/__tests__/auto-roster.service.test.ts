@@ -39,7 +39,6 @@ const siteId = "site-1";
 function makePlan(coveragePercent: number): RosterPlan {
   return {
     siteId,
-    pattern: "3_on_3_off",
     startDate: "2026-06-18",
     endDate: "2026-07-31",
     entries: [],
@@ -48,7 +47,14 @@ function makePlan(coveragePercent: number): RosterPlan {
       shiftsPlanned: 10,
       postsUsed: 2,
       skippedGuardDays: 0,
+      uncoveredDays: 0,
       coveragePercent,
+      fairnessSpread: {
+        maxDayMinusMinDay: 0,
+        maxNightMinusMinNight: 0,
+        maxSundayMinusMinSunday: 0,
+        maxDayNightImbalance: 0,
+      },
     },
     warnings: [],
     conflicts: [],
@@ -60,8 +66,6 @@ function mockEnabledSite(overrides: Record<string, unknown> = {}) {
     id: siteId,
     name: "Alpha Site",
     autoRosterEnabled: true,
-    autoRosterPattern: "3_on_3_off",
-    autoRosterCustomBlocks: null,
     autoRosterMinCoveragePercent: 100,
     posts: [
       { id: "p-day", shiftType: "day" },

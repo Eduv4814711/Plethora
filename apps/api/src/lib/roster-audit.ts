@@ -11,7 +11,7 @@ export async function auditRosterGeneration(params: {
   userId?: string;
   companyId: string;
   siteId: string;
-  plan: Pick<RosterPlan, "pattern" | "startDate" | "endDate" | "summary">;
+  plan: Pick<RosterPlan, "startDate" | "endDate" | "summary">;
   created: number;
   deleted: number;
   source?: string;
@@ -23,7 +23,6 @@ export async function auditRosterGeneration(params: {
     entityType: "site",
     entityId: params.siteId,
     metadata: {
-      pattern: params.plan.pattern,
       startDate: params.plan.startDate,
       endDate: params.plan.endDate,
       created: params.created,
