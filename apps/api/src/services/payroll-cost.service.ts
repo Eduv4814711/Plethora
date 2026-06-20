@@ -10,7 +10,7 @@
 import { prisma } from "../lib/prisma.js";
 
 /** Earnings line from payslip JSON */
-const CORE_EARNINGS = ["Basic", "Basic Salary", "Overtime", "Sunday", "Public Holiday"];
+const CORE_EARNINGS = ["Basic", "Basic Salary", "Overtime", "Sunday", "Public Holiday", "Paid Leave"];
 
 export interface EmployeeCostBreakdown {
   /** Base pay (regular hours) */

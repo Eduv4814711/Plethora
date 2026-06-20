@@ -22,7 +22,7 @@ import {
 } from "../services/payroll-compliance/payroll-compliance.service.js";
 import { getPayrollReserveSnapshot } from "../services/payroll-reserve.service.js";
 
-const CORE_EARNINGS = ["Basic", "Basic Salary", "Overtime", "Sunday", "Public Holiday"];
+const CORE_EARNINGS = ["Basic", "Basic Salary", "Overtime", "Sunday", "Public Holiday", "Paid Leave"];
 
 export async function payrollIntelligenceRoutes(app: FastifyInstance) {
   const protect = [

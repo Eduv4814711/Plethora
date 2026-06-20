@@ -80,7 +80,7 @@ export async function getContractLabourCost(
 
   let unallocatedCost = 0;
 
-  const CORE_EARNINGS = ["Basic", "Basic Salary", "Overtime", "Sunday", "Public Holiday"];
+  const CORE_EARNINGS = ["Basic", "Basic Salary", "Overtime", "Sunday", "Public Holiday", "Paid Leave"];
 
   for (const run of runs) {
     const runPeriodStart = run.periodStart;

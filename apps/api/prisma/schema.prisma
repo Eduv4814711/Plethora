@@ -173,6 +173,8 @@ model Employee {
   postalAddress     String?
   postalCode        String?
   taxNumber         String?
+  taxDirectiveNumber String?
+  taxDirectiveRate   Decimal? @db.Decimal(5, 2) // Fixed PAYE % from SARS directive (0–100)
   bankName          String?
   bankAccountNumber String?
   bankBranchCode    String?

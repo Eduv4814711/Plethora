@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { authFetch } from "@/lib/api";
 import { useConfirmDialog } from "@/components/ui";
 
+const CONFIG_SECTION_CLASS = "rounded-security-lg border border-neutral-200 bg-white p-4 shadow-security-card";
+
 export interface PayGrade {
   id: string;
   name: string;
@@ -101,11 +103,11 @@ export function PayrollConfig({ token }: { token: string }) {
 
   if (loading) {
     return (
-      <div className="card-wireframe mb-6 p-4 animate-pulse">
-        <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-32 mb-3" />
+      <div className="card-wireframe p-4 animate-pulse">
+        <div className="h-4 bg-neutral-200 rounded w-32 mb-3" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-16 bg-neutral-200 dark:bg-neutral-700 rounded" />
+            <div key={i} className="h-16 bg-neutral-200 rounded" />
           ))}
         </div>
       </div>
@@ -117,14 +119,17 @@ export function PayrollConfig({ token }: { token: string }) {
     : null;
 
   return (
-    <div className="card-wireframe mb-6 p-4">
-      <h2 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-4">Payroll Configuration</h2>
-      <div className="mb-4">
-        <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">Configure rules for</label>
+    <div className="card-wireframe p-5 space-y-5">
+      <div>
+        <h2 className="section-title mb-3">Rule scope</h2>
+        <label htmlFor="payroll-config-group" className="label-text block mb-1.5">
+          Configure rules for
+        </label>
         <select
+          id="payroll-config-group"
           value={selectedGroupId ?? ""}
           onChange={(e) => setSelectedGroupId(e.target.value || null)}
-          className="px-3 py-2 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900 min-w-[200px]"
+          className="input-modern min-w-[16rem] text-sm"
         >
           <option value="">Company default (ungrouped team members)</option>
           {groups.map((g) => (
@@ -134,7 +139,7 @@ export function PayrollConfig({ token }: { token: string }) {
           ))}
         </select>
         {selectedGroup && (
-          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+          <p className="text-xs text-neutral-600 mt-1">
             Rules for team members in &quot;{selectedGroup.name}&quot;
           </p>
         )}
@@ -220,16 +225,16 @@ function PayGradesSection({
   };
 
   return (
-    <div className="p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800/30">
+    <div className={CONFIG_SECTION_CLASS}>
       {confirmDialog}
-      <h3 className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Pay Grades</h3>
+      <h3 className="label-text mb-3">Pay grades</h3>
       <form onSubmit={handleAdd} className="flex gap-2 mb-3">
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Name"
-          className="flex-1 min-w-0 px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900"
+          className="input-compact flex-1 min-w-0"
           required
         />
         <input
@@ -239,7 +244,7 @@ function PayGradesSection({
           value={hourlyRate}
           onChange={(e) => setHourlyRate(e.target.value)}
           placeholder="R/hr"
-          className="w-20 px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900"
+          className="input-compact w-20"
           required
         />
         <button type="submit" disabled={saving} className="btn-secondary text-xs py-1.5 px-2">
@@ -248,15 +253,15 @@ function PayGradesSection({
       </form>
       <div className="space-y-1">
         {grades.map((g) => (
-          <div key={g.id} className="flex items-center justify-between py-1.5 px-2 text-sm rounded hover:bg-neutral-100/80 dark:hover:bg-neutral-700/50">
-            <span>{g.name}</span>
-            <span className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400">
+          <div key={g.id} className="flex items-center justify-between rounded px-2 py-1.5 text-sm hover:bg-neutral-50">
+            <span className="text-black">{g.name}</span>
+            <span className="flex items-center gap-2 font-mono text-neutral-600">
               R{Number(g.hourlyRate).toFixed(2)}/hr
-              <button type="button" onClick={() => handleDelete(g.id)} className="text-red-500 hover:text-red-600 text-xs">×</button>
+              <button type="button" onClick={() => handleDelete(g.id)} className="text-red-600 hover:text-red-700 text-xs" aria-label={`Delete ${g.name}`}>×</button>
             </span>
           </div>
         ))}
-        {grades.length === 0 && <p className="text-neutral-400 text-xs py-1">None</p>}
+        {grades.length === 0 && <p className="text-neutral-500 text-xs py-1">No pay grades yet</p>}
       </div>
     </div>
   );
@@ -306,15 +311,15 @@ function PayRulesSection({
     : (["overtime", "sunday", "public_holiday"] as const);
 
   return (
-    <div className="p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800/30">
-      <h3 className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Pay Rules</h3>
+    <div className={CONFIG_SECTION_CLASS}>
+      <h3 className="label-text mb-3">Pay rules</h3>
       <div className="space-y-2">
         {ruleTypesToShow.map((rt) => {
           const rule = payRules.find((r) => r.ruleType === rt);
           const mult = rule ? Number(rule.multiplier) : defaultMult[rt];
           return (
             <div key={rt} className="flex items-center justify-between text-sm">
-              <span className="text-neutral-600 dark:text-neutral-400">{ruleLabels[rt]}</span>
+              <span className="text-neutral-600">{ruleLabels[rt]}</span>
               <div className="flex items-center gap-1">
                 <input
                   type="number"
@@ -322,7 +327,7 @@ function PayRulesSection({
                   min="0"
                   max="10"
                   defaultValue={mult}
-                  className="w-14 px-2 py-1 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900"
+                  className="input-compact w-16"
                   onBlur={(e) => {
                     const v = parseFloat(e.target.value);
                     if (!isNaN(v) && v >= 0 && v <= 10) handleSave(rt, v);
@@ -334,7 +339,7 @@ function PayRulesSection({
           );
         })}
         {groupId && ruleTypesToShow.length === 0 && (
-          <p className="text-neutral-500 dark:text-neutral-400 text-xs py-1">
+          <p className="text-neutral-500 text-xs py-1">
             No pay rules configured for this group.
           </p>
         )}
@@ -403,7 +408,7 @@ function AddPayRuleRow({
       <button
         type="button"
         onClick={() => setAdding(true)}
-        className="text-xs text-amber-600 dark:text-amber-400 hover:underline"
+        className="text-xs font-medium text-security-amber-700 hover:underline"
       >
         + Add {ruleLabels[available[0]]} rule
       </button>
@@ -411,14 +416,14 @@ function AddPayRuleRow({
   }
 
   return (
-    <div className="flex flex-wrap gap-2 items-center pt-2 border-t border-neutral-200 dark:border-neutral-700">
+    <div className="flex flex-wrap items-center gap-2 border-t border-neutral-200 pt-2">
       <select
         value={ruleType}
         onChange={(e) => {
           setRuleType(e.target.value);
           setMultiplier(String(defaultMult[e.target.value as keyof typeof defaultMult] ?? 1.5));
         }}
-        className="px-2 py-1 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900"
+        className="input-compact"
       >
         <option value="">Select rule type</option>
         {available.map((rt) => (
@@ -435,7 +440,7 @@ function AddPayRuleRow({
         value={multiplier}
         onChange={(e) => setMultiplier(e.target.value)}
         placeholder="×"
-        className="w-14 px-2 py-1 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900"
+        className="input-compact w-16"
       />
       <button
         type="button"
@@ -525,28 +530,28 @@ function EarningsRulesSection({
   };
 
   return (
-    <div className="p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800/30">
+    <div className={CONFIG_SECTION_CLASS}>
       {confirmDialog}
-      <h3 className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Earnings</h3>
-      <form onSubmit={handleAdd} className="flex gap-2 mb-3 flex-wrap">
+      <h3 className="label-text mb-3">Earnings</h3>
+      <form onSubmit={handleAdd} className="flex flex-wrap gap-2 mb-3">
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Name"
-          className="flex-1 min-w-[80px] px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900"
+          className="input-compact min-w-[80px] flex-1"
           required
         />
-        <select value={type} onChange={(e) => setType(e.target.value as "fixed" | "percentage")} className="px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900 w-20">
+        <select value={type} onChange={(e) => setType(e.target.value as "fixed" | "percentage")} className="input-compact w-20">
           <option value="fixed">R</option>
           <option value="percentage">%</option>
         </select>
         {type === "fixed" ? (
-          <input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" className="w-16 px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900" required />
+          <input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" className="input-compact w-16" required />
         ) : (
-          <input type="number" step="0.01" min="0" max="100" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="0" className="w-14 px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900" required />
+          <input type="number" step="0.01" min="0" max="100" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="0" className="input-compact w-16" required />
         )}
-        <select value={appliesTo} onChange={(e) => setAppliesTo(e.target.value)} className="px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900 w-20">
+        <select value={appliesTo} onChange={(e) => setAppliesTo(e.target.value)} className="input-compact w-20">
           <option value="all">All</option>
           <option value="security">Sec</option>
           <option value="office">Off</option>
@@ -555,15 +560,15 @@ function EarningsRulesSection({
       </form>
       <div className="space-y-1">
         {earnings.map((e) => (
-          <div key={e.id} className="flex items-center justify-between py-1.5 px-2 text-sm rounded hover:bg-neutral-100/80 dark:hover:bg-neutral-700/50">
-            <span>{e.name}</span>
-            <span className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400">
+          <div key={e.id} className="flex items-center justify-between rounded px-2 py-1.5 text-sm hover:bg-neutral-50">
+            <span className="text-black">{e.name}</span>
+            <span className="flex items-center gap-2 font-mono text-neutral-600">
               {e.type === "fixed" ? `R${Number(e.amount || 0).toFixed(2)}` : `${Number(e.rate || 0)}%`}
-              <button type="button" onClick={() => handleDelete(e.id)} className="text-red-500 hover:text-red-600 text-xs">×</button>
+              <button type="button" onClick={() => handleDelete(e.id)} className="text-red-600 hover:text-red-700 text-xs" aria-label={`Delete ${e.name}`}>×</button>
             </span>
           </div>
         ))}
-        {earnings.length === 0 && <p className="text-neutral-400 text-xs py-1">None</p>}
+        {earnings.length === 0 && <p className="text-neutral-500 text-xs py-1">No earnings rules yet</p>}
       </div>
     </div>
   );
@@ -638,28 +643,28 @@ function DeductionRulesSection({
   };
 
   return (
-    <div className="p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-800/30">
+    <div className={CONFIG_SECTION_CLASS}>
       {confirmDialog}
-      <h3 className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">Deductions</h3>
-      <form onSubmit={handleAdd} className="flex gap-2 mb-3 flex-wrap">
+      <h3 className="label-text mb-3">Deductions</h3>
+      <form onSubmit={handleAdd} className="flex flex-wrap gap-2 mb-3">
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Name"
-          className="flex-1 min-w-[80px] px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900"
+          className="input-compact min-w-[80px] flex-1"
           required
         />
-        <select value={type} onChange={(e) => setType(e.target.value as "fixed" | "percentage")} className="px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900 w-20">
+        <select value={type} onChange={(e) => setType(e.target.value as "fixed" | "percentage")} className="input-compact w-20">
           <option value="fixed">R</option>
           <option value="percentage">%</option>
         </select>
         {type === "fixed" ? (
-          <input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" className="w-16 px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900" required />
+          <input type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" className="input-compact w-16" required />
         ) : (
-          <input type="number" step="0.01" min="0" max="100" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="0" className="w-14 px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900" required />
+          <input type="number" step="0.01" min="0" max="100" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="0" className="input-compact w-16" required />
         )}
-        <select value={appliesTo} onChange={(e) => setAppliesTo(e.target.value)} className="px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-900 w-20">
+        <select value={appliesTo} onChange={(e) => setAppliesTo(e.target.value)} className="input-compact w-20">
           <option value="all">All</option>
           <option value="security">Sec</option>
           <option value="office">Off</option>
@@ -668,15 +673,15 @@ function DeductionRulesSection({
       </form>
       <div className="space-y-1">
         {deductions.map((d) => (
-          <div key={d.id} className="flex items-center justify-between py-1.5 px-2 text-sm rounded hover:bg-neutral-100/80 dark:hover:bg-neutral-700/50">
-            <span>{d.name}</span>
-            <span className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400">
+          <div key={d.id} className="flex items-center justify-between rounded px-2 py-1.5 text-sm hover:bg-neutral-50">
+            <span className="text-black">{d.name}</span>
+            <span className="flex items-center gap-2 font-mono text-neutral-600">
               {d.type === "fixed" ? `R${Number(d.amount || 0).toFixed(2)}` : `${Number(d.rate || 0)}%`}
-              <button type="button" onClick={() => handleDelete(d.id)} className="text-red-500 hover:text-red-600 text-xs" title="Delete">×</button>
+              <button type="button" onClick={() => handleDelete(d.id)} className="text-red-600 hover:text-red-700 text-xs" title="Delete" aria-label={`Delete ${d.name}`}>×</button>
             </span>
           </div>
         ))}
-        {deductions.length === 0 && <p className="text-neutral-400 text-xs py-1">None</p>}
+        {deductions.length === 0 && <p className="text-neutral-500 text-xs py-1">No deduction rules yet</p>}
       </div>
     </div>
   );

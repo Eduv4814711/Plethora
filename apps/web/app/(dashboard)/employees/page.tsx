@@ -850,6 +850,10 @@ function EmployeeForm({
       setError("Group is required for all team members.");
       return;
     }
+    if (employeeType === "office" && (!monthlySalary || parseFloat(monthlySalary) <= 0)) {
+      setError("Monthly salary is required for office staff.");
+      return;
+    }
     try {
       const payload: Record<string, unknown> = {
         employeeNumber: employeeNumber.trim(),
@@ -904,7 +908,7 @@ function EmployeeForm({
       });
       if (!res.ok) {
         const data = await res.json();
-        const msg = data?.message?.psiraNumber?.[0] ?? data?.message?.gradeId?.[0] ?? data?.message?.groupId?.[0] ?? data?.message?.employeeNumber?.[0] ?? (typeof data?.message === "string" ? data.message : null) ?? "Failed to create";
+        const msg = data?.message?.psiraNumber?.[0] ?? data?.message?.gradeId?.[0] ?? data?.message?.groupId?.[0] ?? data?.message?.monthlySalary?.[0] ?? data?.message?.employeeNumber?.[0] ?? (typeof data?.message === "string" ? data.message : null) ?? "Failed to create";
         throw new Error(msg);
       }
       onSuccess();
@@ -1021,10 +1025,11 @@ function EmployeeForm({
                 type="number"
                 step="0.01"
                 min="0"
-                placeholder="Monthly salary (R)"
+                placeholder="Monthly salary (R) *"
                 value={monthlySalary}
                 onChange={(e) => setMonthlySalary(e.target.value)}
                 className="input-compact"
+                required
               />
             ) : (
               <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} groupId={groupId} className="input-compact" required />
@@ -1317,6 +1322,10 @@ function EditModal({
       setError("Group is required for all team members.");
       return;
     }
+    if (employeeType === "office" && (!monthlySalary || parseFloat(monthlySalary) <= 0)) {
+      setError("Monthly salary is required for office staff.");
+      return;
+    }
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {
@@ -1372,7 +1381,7 @@ function EditModal({
       });
       if (!res.ok) {
         const data = await res.json();
-        const msg = data?.message?.psiraNumber?.[0] ?? data?.message?.gradeId?.[0] ?? data?.message?.groupId?.[0] ?? data?.message?.employeeNumber?.[0] ?? data?.message ?? "Failed to update";
+        const msg = data?.message?.psiraNumber?.[0] ?? data?.message?.gradeId?.[0] ?? data?.message?.groupId?.[0] ?? data?.message?.monthlySalary?.[0] ?? data?.message?.employeeNumber?.[0] ?? data?.message ?? "Failed to update";
         throw new Error(typeof msg === "string" ? msg : "Failed to update");
       }
       onSuccess();
@@ -1497,10 +1506,11 @@ function EditModal({
                     type="number"
                     step="0.01"
                     min="0"
-                    placeholder="Monthly salary (R)"
+                    placeholder="Monthly salary (R) *"
                     value={monthlySalary}
                     onChange={(e) => setMonthlySalary(e.target.value)}
                     className="input-modern"
+                    required
                   />
                 ) : (
                   <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} groupId={groupId} required />

@@ -6,8 +6,10 @@ import { prisma } from "../lib/prisma.js";
 import {
   calculatePayroll,
   canTransitionPayrollStatus,
+  revertPayrollToDraft,
 } from "../services/payroll.service.js";
 import { PayrollServiceError } from "../services/payroll.service.js";
+import { validatePayrollFinalisation, validateBankDetailsForItems } from "../services/payroll-validation.service.js";
 import { updateSdlTrackingOnPayrollPaid } from "../services/sdl-tracking.service.js";
 import { buildEmp201Data, emp201ToCsv } from "../services/emp201.service.js";
 import { buildIrp5DataForTaxYear, irp5ToCsv } from "../services/irp5.service.js";
@@ -18,12 +20,17 @@ import {
   auditPayrollApproval,
   auditPayrollCalculation,
   auditPayrollLock,
+  auditPayrollRevertToDraft,
 } from "../lib/payroll-audit.js";
 import { format } from "date-fns";
 
 const createPayrollRunSchema = z.object({
   periodStart: z.string().datetime(),
   periodEnd: z.string().datetime(),
+});
+
+const revertToDraftSchema = z.object({
+  reason: z.string().trim().min(5, "Reason must be at least 5 characters"),
 });
 
 export async function payrollRoutes(app: FastifyInstance) {
@@ -122,10 +129,18 @@ export async function payrollRoutes(app: FastifyInstance) {
       where: { payrollRunId: id },
       include: {
         employee: {
-          select: { id: true, firstName: true, lastName: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            group: { select: { id: true, name: true, sortOrder: true } },
+          },
         },
       },
-      orderBy: { employee: { lastName: "asc" } },
+      orderBy: [
+        { employee: { group: { sortOrder: "asc" } } },
+        { employee: { lastName: "asc" } },
+      ],
     });
 
     return reply.send({ data: items });
@@ -185,6 +200,15 @@ export async function payrollRoutes(app: FastifyInstance) {
       });
     }
 
+    const validation = await validatePayrollFinalisation(id, user.companyId);
+    if (!validation.canApprove) {
+      return reply.code(400).send({
+        error: "Approval blocked",
+        message: "Critical validation errors must be resolved before approving this payroll run.",
+        validation,
+      });
+    }
+
     const lockTime = new Date();
     const updatedCount = await prisma.payrollRun.updateMany({
       where: { id, companyId: user.companyId },
@@ -224,6 +248,82 @@ export async function payrollRoutes(app: FastifyInstance) {
     });
 
     return reply.send(updated);
+  });
+
+  app.post("/runs/:id/revert-to-draft", { preHandler: protect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const user = request.user!;
+
+    const parsed = revertToDraftSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const run = await prisma.payrollRun.findFirst({
+      where: { id, companyId: user.companyId },
+    });
+
+    if (!run) {
+      return reply.code(404).send({ error: "Payroll run not found" });
+    }
+
+    if (!canTransitionPayrollStatus(run.status, "draft")) {
+      return reply.code(400).send({
+        error: "Invalid transition",
+        message: `Cannot revert payroll in status ${run.status}.`,
+      });
+    }
+
+    try {
+      await revertPayrollToDraft(id, user.companyId, parsed.data.reason);
+    } catch (err) {
+      if (err instanceof PayrollServiceError) {
+        return reply.code(400).send({ error: "Revert failed", message: err.message });
+      }
+      throw err;
+    }
+
+    await auditPayrollRevertToDraft({
+      userId: user.sub,
+      companyId: user.companyId,
+      payrollRunId: id,
+      previousStatus: run.status,
+      reason: parsed.data.reason,
+    });
+
+    await createAuditLog({
+      userId: user.sub,
+      companyId: user.companyId,
+      action: "payroll_run.revert_to_draft",
+      entityType: "payroll_run",
+      entityId: id,
+      metadata: { previousStatus: run.status, reason: parsed.data.reason },
+    });
+
+    const updated = await prisma.payrollRun.findFirst({
+      where: { id, companyId: user.companyId },
+    });
+
+    return reply.send(updated);
+  });
+
+  app.get("/runs/:id/validation", { preHandler: protect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const user = request.user!;
+
+    const run = await prisma.payrollRun.findFirst({
+      where: { id, companyId: user.companyId },
+    });
+
+    if (!run) {
+      return reply.code(404).send({ error: "Payroll run not found" });
+    }
+
+    const validation = await validatePayrollFinalisation(id, user.companyId);
+    return reply.send({ payrollRunId: id, status: run.status, ...validation });
   });
 
   app.get("/runs/:id/calculation-snapshot", { preHandler: protect }, async (request, reply) => {
@@ -433,6 +533,7 @@ export async function payrollRoutes(app: FastifyInstance) {
   app.get("/runs/:id/export/fnb", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
+    const q = request.query as { groupId?: string };
 
     const run = await prisma.payrollRun.findFirst({
       where: { id, companyId: user.companyId },
@@ -446,6 +547,7 @@ export async function payrollRoutes(app: FastifyInstance) {
                 employeeNumber: true,
                 bankAccountNumber: true,
                 bankBranchCode: true,
+                groupId: true,
               },
             },
           },
@@ -455,16 +557,46 @@ export async function payrollRoutes(app: FastifyInstance) {
     });
     if (!run) return reply.code(404).send({ error: "Payroll run not found" });
 
+    const bankValidation = validateBankDetailsForItems(
+      run.items.map((item) => ({
+        id: item.id,
+        employeeId: item.employeeId,
+        netPay: item.netPay,
+        employee: item.employee,
+      }))
+    );
+
+    if (!bankValidation.valid) {
+      return reply.code(400).send({
+        error: "Bank export validation failed",
+        message: "One or more employees are missing required bank details. No employees were skipped.",
+        validation: bankValidation,
+      });
+    }
+
     const periodLabel = format(run.periodStart, "yyyy-MM");
     const ownRef = `Payroll ${periodLabel}`.slice(0, 15);
+
+    const groupId = q.groupId?.trim();
+    const items =
+      groupId === "ungrouped"
+        ? run.items.filter((item) => item.employee.groupId == null)
+        : groupId
+          ? run.items.filter((item) => item.employee.groupId === groupId)
+          : run.items;
 
     const rows: string[][] = [
       ["Recipient Name", "Recipient Account", "Account Type", "Branch Code", "Amount", "Own Reference", "Recipient Reference"],
     ];
 
-    for (const item of run.items) {
+    for (const item of items) {
       const acc = item.employee.bankAccountNumber?.trim();
-      if (!acc) continue;
+      if (!acc) {
+        return reply.code(400).send({
+          error: "Bank export validation failed",
+          message: `${item.employee.firstName} ${item.employee.lastName} is missing a bank account number.`,
+        });
+      }
 
       const recipientName = `${item.employee.firstName} ${item.employee.lastName}`.trim();
       const recipientAccount = acc.slice(0, 20);

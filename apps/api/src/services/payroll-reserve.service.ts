@@ -6,7 +6,8 @@
  */
 
 import { prisma } from "../lib/prisma.js";
-import { estimateTaxReserve } from "./payroll-statutory.service.js";
+
+export type ReserveDataSource = "paid" | "projected";
 
 export interface PayrollReserveSnapshot {
   /** Current/average monthly payroll burden (gross + statutory) */
@@ -19,8 +20,10 @@ export interface PayrollReserveSnapshot {
   statutoryReserve: number;
   /** Gap between recommended reserve and available cash (if provided) */
   reserveGap?: number;
-  /** Number of paid runs used for burden calculation */
+  /** Number of payroll periods used for burden calculation */
   periodsUsed: number;
+  /** Whether figures come from paid history or calculated/approved runs */
+  dataSource: ReserveDataSource;
 }
 
 export interface PayrollReserveOptions {
@@ -30,30 +33,71 @@ export interface PayrollReserveOptions {
   monthsToAverage?: number;
 }
 
-/**
- * Get payroll reserve snapshot for management visibility.
- */
-export async function getPayrollReserveSnapshot(
-  companyId: string,
-  options?: PayrollReserveOptions
-): Promise<PayrollReserveSnapshot> {
-  const monthsToAverage = options?.monthsToAverage ?? 3;
+type ReserveRun = {
+  periodEnd: Date;
+  items: Array<{
+    grossPay: { toString(): string } | number | string | null;
+    payslip: {
+      tax: { toString(): string } | number | string | null;
+      uifEmployee: { toString(): string } | number | string | null;
+      uifEmployer: { toString(): string } | number | string | null;
+      sdl: { toString(): string } | number | string | null;
+    } | null;
+  }>;
+};
 
+const runInclude = {
+  items: { include: { payslip: true } },
+} as const;
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+export function reserveCutoff(monthsToAverage: number): Date {
   const cutoff = new Date();
   cutoff.setMonth(cutoff.getMonth() - monthsToAverage);
   cutoff.setDate(1);
   cutoff.setHours(0, 0, 0, 0);
+  return cutoff;
+}
 
-  const runs = await prisma.payrollRun.findMany({
+/** Load paid runs for reserve; fall back to calculated/approved when no paid history exists. */
+export async function loadRunsForReserve(
+  companyId: string,
+  cutoff: Date
+): Promise<{ runs: ReserveRun[]; dataSource: ReserveDataSource }> {
+  const paidRuns = await prisma.payrollRun.findMany({
     where: {
       companyId,
       status: "paid",
       periodEnd: { gte: cutoff },
     },
-    include: { items: { include: { payslip: true } } },
+    include: runInclude,
     orderBy: { periodEnd: "desc" },
   });
 
+  if (paidRuns.length > 0) {
+    return { runs: paidRuns, dataSource: "paid" };
+  }
+
+  const projectedRuns = await prisma.payrollRun.findMany({
+    where: {
+      companyId,
+      status: { in: ["calculated", "approved"] },
+      periodEnd: { gte: cutoff },
+    },
+    include: runInclude,
+    orderBy: { periodEnd: "desc" },
+  });
+
+  return { runs: projectedRuns, dataSource: "projected" };
+}
+
+function computeMonthlyPayrollBurden(runs: ReserveRun[]): {
+  monthlyPayrollBurden: number;
+  periodsUsed: number;
+} {
   const monthlyBurden = new Map<string, number>();
 
   for (const run of runs) {
@@ -73,25 +117,85 @@ export async function getPayrollReserveSnapshot(
     monthlyBurden.set(monthKey, monthTotal);
   }
 
-  const periodsUsed = monthlyBurden.size || 1;
+  const periodsUsed = monthlyBurden.size;
+  if (periodsUsed === 0) {
+    return { monthlyPayrollBurden: 0, periodsUsed: 0 };
+  }
+
   const sumMonthly = [...monthlyBurden.values()].reduce((a, b) => a + b, 0);
-  const monthlyPayrollBurden = sumMonthly / periodsUsed;
+  return {
+    monthlyPayrollBurden: round2(sumMonthly / periodsUsed),
+    periodsUsed,
+  };
+}
 
-  const taxReserve = await estimateTaxReserve(companyId, { monthsToAverage });
+export function computeMonthlyStatutoryReserve(runs: ReserveRun[]): {
+  statutoryReserve: number;
+  threeMonthStatutoryReserve: number;
+  periodsUsed: number;
+} {
+  const monthlyTotals = new Map<string, number>();
 
-  const oneMonthReserve = Math.round(monthlyPayrollBurden * 100) / 100;
-  const threeMonthReserve = Math.round(monthlyPayrollBurden * 3 * 100) / 100;
+  for (const run of runs) {
+    const monthKey = `${run.periodEnd.getFullYear()}-${String(run.periodEnd.getMonth() + 1).padStart(2, "0")}`;
+    let monthTotal = monthlyTotals.get(monthKey) ?? 0;
+
+    for (const item of run.items) {
+      const pay = item.payslip;
+      if (pay) {
+        monthTotal += Number(pay.tax ?? 0);
+        monthTotal += Number(pay.uifEmployee ?? 0);
+        monthTotal += Number(pay.uifEmployer ?? 0);
+        monthTotal += Number(pay.sdl ?? 0);
+      }
+    }
+    monthlyTotals.set(monthKey, monthTotal);
+  }
+
+  const periodsUsed = monthlyTotals.size;
+  if (periodsUsed === 0) {
+    return { statutoryReserve: 0, threeMonthStatutoryReserve: 0, periodsUsed: 0 };
+  }
+
+  const sumMonthly = [...monthlyTotals.values()].reduce((a, b) => a + b, 0);
+  const averageMonthlyStatutory = sumMonthly / periodsUsed;
+  const statutoryReserve = round2(averageMonthlyStatutory);
+
+  return {
+    statutoryReserve,
+    threeMonthStatutoryReserve: round2(averageMonthlyStatutory * 3),
+    periodsUsed,
+  };
+}
+
+/**
+ * Get payroll reserve snapshot for management visibility.
+ */
+export async function getPayrollReserveSnapshot(
+  companyId: string,
+  options?: PayrollReserveOptions
+): Promise<PayrollReserveSnapshot> {
+  const monthsToAverage = options?.monthsToAverage ?? 3;
+  const cutoff = reserveCutoff(monthsToAverage);
+  const { runs, dataSource } = await loadRunsForReserve(companyId, cutoff);
+
+  const { monthlyPayrollBurden, periodsUsed } = computeMonthlyPayrollBurden(runs);
+  const { statutoryReserve } = computeMonthlyStatutoryReserve(runs);
+
+  const oneMonthReserve = monthlyPayrollBurden;
+  const threeMonthReserve = round2(monthlyPayrollBurden * 3);
 
   const snapshot: PayrollReserveSnapshot = {
-    monthlyPayrollBurden: Math.round(monthlyPayrollBurden * 100) / 100,
+    monthlyPayrollBurden,
     oneMonthReserve,
     threeMonthReserve,
-    statutoryReserve: taxReserve.oneMonthReserve,
+    statutoryReserve,
     periodsUsed,
+    dataSource,
   };
 
   if (options?.availableCash != null) {
-    snapshot.reserveGap = Math.round((oneMonthReserve - options.availableCash) * 100) / 100;
+    snapshot.reserveGap = round2(oneMonthReserve - options.availableCash);
   }
 
   return snapshot;

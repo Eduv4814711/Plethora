@@ -30,6 +30,15 @@ describe("calculatePAYE", () => {
     const payeSenior = calculatePAYE(15000, "monthly", senior);
     expect(payeSenior).toBeLessThan(payeYoung);
   });
+
+  it("uses fixed tax directive rate when configured", () => {
+    const tax = calculatePAYE(10000, "monthly", {
+      dateOfBirth: new Date("1990-01-01"),
+      taxDirectiveRate: 20 as never,
+      taxDirectiveNumber: "DIR-001",
+    });
+    expect(tax).toBe(2000);
+  });
 });
 
 describe("calculateUIF", () => {

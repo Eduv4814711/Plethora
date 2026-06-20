@@ -1,7 +1,7 @@
 import type { PayPeriod } from "./tax.service.js";
 
 /** Version bumps when snapshot shape or formula semantics change intentionally. */
-export const PAYROLL_CALCULATION_VERSION = "1.0.0";
+export const PAYROLL_CALCULATION_VERSION = "1.1.0";
 
 export interface PayrollRuleSnapshot {
   overtimeMultiplier: number;
@@ -26,6 +26,7 @@ export interface PayrollTimesheetInputSnapshot {
   sundayHours: number;
   publicHolidayHours: number;
   leaveDays: number;
+  leaveHours: number;
 }
 
 export interface PayrollEmployeeContextSnapshot {
@@ -42,6 +43,17 @@ export interface PayrollEmployeeContextSnapshot {
   gradeName: string | null;
   hourlyRate: number;
   monthlySalary: number;
+  taxDirectiveNumber: string | null;
+  taxDirectiveRate: number | null;
+}
+
+export interface PayrollSdlStatusSnapshot {
+  isLiable: boolean;
+  liableFrom: string | null;
+  rolling12MonthPayroll: number;
+  projectedRolling12Month: number;
+  threshold: number;
+  includeRelieversWithAttendance: boolean;
 }
 
 export interface PayrollEmployeeOutputSnapshot {
@@ -78,6 +90,7 @@ export interface PayrollCalculationInputsSnapshot {
   periodEnd: string;
   payPeriod: PayPeriod;
   isSdlLiable: boolean;
+  sdlStatus: PayrollSdlStatusSnapshot;
   timezone: string;
   publicHolidayDates: string[];
   employeeCount: number;

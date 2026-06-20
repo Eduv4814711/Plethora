@@ -15,12 +15,15 @@ import {
   type PayrollEmployeeContextSnapshot,
   type PayrollEmployeeOutputSnapshot,
   type PayrollRuleSnapshot,
+  type PayrollSdlStatusSnapshot,
   type PayrollTimesheetInputSnapshot,
 } from "./payroll-calculation.types.js";
 
 export const DEFAULT_OT_MULTIPLIER = 1.5;
 export const DEFAULT_SUNDAY_MULTIPLIER = 2.0;
 export const DEFAULT_PUBLIC_HOLIDAY_MULTIPLIER = 2.0;
+/** Matches leave day conversion in timesheet aggregation (leave hours / 8). */
+export const STANDARD_LEAVE_DAY_HOURS = 8;
 
 export type EmployeeForPayroll = Employee & {
   grade: PayGrade | null;
@@ -121,6 +124,9 @@ function employeeContext(emp: EmployeeForPayroll): PayrollEmployeeContextSnapsho
           ? Number(emp.hourlyRate)
           : 0,
     monthlySalary: emp.monthlySalary != null ? Number(emp.monthlySalary) : 0,
+    taxDirectiveNumber: emp.taxDirectiveNumber ?? null,
+    taxDirectiveRate:
+      emp.taxDirectiveRate != null ? Number(emp.taxDirectiveRate) : null,
   };
 }
 
@@ -132,6 +138,7 @@ function timesheetSnapshot(agg: TimesheetAggregate | undefined): PayrollTimeshee
     sundayHours: agg.sundayHours,
     publicHolidayHours: agg.publicHolidayHours,
     leaveDays: agg.leaveDays,
+    leaveHours: agg.leaveHours,
   };
 }
 
@@ -167,12 +174,15 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
 
     let output: PayrollEmployeeOutputSnapshot;
 
-    if (emp.employeeType === "office" && monthlySalary > 0) {
+    const isFixedMonthly = monthlySalary > 0;
+
+    if (isFixedMonthly) {
       grossPay = monthlySalary;
       earningsLines.push({ name: "Basic Salary", amount: monthlySalary });
     } else {
       if (hourlyRate === 0 && monthlySalary === 0) {
-        const skipReason = "missing_pay_rate";
+        const skipReason =
+          emp.employeeType === "office" ? "missing_monthly_salary" : "missing_pay_rate";
         output = {
           hoursWorked: 0,
           overtimeHours: 0,
@@ -203,13 +213,19 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
         continue;
       }
 
-      if (
-        !agg ||
-        (agg.basicHours === 0 &&
-          agg.overtimeHours === 0 &&
-          agg.sundayHours === 0 &&
-          agg.publicHolidayHours === 0)
-      ) {
+      const leaveHours = agg
+        ? agg.leaveHours > 0
+          ? agg.leaveHours
+          : agg.leaveDays * STANDARD_LEAVE_DAY_HOURS
+        : 0;
+      const hasWorkedHours =
+        !!agg &&
+        (agg.basicHours > 0 ||
+          agg.overtimeHours > 0 ||
+          agg.sundayHours > 0 ||
+          agg.publicHolidayHours > 0);
+
+      if (!hasWorkedHours && leaveHours === 0) {
         const skipReason = "no_timesheet_hours";
         output = {
           hoursWorked: 0,
@@ -241,24 +257,28 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
         continue;
       }
 
-      hoursWorked = agg.basicHours;
-      overtimeHours = agg.overtimeHours;
-      basePay = round2(agg.basicHours * hourlyRate);
-      overtimePay = round2(agg.overtimeHours * hourlyRate * rules.overtimeMultiplier);
-      sundayPay = round2(agg.sundayHours * hourlyRate * rules.sundayMultiplier);
+      const workedBasicHours = agg?.basicHours ?? 0;
+      hoursWorked = round2(workedBasicHours + leaveHours);
+      overtimeHours = agg?.overtimeHours ?? 0;
+      const workedBasePay = round2(workedBasicHours * hourlyRate);
+      const leavePay = round2(leaveHours * hourlyRate);
+      basePay = round2(workedBasePay + leavePay);
+      overtimePay = round2((agg?.overtimeHours ?? 0) * hourlyRate * rules.overtimeMultiplier);
+      sundayPay = round2((agg?.sundayHours ?? 0) * hourlyRate * rules.sundayMultiplier);
       publicHolidayPay = round2(
-        agg.publicHolidayHours * hourlyRate * rules.publicHolidayMultiplier
+        (agg?.publicHolidayHours ?? 0) * hourlyRate * rules.publicHolidayMultiplier
       );
       grossPay = round2(basePay + overtimePay + sundayPay + publicHolidayPay);
 
-      if (basePay > 0) earningsLines.push({ name: "Basic", amount: basePay });
+      if (workedBasePay > 0) earningsLines.push({ name: "Basic", amount: workedBasePay });
+      if (leavePay > 0) earningsLines.push({ name: "Paid Leave", amount: leavePay });
       if (overtimePay > 0) earningsLines.push({ name: "Overtime", amount: overtimePay });
       if (sundayPay > 0) earningsLines.push({ name: "Sunday", amount: sundayPay });
       if (publicHolidayPay > 0) earningsLines.push({ name: "Public Holiday", amount: publicHolidayPay });
     }
 
     const empType = emp.employeeType ?? "security";
-    const baseForPct = emp.employeeType === "office" ? grossPay : basePay;
+    const baseForPct = isFixedMonthly ? grossPay : basePay;
     for (const er of earningsRules) {
       const applies =
         er.appliesTo === "all" ||
@@ -348,8 +368,9 @@ export function buildPayrollCalculationSnapshot(params: {
   employeeSnapshots: PayrollEmployeeCalculationSnapshot[];
   lines: PayrollComputedLine[];
   calculatedAt: Date;
+  sdlStatus: PayrollSdlStatusSnapshot;
 }): PayrollCalculationSnapshot {
-  const { ctx, employeeSnapshots, lines, calculatedAt } = params;
+  const { ctx, employeeSnapshots, lines, calculatedAt, sdlStatus } = params;
   const companyRules: Record<string, number> = {};
   for (const [k, v] of ctx.companyPayRules) {
     companyRules[k] = v;
@@ -381,6 +402,7 @@ export function buildPayrollCalculationSnapshot(params: {
       periodEnd: ctx.periodEnd.toISOString(),
       payPeriod: ctx.payPeriod,
       isSdlLiable: ctx.isSdlLiable,
+      sdlStatus,
       timezone: ctx.timezone,
       publicHolidayDates: ctx.publicHolidayDates,
       employeeCount: ctx.employees.length,

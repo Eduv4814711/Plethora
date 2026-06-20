@@ -30,22 +30,42 @@ export async function calculateDeductions(
     { appliesTo: empType },
   ];
 
-  const rules = groupId
-    ? await prisma.groupDeductionRule.findMany({
-        where: {
-          companyId,
-          groupId,
-          isActive: true,
-          OR: appliesFilter,
-        },
-      })
-    : await prisma.deductionRule.findMany({
-        where: {
-          companyId,
-          isActive: true,
-          OR: appliesFilter,
-        },
-      });
+  let rules: Array<{
+    id: string;
+    name: string;
+    type: string;
+    amount: { toString(): string } | null;
+    rate: { toString(): string } | null;
+    appliesTo: string;
+    employeeIds: unknown;
+    isOptional: boolean;
+  }> = [];
+  let rulesFromGroup = false;
+
+  if (groupId) {
+    const groupRules = await prisma.groupDeductionRule.findMany({
+      where: {
+        companyId,
+        groupId,
+        isActive: true,
+        OR: appliesFilter,
+      },
+    });
+    if (groupRules.length > 0) {
+      rules = groupRules;
+      rulesFromGroup = true;
+    }
+  }
+
+  if (rules.length === 0) {
+    rules = await prisma.deductionRule.findMany({
+      where: {
+        companyId,
+        isActive: true,
+        OR: appliesFilter,
+      },
+    });
+  }
 
   const excludeSet = excludeDeductionNames
     ? new Set(excludeDeductionNames.map((n) => n.toLowerCase()))
@@ -55,16 +75,20 @@ export async function calculateDeductions(
     if (excludeSet?.has(rule.name.toLowerCase())) continue;
 
     if (rule.isOptional) {
-      if (groupId) {
-        continue;
-      }
       const optedIn = await prisma.employeeDeduction.findFirst({
-        where: {
-          employeeId,
-          deductionRuleId: rule.id,
-          appliesFrom: { lte: periodEnd },
-          OR: [{ appliesTo: null }, { appliesTo: { gte: periodStart } }],
-        },
+        where: rulesFromGroup
+          ? {
+              employeeId,
+              name: rule.name,
+              appliesFrom: { lte: periodEnd },
+              OR: [{ appliesTo: null }, { appliesTo: { gte: periodStart } }],
+            }
+          : {
+              employeeId,
+              deductionRuleId: rule.id,
+              appliesFrom: { lte: periodEnd },
+              OR: [{ appliesTo: null }, { appliesTo: { gte: periodStart } }],
+            },
       });
       if (!optedIn) continue;
     }

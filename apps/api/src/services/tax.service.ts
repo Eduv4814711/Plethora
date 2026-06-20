@@ -21,9 +21,23 @@ const PERIODS_PER_YEAR: Record<PayPeriod, number> = {
 export function calculatePAYE(
   taxableEarnings: number,
   payPeriod: PayPeriod,
-  employee: Pick<Employee, "dateOfBirth">,
+  employee: Pick<Employee, "dateOfBirth" | "taxDirectiveRate" | "taxDirectiveNumber">,
   taxYearConfig: TaxYearConfig = TAX_YEAR_2025_2026
 ): number {
+  if (taxableEarnings <= 0) return 0;
+
+  const directiveRate =
+    employee.taxDirectiveRate != null ? Number(employee.taxDirectiveRate) : null;
+  if (
+    directiveRate != null &&
+    Number.isFinite(directiveRate) &&
+    directiveRate >= 0 &&
+    directiveRate <= 100
+  ) {
+    const periodTax = taxableEarnings * (directiveRate / 100);
+    return Math.round(periodTax * 100) / 100;
+  }
+
   const periodsPerYear = PERIODS_PER_YEAR[payPeriod];
   const annualTaxable = taxableEarnings * periodsPerYear;
 

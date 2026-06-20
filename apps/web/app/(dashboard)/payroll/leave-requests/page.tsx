@@ -10,7 +10,7 @@ export default function LeaveRequestsRedirectPage() {
   }, [router]);
   return (
     <div className="animate-fade-in p-8 text-center">
-      <p className="text-neutral-500 dark:text-neutral-400">Redirecting to Leave Management…</p>
+      <p className="text-neutral-600">Redirecting to leave management…</p>
     </div>
   );
 }

@@ -38,7 +38,7 @@ export function canTransitionShift(
 export const PAYROLL_TRANSITIONS: Record<PayrollStatus, PayrollStatus[]> = {
   draft: ["calculated"],
   calculated: ["approved", "draft"],
-  approved: ["paid"],
+  approved: ["paid", "draft"],
   paid: [],
 };
 

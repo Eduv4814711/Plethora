@@ -17,6 +17,7 @@ export interface Irp5EmployeeData {
   bankAccountNumber: string | null;
   bankBranchCode: string | null;
   commencementDate: Date | null;
+  taxDirectiveNumber: string | null;
   grossIncome: number;
   taxWithheld: number;
   uifEmployee: number;
@@ -92,6 +93,7 @@ export async function buildIrp5DataForTaxYear(
           bankAccountNumber: emp.bankAccountNumber,
           bankBranchCode: emp.bankBranchCode,
           commencementDate: emp.commencementDate,
+          taxDirectiveNumber: emp.taxDirectiveNumber,
           grossIncome: grossPay,
           taxWithheld: tax,
           uifEmployee: uif,
@@ -137,6 +139,7 @@ export function irp5ToCsv(
     "Account Number",
     "Branch Code",
     "Commencement Date",
+    "Tax Directive Number",
     "Gross Income",
     "Tax Withheld",
     "UIF",
@@ -164,6 +167,7 @@ export function irp5ToCsv(
     e.bankAccountNumber ?? "",
     e.bankBranchCode ?? "",
     e.commencementDate ? format(new Date(e.commencementDate), "yyyy-MM-dd") : "",
+    e.taxDirectiveNumber ?? "",
     e.grossIncome.toFixed(2),
     e.taxWithheld.toFixed(2),
     e.uifEmployee.toFixed(2),

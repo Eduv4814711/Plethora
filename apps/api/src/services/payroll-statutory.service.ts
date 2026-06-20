@@ -6,6 +6,11 @@
  */
 
 import { prisma } from "../lib/prisma.js";
+import {
+  computeMonthlyStatutoryReserve,
+  loadRunsForReserve,
+  reserveCutoff,
+} from "./payroll-reserve.service.js";
 
 export interface PayrollStatutorySummary {
   /** Payroll run ID (if run-specific) */
@@ -149,48 +154,15 @@ export async function estimateTaxReserve(
   options?: { monthsToAverage?: number }
 ): Promise<TaxReserveEstimate> {
   const monthsToAverage = options?.monthsToAverage ?? 3;
-
-  const cutoff = new Date();
-  cutoff.setMonth(cutoff.getMonth() - monthsToAverage);
-  cutoff.setDate(1);
-  cutoff.setHours(0, 0, 0, 0);
-
-  const runs = await prisma.payrollRun.findMany({
-    where: {
-      companyId,
-      status: "paid",
-      periodEnd: { gte: cutoff },
-    },
-    include: { items: { include: { payslip: true } } },
-    orderBy: { periodEnd: "desc" },
-  });
-
-  const monthlyTotals = new Map<string, number>();
-
-  for (const run of runs) {
-    const monthKey = `${run.periodEnd.getFullYear()}-${String(run.periodEnd.getMonth() + 1).padStart(2, "0")}`;
-    let monthTotal = monthlyTotals.get(monthKey) ?? 0;
-
-    for (const item of run.items) {
-      const pay = item.payslip;
-      if (pay) {
-        monthTotal += Number(pay.tax ?? 0);
-        monthTotal += Number(pay.uifEmployee ?? 0);
-        monthTotal += Number(pay.uifEmployer ?? 0);
-        monthTotal += Number(pay.sdl ?? 0);
-      }
-    }
-    monthlyTotals.set(monthKey, monthTotal);
-  }
-
-  const periodsUsed = monthlyTotals.size || 1;
-  const sumMonthly = [...monthlyTotals.values()].reduce((a, b) => a + b, 0);
-  const averageMonthlyStatutory = sumMonthly / periodsUsed;
+  const cutoff = reserveCutoff(monthsToAverage);
+  const { runs } = await loadRunsForReserve(companyId, cutoff);
+  const { statutoryReserve, threeMonthStatutoryReserve, periodsUsed } =
+    computeMonthlyStatutoryReserve(runs);
 
   return {
-    oneMonthReserve: Math.round(averageMonthlyStatutory * 100) / 100,
-    threeMonthReserve: Math.round(averageMonthlyStatutory * 3 * 100) / 100,
-    averageMonthlyStatutory: Math.round(averageMonthlyStatutory * 100) / 100,
+    oneMonthReserve: statutoryReserve,
+    threeMonthReserve: threeMonthStatutoryReserve,
+    averageMonthlyStatutory: statutoryReserve,
     periodsUsed,
   };
 }

@@ -65,6 +65,7 @@ function agg(partial: Partial<TimesheetAggregate>): TimesheetAggregate {
     sundayHours: 0,
     publicHolidayHours: 0,
     leaveDays: 0,
+    leaveHours: 0,
     ...partial,
   };
 }
@@ -130,6 +131,32 @@ describe("computePayrollLines", () => {
     );
     expect(lines[0]!.grossPay).toBe(25000);
     expect(lines[0]!.hoursWorked).toBe(0);
+  });
+
+  it("uses monthly salary without timesheet hours when employeeType is security", () => {
+    const emp = baseEmployee({
+      employeeType: "security",
+      monthlySalary: 18000,
+    });
+    const { lines } = computePayrollLines(
+      ctx({
+        employees: [emp],
+        deductionsByEmployee: new Map([["emp-1", { total: 0, lines: [] }]]),
+      })
+    );
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.grossPay).toBe(18000);
+    expect(lines[0]!.hoursWorked).toBe(0);
+  });
+
+  it("skips office employee without monthly salary (missing_monthly_salary)", () => {
+    const emp = baseEmployee({
+      employeeType: "office",
+      monthlySalary: null,
+    });
+    const { employeeSnapshots } = computePayrollLines(ctx({ employees: [emp] }));
+    expect(employeeSnapshots[0]!.output.skipped).toBe(true);
+    expect(employeeSnapshots[0]!.output.skipReason).toBe("missing_monthly_salary");
   });
 
   it("skips hourly employee with missing pay grade and no rate (missing_pay_rate)", () => {
@@ -223,8 +250,16 @@ describe("computePayrollLines", () => {
       employeeSnapshots,
       lines,
       calculatedAt: new Date("2026-05-15T12:00:00.000Z"),
+      sdlStatus: {
+        isLiable: false,
+        liableFrom: null,
+        rolling12MonthPayroll: 0,
+        projectedRolling12Month: 5000,
+        threshold: 500000,
+        includeRelieversWithAttendance: true,
+      },
     });
-    expect(snapshot.version).toBe("1.0.0");
+    expect(snapshot.version).toBe("1.1.0");
     expect(snapshot.totals.grossPay).toBe(5000);
     expect(snapshot.inputs.defaultMultipliers).toEqual({
       overtime: DEFAULT_OT_MULTIPLIER,
@@ -280,6 +315,73 @@ describe("computePayrollLines", () => {
       })
     );
     expect(lines[0]!.grossPay).toBe(11000);
+  });
+
+  it("uses actual leave hours for partial-day leave pay", () => {
+    const emp = baseEmployee({
+      hourlyRate: 100,
+      grade: { id: "g1", name: "Partial", hourlyRate: 100, companyId: "co-1" } as PayGrade,
+    });
+    const { lines } = computePayrollLines(
+      ctx({
+        employees: [emp],
+        aggregates: new Map([["emp-1", agg({ leaveHours: 4, leaveDays: 0.5 })]]),
+        deductionsByEmployee: new Map([["emp-1", { total: 0, lines: [] }]]),
+      })
+    );
+    expect(lines[0]!.hoursWorked).toBe(4);
+    expect(lines[0]!.basePay).toBe(400);
+  });
+
+  it("applies fixed tax directive rate when configured on employee", () => {
+    const emp = baseEmployee({
+      hourlyRate: 100,
+      taxDirectiveRate: 25 as unknown as Employee["taxDirectiveRate"],
+      taxDirectiveNumber: "DIR-123",
+      grade: { id: "g1", name: "Tax", hourlyRate: 100, companyId: "co-1" } as PayGrade,
+    });
+    const { lines } = computePayrollLines(
+      ctx({
+        employees: [emp],
+        aggregates: new Map([["emp-1", agg({ basicHours: 100 })]]),
+        deductionsByEmployee: new Map([["emp-1", { total: 0, lines: [] }]]),
+      })
+    );
+    expect(lines[0]!.tax).toBe(2500);
+  });
+
+  it("pays hourly guard for approved leave days without attendance", () => {
+    const emp = baseEmployee({
+      hourlyRate: 100,
+      grade: { id: "g1", name: "Leave", hourlyRate: 100, companyId: "co-1" } as PayGrade,
+    });
+    const { lines } = computePayrollLines(
+      ctx({
+        employees: [emp],
+        aggregates: new Map([["emp-1", agg({ leaveDays: 2, leaveHours: 16 })]]),
+        deductionsByEmployee: new Map([["emp-1", { total: 0, lines: [] }]]),
+      })
+    );
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.hoursWorked).toBe(16);
+    expect(lines[0]!.basePay).toBe(1600);
+    expect(lines[0]!.grossPay).toBe(1600);
+  });
+
+  it("adds paid leave on top of worked hours in the same period", () => {
+    const emp = baseEmployee({
+      hourlyRate: 50,
+      grade: { id: "g1", name: "Mixed", hourlyRate: 50, companyId: "co-1" } as PayGrade,
+    });
+    const { lines } = computePayrollLines(
+      ctx({
+        employees: [emp],
+        aggregates: new Map([["emp-1", agg({ basicHours: 40, leaveDays: 1, leaveHours: 8 })]]),
+        deductionsByEmployee: new Map([["emp-1", { total: 0, lines: [] }]]),
+      })
+    );
+    expect(lines[0]!.basePay).toBe(2400);
+    expect(lines[0]!.hoursWorked).toBe(48);
   });
 
   it("computes net pay as gross minus deductions, PAYE, and UIF", () => {

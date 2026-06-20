@@ -126,6 +126,9 @@ const createEmployeeSchemaWithRefine = createEmployeeSchema.superRefine((data, c
   if (!data.groupId || !String(data.groupId).trim()) {
     ctx.addIssue({ code: "custom", path: ["groupId"], message: "Group is required for all employees" });
   }
+  if (data.employeeType === "office" && (!data.monthlySalary || data.monthlySalary <= 0)) {
+    ctx.addIssue({ code: "custom", path: ["monthlySalary"], message: "Monthly salary is required for office staff" });
+  }
 });
 
 const updateEmployeeSchema = createEmployeeSchema.partial().extend({
@@ -399,6 +402,22 @@ export async function employeesRoutes(app: FastifyInstance) {
         message: { groupId: ["Group is required for all employees"] },
       });
     }
+    const effectiveMonthlySalary =
+      updateData.monthlySalary !== undefined
+        ? updateData.monthlySalary
+        : existing.monthlySalary != null
+          ? Number(existing.monthlySalary)
+          : null;
+    if (
+      effectiveType === "office" &&
+      (effectiveMonthlySalary == null || effectiveMonthlySalary <= 0)
+    ) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: { monthlySalary: ["Monthly salary is required for office staff"] },
+      });
+    }
+
     if (updateData.employeeNumber !== undefined) {
       const trimmed = updateData.employeeNumber.trim();
       if (!trimmed) {

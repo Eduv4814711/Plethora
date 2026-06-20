@@ -8,10 +8,32 @@ export interface TimesheetAggregate {
   overtimeHours: number;
   sundayHours: number;
   publicHolidayHours: number;
+  /** Derived from leave hours (hours / 8) for display and legacy consumers. */
   leaveDays: number;
+  /** Actual paid leave hours from LeaveRecord entries in the period. */
+  leaveHours: number;
 }
 
-export type TimesheetHourBucket = "basic" | "overtime" | "sunday" | "public_holiday";
+/** Maximum leave hours accepted per single leave record (guards against bad data). */
+export const MAX_LEAVE_HOURS_PER_RECORD = 24;
+
+/**
+ * Sum leave hours from records, ignoring invalid entries.
+ */
+export function sumLeaveHoursFromRecords(
+  records: Array<{ employeeId: string; hours: unknown }>
+): Map<string, number> {
+  const employeeLeaveHours = new Map<string, number>();
+  for (const lr of records) {
+    const hours = Number(lr.hours);
+    if (!Number.isFinite(hours) || hours <= 0 || hours > MAX_LEAVE_HOURS_PER_RECORD) {
+      continue;
+    }
+    const current = employeeLeaveHours.get(lr.employeeId) ?? 0;
+    employeeLeaveHours.set(lr.employeeId, current + hours);
+  }
+  return employeeLeaveHours;
+}
 
 /**
  * Classify worked hours by shift start date in company timezone.
@@ -96,12 +118,7 @@ export async function aggregateTimesheets(
     },
   });
 
-  const employeeLeaveDays = new Map<string, number>();
-  for (const lr of leaveRecords) {
-    const days = Number(lr.hours) / 8;
-    const current = employeeLeaveDays.get(lr.employeeId) ?? 0;
-    employeeLeaveDays.set(lr.employeeId, current + days);
-  }
+  const employeeLeaveHours = sumLeaveHoursFromRecords(leaveRecords);
 
   const totals = new Map<
     string,
@@ -138,14 +155,34 @@ export async function aggregateTimesheets(
   }
 
   const result: TimesheetAggregate[] = [];
+  const seen = new Set<string>();
+
   for (const [employeeId, t] of totals) {
+    seen.add(employeeId);
+    const leaveHours = Math.round((employeeLeaveHours.get(employeeId) ?? 0) * 100) / 100;
     result.push({
       employeeId,
       basicHours: Math.round(t.basicHours * 100) / 100,
       overtimeHours: Math.round(t.overtimeHours * 100) / 100,
       sundayHours: Math.round(t.sundayHours * 100) / 100,
       publicHolidayHours: Math.round(t.publicHolidayHours * 100) / 100,
-      leaveDays: Math.round((employeeLeaveDays.get(employeeId) ?? 0) * 100) / 100,
+      leaveHours,
+      leaveDays: Math.round((leaveHours / 8) * 100) / 100,
+    });
+  }
+
+  // Include approved leave for employees with no attendance shifts in the period.
+  for (const [employeeId, leaveHoursRaw] of employeeLeaveHours) {
+    if (seen.has(employeeId) || leaveHoursRaw <= 0) continue;
+    const leaveHours = Math.round(leaveHoursRaw * 100) / 100;
+    result.push({
+      employeeId,
+      basicHours: 0,
+      overtimeHours: 0,
+      sundayHours: 0,
+      publicHolidayHours: 0,
+      leaveHours,
+      leaveDays: Math.round((leaveHours / 8) * 100) / 100,
     });
   }
 

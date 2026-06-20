@@ -1,12 +1,22 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { Fragment, useEffect, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
+import { clsx } from "clsx";
 import { useAuth } from "@/lib/auth-context";
-import { authFetch, fetchCurrentPayPeriod, fetchPayPeriods, type PayPeriodOption } from "@/lib/api";
+import { authFetch } from "@/lib/api";
 import { PayPeriodSelect } from "@/components/pay-period-select";
-import { DateInput } from "@/components/date-input";
+import {
+  AlertBanner,
+  Badge,
+  Button,
+  EmptyState,
+  PageHeader,
+  SkeletonBlock,
+  TableShell,
+  useConfirmDialog,
+} from "@/components/ui";
 
 function formatCurrency(n: number): string {
   return new Intl.NumberFormat("en-ZA", {
@@ -74,17 +84,19 @@ function SarsExportsDropdown({ token }: { token: string }) {
 
   return (
     <div className="relative" ref={ref}>
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        size="sm"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-4 py-2.5 rounded-security border-2 border-security-navy-300 bg-white text-security-navy hover:bg-security-navy-50 hover:border-security-navy-400 transition-all text-sm font-medium"
+        className="gap-2"
         aria-label="SARS exports"
       >
         SARS Exports
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
-      </button>
+      </Button>
       {open && (
         <div className="absolute right-0 mt-1 w-72 p-3 bg-white border border-neutral-200 rounded-security-lg shadow-security-elevated z-20">
           <p className="text-xs text-security-navy-600 mb-3">Export for SARS eFiling</p>
@@ -98,9 +110,9 @@ function SarsExportsDropdown({ token }: { token: string }) {
                   onChange={(e) => setEmp201Period(e.target.value)}
                   className="input-modern text-sm flex-1"
                 />
-                <button onClick={handleEmp201} disabled={downloading === "emp201"} className="btn-primary text-sm py-1.5 px-3 disabled:opacity-50">
-                  {downloading === "emp201" ? "…" : "Download"}
-                </button>
+                <Button type="button" size="sm" onClick={handleEmp201} loading={downloading === "emp201"}>
+                  Download
+                </Button>
               </div>
             </div>
             <div>
@@ -114,9 +126,9 @@ function SarsExportsDropdown({ token }: { token: string }) {
                   onChange={(e) => setIrp5Year(e.target.value)}
                   className="input-modern text-sm w-24"
                 />
-                <button onClick={handleIrp5} disabled={downloading === "irp5"} className="btn-primary text-sm py-1.5 px-3 disabled:opacity-50">
-                  {downloading === "irp5" ? "…" : "Download"}
-                </button>
+                <Button type="button" size="sm" onClick={handleIrp5} loading={downloading === "irp5"}>
+                  Download
+                </Button>
               </div>
             </div>
           </div>
@@ -149,32 +161,58 @@ interface ReserveSnapshot {
   threeMonthReserve: number;
   statutoryReserve: number;
   reserveGap?: number;
+  periodsUsed: number;
+  dataSource?: "paid" | "projected";
 }
 
-const statusConfig: Record<string, { label: string; className: string }> = {
-  draft: { label: "Draft", className: "bg-security-navy-100 text-security-navy-700 border-neutral-200" },
-  calculated: { label: "Calculated", className: "bg-security-amber-100 text-security-amber-700 border-security-amber-200" },
-  approved: { label: "Approved", className: "bg-security-emerald-50 text-security-emerald-600 border-security-emerald-200" },
-  paid: { label: "Paid", className: "bg-security-emerald-50 text-security-emerald-600 border-security-emerald-200" },
+const REPORTABLE_RUN_STATUSES = ["calculated", "approved", "paid"] as const;
+
+function latestReportableRun(runs: PayrollRun[]): PayrollRun | undefined {
+  return runs
+    .filter((r) => REPORTABLE_RUN_STATUSES.includes(r.status as (typeof REPORTABLE_RUN_STATUSES)[number]))
+    .sort((a, b) => new Date(b.periodEnd).getTime() - new Date(a.periodEnd).getTime())[0];
+}
+
+function loadLatestRunSummary(token: string, runs: PayrollRun[]) {
+  const latest = latestReportableRun(runs);
+  if (!latest) {
+    return Promise.resolve(null);
+  }
+  return authFetch(`/payroll/runs/${latest.id}/summary`, token)
+    .then((res) => (res.ok ? res.json() : null))
+    .catch(() => null);
+}
+
+const statusConfig: Record<string, { label: string; variant: "neutral" | "warning" | "success" }> = {
+  draft: { label: "Draft", variant: "neutral" },
+  calculated: { label: "Calculated", variant: "warning" },
+  approved: { label: "Approved", variant: "success" },
+  paid: { label: "Paid", variant: "success" },
 };
 
 const PAYROLL_WORKFLOW_STEPS = [
-  { step: 1, title: "Attendance", caption: "Timesheets & clock data", ring: "border-neutral-200 bg-white text-security-navy" },
-  { step: 2, title: "Create run", caption: "Open a pay period", ring: "border-neutral-200 bg-white text-security-navy" },
-  {
-    step: 3,
-    title: "Calculate",
-    caption: "Pay, tax & compliance",
-    ring: "border-security-amber-400 bg-security-amber-50 text-security-amber-800 shadow-sm shadow-security-amber-200/50",
-  },
-  { step: 4, title: "Approve", caption: "Review & sign off", ring: "border-neutral-200 bg-white text-security-navy" },
-  {
-    step: 5,
-    title: "Mark paid",
-    caption: "Close the period",
-    ring: "border-security-emerald-400 bg-security-emerald-50 text-security-emerald-800 shadow-sm shadow-security-emerald-200/40",
-  },
+  { step: 1, title: "Attendance", caption: "Guard attendance (office staff use fixed salary)" },
+  { step: 2, title: "Create run", caption: "Open a pay period" },
+  { step: 3, title: "Calculate", caption: "Pay, tax & compliance — relievers with approved attendance are included", highlight: "amber" as const },
+  { step: 4, title: "Approve", caption: "Review & sign off" },
+  { step: 5, title: "Mark paid", caption: "Close the period", highlight: "emerald" as const },
 ] as const;
+
+const INTELLIGENCE_TABS = [
+  { id: "reserve" as const, label: "Reserve Summary" },
+  { id: "contracts" as const, label: "Contract Labour Cost" },
+  { id: "employees" as const, label: "Employee Cost Summary" },
+];
+
+function workflowStepClass(highlight?: "amber" | "emerald") {
+  if (highlight === "amber") {
+    return "border-security-amber-300 bg-security-amber-50 text-security-amber-800";
+  }
+  if (highlight === "emerald") {
+    return "border-security-emerald-300 bg-security-emerald-50 text-security-emerald-800";
+  }
+  return "border-neutral-200 bg-white text-security-navy";
+}
 
 export default function PayrollPage() {
   const { token } = useAuth();
@@ -196,15 +234,17 @@ export default function PayrollPage() {
       .then((d) => {
         const newRuns = d.data || [];
         setRuns(newRuns);
-        const calculated = newRuns.find((r: PayrollRun) => r.status === "calculated");
-        if (calculated) {
-          authFetch(`/payroll/runs/${calculated.id}/summary`, token)
-            .then((res) => (res.ok ? res.json() : null))
-            .then((s) => s && setMetrics((m) => ({ ...m, latestRunSummary: s, totalComplianceIssues: s.complianceIssueCount ?? 0 })))
-            .catch(() => {});
-        } else {
-          setMetrics((m) => ({ ...m, latestRunSummary: null, totalComplianceIssues: 0 }));
-        }
+        loadLatestRunSummary(token, newRuns).then((s) => {
+          if (s) {
+            setMetrics((m) => ({
+              ...m,
+              latestRunSummary: s,
+              totalComplianceIssues: s.complianceIssueCount ?? 0,
+            }));
+          } else {
+            setMetrics((m) => ({ ...m, latestRunSummary: null, totalComplianceIssues: 0 }));
+          }
+        });
       })
       .catch(console.error);
     setMetricsLoading(true);
@@ -231,13 +271,15 @@ export default function PayrollPage() {
       .then((d) => {
         const newRuns = d.data || [];
         setRuns(newRuns);
-        const calculated = newRuns.find((r: PayrollRun) => r.status === "calculated");
-        if (calculated) {
-          authFetch(`/payroll/runs/${calculated.id}/summary`, token)
-            .then((res) => (res.ok ? res.json() : null))
-            .then((s) => s && setMetrics((m) => ({ ...m, latestRunSummary: s, totalComplianceIssues: s.complianceIssueCount ?? 0 })))
-            .catch(() => {});
-        }
+        loadLatestRunSummary(token, newRuns).then((s) => {
+          if (s) {
+            setMetrics((m) => ({
+              ...m,
+              latestRunSummary: s,
+              totalComplianceIssues: s.complianceIssueCount ?? 0,
+            }));
+          }
+        });
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -261,16 +303,17 @@ export default function PayrollPage() {
 
   if (loading) {
     return (
-      <div className="animate-pulse">
-        <div className="h-8 bg-security-navy-200 rounded w-48 mb-6" />
-        <div className="grid grid-cols-2 gap-4 mb-8 sm:grid-cols-4">
+      <div className="animate-fade-in max-w-7xl mx-auto space-y-6">
+        <SkeletonBlock className="h-9 w-48" />
+        <SkeletonBlock className="h-36 w-full" />
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-20 bg-security-navy-100 rounded-security-lg" />
+            <SkeletonBlock key={i} className="h-24" />
           ))}
         </div>
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-24 bg-security-navy-100 rounded-security-lg" />
+            <SkeletonBlock key={i} className="h-28" />
           ))}
         </div>
       </div>
@@ -278,116 +321,83 @@ export default function PayrollPage() {
   }
 
   return (
-    <div className="animate-fade-in max-w-7xl mx-auto">
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">
-        <div>
-          <h1 className="page-title">Payroll</h1>
-          <p className="text-security-navy-600 mt-1 text-sm">Manage payroll runs, view financial metrics, and control the workflow</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button onClick={() => setShowForm(!showForm)} className="btn-primary">
-            {showForm ? "Cancel" : "+ New Payroll Run"}
-          </button>
-          <SarsExportsDropdown token={token!} />
-          <Link
-            href="/payroll/leave-requests"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-security border-2 border-security-navy-300 bg-white text-security-navy hover:bg-security-navy-50 hover:border-security-navy-400 transition-all text-sm font-medium"
-          >
-            Leave Requests
-          </Link>
-          <Link
-            href="/payroll/configuration"
-            className="flex items-center gap-2 px-4 py-2.5 rounded-security border-2 border-security-navy-300 bg-white text-security-navy hover:bg-security-navy-50 hover:border-security-navy-400 transition-all"
-            aria-label="Payroll configuration"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            <span className="text-sm font-medium">Configuration</span>
-          </Link>
-        </div>
-      </div>
+    <div className="animate-fade-in max-w-7xl mx-auto space-y-6">
+      <PageHeader
+        title="Payroll"
+        description="Manage payroll runs, review financial metrics, and control the pay period workflow."
+        actions={
+          <>
+            <Button type="button" onClick={() => setShowForm(!showForm)}>
+              {showForm ? "Cancel" : "New payroll run"}
+            </Button>
+            <SarsExportsDropdown token={token!} />
+            <Link href="/employees/leave" className="btn-secondary text-sm">
+              Leave requests
+            </Link>
+            <Link href="/payroll/configuration" className="btn-secondary text-sm">
+              Configuration
+            </Link>
+          </>
+        }
+      />
 
-      {/* Payroll workflow — high-visibility guide aligned with dashboard aesthetic */}
-      <section
-        className="mb-6 overflow-hidden rounded-security-lg border border-security-navy-200/70 bg-white shadow-security-elevated"
-        aria-label="Payroll workflow steps"
-      >
-        <div className="border-b border-neutral-100 bg-gradient-to-r from-security-navy-50/90 via-white to-security-emerald-50/40 px-5 py-4 sm:px-6 sm:py-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-5">
-            <div
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-security-lg border border-security-emerald-200/80 bg-security-emerald-50 text-security-emerald-700 shadow-sm"
-              aria-hidden
-            >
-              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.75}
-                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                />
-              </svg>
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-security-navy-500">Process guide</p>
-              <h2 className="mt-1 text-lg font-semibold tracking-tight text-security-navy sm:text-xl">Payroll workflow</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-security-navy-600">
-                Follow these stages in order for every period: capture attendance, create the run, calculate pay and statutory amounts, approve, then mark as paid.
-              </p>
-            </div>
-          </div>
+      {/* Payroll workflow */}
+      <section className="card-wireframe overflow-hidden" aria-label="Payroll workflow steps">
+        <div className="border-b border-neutral-200 px-5 py-4 sm:px-6">
+          <p className="section-title mb-1">Process guide</p>
+          <h2 className="text-base font-semibold text-black">Payroll workflow</h2>
+          <p className="mt-1 max-w-2xl text-sm text-neutral-600">
+            Follow these stages in order for every period: capture guard attendance, create the run, calculate pay and statutory amounts, approve, then mark as paid. Office staff are paid a fixed monthly salary and do not need attendance.
+          </p>
         </div>
 
-        <div className="px-5 py-5 sm:px-6 sm:py-6">
-          {/* Desktop: horizontal stepper with connector line */}
+        <div className="px-5 py-5 sm:px-6">
           <div className="relative hidden md:block">
-            <div
-              className="absolute left-[10%] right-[10%] top-5 h-px bg-gradient-to-r from-neutral-200 via-security-navy-200 to-security-emerald-300"
-              aria-hidden
-            />
+            <div className="absolute left-[10%] right-[10%] top-5 h-px bg-neutral-200" aria-hidden />
             <ol className="relative grid grid-cols-5 gap-2">
               {PAYROLL_WORKFLOW_STEPS.map((s) => (
                 <li key={s.step} className="flex flex-col items-center text-center">
                   <div
-                    className={`relative z-[1] flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold tabular-nums ${s.ring}`}
+                    className={clsx(
+                      "relative z-[1] flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold tabular-nums",
+                      workflowStepClass("highlight" in s ? s.highlight : undefined)
+                    )}
                   >
                     {s.step}
                   </div>
                   <p className="mt-3 text-xs font-semibold text-security-navy">{s.title}</p>
-                  <p className="mt-1 max-w-[9rem] text-[11px] leading-snug text-security-navy-500">{s.caption}</p>
+                  <p className="mt-1 max-w-[9rem] text-[11px] leading-snug text-neutral-600">{s.caption}</p>
                 </li>
               ))}
             </ol>
           </div>
 
-          {/* Mobile / small: vertical timeline */}
           <div className="relative md:hidden">
-            <div
-              className="absolute left-[19px] top-3 bottom-3 w-px bg-gradient-to-b from-neutral-200 via-security-navy-200 to-security-emerald-300"
-              aria-hidden
-            />
+            <div className="absolute left-[19px] top-3 bottom-3 w-px bg-neutral-200" aria-hidden />
             <ol className="relative m-0 list-none space-y-0 p-0">
               {PAYROLL_WORKFLOW_STEPS.map((s) => (
                 <li key={s.step} className="relative flex gap-4 pb-6 last:pb-0">
                   <div
-                    className={`relative z-[1] flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold tabular-nums ${s.ring}`}
+                    className={clsx(
+                      "relative z-[1] flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold tabular-nums",
+                      workflowStepClass("highlight" in s ? s.highlight : undefined)
+                    )}
                   >
                     {s.step}
                   </div>
                   <div className="min-w-0 pt-1">
                     <p className="text-sm font-semibold text-security-navy">{s.title}</p>
-                    <p className="mt-0.5 text-xs leading-relaxed text-security-navy-600">{s.caption}</p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-neutral-600">{s.caption}</p>
                   </div>
                 </li>
               ))}
             </ol>
           </div>
 
-          <p className="mt-5 rounded-security border border-neutral-100 bg-security-navy-50/50 px-3 py-2.5 text-center text-xs text-security-navy-600 md:text-left">
-            <span className="font-medium text-security-navy">Tip:</span> always run <strong className="font-semibold text-security-amber-800">Calculate</strong> before{" "}
-            <strong className="font-semibold text-security-navy">Approve</strong>, then <strong className="font-semibold text-security-emerald-800">Mark paid</strong> when funds have cleared.
-          </p>
+          <AlertBanner variant="info" className="mt-5">
+            Always run <strong className="font-semibold">Calculate</strong> before <strong className="font-semibold">Approve</strong>, then{" "}
+            <strong className="font-semibold">Mark paid</strong> when funds have cleared.
+          </AlertBanner>
         </div>
       </section>
 
@@ -405,17 +415,17 @@ export default function PayrollPage() {
       <PayrollIntelligenceSection token={token!} runs={runs} onRefresh={refresh} />
 
       {/* Dashboard metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div className="card-wireframe p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-security-navy-500">Pending Approvals</p>
+              <p className="section-title">Pending approvals</p>
               {metricsLoading ? (
-                <div className="h-8 w-16 bg-security-navy-100 rounded mt-2 animate-pulse" />
+                <SkeletonBlock className="mt-2 h-8 w-16" />
               ) : (
-                <p className="text-2xl font-bold text-security-navy mt-1">{metrics.pendingApprovals}</p>
+                <p className="mt-1 text-2xl font-bold text-black">{metrics.pendingApprovals}</p>
               )}
-              <p className="text-xs text-security-navy-500 mt-0.5">Runs awaiting approval</p>
+              <p className="mt-0.5 text-xs text-neutral-600">Runs awaiting approval</p>
             </div>
             <div className="w-10 h-10 rounded-security-lg bg-security-amber-100 flex items-center justify-center">
               <svg className="w-5 h-5 text-security-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -428,15 +438,15 @@ export default function PayrollPage() {
         <div className="card-wireframe p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-security-navy-500">1-Month Reserve</p>
+              <p className="section-title">1-month reserve</p>
               {metricsLoading ? (
-                <div className="h-8 w-24 bg-security-navy-100 rounded mt-2 animate-pulse" />
-              ) : metrics.reserve ? (
-                <p className="text-xl font-bold text-security-navy mt-1">{formatCurrency(metrics.reserve.oneMonthReserve)}</p>
+                <SkeletonBlock className="mt-2 h-8 w-24" />
+              ) : metrics.reserve && metrics.reserve.periodsUsed > 0 ? (
+                <p className="mt-1 font-mono text-xl font-bold text-black">{formatCurrency(metrics.reserve.oneMonthReserve)}</p>
               ) : (
-                <p className="text-sm text-security-navy-500 mt-1">—</p>
+                <p className="mt-1 text-sm text-neutral-600">—</p>
               )}
-              <p className="text-xs text-security-navy-500 mt-0.5">Recommended reserve</p>
+              <p className="mt-0.5 text-xs text-neutral-600">Recommended reserve</p>
             </div>
             <div className="w-10 h-10 rounded-security-lg bg-security-emerald-50 flex items-center justify-center">
               <svg className="w-5 h-5 text-security-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -449,14 +459,14 @@ export default function PayrollPage() {
         <div className="card-wireframe p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-security-navy-500">Latest Run</p>
+              <p className="section-title">Latest run</p>
               {metrics.latestRunSummary ? (
                 <>
-                  <p className="text-xl font-bold text-security-navy mt-1">{formatCurrency(metrics.latestRunSummary.totalGrossPay)}</p>
-                  <p className="text-xs text-security-navy-500 mt-0.5">{metrics.latestRunSummary.employeeCount} employees</p>
+                  <p className="mt-1 font-mono text-xl font-bold text-black">{formatCurrency(metrics.latestRunSummary.totalGrossPay)}</p>
+                  <p className="mt-0.5 text-xs text-neutral-600">{metrics.latestRunSummary.employeeCount} employees</p>
                 </>
               ) : (
-                <p className="text-sm text-security-navy-500 mt-1">No calculated run</p>
+                <p className="mt-1 text-sm text-neutral-600">No calculated run</p>
               )}
             </div>
             <div className="w-10 h-10 rounded-security-lg bg-security-navy-100 flex items-center justify-center">
@@ -470,18 +480,25 @@ export default function PayrollPage() {
         <div className="card-wireframe p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-security-navy-500">Compliance</p>
+              <p className="section-title">Compliance</p>
               {metrics.latestRunSummary?.complianceIssueCount != null ? (
                 <>
-                  <p className={`text-xl font-bold mt-1 ${metrics.latestRunSummary.criticalComplianceCount > 0 ? "text-red-600" : metrics.latestRunSummary.warningComplianceCount > 0 ? "text-security-amber-600" : "text-security-navy"}`}>
+                  <p className={clsx(
+                    "mt-1 text-xl font-bold",
+                    metrics.latestRunSummary.criticalComplianceCount > 0
+                      ? "text-red-600"
+                      : metrics.latestRunSummary.warningComplianceCount > 0
+                        ? "text-security-amber-600"
+                        : "text-black"
+                  )}>
                     {metrics.latestRunSummary.complianceIssueCount} issues
                   </p>
-                  <p className="text-xs text-security-navy-500 mt-0.5">
+                  <p className="mt-0.5 text-xs text-neutral-600">
                     {metrics.latestRunSummary.criticalComplianceCount} critical
                   </p>
                 </>
               ) : (
-                <p className="text-sm text-security-navy-500 mt-1">No compliance checks yet</p>
+                <p className="mt-1 text-sm text-neutral-600">No compliance checks yet</p>
               )}
             </div>
             <div className={`w-10 h-10 rounded-security-lg flex items-center justify-center ${
@@ -495,20 +512,26 @@ export default function PayrollPage() {
         </div>
       </div>
 
-      {/* Payroll runs */}
-      <div className="space-y-4">
-        {runs.map((run) => (
-          <PayrollRunCard key={run.id} run={run} token={token!} onAction={refresh} />
-        ))}
-      </div>
-
-      {runs.length === 0 && (
-        <div className="card-wireframe p-12 text-center">
-          <p className="text-security-navy-600 mb-4">No payroll runs have been created yet. Create a run to calculate wages, compliance checks, and exports.</p>
-          <button onClick={() => setShowForm(true)} className="btn-primary">
-            Create your first payroll run
-          </button>
-        </div>
+      {runs.length > 0 ? (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="section-title">Payroll runs</h2>
+            <p className="text-sm text-neutral-600">{runs.length} run{runs.length === 1 ? "" : "s"}</p>
+          </div>
+          {runs.map((run) => (
+            <PayrollRunCard key={run.id} run={run} token={token!} onAction={refresh} />
+          ))}
+        </section>
+      ) : (
+        <EmptyState
+          title="No payroll runs yet"
+          description="Create a run to calculate wages, run compliance checks, and prepare bank and SARS exports."
+          action={
+            <Button type="button" onClick={() => setShowForm(true)}>
+              Create payroll run
+            </Button>
+          }
+        />
       )}
     </div>
   );
@@ -567,26 +590,23 @@ function PayrollIntelligenceSection({
   const [activeTab, setActiveTab] = useState<"reserve" | "contracts" | "employees">("reserve");
 
   return (
-    <div className="card-wireframe mb-8 overflow-hidden">
-      <div className="border-b border-neutral-200">
-        <div className="flex">
-          {(["reserve", "contracts", "employees"] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setActiveTab(tab)}
-              className={`px-5 py-3 text-sm font-medium transition-colors ${
-                activeTab === tab
-                  ? "border-b-2 border-security-navy text-security-navy bg-security-navy-50"
-                  : "text-security-navy-600 hover:text-security-navy hover:bg-security-navy-50/50"
-              }`}
-            >
-              {tab === "reserve" && "Reserve Summary"}
-              {tab === "contracts" && "Contract Labour Cost"}
-              {tab === "employees" && "Employee Cost Summary"}
-            </button>
-          ))}
-        </div>
+    <div className="card-wireframe overflow-hidden">
+      <div className="flex gap-1 overflow-x-auto border-b border-neutral-200 px-2 pt-2">
+        {INTELLIGENCE_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={clsx(
+              "-mb-px rounded-t-sm px-4 py-2.5 text-sm font-medium transition-colors",
+              activeTab === tab.id
+                ? "border border-neutral-200 border-b-transparent bg-white text-black"
+                : "text-neutral-600 hover:text-black"
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
       <div className="p-5">
         {activeTab === "reserve" && <ReserveSummaryPanel token={token} onRefresh={onRefresh} />}
@@ -625,70 +645,82 @@ function ReserveSummaryPanel({ token, onRefresh }: { token: string; onRefresh: (
 
   if (loading && !data) {
     return (
-      <div className="animate-pulse space-y-4">
-        <div className="h-8 bg-security-navy-100 rounded w-48" />
-        <div className="grid grid-cols-2 gap-4">
+      <div className="space-y-4">
+        <SkeletonBlock className="h-8 w-48" />
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-16 bg-security-navy-100 rounded" />
+            <SkeletonBlock key={i} className="h-16" />
           ))}
         </div>
       </div>
     );
   }
 
-  if (!data) {
+  if (!data || data.periodsUsed === 0) {
     return (
-      <div className="text-center py-8">
-        <p className="text-security-navy-600 mb-4">No reserve data available. Add paid payroll runs to see estimates.</p>
-        <button onClick={fetchReserve} className="btn-secondary">Retry</button>
-      </div>
+      <EmptyState
+        title="No reserve data"
+        description="Calculate a payroll run to see reserve estimates. Figures become more accurate once runs are marked as paid."
+        action={
+          <Button type="button" variant="secondary" onClick={fetchReserve}>
+            Retry
+          </Button>
+        }
+        className="max-w-none border-0 shadow-none"
+      />
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h4 className="font-semibold text-security-navy">Payroll Reserve Summary</h4>
-        <div className="flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-black">Payroll reserve summary</h3>
+        <div className="flex flex-wrap items-center gap-2">
           <input
             type="number"
             placeholder="Available cash (optional)"
             value={availableCash}
             onChange={(e) => setAvailableCash(e.target.value)}
-            className="input-modern text-sm w-40"
+            className="input-compact w-44"
           />
-          <button onClick={handleApplyCash} className="btn-secondary text-sm">Apply</button>
-          <button onClick={fetchReserve} className="btn-ghost text-sm">Refresh</button>
+          <Button type="button" variant="secondary" size="sm" onClick={handleApplyCash}>
+            Apply
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={fetchReserve}>
+            Refresh
+          </Button>
         </div>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-3 rounded-security bg-security-navy-50 border border-neutral-200">
-          <p className="text-xs font-medium text-security-navy-600">Monthly Burden</p>
-          <p className="text-lg font-bold text-security-navy mt-1">{formatCurrency(data.monthlyPayrollBurden)}</p>
+      {data.dataSource === "projected" && (
+        <AlertBanner variant="info">
+          Based on calculated payroll runs (not yet marked as paid). Reserve figures update automatically when runs are paid.
+        </AlertBanner>
+      )}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="rounded-security border border-neutral-200 bg-neutral-50 p-3">
+          <p className="label-text">Monthly burden</p>
+          <p className="mt-1 font-mono text-lg font-bold text-black">{formatCurrency(data.monthlyPayrollBurden)}</p>
         </div>
-        <div className="p-3 rounded-security bg-security-navy-50 border border-neutral-200">
-          <p className="text-xs font-medium text-security-navy-600">1-Month Reserve</p>
-          <p className="text-lg font-bold text-security-navy mt-1">{formatCurrency(data.oneMonthReserve)}</p>
+        <div className="rounded-security border border-neutral-200 bg-neutral-50 p-3">
+          <p className="label-text">1-month reserve</p>
+          <p className="mt-1 font-mono text-lg font-bold text-black">{formatCurrency(data.oneMonthReserve)}</p>
         </div>
-        <div className="p-3 rounded-security bg-security-navy-50 border border-neutral-200">
-          <p className="text-xs font-medium text-security-navy-600">3-Month Reserve</p>
-          <p className="text-lg font-bold text-security-navy mt-1">{formatCurrency(data.threeMonthReserve)}</p>
+        <div className="rounded-security border border-neutral-200 bg-neutral-50 p-3">
+          <p className="label-text">3-month reserve</p>
+          <p className="mt-1 font-mono text-lg font-bold text-black">{formatCurrency(data.threeMonthReserve)}</p>
         </div>
-        <div className="p-3 rounded-security bg-security-navy-50 border border-neutral-200">
-          <p className="text-xs font-medium text-security-navy-600">Statutory Reserve</p>
-          <p className="text-lg font-bold text-security-navy mt-1">{formatCurrency(data.statutoryReserve)}</p>
+        <div className="rounded-security border border-neutral-200 bg-neutral-50 p-3">
+          <p className="label-text">Statutory reserve</p>
+          <p className="mt-1 font-mono text-lg font-bold text-black">{formatCurrency(data.statutoryReserve)}</p>
         </div>
       </div>
       {data.reserveGap != null && (
-        <div className={`p-3 rounded-security border ${data.reserveGap > 0 ? "bg-red-50 border-red-200" : "bg-security-emerald-50 border-security-emerald-200"}`}>
-          <p className="text-sm font-medium">Reserve Gap</p>
-          <p className={`text-lg font-bold mt-1 ${data.reserveGap > 0 ? "text-red-600" : "text-security-emerald-600"}`}>
-            {formatCurrency(data.reserveGap)}
+        <AlertBanner variant={data.reserveGap > 0 ? "error" : "success"}>
+          <p className="font-semibold">Reserve gap: {formatCurrency(data.reserveGap)}</p>
+          <p className="mt-0.5 text-xs">
+            {data.reserveGap > 0 ? "Shortfall — reserve below target" : "Surplus — reserve above 1-month target"}
           </p>
-          <p className="text-xs text-security-navy-600 mt-0.5">
-            {data.reserveGap > 0 ? "Shortfall – reserve below target" : "Surplus – reserve above 1-month target"}
-          </p>
-        </div>
+        </AlertBanner>
       )}
     </div>
   );
@@ -725,7 +757,9 @@ function ContractLabourCostPanel({ token }: { token: string }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-[14rem]">
-          <label className="block text-sm font-medium text-security-navy-600 mb-1">Pay period</label>
+          <label htmlFor="contract-labour-period" className="label-text block mb-1.5">
+            Pay period
+          </label>
           <PayPeriodSelect
             token={token}
             variant="pay"
@@ -738,60 +772,64 @@ function ContractLabourCostPanel({ token }: { token: string }) {
             className="input-modern text-sm w-full"
           />
         </div>
-        <button onClick={handleLoad} disabled={loading || !periodKey} className="btn-primary text-sm disabled:opacity-50">
-          {loading ? "Loading…" : "Load"}
-        </button>
+        <Button type="button" size="sm" onClick={handleLoad} disabled={loading || !periodKey} loading={loading}>
+          Load
+        </Button>
       </div>
 
       {loaded && data && (
         <>
           {data.contracts.length === 0 && data.unallocatedCost === 0 ? (
-            <p className="text-security-navy-600">No contract labour data for this period. Ensure payroll runs exist and employees have shifts at sites.</p>
+            <p className="text-sm text-neutral-600">No contract labour data for this period. Ensure payroll runs exist and employees have shifts at sites.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
+            <>
+              <TableShell title="Contract labour by site">
+                <thead className="bg-neutral-50">
                   <tr>
-                    <th className="text-left py-2 text-security-navy-600 font-medium">Site</th>
-                    <th className="text-right py-2 text-security-navy-600 font-medium">Employees</th>
-                    <th className="text-right py-2 text-security-navy-600 font-medium">Labour Cost</th>
-                    <th className="text-right py-2 text-security-navy-600 font-medium">Overtime</th>
-                    <th className="text-right py-2 text-security-navy-600 font-medium">Revenue</th>
-                    <th className="text-right py-2 text-security-navy-600 font-medium">Labour %</th>
-                    <th className="text-center py-2 text-security-navy-600 font-medium">Health</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-neutral-600">Site</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Employees</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Labour cost</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Overtime</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Revenue</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Labour %</th>
+                    <th className="px-4 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-neutral-600">Health</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-neutral-100">
                   {data.contracts.map((c) => (
-                    <tr key={c.siteId} className="border-t border-security-navy-100">
-                      <td className="py-2.5 font-medium">{c.siteName}</td>
-                      <td className="text-right py-2.5">{c.employeeCount}</td>
-                      <td className="text-right py-2.5">{formatCurrency(c.totalLabourCost)}</td>
-                      <td className="text-right py-2.5">{formatCurrency(c.overtimeCost)}</td>
-                      <td className="text-right py-2.5">{c.revenue != null ? formatCurrency(c.revenue) : "—"}</td>
-                      <td className="text-right py-2.5">
+                    <tr key={c.siteId}>
+                      <td className="px-4 py-2.5 font-medium text-black">{c.siteName}</td>
+                      <td className="px-4 py-2.5 text-right">{c.employeeCount}</td>
+                      <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(c.totalLabourCost)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(c.overtimeCost)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono">{c.revenue != null ? formatCurrency(c.revenue) : "—"}</td>
+                      <td className="px-4 py-2.5 text-right font-mono">
                         {c.labourRatio != null ? `${(c.labourRatio * 100).toFixed(1)}%` : "—"}
                       </td>
-                      <td className="text-center py-2.5">
+                      <td className="px-4 py-2.5 text-center">
                         {c.healthIndicator && (
-                          <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                            c.healthIndicator === "healthy" ? "bg-security-emerald-100 text-security-emerald-700" :
-                            c.healthIndicator === "warning" ? "bg-security-amber-100 text-security-amber-700" :
-                            "bg-red-100 text-red-700"
-                          }`}>
+                          <Badge
+                            variant={
+                              c.healthIndicator === "healthy"
+                                ? "success"
+                                : c.healthIndicator === "warning"
+                                  ? "warning"
+                                  : "error"
+                            }
+                          >
                             {c.healthIndicator}
-                          </span>
+                          </Badge>
                         )}
-                        {c.insufficientData && <span className="text-security-navy-500 text-xs">No revenue</span>}
+                        {c.insufficientData && <span className="text-xs text-neutral-500">No revenue</span>}
                       </td>
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </TableShell>
               {data.unallocatedCost > 0 && (
-                <p className="text-sm text-security-navy-600 mt-3">Unallocated cost: {formatCurrency(data.unallocatedCost)} (e.g. office staff)</p>
+                <p className="text-sm text-neutral-600">Unallocated cost: <span className="font-mono font-medium">{formatCurrency(data.unallocatedCost)}</span> (e.g. office staff)</p>
               )}
-            </div>
+            </>
           )}
         </>
       )}
@@ -825,13 +863,16 @@ function EmployeeCostSummaryPanel({ token, runs }: { token: string; runs: Payrol
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2">
-          <span className="text-sm font-medium text-security-navy-600">Payroll Run</span>
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <label htmlFor="employee-cost-run" className="label-text block mb-1.5">
+            Payroll run
+          </label>
           <select
+            id="employee-cost-run"
             value={selectedRunId}
             onChange={(e) => setSelectedRunId(e.target.value)}
-            className="input-modern text-sm w-64"
+            className="input-modern w-64 text-sm"
           >
             <option value="">Select a run</option>
             {runsWithItems.map((r) => (
@@ -840,51 +881,51 @@ function EmployeeCostSummaryPanel({ token, runs }: { token: string; runs: Payrol
               </option>
             ))}
           </select>
-        </label>
-        <button onClick={handleLoad} disabled={loading || !selectedRunId} className="btn-primary text-sm disabled:opacity-50">
-          {loading ? "Loading…" : "Load"}
-        </button>
+        </div>
+        <Button type="button" size="sm" onClick={handleLoad} disabled={loading || !selectedRunId} loading={loading}>
+          Load
+        </Button>
       </div>
 
       {loaded && data && (
         <>
           {data.employees.length === 0 ? (
-            <p className="text-security-navy-600">No employee cost data for this run.</p>
+            <p className="text-sm text-neutral-600">No employee cost data for this run.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
+            <>
+              <TableShell title="Employee cost summary">
+                <thead className="bg-neutral-50">
                   <tr>
-                    <th className="text-left py-2 text-security-navy-600 font-medium">Employee</th>
-                    <th className="text-right py-2 text-security-navy-600 font-medium">Base Pay</th>
-                    <th className="text-right py-2 text-security-navy-600 font-medium">Overtime</th>
-                    <th className="text-right py-2 text-security-navy-600 font-medium">Allowances</th>
-                    <th className="text-right py-2 text-security-navy-600 font-medium">Deductions</th>
-                    <th className="text-right py-2 text-security-navy-600 font-medium">Gross</th>
-                    <th className="text-right py-2 text-security-navy-600 font-medium">Net</th>
-                    <th className="text-right py-2 text-security-navy-600 font-medium">Total Cost</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-neutral-600">Employee</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Base pay</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Overtime</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Allowances</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Deductions</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Gross</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Net</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Total cost</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-neutral-100">
                   {data.employees.map((c) => (
-                    <tr key={c.employeeId} className="border-t border-security-navy-100">
-                      <td className="py-2.5">
-                        <span className="font-medium">{c.employeeName ?? "—"}</span>
-                        {c.employeeNumber && <span className="text-xs text-security-navy-500 ml-1">({c.employeeNumber})</span>}
+                    <tr key={c.employeeId}>
+                      <td className="px-4 py-2.5">
+                        <span className="font-medium text-black">{c.employeeName ?? "—"}</span>
+                        {c.employeeNumber && <span className="ml-1 font-mono text-xs text-neutral-500">({c.employeeNumber})</span>}
                       </td>
-                      <td className="text-right py-2.5">{formatCurrency(c.basePay)}</td>
-                      <td className="text-right py-2.5">{formatCurrency(c.overtimePay)}</td>
-                      <td className="text-right py-2.5">{formatCurrency(c.allowances)}</td>
-                      <td className="text-right py-2.5">{formatCurrency(c.deductions)}</td>
-                      <td className="text-right py-2.5">{formatCurrency(c.grossPay)}</td>
-                      <td className="text-right py-2.5">{formatCurrency(c.netPay)}</td>
-                      <td className="text-right py-2.5 font-semibold">{formatCurrency(c.totalEmployerCost)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(c.basePay)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(c.overtimePay)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(c.allowances)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(c.deductions)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(c.grossPay)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(c.netPay)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono font-semibold">{formatCurrency(c.totalEmployerCost)}</td>
                     </tr>
                   ))}
                 </tbody>
-              </table>
-              <p className="text-xs text-security-navy-500 mt-3">Total Cost includes gross pay + employer UIF + SDL</p>
-            </div>
+              </TableShell>
+              <p className="text-xs text-neutral-500">Total cost includes gross pay + employer UIF + SDL</p>
+            </>
           )}
         </>
       )}
@@ -912,10 +953,12 @@ function PayrollRunForm({ token, onSuccess }: { token: string; onSuccess: () => 
   };
 
   return (
-    <form onSubmit={handleSubmit} className="card-wireframe mb-8 p-6">
-      <h3 className="font-semibold text-security-navy mb-4">New Payroll Run</h3>
+    <form onSubmit={handleSubmit} className="card-wireframe p-6">
+      <h3 className="section-title mb-4">New payroll run</h3>
       <div className="max-w-md space-y-2">
-        <label className="label-text block">Pay period</label>
+        <label htmlFor="new-payroll-period" className="label-text block">
+          Pay period
+        </label>
         <PayPeriodSelect
           token={token}
           variant="pay"
@@ -928,22 +971,146 @@ function PayrollRunForm({ token, onSuccess }: { token: string; onSuccess: () => 
           }}
         />
         {periodLabel && (
-          <p className="text-xs text-security-navy-600">
+          <p className="text-xs text-neutral-600">
             {periodLabel}: {periodStart} – {periodEnd}
           </p>
         )}
       </div>
-      <button type="submit" className="mt-4 btn-primary" disabled={!periodKey}>
-        Create
-      </button>
+      <Button type="submit" className="mt-4" disabled={!periodKey}>
+        Create run
+      </Button>
     </form>
   );
 }
 
 interface PayrollItem {
   id: string;
-  employee: { firstName: string; lastName: string };
+  employee: {
+    firstName: string;
+    lastName: string;
+    group: { id: string; name: string; sortOrder: number } | null;
+  };
   netPay: string;
+}
+
+interface PayrollItemGroup {
+  key: string;
+  name: string;
+  sortOrder: number;
+  items: PayrollItem[];
+  totalNetPay: number;
+}
+
+function parsePayAmount(value: string | number): number {
+  const amount = typeof value === "number" ? value : parseFloat(value);
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function groupPayrollItemsByTeam(items: PayrollItem[]): PayrollItemGroup[] {
+  const groups = new Map<string, PayrollItemGroup>();
+
+  for (const item of items) {
+    const group = item.employee.group;
+    const key = group?.id ?? "ungrouped";
+    const existing = groups.get(key);
+    if (existing) {
+      existing.items.push(item);
+      existing.totalNetPay += parsePayAmount(item.netPay);
+      continue;
+    }
+    groups.set(key, {
+      key,
+      name: group?.name ?? "Unassigned",
+      sortOrder: group?.sortOrder ?? 9999,
+      items: [item],
+      totalNetPay: parsePayAmount(item.netPay),
+    });
+  }
+
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      items: [...group.items].sort((a, b) =>
+        a.employee.lastName.localeCompare(b.employee.lastName, undefined, { sensitivity: "base" })
+      ),
+    }))
+    .sort(
+      (a, b) =>
+        a.sortOrder - b.sortOrder ||
+        a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+    );
+}
+
+interface PayrollValidationIssue {
+  ruleId: string;
+  ruleName: string;
+  severity: "critical" | "warning";
+  message: string;
+  employeeName?: string;
+  suggestedAction: string;
+}
+
+interface PayrollValidationResponse {
+  canApprove: boolean;
+  canExportBank: boolean;
+  criticalCount: number;
+  warningCount: number;
+  issues: PayrollValidationIssue[];
+  bankExport: {
+    valid: boolean;
+    totalNetPay: number;
+    exportTotal: number;
+    excludedEmployees: Array<{ employeeName: string; missingFields: string[]; netPay: number }>;
+  };
+  statutoryReconciliation: {
+    matched: boolean;
+    mismatches: string[];
+    emp201Preview?: { period: string; payeLiability: number; uifLiability: number; sdlLiability: number; matchesRun: boolean };
+  };
+}
+
+interface SkippedEmployee {
+  name: string;
+  employeeNumber: string | null;
+  skipReason: string;
+}
+
+interface CalculationSnapshotResponse {
+  snapshot: {
+    inputs: { employeesSkipped: number };
+    employees: Array<{
+      context: {
+        firstName: string;
+        lastName: string;
+        employeeNumber: string | null;
+      };
+      output: {
+        skipped?: boolean;
+        skipReason?: string;
+      };
+    }>;
+  };
+}
+
+function fnbCsvSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40) || "group";
+}
+
+function skipReasonLabel(reason: string): string {
+  switch (reason) {
+    case "missing_monthly_salary":
+      return "Set monthly salary on employee profile";
+    case "no_timesheet_hours":
+      return "Capture guard attendance or set monthly salary";
+    case "missing_pay_rate":
+      return "Set pay grade or hourly rate";
+    default:
+      return reason.replace(/_/g, " ");
+  }
 }
 
 function PayrollRunCard({
@@ -958,10 +1125,29 @@ function PayrollRunCard({
   const [items, setItems] = useState<PayrollItem[]>([]);
   const [showItems, setShowItems] = useState(false);
   const [summary, setSummary] = useState<RunSummary | null>(null);
+  const [skippedEmployees, setSkippedEmployees] = useState<SkippedEmployee[]>([]);
+  const [skippedExpanded, setSkippedExpanded] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [previewingId, setPreviewingId] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [downloadingFnb, setDownloadingFnb] = useState(false);
+  const [downloadingFnbGroup, setDownloadingFnbGroup] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [validation, setValidation] = useState<PayrollValidationResponse | null>(null);
+  const [showRevertModal, setShowRevertModal] = useState(false);
+  const [revertReason, setRevertReason] = useState("");
+  const { confirm, confirmDialog } = useConfirmDialog();
+
+  const fetchValidation = () => {
+    if (run.status === "draft") {
+      setValidation(null);
+      return;
+    }
+    authFetch(`/payroll/runs/${run.id}/validation`, token)
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setValidation)
+      .catch(() => setValidation(null));
+  };
 
   const fetchItems = () => {
     authFetch(`/payroll/runs/${run.id}/items`, token)
@@ -976,21 +1162,120 @@ function PayrollRunCard({
       .catch(() => setSummary(null));
   };
 
+  const fetchCalculationSnapshot = () => {
+    authFetch(`/payroll/runs/${run.id}/calculation-snapshot`, token)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: CalculationSnapshotResponse | null) => {
+        if (!data?.snapshot) {
+          setSkippedEmployees([]);
+          return;
+        }
+        const skipped = data.snapshot.employees
+          .filter((e) => e.output.skipped)
+          .map((e) => ({
+            name: `${e.context.firstName} ${e.context.lastName}`,
+            employeeNumber: e.context.employeeNumber,
+            skipReason: e.output.skipReason ?? "unknown",
+          }));
+        setSkippedEmployees(skipped);
+      })
+      .catch(() => setSkippedEmployees([]));
+  };
+
+  const loadRunDetails = () => {
+    fetchItems();
+    fetchSummary();
+    fetchCalculationSnapshot();
+    fetchValidation();
+  };
+
   const handleCalculate = async () => {
     setActionLoading(true);
+    setActionError(null);
     try {
-      await authFetch(`/payroll/runs/${run.id}/calculate`, token, { method: "POST" });
+      const res = await authFetch(`/payroll/runs/${run.id}/calculate`, token, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof err.message === "string" ? err.message : "Payroll calculation failed"
+        );
+      }
+      setShowItems(true);
+      loadRunDetails();
       onAction();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Payroll calculation failed");
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleApprove = async () => {
+    if (validation && validation.criticalCount > 0) {
+      setActionError(
+        `Cannot approve: ${validation.criticalCount} critical validation issue(s) must be resolved first.`
+      );
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: "Approve payroll run?",
+      message: "This locks the run for payment. Verify bank details and IRP5 data are complete.",
+      confirmLabel: "Approve",
+      danger: false,
+    });
+    if (!confirmed) return;
+
     setActionLoading(true);
+    setActionError(null);
     try {
-      await authFetch(`/payroll/runs/${run.id}/approve`, token, { method: "POST" });
+      const res = await authFetch(`/payroll/runs/${run.id}/approve`, token, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const validationMsg =
+          err.validation?.issues?.length > 0
+            ? err.validation.issues
+                .filter((i: PayrollValidationIssue) => i.severity === "critical")
+                .map((i: PayrollValidationIssue) => i.message)
+                .join(" ")
+            : null;
+        throw new Error(
+          validationMsg ??
+            (typeof err.message === "string" ? err.message : "Failed to approve payroll run")
+        );
+      }
       onAction();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to approve payroll run");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRevertToDraft = async () => {
+    if (revertReason.trim().length < 5) {
+      setActionError("Please provide a revert reason (at least 5 characters).");
+      return;
+    }
+
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const res = await authFetch(`/payroll/runs/${run.id}/revert-to-draft`, token, {
+        method: "POST",
+        body: JSON.stringify({ reason: revertReason.trim() }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof err.message === "string" ? err.message : "Failed to revert payroll run"
+        );
+      }
+      setShowRevertModal(false);
+      setRevertReason("");
+      onAction();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to revert payroll run");
     } finally {
       setActionLoading(false);
     }
@@ -998,12 +1283,33 @@ function PayrollRunCard({
 
   const handleMarkPaid = async () => {
     setActionLoading(true);
+    setActionError(null);
     try {
-      await authFetch(`/payroll/runs/${run.id}/mark-paid`, token, { method: "POST" });
+      const res = await authFetch(`/payroll/runs/${run.id}/mark-paid`, token, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof err.message === "string" ? err.message : "Failed to mark payroll as paid"
+        );
+      }
       onAction();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to mark payroll as paid");
     } finally {
       setActionLoading(false);
     }
+  };
+
+  const toggleGroup = (groupKey: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+      return next;
+    });
   };
 
   const handlePreviewPayslip = async (item: PayrollItem) => {
@@ -1023,55 +1329,72 @@ function PayrollRunCard({
     }
   };
 
-  const handleDownloadFnbCsv = async () => {
-    setDownloadingFnb(true);
+  const handleDownloadFnbCsv = async (groupKey: string, groupName: string) => {
+    setDownloadingFnbGroup(groupKey);
     try {
-      const res = await authFetch(`/payroll/runs/${run.id}/export/fnb`, token);
-      if (!res.ok) throw new Error("Failed to download FNB CSV");
+      const groupParam =
+        groupKey === "ungrouped"
+          ? "groupId=ungrouped"
+          : `groupId=${encodeURIComponent(groupKey)}`;
+      const res = await authFetch(`/payroll/runs/${run.id}/export/fnb?${groupParam}`, token);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const detail =
+          err.validation?.excludedEmployees?.length > 0
+            ? err.validation.excludedEmployees
+                .map(
+                  (e: { employeeName: string; missingFields: string[] }) =>
+                    `${e.employeeName}: missing ${e.missingFields.join(", ")}`
+                )
+                .join("; ")
+            : typeof err.message === "string"
+              ? err.message
+              : null;
+        throw new Error(detail ?? "Failed to download FNB CSV");
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `payroll-fnb-${format(new Date(run.periodStart), "yyyy-MM")}.csv`;
+      a.download = `payroll-fnb-${format(new Date(run.periodStart), "yyyy-MM")}-${fnbCsvSlug(groupName)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to download FNB CSV");
     } finally {
-      setDownloadingFnb(false);
+      setDownloadingFnbGroup(null);
     }
   };
 
   const canExportFnb = ["calculated", "approved", "paid"].includes(run.status);
-  const status = statusConfig[run.status] ?? { label: run.status, className: "bg-security-navy-100 text-security-navy-600" };
+  const status = statusConfig[run.status] ?? { label: run.status, variant: "neutral" as const };
 
   const toggleExpand = () => {
     if (!showItems) {
-      fetchItems();
-      if (["calculated", "approved", "paid"].includes(run.status)) fetchSummary();
+      loadRunDetails();
     }
     setShowItems(!showItems);
   };
 
   return (
-    <div className="card-wireframe p-5 hover:shadow-security-card-hover transition-shadow">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+    <div className="card-dashboard p-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div>
-            <span className="font-semibold text-security-navy">
+            <span className="font-semibold text-black">
               {format(new Date(run.periodStart), "d MMM yyyy")} – {format(new Date(run.periodEnd), "d MMM yyyy")}
             </span>
-            <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium border ${status.className}`}>
+            <Badge variant={status.variant} className="ml-2">
               {status.label}
-            </span>
+            </Badge>
           </div>
           {summary && (
-            <div className="flex flex-wrap gap-4 text-sm text-security-navy-600">
-              <span>Gross: {formatCurrency(summary.totalGrossPay)}</span>
-              <span>Net: {formatCurrency(summary.totalNetPay)}</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-neutral-600">
+              <span>Gross: <span className="font-mono font-medium text-black">{formatCurrency(summary.totalGrossPay)}</span></span>
+              <span>Net: <span className="font-mono font-medium text-black">{formatCurrency(summary.totalNetPay)}</span></span>
               <span>{summary.employeeCount} employees</span>
               {summary.complianceIssueCount > 0 && (
-                <span className={summary.criticalComplianceCount > 0 ? "text-red-600 font-medium" : "text-security-amber-600"}>
+                <span className={summary.criticalComplianceCount > 0 ? "font-medium text-red-600" : "font-medium text-security-amber-600"}>
                   {summary.complianceIssueCount} compliance issues
                 </span>
               )}
@@ -1080,79 +1403,281 @@ function PayrollRunCard({
         </div>
         <div className="flex flex-wrap gap-2">
           {run.status === "draft" && (
-            <button onClick={handleCalculate} disabled={actionLoading} className="btn-primary text-sm disabled:opacity-50">
-              {actionLoading ? "Calculating…" : "Calculate"}
-            </button>
+            <Button type="button" size="sm" onClick={handleCalculate} loading={actionLoading}>
+              Calculate
+            </Button>
           )}
           {run.status === "calculated" && (
-            <button onClick={handleApprove} disabled={actionLoading} className="btn-primary text-sm disabled:opacity-50">
-              {actionLoading ? "Approving…" : "Approve"}
-            </button>
+            <>
+              <Button type="button" size="sm" onClick={handleApprove} loading={actionLoading}>
+                Approve
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setActionError(null);
+                  setShowRevertModal(true);
+                }}
+                disabled={actionLoading}
+              >
+                Revert to draft
+              </Button>
+            </>
           )}
           {run.status === "approved" && (
-            <button onClick={handleMarkPaid} disabled={actionLoading} className="btn-primary text-sm disabled:opacity-50">
-              {actionLoading ? "Processing…" : "Mark Paid"}
-            </button>
+            <>
+              <Button type="button" size="sm" onClick={handleMarkPaid} loading={actionLoading}>
+                Mark paid
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setActionError(null);
+                  setShowRevertModal(true);
+                }}
+                disabled={actionLoading}
+              >
+                Revert to draft
+              </Button>
+            </>
           )}
-          <button onClick={toggleExpand} className="btn-secondary text-sm">
-            {showItems ? "Hide" : "View"} Items
-          </button>
-          {canExportFnb && (
-            <button onClick={handleDownloadFnbCsv} disabled={downloadingFnb} className="btn-secondary text-sm disabled:opacity-50">
-              {downloadingFnb ? "Downloading…" : "FNB CSV"}
-            </button>
-          )}
+          <Button type="button" variant="secondary" size="sm" onClick={toggleExpand}>
+            {showItems ? "Hide items" : "View items"}
+          </Button>
         </div>
       </div>
 
+      {actionError && !showItems && (
+        <AlertBanner variant="error" className="mt-4">
+          {actionError}
+        </AlertBanner>
+      )}
+
       {showItems && (
-        <div className="mt-5 pt-5 border-t border-neutral-200">
-          {previewError && (
-            <p className="text-red-600 text-sm mb-3">{previewError}</p>
+        <div className="mt-5 border-t border-neutral-200 pt-5">
+          {actionError && (
+            <AlertBanner variant="error" className="mb-4">
+              {actionError}
+            </AlertBanner>
           )}
-          {canExportFnb && items.length > 0 && (
-            <div className="mb-4 flex items-center gap-2">
-              <button onClick={handleDownloadFnbCsv} disabled={downloadingFnb} className="btn-primary text-sm disabled:opacity-50">
-                {downloadingFnb ? "Downloading…" : "Download FNB CSV for Bulk Payment"}
+          {skippedEmployees.length > 0 && (
+            <AlertBanner variant="warning" className="mb-4">
+              <button
+                type="button"
+                onClick={() => setSkippedExpanded((open) => !open)}
+                className="flex w-full items-center justify-between gap-3 text-left font-semibold"
+                aria-expanded={skippedExpanded}
+                aria-controls={`skipped-employees-${run.id}`}
+              >
+                <span>
+                  {skippedEmployees.length} team member{skippedEmployees.length === 1 ? "" : "s"} excluded from this run
+                </span>
+                <svg
+                  className={clsx("h-4 w-4 shrink-0 transition-transform", skippedExpanded && "rotate-180")}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
               </button>
-              <span className="text-xs text-security-navy-500">Upload to FNB Online Banking for bulk salary payments</span>
-            </div>
+              {!skippedExpanded && (
+                <p className="mt-1 text-xs text-security-amber-800/80">
+                  Expand to see who was excluded and how to fix it.
+                </p>
+              )}
+              {skippedExpanded && (
+                <div id={`skipped-employees-${run.id}`}>
+                  <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto text-sm">
+                    {skippedEmployees.map((emp) => (
+                      <li key={`${emp.employeeNumber ?? emp.name}-${emp.skipReason}`}>
+                        <span className="font-medium">{emp.name}</span>
+                        {emp.employeeNumber ? ` (${emp.employeeNumber})` : ""}
+                        {": "}
+                        {skipReasonLabel(emp.skipReason)}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-sm">
+                    Update employee profiles on the{" "}
+                    <Link href="/employees" className="font-medium underline underline-offset-2">
+                      Employees
+                    </Link>{" "}
+                    page, then recalculate.
+                  </p>
+                </div>
+              )}
+            </AlertBanner>
+          )}
+          {validation && validation.criticalCount > 0 && (
+            <AlertBanner variant="error" className="mb-4">
+              <p className="font-semibold">
+                {validation.criticalCount} critical issue(s) block approval and bank export
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                {validation.issues
+                  .filter((issue) => issue.severity === "critical")
+                  .slice(0, 8)
+                  .map((issue) => (
+                    <li key={`${issue.ruleId}-${issue.message}`}>{issue.message}</li>
+                  ))}
+              </ul>
+            </AlertBanner>
+          )}
+          {validation?.statutoryReconciliation?.emp201Preview && (
+            <AlertBanner variant="info" className="mb-4">
+              EMP201 preview ({validation.statutoryReconciliation.emp201Preview.period}): PAYE{" "}
+              {formatCurrency(validation.statutoryReconciliation.emp201Preview.payeLiability)}, UIF{" "}
+              {formatCurrency(validation.statutoryReconciliation.emp201Preview.uifLiability)}, SDL{" "}
+              {formatCurrency(validation.statutoryReconciliation.emp201Preview.sdlLiability)}
+              {validation.statutoryReconciliation.matched ? " — reconciled" : " — mismatch detected"}
+            </AlertBanner>
+          )}
+          {previewError && (
+            <AlertBanner variant="error" className="mb-3">
+              {previewError}
+            </AlertBanner>
           )}
           {items.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr>
-                    <th className="text-left py-2 text-security-navy-600 font-medium">Team Member</th>
-                    <th className="text-right py-2 text-security-navy-600 font-medium">Net Pay</th>
-                    <th className="text-right py-2 w-32 text-security-navy-600 font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => (
-                    <tr key={item.id} className="border-t border-security-navy-100">
-                      <td className="py-2.5">{item.employee.firstName} {item.employee.lastName}</td>
-                      <td className="text-right py-2.5 font-medium">{item.netPay}</td>
-                      <td className="text-right py-2.5">
+            <TableShell title="Payroll run items">
+              <thead className="bg-neutral-50">
+                <tr>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-neutral-600">Team member</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Net pay</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {groupPayrollItemsByTeam(items).map((group) => {
+                  const isCollapsed = collapsedGroups.has(group.key);
+                  return (
+                  <Fragment key={group.key}>
+                    <tr className="bg-neutral-50/80">
+                      <td className="px-4 py-2.5">
                         <button
                           type="button"
-                          onClick={() => handlePreviewPayslip(item)}
-                          disabled={previewingId === item.id}
-                          className="btn-secondary text-xs py-1.5 px-2 disabled:opacity-50"
+                          onClick={() => toggleGroup(group.key)}
+                          className="flex w-full items-center gap-2 text-left"
+                          aria-expanded={!isCollapsed}
                         >
-                          {previewingId === item.id ? "Opening…" : "Preview Payslip"}
+                          <svg
+                            className={clsx(
+                              "h-4 w-4 shrink-0 text-security-navy transition-transform",
+                              !isCollapsed && "rotate-180"
+                            )}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                          <span className="text-sm font-semibold text-security-navy">{group.name}</span>
+                          <span className="text-xs font-normal text-neutral-500">
+                            {group.items.length} member{group.items.length === 1 ? "" : "s"}
+                          </span>
                         </button>
                       </td>
+                      <td className="px-4 py-2.5 text-right font-mono text-sm font-semibold text-neutral-700">
+                        {formatCurrency(group.totalNetPay)}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        {canExportFnb && (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleDownloadFnbCsv(group.key, group.name)}
+                            loading={downloadingFnbGroup === group.key}
+                          >
+                            FNB CSV
+                          </Button>
+                        )}
+                      </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                    {!isCollapsed &&
+                      group.items.map((item) => (
+                      <tr key={item.id}>
+                        <td className="px-4 py-2.5 pl-8 text-black">
+                          {item.employee.firstName} {item.employee.lastName}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono font-medium">
+                          {formatCurrency(parsePayAmount(item.netPay))}
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handlePreviewPayslip(item)}
+                            loading={previewingId === item.id}
+                          >
+                            Preview payslip
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                  );
+                })}
+              </tbody>
+            </TableShell>
           ) : (
-            <p className="text-security-navy-500 text-sm">No items yet. Run Calculate.</p>
+            <p className="text-sm text-neutral-500">No items yet. Run calculate to generate payroll lines.</p>
           )}
         </div>
       )}
+
+      {showRevertModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-security-lg bg-white p-5 shadow-security-card">
+            <h3 className="text-lg font-semibold text-black">Revert to draft</h3>
+            <p className="mt-2 text-sm text-neutral-600">
+              This clears calculated payroll items so you can fix inputs and recalculate. Paid runs cannot be reverted.
+            </p>
+            <label className="mt-4 block text-sm font-medium text-neutral-700" htmlFor={`revert-reason-${run.id}`}>
+              Reason for revert
+            </label>
+            <textarea
+              id={`revert-reason-${run.id}`}
+              className="mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+              rows={3}
+              value={revertReason}
+              onChange={(e) => setRevertReason(e.target.value)}
+              placeholder="e.g. Correcting leave records for two guards"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setShowRevertModal(false);
+                  setRevertReason("");
+                }}
+                disabled={actionLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleRevertToDraft}
+                loading={actionLoading}
+              >
+                Revert to draft
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmDialog}
     </div>
   );
 }

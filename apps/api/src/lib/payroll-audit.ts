@@ -6,6 +6,7 @@ export const PAYROLL_AUDIT = {
   CALCULATION: "payroll.calculation",
   APPROVAL: "payroll.approval",
   LOCK: "payroll.lock",
+  REVERT_TO_DRAFT: "payroll.revert_to_draft",
   MARK_PAID: "payroll_run.mark_paid",
   CREATE: "payroll_run.create",
 } as const;
@@ -68,5 +69,27 @@ export async function auditPayrollLock(params: {
     entityType: "payroll_run",
     entityId: params.payrollRunId,
     metadata: { lockedAt: params.lockedAt },
+  });
+}
+
+export async function auditPayrollRevertToDraft(params: {
+  userId?: string;
+  companyId: string;
+  payrollRunId: string;
+  previousStatus: string;
+  reason: string;
+}) {
+  await createAuditLog({
+    userId: params.userId,
+    companyId: params.companyId,
+    action: PAYROLL_AUDIT.REVERT_TO_DRAFT,
+    entityType: "payroll_run",
+    entityId: params.payrollRunId,
+    metadata: {
+      previousStatus: params.previousStatus,
+      newStatus: "draft",
+      reason: params.reason,
+      revertedAt: new Date().toISOString(),
+    },
   });
 }
