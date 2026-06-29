@@ -60,6 +60,12 @@ model Company {
   tasks                 Task[]
   whatsappMessages      WhatsAppMessage[]
 
+  siteRosterPatterns          SiteRosterPattern[]
+  siteRosterManualOverrides   SiteRosterManualOverride[]
+  siteRosterGeneratedShifts   SiteRosterGeneratedShift[]
+  siteTimesheets              SiteTimesheet[]
+  siteTimesheetRows           SiteTimesheetRow[]
+
   academyBranches         AcademyBranch[]
   academyStudents         Student[]
   academyStudentDocuments StudentDocument[]
@@ -213,7 +219,12 @@ model Employee {
   shifts                      Shift[]
   payrollItems                PayrollItem[]
   siteAssignments             SiteAssignment[]
-  postAssignments             PostAssignment[]
+  guardSiteEligibilities      GuardSiteEligibility[]
+  siteRosterPatternCells      SiteRosterPatternCell[]
+  siteRosterManualOverrides   SiteRosterManualOverride[]
+  siteRosterGeneratedShifts   SiteRosterGeneratedShift[]
+  plannedSiteTimesheetRows    SiteTimesheetRow[]        @relation("PlannedTimesheetGuard")
+  actualSiteTimesheetRows     SiteTimesheetRow[]        @relation("ActualTimesheetGuard")
   timesheets                  Timesheet[]
   leaveRecords                LeaveRecord[]
   leaveRequests               LeaveRequest[]
@@ -268,6 +279,14 @@ model Site {
   rosterNightShiftGuardsRequired Int @default(1)
   /// Extra lines on the shift roster sheet / PDF (operational notes).
   rosterSheetNotes           String?  @db.Text
+  rosterDayShiftGenderMode     String?
+  rosterNightShiftGenderMode   String?
+  rosterDayShiftCustomMales    Int?
+  rosterDayShiftCustomFemales  Int?
+  rosterNightShiftCustomMales  Int?
+  rosterNightShiftCustomFemales Int?
+  dayShiftEnabled              Boolean  @default(true)
+  nightShiftEnabled            Boolean  @default(true)
   /// Automatic roster generation from payroll calendar.
   autoRosterEnabled            Boolean   @default(false)
   autoRosterMinCoveragePercent Int       @default(100)
@@ -277,9 +296,17 @@ model Site {
   updatedAt                  DateTime @updatedAt
 
   company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  posts          Post[]           @relation("SitePosts")
-  assignedGuards SiteAssignment[]
+  posts                    SitePost[]
+  assignedGuards           SiteAssignment[]
+  guardSiteEligibilities   GuardSiteEligibility[]
+  coverageRequirements     CoverageRequirement[]
   rosterAutomationRuns RosterAutomationRun[]
+  shifts         Shift[]
+  siteRosterPatterns SiteRosterPattern[]
+  siteRosterManualOverrides SiteRosterManualOverride[]
+  siteRosterGeneratedShifts SiteRosterGeneratedShift[]
+  siteTimesheets SiteTimesheet[]
+  siteTimesheetRows SiteTimesheetRow[]
 
   @@index([companyId])
 }
@@ -309,10 +336,15 @@ model RosterAutomationRun {
 }
 
 model SiteAssignment {
-  id         String   @id @default(cuid())
-  siteId     String
-  employeeId String
-  assignedAt DateTime @default(now())
+  id             String                   @id @default(cuid())
+  siteId         String
+  employeeId     String
+  assignedAt     DateTime                 @default(now())
+  assignmentType SiteGuardAssignmentType  @default(PERMANENT)
+  priority       Int                      @default(0)
+  effectiveFrom  DateTime?
+  effectiveTo    DateTime?
+  isActive       Boolean                  @default(true)
 
   site     Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
@@ -322,58 +354,92 @@ model SiteAssignment {
   @@index([employeeId])
 }
 
-model Post {
+enum SiteGuardAssignmentType {
+  PERMANENT
+  RELIEVER
+  TEMPORARY
+}
+
+model SitePost {
   id        String   @id @default(cuid())
   siteId    String
   name      String
-  shiftType String? // "day" (6-18) | "night" (18-6)
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  site           Site             @relation("SitePosts", fields: [siteId], references: [id], onDelete: Cascade)
-  shifts         Shift[]
-  assignedGuards PostAssignment[]
+  site                 Site                   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  guardEligibilities   GuardSiteEligibility[]
+  coverageRequirements CoverageRequirement[]
+  siteRosterPatternCells SiteRosterPatternCell[]
+  siteRosterGeneratedShifts SiteRosterGeneratedShift[]
 
   @@index([siteId])
+  @@map("SitePost")
 }
 
-model PostAssignment {
+model GuardSiteEligibility {
   id         String   @id @default(cuid())
-  postId     String
+  siteId     String
   employeeId String
-  assignedAt DateTime @default(now())
+  sitePostId String
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
 
-  post     Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  site     Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  sitePost SitePost @relation(fields: [sitePostId], references: [id], onDelete: Cascade)
 
-  @@unique([postId, employeeId])
-  @@index([postId])
+  @@unique([siteId, employeeId, sitePostId])
+  @@index([siteId])
+  @@index([sitePostId])
   @@index([employeeId])
 }
 
+model CoverageRequirement {
+  id             String   @id @default(cuid())
+  siteId         String
+  sitePostId     String
+  shiftTypeCode  String
+  guardsRequired Int      @default(1)
+  genderRule     String   @default("any")
+  isEnabled      Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  site     Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  sitePost SitePost @relation(fields: [sitePostId], references: [id], onDelete: Cascade)
+
+  @@index([siteId])
+  @@index([sitePostId])
+}
+
 model Shift {
-  id         String      @id @default(cuid())
-  companyId  String
-  employeeId String
-  postId     String
-  startTime  DateTime
-  endTime    DateTime
-  status     ShiftStatus
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  id             String      @id @default(cuid())
+  companyId      String
+  employeeId     String
+  siteId         String
+  shiftType      String? // day | night
+  legacyPostName String?
+  startTime      DateTime
+  endTime        DateTime
+  status         ShiftStatus
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
 
   company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   employee    Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  post        Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  site        Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
   attendances Attendance[]
 
   @@index([companyId])
   @@index([companyId, startTime])
   @@index([companyId, employeeId, startTime])
-  @@index([companyId, postId, startTime])
+  @@index([companyId, siteId, startTime])
   @@index([companyId, status, startTime])
   @@index([employeeId])
-  @@index([postId])
+  @@index([siteId])
   @@index([startTime])
   @@index([status])
 }
@@ -666,6 +732,96 @@ model Timesheet {
   @@index([companyId])
   @@index([employeeId])
   @@index([payrollRunId])
+}
+
+model SiteTimesheet {
+  id              String              @id @default(cuid())
+  companyId       String
+  siteId          String
+  periodStart     DateTime            @db.Date
+  periodEnd       DateTime            @db.Date
+  status          SiteTimesheetStatus  @default(draft)
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  approvedBy      String?
+  approvedAt      DateTime?
+  unlockedBy      String?
+  unlockedAt      DateTime?
+  unlockReason    String?
+  approvalNotes   String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site    Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  rows    SiteTimesheetRow[]
+
+  @@unique([companyId, siteId, periodStart, periodEnd])
+  @@index([companyId, status])
+  @@index([siteId, periodStart, periodEnd])
+}
+
+model SiteTimesheetRow {
+  id                    String                  @id @default(cuid())
+  companyId             String
+  siteTimesheetId       String
+  siteId                String
+  workDate              DateTime                @db.Date
+  plannedGuardId        String?
+  actualGuardId         String?
+  plannedShiftCode      String?
+  plannedShiftType      String?
+  actualShiftCode       String?
+  actualShiftType       String?
+  clockIn               DateTime?
+  clockOut              DateTime?
+  hoursWorked           Decimal?                @db.Decimal(10, 2)
+  overtimeHours         Decimal?                @db.Decimal(10, 2)
+  attendanceStatus      SiteTimesheetAttendance @default(pending)
+  approvalStatus        SiteTimesheetRowStatus  @default(pending)
+  comments              String?
+  discrepancyCodes      Json?
+  sourceShiftId         String?
+  sourceAttendanceId    String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  siteTimesheet SiteTimesheet @relation(fields: [siteTimesheetId], references: [id], onDelete: Cascade)
+  site          Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  plannedGuard  Employee?     @relation("PlannedTimesheetGuard", fields: [plannedGuardId], references: [id], onDelete: SetNull)
+  actualGuard   Employee?     @relation("ActualTimesheetGuard", fields: [actualGuardId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, workDate])
+  @@index([companyId, actualGuardId, workDate])
+  @@index([siteTimesheetId, workDate])
+  @@index([siteId, workDate])
+}
+
+enum SiteTimesheetStatus {
+  draft
+  approved
+  locked
+}
+
+enum SiteTimesheetAttendance {
+  pending
+  present
+  absent
+  late
+  left_early
+  reliever
+  shift_swapped
+  leave
+  sick_leave
+  training
+  off
+}
+
+enum SiteTimesheetRowStatus {
+  pending
+  reviewed
+  approved
 }
 
 model LeaveRecord {
@@ -1622,4 +1778,123 @@ model AcademyRenewalAlert {
   @@index([companyId])
   @@index([dueDate])
   @@index([severity])
+}
+
+enum SiteRosterPatternStatus {
+  draft
+  active
+  archived
+}
+
+enum SiteRosterShiftCode {
+  D
+  N
+  O
+  L
+  SL
+  TR
+  SB
+  AWOL
+  R
+  blank
+}
+
+enum SiteRosterShiftType {
+  day
+  night
+  off
+  leave
+  sick_leave
+  training
+  standby
+  awol
+  replaced
+  unassigned
+}
+
+model SiteRosterPattern {
+  id              String                  @id @default(cuid())
+  companyId       String
+  siteId          String
+  name            String
+  anchorDate      DateTime                @db.Date
+  cycleLengthDays Int
+  effectiveFrom   DateTime                @db.Date
+  effectiveTo     DateTime?               @db.Date
+  status          SiteRosterPatternStatus @default(draft)
+  createdBy       String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site    Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  cells   SiteRosterPatternCell[]
+
+  @@index([companyId, siteId, status])
+  @@index([siteId, effectiveFrom])
+}
+
+model SiteRosterPatternCell {
+  id              String              @id @default(cuid())
+  rosterPatternId String
+  guardId         String
+  patternDayIndex Int
+  shiftCode       SiteRosterShiftCode @default(blank)
+  shiftType       SiteRosterShiftType @default(unassigned)
+  sitePostId      String?
+  isLocked        Boolean             @default(false)
+  notes           String?
+
+  pattern SiteRosterPattern @relation(fields: [rosterPatternId], references: [id], onDelete: Cascade)
+  guard   Employee          @relation(fields: [guardId], references: [id], onDelete: Cascade)
+  sitePost SitePost?        @relation(fields: [sitePostId], references: [id], onDelete: SetNull)
+
+  @@unique([rosterPatternId, guardId, patternDayIndex])
+  @@index([rosterPatternId])
+  @@index([guardId])
+}
+
+model SiteRosterManualOverride {
+  id                    String              @id @default(cuid())
+  companyId             String
+  siteId                String
+  guardId               String
+  rosterDate            DateTime            @db.Date
+  originalShiftCode     SiteRosterShiftCode?
+  overrideShiftCode     SiteRosterShiftCode
+  overrideShiftType     SiteRosterShiftType
+  reason                String?
+  doesChangeBasePattern Boolean             @default(false)
+  createdBy             String?
+  createdAt             DateTime            @default(now())
+
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site    Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  guard   Employee @relation(fields: [guardId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, guardId, rosterDate])
+  @@index([companyId, siteId, rosterDate])
+}
+
+model SiteRosterGeneratedShift {
+  id              String                   @id @default(cuid())
+  companyId       String
+  siteId          String
+  guardId         String
+  rosterDate      DateTime                 @db.Date
+  shiftCode       SiteRosterShiftCode
+  shiftType       SiteRosterShiftType
+  source          String                   @default("pattern")
+  rosterPatternId String?
+  sitePostId      String?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site    Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  guard   Employee @relation(fields: [guardId], references: [id], onDelete: Cascade)
+  sitePost SitePost? @relation(fields: [sitePostId], references: [id], onDelete: SetNull)
+
+  @@unique([siteId, guardId, rosterDate])
+  @@index([companyId, siteId, rosterDate])
 }

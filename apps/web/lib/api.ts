@@ -330,7 +330,7 @@ export const FACTORY_RESET_MODULES = [
   { id: "employees", label: "Team", description: "Clear all team members, assignments, leave records, and deductions" },
   { id: "sites", label: "Sites", description: "Clear sites, posts, and site/post assignments" },
   { id: "shifts", label: "Shifts", description: "Clear shifts and attendance records" },
-  { id: "attendance", label: "Attendance", description: "Clear clock-in/out records only (shifts remain). Optionally for one person." },
+  { id: "attendance", label: "Attendance", description: "Clear attendance records only (shifts remain). Optionally for one person." },
   { id: "payroll", label: "Payroll", description: "Clear payroll runs, items, and payslips" },
   { id: "timesheets", label: "Timesheets", description: "Clear all timesheet records" },
   { id: "payRules", label: "Pay Rules", description: "Reset to defaults: overtime, sunday, public holiday rates; UIF, PSIRA" },

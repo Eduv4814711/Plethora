@@ -91,11 +91,19 @@ async function provisionCompany(label: "A" | "B", runId: string): Promise<Tenant
     },
   });
 
-  const post = await prisma.post.create({
+  const post = await prisma.sitePost.create({
     data: {
       siteId: site.id,
       name: "Day Post",
-      shiftType: "day",
+    },
+  });
+  await prisma.coverageRequirement.create({
+    data: {
+      siteId: site.id,
+      sitePostId: post.id,
+      shiftTypeCode: "day",
+      guardsRequired: 1,
+      genderRule: "any",
     },
   });
 
@@ -106,7 +114,9 @@ async function provisionCompany(label: "A" | "B", runId: string): Promise<Tenant
     data: {
       companyId: company.id,
       employeeId: employee.id,
-      postId: post.id,
+      siteId: post.siteId,
+      shiftType: "day",
+      legacyPostName: post.name,
       startTime: shiftStart,
       endTime: shiftEnd,
       status: "assigned",

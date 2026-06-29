@@ -158,6 +158,7 @@ export async function payrollRoutes(app: FastifyInstance) {
         return reply.code(400).send({
           error: "Calculation failed",
           message: err.message,
+          details: err.details,
         });
       }
       throw err;

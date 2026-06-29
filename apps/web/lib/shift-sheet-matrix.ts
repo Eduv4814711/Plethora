@@ -1,12 +1,14 @@
 import { format, parseISO } from "date-fns";
 
+export type ShiftSheetCellCode = "D" | "N" | "O" | "L" | "SL" | "TR" | "SB" | "AWOL" | "R" | "";
+
 export type ShiftSheetRow = {
   employeeId: string;
   firstName: string;
   lastName: string;
   gender: string | null | undefined;
   phone: string | null | undefined;
-  cells: ("D" | "N" | "O")[];
+  cells: ShiftSheetCellCode[];
 };
 
 /** Minimal shift shape for building the staff × day matrix (API + roster page). */
@@ -19,7 +21,8 @@ export type MatrixShift = {
     gender?: string | null;
     phone?: string | null;
   };
-  post: { shiftType: string | null; site: { id: string } };
+  site: { id: string; name: string };
+  shiftType?: string | null;
 };
 
 export type MatrixEmployee = {
@@ -29,7 +32,7 @@ export type MatrixEmployee = {
 };
 
 export function shiftCellLetter(s: MatrixShift): "D" | "N" {
-  const t = s.post.shiftType;
+  const t = s.shiftType;
   if (t === "night") return "N";
   if (t === "day") return "D";
   const h = parseISO(s.startTime).getHours();
@@ -68,7 +71,7 @@ export function buildShiftSheetRows({
   employees: MatrixEmployee[];
 }): ShiftSheetRow[] {
   if (!siteId) return [];
-  const sheetShifts = shifts.filter((s) => s.post.site.id === siteId);
+  const sheetShifts = shifts.filter((s) => s.site.id === siteId);
 
   const employeeById = new Map<string, MatrixEmployee>();
   for (const e of employees) employeeById.set(e.id, e);

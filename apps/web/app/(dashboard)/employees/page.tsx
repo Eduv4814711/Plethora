@@ -37,6 +37,7 @@ interface Employee {
   group?: { id: string; name: string } | null;
   currentSite: string | null;
   currentPost: string | null;
+  assignedSites?: string[];
   employeeType?: string | null;
   dateOfBirth?: string | null;
   gender?: string | null;
@@ -507,11 +508,30 @@ function EmployeeTeamCard({
                     : "—"}
             </p>
           )}
+          {(emp.employeeType ?? "security") === "security" && (
+            <p>
+              SITE: {emp.assignedSites && emp.assignedSites.length > 0 ? emp.assignedSites.join(", ") : "Not assigned"}
+            </p>
+          )}
           {!emp.idNumber && !emp.psiraNumber && !emp.phone && !emp.grade && emp.hourlyRate == null && emp.monthlySalary == null && (
             <p className="text-black/70">No details</p>
           )}
         </div>
       </div>
+
+      {(emp.employeeType ?? "security") === "security" &&
+        (!emp.assignedSites || emp.assignedSites.length === 0) &&
+        ["active", "training", "hired", "reliever"].includes(emp.status) && (
+          <div
+            className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[10px] border-2 border-neutral-200 bg-neutral-50 px-3 py-2 text-xs"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="uppercase tracking-wider text-black">Next step: assign this guard to a site</span>
+            <Link href="/sites" className="font-bold uppercase tracking-wider text-black underline">
+              Go to Sites
+            </Link>
+          </div>
+        )}
 
       {expandedId === emp.id && (
         <div className="mt-4 pt-4 border-t-2 border-neutral-200 space-y-3 text-sm">

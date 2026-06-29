@@ -20,6 +20,7 @@ import { companiesRoutes } from "./routes/companies.js";
 import { employeesRoutes } from "./routes/employees.js";
 import { sitesRoutes } from "./routes/sites.js";
 import { rosteringRoutes } from "./modules/rostering/rostering.routes.js";
+import { rostersRoutes } from "./modules/rosters/rosters.routes.js";
 import { attendanceRoutes } from "./routes/attendance.js";
 import { payrollRoutes } from "./routes/payroll.js";
 import { payrollIntelligenceRoutes } from "./routes/payroll-intelligence.js";
@@ -168,6 +169,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(employeesRoutes, { prefix: "/employees" });
   await app.register(sitesRoutes, { prefix: "/sites" });
   await app.register(rosteringRoutes, { prefix: "/shifts" });
+  await app.register(rostersRoutes, { prefix: "/rosters" });
   await app.register(attendanceRoutes, { prefix: "/attendance" });
   await app.register(payrollRoutes, { prefix: "/payroll" });
   await app.register(payrollIntelligenceRoutes, { prefix: "/payroll" });

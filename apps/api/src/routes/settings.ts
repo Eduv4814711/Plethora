@@ -323,7 +323,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 
     try {
     await prisma.$transaction(async (tx) => {
-      const posts = await tx.post.findMany({
+      const posts = await tx.sitePost.findMany({
         where: { site: { companyId } },
         select: { id: true },
       });
@@ -375,16 +375,17 @@ export async function settingsRoutes(app: FastifyInstance) {
         }
       }
 
-      // Sites: PostAssignment, SiteAssignment, Shift, Post, Site
+      // Sites: GuardSiteEligibility, SiteAssignment, Shift, SitePost, Site
       if (has("sites")) {
         if (postIds.length > 0) {
-          await tx.postAssignment.deleteMany({ where: { postId: { in: postIds } } });
-          await tx.shift.deleteMany({ where: { postId: { in: postIds } } });
+          await tx.guardSiteEligibility.deleteMany({ where: { sitePostId: { in: postIds } } });
+          await tx.coverageRequirement.deleteMany({ where: { sitePostId: { in: postIds } } });
+          await tx.shift.deleteMany({ where: { siteId: { in: siteIds } } });
         }
         if (siteIds.length > 0) {
           await tx.siteAssignment.deleteMany({ where: { siteId: { in: siteIds } } });
         }
-        await tx.post.deleteMany({ where: { site: { companyId } } });
+        await tx.sitePost.deleteMany({ where: { site: { companyId } } });
         await tx.site.deleteMany({ where: { companyId } });
       }
 
@@ -398,10 +399,10 @@ export async function settingsRoutes(app: FastifyInstance) {
         await tx.timesheet.deleteMany({ where: { companyId } });
       }
 
-      // Employees: PostAssignment, SiteAssignment, LeaveRecord, EmployeeDeduction, Shift, PayrollItem, Timesheet, Employee
+      // Employees: GuardSiteEligibility, SiteAssignment, LeaveRecord, EmployeeDeduction, Shift, PayrollItem, Timesheet, Employee
       if (has("employees")) {
         if (postIds.length > 0) {
-          await tx.postAssignment.deleteMany({ where: { postId: { in: postIds } } });
+          await tx.guardSiteEligibility.deleteMany({ where: { sitePostId: { in: postIds } } });
         }
         if (siteIds.length > 0) {
           await tx.siteAssignment.deleteMany({ where: { siteId: { in: siteIds } } });

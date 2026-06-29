@@ -29,10 +29,23 @@ export async function transitionEmployeeStatus(
     };
   }
 
-  const updated = await prisma.employee.updateMany({
-    where: { id: employeeId, companyId },
-    data: { status: newStatus },
+  const deactivatesAssignments = newStatus === "suspended" || newStatus === "offboarded";
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const result = await tx.employee.updateMany({
+      where: { id: employeeId, companyId },
+      data: { status: newStatus },
+    });
+    if (result.count > 0 && deactivatesAssignments) {
+      // A guard who is no longer active must not stay in any site's rosterable pool.
+      await tx.siteAssignment.updateMany({
+        where: { employeeId, isActive: true },
+        data: { isActive: false },
+      });
+    }
+    return result;
   });
+
   if (updated.count === 0) {
     return { success: false, error: "Employee not found" };
   }

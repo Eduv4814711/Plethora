@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { canManageSitesModule } from "@/lib/permissions";
+import { buildSiteRosterReadinessHints } from "@/lib/roster-readiness-hints";
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
   guarding: "Guarding",
@@ -52,6 +53,7 @@ interface AssignedGuard {
     lastName: string;
     status: string;
     phone: string | null;
+    gender?: string | null;
   };
 }
 
@@ -67,6 +69,10 @@ interface Site {
   latitude?: number | string | null;
   longitude?: number | string | null;
   geofenceRadiusMeters?: number | null;
+  rosterDayShiftGuardsRequired?: number;
+  rosterNightShiftGuardsRequired?: number;
+  rosterDayShiftGender?: string | null;
+  rosterNightShiftGender?: string | null;
   posts: Post[];
   assignedGuards: AssignedGuard[];
 }
@@ -237,6 +243,17 @@ function SiteCard({
   const address = site.physicalAddress || site.location;
   const [expanded, setExpanded] = useState(false);
 
+  const dayRequired = site.rosterDayShiftGuardsRequired ?? 1;
+  const nightRequired = site.rosterNightShiftGuardsRequired ?? 1;
+  const rosterableCount = site.assignedGuards.filter((a) =>
+    ["active", "training", "hired", "reliever"].includes(a.employee.status)
+  ).length;
+  const minRequired = Math.max(dayRequired, nightRequired);
+  const hints = buildSiteRosterReadinessHints(site);
+  const hasError = hints.some((h) => h.level === "error");
+  const hasWarning = hints.some((h) => h.level === "warning");
+  const coverageReady = !hasError && rosterableCount > 0;
+
   return (
     <div
       onClick={() => setExpanded((v) => !v)}
@@ -256,11 +273,26 @@ function SiteCard({
               <h3 className="font-semibold text-neutral-900 dark:text-neutral-100 truncate">
                 {site.name}
               </h3>
-              {site.serviceType && (
-                <span className="inline-block mt-0.5 px-2.5 py-0.5 rounded-lg text-xs font-medium bg-neutral-100 dark:bg-neutral-900/40 text-neutral-700 dark:text-neutral-300">
-                  {SERVICE_TYPE_LABELS[site.serviceType] || site.serviceType}
+              <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                {site.serviceType && (
+                  <span className="inline-block px-2.5 py-0.5 rounded-lg text-xs font-medium bg-neutral-100 dark:bg-neutral-900/40 text-neutral-700 dark:text-neutral-300">
+                    {SERVICE_TYPE_LABELS[site.serviceType] || site.serviceType}
+                  </span>
+                )}
+                <span
+                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-medium ${
+                    hasError
+                      ? "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+                      : hasWarning
+                        ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                        : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                  }`}
+                  title={`Day requires ${dayRequired}, night requires ${nightRequired}`}
+                >
+                  {rosterableCount}/{minRequired} guards
+                  {hasError ? " · short" : hasWarning ? " · check" : " · ready"}
                 </span>
-              )}
+              </div>
             </div>
           </div>
 
@@ -326,7 +358,40 @@ function SiteCard({
         )}
       </div>
       {expanded && (
-        <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700" onClick={(e) => e.stopPropagation()}>
+        <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700 space-y-3" onClick={(e) => e.stopPropagation()}>
+          {hints.filter((h) => h.level !== "ok").length > 0 && (
+            <ul className="space-y-1">
+              {hints
+                .filter((h) => h.level !== "ok")
+                .map((h) => (
+                  <li
+                    key={h.code + h.message}
+                    className={`text-xs ${h.level === "error" ? "text-red-600 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}`}
+                  >
+                    {h.level === "error" ? "✕ " : "! "}
+                    {h.message}
+                  </li>
+                ))}
+            </ul>
+          )}
+
+          {coverageReady ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
+              <span>Guards assigned. Next step: build the roster for this site.</span>
+              <button
+                type="button"
+                onClick={() => router.push(`/rostering?siteId=${site.id}`)}
+                className="btn-primary"
+              >
+                Create roster
+              </button>
+            </div>
+          ) : (
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              Assign enough active guards to this site before building a roster.
+            </p>
+          )}
+
           <button
             type="button"
             onClick={() => router.push(`/sites/${site.id}`)}

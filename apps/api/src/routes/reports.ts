@@ -97,12 +97,8 @@ export async function reportsRoutes(app: FastifyInstance) {
           hoursWorked: true,
           shift: {
             select: {
-              post: {
-                select: {
-                  site: {
-                    select: { name: true },
-                  },
-                },
+              site: {
+                select: { name: true },
               },
             },
           },
@@ -166,7 +162,7 @@ export async function reportsRoutes(app: FastifyInstance) {
 
     const siteHours = new Map<string, number>();
     for (const a of hoursBySite) {
-      const siteName = a.shift?.post?.site?.name ?? "Unknown";
+      const siteName = a.shift?.site?.name ?? "Unknown";
       const hrs = Number(a.hoursWorked ?? 0);
       siteHours.set(siteName, (siteHours.get(siteName) ?? 0) + hrs);
     }

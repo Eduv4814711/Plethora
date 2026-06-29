@@ -5,7 +5,7 @@ vi.mock("../../lib/prisma.js", () => ({
     site: { findFirst: vi.fn() },
     shift: { findMany: vi.fn(), count: vi.fn(), deleteMany: vi.fn(), createMany: vi.fn() },
     employee: { findMany: vi.fn() },
-    post: { findMany: vi.fn() },
+    sitePost: { findMany: vi.fn() },
     siteAssignment: { findMany: vi.fn() },
     company: { findUnique: vi.fn() },
     $transaction: vi.fn(),
@@ -58,6 +58,21 @@ function makeGuards(count: number) {
   }));
 }
 
+function makePost(
+  id: string,
+  name: string,
+  shiftType: "day" | "night",
+  eligibleEmployeeIds: string[] = []
+) {
+  return {
+    id,
+    name,
+    siteId,
+    guardEligibilities: eligibleEmployeeIds.map((employeeId) => ({ employeeId })),
+    coverageRequirements: [{ shiftTypeCode: shiftType, isEnabled: true }],
+  };
+}
+
 function mockSite(overrides: Record<string, unknown> = {}) {
   return {
     id: siteId,
@@ -65,10 +80,7 @@ function mockSite(overrides: Record<string, unknown> = {}) {
     name: "Test Site",
     rosterDayShiftGender: null,
     rosterNightShiftGender: null,
-    posts: [
-      { id: "post-day", name: "Day 1", shiftType: "day", siteId, assignedGuards: [] },
-      { id: "post-night", name: "Night 1", shiftType: "night", siteId, assignedGuards: [] },
-    ],
+    posts: [makePost("post-day", "Day 1", "day"), makePost("post-night", "Night 1", "night")],
     assignedGuards: [
       {
         employee: {
@@ -231,9 +243,9 @@ describe("generateRosterPlan", () => {
       mockSite({
         rosterDayShiftGuardsRequired: 2,
         posts: [
-          { id: "post-day-a", name: "Day A", shiftType: "day", siteId, assignedGuards: [] },
-          { id: "post-day-b", name: "Day B", shiftType: "day", siteId, assignedGuards: [] },
-          { id: "post-night", name: "Night", shiftType: "night", siteId, assignedGuards: [] },
+          makePost("post-day-a", "Day A", "day"),
+          makePost("post-day-b", "Day B", "day"),
+          makePost("post-night", "Night", "night"),
         ],
         assignedGuards: makeGuards(6),
       }) as never
@@ -256,27 +268,9 @@ describe("generateRosterPlan", () => {
     vi.mocked(prisma.site.findFirst).mockResolvedValue(
       mockSite({
         posts: [
-          {
-            id: "post-day-a",
-            name: "Day A",
-            shiftType: "day",
-            siteId,
-            assignedGuards: [{ employeeId: "g1" }],
-          },
-          {
-            id: "post-day-b",
-            name: "Day B",
-            shiftType: "day",
-            siteId,
-            assignedGuards: [],
-          },
-          {
-            id: "post-night",
-            name: "Night",
-            shiftType: "night",
-            siteId,
-            assignedGuards: [{ employeeId: "g1" }],
-          },
+          makePost("post-day-a", "Day A", "day", ["g1"]),
+          makePost("post-day-b", "Day B", "day"),
+          makePost("post-night", "Night", "night", ["g1"]),
         ],
         assignedGuards: [
           {
@@ -382,7 +376,7 @@ describe("generateRosterPlan", () => {
   it("returns empty plan when site has no night post", async () => {
     vi.mocked(prisma.site.findFirst).mockResolvedValue(
       mockSite({
-        posts: [{ id: "post-day", name: "Day 1", shiftType: "day", siteId, assignedGuards: [] }],
+        posts: [makePost("post-day", "Day 1", "day")],
       }) as never
     );
 
@@ -401,7 +395,7 @@ describe("generateRosterPlan", () => {
     vi.mocked(prisma.site.findFirst).mockResolvedValue(
       mockSite({
         rosterNightShiftGuardsRequired: 0,
-        posts: [{ id: "post-day", name: "Day 1", shiftType: "day", siteId, assignedGuards: [] }],
+        posts: [makePost("post-day", "Day 1", "day")],
         assignedGuards: makeGuards(3),
       }) as never
     );
@@ -501,9 +495,9 @@ describe("generateRosterPlan", () => {
         rosterDayShiftGuardsRequired: 1,
         rosterNightShiftGuardsRequired: 2,
         posts: [
-          { id: "post-day", name: "Day 1", shiftType: "day", siteId, assignedGuards: [] },
-          { id: "post-night-1", name: "Night 1", shiftType: "night", siteId, assignedGuards: [] },
-          { id: "post-night-2", name: "Night 2", shiftType: "night", siteId, assignedGuards: [] },
+          makePost("post-day", "Day 1", "day"),
+          makePost("post-night-1", "Night 1", "night"),
+          makePost("post-night-2", "Night 2", "night"),
         ],
         assignedGuards: makeGuards(5),
       }) as never
@@ -845,7 +839,7 @@ describe("applyRosterPlan", () => {
   beforeEach(() => {
     vi.mocked(prisma.site.findFirst).mockReset();
     vi.mocked(prisma.employee.findMany).mockReset();
-    vi.mocked(prisma.post.findMany).mockReset();
+    vi.mocked(prisma.sitePost.findMany).mockReset();
     vi.mocked(prisma.siteAssignment.findMany).mockReset();
     vi.mocked(prisma.shift.findMany).mockReset();
     vi.mocked(prisma.$transaction).mockReset();
@@ -860,11 +854,12 @@ describe("applyRosterPlan", () => {
       { id: "g1", status: "active", gender: "M" },
     ] as never);
 
-    vi.mocked(prisma.post.findMany).mockResolvedValue([
+    vi.mocked(prisma.sitePost.findMany).mockResolvedValue([
       {
         id: "post-day",
+        name: "Day 1",
         siteId,
-        shiftType: "day",
+        coverageRequirements: [{ shiftTypeCode: "day", isEnabled: true }],
         site: { companyId, rosterDayShiftGender: null, rosterNightShiftGender: null },
       },
     ] as never);

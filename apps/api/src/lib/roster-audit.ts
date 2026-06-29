@@ -63,14 +63,16 @@ export async function auditManualShiftEdit(params: {
   shiftId: string;
   before: {
     employeeId: string;
-    postId: string;
+    siteId: string;
+    shiftType: string | null;
     startTime: string;
     endTime: string;
     status: string;
   };
   after: {
     employeeId: string;
-    postId: string;
+    siteId: string;
+    shiftType: string | null;
     startTime: string;
     endTime: string;
   };

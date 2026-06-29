@@ -26,18 +26,18 @@ export async function validateClockIn(
     throw new AttendanceValidationError("Shift not found");
   }
 
-  if (shift.status !== "assigned" && shift.status !== "active") {
+  if (shift.status !== "assigned" && shift.status !== "active" && shift.status !== "created") {
     throw new AttendanceValidationError(
-      `Shift must be assigned or active to clock in. Current status: ${shift.status}`
+      `Shift must be created, assigned, or active to clock in. Current status: ${shift.status}`
     );
   }
 
   const existing = await prisma.attendance.findFirst({
-    where: { shiftId, clockIn: { not: null }, clockOut: null },
+    where: { shiftId, clockIn: { not: null } },
   });
 
   if (existing) {
-    throw new AttendanceValidationError("Already clocked in for this shift");
+    throw new AttendanceValidationError("Attendance has already been recorded for this shift");
   }
 
   const now = new Date();

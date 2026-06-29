@@ -87,12 +87,39 @@ export async function aggregateTimesheets(
     holidayDates.add(dateKeyInTimeZone(new Date(h.date), timeZone));
   }
 
+  const approvedSiteRows = await prisma.siteTimesheetRow.findMany({
+    where: {
+      companyId,
+      workDate: { gte: periodStart, lte: periodEnd },
+      actualGuardId: { not: null },
+      siteTimesheet: { status: { in: ["approved", "locked"] } },
+      attendanceStatus: {
+        in: ["present", "late", "left_early", "reliever", "shift_swapped", "leave", "sick_leave", "training"],
+      },
+    },
+  });
+
+  // Per-site aggregation: a site contributes hours either through its approved/locked
+  // site timesheet rows OR through raw shift attendance — never both. This avoids the
+  // legacy all-or-nothing switch where one approved site disabled raw attendance for all.
+  const approvedTimesheets = await prisma.siteTimesheet.findMany({
+    where: {
+      companyId,
+      status: { in: ["approved", "locked"] },
+      periodStart: { lte: periodEnd },
+      periodEnd: { gte: periodStart },
+    },
+    select: { siteId: true },
+  });
+  const approvedSiteIds = [...new Set(approvedTimesheets.map((t) => t.siteId))];
+
   const shiftsWithAttendance = await prisma.shift.findMany({
     where: {
       companyId,
       status: { in: ["completed", "verified"] },
       startTime: { lt: periodEnd },
       endTime: { gt: periodStart },
+      ...(approvedSiteIds.length > 0 ? { siteId: { notIn: approvedSiteIds } } : {}),
       attendances: {
         some: {
           clockIn: { not: null },
@@ -124,6 +151,33 @@ export async function aggregateTimesheets(
     string,
     { basicHours: number; overtimeHours: number; sundayHours: number; publicHolidayHours: number }
   >();
+
+  for (const row of approvedSiteRows) {
+    const empId = row.actualGuardId;
+    if (!empId) continue;
+    if (!totals.has(empId)) {
+      totals.set(empId, {
+        basicHours: 0,
+        overtimeHours: 0,
+        sundayHours: 0,
+        publicHolidayHours: 0,
+      });
+    }
+    const t = totals.get(empId)!;
+    const hoursWorked = row.hoursWorked != null ? Number(row.hoursWorked) : row.attendanceStatus === "leave" || row.attendanceStatus === "sick_leave" || row.attendanceStatus === "training" ? 8 : 0;
+    const overtimeHours = row.overtimeHours != null ? Number(row.overtimeHours) : 0;
+    const bucket = classifyShiftHours({
+      shiftStartTime: row.clockIn ?? row.workDate,
+      hoursWorked,
+      overtimeHours,
+      timeZone,
+      holidayDates,
+    });
+    t.basicHours += bucket.basicHours;
+    t.overtimeHours += bucket.overtimeHours;
+    t.sundayHours += bucket.sundayHours;
+    t.publicHolidayHours += bucket.publicHolidayHours;
+  }
 
   for (const shift of shiftsWithAttendance) {
     const empId = shift.employeeId;

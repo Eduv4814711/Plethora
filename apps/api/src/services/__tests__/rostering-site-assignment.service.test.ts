@@ -4,7 +4,7 @@ vi.mock("../../lib/prisma.js", () => ({
   prisma: {
     company: { findUnique: vi.fn() },
     employee: { findFirst: vi.fn() },
-    post: { findFirst: vi.fn() },
+    sitePost: { findFirst: vi.fn() },
     siteAssignment: { findFirst: vi.fn() },
     shift: { findFirst: vi.fn(), findMany: vi.fn() },
   },
@@ -27,7 +27,7 @@ describe("validateShiftAssignment site assignment", () => {
   beforeEach(() => {
     vi.mocked(prisma.company.findUnique).mockReset();
     vi.mocked(prisma.employee.findFirst).mockReset();
-    vi.mocked(prisma.post.findFirst).mockReset();
+    vi.mocked(prisma.sitePost.findFirst).mockReset();
     vi.mocked(prisma.siteAssignment.findFirst).mockReset();
     vi.mocked(prisma.shift.findFirst).mockReset();
     vi.mocked(prisma.shift.findMany).mockReset();
@@ -43,10 +43,10 @@ describe("validateShiftAssignment site assignment", () => {
       gender: "M",
     } as never);
 
-    vi.mocked(prisma.post.findFirst).mockResolvedValue({
+    vi.mocked(prisma.sitePost.findFirst).mockResolvedValue({
       id: postId,
       siteId,
-      shiftType: "day",
+      coverageRequirements: [{ shiftTypeCode: "day", isEnabled: true }],
       site: {
         id: siteId,
         companyId,
@@ -83,7 +83,7 @@ describe("validateShiftAssignment site assignment", () => {
     ).rejects.toThrow(/not assigned to this site/i);
   });
 
-  it("passes when SiteAssignment exists", async () => {
+  it("passes when an active SiteAssignment exists", async () => {
     vi.mocked(prisma.siteAssignment.findFirst).mockResolvedValue({
       id: "sa-1",
       siteId,
@@ -100,6 +100,12 @@ describe("validateShiftAssignment site assignment", () => {
         allowRosterable: true,
       })
     ).resolves.toBeUndefined();
+
+    // Only active site assignments make a guard rosterable for the site.
+    const where = vi.mocked(prisma.siteAssignment.findFirst).mock.calls[0][0] as {
+      where: { isActive?: boolean };
+    };
+    expect(where.where.isActive).toBe(true);
   });
 
   it("skips SiteAssignment check when allowUnassigned is true", async () => {

@@ -205,9 +205,15 @@ export async function employeesRoutes(app: FastifyInstance) {
               status: { in: ["assigned", "created"] },
             },
             select: {
-              post: { select: { name: true, site: { select: { name: true } } } },
+              site: { select: { name: true } },
+              shiftType: true,
+              legacyPostName: true,
             },
             take: 1,
+          },
+          siteAssignments: {
+            where: { isActive: true },
+            select: { site: { select: { id: true, name: true } } },
           },
         },
         take: limit,
@@ -220,9 +226,11 @@ export async function employeesRoutes(app: FastifyInstance) {
     const data = employees.map((e) => {
       const row = {
         ...e,
-        currentSite: e.shifts?.[0]?.post?.site?.name ?? null,
-        currentPost: e.shifts?.[0]?.post?.name ?? null,
+        currentSite: e.shifts?.[0]?.site?.name ?? null,
+        currentPost: e.shifts?.[0]?.legacyPostName ?? null,
+        assignedSites: e.siteAssignments?.map((a) => a.site.name) ?? [],
         shifts: undefined,
+        siteAssignments: undefined,
       };
       return sanitizeEmployeeForList(row, user);
     });

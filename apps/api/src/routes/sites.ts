@@ -6,6 +6,7 @@ import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 import { runAutoRosterForSite } from "../services/auto-roster.service.js";
+import { mapSiteForApi, siteDetailInclude } from "../lib/site-post-api.js";
 
 const SERVICE_TYPES = [
   "guarding",
@@ -17,6 +18,9 @@ const SERVICE_TYPES = [
   "monitoring",
   "other",
 ] as const;
+
+/** Statuses a guard must have to be assignable to a site / rosterable. Mirrors the roster engine. */
+const ROSTERABLE_STATUSES = ["active", "training", "hired", "reliever"] as const;
 
 function refineSiteGeofenceThreeOrNone(data: {
   latitude?: number | null;
@@ -165,51 +169,17 @@ export async function sitesRoutes(app: FastifyInstance) {
     const limit = Math.min(Number(q.limit) || 50, 100);
     const offset = Number(q.offset) || 0;
 
-    const [sites, total] = await Promise.all([
+    const [sitesRaw, total] = await Promise.all([
       prisma.site.findMany({
         where: { companyId: user.companyId },
-        include: {
-          posts: {
-            include: {
-              assignedGuards: {
-                include: {
-                  employee: {
-                    select: {
-                      id: true,
-                      firstName: true,
-                      lastName: true,
-                      status: true,
-                      phone: true,
-                      gender: true,
-                      employeeType: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-          assignedGuards: {
-            include: {
-              employee: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  status: true,
-                  phone: true,
-                  gender: true,
-                  employeeType: true,
-                },
-              },
-            },
-          },
-        },
+        include: siteDetailInclude,
         take: limit,
         skip: offset,
         orderBy: { name: "asc" },
       }),
       prisma.site.count({ where: { companyId: user.companyId } }),
     ]);
+    const sites = sitesRaw.map(mapSiteForApi);
 
     return reply.send({ data: sites, total, limit, offset });
   });
@@ -266,6 +236,7 @@ export async function sitesRoutes(app: FastifyInstance) {
           id: { in: d.assignedGuardIds },
           companyId,
           employeeType: "security",
+          status: { in: [...ROSTERABLE_STATUSES] },
         },
       });
       await prisma.siteAssignment.createMany({
@@ -274,45 +245,11 @@ export async function sitesRoutes(app: FastifyInstance) {
       });
     }
 
-    const siteWithAssigned = await prisma.site.findUnique({
+    const siteWithAssignedRaw = await prisma.site.findUnique({
       where: { id: site.id },
-      include: {
-        posts: {
-          include: {
-            assignedGuards: {
-              include: {
-                employee: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  status: true,
-                  phone: true,
-                  gender: true,
-                  employeeType: true,
-                },
-                },
-              },
-            },
-          },
-        },
-        assignedGuards: {
-          include: {
-            employee: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  status: true,
-                  phone: true,
-                  gender: true,
-                  employeeType: true,
-                },
-            },
-          },
-        },
-      },
+      include: siteDetailInclude,
     });
+    const siteWithAssigned = siteWithAssignedRaw ? mapSiteForApi(siteWithAssignedRaw) : null;
 
     await createAuditLog({
       userId: request.user!.sub,
@@ -340,51 +277,16 @@ export async function sitesRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const user = request.user!;
 
-    const site = await prisma.site.findFirst({
+    const siteRaw = await prisma.site.findFirst({
       where: { id, companyId: user.companyId },
-      include: {
-        posts: {
-          include: {
-            assignedGuards: {
-              include: {
-                employee: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  status: true,
-                  phone: true,
-                  gender: true,
-                  employeeType: true,
-                },
-                },
-              },
-            },
-          },
-        },
-        assignedGuards: {
-          include: {
-            employee: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  status: true,
-                  phone: true,
-                  gender: true,
-                  employeeType: true,
-                },
-            },
-          },
-        },
-      },
+      include: siteDetailInclude,
     });
 
-    if (!site) {
+    if (!siteRaw) {
       return reply.code(404).send({ error: "Site not found" });
     }
 
-    return reply.send(site);
+    return reply.send(mapSiteForApi(siteRaw));
   });
 
   app.put("/:id", { preHandler: manageSites }, async (request, reply) => {
@@ -485,6 +387,7 @@ export async function sitesRoutes(app: FastifyInstance) {
             id: { in: assignedGuardIds },
             companyId,
             employeeType: "security",
+            status: { in: [...ROSTERABLE_STATUSES] },
           },
         });
         await prisma.siteAssignment.createMany({
@@ -494,45 +397,11 @@ export async function sitesRoutes(app: FastifyInstance) {
       }
     }
 
-    const siteWithAssigned = await prisma.site.findFirst({
+    const siteWithAssignedRaw = await prisma.site.findFirst({
       where: { id, companyId },
-      include: {
-        posts: {
-          include: {
-            assignedGuards: {
-              include: {
-                employee: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  status: true,
-                  phone: true,
-                  gender: true,
-                  employeeType: true,
-                },
-                },
-              },
-            },
-          },
-        },
-        assignedGuards: {
-          include: {
-            employee: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  status: true,
-                  phone: true,
-                  gender: true,
-                  employeeType: true,
-                },
-            },
-          },
-        },
-      },
+      include: siteDetailInclude,
     });
+    const siteWithAssigned = siteWithAssignedRaw ? mapSiteForApi(siteWithAssignedRaw) : null;
 
     if (!siteWithAssigned) {
       return reply.code(404).send({ error: "Site not found" });
@@ -578,7 +447,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     }
 
     const shiftCount = await prisma.shift.count({
-      where: { post: { siteId: id } },
+      where: { siteId: id },
     });
 
     if (shiftCount > 0) {
@@ -616,12 +485,38 @@ export async function sitesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Site not found" });
     }
 
-    const posts = await prisma.post.findMany({
+    const posts = await prisma.sitePost.findMany({
       where: { siteId },
-      orderBy: { name: "asc" },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      include: {
+        guardEligibilities: {
+          include: {
+            employee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                status: true,
+                phone: true,
+              },
+            },
+          },
+        },
+        coverageRequirements: { where: { isEnabled: true } },
+      },
     });
 
-    return reply.send({ data: posts });
+    return reply.send({
+      data: posts.map((p) => ({
+        id: p.id,
+        name: p.name,
+        shiftType: p.coverageRequirements.find((c) => c.shiftTypeCode === "day")
+          ? "day"
+          : p.coverageRequirements.find((c) => c.shiftTypeCode === "night")
+            ? "night"
+            : null,
+      })),
+    });
   });
 
   app.post("/:siteId/posts", { preHandler: protect }, async (request, reply) => {
@@ -643,11 +538,20 @@ export async function sitesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Site not found" });
     }
 
-    const post = await prisma.post.create({
+    const shiftType = parsed.data.shiftType ?? "day";
+    const post = await prisma.sitePost.create({
       data: {
         siteId,
         name: parsed.data.name,
-        shiftType: parsed.data.shiftType ?? "day",
+      },
+    });
+    await prisma.coverageRequirement.create({
+      data: {
+        siteId,
+        sitePostId: post.id,
+        shiftTypeCode: shiftType,
+        guardsRequired: 1,
+        genderRule: "any",
       },
     });
 
@@ -659,7 +563,11 @@ export async function sitesRoutes(app: FastifyInstance) {
       entityId: post.id,
     });
 
-    return reply.code(201).send(post);
+    return reply.code(201).send({
+      id: post.id,
+      name: post.name,
+      shiftType,
+    });
   });
 
   app.put("/:siteId/posts/:postId", { preHandler: protect }, async (request, reply) => {
@@ -681,23 +589,48 @@ export async function sitesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Site not found" });
     }
 
-    const post = await prisma.post.findFirst({
+    const post = await prisma.sitePost.findFirst({
       where: { id: postId, siteId, site: { companyId: user.companyId } },
+      include: { coverageRequirements: { where: { isEnabled: true } } },
     });
 
     if (!post) {
       return reply.code(404).send({ error: "Post not found" });
     }
 
-    const postUpdate = await prisma.post.updateMany({
-      where: { id: postId, site: { companyId: user.companyId } },
-      data: parsed.data,
-    });
-    if (postUpdate.count === 0) {
-      return reply.code(404).send({ error: "Post not found" });
+    if (parsed.data.name) {
+      await prisma.sitePost.updateMany({
+        where: { id: postId, site: { companyId: user.companyId } },
+        data: { name: parsed.data.name },
+      });
     }
 
-    const updated = await prisma.post.findFirst({ where: { id: postId } });
+    if (parsed.data.shiftType) {
+      const existing = post.coverageRequirements.find(
+        (c) => c.shiftTypeCode === parsed.data.shiftType
+      );
+      if (existing) {
+        await prisma.coverageRequirement.update({
+          where: { id: existing.id },
+          data: { isEnabled: true },
+        });
+      } else {
+        await prisma.coverageRequirement.create({
+          data: {
+            siteId,
+            sitePostId: postId,
+            shiftTypeCode: parsed.data.shiftType,
+            guardsRequired: 1,
+            genderRule: "any",
+          },
+        });
+      }
+    }
+
+    const updated = await prisma.sitePost.findFirst({
+      where: { id: postId },
+      include: { coverageRequirements: { where: { isEnabled: true } } },
+    });
 
     await createAuditLog({
       userId: request.user!.sub,
@@ -707,7 +640,17 @@ export async function sitesRoutes(app: FastifyInstance) {
       entityId: postId,
     });
 
-    return reply.send(updated);
+    return reply.send({
+      id: updated!.id,
+      name: updated!.name,
+      shiftType:
+        updated!.coverageRequirements.find((c) => c.shiftTypeCode === "night") &&
+        !updated!.coverageRequirements.find((c) => c.shiftTypeCode === "day")
+          ? "night"
+          : updated!.coverageRequirements.find((c) => c.shiftTypeCode === "day")
+            ? "day"
+            : null,
+    });
   });
 
   app.delete("/:siteId/posts/:postId", { preHandler: protect }, async (request, reply) => {
@@ -722,23 +665,26 @@ export async function sitesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Site not found" });
     }
 
-    const post = await prisma.post.findFirst({
+    const post = await prisma.sitePost.findFirst({
       where: { id: postId, siteId, site: { companyId: user.companyId } },
-      include: { _count: { select: { shifts: true } } },
     });
 
     if (!post) {
       return reply.code(404).send({ error: "Post not found" });
     }
 
-    if (post._count.shifts > 0) {
+    const shiftCount = await prisma.shift.count({
+      where: { siteId, legacyPostName: post.name },
+    });
+
+    if (post && shiftCount > 0) {
       return reply.code(400).send({
         error: "Cannot delete post",
         message: "Post has shifts. Remove shifts first.",
       });
     }
 
-    await prisma.post.deleteMany({
+    await prisma.sitePost.deleteMany({
       where: { id: postId, site: { companyId: user.companyId } },
     });
 
@@ -772,7 +718,7 @@ export async function sitesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Site not found" });
     }
 
-    const post = await prisma.post.findFirst({
+    const post = await prisma.sitePost.findFirst({
       where: { id: postId, siteId },
     });
 
@@ -792,32 +738,56 @@ export async function sitesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Guard not found" });
     }
 
-    const existing = await prisma.postAssignment.findUnique({
-      where: {
-        postId_employeeId: { postId, employeeId: parsed.data.employeeId },
+    if (!ROSTERABLE_STATUSES.includes(employee.status as (typeof ROSTERABLE_STATUSES)[number])) {
+      return reply.code(400).send({
+        error: "Guard is not active",
+        message:
+          "Only active guards can be assigned to a site post. Reactivate the guard in Team first.",
+      });
+    }
+
+    const existing = await prisma.guardSiteEligibility.findFirst({
+      where: { sitePostId: postId, employeeId: parsed.data.employeeId },
+      include: {
+        employee: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            status: true,
+            phone: true,
+            gender: true,
+            employeeType: true,
+          },
+        },
       },
     });
 
     if (existing) {
-      return reply.code(200).send(existing);
+      return reply.code(200).send({
+        id: existing.id,
+        employee: existing.employee,
+      });
     }
 
-    const assignment = await prisma.postAssignment.create({
+    const assignment = await prisma.guardSiteEligibility.create({
       data: {
-        postId,
+        siteId,
+        sitePostId: postId,
         employeeId: parsed.data.employeeId,
+        isPrimary: true,
       },
       include: {
         employee: {
-                select: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  status: true,
-                  phone: true,
-                  gender: true,
-                  employeeType: true,
-                },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            status: true,
+            phone: true,
+            gender: true,
+            employeeType: true,
+          },
         },
       },
     });
@@ -831,7 +801,10 @@ export async function sitesRoutes(app: FastifyInstance) {
       metadata: { postId, employeeId: parsed.data.employeeId },
     });
 
-    return reply.code(201).send(assignment);
+    return reply.code(201).send({
+      id: assignment.id,
+      employee: assignment.employee,
+    });
   });
 
   app.delete("/:siteId/posts/:postId/guards/:employeeId", { preHandler: protect }, async (request, reply) => {
@@ -850,7 +823,7 @@ export async function sitesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Site not found" });
     }
 
-    const post = await prisma.post.findFirst({
+    const post = await prisma.sitePost.findFirst({
       where: { id: postId, siteId },
     });
 
@@ -858,9 +831,9 @@ export async function sitesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Post not found" });
     }
 
-    await prisma.postAssignment.deleteMany({
+    await prisma.guardSiteEligibility.deleteMany({
       where: {
-        postId,
+        sitePostId: postId,
         employeeId,
       },
     });

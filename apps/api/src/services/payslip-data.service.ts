@@ -164,7 +164,7 @@ export async function fetchPayslipData(
               startTime: { lt: run.periodEnd },
               endTime: { gt: run.periodStart },
             },
-            include: { post: { include: { site: true } } },
+            include: { site: true },
           })
         : null
     ),
@@ -172,7 +172,7 @@ export async function fetchPayslipData(
 
   if (!item || !company) return null;
 
-  const siteName = shiftWithSite?.post?.site?.name ?? null;
+  const siteName = shiftWithSite?.site?.name ?? null;
 
   let annualLeaveHours = 0;
   let sickLeaveHours = 0;

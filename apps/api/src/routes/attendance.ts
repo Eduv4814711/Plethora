@@ -55,7 +55,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
     const siteId = q.siteId;
     const shiftWhere: Record<string, unknown> = { companyId: user.companyId };
     if (employeeId) shiftWhere.employeeId = employeeId;
-    if (siteId) shiftWhere.post = { siteId };
+    if (siteId) shiftWhere.siteId = siteId;
     // Overlap: shift overlaps [startDate, endDate] when startTime < endDate AND endTime > startDate
     if (startDate && endDate) {
       const start = new Date(startDate);
@@ -79,7 +79,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
           shift: {
             include: {
               employee: { select: { id: true, firstName: true, lastName: true } },
-              post: { include: { site: true } },
+              site: true,
             },
           },
         },
@@ -98,6 +98,8 @@ export async function attendanceRoutes(app: FastifyInstance) {
     const q = request.query as Record<string, string | undefined>;
     const employeeId = q.employeeId;
     const siteId = q.siteId;
+    const startDate = q.startDate;
+    const endDate = q.endDate;
     const limit = Math.min(Number(q.limit) || 50, 100);
     const offset = Number(q.offset) || 0;
 
@@ -109,14 +111,24 @@ export async function attendanceRoutes(app: FastifyInstance) {
       attendances: { none: { clockIn: { not: null } } },
     };
     if (employeeId) where.employeeId = employeeId;
-    if (siteId) where.post = { siteId };
+    if (siteId) where.siteId = siteId;
+    if (startDate && endDate) {
+      const endBound = new Date(endDate);
+      where.startTime = { gte: new Date(startDate) };
+      where.endTime = { lt: endBound < now ? endBound : now };
+    } else if (startDate) {
+      where.startTime = { gte: new Date(startDate) };
+    } else if (endDate) {
+      const endBound = new Date(endDate);
+      where.endTime = { lt: endBound < now ? endBound : now };
+    }
 
     const [missedShifts, total] = await Promise.all([
       prisma.shift.findMany({
         where,
         include: {
           employee: { select: { id: true, firstName: true, lastName: true } },
-          post: { include: { site: true } },
+          site: true,
         },
         take: limit,
         skip: offset,
@@ -201,12 +213,13 @@ export async function attendanceRoutes(app: FastifyInstance) {
         hoursWorked,
         overtimeHours,
         status: "completed",
+        source: "manual",
       },
       include: {
         shift: {
           include: {
             employee: { select: { id: true, firstName: true, lastName: true } },
-            post: { include: { site: true } },
+            site: true,
           },
         },
       },
@@ -216,8 +229,6 @@ export async function attendanceRoutes(app: FastifyInstance) {
       where: { id: shiftId },
       data: { status: "completed" },
     });
-
-    await prisma.$executeRaw`UPDATE "Attendance" SET source = 'manual' WHERE id = ${attendance.id}`;
 
     await createAuditLog({
       userId: user.sub,
@@ -246,9 +257,9 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
       const shiftWithSite = await prisma.shift.findFirst({
         where: { id: parsed.data.shiftId, companyId: request.user!.companyId },
-        include: { post: { include: { site: true } } },
+        include: { site: true },
       });
-      const site = shiftWithSite?.post?.site;
+      const site = shiftWithSite?.site;
       const lat = parsed.data.latitude;
       const lng = parsed.data.longitude;
       if (site && lat !== undefined && lng !== undefined) {
@@ -267,7 +278,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
           shift: {
             include: {
               employee: { select: { id: true, firstName: true, lastName: true } },
-              post: { include: { site: true } },
+              site: true,
             },
           },
         },
@@ -318,7 +329,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         id: parsed.data.attendanceId,
         shift: { companyId: user.companyId },
       },
-      include: { shift: { include: { post: { include: { site: true } } } } },
+      include: { shift: { include: { site: true } } },
     });
 
     if (!attendance) {
@@ -327,7 +338,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
     const outLat = parsed.data.latitude;
     const outLng = parsed.data.longitude;
-    const outSite = attendance.shift.post?.site;
+    const outSite = attendance.shift.site;
     if (outSite && outLat !== undefined && outLng !== undefined) {
       try {
         assertWithinSiteGeofence(outSite, outLat, outLng);
@@ -378,7 +389,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         shift: {
           include: {
             employee: { select: { id: true, firstName: true, lastName: true } },
-            post: { include: { site: true } },
+            site: true,
           },
         },
       },
@@ -421,7 +432,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         clockOut: null,
         status: "clocked_in",
       },
-      include: { shift: { include: { post: { include: { site: true } } } } },
+      include: { shift: { include: { site: true } } },
     });
 
     if (!attendance) {
@@ -433,7 +444,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
     const byShiftLat = parsed.data.latitude;
     const byShiftLng = parsed.data.longitude;
-    const byShiftSite = attendance.shift.post?.site;
+    const byShiftSite = attendance.shift.site;
     if (byShiftSite && byShiftLat !== undefined && byShiftLng !== undefined) {
       try {
         assertWithinSiteGeofence(byShiftSite, byShiftLat, byShiftLng);
@@ -477,7 +488,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         shift: {
           include: {
             employee: { select: { id: true, firstName: true, lastName: true } },
-            post: { include: { site: true } },
+            site: true,
           },
         },
       },
@@ -530,9 +541,9 @@ export async function attendanceRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Employee not found" });
     }
 
-    const post = await prisma.post.findFirst({
+    const post = await prisma.sitePost.findFirst({
       where: { id: postId, site: { companyId } },
-      include: { site: true },
+      include: { site: true, coverageRequirements: { where: { isEnabled: true } } },
     });
     if (!post) {
       return reply.code(400).send({
@@ -547,7 +558,9 @@ export async function attendanceRoutes(app: FastifyInstance) {
       data: {
         companyId,
         employeeId,
-        postId,
+        siteId: post.siteId,
+        shiftType: post.coverageRequirements[0]?.shiftTypeCode ?? "day",
+        legacyPostName: post.name,
         startTime: clockIn,
         endTime: clockOut,
         status: "completed",
@@ -562,18 +575,17 @@ export async function attendanceRoutes(app: FastifyInstance) {
         hoursWorked,
         overtimeHours,
         status: "completed",
+        source: "manual",
       },
       include: {
         shift: {
           include: {
             employee: { select: { id: true, firstName: true, lastName: true } },
-            post: { include: { site: true } },
+            site: true,
           },
         },
       },
     });
-
-    await prisma.$executeRaw`UPDATE "Attendance" SET source = 'manual' WHERE id = ${attendance.id}`;
 
     await createAuditLog({
       userId: user.sub,
@@ -602,7 +614,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         shift: {
           include: {
             employee: { select: { id: true, firstName: true, lastName: true } },
-            post: { include: { site: true } },
+            site: true,
           },
         },
       },
@@ -711,7 +723,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
         shift: {
           include: {
             employee: { select: { id: true, firstName: true, lastName: true } },
-            post: { include: { site: true } },
+            site: true,
           },
         },
       },

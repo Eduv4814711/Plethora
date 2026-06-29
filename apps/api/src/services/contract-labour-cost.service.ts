@@ -100,7 +100,7 @@ export async function getContractLabourCost(
         },
       },
       include: {
-        post: { select: { siteId: true } },
+        site: { select: { id: true } },
         attendances: {
           where: {
             clockIn: { not: null },
@@ -112,7 +112,7 @@ export async function getContractLabourCost(
 
     const employeeHoursBySite = new Map<string, Map<string, number>>();
     for (const shift of shifts) {
-      const siteId = shift.post.siteId;
+      const siteId = shift.siteId;
       const empId = shift.employeeId;
       const hours = shift.attendances.reduce(
         (sum, a) => sum + Number(a.hoursWorked ?? 0) + Number(a.overtimeHours ?? 0),

@@ -252,7 +252,7 @@ async function handleClockIn(
       endTime: { gt: now },
     },
     include: {
-      post: { include: { site: true } },
+      site: true,
     },
     orderBy: { startTime: "asc" },
   });
@@ -284,7 +284,7 @@ async function handleClockIn(
     throw err;
   }
 
-  const site = shift.post?.site;
+  const site = shift.site;
   if (site && siteHasGeofence(site)) {
     const expiresAt = new Date(Date.now() + WHATSAPP_LOCATION_PENDING_MS);
     await prisma.whatsAppClockPending.upsert({
@@ -320,7 +320,7 @@ async function handleClockIn(
     include: {
       shift: {
         include: {
-          post: { include: { site: true } },
+          site: true,
         },
       },
     },
@@ -339,7 +339,7 @@ async function handleClockIn(
     metadata: { source: "whatsapp", from: employee.phone, shiftId: shift.id },
   });
 
-  const siteName = shift.post?.site?.name ?? "your post";
+  const siteName = shift.site?.name ?? "your post";
   const timeZone = await getCompanyTimezone(employee.companyId);
   return {
     reply: `Clocked in for ${siteName} at ${formatInTimeZone(now, timeZone, "HH:mm")}.`,
@@ -357,7 +357,7 @@ async function handleClockOut(
       clockOut: null,
       status: "clocked_in",
     },
-    include: { shift: { include: { post: { include: { site: true } } } } },
+    include: { shift: { include: { site: true } } },
   });
 
   if (!attendance) {
@@ -379,7 +379,7 @@ async function handleClockOut(
     };
   }
 
-  const outSite = attendance.shift.post?.site;
+  const outSite = attendance.shift.site;
   if (outSite && siteHasGeofence(outSite)) {
     const expiresAt = new Date(Date.now() + WHATSAPP_LOCATION_PENDING_MS);
     await prisma.whatsAppClockPending.upsert({
@@ -453,15 +453,15 @@ export async function processIncomingLocation(
 
     const shift = await prisma.shift.findFirst({
       where: { id: pending.shiftId, companyId: employee.companyId },
-      include: { post: { include: { site: true } } },
+      include: { site: true },
     });
-    if (!shift?.post?.site) {
+    if (!shift?.site) {
       await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
       return { reply: "Shift or site not found. Contact HR." };
     }
 
     try {
-      assertWithinSiteGeofence(shift.post.site, latitude, longitude);
+      assertWithinSiteGeofence(shift.site, latitude, longitude);
     } catch (err) {
       if (err instanceof AttendanceValidationError) {
         return { reply: err.message };
@@ -479,7 +479,7 @@ export async function processIncomingLocation(
         clockInLng: longitude,
       },
       include: {
-        shift: { include: { post: { include: { site: true } } } },
+        shift: { include: { site: true } },
       },
     });
 
@@ -504,7 +504,7 @@ export async function processIncomingLocation(
       },
     });
 
-    const siteName = shift.post?.site?.name ?? "your post";
+    const siteName = shift.site?.name ?? "your post";
     const timeZone = await getCompanyTimezone(employee.companyId);
     return {
       reply: `Clocked in for ${siteName} at ${formatInTimeZone(now, timeZone, "HH:mm")}.`,
@@ -520,7 +520,7 @@ export async function processIncomingLocation(
         clockOut: null,
         status: "clocked_in",
       },
-      include: { shift: { include: { post: { include: { site: true } } } } },
+      include: { shift: { include: { site: true } } },
     });
 
     if (!attendance) {
@@ -528,7 +528,7 @@ export async function processIncomingLocation(
       return { reply: "No active clock-in found for that shift." };
     }
 
-    const site = attendance.shift.post?.site;
+    const site = attendance.shift.site;
     if (site) {
       try {
         assertWithinSiteGeofence(site, latitude, longitude);
@@ -690,7 +690,7 @@ async function handleRoster(
       startTime: { lte: horizonEnd },
       status: { in: ["assigned", "active", "created"] },
     },
-    include: { post: { include: { site: true } } },
+    include: { site: true },
     orderBy: { startTime: "asc" },
     take: ROSTER_MAX_SHIFTS,
   });
@@ -715,8 +715,8 @@ async function handleRoster(
   const pdfRows = shifts.map((s) => ({
     dateLine: formatInTimeZone(s.startTime, timeZone, "EEE d MMM yyyy"),
     timeRange: `${formatInTimeZone(s.startTime, timeZone, "HH:mm")} – ${formatInTimeZone(s.endTime, timeZone, "HH:mm")}`,
-    site: s.post?.site?.name ?? "—",
-    post: s.post?.name ?? "—",
+    site: s.site?.name ?? "—",
+    post: s.legacyPostName ?? "—",
   }));
 
   const pdfBuffer = await generateRosterPDF({

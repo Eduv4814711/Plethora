@@ -1,5 +1,5 @@
-import type { Post } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { inferPostShiftType } from "../lib/site-post-api.js";
 import { getCompanyTimezone, getShiftTimes, dateKeyInTimeZone } from "../lib/timezone.js";
 import { meetsSiteShiftGenderRule, normalizeEmployeeGenderForRoster } from "./rostering.service.js";
 import { auditRosterGeneration } from "../lib/roster-audit.js";
@@ -111,13 +111,20 @@ const EMPTY_FAIRNESS_SPREAD: FairnessSpread = {
   maxDayNightImbalance: 0,
 };
 
-export type PostWithAssignments = Post & {
+export type RosterPost = {
+  id: string;
+  name: string;
+  siteId: string;
+  shiftType: string | null;
+};
+
+export type PostWithAssignments = RosterPost & {
   assignedGuards: { employeeId: string }[];
 };
 
 export type EmployeePostPools = {
-  day: Post[];
-  night: Post[];
+  day: RosterPost[];
+  night: RosterPost[];
 };
 
 /** Map each employee to day/night posts they are explicitly assigned to (PostAssignment). */
@@ -145,11 +152,11 @@ export function buildEmployeePostAssignmentMap(
 export function resolvePostForShiftSlot(params: {
   employeeId: string;
   shiftType: "day" | "night";
-  dayPosts: Post[];
-  nightPosts: Post[];
+  dayPosts: RosterPost[];
+  nightPosts: RosterPost[];
   assignmentByEmployee: Map<string, EmployeePostPools>;
   roundRobin: { day: number; night: number };
-}): Post {
+}): RosterPost {
   const { employeeId, shiftType, dayPosts, nightPosts, assignmentByEmployee, roundRobin } = params;
   const sitePool = shiftType === "day" ? dayPosts : nightPosts;
   const assignedPool = assignmentByEmployee.get(employeeId)?.[shiftType] ?? [];
@@ -218,10 +225,12 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
     include: {
       posts: {
         include: {
-          assignedGuards: { select: { employeeId: true } },
+          guardEligibilities: { select: { employeeId: true } },
+          coverageRequirements: { where: { isEnabled: true } },
         },
       },
       assignedGuards: {
+        where: { isActive: true },
         include: {
           employee: {
             select: {
@@ -253,7 +262,13 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
     }
   );
 
-  const postsWithAssignments = site.posts as PostWithAssignments[];
+  const postsWithAssignments: PostWithAssignments[] = site.posts.map((p) => ({
+    id: p.id,
+    name: p.name,
+    siteId: p.siteId,
+    shiftType: inferPostShiftType(p.coverageRequirements),
+    assignedGuards: p.guardEligibilities.map((g) => ({ employeeId: g.employeeId })),
+  }));
   const dayPosts = postsWithAssignments.filter((p) => (p.shiftType ?? "day") === "day");
   const nightPosts = postsWithAssignments.filter((p) => p.shiftType === "night");
   if (shiftStaffing.day === 0 && shiftStaffing.night === 0) {
@@ -307,7 +322,6 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
     });
   }
 
-  const postIds = site.posts.map((p) => p.id);
   const guardIds = rosterableGuards.map((g) => g.id);
 
   const [blockingExistingShifts, sameSiteShiftsInPeriod] = await Promise.all([
@@ -315,7 +329,7 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
       where: {
         companyId,
         employeeId: { in: guardIds },
-        postId: { notIn: postIds },
+        siteId: { not: siteId },
         startTime: { lt: endDate },
         endTime: { gt: startDate },
       },
@@ -324,7 +338,7 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
     prisma.shift.count({
       where: {
         companyId,
-        postId: { in: postIds },
+        siteId,
         status: { in: ["created", "assigned"] },
         startTime: { lt: endDate },
         endTime: { gt: startDate },
@@ -713,6 +727,7 @@ type ApplyValidationContext = {
     string,
     {
       id: string;
+      name: string;
       siteId: string;
       shiftType: string | null;
       site: {
@@ -745,9 +760,10 @@ async function loadApplyValidationContext(
       where: { companyId, id: { in: employeeIds } },
       select: { id: true, status: true, gender: true },
     }),
-    prisma.post.findMany({
+    prisma.sitePost.findMany({
       where: { id: { in: postIds } },
       include: {
+        coverageRequirements: { where: { isEnabled: true } },
         site: {
           select: {
             companyId: true,
@@ -770,13 +786,13 @@ async function loadApplyValidationContext(
         ...(replaceExisting
           ? {
               NOT: {
-                postId: { in: sitePostIds },
+                siteId,
                 status: { in: ["created", "assigned"] },
               },
             }
           : {}),
       },
-      select: { employeeId: true, startTime: true, endTime: true, post: { select: { shiftType: true } } },
+      select: { employeeId: true, startTime: true, endTime: true, shiftType: true },
     }),
   ]);
 
@@ -789,7 +805,7 @@ async function loadApplyValidationContext(
 
     const dateKey = dateKeyInTimeZone(shift.startTime, timeZone);
     const shiftType =
-      (shift.post.shiftType ?? "day").toLowerCase() === "night" ? "night" : "day";
+      (shift.shiftType ?? "day").toLowerCase() === "night" ? "night" : "day";
     let restMap = existingRestByEmployee.get(shift.employeeId);
     if (!restMap) {
       restMap = new Map();
@@ -800,7 +816,18 @@ async function loadApplyValidationContext(
 
   return {
     employeeById: new Map(employees.map((e) => [e.id, e])),
-    postById: new Map(posts.map((p) => [p.id, p])),
+    postById: new Map(
+      posts.map((p) => [
+        p.id,
+        {
+          id: p.id,
+          name: p.name,
+          siteId: p.siteId,
+          shiftType: inferPostShiftType(p.coverageRequirements),
+          site: p.site,
+        },
+      ])
+    ),
     siteAssignedEmployeeIds: new Set(siteAssignments.map((a) => a.employeeId)),
     existingShiftsByEmployee,
     existingRestByEmployee,
@@ -898,7 +925,9 @@ export async function applyRosterPlan(input: ApplyRosterPlanInput): Promise<Appl
   const shiftsToCreate: {
     companyId: string;
     employeeId: string;
-    postId: string;
+    siteId: string;
+    shiftType: string;
+    legacyPostName: string | null;
     startTime: Date;
     endTime: Date;
     status: "assigned";
@@ -952,7 +981,9 @@ export async function applyRosterPlan(input: ApplyRosterPlanInput): Promise<Appl
     shiftsToCreate.push({
       companyId,
       employeeId: entry.employeeId,
-      postId: entry.postId,
+      siteId: plan.siteId,
+      shiftType: entry.shiftType,
+      legacyPostName: validationCtx.postById.get(entry.postId)?.name ?? null,
       startTime,
       endTime,
       status: "assigned",
@@ -968,7 +999,7 @@ export async function applyRosterPlan(input: ApplyRosterPlanInput): Promise<Appl
         const del = await tx.shift.deleteMany({
           where: {
             companyId,
-            postId: { in: [...sitePostIds] },
+            siteId: plan.siteId,
             status: { in: ["created", "assigned"] },
             startTime: { lt: end },
             endTime: { gt: start },

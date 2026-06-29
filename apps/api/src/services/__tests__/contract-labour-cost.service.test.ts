@@ -48,7 +48,8 @@ describe("ContractLabourCostService", () => {
 
     vi.mocked(prisma.shift.findMany).mockResolvedValue([
       {
-        post: { siteId: "site1" },
+        siteId: "site1",
+        site: { id: "site1" },
         employeeId: "emp1",
         attendances: [{ hoursWorked: 160, overtimeHours: 10 }],
       },
@@ -92,7 +93,8 @@ describe("ContractLabourCostService", () => {
 
     vi.mocked(prisma.shift.findMany).mockResolvedValue([
       {
-        post: { siteId: "site1" },
+        siteId: "site1",
+        site: { id: "site1" },
         employeeId: "emp1",
         attendances: [{ hoursWorked: 160, overtimeHours: 10 }],
       },

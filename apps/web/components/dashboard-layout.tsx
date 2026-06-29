@@ -41,6 +41,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   }, [pathname, user, router]);
 
   useEffect(() => {
+    if (!loading && !user) {
+      router.replace("/login");
+    }
+  }, [loading, user, router]);
+
+  useEffect(() => {
     setMobileNavOpen(false);
   }, [pathname]);
 
@@ -99,7 +105,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) {
-    router.push("/login");
     return null;
   }
 

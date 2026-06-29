@@ -106,8 +106,11 @@ export async function runAutoRosterForSite(params: {
     where: { id: params.siteId, companyId: params.companyId },
     include: {
       company: { select: { settings: true, name: true } },
-      posts: { select: { id: true, shiftType: true } },
+      posts: {
+        include: { coverageRequirements: { where: { isEnabled: true } } },
+      },
       assignedGuards: {
+        where: { isActive: true },
         include: {
           employee: { select: { id: true, status: true, employeeType: true } },
         },
@@ -139,8 +142,9 @@ export async function runAutoRosterForSite(params: {
     };
   }
 
-  const hasDayPost = site.posts.some((p) => p.shiftType === "day");
-  const hasNightPost = site.posts.some((p) => p.shiftType === "night");
+  const coverages = site.posts.flatMap((p) => p.coverageRequirements);
+  const hasDayPost = coverages.some((c) => c.shiftTypeCode === "day");
+  const hasNightPost = coverages.some((c) => c.shiftTypeCode === "night");
   const rosterableGuards = site.assignedGuards.filter((a) => {
     const e = a.employee;
     return (

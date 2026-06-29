@@ -21,10 +21,54 @@ import type {
 } from "./payroll-calculation.types.js";
 
 export class PayrollServiceError extends Error {
-  constructor(message: string) {
+  details?: unknown;
+  constructor(message: string, details?: unknown) {
     super(message);
     this.name = "PayrollServiceError";
+    this.details = details;
   }
+}
+
+/**
+ * Sites that have shift activity in the period but whose site timesheet is not yet
+ * approved/locked. Payroll must not run until attendance is verified for all of them.
+ */
+export async function findSitesNeedingApproval(
+  companyId: string,
+  periodStart: Date,
+  periodEnd: Date
+): Promise<Array<{ id: string; name: string }>> {
+  const shifts = await prisma.shift.findMany({
+    where: {
+      companyId,
+      startTime: { lt: periodEnd },
+      endTime: { gt: periodStart },
+    },
+    select: { siteId: true },
+    distinct: ["siteId"],
+  });
+  const siteIds = shifts.map((s) => s.siteId);
+  if (siteIds.length === 0) return [];
+
+  const approved = await prisma.siteTimesheet.findMany({
+    where: {
+      companyId,
+      siteId: { in: siteIds },
+      status: { in: ["approved", "locked"] },
+      periodStart: { lte: periodEnd },
+      periodEnd: { gte: periodStart },
+    },
+    select: { siteId: true },
+  });
+  const approvedSet = new Set(approved.map((a) => a.siteId));
+  const missingIds = siteIds.filter((id) => !approvedSet.has(id));
+  if (missingIds.length === 0) return [];
+
+  return prisma.site.findMany({
+    where: { id: { in: missingIds } },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
 }
 
 export interface CalculatePayrollResult {
@@ -125,6 +169,16 @@ export async function calculatePayroll(
   const periodStart = run.periodStart;
   const periodEnd = run.periodEnd;
   const calculatedAt = new Date();
+
+  const sitesNeedingApproval = await findSitesNeedingApproval(companyId, periodStart, periodEnd);
+  if (sitesNeedingApproval.length > 0) {
+    const names = sitesNeedingApproval.map((s) => s.name).join(", ");
+    throw new PayrollServiceError(
+      `Cannot calculate payroll until attendance is approved for every site with shifts in this period. ` +
+        `Approve the site timesheet(s) for: ${names}.`,
+      { sitesNeedingApproval }
+    );
+  }
 
   const [companyPayRules, companyEarningsRules, aggregates, timezone, holidays, company, rolling12MonthPayroll] =
     await Promise.all([

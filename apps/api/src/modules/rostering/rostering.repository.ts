@@ -3,12 +3,12 @@ import { prisma } from "../../lib/prisma.js";
 
 const shiftListInclude = {
   employee: { select: { id: true, firstName: true, lastName: true, gender: true, phone: true } },
-  post: { include: { site: true } },
+  site: true,
 } satisfies Prisma.ShiftInclude;
 
 const shiftDetailInclude = {
   employee: true,
-  post: { include: { site: true } },
+  site: true,
   attendances: true,
 } satisfies Prisma.ShiftInclude;
 
@@ -89,9 +89,9 @@ export const rosteringRepository = {
   },
 
   findPostWithSite(postId: string) {
-    return prisma.post.findFirst({
+    return prisma.sitePost.findFirst({
       where: { id: postId },
-      include: { site: true },
+      include: { site: true, coverageRequirements: { where: { isEnabled: true } } },
     });
   },
 
@@ -101,7 +101,8 @@ export const rosteringRepository = {
       include: {
         posts: {
           include: {
-            assignedGuards: { select: { employeeId: true } },
+            guardEligibilities: { select: { employeeId: true } },
+            coverageRequirements: { where: { isEnabled: true } },
           },
         },
       },
@@ -123,10 +124,10 @@ export const rosteringRepository = {
     });
   },
 
-  findShiftWithPostSite(companyId: string, id: string) {
+  findShiftWithSite(companyId: string, id: string) {
     return prisma.shift.findFirst({
       where: { id, companyId },
-      include: { post: { include: { site: true } } },
+      include: { site: true },
     });
   },
 
@@ -153,6 +154,7 @@ export const rosteringRepository = {
       where: {
         companyId,
         id: { notIn: excludeEmployeeIds },
+        employeeType: "security",
         status: { in: ["active", "training", "hired", "reliever"] },
       },
       select: { id: true, firstName: true, lastName: true, gender: true },

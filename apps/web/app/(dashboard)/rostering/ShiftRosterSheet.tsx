@@ -309,10 +309,15 @@ function GenderMarker({ gender }: { gender: string | null | undefined }) {
   );
 }
 
-function cellTone(cell: "D" | "N" | "O"): string {
+function cellTone(cell: string): string {
   if (cell === "N") return "text-slate-800 dark:text-slate-200 print:text-neutral-900";
   if (cell === "D") return "text-orange-900 dark:text-orange-200 print:text-neutral-900";
-  return "text-neutral-400 dark:text-neutral-500 print:text-neutral-500";
+  if (cell === "L") return "text-sky-800 dark:text-sky-300 print:text-neutral-900";
+  if (cell === "SL") return "text-rose-800 dark:text-rose-300 print:text-neutral-900";
+  if (cell === "TR") return "text-violet-800 dark:text-violet-300 print:text-neutral-900";
+  if (cell === "AWOL" || cell === "R") return "text-red-800 dark:text-red-300 print:text-neutral-900";
+  if (!cell) return "text-neutral-300 dark:text-neutral-600 print:text-neutral-400";
+  return "text-neutral-500 dark:text-neutral-400 print:text-neutral-600";
 }
 
 const PRINT_STYLES = `

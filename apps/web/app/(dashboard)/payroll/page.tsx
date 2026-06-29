@@ -1133,6 +1133,7 @@ function PayrollRunCard({
   const [downloadingFnbGroup, setDownloadingFnbGroup] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [sitesNeedingApproval, setSitesNeedingApproval] = useState<{ id: string; name: string }[]>([]);
   const [validation, setValidation] = useState<PayrollValidationResponse | null>(null);
   const [showRevertModal, setShowRevertModal] = useState(false);
   const [revertReason, setRevertReason] = useState("");
@@ -1192,10 +1193,15 @@ function PayrollRunCard({
   const handleCalculate = async () => {
     setActionLoading(true);
     setActionError(null);
+    setSitesNeedingApproval([]);
     try {
       const res = await authFetch(`/payroll/runs/${run.id}/calculate`, token, { method: "POST" });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
+        const sites = err?.details?.sitesNeedingApproval;
+        if (Array.isArray(sites) && sites.length > 0) {
+          setSitesNeedingApproval(sites);
+        }
         throw new Error(
           typeof err.message === "string" ? err.message : "Payroll calculation failed"
         );
@@ -1453,7 +1459,22 @@ function PayrollRunCard({
 
       {actionError && !showItems && (
         <AlertBanner variant="error" className="mt-4">
-          {actionError}
+          <div className="space-y-2">
+            <p>{actionError}</p>
+            {sitesNeedingApproval.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {sitesNeedingApproval.map((s) => (
+                  <Link
+                    key={s.id}
+                    href={`/attendance?siteId=${s.id}&start=${run.periodStart.slice(0, 10)}&end=${run.periodEnd.slice(0, 10)}`}
+                    className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                  >
+                    Approve {s.name} →
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
         </AlertBanner>
       )}
 

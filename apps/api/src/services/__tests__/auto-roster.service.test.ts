@@ -68,8 +68,8 @@ function mockEnabledSite(overrides: Record<string, unknown> = {}) {
     autoRosterEnabled: true,
     autoRosterMinCoveragePercent: 100,
     posts: [
-      { id: "p-day", shiftType: "day" },
-      { id: "p-night", shiftType: "night" },
+      { id: "p-day", coverageRequirements: [{ shiftTypeCode: "day", isEnabled: true }] },
+      { id: "p-night", coverageRequirements: [{ shiftTypeCode: "night", isEnabled: true }] },
     ],
     assignedGuards: [
       { employee: { id: "g1", status: "active", employeeType: "security" } },

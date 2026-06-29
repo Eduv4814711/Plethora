@@ -52,7 +52,8 @@ describe("rosteringModuleService.bulkCreate", () => {
   it("bulk-creates shifts for a post after clearing overlapping assigned shifts", async () => {
     vi.mocked(rosteringRepository.findPostWithSite).mockResolvedValue({
       id: "post-1",
-      shiftType: "day",
+      siteId: "site-1",
+      coverageRequirements: [{ shiftTypeCode: "day", isEnabled: true }],
       site: { companyId: "co-1" },
     } as never);
 
@@ -73,7 +74,8 @@ describe("rosteringModuleService.bulkCreate", () => {
       expect.objectContaining({
         companyId: "co-1",
         employeeId: "emp-1",
-        postId: "post-1",
+        siteId: "site-1",
+        shiftType: "day",
         status: { in: ["created", "assigned"] },
       })
     );

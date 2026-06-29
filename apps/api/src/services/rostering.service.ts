@@ -1,5 +1,6 @@
 import { addDays, differenceInCalendarDays, getDay } from "date-fns";
 import { prisma } from "../lib/prisma.js";
+import { inferPostShiftType } from "../lib/site-post-api.js";
 import { dateKeyInTimeZone, getCompanyTimezone } from "../lib/timezone.js";
 import { violatesAdjacentShiftRestRules } from "./roster-scheduler.js";
 
@@ -288,7 +289,10 @@ function assertSiteShiftGenderRule(
 export async function validateShiftAssignment(params: {
   companyId: string;
   employeeId: string;
-  postId: string;
+  /** Legacy: resolve site + shift type from post when siteId omitted. */
+  postId?: string;
+  siteId?: string;
+  shiftType?: string | null;
   startTime: Date;
   endTime: Date;
   excludeShiftId?: string;
@@ -307,6 +311,29 @@ export async function validateShiftAssignment(params: {
     allowUnassigned,
   } = params;
 
+  let siteId = params.siteId;
+  let shiftType = params.shiftType ?? "day";
+  let site: { companyId: string; rosterDayShiftGender: string | null; rosterNightShiftGender: string | null } | null =
+    null;
+
+  if (postId && !siteId) {
+    const post = await prisma.sitePost.findFirst({
+      where: { id: postId },
+      include: { site: true, coverageRequirements: { where: { isEnabled: true } } },
+    });
+    if (!post) throw new RosteringValidationError("Post not found");
+    siteId = post.siteId;
+    shiftType = inferPostShiftType(post.coverageRequirements) ?? "day";
+    site = post.site;
+  } else if (siteId) {
+    site = await prisma.site.findFirst({ where: { id: siteId, companyId } });
+    if (!site) throw new RosteringValidationError("Site not found");
+  }
+
+  if (!siteId || !site) {
+    throw new RosteringValidationError("Site not found for shift assignment");
+  }
+
   const employee = await prisma.employee.findFirst({
     where: { id: employeeId, companyId },
   });
@@ -322,22 +349,13 @@ export async function validateShiftAssignment(params: {
     );
   }
 
-  const post = await prisma.post.findFirst({
-    where: { id: postId },
-    include: { site: true },
-  });
-
-  if (!post) {
-    throw new RosteringValidationError("Post not found");
-  }
-
-  if (post.site.companyId !== companyId) {
-    throw new RosteringValidationError("Post does not belong to company");
+  if (site.companyId !== companyId) {
+    throw new RosteringValidationError("Site does not belong to company");
   }
 
   if (!allowUnassigned) {
     const siteAssignment = await prisma.siteAssignment.findFirst({
-      where: { siteId: post.siteId, employeeId },
+      where: { siteId, employeeId, isActive: true },
     });
     if (!siteAssignment) {
       throw new RosteringValidationError(
@@ -346,7 +364,7 @@ export async function validateShiftAssignment(params: {
     }
   }
 
-  assertSiteShiftGenderRule(employee.gender, post.site, post.shiftType);
+  assertSiteShiftGenderRule(employee.gender, site, shiftType);
 
   const overlapping = await prisma.shift.findFirst({
     where: {
@@ -370,7 +388,7 @@ export async function validateShiftAssignment(params: {
   const timeZone = await getCompanyTimezone(companyId);
   const candidateDateKey = dateKeyInTimeZone(startTime, timeZone);
   const candidateShiftType =
-    (post.shiftType ?? "day").toLowerCase() === "night" ? "night" : "day";
+    (shiftType ?? "day").toLowerCase() === "night" ? "night" : "day";
 
   const restRangeStart = addDays(new Date(`${candidateDateKey}T00:00:00.000Z`), -2);
   const restRangeEnd = addDays(new Date(`${candidateDateKey}T00:00:00.000Z`), 2);
@@ -384,14 +402,14 @@ export async function validateShiftAssignment(params: {
       startTime: { lt: restRangeEnd },
       endTime: { gt: restRangeStart },
     },
-    include: { post: { select: { shiftType: true } } },
+    select: { startTime: true, shiftType: true },
   });
 
   const assignmentsByDate = new Map<string, "day" | "night">();
   for (const s of nearbyShifts) {
     const key = dateKeyInTimeZone(s.startTime, timeZone);
     const kind =
-      (s.post.shiftType ?? "day").toLowerCase() === "night" ? "night" : "day";
+      (s.shiftType ?? "day").toLowerCase() === "night" ? "night" : "day";
     assignmentsByDate.set(key, kind);
   }
 

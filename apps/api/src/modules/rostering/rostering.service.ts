@@ -20,6 +20,8 @@ import {
   type RosterPlan,
 } from "../../services/roster-engine.service.js";
 import { rosteringRepository } from "./rostering.repository.js";
+import { resolveShiftSiteFieldsFromPost } from "../../lib/shift-site-fields.js";
+import { inferPostShiftType } from "../../lib/site-post-api.js";
 import type {
   BulkCreateInput,
   CreateShiftInput,
@@ -81,7 +83,7 @@ function buildShiftListWhere(
 ): Prisma.ShiftWhereInput {
   const where: Prisma.ShiftWhereInput = { companyId };
   if (query.employeeId) where.employeeId = query.employeeId;
-  if (query.siteId) where.post = { siteId: query.siteId };
+  if (query.siteId) where.siteId = query.siteId;
   const startDate = query.startDate;
   const endDate = query.endDate;
   if (startDate && endDate) {
@@ -122,11 +124,16 @@ export const rosteringModuleService = {
         body: { error: "Validation error", message: "endTime must be after startTime" },
       };
     }
+    const siteFields = await resolveShiftSiteFieldsFromPost(input.postId, companyId);
+    if (!siteFields) {
+      return { status: 400, body: { error: "Validation error", message: "Post not found" } };
+    }
     try {
       await validateShiftAssignment({
         companyId,
         employeeId: input.employeeId,
-        postId: input.postId,
+        siteId: siteFields.siteId,
+        shiftType: siteFields.shiftType,
         startTime,
         endTime,
       });
@@ -142,7 +149,9 @@ export const rosteringModuleService = {
     const shift = await rosteringRepository.createShift({
       companyId,
       employeeId: input.employeeId,
-      postId: input.postId,
+      siteId: siteFields.siteId,
+      shiftType: siteFields.shiftType,
+      legacyPostName: siteFields.legacyPostName,
       startTime,
       endTime,
       status: input.status,
@@ -176,7 +185,7 @@ export const rosteringModuleService = {
       startTime: { lt: end },
       endTime: { gt: start },
       ...(input.employeeId && { employeeId: input.employeeId }),
-      ...(input.siteId && { post: { siteId: input.siteId } }),
+      ...(input.siteId && { siteId: input.siteId }),
     };
     const deleted = await rosteringRepository.deleteShifts(where);
     if (deleted.count > 0) {
@@ -269,7 +278,11 @@ export const rosteringModuleService = {
     if (!site) {
       return { status: 404, body: { error: "Site not found" } };
     }
-    const postsWithAssignments = site.posts as PostWithAssignments[];
+    const postsWithAssignments = site.posts.map((p) => ({
+      ...p,
+      shiftType: inferPostShiftType(p.coverageRequirements),
+      assignedGuards: p.guardEligibilities.map((g) => ({ employeeId: g.employeeId })),
+    })) as PostWithAssignments[];
     const dayPosts = postsWithAssignments.filter((p) => (p.shiftType ?? "day") === "day");
     const nightPosts = postsWithAssignments.filter((p) => p.shiftType === "night");
     if (dayPosts.length === 0) {
@@ -306,7 +319,7 @@ export const rosteringModuleService = {
     const deleted = await rosteringRepository.deleteShifts({
       companyId,
       employeeId: params.employeeId,
-      postId: { in: sitePostIds },
+      siteId: params.siteId,
       status: { in: ["created", "assigned"] },
       startTime: { lt: params.end },
       endTime: { gt: params.start },
@@ -343,7 +356,9 @@ export const rosteringModuleService = {
       await rosteringRepository.createShift({
         companyId,
         employeeId: params.employeeId,
-        postId: post.id,
+        siteId: post.siteId,
+        shiftType,
+        legacyPostName: post.name,
         startTime: shiftStart,
         endTime: shiftEnd,
         status: "assigned",
@@ -391,13 +406,14 @@ export const rosteringModuleService = {
     if (!post || post.site.companyId !== companyId) {
       return { status: 404, body: { error: "Post not found" } };
     }
-    const shiftType = (post.shiftType ?? "day") as "day" | "night";
+    const shiftType = (inferPostShiftType(post.coverageRequirements) ?? "day") as "day" | "night";
     const dates = computeDatesFromPattern(params.start, params.end, params.pattern, params.customDays);
     const timeZone = await getCompanyTimezone(companyId);
     const deleted = await rosteringRepository.deleteShifts({
       companyId,
       employeeId: params.employeeId,
-      postId: params.postId,
+      siteId: post.siteId,
+      shiftType,
       status: { in: ["created", "assigned"] },
       startTime: { lt: params.end },
       endTime: { gt: params.start },
@@ -426,7 +442,9 @@ export const rosteringModuleService = {
       await rosteringRepository.createShift({
         companyId,
         employeeId: params.employeeId,
-        postId: params.postId,
+        siteId: post.siteId,
+        shiftType,
+        legacyPostName: post.name,
         startTime: shiftStart,
         endTime: shiftEnd,
         status: "assigned",
@@ -559,7 +577,7 @@ export const rosteringModuleService = {
   },
 
   async listAvailableRelievers(companyId: string, shiftId: string) {
-    const shift = await rosteringRepository.findShiftWithPostSite(companyId, shiftId);
+    const shift = await rosteringRepository.findShiftWithSite(companyId, shiftId);
     if (!shift) {
       return { status: 404 as const, body: { error: "Shift not found" } };
     }
@@ -575,8 +593,8 @@ export const rosteringModuleService = {
       companyId,
       Array.from(busyEmployeeIds)
     );
-    const site = shift.post.site;
-    const postShiftType = shift.post.shiftType;
+    const site = shift.site;
+    const postShiftType = shift.shiftType;
     const data = candidates
       .filter((e) => meetsSiteShiftGenderRule(e.gender, site, postShiftType))
       .map(({ id, firstName, lastName }) => ({ id, firstName, lastName }));
@@ -608,23 +626,38 @@ export const rosteringModuleService = {
       };
     }
     const employeeId = input.employeeId ?? existing.employeeId;
-    const postId = input.postId ?? existing.postId;
     const startTime = input.startTime ? new Date(input.startTime) : existing.startTime;
     const endTime = input.endTime ? new Date(input.endTime) : existing.endTime;
+    let siteId = existing.siteId;
+    let shiftType = existing.shiftType;
+    let legacyPostName = existing.legacyPostName;
+    if (input.postId) {
+      const resolved = await resolveShiftSiteFieldsFromPost(input.postId, companyId);
+      if (!resolved) {
+        return { status: 404, body: { error: "Post not found" } };
+      }
+      siteId = resolved.siteId;
+      shiftType = resolved.shiftType;
+      legacyPostName = resolved.legacyPostName;
+    }
     if (startTime >= endTime) {
       return {
         status: 400,
         body: { error: "Validation error", message: "endTime must be after startTime" },
       };
     }
+    const isGuardReplacementOnly = !!input.employeeId && !input.postId && !input.startTime && !input.endTime;
     try {
       await validateShiftAssignment({
         companyId,
         employeeId,
-        postId,
+        siteId,
+        shiftType,
         startTime,
         endTime,
         excludeShiftId: id,
+        allowRosterable: isGuardReplacementOnly,
+        allowUnassigned: isGuardReplacementOnly,
       });
     } catch (err) {
       if (err instanceof RosteringValidationError) {
@@ -637,7 +670,9 @@ export const rosteringModuleService = {
     }
     const shift = await rosteringRepository.updateShift(companyId, id, {
       employeeId,
-      postId,
+      siteId,
+      shiftType,
+      legacyPostName,
       startTime,
       endTime,
     });
@@ -650,14 +685,16 @@ export const rosteringModuleService = {
       shiftId: id,
       before: {
         employeeId: existing.employeeId,
-        postId: existing.postId,
+        siteId: existing.siteId,
+        shiftType: existing.shiftType,
         startTime: existing.startTime.toISOString(),
         endTime: existing.endTime.toISOString(),
         status: existing.status,
       },
       after: {
         employeeId,
-        postId,
+        siteId,
+        shiftType,
         startTime: startTime.toISOString(),
         endTime: endTime.toISOString(),
       },

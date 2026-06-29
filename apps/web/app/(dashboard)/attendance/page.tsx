@@ -1,63 +1,17 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { format, parseISO } from "date-fns";
-import { DateInput } from "@/components/date-input";
 import { fetchCurrentPayPeriod, fetchPayPeriods, type PayPeriodOption } from "@/lib/api";
 import { PayPeriodSelect } from "@/components/pay-period-select";
-import { clsx } from "clsx";
-
-interface ShiftForClockIn {
-  id: string;
-  startTime: string;
-  endTime: string;
-  status: string;
-  employee: { id: string; firstName: string; lastName: string };
-  post: { name: string; site: { id: string; name: string } };
-}
-
-interface Attendance {
-  id: string;
-  shiftId: string;
-  clockIn: string | null;
-  clockOut: string | null;
-  hoursWorked: number | null;
-  overtimeHours: number | null;
-  status: string;
-  source?: string;
-  shift: {
-    employee: { id: string; firstName: string; lastName: string };
-    post: { name: string; site: { id: string; name: string } };
-    startTime: string;
-    endTime: string;
-    status: string;
-  };
-}
-
-interface EmployeeOption {
-  id: string;
-  firstName: string;
-  lastName: string;
-}
+import { SiteTimesheetsSection } from "./SiteTimesheetsSection";
 
 interface SiteOption {
   id: string;
   name: string;
-}
-
-interface SiteWithPosts extends SiteOption {
-  posts?: { id: string; name: string; shiftType?: string | null }[];
-}
-
-interface MissedShift {
-  id: string;
-  startTime: string;
-  endTime: string;
-  status: string;
-  employee: { id: string; firstName: string; lastName: string };
-  post: { name: string; site: { id: string; name: string } };
 }
 
 function emptyDateRange() {
@@ -65,126 +19,92 @@ function emptyDateRange() {
   return { start: now, end: now };
 }
 
+const WORKFLOW_STEPS = [
+  "Roster created",
+  "Timesheet generated",
+  "Capture actuals",
+  "Review & approve",
+  "Payroll uses actuals",
+];
+
 export default function AttendancePage() {
   const { token } = useAuth();
+  const searchParams = useSearchParams();
 
-  const [attendances, setAttendances] = useState<Attendance[]>([]);
-  const [manualEntries, setManualEntries] = useState<Attendance[]>([]);
-  const [missedShifts, setMissedShifts] = useState<MissedShift[]>([]);
-  const [shiftsForClockIn, setShiftsForClockIn] = useState<ShiftForClockIn[]>([]);
-  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [sites, setSites] = useState<SiteOption[]>([]);
+  const [siteId, setSiteId] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
   const [dateRange, setDateRange] = useState(emptyDateRange);
   const [periodKey, setPeriodKey] = useState("");
   const [periodLabel, setPeriodLabel] = useState("");
   const [payPeriodOptions, setPayPeriodOptions] = useState<PayPeriodOption[]>([]);
-  const [employeeId, setEmployeeId] = useState<string>("");
-  const [siteId, setSiteId] = useState<string>("");
 
-  const [replacingShift, setReplacingShift] = useState<MissedShift | null>(null);
-  const [availableRelievers, setAvailableRelievers] = useState<{ id: string; firstName: string; lastName: string }[]>([]);
-  const [replacingLoading, setReplacingLoading] = useState(false);
-  const [replaceError, setReplaceError] = useState("");
-  const [recordingShiftId, setRecordingShiftId] = useState<string | null>(null);
-  const [recordError, setRecordError] = useState("");
-  const [activeTab, setActiveTab] = useState<"clock" | "manual">("clock");
-  const [preselectedEmployeeId, setPreselectedEmployeeId] = useState<string>("");
-  const manualFormRef = useRef<HTMLDivElement>(null);
-
-  const refresh = useCallback((): Promise<unknown> | void => {
-    if (!token) return;
-    const params = new URLSearchParams();
-    params.set("startDate", dateRange.start.toISOString());
-    params.set("endDate", dateRange.end.toISOString());
-    if (employeeId) params.set("employeeId", employeeId);
-    if (siteId) params.set("siteId", siteId);
-
-    const missedParams = new URLSearchParams();
-    if (employeeId) missedParams.set("employeeId", employeeId);
-    if (siteId) missedParams.set("siteId", siteId);
-
-    const now = new Date();
-    const dayStart = new Date(now);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(now);
-    dayEnd.setHours(23, 59, 59, 999);
-
-    const promises: Promise<unknown>[] = [
-      authFetch(`/attendance?${params}`, token)
-        .then((r) => r.json())
-        .then((d) => setAttendances(d.data || [])),
-      authFetch(`/attendance?source=manual&limit=500`, token)
-        .then((r) => r.json())
-        .then((d) => setManualEntries(d.data || [])),
-      authFetch(`/attendance/missed?${missedParams}`, token)
-        .then((r) => r.json())
-        .then((d) => setMissedShifts(d.data || [])),
-      authFetch(
-        `/shifts?startDate=${dayStart.toISOString()}&endDate=${dayEnd.toISOString()}`,
-        token
-      )
-        .then((r) => r.json())
-        .then((d) => {
-          const shifts = (d.data || []).filter(
-            (s: ShiftForClockIn) =>
-              s.status === "assigned" &&
-              new Date(s.startTime).getTime() - 15 * 60 * 1000 <= now.getTime() &&
-              new Date(s.endTime).getTime() > now.getTime()
-          );
-          setShiftsForClockIn(shifts);
-        }),
-    ];
-
-    return Promise.all(promises);
-  }, [token, dateRange.start, dateRange.end, employeeId, siteId]);
+  useEffect(() => {
+    const deepLinkedSite = searchParams.get("siteId");
+    if (deepLinkedSite) setSiteId(deepLinkedSite);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!token) return;
+    const deepStart = searchParams.get("start");
+    const deepEnd = searchParams.get("end");
     Promise.all([
       fetchCurrentPayPeriod(token),
       fetchPayPeriods(token, { before: 12, after: 3 }),
     ])
       .then(([current, periods]) => {
         setPayPeriodOptions(periods);
+        if (deepStart && deepEnd) {
+          const matched = periods.find(
+            (p) => p.periodStart.slice(0, 10) === deepStart && p.periodEnd.slice(0, 10) === deepEnd
+          );
+          if (matched) {
+            setPeriodKey(matched.periodKey);
+            setPeriodLabel(matched.label);
+            setDateRange({ start: parseISO(matched.periodStart), end: parseISO(matched.periodEnd) });
+            return;
+          }
+          setDateRange({ start: parseISO(deepStart), end: parseISO(deepEnd) });
+          setPeriodLabel(`${deepStart} – ${deepEnd}`);
+          return;
+        }
         setPeriodKey(current.periodKey);
         setPeriodLabel(current.label);
-        setDateRange({
-          start: parseISO(current.periodStart),
-          end: parseISO(current.periodEnd),
-        });
+        setDateRange({ start: parseISO(current.periodStart), end: parseISO(current.periodEnd) });
       })
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   useEffect(() => {
     if (!token) return;
-    authFetch("/employees?limit=200", token)
-      .then((r) => r.json())
-      .then((d) => setEmployees(d.data || []))
-      .catch(console.error);
     authFetch("/sites?limit=100", token)
       .then((r) => r.json())
       .then((d) => setSites(d.data || []))
       .catch(console.error);
   }, [token]);
 
-  useEffect(() => {
-    if (!token) return;
-    const p = refresh();
-    if (p) p.finally(() => setLoading(false));
-  }, [token, refresh]);
+  const applyPayPeriod = (period: PayPeriodOption) => {
+    setPeriodKey(period.periodKey);
+    setPeriodLabel(period.label);
+    setDateRange({ start: parseISO(period.periodStart), end: parseISO(period.periodEnd) });
+  };
 
-  const { activeAttendances, completedAttendances } = useMemo(() => {
-    const active = attendances.filter(
-      (a) => a.clockIn && !a.clockOut && a.status === "clocked_in"
-    );
-    const completed = attendances.filter(
-      (a) => a.clockOut != null || a.status === "completed"
-    );
-    return { activeAttendances: active, completedAttendances: completed };
-  }, [attendances]);
+  const shiftPayPeriod = (direction: -1 | 1) => {
+    const idx = payPeriodOptions.findIndex((p) => p.periodKey === periodKey);
+    const next = payPeriodOptions[idx + direction];
+    if (next) applyPayPeriod(next);
+  };
+
+  const goPrevPeriod = () => shiftPayPeriod(-1);
+  const goNextPeriod = () => shiftPayPeriod(1);
+  const goCurrentPeriod = () => {
+    const current = payPeriodOptions.find((p) => p.isCurrent);
+    if (current) applyPayPeriod(current);
+  };
 
   if (loading) {
     return (
@@ -199,1001 +119,126 @@ export default function AttendancePage() {
     );
   }
 
-  const applyPayPeriod = (period: PayPeriodOption) => {
-    setPeriodKey(period.periodKey);
-    setPeriodLabel(period.label);
-    setDateRange({
-      start: parseISO(period.periodStart),
-      end: parseISO(period.periodEnd),
-    });
-  };
-
-  const shiftPayPeriod = (direction: -1 | 1) => {
-    const idx = payPeriodOptions.findIndex((p) => p.periodKey === periodKey);
-    const next = payPeriodOptions[idx + direction];
-    if (next) applyPayPeriod(next);
-  };
-
-  const goPrevMonth = () => shiftPayPeriod(-1);
-  const goNextMonth = () => shiftPayPeriod(1);
-  const goCurrentMonth = () => {
-    const current = payPeriodOptions.find((p) => p.isCurrent);
-    if (current) applyPayPeriod(current);
-  };
-
   return (
     <div className="animate-fade-in">
-      <h1 className="page-title mb-6">Attendance</h1>
+      <div className="mb-6">
+        <h1 className="page-title">Attendance</h1>
+        <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+          The Site Timesheet is the single source of truth for attendance. Confirm who actually worked at each
+          site, then approve it for payroll.
+        </p>
+      </div>
 
-      <div className="card-wireframe mb-8 p-6">
-        <h3 className="section-title mb-4 pb-3 border-b border-neutral-200 dark:border-neutral-700">
-          Filters
-        </h3>
-        <div className="flex flex-wrap gap-6 items-end">
-          <div className="space-y-2">
-            <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-              Pay period
+      <div className="card-wireframe mb-6 overflow-hidden">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-5 py-3 text-xs text-neutral-600 dark:text-neutral-400 sm:px-6">
+          {WORKFLOW_STEPS.map((step, i) => (
+            <div key={step} className="flex items-center gap-2">
+              <span className="flex items-center gap-1.5">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-neutral-200 text-[10px] font-semibold text-neutral-700 dark:bg-neutral-700 dark:text-neutral-200">
+                  {i + 1}
+                </span>
+                <span className="font-medium text-neutral-700 dark:text-neutral-300">{step}</span>
+              </span>
+              {i < WORKFLOW_STEPS.length - 1 && (
+                <svg className="h-3.5 w-3.5 text-neutral-300 dark:text-neutral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card-wireframe mb-8 overflow-hidden">
+        <div className="border-b border-neutral-200 bg-neutral-50/70 px-5 py-4 dark:border-neutral-700 dark:bg-neutral-900/40 sm:px-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="section-title">Choose roster period &amp; site</h3>
+              <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+                Pick the pay period and the site whose timesheet you want to review.
+              </p>
+            </div>
+            {periodLabel && (
+              <div className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs text-neutral-600 shadow-sm dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300">
+                <span className="font-medium text-neutral-800 dark:text-neutral-100">{periodLabel}</span>
+                <span className="block mt-0.5">
+                  {format(dateRange.start, "d MMM yyyy")} – {format(dateRange.end, "d MMM yyyy")}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="grid gap-4 p-5 sm:p-6 xl:grid-cols-[minmax(18rem,1.1fr)_minmax(20rem,1fr)]">
+          <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-950/60">
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+              Roster / pay period
             </label>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="mt-2 grid gap-2">
               {token && (
                 <PayPeriodSelect
                   token={token}
                   variant="pay"
                   value={periodKey}
                   onChange={applyPayPeriod}
-                  className="input-modern min-w-[14rem]"
+                  className="input-modern w-full"
                 />
               )}
-              <button type="button" onClick={goPrevMonth} className="btn-secondary text-sm">
-                Prev
-              </button>
-              <button type="button" onClick={goNextMonth} className="btn-secondary text-sm">
-                Next
-              </button>
-              <button type="button" onClick={goCurrentMonth} className="btn-secondary text-sm">
-                Current
-              </button>
+              <div className="grid grid-cols-3 gap-2">
+                <button type="button" onClick={goPrevPeriod} className="btn-secondary px-2 py-2 text-xs">
+                  Previous
+                </button>
+                <button type="button" onClick={goCurrentPeriod} className="btn-secondary px-2 py-2 text-xs">
+                  Current
+                </button>
+                <button type="button" onClick={goNextPeriod} className="btn-secondary px-2 py-2 text-xs">
+                  Next
+                </button>
+              </div>
             </div>
-            {periodLabel && (
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                {periodLabel} · {format(dateRange.start, "d MMM yyyy")} – {format(dateRange.end, "d MMM yyyy")}
-              </p>
-            )}
-          </div>
-          <div className="space-y-2">
-            <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-              Employee
-            </label>
-            <select
-              value={employeeId}
-              onChange={(e) => setEmployeeId(e.target.value)}
-              className="input-modern w-full min-w-[180px]"
-            >
-              <option value="">All team</option>
-              {employees.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.firstName} {e.lastName}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+          </section>
+
+          <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-950/60">
+            <label className="block text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
               Site
             </label>
             <select
               value={siteId}
               onChange={(e) => setSiteId(e.target.value)}
-              className="input-modern w-full min-w-[180px]"
+              className="input-modern mt-2 w-full"
             >
-              <option value="">All sites</option>
+              <option value="">Select a site…</option>
               {sites.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
                 </option>
               ))}
             </select>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setLoading(true);
-              const p = refresh();
-              if (p) p.finally(() => setLoading(false));
-            }}
-            className="btn-primary"
-          >
-            Apply
-          </button>
+            <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+              Each site keeps its own timesheet for the selected period.
+            </p>
+          </section>
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-neutral-200 dark:border-neutral-700 mb-6">
-        {(["clock", "manual"] as const).map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setActiveTab(tab)}
-            className={clsx(
-              "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors -mb-px",
-              activeTab === tab
-                ? "bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-neutral-200 dark:border-neutral-700 border-b-transparent"
-                : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 border border-transparent"
-            )}
-          >
-            {tab === "clock" ? "Clock in / out" : "Manual attendance"}
-          </button>
-        ))}
-      </div>
-
-      {replacingShift && (
-        <ReplaceGuardModal
-          shift={replacingShift}
-          availableRelievers={availableRelievers}
-          loading={replacingLoading}
-          error={replaceError}
-          token={token!}
-          onClose={() => {
-            setReplacingShift(null);
-            setReplaceError("");
-          }}
-          onSuccess={() => {
-            setReplacingShift(null);
-            setReplaceError("");
-            refresh();
-          }}
-          onError={(msg) => setReplaceError(msg)}
-        />
-      )}
-
-      {activeTab === "clock" && (
-        <>
-          {shiftsForClockIn.length > 0 && (
-            <div className="card-wireframe mb-6 p-4">
-              <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
-                Clock in / Clock out
-              </h3>
-              <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
-                Shifts within clock-in window. Clock in when the guard arrives, or mark absent to replace with another guard.
-                Sites with a geofence set under{" "}
-                <span className="font-medium text-neutral-700 dark:text-neutral-300">Sites</span> still allow dashboard
-                clock-in without GPS; guards using WhatsApp must share their location for those sites.
-              </p>
-              <div className="space-y-2">
-                {shiftsForClockIn.map((shift) => (
-                  <ClockInRow
-                key={shift.id}
-                shift={shift}
-                token={token!}
-                onSuccess={refresh}
-                onMarkAbsent={() => {
-                  setReplacingShift(shift);
-                  setReplaceError("");
-                  setAvailableRelievers([]);
-                  setReplacingLoading(true);
-                  authFetch(`/shifts/${shift.id}/available-relievers`, token!)
-                    .then((r) => r.json())
-                    .then((d) => setAvailableRelievers(d.data || []))
-                    .catch(() => setAvailableRelievers([]))
-                    .finally(() => setReplacingLoading(false));
-                }}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeAttendances.length > 0 && (
-            <div className="card-wireframe mb-6 p-4">
-              <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
-                Clock out
-              </h3>
-              <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
-                Guards currently on shift. Clock them out when they finish.
-              </p>
-              <div className="space-y-3">
-                {activeAttendances.map((att) => (
-                  <AttendanceRow
-                    key={att.id}
-                    att={att}
-                    token={token!}
-                    onSuccess={refresh}
-                    showClockOut
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-3">
-            <h3 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-500 dark:text-neutral-400 mb-2">
-              Completed
-            </h3>
-        {completedAttendances.filter((a) => a.source !== "manual" && a.shift?.post?.site?.name !== "Manual").length > 0 ? (
-          completedAttendances
-            .filter((a) => a.source !== "manual" && a.shift?.post?.site?.name !== "Manual")
-                .map((att) => (
-                  <AttendanceRow
-                    key={att.id}
-                    att={att}
-                    token={token!}
-                    onSuccess={refresh}
-                    showClockOut={false}
-                  />
-                ))
-            ) : (
-              <p className="text-neutral-500 text-sm py-2">No completed records</p>
-            )}
-          </div>
-
-          {attendances.length === 0 && !shiftsForClockIn.length && (
-            <p className="text-neutral-500 py-8 text-center">No attendance records</p>
-          )}
-
-          <div className="card-wireframe mt-8 mb-6 p-4">
-            <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
-              Missed shifts (no clock-in)
-            </h3>
-            <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-3">
-              Record attendance for shifts that were worked but not clocked in. Uses shift start/end times by default.
-            </p>
-            {recordError && (
-              <div className="mb-3 p-2 rounded bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm">
-                {recordError}
-              </div>
-            )}
-            {missedShifts.length > 0 ? (
-              <div className="space-y-2">
-                {missedShifts.map((s) => (
-                  <div
-                    key={s.id}
-                    className="card-wireframe p-3 flex items-center justify-between gap-4"
-                  >
-                    <span>
-                      {s.employee.firstName} {s.employee.lastName} at {s.post.site.name} - {s.post.name}
-                    </span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm text-neutral-600 dark:text-neutral-400">
-                        {format(new Date(s.startTime), "dd MMM HH:mm")} - {format(new Date(s.endTime), "dd MMM HH:mm")}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          setRecordError("");
-                          setRecordingShiftId(s.id);
-                          try {
-                            const res = await authFetch(`/attendance/missed/${s.id}/record`, token!, {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({}),
-                            });
-                            const data = await res.json();
-                            if (!res.ok) throw new Error(data.message || data.error || "Failed to record");
-                            refresh();
-                          } catch (err) {
-                            setRecordError(err instanceof Error ? err.message : "Failed to record attendance");
-                          } finally {
-                            setRecordingShiftId(null);
-                          }
-                        }}
-                        disabled={recordingShiftId !== null}
-                        className="btn-primary text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                      >
-                        {recordingShiftId === s.id ? "Recording…" : "Record attendance"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setReplacingShift(s);
-                          setReplaceError("");
-                          setAvailableRelievers([]);
-                          setReplacingLoading(true);
-                          authFetch(`/shifts/${s.id}/available-relievers`, token!)
-                            .then((r) => r.json())
-                            .then((d) => setAvailableRelievers(d.data || []))
-                            .catch(() => setAvailableRelievers([]))
-                            .finally(() => setReplacingLoading(false));
-                        }}
-                        className="btn-secondary text-sm"
-                      >
-                        Replace
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-neutral-600 dark:text-neutral-400">No missed shifts found.</p>
-            )}
-          </div>
-        </>
-      )}
-
-      {activeTab === "manual" && (
-        <>
-          <div ref={manualFormRef}>
-            <ManualEntryForm
-              employees={employees}
-              sites={sites as SiteWithPosts[]}
-              token={token!}
-              onSuccess={refresh}
-              preselectedEmployeeId={preselectedEmployeeId}
-              onPreselectHandled={() => setPreselectedEmployeeId("")}
-            />
-          </div>
-          <div className="card-wireframe mb-6 p-4">
-            <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
-              Recorded manual entries
-            </h3>
-            <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
-              Attendance records added manually (not from clock-in/clock-out). Click a guard to expand and view their shifts. Click &quot;Add another&quot; to quickly add another entry for that guard.
-            </p>
-            {manualEntries.length > 0 ? (
-              <ManualEntriesByGuard
-                manualEntries={manualEntries}
-                token={token!}
-                onSuccess={refresh}
-                onAddAnother={(employeeId) => {
-                  setPreselectedEmployeeId(employeeId);
-                  manualFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                }}
-              />
-            ) : (
-              <p className="text-neutral-500 text-sm py-2">No manual entries yet. Add one above.</p>
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function ManualEntriesByGuard({
-  manualEntries,
-  token,
-  onSuccess,
-  onAddAnother,
-}: {
-  manualEntries: Attendance[];
-  token: string;
-  onSuccess: () => void;
-  onAddAnother: (employeeId: string) => void;
-}) {
-  const groupedByGuard = useMemo(() => {
-    const map = new Map<string, Attendance[]>();
-    for (const att of manualEntries) {
-      const empId = att.shift?.employee?.id ?? "unknown";
-      if (!map.has(empId)) map.set(empId, []);
-      map.get(empId)!.push(att);
-    }
-    return Array.from(map.entries()).map(([empId, entries]) => ({
-      employeeId: empId,
-      employeeName: `${entries[0].shift.employee.firstName} ${entries[0].shift.employee.lastName}`,
-      entries: entries.sort(
-        (a, b) => new Date(a.shift.startTime).getTime() - new Date(b.shift.startTime).getTime()
-      ),
-    }));
-  }, [manualEntries]);
-
-  return (
-    <div className="space-y-2">
-      {groupedByGuard.map((group) => (
-        <ManualEntriesGuardGroup
-          key={group.employeeId}
-          group={group}
+      {siteId && token ? (
+        <SiteTimesheetsSection
           token={token}
-          onSuccess={onSuccess}
-          onAddAnother={onAddAnother}
+          siteId={siteId}
+          periodStart={format(dateRange.start, "yyyy-MM-dd")}
+          periodEnd={format(dateRange.end, "yyyy-MM-dd")}
         />
-      ))}
-    </div>
-  );
-}
-
-function ManualEntriesGuardGroup({
-  group,
-  token,
-  onSuccess,
-  onAddAnother,
-}: {
-  group: { employeeId: string; employeeName: string; entries: Attendance[] };
-  token: string;
-  onSuccess: () => void;
-  onAddAnother: (employeeId: string) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-
-  return (
-    <div className="card-wireframe overflow-hidden">
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => setExpanded((e) => !e)}
-        onKeyDown={(e) => e.key === "Enter" && setExpanded((ex) => !ex)}
-        className="p-4 flex items-center justify-between cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors"
-      >
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <svg
-            className={`w-4 h-4 text-neutral-500 transition-transform shrink-0 ${expanded ? "rotate-90" : ""}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onAddAnother(group.employeeId);
-            }}
-            className="font-medium text-left hover:underline underline-offset-2 text-neutral-900 dark:text-neutral-100"
-          >
-            {group.employeeName}
-          </button>
-          <span className="text-sm text-neutral-500 dark:text-neutral-400 shrink-0">
-            ({group.entries.length} shift{group.entries.length !== 1 ? "s" : ""})
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onAddAnother(group.employeeId);
-          }}
-          className="text-sm font-medium text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 underline underline-offset-2 shrink-0"
-        >
-          Add another
-        </button>
-      </div>
-      {expanded && (
-        <div className="border-t border-neutral-200 dark:border-neutral-700">
-          <div className="p-3 space-y-2 bg-neutral-50/50 dark:bg-neutral-900/30">
-            {group.entries.map((att) => (
-              <AttendanceRow
-                key={att.id}
-                att={att}
-                token={token}
-                onSuccess={onSuccess}
-                showClockOut={false}
-                isManualEntry
-              />
-            ))}
-          </div>
+      ) : (
+        <div className="card-wireframe p-8 text-center">
+          <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+            Select a site to open its timesheet
+          </p>
+          <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500 dark:text-neutral-400">
+            Choose a site above to see every guard scheduled for the period, capture who actually worked, resolve
+            discrepancies, and approve the timesheet for payroll.
+          </p>
         </div>
       )}
     </div>
-  );
-}
-
-function ManualEntryForm({
-  employees,
-  sites,
-  token,
-  onSuccess,
-  preselectedEmployeeId,
-  onPreselectHandled,
-}: {
-  employees: EmployeeOption[];
-  sites: SiteWithPosts[];
-  token: string;
-  onSuccess: () => void;
-  preselectedEmployeeId?: string;
-  onPreselectHandled?: () => void;
-}) {
-  const [employeeId, setEmployeeId] = useState("");
-  const [siteId, setSiteId] = useState("");
-  const [postId, setPostId] = useState("");
-  const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (preselectedEmployeeId && employees.some((e) => e.id === preselectedEmployeeId)) {
-      setEmployeeId(preselectedEmployeeId);
-      onPreselectHandled?.();
-    }
-  }, [preselectedEmployeeId, employees, onPreselectHandled]);
-
-  const selectedSite = sites.find((s) => s.id === siteId);
-  const posts = selectedSite?.posts ?? [];
-  const selectedPost = posts.find((p) => p.id === postId);
-  const shiftType = (selectedPost?.shiftType ?? "day") === "night" ? "night" : "day";
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    if (!employeeId) {
-      setError("Select an employee");
-      return;
-    }
-    if (!siteId) {
-      setError("Select a site");
-      return;
-    }
-    if (!postId) {
-      setError("Select a post");
-      return;
-    }
-    setSaving(true);
-    try {
-      const clockIn =
-        shiftType === "day"
-          ? new Date(`${date}T06:00`)
-          : new Date(`${date}T18:00`);
-      const clockOut =
-        shiftType === "day"
-          ? new Date(`${date}T18:00`)
-          : (() => {
-              const [y, m, d] = date.split("-").map(Number);
-              const nextDay = new Date(y, m - 1, d + 1);
-              return new Date(`${format(nextDay, "yyyy-MM-dd")}T06:00`);
-            })();
-      const res = await authFetch("/attendance/manual", token, {
-        method: "POST",
-        body: JSON.stringify({
-          employeeId,
-          postId,
-          clockIn: clockIn.toISOString(),
-          clockOut: clockOut.toISOString(),
-        }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || data.error || "Failed to add manual attendance");
-      }
-      setEmployeeId("");
-      setSiteId("");
-      setPostId("");
-      setDate(format(new Date(), "yyyy-MM-dd"));
-      onSuccess();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="card-wireframe mb-6 p-4">
-      <h3 className="font-medium text-neutral-800 dark:text-neutral-200 mb-2">
-        Manual entry
-      </h3>
-      <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
-        Add clock-in and clock-out for team members who were not rostered.
-      </p>
-      <form onSubmit={handleSubmit} className="flex flex-wrap gap-4 items-end">
-        <div className="space-y-1">
-          <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-            Employee
-          </label>
-          <select
-            value={employeeId}
-            onChange={(e) => setEmployeeId(e.target.value)}
-            className="input-modern w-full min-w-[180px]"
-            required
-          >
-            <option value="">Select employee</option>
-            {employees.map((emp) => (
-              <option key={emp.id} value={emp.id}>
-                {emp.firstName} {emp.lastName}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-1">
-          <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-            Site *
-          </label>
-          <select
-            value={siteId}
-            onChange={(e) => {
-              setSiteId(e.target.value);
-              setPostId("");
-            }}
-            className="input-modern w-full min-w-[180px]"
-            required
-          >
-            <option value="">Select site</option>
-            {sites.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-1">
-          <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-            Post *
-          </label>
-          <select
-            value={postId}
-            onChange={(e) => setPostId(e.target.value)}
-            className="input-modern w-full min-w-[180px]"
-            required
-            disabled={!siteId}
-          >
-            <option value="">
-              {siteId && posts.length === 0 ? "No posts at this site" : "Select post"}
-            </option>
-            {posts.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-1">
-          <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-            Date
-          </label>
-          <DateInput value={date} onChange={setDate} className="input-modern" showToday />
-        </div>
-        <button type="submit" disabled={saving} className="btn-primary">
-          {saving ? "Adding…" : "Add"}
-        </button>
-      </form>
-      {error && (
-        <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p>
-      )}
-    </div>
-  );
-}
-
-type ShiftForReplace = MissedShift | ShiftForClockIn;
-
-function ReplaceGuardModal({
-  shift,
-  availableRelievers,
-  loading,
-  error,
-  token,
-  onClose,
-  onSuccess,
-  onError,
-}: {
-  shift: ShiftForReplace;
-  availableRelievers: { id: string; firstName: string; lastName: string }[];
-  loading: boolean;
-  error: string;
-  token: string;
-  onClose: () => void;
-  onSuccess: () => void;
-  onError: (msg: string) => void;
-}) {
-  const [replacing, setReplacing] = useState(false);
-
-  const handleSelect = async (relieverId: string) => {
-    onError("");
-    setReplacing(true);
-    try {
-      const res = await authFetch(`/shifts/${shift.id}`, token, {
-        method: "PUT",
-        body: JSON.stringify({ employeeId: relieverId }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || data.error || "Replace failed");
-      }
-      onSuccess();
-    } catch (e) {
-      onError(e instanceof Error ? e.message : "Replace failed");
-    } finally {
-      setReplacing(false);
-    }
-  };
-
-  const guardName = `${shift.employee.firstName} ${shift.employee.lastName}`;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="card-wireframe p-6 max-w-md w-full mx-4 shadow-xl">
-        <h3 className="text-lg font-semibold text-neutral-800 dark:text-neutral-200 mb-2">
-          Replace absent guard
-        </h3>
-        <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
-          {guardName} is absent. Select an active guard to replace them for this shift.
-        </p>
-        {error && (
-          <div className="mb-4 p-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-sm">
-            {error}
-          </div>
-        )}
-        {loading ? (
-          <p className="text-neutral-600 dark:text-neutral-400 py-4">Loading available relievers...</p>
-        ) : availableRelievers.length === 0 ? (
-          <p className="text-neutral-600 dark:text-neutral-400 py-4">No available relievers for this shift.</p>
-        ) : (
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {availableRelievers.map((r) => (
-              <div
-                key={r.id}
-                className="flex items-center justify-between p-2 rounded-md border border-neutral-200 dark:border-neutral-700"
-              >
-                <span className="text-neutral-800 dark:text-neutral-200">
-                  {r.firstName} {r.lastName}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleSelect(r.id)}
-                  disabled={replacing}
-                  className="btn-secondary text-sm disabled:opacity-50"
-                >
-                  {replacing ? "..." : "Select"}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="mt-6 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="btn-secondary"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AttendanceRow({
-  att,
-  token,
-  onSuccess,
-  showClockOut,
-  isManualEntry = false,
-}: {
-  att: Attendance;
-  token: string;
-  onSuccess: () => void;
-  showClockOut: boolean;
-  isManualEntry?: boolean;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const shiftStart = new Date(att.shift.startTime);
-  const shiftEnd = new Date(att.shift.endTime);
-  const shiftHours = Math.round(((shiftEnd.getTime() - shiftStart.getTime()) / (1000 * 60 * 60)) * 100) / 100;
-
-  return (
-    <div className="card-wireframe overflow-hidden">
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => setExpanded((e) => !e)}
-        onKeyDown={(e) => e.key === "Enter" && setExpanded((ex) => !ex)}
-        className="p-4 flex items-center justify-between cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-700/50 transition-colors"
-      >
-        <div className="flex items-center gap-2">
-          <svg
-            className={`w-4 h-4 text-neutral-500 transition-transform ${expanded ? "rotate-90" : ""}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-          <div>
-            <span className="font-medium">
-              {att.shift.employee.firstName} {att.shift.employee.lastName}
-            </span>
-            <span className="text-neutral-500 mx-2">at</span>
-            <span>
-              {att.shift.post.site.name} - {att.shift.post.name}
-            </span>
-            <span className="ml-2 text-sm text-neutral-600 dark:text-neutral-400">
-              {att.clockIn
-                ? new Date(att.clockIn).toLocaleString()
-                : "Not clocked in"}
-              {att.clockOut && ` - ${new Date(att.clockOut).toLocaleString()}`}
-            </span>
-            <span className="ml-2 text-sm text-neutral-500 dark:text-neutral-500">
-              | Shift: {shiftHours}h
-            </span>
-            {(att.overtimeHours ?? 0) > 0 && (
-              <span className="ml-2 text-neutral-600 font-medium">
-                OT: {att.overtimeHours}h
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
-          {showClockOut && att.clockIn && !att.clockOut && (
-            <ClockOutButton
-              attendanceId={att.id}
-              token={token}
-              onSuccess={onSuccess}
-            />
-          )}
-          {(isManualEntry || att.source === "manual" || att.shift?.post?.site?.name === "Manual") && (
-            <span className="badge bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-700">
-              Manual
-            </span>
-          )}
-          <span
-            className={`badge ${
-              att.status === "completed"
-                ? "badge-success"
-                : "badge-neutral"
-            }`}
-          >
-            {att.status}
-          </span>
-        </div>
-      </div>
-      {expanded && (
-        <div className="px-4 pb-4 pt-0 border-t border-neutral-200 dark:border-neutral-700">
-          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-            <div className="space-y-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                Employee
-              </p>
-              <p className="text-neutral-800 dark:text-neutral-200">
-                {att.shift.employee.firstName} {att.shift.employee.lastName}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                Location
-              </p>
-              <p className="text-neutral-800 dark:text-neutral-200">
-                {att.shift.post.site.name} — {att.shift.post.name}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                Scheduled shift
-              </p>
-              <p className="text-neutral-800 dark:text-neutral-200">
-                {format(shiftStart, "EEE, MMM d, yyyy · h:mm a")} — {format(shiftEnd, "h:mm a")}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                Clock in / out
-              </p>
-              <p className="text-neutral-800 dark:text-neutral-200">
-                {att.clockIn
-                  ? format(new Date(att.clockIn), "EEE, MMM d · h:mm a")
-                  : "—"}
-                {att.clockOut && (
-                  <>
-                    {" → "}
-                    {format(new Date(att.clockOut), "h:mm a")}
-                  </>
-                )}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                Hours
-              </p>
-              <p className="text-neutral-800 dark:text-neutral-200">
-                Shift: {shiftHours}h
-                {(att.overtimeHours ?? 0) > 0 && (
-                  <span className="ml-2 font-medium">Overtime: {att.overtimeHours}h</span>
-                )}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-                Status
-              </p>
-              <p className="text-neutral-800 dark:text-neutral-200 capitalize">{att.status.replace(/_/g, " ")}</p>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ClockInRow({
-  shift,
-  token,
-  onSuccess,
-  onMarkAbsent,
-}: {
-  shift: ShiftForClockIn;
-  token: string;
-  onSuccess: () => void;
-  onMarkAbsent: () => void;
-}) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleClockIn = async () => {
-    setError("");
-    setLoading(true);
-    try {
-      const res = await authFetch("/attendance/clock-in", token, {
-        method: "POST",
-        body: JSON.stringify({ shiftId: shift.id }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "Clock-in failed");
-      }
-      onSuccess();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="card-wireframe flex items-center justify-between p-3">
-      <span className="text-neutral-800 dark:text-neutral-200">
-        {shift.employee.firstName} {shift.employee.lastName} at{" "}
-        {shift.post.site.name} - {shift.post.name}
-      </span>
-      <div className="flex items-center gap-2">
-        {error && <span className="text-red-600 dark:text-red-400 text-sm">{error}</span>}
-        <button
-          onClick={handleClockIn}
-          disabled={loading}
-          className="btn-secondary text-sm disabled:opacity-50"
-        >
-          {loading ? "..." : "Clock In"}
-        </button>
-        <button
-          type="button"
-          onClick={onMarkAbsent}
-          disabled={loading}
-          className="btn-primary bg-red-600 dark:bg-red-600 border-red-600 dark:border-red-600 hover:bg-red-700 dark:hover:bg-red-700 disabled:opacity-50"
-        >
-          Mark Absent
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ClockOutButton({
-  attendanceId,
-  token,
-  onSuccess,
-}: {
-  attendanceId: string;
-  token: string;
-  onSuccess: () => void;
-}) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleSubmit = async () => {
-    setError("");
-    setLoading(true);
-    try {
-      const res = await authFetch("/attendance/clock-out", token, {
-        method: "POST",
-        body: JSON.stringify({ attendanceId }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || "Clock-out failed");
-      }
-      onSuccess();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <>
-      {error && <span className="text-red-600 text-sm mr-2">{error}</span>}
-      <button
-        onClick={handleSubmit}
-        disabled={loading}
-        className="btn-secondary text-sm disabled:opacity-50"
-      >
-        {loading ? "..." : "Clock Out"}
-      </button>
-    </>
   );
 }

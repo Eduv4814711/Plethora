@@ -49,12 +49,7 @@ async function getGuardsOnDutyByDay(
           AND s."status" IN ('assigned', 'active', 'completed', 'verified')
           AND s."startTime" <= (${weekStart}::timestamp + ((d.day_index + 1) * interval '1 day') - interval '1 millisecond')
           AND s."endTime" >= (${weekStart}::timestamp + (d.day_index * interval '1 day'))
-          AND EXISTS (
-            SELECT 1
-            FROM "Post" p
-            WHERE p.id = s."postId"
-              AND p."siteId" IN (${Prisma.join(siteIds)})
-          )
+          AND s."siteId" IN (${Prisma.join(siteIds)})
         GROUP BY d.day_index
         ORDER BY d.day_index ASC
       `)
@@ -94,7 +89,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
 
     const shiftWhereBase = {
       companyId,
-      ...(siteIds?.length ? { post: { siteId: { in: siteIds } } } : {}),
+      ...(siteIds?.length ? { siteId: { in: siteIds } } : {}),
     };
 
     // Get start of current week (Monday) and build day boundaries
@@ -125,15 +120,11 @@ export async function dashboardRoutes(app: FastifyInstance) {
         prisma.site.count({
           where: {
             ...activeSitesWhere,
-            posts: {
+            shifts: {
               some: {
-                shifts: {
-                  some: {
-                    status: "active",
-                    startTime: { lte: now },
-                    endTime: { gte: now },
-                  },
-                },
+                status: "active",
+                startTime: { lte: now },
+                endTime: { gte: now },
               },
             },
           },
@@ -141,16 +132,12 @@ export async function dashboardRoutes(app: FastifyInstance) {
         prisma.site.count({
           where: {
             ...activeSitesWhere,
-            posts: {
+            shifts: {
               some: {
-                shifts: {
-                  some: {
-                    status: { in: ["assigned", "active", "completed", "verified"] },
-                    startTime: {
-                      gte: startOfMonth(subMonths(now, 1)),
-                      lte: endOfDay(subMonths(now, 1)),
-                    },
-                  },
+                status: { in: ["assigned", "active", "completed", "verified"] },
+                startTime: {
+                  gte: startOfMonth(subMonths(now, 1)),
+                  lte: endOfDay(subMonths(now, 1)),
                 },
               },
             },
@@ -216,9 +203,8 @@ export async function dashboardRoutes(app: FastifyInstance) {
         >(Prisma.sql`
       SELECT to_char(date_trunc('month', s."startTime")::date, 'YYYY-MM') as month, count(*)::bigint
       FROM "Shift" s
-      JOIN "Post" p ON p.id = s."postId"
       WHERE s."companyId" = ${companyId}
-        AND p."siteId" IN (${Prisma.join(siteIds)})
+        AND s."siteId" IN (${Prisma.join(siteIds)})
         AND s."startTime" >= ${reportStart}
       GROUP BY date_trunc('month', s."startTime")
       ORDER BY month ASC
