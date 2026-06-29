@@ -24,10 +24,22 @@ function originAlreadyIncludesPrefix(origin: string, prefix: string): boolean {
   }
 }
 
+/**
+ * Browser calls use the Next.js `/api` rewrite so auth cookies stay on the web origin.
+ * Server-side fetches (SSR) talk to the API host directly.
+ */
+function resolveApiOrigin(): string {
+  if (typeof window !== "undefined") return "/api";
+  return normalizeApiOrigin(process.env.NEXT_PUBLIC_API_URL);
+}
+
 export function buildApiUrl(endpointPath: string): string {
-  const origin = normalizeApiOrigin(process.env.NEXT_PUBLIC_API_URL);
+  const origin = resolveApiOrigin();
   const configuredPrefix = trimSlashes(process.env.NEXT_PUBLIC_API_PATH_PREFIX ?? "");
-  const prefix = originAlreadyIncludesPrefix(origin, configuredPrefix) ? "" : configuredPrefix;
+  const prefix =
+    origin.startsWith("/") || originAlreadyIncludesPrefix(origin, configuredPrefix)
+      ? ""
+      : configuredPrefix;
   const endpoint = trimSlashes(endpointPath);
   const path = [prefix, endpoint].filter(Boolean).join("/");
   return path ? `${origin}/${path}` : origin;
@@ -145,7 +157,29 @@ export async function onboardCompany(payload: OnboardPayload): Promise<LoginResp
  * Pass `legacyRefreshToken` once when migrating from localStorage.
  */
 export async function refreshSession(legacyRefreshToken?: string): Promise<LoginResponse> {
-  const res = await fetch(`${API_BASE}/auth/refresh`, {
+  const csrf = getCsrfTokenFromDocument();
+  const url = `${API_BASE}/auth/refresh`;
+  // #region agent log
+  fetch("http://127.0.0.1:7661/ingest/453706ed-2456-4856-80b5-ae7dd19b5077", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "2915a3" },
+    body: JSON.stringify({
+      sessionId: "2915a3",
+      runId: "pre-fix",
+      hypothesisId: "A,D",
+      location: "api.ts:refreshSession:request",
+      message: "Refresh request prepared",
+      data: {
+        apiBase: API_BASE,
+        hasCsrfHeader: !!csrf,
+        hasLegacyBodyToken: !!legacyRefreshToken,
+        webOrigin: typeof window !== "undefined" ? window.location.origin : null,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+  const res = await fetch(url, {
     ...AUTH_FETCH_INIT,
     method: "POST",
     headers: authJsonHeaders(),
@@ -153,7 +187,29 @@ export async function refreshSession(legacyRefreshToken?: string): Promise<Login
       legacyRefreshToken ? { refreshToken: legacyRefreshToken } : {}
     ),
   });
-  if (!res.ok) throw new Error("Token refresh failed");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    // #region agent log
+    fetch("http://127.0.0.1:7661/ingest/453706ed-2456-4856-80b5-ae7dd19b5077", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "2915a3" },
+      body: JSON.stringify({
+        sessionId: "2915a3",
+        runId: "pre-fix",
+        hypothesisId: "A,C",
+        location: "api.ts:refreshSession:response",
+        message: "Refresh request failed",
+        data: {
+          status: res.status,
+          error: err?.error ?? null,
+          message: err?.message ?? null,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    throw new Error("Token refresh failed");
+  }
   return res.json();
 }
 
@@ -400,6 +456,21 @@ export async function authFetch(url: string, token: string, init?: RequestInit):
 
   let res = await doFetch(token);
   if (res.status === 401 && tokenRefreshCallback) {
+    // #region agent log
+    fetch("http://127.0.0.1:7661/ingest/453706ed-2456-4856-80b5-ae7dd19b5077", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "2915a3" },
+      body: JSON.stringify({
+        sessionId: "2915a3",
+        runId: "pre-fix",
+        hypothesisId: "B,C",
+        location: "api.ts:authFetch:401",
+        message: "API returned 401 — attempting token refresh",
+        data: { url },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     const newToken = await tokenRefreshCallback();
     if (newToken) {
       res = await doFetch(newToken);

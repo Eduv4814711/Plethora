@@ -42,6 +42,21 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!loading && !user) {
+      // #region agent log
+      fetch("http://127.0.0.1:7661/ingest/453706ed-2456-4856-80b5-ae7dd19b5077", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "2915a3" },
+        body: JSON.stringify({
+          sessionId: "2915a3",
+          runId: "pre-fix",
+          hypothesisId: "A,B,C,D,E",
+          location: "dashboard-layout.tsx:redirect-login",
+          message: "Redirecting to login — user session lost",
+          data: { pathname, loading },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
       router.replace("/login");
     }
   }, [loading, user, router]);
