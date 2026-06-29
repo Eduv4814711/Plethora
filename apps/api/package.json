@@ -12,7 +12,7 @@
     "test:watch": "vitest",
     "build": "prisma generate && tsc && node scripts/copy-templates.mjs",
     "start": "prisma migrate deploy && node dist/index.js",
-    "start:with-migrate": "prisma migrate deploy && node dist/index.js",
+    "start:with-migrate": "prisma migrate resolve --rolled-back 20260627120000_roster_module_v2 || true && prisma migrate deploy && node dist/index.js",
     "start:server": "node dist/index.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
