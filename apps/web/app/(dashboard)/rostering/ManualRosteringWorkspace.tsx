@@ -14,6 +14,7 @@ import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import {
   applyManualOverridesBulk,
+  addPlaceholderGuardToSite,
   fetchLiveRoster,
   fetchSiteRosterConfig,
   MANUAL_SHIFT_CODE_OPTIONS,
@@ -81,6 +82,7 @@ type EmployeeOption = {
   lastName: string;
   status: string;
   employeeType?: string;
+  jobRole?: string | null;
 };
 
 type PendingOverride = {
@@ -113,6 +115,7 @@ export type ManualRosteringWorkspaceHandle = {
   applyGuardPattern: (guardId: string, cycleCodes: RosterShiftCode[]) => void;
   applyPatternToAll: (cycleCodes: RosterShiftCode[]) => void;
   addGuardToSite: (guardId: string) => Promise<void>;
+  addPlaceholderGuard: (type: "unknown" | "reliever") => Promise<void>;
 };
 
 function buildBaselineCells(rows: RosterPeriodGrid["rows"]) {
@@ -149,6 +152,7 @@ export const ManualRosteringWorkspace = forwardRef<
   const [isSaving, setIsSaving] = useState(false);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [addingGuard, setAddingGuard] = useState(false);
+  const [addingPlaceholder, setAddingPlaceholder] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -254,7 +258,8 @@ export const ManualRosteringWorkspace = forwardRef<
         .filter(
           (e) =>
             (e.employeeType ?? "security") === "security" &&
-            ["active", "training", "hired", "reliever"].includes(e.status)
+            ["active", "training", "hired", "reliever"].includes(e.status) &&
+            !(e.jobRole ?? "").startsWith("roster_placeholder:")
         )
         .map((e) => ({
           id: e.id,
@@ -460,6 +465,31 @@ export const ManualRosteringWorkspace = forwardRef<
     }
   };
 
+  const handleAddPlaceholderGuard = async (type: "unknown" | "reliever") => {
+    if (!token || !siteConfig) return;
+    if (
+      pendingChangesRef.current.size > 0 &&
+      !window.confirm("Adding a placeholder reloads the roster. Discard unsaved changes and continue?")
+    ) {
+      return;
+    }
+    setAddingPlaceholder(true);
+    setError(null);
+    try {
+      const created = await addPlaceholderGuardToSite(token, siteId, type);
+      await loadConfig();
+      await fetchGrid();
+      setStatusMsg(
+        `${created.guardName} added for monthly planning — capture the real guard in attendance when known.`
+      );
+      setTimeout(() => setStatusMsg(null), 5000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to add placeholder guard");
+    } finally {
+      setAddingPlaceholder(false);
+    }
+  };
+
   const applyGuardPattern = useCallback(
     (guardId: string, cycleCodes: RosterShiftCode[]) => {
       if (!grid || cycleCodes.length === 0) return;
@@ -595,8 +625,9 @@ export const ManualRosteringWorkspace = forwardRef<
       applyGuardPattern,
       applyPatternToAll,
       addGuardToSite: handleAddGuardToSite,
+      addPlaceholderGuard: handleAddPlaceholderGuard,
     }),
-    [handleSaveRoster, handleDiscardChanges, handlePublishRoster, applyGuardPattern, applyPatternToAll, handleAddGuardToSite]
+    [handleSaveRoster, handleDiscardChanges, handlePublishRoster, applyGuardPattern, applyPatternToAll, handleAddGuardToSite, handleAddPlaceholderGuard]
   );
 
   useEffect(() => {
@@ -783,6 +814,8 @@ export const ManualRosteringWorkspace = forwardRef<
           editable
           shiftOptions={MANUAL_SHIFT_CODE_OPTIONS}
           onCellChange={handleCellChange}
+          onAddPlaceholderGuard={(type) => void handleAddPlaceholderGuard(type)}
+          addingPlaceholder={addingPlaceholder}
         />
       ) : (
         <div className="h-64 flex items-center justify-center text-neutral-500">No roster data.</div>

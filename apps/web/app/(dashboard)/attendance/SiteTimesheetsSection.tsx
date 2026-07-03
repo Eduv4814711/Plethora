@@ -166,7 +166,7 @@ export function SiteTimesheetsSection({
       ]);
       if (loadId !== loadIdRef.current) return;
       setSheet(nextSheet);
-      setGuards((employeesRes.data ?? []).filter((e: GuardOption & { employeeType?: string; status?: string }) => (e.employeeType ?? "security") === "security" && e.status !== "offboarded"));
+      setGuards((employeesRes.data ?? []).filter((e: GuardOption & { employeeType?: string; status?: string; jobRole?: string | null }) => (e.employeeType ?? "security") === "security" && e.status !== "offboarded" && !(e.jobRole ?? "").startsWith("roster_placeholder:")));
     } catch (err) {
       if (loadId !== loadIdRef.current) return;
       setError(err instanceof Error ? err.message : "Failed to load site timesheet");

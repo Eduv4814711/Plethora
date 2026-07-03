@@ -147,3 +147,7 @@ export const approveSiteTimesheetSchema = z.object({
 export const unlockSiteTimesheetSchema = z.object({
   reason: z.string().optional(),
 });
+
+export const addPlaceholderGuardSchema = z.object({
+  type: z.enum(["unknown", "reliever"]),
+});

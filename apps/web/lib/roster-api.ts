@@ -32,6 +32,8 @@ export type RosterGridRow = {
   guardName: string;
   gender?: string | null;
   phone?: string | null;
+  isPlaceholder?: boolean;
+  placeholderType?: "unknown" | "reliever";
   cells: RosterGridCell[];
   totals: Record<string, number>;
 };
@@ -202,6 +204,18 @@ export async function updateSiteAssignedGuards(
     const data = await res.json();
     throw new Error(data?.error || data?.message || "Failed to update site guards");
   }
+}
+
+export async function addPlaceholderGuardToSite(
+  token: string,
+  siteId: string,
+  type: "unknown" | "reliever"
+) {
+  const res = await authFetch(`/rosters/sites/${siteId}/placeholder-guards`, token, {
+    method: "POST",
+    body: JSON.stringify({ type }),
+  });
+  return parseJson<{ guardId: string; guardName: string; placeholderType: "unknown" | "reliever" }>(res);
 }
 
 export async function fetchLiveRoster(

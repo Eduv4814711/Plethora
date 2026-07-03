@@ -74,6 +74,8 @@ export function RosterSpreadsheet({
   shiftOptions,
   savingCellKey,
   onCellChange,
+  onAddPlaceholderGuard,
+  addingPlaceholder = false,
 }: {
   rows: RosterGridRow[];
   columnKeys: string[];
@@ -82,9 +84,37 @@ export function RosterSpreadsheet({
   shiftOptions: ShiftOption[];
   savingCellKey?: string | null;
   onCellChange?: (guardId: string, colKey: string, shiftCode: RosterShiftCode) => void;
+  onAddPlaceholderGuard?: (type: "unknown" | "reliever") => void;
+  addingPlaceholder?: boolean;
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-700">
+      {editable && onAddPlaceholderGuard && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900/80">
+          <span className="text-xs text-neutral-500 dark:text-neutral-400">
+            Need a slot before you know who will work?
+          </span>
+          <button
+            type="button"
+            disabled={addingPlaceholder}
+            onClick={() => onAddPlaceholderGuard("unknown")}
+            className="btn-secondary px-2.5 py-1 text-[11px] disabled:opacity-50"
+          >
+            + Unknown guard
+          </button>
+          <button
+            type="button"
+            disabled={addingPlaceholder}
+            onClick={() => onAddPlaceholderGuard("reliever")}
+            className="btn-secondary px-2.5 py-1 text-[11px] disabled:opacity-50"
+          >
+            + Reliever slot
+          </button>
+          <span className="text-[10px] text-neutral-400">
+            Planning only — assign the real guard in attendance/timesheets later.
+          </span>
+        </div>
+      )}
       <table className="w-full min-w-[720px] border-collapse text-[13px]">
         <thead>
           <tr className="border-b border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900">
@@ -132,7 +162,14 @@ export function RosterSpreadsheet({
               >
                 <td className="sticky left-0 z-10 bg-inherit px-2 py-1 text-neutral-400">{rowIdx + 1}</td>
                 <td className="sticky left-10 z-10 bg-inherit px-2 py-1 font-medium whitespace-nowrap">
-                  {row.guardName}
+                  <div className={row.isPlaceholder ? "italic text-neutral-600 dark:text-neutral-300" : ""}>
+                    {row.guardName}
+                  </div>
+                  {row.isPlaceholder && (
+                    <div className="text-[10px] font-normal text-amber-700 dark:text-amber-300">
+                      {row.placeholderType === "reliever" ? "Reliever TBD" : "Unknown — fill in at attendance"}
+                    </div>
+                  )}
                 </td>
                 {columnKeys.map((colKey) => {
                   const cell = findCell(row, colKey);

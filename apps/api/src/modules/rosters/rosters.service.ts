@@ -57,6 +57,7 @@ async function loadSiteGuards(siteId: string, companyId: string) {
           phone: true,
           status: true,
           employeeType: true,
+          jobRole: true,
         },
       },
     },
@@ -298,6 +299,12 @@ async function buildGridRows(
       guardName: `${guard.firstName} ${guard.lastName}`.trim(),
       gender: guard.gender,
       phone: guard.phone,
+      isPlaceholder: (guard.jobRole ?? "").startsWith("roster_placeholder:"),
+      placeholderType: (guard.jobRole ?? "").endsWith(":reliever")
+        ? ("reliever" as const)
+        : (guard.jobRole ?? "").startsWith("roster_placeholder:")
+          ? ("unknown" as const)
+          : undefined,
       cells,
       totals,
     };
@@ -1010,5 +1017,78 @@ export async function publishRoster(
     skippedCount,
     replacedCount,
     warnings: grid.warnings,
+  };
+}
+
+export const ROSTER_PLACEHOLDER_JOB_ROLE_PREFIX = "roster_placeholder";
+
+/** Planning-only guard row — assign the real person later in attendance/timesheets. */
+export async function addPlaceholderGuardToSite(
+  companyId: string,
+  siteId: string,
+  type: "unknown" | "reliever"
+) {
+  const site = await prisma.site.findFirst({ where: { id: siteId, companyId } });
+  if (!site) return null;
+
+  const [group, grade] = await Promise.all([
+    prisma.employeeGroup.findFirst({ where: { companyId }, orderBy: { sortOrder: "asc" } }),
+    prisma.payGrade.findFirst({ where: { companyId }, orderBy: { name: "asc" } }),
+  ]);
+  if (!group || !grade) {
+    return {
+      error:
+        "Set up at least one employee group and pay grade before adding placeholder guards.",
+    };
+  }
+
+  const existingPlaceholders = await prisma.employee.count({
+    where: {
+      companyId,
+      jobRole: { startsWith: `${ROSTER_PLACEHOLDER_JOB_ROLE_PREFIX}:` },
+      siteAssignments: { some: { siteId, isActive: true } },
+    },
+  });
+  const slot = existingPlaceholders + 1;
+  const isReliever = type === "reliever";
+  const firstName = isReliever ? "Reliever" : "Unknown";
+  const lastName = slot > 1 ? `(Planning #${slot})` : "(Planning)";
+
+  const existingNumbers = await prisma.employee.findMany({
+    where: { companyId, employeeNumber: { startsWith: "PLN-" } },
+    select: { employeeNumber: true },
+  });
+  let maxNum = 0;
+  for (const row of existingNumbers) {
+    const match = row.employeeNumber.match(/^PLN-(\d+)$/i);
+    if (match) maxNum = Math.max(maxNum, parseInt(match[1], 10));
+  }
+  const employeeNumber = `PLN-${String(maxNum + 1).padStart(4, "0")}`;
+
+  const employee = await prisma.$transaction(async (tx) => {
+    const created = await tx.employee.create({
+      data: {
+        companyId,
+        employeeNumber,
+        firstName,
+        lastName,
+        status: isReliever ? "reliever" : "hired",
+        employeeType: "security",
+        jobRole: `${ROSTER_PLACEHOLDER_JOB_ROLE_PREFIX}:${type}`,
+        groupId: group.id,
+        gradeId: grade.id,
+        psiraNumber: `ROSTER-TBD-${employeeNumber}`,
+      },
+    });
+    await tx.siteAssignment.create({
+      data: { siteId, employeeId: created.id, isActive: true },
+    });
+    return created;
+  });
+
+  return {
+    guardId: employee.id,
+    guardName: `${employee.firstName} ${employee.lastName}`.trim(),
+    placeholderType: type,
   };
 }

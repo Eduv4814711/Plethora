@@ -3,6 +3,7 @@ import { authMiddleware } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
 import {
   activatePatternSchema,
+  addPlaceholderGuardSchema,
   approveSiteTimesheetSchema,
   bulkManualOverridesSchema,
   createPatternSchema,
@@ -19,6 +20,7 @@ import {
 } from "./rosters.schemas.js";
 import {
   activatePattern,
+  addPlaceholderGuardToSite,
   applyManualOverride,
   applyManualOverridesBulk,
   createPattern,
@@ -52,6 +54,22 @@ export async function rostersRoutes(app: FastifyInstance) {
     const config = await getSiteRosterConfig(request.user!.companyId, siteId);
     if (!config) return reply.code(404).send({ error: "Site not found" });
     return reply.send(config);
+  });
+
+  app.post("/sites/:siteId/placeholder-guards", { preHandler: protect }, async (request, reply) => {
+    const { siteId } = request.params as { siteId: string };
+    const parsed = addPlaceholderGuardSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
+    }
+    const result = await addPlaceholderGuardToSite(
+      request.user!.companyId,
+      siteId,
+      parsed.data.type
+    );
+    if (!result) return reply.code(404).send({ error: "Site not found" });
+    if ("error" in result) return reply.code(400).send({ error: result.error });
+    return reply.code(201).send(result);
   });
 
   app.get("/pattern-grid", { preHandler: protect }, async (request, reply) => {
