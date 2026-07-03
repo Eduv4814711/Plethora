@@ -143,7 +143,7 @@ async function seedRows(tx: Tx, companyId: string, timesheetId: string, siteId: 
       siteId,
       workDate: p.rosterDate,
       plannedGuardId: p.guardId,
-      actualGuardId: attendance?.clockIn || attendance?.clockOut || shift?.status === "completed" || shift?.status === "verified" ? p.guardId : null,
+      actualGuardId: p.guardId,
       plannedShiftCode: p.shiftCode,
       plannedShiftType: p.shiftType,
       actualShiftCode: shift ? p.shiftCode : null,
@@ -209,15 +209,13 @@ async function resyncRows(tx: Tx, companyId: string, timesheetId: string, siteId
     if (rowByPlanned.has(key)) continue;
     const shift = shiftByGuardDate.get(key);
     const attendance = shift?.attendances[0];
-    const worked =
-      attendance?.clockIn || attendance?.clockOut || shift?.status === "completed" || shift?.status === "verified";
     toCreate.push({
       companyId,
       siteTimesheetId: timesheetId,
       siteId,
       workDate: p.rosterDate,
       plannedGuardId: p.guardId,
-      actualGuardId: worked ? p.guardId : null,
+      actualGuardId: p.guardId,
       plannedShiftCode: p.shiftCode,
       plannedShiftType: p.shiftType,
       actualShiftCode: shift ? p.shiftCode : null,
@@ -238,7 +236,17 @@ async function resyncRows(tx: Tx, companyId: string, timesheetId: string, siteId
   }
   if (toCreate.length > 0) await tx.siteTimesheetRow.createMany({ data: toCreate });
 
-  // 2. Fill actual data on still-pending seeded rows that now have attendance.
+  // 2. Default actual worker to scheduled guard on rostered rows still missing one.
+  for (const row of existingRows) {
+    if (!row.plannedGuardId || row.actualGuardId) continue;
+    if (row.approvalStatus !== "pending") continue;
+    await tx.siteTimesheetRow.update({
+      where: { id: row.id },
+      data: { actualGuardId: row.plannedGuardId },
+    });
+  }
+
+  // 3. Fill actual data on still-pending seeded rows that now have attendance.
   for (const row of existingRows) {
     if (!row.plannedGuardId) continue; // manual/reliever row
     if (row.attendanceStatus !== "pending") continue; // already actioned by an operator

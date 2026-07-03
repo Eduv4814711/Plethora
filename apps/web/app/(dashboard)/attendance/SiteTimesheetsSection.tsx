@@ -5,6 +5,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { authFetch } from "@/lib/api";
 import Link from "next/link";
+import { GuardSearchPicker } from "@/components/guard-search-picker";
 import {
   addSiteTimesheetRow,
   approveSiteTimesheet,
@@ -45,12 +46,52 @@ function timeValue(iso: string | null | undefined) {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+function normalizeShiftType(value: string | null | undefined): "day" | "night" | null {
+  if (!value) return null;
+  if (value === "day" || value === "D") return "day";
+  if (value === "night" || value === "N") return "night";
+  return null;
+}
+
+function rowShiftType(row: SiteTimesheetRow): "day" | "night" | null {
+  return normalizeShiftType(
+    row.actualShiftType ?? row.plannedShiftType ?? row.actualShiftCode ?? row.plannedShiftCode
+  );
+}
+
+/** Day 06:00–18:00, night 18:00–06:00 — matches site shift defaults. */
+function defaultShiftTime(shiftType: "day" | "night" | null, which: "start" | "end"): string {
+  if (shiftType === "night") return which === "start" ? "18:00" : "06:00";
+  if (shiftType === "day") return which === "start" ? "06:00" : "18:00";
+  return "";
+}
+
+function displayShiftTime(
+  iso: string | null | undefined,
+  shiftType: "day" | "night" | null,
+  which: "start" | "end"
+): string {
+  return timeValue(iso) || defaultShiftTime(shiftType, which);
+}
+
 /** Combine a work date (yyyy-MM-dd) with an HH:mm time into a local-time ISO string. */
 function combineDateTime(workDate: string, time: string): string | null {
   if (!time) return null;
   const d = new Date(`${workDate}T${time}:00`);
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString();
+}
+
+function combineClockOut(workDate: string, time: string, clockIn: string | null): string | null {
+  const out = combineDateTime(workDate, time);
+  if (!out || !clockIn) return out;
+  if (new Date(out).getTime() <= new Date(clockIn).getTime()) {
+    const next = new Date(`${workDate}T00:00:00`);
+    next.setDate(next.getDate() + 1);
+    const nextDate = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
+    return combineDateTime(nextDate, time);
+  }
+  return out;
 }
 
 function hoursBetween(clockIn: string | null, clockOut: string | null): number | null {
@@ -63,8 +104,27 @@ function hoursBetween(clockIn: string | null, clockOut: string | null): number |
   return Math.round(((end - start) / (1000 * 60 * 60)) * 100) / 100;
 }
 
-function guardName(guard: GuardOption) {
-  return `${guard.firstName} ${guard.lastName}`.trim();
+function buildRowApprovalPatch(row: SiteTimesheetRow): Partial<SiteTimesheetRow> {
+  const shiftType = rowShiftType(row);
+  const actualGuardId = row.actualGuardId ?? row.plannedGuardId;
+  const startTime = displayShiftTime(row.clockIn, shiftType, "start");
+  const endTime = displayShiftTime(row.clockOut, shiftType, "end");
+  const clockIn = row.clockIn ?? (startTime ? combineDateTime(row.workDate, startTime) : null);
+  const clockOut =
+    row.clockOut ?? (endTime ? combineClockOut(row.workDate, endTime, clockIn) : null);
+
+  return {
+    actualGuardId,
+    clockIn,
+    clockOut,
+    hoursWorked: row.hoursWorked ?? hoursBetween(clockIn, clockOut),
+    attendanceStatus: row.attendanceStatus === "pending" ? "present" : row.attendanceStatus,
+    actualShiftType: row.actualShiftType ?? shiftType,
+    actualShiftCode:
+      row.actualShiftCode ??
+      (shiftType === "night" ? "N" : shiftType === "day" ? "D" : null),
+    approvalStatus: "reviewed",
+  };
 }
 
 export function SiteTimesheetsSection({
@@ -119,13 +179,19 @@ export function SiteTimesheetsSection({
     void load();
   }, [token, siteId, periodStart, periodEnd]);
 
-  const guardOptions = useMemo(() => guards.map((g) => ({ id: g.id, label: `${guardName(g)}${g.employeeNumber ? ` (${g.employeeNumber})` : ""}` })), [guards]);
+  const guardOptions = useMemo(() => guards, [guards]);
+  const reviewedCount = sheet?.rows.filter((r) => r.approvalStatus !== "pending").length ?? 0;
+  const pendingReviewCount = sheet ? sheet.rows.length - reviewedCount : 0;
 
   const updateRow = async (row: SiteTimesheetRow, patch: Partial<SiteTimesheetRow>) => {
+    const nextPatch =
+      row.approvalStatus === "reviewed" && patch.approvalStatus === undefined
+        ? { ...patch, approvalStatus: "pending" as const }
+        : patch;
     setSavingRowId(row.id);
     setError(null);
     try {
-      const res = await updateSiteTimesheetRow(token, row.id, patch);
+      const res = await updateSiteTimesheetRow(token, row.id, nextPatch);
       setSheet((current) =>
         current
           ? {
@@ -140,6 +206,10 @@ export function SiteTimesheetsSection({
     } finally {
       setSavingRowId(null);
     }
+  };
+
+  const approveRowAttendance = async (row: SiteTimesheetRow) => {
+    await updateRow(row, buildRowApprovalPatch(row));
   };
 
   const exportPdf = () => {
@@ -244,7 +314,12 @@ export function SiteTimesheetsSection({
               <button
                 type="button"
                 onClick={async () => {
-                  if (!window.confirm("Approve and lock this site timesheet for payroll?")) return;
+                  const unreviewed = sheet.rows.filter((r) => r.approvalStatus === "pending").length;
+                  const message =
+                    unreviewed > 0
+                      ? `${unreviewed} row(s) have not been individually approved yet. Approve and lock this site timesheet for payroll anyway?`
+                      : "Approve and lock this site timesheet for payroll?";
+                  if (!window.confirm(message)) return;
                   await approveSiteTimesheet(token, sheet.id);
                   await load();
                 }}
@@ -268,9 +343,10 @@ export function SiteTimesheetsSection({
 
       {sheet && (
         <>
-          <div className="grid gap-2 text-xs sm:grid-cols-6">
+          <div className="grid gap-2 text-xs sm:grid-cols-7">
             {[
               ["Status", label(sheet.status)],
+              ["Reviewed", `${reviewedCount}/${sheet.rows.length}`],
               ["Day shifts", sheet.totals.dayShifts],
               ["Night shifts", sheet.totals.nightShifts],
               ["Hours", sheet.totals.totalHours],
@@ -284,13 +360,25 @@ export function SiteTimesheetsSection({
             ))}
           </div>
 
+          {!locked && pendingReviewCount > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+              Review each row and click <span className="font-medium">Approve attendance</span> to confirm who worked, shift times, and status.
+              {" "}
+              <span className="font-medium">{pendingReviewCount}</span> row{pendingReviewCount === 1 ? "" : "s"} still need review.
+            </div>
+          )}
+
           {!locked && (
             <div className="grid gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm dark:border-neutral-700 dark:bg-neutral-900 md:grid-cols-6">
               <input type="date" value={newRow.workDate} onChange={(e) => setNewRow({ ...newRow, workDate: e.target.value })} className="input-compact" />
-              <select value={newRow.actualGuardId} onChange={(e) => setNewRow({ ...newRow, actualGuardId: e.target.value })} className="input-compact md:col-span-2">
-                <option value="">Choose reliever/guard…</option>
-                {guardOptions.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
-              </select>
+              <GuardSearchPicker
+                guards={guardOptions}
+                value={newRow.actualGuardId || null}
+                onChange={(id) => setNewRow({ ...newRow, actualGuardId: id ?? "" })}
+                placeholder="Choose reliever/guard…"
+                className="input-compact md:col-span-2"
+                allowClear={false}
+              />
               <select value={newRow.actualShiftType} onChange={(e) => setNewRow({ ...newRow, actualShiftType: e.target.value, actualShiftCode: e.target.value === "night" ? "N" : "D" })} className="input-compact">
                 <option value="day">Day shift</option>
                 <option value="night">Night shift</option>
@@ -312,29 +400,37 @@ export function SiteTimesheetsSection({
           )}
 
           <div className="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-700">
-            <table className="min-w-[1200px] w-full text-left text-xs">
+            <table className="min-w-[1320px] w-full text-left text-xs">
               <thead className="bg-neutral-100 text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">
                 <tr>
-                  {["Date", "Scheduled", "Actual worked", "Planned", "Actual shift", "Start / End", "Status", "Discrepancies", "Comments"].map((h) => (
+                  {["Date", "Scheduled", "Actual worked", "Planned", "Actual shift", "Start / End", "Status", "Discrepancies", "Comments", "Attendance"].map((h) => (
                     <th key={h} className="px-3 py-2 font-semibold">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
                 {sheet.rows.map((row) => (
-                  <tr key={row.id} className={row.discrepancyCodes.length ? "bg-amber-50/60 dark:bg-amber-950/20" : ""}>
+                  <tr
+                    key={row.id}
+                    className={
+                      row.approvalStatus === "pending"
+                        ? row.discrepancyCodes.length
+                          ? "bg-amber-50/60 dark:bg-amber-950/20"
+                          : ""
+                        : "bg-emerald-50/40 dark:bg-emerald-950/15"
+                    }
+                  >
                     <td className="px-3 py-2 font-medium">{row.workDate}<br /><span className="text-neutral-500">{row.dayOfWeek}</span></td>
                     <td className="px-3 py-2">{row.plannedGuardName ?? "Unrostered"}<br /><span className="text-neutral-500">{row.employeeNumber ?? row.psiraNumber ?? ""}</span></td>
                     <td className="px-3 py-2">
-                      <select
+                      <GuardSearchPicker
+                        guards={guardOptions}
+                        value={row.actualGuardId}
+                        defaultGuardId={row.plannedGuardId}
                         disabled={locked || savingRowId === row.id}
-                        value={row.actualGuardId ?? ""}
-                        onChange={(e) => void updateRow(row, { actualGuardId: e.target.value || null })}
-                        className="input-compact min-w-44"
-                      >
-                        <option value="">No actual worker</option>
-                        {guardOptions.map((g) => <option key={g.id} value={g.id}>{g.label}</option>)}
-                      </select>
+                        onChange={(guardId) => void updateRow(row, { actualGuardId: guardId })}
+                        clearLabel="Nobody worked"
+                      />
                     </td>
                     <td className="px-3 py-2">{label(row.plannedShiftType ?? row.plannedShiftCode)}</td>
                     <td className="px-3 py-2">
@@ -354,8 +450,12 @@ export function SiteTimesheetsSection({
                         <input
                           type="time"
                           disabled={locked || savingRowId === row.id}
-                          defaultValue={timeValue(row.clockIn)}
+                          key={`${row.id}-in-${row.clockIn ?? "default"}`}
+                          defaultValue={displayShiftTime(row.clockIn, rowShiftType(row), "start")}
                           onBlur={(e) => {
+                            const shiftType = rowShiftType(row);
+                            const displayed = displayShiftTime(row.clockIn, shiftType, "start");
+                            if (e.target.value === displayed && row.clockIn) return;
                             const clockIn = combineDateTime(row.workDate, e.target.value);
                             if (clockIn === (row.clockIn ?? null)) return;
                             void updateRow(row, { clockIn, hoursWorked: hoursBetween(clockIn, row.clockOut) });
@@ -367,11 +467,16 @@ export function SiteTimesheetsSection({
                         <input
                           type="time"
                           disabled={locked || savingRowId === row.id}
-                          defaultValue={timeValue(row.clockOut)}
+                          key={`${row.id}-out-${row.clockOut ?? "default"}`}
+                          defaultValue={displayShiftTime(row.clockOut, rowShiftType(row), "end")}
                           onBlur={(e) => {
-                            const clockOut = combineDateTime(row.workDate, e.target.value);
+                            const shiftType = rowShiftType(row);
+                            const displayed = displayShiftTime(row.clockOut, shiftType, "end");
+                            if (e.target.value === displayed && row.clockOut) return;
+                            const clockIn = row.clockIn ?? combineDateTime(row.workDate, displayShiftTime(null, shiftType, "start"));
+                            const clockOut = combineClockOut(row.workDate, e.target.value, clockIn);
                             if (clockOut === (row.clockOut ?? null)) return;
-                            void updateRow(row, { clockOut, hoursWorked: hoursBetween(row.clockIn, clockOut) });
+                            void updateRow(row, { clockOut, hoursWorked: hoursBetween(clockIn, clockOut) });
                           }}
                           className="input-compact w-24"
                           title="Actual end time"
@@ -398,6 +503,36 @@ export function SiteTimesheetsSection({
                         className="input-compact min-w-48"
                         placeholder="Supervisor/controller comment"
                       />
+                    </td>
+                    <td className="px-3 py-2">
+                      {row.approvalStatus === "approved" || locked ? (
+                        <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                          Approved
+                        </span>
+                      ) : row.approvalStatus === "reviewed" ? (
+                        <div className="flex flex-col gap-1">
+                          <span className="inline-flex w-fit items-center rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                            Reviewed
+                          </span>
+                          <button
+                            type="button"
+                            disabled={savingRowId === row.id}
+                            onClick={() => void updateRow(row, { approvalStatus: "pending" })}
+                            className="text-left text-[10px] text-neutral-500 underline-offset-2 hover:text-neutral-700 hover:underline dark:hover:text-neutral-300"
+                          >
+                            Undo review
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={savingRowId === row.id}
+                          onClick={() => void approveRowAttendance(row)}
+                          className="btn-primary whitespace-nowrap px-2.5 py-1.5 text-[11px] disabled:opacity-50"
+                        >
+                          {savingRowId === row.id ? "Saving…" : "Approve attendance"}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
