@@ -38,9 +38,13 @@ export async function findSitesNeedingApproval(
   periodStart: Date,
   periodEnd: Date
 ): Promise<Array<{ id: string; name: string }>> {
+  // Only worked shifts can contribute payable hours (matches aggregateTimesheets),
+  // so only they require an approved site timesheet. Planned-but-unworked shifts
+  // (created/assigned/active) must not block payroll for the whole company.
   const shifts = await prisma.shift.findMany({
     where: {
       companyId,
+      status: { in: ["completed", "verified"] },
       startTime: { lt: periodEnd },
       endTime: { gt: periodStart },
     },
@@ -78,7 +82,12 @@ export interface CalculatePayrollResult {
 const employeeInclude = {
   grade: true,
   siteAssignments: { take: 1, orderBy: { assignedAt: "asc" as const }, select: { siteId: true } },
-  postAssignments: { take: 1, orderBy: { assignedAt: "asc" as const }, select: { postId: true } },
+  // Post membership lives on GuardSiteEligibility (primary post first).
+  guardSiteEligibilities: {
+    take: 1,
+    orderBy: [{ isPrimary: "desc" as const }, { createdAt: "asc" as const }],
+    select: { sitePostId: true },
+  },
 };
 
 /**

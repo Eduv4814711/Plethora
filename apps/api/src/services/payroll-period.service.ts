@@ -63,6 +63,39 @@ function utcEndOfMonthDay(year: number, month: number, day: number): Date {
   return endOfUtcDay(new Date(Date.UTC(year, month, clamped)));
 }
 
+function lastDayOfUtcMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+}
+
+/** When endDay >= startDay the period stays inside one calendar month (e.g. 1–31). */
+function isWithinMonthPeriod(startDay: number, endDay: number): boolean {
+  return endDay >= startDay;
+}
+
+function getWithinMonthPeriodContaining(
+  asOf: Date,
+  startDay: number,
+  endDay: number,
+  opts?: { calendarName?: string; calendarId?: string }
+): PayPeriodBounds {
+  const y = asOf.getUTCFullYear();
+  const m = asOf.getUTCMonth();
+  const d = asOf.getUTCDate();
+
+  if (d < startDay) {
+    const prevMonth = addMonths(new Date(Date.UTC(y, m, 1)), -1);
+    const py = prevMonth.getUTCFullYear();
+    const pm = prevMonth.getUTCMonth();
+    const periodStart = utcDateClamped(py, pm, startDay);
+    const periodEnd = utcEndOfMonthDay(py, pm, Math.min(endDay, lastDayOfUtcMonth(py, pm)));
+    return enrichPeriod(periodStart, periodEnd, opts);
+  }
+
+  const periodStart = utcDateClamped(y, m, startDay);
+  const periodEnd = utcEndOfMonthDay(y, m, Math.min(endDay, lastDayOfUtcMonth(y, m)));
+  return enrichPeriod(periodStart, periodEnd, opts);
+}
+
 export function formatPayPeriodLabel(periodEnd: Date, kind: "pay" | "roster"): string {
   const month = MONTH_NAMES[periodEnd.getUTCMonth()];
   const year = periodEnd.getUTCFullYear();
@@ -95,6 +128,10 @@ function getSpanningPeriodContaining(
   endDay: number,
   opts?: { calendarName?: string; calendarId?: string }
 ): PayPeriodBounds {
+  if (isWithinMonthPeriod(startDay, endDay)) {
+    return getWithinMonthPeriodContaining(asOf, startDay, endDay, opts);
+  }
+
   const y = asOf.getUTCFullYear();
   const m = asOf.getUTCMonth();
   const d = asOf.getUTCDate();
@@ -173,6 +210,17 @@ export function resolveSpanningPeriodByKey(
   const year = parseInt(yStr, 10);
   const month = parseInt(mStr, 10) - 1;
   if (!Number.isFinite(year) || !Number.isFinite(month) || month < 0 || month > 11) return null;
+
+  if (isWithinMonthPeriod(bounds.startDay, bounds.endDay)) {
+    const periodStart = utcDateClamped(year, month, bounds.startDay);
+    const periodEnd = utcEndOfMonthDay(
+      year,
+      month,
+      Math.min(bounds.endDay, lastDayOfUtcMonth(year, month))
+    );
+    const period = enrichPeriod(periodStart, periodEnd, meta);
+    return period.periodKey === periodKey ? period : null;
+  }
 
   const probe = utcEndOfMonthDay(year, month, bounds.endDay);
   const period = getSpanningPeriodContainingBounds(bounds, probe, meta);

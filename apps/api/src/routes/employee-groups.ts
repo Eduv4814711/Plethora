@@ -69,21 +69,18 @@ export async function employeeGroupsRoutes(app: FastifyInstance) {
     }
 
     const companyId = request.user!.companyId;
-    const existing = await prisma.employeeGroup.findFirst({
+    const updated = await prisma.employeeGroup.updateMany({
       where: { id, companyId },
-    });
-    if (!existing) {
-      return reply.code(404).send({ error: "Employee group not found" });
-    }
-
-    const group = await prisma.employeeGroup.update({
-      where: { id },
       data: {
         ...(parsed.data.name !== undefined && { name: parsed.data.name }),
         ...(parsed.data.description !== undefined && { description: parsed.data.description }),
         ...(parsed.data.sortOrder !== undefined && { sortOrder: parsed.data.sortOrder }),
       },
     });
+    if (updated.count === 0) {
+      return reply.code(404).send({ error: "Employee group not found" });
+    }
+    const group = await prisma.employeeGroup.findFirst({ where: { id, companyId } });
 
     await createAuditLog({
       userId: request.user!.sub,
@@ -107,7 +104,17 @@ export async function employeeGroupsRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Employee group not found" });
     }
 
-    await prisma.employeeGroup.delete({ where: { id } });
+    // Employee updates require a group, so deleting a non-empty group (FK SetNull)
+    // would leave its members in an un-updatable state.
+    const memberCount = await prisma.employee.count({ where: { companyId, groupId: id } });
+    if (memberCount > 0) {
+      return reply.code(400).send({
+        error: "Group not empty",
+        message: `Cannot delete this group while ${memberCount} employee(s) belong to it. Move them to another group first.`,
+      });
+    }
+
+    await prisma.employeeGroup.deleteMany({ where: { id, companyId } });
 
     await createAuditLog({
       userId: request.user!.sub,

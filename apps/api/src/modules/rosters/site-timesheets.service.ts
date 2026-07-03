@@ -445,6 +445,15 @@ export async function getSiteTimesheet(companyId: string, siteId: string, startD
   };
 }
 
+/** Guard IDs on timesheet rows must reference employees of the same company (tenant boundary). */
+async function guardBelongsToCompany(guardId: string, companyId: string): Promise<boolean> {
+  const employee = await prisma.employee.findFirst({
+    where: { id: guardId, companyId },
+    select: { id: true },
+  });
+  return employee != null;
+}
+
 export async function updateSiteTimesheetRow(
   companyId: string,
   rowId: string,
@@ -468,6 +477,10 @@ export async function updateSiteTimesheetRow(
   if (!existing) return null;
   if (existing.siteTimesheet.status === "approved" || existing.siteTimesheet.status === "locked") {
     return { error: "Timesheet is approved and locked. Unlock it before making changes." };
+  }
+
+  if (input.actualGuardId && !(await guardBelongsToCompany(input.actualGuardId, companyId))) {
+    return { error: "Guard not found." };
   }
 
   const updated = await prisma.$transaction(async (tx) => {
@@ -523,6 +536,9 @@ export async function addSiteTimesheetRow(
   if (!sheet) return null;
   if (sheet.status === "approved" || sheet.status === "locked") {
     return { error: "Timesheet is approved and locked. Unlock it before adding rows." };
+  }
+  if (!(await guardBelongsToCompany(input.actualGuardId, companyId))) {
+    return { error: "Guard not found." };
   }
   const row = await prisma.$transaction(async (tx) => {
     const created = await tx.siteTimesheetRow.create({

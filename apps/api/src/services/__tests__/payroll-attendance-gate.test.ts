@@ -39,6 +39,18 @@ describe("findSitesNeedingApproval (payroll attendance gate)", () => {
     expect(result).toEqual([{ id: "B", name: "Site B" }]);
   });
 
+  it("only counts worked shifts (completed/verified), matching aggregateTimesheets", async () => {
+    vi.mocked(prisma.shift.findMany).mockResolvedValue([] as never);
+    await findSitesNeedingApproval(companyId, periodStart, periodEnd);
+    expect(prisma.shift.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: { in: ["completed", "verified"] },
+        }),
+      })
+    );
+  });
+
   it("returns empty when there are no shifts in the period", async () => {
     vi.mocked(prisma.shift.findMany).mockResolvedValue([] as never);
     const result = await findSitesNeedingApproval(companyId, periodStart, periodEnd);

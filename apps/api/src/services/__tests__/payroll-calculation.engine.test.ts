@@ -205,7 +205,7 @@ describe("computePayrollLines", () => {
         monthlySalary: 10000,
       }),
       siteAssignments: [{ siteId: "site-mid" }],
-      postAssignments: [{ postId: "post-mid" }],
+      guardSiteEligibilities: [{ sitePostId: "post-mid" }],
     };
     const { employeeSnapshots } = computePayrollLines(
       ctx({

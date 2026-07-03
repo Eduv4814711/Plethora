@@ -3,6 +3,7 @@ import {
   formatDateKey,
   formatPayPeriodLabel,
   getCurrentPayPeriod,
+  getCurrentRosterPeriod,
   getNextPayPeriod,
   getRosterWindow,
   getUpcomingPayPeriods,
@@ -86,6 +87,21 @@ describe("payroll-period.service", () => {
     const end = startOfUtcDay(new Date("2026-07-25T00:00:00.000Z"));
     expect(formatPayPeriodLabel(end, "pay")).toBe("July 2026 Pay Period");
     expect(formatPayPeriodLabel(end, "roster")).toBe("July 2026 Roster Period");
+  });
+
+  it("keeps calendar-month roster periods within a single month (1–31)", () => {
+    const settings: PayrollCalendarSettings = {
+      ...settings2625,
+      rosterPeriodCalendars: [
+        { id: "pay-aligned", name: "Pay period aligned", startDay: 26, endDay: 25 },
+        { id: "calendar-month", name: "Calendar month", startDay: 1, endDay: 31 },
+      ],
+    };
+    const asOf = startOfUtcDay(new Date("2026-06-18T12:00:00.000Z"));
+    const period = getCurrentRosterPeriod(settings, "calendar-month", asOf);
+    expect(formatDateKey(period.periodStart)).toBe("2026-06-01");
+    expect(formatDateKey(period.periodEnd)).toBe("2026-06-30");
+    expect(period.periodKey).toBe("2026-06");
   });
 });
 

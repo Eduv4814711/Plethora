@@ -45,7 +45,9 @@ export async function reportsRoutes(app: FastifyInstance) {
       shiftsByStatus,
       shiftsInRange,
       payrollByMonth,
-      hoursBySite,
+      rawAttendanceHours,
+      approvedTimesheetSites,
+      approvedTimesheetRows,
     ] = await Promise.all([
       prisma.payrollRun.groupBy({
         by: ["status"],
@@ -97,11 +99,38 @@ export async function reportsRoutes(app: FastifyInstance) {
           hoursWorked: true,
           shift: {
             select: {
+              siteId: true,
               site: {
                 select: { name: true },
               },
             },
           },
+        },
+      }),
+      // Same per-site rule as payroll's aggregateTimesheets: sites with an
+      // approved/locked site timesheet report the approved hours, others fall
+      // back to raw clock data. Keeps reports consistent with what gets paid.
+      prisma.siteTimesheet.findMany({
+        where: {
+          companyId,
+          status: { in: ["approved", "locked"] },
+          periodStart: { lte: end },
+          periodEnd: { gte: start },
+        },
+        select: { siteId: true },
+      }),
+      prisma.siteTimesheetRow.findMany({
+        where: {
+          companyId,
+          workDate: { gte: start, lte: end },
+          actualGuardId: { not: null },
+          siteTimesheet: { status: { in: ["approved", "locked"] } },
+        },
+        select: {
+          hoursWorked: true,
+          overtimeHours: true,
+          siteId: true,
+          site: { select: { name: true } },
         },
       }),
     ]);
@@ -160,8 +189,15 @@ export async function reportsRoutes(app: FastifyInstance) {
       };
     });
 
+    const approvedSiteIds = new Set(approvedTimesheetSites.map((t) => t.siteId));
     const siteHours = new Map<string, number>();
-    for (const a of hoursBySite) {
+    for (const row of approvedTimesheetRows) {
+      const siteName = row.site?.name ?? "Unknown";
+      const hrs = Number(row.hoursWorked ?? 0) + Number(row.overtimeHours ?? 0);
+      siteHours.set(siteName, (siteHours.get(siteName) ?? 0) + hrs);
+    }
+    for (const a of rawAttendanceHours) {
+      if (a.shift?.siteId && approvedSiteIds.has(a.shift.siteId)) continue;
       const siteName = a.shift?.site?.name ?? "Unknown";
       const hrs = Number(a.hoursWorked ?? 0);
       siteHours.set(siteName, (siteHours.get(siteName) ?? 0) + hrs);

@@ -109,12 +109,27 @@ describe.runIf(dbReady)("payroll lifecycle smoke test (integration)", () => {
     const site = await prisma.site.create({
       data: { companyId, name: `Smoke Site ${runId}` },
     });
-    const post = await prisma.post.create({
-      data: { siteId: site.id, name: "Gate", shiftType: "day" },
+    const post = await prisma.sitePost.create({
+      data: { siteId: site.id, name: "Gate" },
     });
 
     const periodStart = new Date("2026-06-01T00:00:00.000Z");
     const periodEnd = new Date("2026-06-30T23:59:59.999Z");
+
+    // Payroll requires an approved site timesheet for every site with shifts
+    // in the period (attendance gate). Mirror the real business flow: raw
+    // shifts + attendance exist, and the controller approves the site
+    // timesheet whose rows carry the payable hours.
+    const siteTimesheet = await prisma.siteTimesheet.create({
+      data: {
+        companyId,
+        siteId: site.id,
+        periodStart,
+        periodEnd,
+        status: "approved",
+        approvedAt: new Date("2026-07-01T08:00:00.000Z"),
+      },
+    });
 
     for (const [employeeId, hours] of [
       [guardEmployee.id, 12],
@@ -124,19 +139,39 @@ describe.runIf(dbReady)("payroll lifecycle smoke test (integration)", () => {
         data: {
           companyId,
           employeeId,
-          postId: post.id,
+          siteId: site.id,
+          shiftType: "day",
+          legacyPostName: post.name,
           startTime: new Date("2026-06-10T06:00:00.000Z"),
           endTime: new Date("2026-06-10T18:00:00.000Z"),
           status: "completed",
         },
       });
-      await prisma.attendance.create({
+      const attendance = await prisma.attendance.create({
         data: {
           shiftId: shift.id,
           clockIn: new Date("2026-06-10T06:00:00.000Z"),
           clockOut: new Date("2026-06-10T18:00:00.000Z"),
           hoursWorked: hours,
           overtimeHours: 0,
+        },
+      });
+      await prisma.siteTimesheetRow.create({
+        data: {
+          companyId,
+          siteTimesheetId: siteTimesheet.id,
+          siteId: site.id,
+          workDate: new Date("2026-06-10T00:00:00.000Z"),
+          actualGuardId: employeeId,
+          actualShiftType: "day",
+          clockIn: new Date("2026-06-10T06:00:00.000Z"),
+          clockOut: new Date("2026-06-10T18:00:00.000Z"),
+          hoursWorked: hours,
+          overtimeHours: 0,
+          attendanceStatus: "present",
+          approvalStatus: "approved",
+          sourceShiftId: shift.id,
+          sourceAttendanceId: attendance.id,
         },
       });
     }
@@ -287,6 +322,66 @@ describe.runIf(dbReady)("payroll lifecycle smoke test (integration)", () => {
     expect(irp5Res.statusCode).toBe(200);
     expect(irp5Res.body).toContain("Office");
     expect(irp5Res.body).toContain("9001015800085");
+  });
+
+  it("blocks calculate when a site has worked shifts without an approved timesheet, ignoring unworked shifts", async () => {
+    const periodStart = new Date("2026-09-01T00:00:00.000Z");
+    const periodEnd = new Date("2026-09-30T23:59:59.999Z");
+
+    const unapprovedSite = await prisma.site.create({
+      data: { companyId, name: `Unapproved Site ${runId}` },
+    });
+    await prisma.shift.create({
+      data: {
+        companyId,
+        employeeId: (await prisma.employee.findFirstOrThrow({ where: { companyId } })).id,
+        siteId: unapprovedSite.id,
+        shiftType: "day",
+        startTime: new Date("2026-09-05T06:00:00.000Z"),
+        endTime: new Date("2026-09-05T18:00:00.000Z"),
+        status: "completed",
+      },
+    });
+
+    // A site with only planned (assigned) shifts must NOT block the run.
+    const plannedOnlySite = await prisma.site.create({
+      data: { companyId, name: `Planned Only Site ${runId}` },
+    });
+    await prisma.shift.create({
+      data: {
+        companyId,
+        employeeId: (await prisma.employee.findFirstOrThrow({ where: { companyId } })).id,
+        siteId: plannedOnlySite.id,
+        shiftType: "day",
+        startTime: new Date("2026-09-06T06:00:00.000Z"),
+        endTime: new Date("2026-09-06T18:00:00.000Z"),
+        status: "assigned",
+      },
+    });
+
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/payroll/runs",
+      headers: { ...authHeader(accessToken), "content-type": "application/json" },
+      payload: {
+        periodStart: periodStart.toISOString(),
+        periodEnd: periodEnd.toISOString(),
+      },
+    });
+    const gatedRunId = createRes.json().id as string;
+
+    const calcRes = await app.inject({
+      method: "POST",
+      url: `/payroll/runs/${gatedRunId}/calculate`,
+      headers: authHeader(accessToken),
+    });
+    expect(calcRes.statusCode).toBe(400);
+    const body = calcRes.json();
+    const blockedIds = (body.details?.sitesNeedingApproval ?? []).map(
+      (s: { id: string }) => s.id
+    );
+    expect(blockedIds).toContain(unapprovedSite.id);
+    expect(blockedIds).not.toContain(plannedOnlySite.id);
   });
 
   it("supports revert to draft on a fresh calculated run", async () => {

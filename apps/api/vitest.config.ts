@@ -6,8 +6,9 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["src/**/*.test.ts"],
-    testTimeout: 30_000,
-    hookTimeout: 60_000,
+    // Integration tests run against a remote database with variable latency.
+    testTimeout: 120_000,
+    hookTimeout: 120_000,
     fileParallelism: false,
   },
   resolve: {

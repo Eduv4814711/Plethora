@@ -669,6 +669,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
     const timesheet = await prisma.timesheet.findFirst({
       where: {
+        companyId: user.companyId,
         employeeId: attendance.shift.employeeId,
         payrollRunId: { not: null },
         periodStart: { lte: attendance.shift.endTime },

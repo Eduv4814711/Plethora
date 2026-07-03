@@ -42,6 +42,32 @@ function sanitizeDate(v: string | undefined): Date | undefined {
 const optionalDate = z.string().optional().transform(sanitizeDate);
 const optionalBool = z.boolean().optional();
 
+/**
+ * Verify referenced group/grade IDs belong to the caller's company.
+ * FKs alone don't enforce tenant boundaries, so cross-company IDs must be rejected.
+ */
+async function validateEmployeeReferences(
+  companyId: string,
+  refs: { groupId?: string | null; gradeId?: string | null }
+): Promise<Record<string, string[]> | null> {
+  const errors: Record<string, string[]> = {};
+  if (refs.groupId) {
+    const group = await prisma.employeeGroup.findFirst({
+      where: { id: refs.groupId, companyId },
+      select: { id: true },
+    });
+    if (!group) errors.groupId = ["Group not found"];
+  }
+  if (refs.gradeId) {
+    const grade = await prisma.payGrade.findFirst({
+      where: { id: refs.gradeId, companyId },
+      select: { id: true },
+    });
+    if (!grade) errors.gradeId = ["Pay grade not found"];
+  }
+  return Object.keys(errors).length > 0 ? errors : null;
+}
+
 /** Generate next unique employee number for a company (e.g. EMP-0001, STAFF-0001) */
 async function generateNextEmployeeNumber(companyId: string, prefix: string = "EMP"): Promise<string> {
   const safePrefix = (prefix || "EMP").replace(/[^a-zA-Z0-9_-]/g, "").trim() || "EMP";
@@ -261,6 +287,14 @@ export async function employeesRoutes(app: FastifyInstance) {
       });
     }
 
+    const refErrors = await validateEmployeeReferences(companyId, {
+      groupId: d.groupId,
+      gradeId: d.gradeId,
+    });
+    if (refErrors) {
+      return reply.code(400).send({ error: "Validation error", message: refErrors });
+    }
+
     const employee = await prisma.employee.create({
       data: {
         companyId,
@@ -446,6 +480,14 @@ export async function employeesRoutes(app: FastifyInstance) {
       updateData.employeeNumber = trimmed;
     }
 
+    const refErrors = await validateEmployeeReferences(companyId, {
+      groupId: updateData.groupId,
+      gradeId: updateData.gradeId,
+    });
+    if (refErrors) {
+      return reply.code(400).send({ error: "Validation error", message: refErrors });
+    }
+
     const updated = await prisma.employee.updateMany({
       where: { id, companyId },
       data: updateData,
@@ -550,12 +592,19 @@ export async function employeesRoutes(app: FastifyInstance) {
 
     const employee = await prisma.employee.findFirst({
       where: { id, companyId },
+      select: {
+        ...(canViewEmployeeSensitiveFields(request.user!)
+          ? employeePayrollSelect
+          : employeeDetailSelect),
+        grade: { select: { name: true, hourlyRate: true } },
+        group: { select: { id: true, name: true } },
+      },
     });
 
     if (!employee) {
       return reply.code(404).send({ error: "Employee not found" });
     }
 
-    return reply.send(employee);
+    return reply.send(sanitizeEmployeeForDetail(employee, request.user!));
   });
 }

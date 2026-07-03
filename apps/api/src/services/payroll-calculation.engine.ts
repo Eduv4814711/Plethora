@@ -28,7 +28,7 @@ export const STANDARD_LEAVE_DAY_HOURS = 8;
 export type EmployeeForPayroll = Employee & {
   grade: PayGrade | null;
   siteAssignments?: { siteId: string }[];
-  postAssignments?: { postId: string }[];
+  guardSiteEligibilities?: { sitePostId: string }[];
 };
 
 export interface PayrollDeductionResult {
@@ -114,7 +114,7 @@ function employeeContext(emp: EmployeeForPayroll): PayrollEmployeeContextSnapsho
     employeeType: emp.employeeType,
     groupId: emp.groupId,
     siteId: emp.siteAssignments?.[0]?.siteId ?? null,
-    postId: emp.postAssignments?.[0]?.postId ?? null,
+    postId: emp.guardSiteEligibilities?.[0]?.sitePostId ?? null,
     gradeId: emp.gradeId,
     gradeName: emp.grade?.name ?? null,
     hourlyRate:

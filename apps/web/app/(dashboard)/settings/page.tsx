@@ -645,8 +645,9 @@ function BusinessSettingsSection({
           <div>
             <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100">Roster period calendars</p>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-              Add different period date ranges for roster planning (e.g. pay-aligned 26–25 vs site monthly 1–31).
-              Payroll still uses the pay period dates above.
+              Add different period date ranges for roster planning. Use start ≤ end for one calendar month
+              (e.g. 1–31). Use start &gt; end for cross-month periods (e.g. 26–25). Payroll still uses the pay
+              period dates above.
             </p>
           </div>
           <div className="space-y-3">
@@ -771,9 +772,9 @@ function BusinessSettingsSection({
                     ...f.rosterPeriodCalendars,
                     {
                       id,
-                      name: `Roster period ${f.rosterPeriodCalendars.length + 1}`,
-                      startDay: parseInt(f.payPeriodStartDay, 10) || 26,
-                      endDay: parseInt(f.payPeriodEndDay, 10) || 25,
+                      name: `Calendar month ${f.rosterPeriodCalendars.length + 1}`,
+                      startDay: 1,
+                      endDay: 31,
                     },
                   ],
                 }));
