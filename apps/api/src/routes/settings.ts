@@ -25,6 +25,13 @@ const businessDetailsSchema = z.object({
   sdlReference: z.string().optional(),
 });
 
+const rosterPeriodCalendarSchema = z.object({
+  id: z.string().min(1).max(64),
+  name: z.string().min(1).max(80),
+  startDay: z.number().int().min(1).max(31),
+  endDay: z.number().int().min(1).max(31),
+});
+
 const businessSettingsSchema = z.object({
   currency: z.string().optional(),
   dateFormat: z.string().optional(),
@@ -34,6 +41,8 @@ const businessSettingsSchema = z.object({
   payPeriodStartDay: z.number().int().min(1).max(31).optional(),
   payPeriodEndDay: z.number().int().min(1).max(31).optional(),
   autoRosterHorizonPeriods: z.number().int().min(1).max(6).optional(),
+  rosterPeriodCalendars: z.array(rosterPeriodCalendarSchema).min(1).max(8).optional(),
+  defaultRosterPeriodCalendarId: z.string().min(1).max(64).optional(),
 });
 
 const updateSettingsSchema = z.object({

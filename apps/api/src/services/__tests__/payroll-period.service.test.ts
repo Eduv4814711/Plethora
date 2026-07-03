@@ -18,6 +18,8 @@ const settings2625: PayrollCalendarSettings = {
   payPeriodStartDay: 26,
   payPeriodEndDay: 25,
   autoRosterHorizonPeriods: 2,
+  rosterPeriodCalendars: [{ id: "pay-aligned", name: "Pay period aligned", startDay: 26, endDay: 25 }],
+  defaultRosterPeriodCalendarId: "pay-aligned",
 };
 
 describe("payroll-period.service", () => {

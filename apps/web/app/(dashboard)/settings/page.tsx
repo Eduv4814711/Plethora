@@ -1,5 +1,7 @@
 "use client";
 
+import type { RosterPeriodCalendarConfig } from "@/lib/api";
+
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -452,7 +454,7 @@ function BusinessSettingsSection({
   settings: ReturnType<typeof useSettings>["settings"];
   saving: boolean;
   saveError: string | null;
-  onSave: (data: Record<string, string | number | null>) => Promise<void>;
+  onSave: (data: Record<string, string | number | null | RosterPeriodCalendarConfig[]>) => Promise<void>;
   readOnly?: boolean;
 }) {
   const bizSettings = settings?.settings ?? {};
@@ -465,6 +467,8 @@ function BusinessSettingsSection({
     payPeriodStartDay: "26",
     payPeriodEndDay: "25",
     autoRosterHorizonPeriods: "2",
+    rosterPeriodCalendars: [] as RosterPeriodCalendarConfig[],
+    defaultRosterPeriodCalendarId: "pay-aligned",
   });
 
   useEffect(() => {
@@ -479,6 +483,18 @@ function BusinessSettingsSection({
         payPeriodStartDay: String(s.payPeriodStartDay ?? 26),
         payPeriodEndDay: String(s.payPeriodEndDay ?? 25),
         autoRosterHorizonPeriods: String(s.autoRosterHorizonPeriods ?? 2),
+        rosterPeriodCalendars:
+          s.rosterPeriodCalendars && s.rosterPeriodCalendars.length > 0
+            ? s.rosterPeriodCalendars
+            : [
+                {
+                  id: "pay-aligned",
+                  name: "Pay period aligned",
+                  startDay: s.payPeriodStartDay ?? 26,
+                  endDay: s.payPeriodEndDay ?? 25,
+                },
+              ],
+        defaultRosterPeriodCalendarId: s.defaultRosterPeriodCalendarId ?? "pay-aligned",
       });
     }
   }, [settings?.settings]);
@@ -488,6 +504,13 @@ function BusinessSettingsSection({
     const horizon = parseInt(form.autoRosterHorizonPeriods, 10);
     const startDay = parseInt(form.payPeriodStartDay, 10);
     const endDay = parseInt(form.payPeriodEndDay, 10);
+    const calendars =
+      form.rosterPeriodCalendars.length > 0
+        ? form.rosterPeriodCalendars
+        : [{ id: "pay-aligned", name: "Pay period aligned", startDay: startDay || 26, endDay: endDay || 25 }];
+    const defaultCalendarId = calendars.some((c) => c.id === form.defaultRosterPeriodCalendarId)
+      ? form.defaultRosterPeriodCalendarId
+      : calendars[0]!.id;
     onSave({
       currency: form.currency,
       dateFormat: form.dateFormat,
@@ -497,6 +520,12 @@ function BusinessSettingsSection({
       payPeriodStartDay: Number.isFinite(startDay) ? startDay : 26,
       payPeriodEndDay: Number.isFinite(endDay) ? endDay : 25,
       autoRosterHorizonPeriods: Number.isFinite(horizon) && horizon >= 1 ? horizon : 2,
+      rosterPeriodCalendars: calendars.map((calendar) => ({
+        ...calendar,
+        startDay: Math.min(31, Math.max(1, calendar.startDay)),
+        endDay: Math.min(31, Math.max(1, calendar.endDay)),
+      })),
+      defaultRosterPeriodCalendarId: defaultCalendarId,
     });
   };
 
@@ -611,6 +640,149 @@ function BusinessSettingsSection({
               disabled={readOnly}
             />
           </div>
+        </div>
+        <div className="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50/60 dark:bg-neutral-900/40 p-4 space-y-3">
+          <div>
+            <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100">Roster period calendars</p>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+              Add different period date ranges for roster planning (e.g. pay-aligned 26–25 vs site monthly 1–31).
+              Payroll still uses the pay period dates above.
+            </p>
+          </div>
+          <div className="space-y-3">
+            {form.rosterPeriodCalendars.map((calendar, index) => (
+              <div
+                key={calendar.id}
+                className="rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 p-3 space-y-2"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={calendar.name}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        rosterPeriodCalendars: f.rosterPeriodCalendars.map((row, i) =>
+                          i === index ? { ...row, name: e.target.value } : row
+                        ),
+                      }))
+                    }
+                    className="input-modern flex-1 min-w-[10rem]"
+                    placeholder="Calendar name"
+                    disabled={readOnly}
+                  />
+                  <label className="inline-flex items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-300">
+                    <input
+                      type="radio"
+                      name="defaultRosterCalendar"
+                      checked={form.defaultRosterPeriodCalendarId === calendar.id}
+                      onChange={() =>
+                        setForm((f) => ({ ...f, defaultRosterPeriodCalendarId: calendar.id }))
+                      }
+                      disabled={readOnly}
+                    />
+                    Default for rostering
+                  </label>
+                  {!readOnly && form.rosterPeriodCalendars.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm((f) => {
+                          const next = f.rosterPeriodCalendars.filter((_, i) => i !== index);
+                          const defaultId =
+                            f.defaultRosterPeriodCalendarId === calendar.id
+                              ? next[0]!.id
+                              : f.defaultRosterPeriodCalendarId;
+                          return {
+                            ...f,
+                            rosterPeriodCalendars: next,
+                            defaultRosterPeriodCalendarId: defaultId,
+                          };
+                        })
+                      }
+                      className="text-xs text-red-600 hover:underline"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+                      Start day
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={31}
+                      value={calendar.startDay}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          rosterPeriodCalendars: f.rosterPeriodCalendars.map((row, i) =>
+                            i === index
+                              ? { ...row, startDay: parseInt(e.target.value, 10) || row.startDay }
+                              : row
+                          ),
+                        }))
+                      }
+                      className="input-modern w-full"
+                      disabled={readOnly}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+                      End day
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={31}
+                      value={calendar.endDay}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          rosterPeriodCalendars: f.rosterPeriodCalendars.map((row, i) =>
+                            i === index
+                              ? { ...row, endDay: parseInt(e.target.value, 10) || row.endDay }
+                              : row
+                          ),
+                        }))
+                      }
+                      className="input-modern w-full"
+                      disabled={readOnly}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {!readOnly && form.rosterPeriodCalendars.length < 8 && (
+            <button
+              type="button"
+              onClick={() => {
+                const id =
+                  typeof crypto !== "undefined" && "randomUUID" in crypto
+                    ? crypto.randomUUID()
+                    : `roster-${Date.now()}`;
+                setForm((f) => ({
+                  ...f,
+                  rosterPeriodCalendars: [
+                    ...f.rosterPeriodCalendars,
+                    {
+                      id,
+                      name: `Roster period ${f.rosterPeriodCalendars.length + 1}`,
+                      startDay: parseInt(f.payPeriodStartDay, 10) || 26,
+                      endDay: parseInt(f.payPeriodEndDay, 10) || 25,
+                    },
+                  ],
+                }));
+              }}
+              className="btn-secondary text-sm"
+            >
+              Add roster period calendar
+            </button>
+          )}
         </div>
         <div>
           <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Team Member ID Prefix</label>

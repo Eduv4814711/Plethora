@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { authFetch, fetchCurrentPayPeriod, fetchPayPeriods, type PayPeriodOption } from "@/lib/api";
+import { authFetch, fetchCurrentPayPeriod, fetchPayPeriods, fetchRosterPeriodCalendars, type PayPeriodOption, type RosterPeriodCalendarConfig } from "@/lib/api";
 import { PayPeriodSelect } from "@/components/pay-period-select";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import {
@@ -41,6 +41,8 @@ export default function RosteringPage() {
   const [periodKey, setPeriodKey] = useState("");
   const [rosterPeriodLabel, setRosterPeriodLabel] = useState("");
   const [payPeriodOptions, setPayPeriodOptions] = useState<PayPeriodOption[]>([]);
+  const [rosterCalendars, setRosterCalendars] = useState<RosterPeriodCalendarConfig[]>([]);
+  const [rosterCalendarId, setRosterCalendarId] = useState("");
   const [draftPeriodKey, setDraftPeriodKey] = useState("");
   const [showPeriodModal, setShowPeriodModal] = useState(false);
   const [draftState, setDraftState] = useState<RosterDraftState>({
@@ -81,17 +83,39 @@ export default function RosteringPage() {
     setSelectedSiteId(nextSiteId);
   };
 
+  const loadRosterPeriods = async (calendarId: string, opts?: { skipConfirm?: boolean }) => {
+    if (!token || !calendarId) return;
+    const [current, periods] = await Promise.all([
+      fetchCurrentPayPeriod(token, { calendarId }),
+      fetchPayPeriods(token, { before: 12, after: 6, calendarId }),
+    ]);
+    setPayPeriodOptions(periods);
+    if (!periodKey || opts?.skipConfirm) {
+      applyPayPeriod(current, { skipConfirm: true });
+      setDraftPeriodKey(current.periodKey);
+    }
+  };
+
+  const handleRosterCalendarChange = (nextCalendarId: string) => {
+    if (!canLeaveDraft()) return;
+    setRosterCalendarId(nextCalendarId);
+    void loadRosterPeriods(nextCalendarId, { skipConfirm: true });
+  };
+
   useEffect(() => {
     if (!token) return;
     Promise.all([
-      fetchCurrentPayPeriod(token),
-      fetchPayPeriods(token, { before: 12, after: 6 }),
+      fetchRosterPeriodCalendars(token),
       authFetch("/sites?limit=100", token).then((r) => r.json()),
     ])
-      .then(([current, periods, sitesRes]) => {
-        setPayPeriodOptions(periods);
+      .then(([calendarsRes, sitesRes]) => {
+        setRosterCalendars(calendarsRes.calendars);
+        const defaultId = calendarsRes.defaultCalendarId || calendarsRes.calendars[0]?.id || "";
+        setRosterCalendarId(defaultId);
         setSites(sitesRes.data ?? []);
-        if (!periodKey) applyPayPeriod(current, { skipConfirm: true });
+        if (defaultId) {
+          return loadRosterPeriods(defaultId, { skipConfirm: true });
+        }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -109,7 +133,7 @@ export default function RosteringPage() {
     });
     setPatternContext(null);
     setPatternCycleLength(6);
-  }, [selectedSiteId, periodStart, periodEnd]);
+  }, [selectedSiteId, periodStart, periodEnd, rosterCalendarId]);
 
   useEffect(() => {
     if (!draftState.hasUnsavedChanges) return;
@@ -174,7 +198,24 @@ export default function RosteringPage() {
 
           <div className="space-y-2">
             <label className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
-              2. Roster period
+              2. Roster type
+            </label>
+            <select
+              value={rosterCalendarId}
+              onChange={(e) => handleRosterCalendarChange(e.target.value)}
+              className="input-modern w-full py-2.5 text-sm"
+            >
+              {rosterCalendars.map((calendar) => (
+                <option key={calendar.id} value={calendar.id}>
+                  {calendar.name} ({calendar.startDay}–{calendar.endDay})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+              3. Roster period
             </label>
             <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 px-3 py-2.5">
               <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100">{periodLabel}</p>
@@ -230,7 +271,7 @@ export default function RosteringPage() {
           {selectedSiteId && (
             <div className="border-t border-neutral-200 dark:border-neutral-700 pt-4 min-w-0">
               <label className="text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
-                3. Pattern builder
+                4. Pattern builder
               </label>
               <div className="mt-2 min-w-0 w-full">
                 {patternContext ? (
@@ -372,13 +413,14 @@ export default function RosteringPage() {
                   Choose roster period
                 </h3>
                 <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
-                  Select the pay period you want to roster.
+                  Select the roster period for the chosen calendar type.
                 </p>
                 <div className="mb-6">
-                  {token && (
+                  {token && rosterCalendarId && (
                     <PayPeriodSelect
                       token={token}
                       variant="roster"
+                      calendarId={rosterCalendarId}
                       value={draftPeriodKey}
                       onChange={(p) => setDraftPeriodKey(p.periodKey)}
                     />

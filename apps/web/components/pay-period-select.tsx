@@ -13,6 +13,7 @@ type PayPeriodSelectProps = {
   className?: string;
   disabled?: boolean;
   showCurrentBadge?: boolean;
+  calendarId?: string;
 };
 
 export function PayPeriodSelect({
@@ -23,6 +24,7 @@ export function PayPeriodSelect({
   className = "input-modern w-full",
   disabled = false,
   showCurrentBadge = true,
+  calendarId,
 }: PayPeriodSelectProps) {
   const [periods, setPeriods] = useState<PayPeriodOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +32,7 @@ export function PayPeriodSelect({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetchPayPeriods(token, { before: 12, after: 3 })
+    fetchPayPeriods(token, { before: 12, after: 3, calendarId })
       .then((data) => {
         if (!cancelled) setPeriods(data);
       })
@@ -41,7 +43,7 @@ export function PayPeriodSelect({
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, calendarId]);
 
   useEffect(() => {
     if (!value && periods.length > 0) {

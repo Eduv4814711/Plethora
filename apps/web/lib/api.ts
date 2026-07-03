@@ -282,8 +282,17 @@ export interface CompanySettings {
     payPeriodStartDay?: number;
     payPeriodEndDay?: number;
     autoRosterHorizonPeriods?: number;
+    rosterPeriodCalendars?: RosterPeriodCalendarConfig[];
+    defaultRosterPeriodCalendarId?: string;
   } | null;
 }
+
+export type RosterPeriodCalendarConfig = {
+  id: string;
+  name: string;
+  startDay: number;
+  endDay: number;
+};
 
 export async function getMe(token: string): Promise<AuthUser & { company: CompanySettings }> {
   const res = await fetch(`${API_BASE}/auth/me`, {
@@ -329,6 +338,8 @@ export async function updateSettings(
       payPeriodStartDay?: number;
       payPeriodEndDay?: number;
       autoRosterHorizonPeriods?: number;
+      rosterPeriodCalendars?: RosterPeriodCalendarConfig[];
+      defaultRosterPeriodCalendarId?: string;
     }>;
   }>
 ): Promise<CompanySettings> {
@@ -358,13 +369,14 @@ export type PayPeriodOption = {
 
 export async function fetchPayPeriods(
   token: string,
-  opts?: { around?: string; before?: number; after?: number; periodKey?: string }
+  opts?: { around?: string; before?: number; after?: number; periodKey?: string; calendarId?: string }
 ): Promise<PayPeriodOption[]> {
   const params = new URLSearchParams();
   if (opts?.around) params.set("around", opts.around);
   if (opts?.before != null) params.set("before", String(opts.before));
   if (opts?.after != null) params.set("after", String(opts.after));
   if (opts?.periodKey) params.set("periodKey", opts.periodKey);
+  if (opts?.calendarId) params.set("calendarId", opts.calendarId);
   const qs = params.toString();
   const res = await fetch(`${API_BASE}/pay-periods${qs ? `?${qs}` : ""}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -374,11 +386,28 @@ export async function fetchPayPeriods(
   return body.data ?? [];
 }
 
-export async function fetchCurrentPayPeriod(token: string): Promise<PayPeriodOption> {
-  const res = await fetch(`${API_BASE}/pay-periods/current`, {
+export async function fetchCurrentPayPeriod(
+  token: string,
+  opts?: { calendarId?: string }
+): Promise<PayPeriodOption> {
+  const params = new URLSearchParams();
+  if (opts?.calendarId) params.set("calendarId", opts.calendarId);
+  const qs = params.toString();
+  const res = await fetch(`${API_BASE}/pay-periods/current${qs ? `?${qs}` : ""}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error("Failed to fetch current pay period");
+  return res.json();
+}
+
+export async function fetchRosterPeriodCalendars(token: string): Promise<{
+  defaultCalendarId: string;
+  calendars: RosterPeriodCalendarConfig[];
+}> {
+  const res = await fetch(`${API_BASE}/pay-periods/roster-calendars`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to fetch roster period calendars");
   return res.json();
 }
 

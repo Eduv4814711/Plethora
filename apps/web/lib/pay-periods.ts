@@ -4,6 +4,8 @@ export type PayPeriodOption = {
   rosterLabel: string;
   periodStart: string;
   periodEnd: string;
+  calendarId?: string;
+  calendarName?: string;
   isCurrent?: boolean;
 };
 

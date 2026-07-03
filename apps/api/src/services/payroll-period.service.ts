@@ -1,8 +1,15 @@
 import { addDays, addMonths } from "date-fns";
 import {
+  getRosterPeriodCalendar,
   parsePayrollCalendarSettings,
+  rosterCalendarBounds,
   type PayrollCalendarSettings,
 } from "../lib/payroll-calendar-settings.js";
+
+export type SpanningPeriodDayBounds = {
+  startDay: number;
+  endDay: number;
+};
 
 export type PayPeriodBounds = {
   periodStart: Date;
@@ -10,6 +17,8 @@ export type PayPeriodBounds = {
   label: string;
   rosterLabel: string;
   periodKey: string;
+  calendarId?: string;
+  calendarName?: string;
 };
 
 const MONTH_NAMES = [
@@ -61,20 +70,30 @@ export function formatPayPeriodLabel(periodEnd: Date, kind: "pay" | "roster"): s
   return `${month} ${year} ${suffix}`;
 }
 
-function enrichPeriod(periodStart: Date, periodEnd: Date): PayPeriodBounds {
+function enrichPeriod(
+  periodStart: Date,
+  periodEnd: Date,
+  opts?: { calendarName?: string; calendarId?: string }
+): PayPeriodBounds {
+  const basePay = formatPayPeriodLabel(periodEnd, "pay");
+  const baseRoster = formatPayPeriodLabel(periodEnd, "roster");
+  const rosterLabel = opts?.calendarName ? `${opts.calendarName} — ${baseRoster}` : baseRoster;
   return {
     periodStart,
     periodEnd,
-    label: formatPayPeriodLabel(periodEnd, "pay"),
-    rosterLabel: formatPayPeriodLabel(periodEnd, "roster"),
+    label: basePay,
+    rosterLabel,
     periodKey: formatDateKey(periodEnd).slice(0, 7),
+    calendarId: opts?.calendarId,
+    calendarName: opts?.calendarName,
   };
 }
 
 function getSpanningPeriodContaining(
   asOf: Date,
   startDay: number,
-  endDay: number
+  endDay: number,
+  opts?: { calendarName?: string; calendarId?: string }
 ): PayPeriodBounds {
   const y = asOf.getUTCFullYear();
   const m = asOf.getUTCMonth();
@@ -84,23 +103,132 @@ function getSpanningPeriodContaining(
     const periodStart = utcDateClamped(y, m, startDay);
     const endMonth = addMonths(new Date(Date.UTC(y, m, 1)), 1);
     const periodEnd = utcEndOfMonthDay(endMonth.getUTCFullYear(), endMonth.getUTCMonth(), endDay);
-    return enrichPeriod(periodStart, periodEnd);
+    return enrichPeriod(periodStart, periodEnd, opts);
   }
 
   const prevMonth = addMonths(new Date(Date.UTC(y, m, 1)), -1);
   const periodStart = utcDateClamped(prevMonth.getUTCFullYear(), prevMonth.getUTCMonth(), startDay);
   const periodEnd = utcEndOfMonthDay(y, m, endDay);
-  return enrichPeriod(periodStart, periodEnd);
+  return enrichPeriod(periodStart, periodEnd, opts);
+}
+
+export function getSpanningPeriodContainingBounds(
+  bounds: SpanningPeriodDayBounds,
+  asOfDate: Date = new Date(),
+  opts?: { calendarName?: string; calendarId?: string }
+): PayPeriodBounds {
+  return getSpanningPeriodContaining(startOfUtcDay(asOfDate), bounds.startDay, bounds.endDay, opts);
+}
+
+export function getNextSpanningPeriod(
+  bounds: SpanningPeriodDayBounds,
+  current: PayPeriodBounds,
+  opts?: { calendarName?: string; calendarId?: string }
+): PayPeriodBounds {
+  return getSpanningPeriodContainingBounds(bounds, addDays(current.periodEnd, 1), opts);
+}
+
+export function getPreviousSpanningPeriod(
+  bounds: SpanningPeriodDayBounds,
+  current: PayPeriodBounds,
+  opts?: { calendarName?: string; calendarId?: string }
+): PayPeriodBounds {
+  return getSpanningPeriodContainingBounds(bounds, addDays(current.periodStart, -1), opts);
+}
+
+export function listSpanningPeriods(
+  bounds: SpanningPeriodDayBounds,
+  options: ListPayPeriodsOptions = {},
+  meta?: { calendarName?: string; calendarId?: string }
+): PayPeriodBounds[] {
+  const around = startOfUtcDay(options.aroundDate ?? new Date());
+  const before = Math.max(0, Math.min(options.before ?? 6, 24));
+  const after = Math.max(0, Math.min(options.after ?? 6, 24));
+
+  const current = getSpanningPeriodContainingBounds(bounds, around, meta);
+  const periods: PayPeriodBounds[] = [current];
+
+  let prev = current;
+  for (let i = 0; i < before; i++) {
+    prev = getPreviousSpanningPeriod(bounds, prev, meta);
+    periods.unshift(prev);
+  }
+
+  let next = current;
+  for (let i = 0; i < after; i++) {
+    next = getNextSpanningPeriod(bounds, next, meta);
+    periods.push(next);
+  }
+
+  return periods;
+}
+
+export function resolveSpanningPeriodByKey(
+  bounds: SpanningPeriodDayBounds,
+  periodKey: string,
+  meta?: { calendarName?: string; calendarId?: string }
+): PayPeriodBounds | null {
+  if (!/^\d{4}-\d{2}$/.test(periodKey)) return null;
+  const [yStr, mStr] = periodKey.split("-");
+  const year = parseInt(yStr, 10);
+  const month = parseInt(mStr, 10) - 1;
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 0 || month > 11) return null;
+
+  const probe = utcEndOfMonthDay(year, month, bounds.endDay);
+  const period = getSpanningPeriodContainingBounds(bounds, probe, meta);
+  return period.periodKey === periodKey ? period : null;
+}
+
+export function listRosterPeriods(
+  settings: PayrollCalendarSettings,
+  calendarId: string | undefined,
+  options: ListPayPeriodsOptions = {}
+): PayPeriodBounds[] {
+  const calendar = getRosterPeriodCalendar(settings, calendarId);
+  return listSpanningPeriods(rosterCalendarBounds(calendar), options, {
+    calendarId: calendar.id,
+    calendarName: calendar.name,
+  });
+}
+
+export function getCurrentRosterPeriod(
+  settings: PayrollCalendarSettings,
+  calendarId: string | undefined,
+  asOfDate: Date = new Date()
+): PayPeriodBounds {
+  const calendar = getRosterPeriodCalendar(settings, calendarId);
+  return getSpanningPeriodContainingBounds(rosterCalendarBounds(calendar), asOfDate, {
+    calendarId: calendar.id,
+    calendarName: calendar.name,
+  });
+}
+
+export function resolveRosterPeriodByKey(
+  settings: PayrollCalendarSettings,
+  calendarId: string | undefined,
+  periodKey: string
+): PayPeriodBounds | null {
+  const calendar = getRosterPeriodCalendar(settings, calendarId);
+  return resolveSpanningPeriodByKey(rosterCalendarBounds(calendar), periodKey, {
+    calendarId: calendar.id,
+    calendarName: calendar.name,
+  });
+}
+
+export function serializeRosterCalendars(settings: PayrollCalendarSettings) {
+  return {
+    defaultCalendarId: settings.defaultRosterPeriodCalendarId,
+    calendars: settings.rosterPeriodCalendars,
+  };
 }
 
 export function getPayPeriodContaining(
   settings: PayrollCalendarSettings,
   asOfDate: Date = new Date()
 ): PayPeriodBounds {
-  return getSpanningPeriodContaining(
-    startOfUtcDay(asOfDate),
-    settings.payPeriodStartDay,
-    settings.payPeriodEndDay
+  return getSpanningPeriodContainingBounds(
+    { startDay: settings.payPeriodStartDay, endDay: settings.payPeriodEndDay },
+    asOfDate
   );
 }
 
@@ -151,41 +279,20 @@ export function listPayPeriods(
   settings: PayrollCalendarSettings,
   options: ListPayPeriodsOptions = {}
 ): PayPeriodBounds[] {
-  const around = startOfUtcDay(options.aroundDate ?? new Date());
-  const before = Math.max(0, Math.min(options.before ?? 6, 24));
-  const after = Math.max(0, Math.min(options.after ?? 6, 24));
-
-  const current = getCurrentPayPeriod(settings, around);
-  const periods: PayPeriodBounds[] = [current];
-
-  let prev = current;
-  for (let i = 0; i < before; i++) {
-    prev = getPreviousPayPeriod(settings, prev);
-    periods.unshift(prev);
-  }
-
-  let next = current;
-  for (let i = 0; i < after; i++) {
-    next = getNextPayPeriod(settings, next);
-    periods.push(next);
-  }
-
-  return periods;
+  return listSpanningPeriods(
+    { startDay: settings.payPeriodStartDay, endDay: settings.payPeriodEndDay },
+    options
+  );
 }
 
 export function resolvePayPeriodByKey(
   settings: PayrollCalendarSettings,
   periodKey: string
 ): PayPeriodBounds | null {
-  if (!/^\d{4}-\d{2}$/.test(periodKey)) return null;
-  const [yStr, mStr] = periodKey.split("-");
-  const year = parseInt(yStr, 10);
-  const month = parseInt(mStr, 10) - 1;
-  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 0 || month > 11) return null;
-
-  const probe = utcEndOfMonthDay(year, month, settings.payPeriodEndDay);
-  const period = getPayPeriodContaining(settings, probe);
-  return period.periodKey === periodKey ? period : null;
+  return resolveSpanningPeriodByKey(
+    { startDay: settings.payPeriodStartDay, endDay: settings.payPeriodEndDay },
+    periodKey
+  );
 }
 
 export function getRosterWindow(
@@ -212,6 +319,8 @@ export function serializePayPeriod(period: PayPeriodBounds, isCurrent = false) {
     rosterLabel: period.rosterLabel,
     periodStart: formatDateKey(period.periodStart),
     periodEnd: formatDateKey(period.periodEnd),
+    calendarId: period.calendarId,
+    calendarName: period.calendarName,
     isCurrent,
   };
 }
