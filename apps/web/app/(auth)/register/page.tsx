@@ -227,7 +227,7 @@ function RegisterFormContent() {
           </div>
 
           {error && (
-            <div className="p-4 text-sm text-security-navy bg-security-amber-50 border-2 border-security-amber-200 rounded-security">
+            <div className="p-4 text-sm text-red-800 bg-red-50 border-2 border-red-200 rounded-security" role="alert">
               {error}
             </div>
           )}

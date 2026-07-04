@@ -111,7 +111,7 @@ function LoginForm() {
           </div>
 
           {error && (
-            <div className="p-4 text-sm text-security-navy bg-security-amber-50 border-2 border-security-amber-200 rounded-security space-y-2" role="alert">
+            <div className="p-4 text-sm text-red-800 bg-red-50 border-2 border-red-200 rounded-security space-y-2" role="alert">
               <p className="font-medium">{error}</p>
               {process.env.NODE_ENV !== "production" && (error === "Login failed" || error.includes("connect") || error.includes("server") || error.includes("404")) && (
                 <p className="text-xs mt-2 text-security-navy-600">

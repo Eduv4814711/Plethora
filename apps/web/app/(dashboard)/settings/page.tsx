@@ -100,7 +100,12 @@ export default function SettingsPage() {
 
   return (
     <div className="animate-fade-in">
-      <h1 className="page-title mb-6">Settings</h1>
+      <div className="mb-6">
+        <h1 className="page-title">Settings</h1>
+        <p className="mt-1 text-sm text-neutral-600">
+          Manage your profile, company details, users, and system options.
+        </p>
+      </div>
 
       {error && (
         <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-sm border border-red-200 dark:border-red-800/50">
@@ -142,7 +147,7 @@ export default function SettingsPage() {
           })}
       </div>
 
-      <div className={clsx("card-wireframe p-6 w-full max-w-6xl mx-auto", activeTab === "profile" && "max-w-[50%]")}>
+      <div className={clsx("card-wireframe p-6 w-full max-w-6xl mx-auto", activeTab === "profile" && "sm:max-w-xl")}>
         {activeTab === "profile" && (
           <ProfileSection user={user} />
         )}

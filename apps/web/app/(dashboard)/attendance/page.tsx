@@ -21,10 +21,10 @@ function emptyDateRange() {
 
 const WORKFLOW_STEPS = [
   "Roster created",
-  "Timesheet generated",
-  "Capture actuals",
+  "Timesheet created",
+  "Record who worked",
   "Review & approve",
-  "Payroll uses actuals",
+  "Ready for payroll",
 ];
 
 export default function AttendancePage() {
@@ -123,9 +123,8 @@ export default function AttendancePage() {
     <div className="animate-fade-in">
       <div className="mb-6">
         <h1 className="page-title">Attendance</h1>
-        <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-          The Site Timesheet is the single source of truth for attendance. Confirm who actually worked at each
-          site, then approve it for payroll.
+        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+          Confirm who actually worked at each site, then approve the timesheet so payroll pays the right hours.
         </p>
       </div>
 

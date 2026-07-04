@@ -194,6 +194,11 @@ export default function RosteringPage() {
                 </option>
               ))}
             </select>
+            {sites.length === 0 && (
+              <p className="text-xs text-neutral-500">
+                No sites yet. Add a site on the Sites page before building a roster.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -345,7 +350,15 @@ export default function RosteringPage() {
               </button>
               <button
                 type="button"
-                onClick={() => void workspaceRef.current?.publishRoster()}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      "Publish this roster? This replaces any previously published shifts for this site and period."
+                    )
+                  ) {
+                    void workspaceRef.current?.publishRoster();
+                  }
+                }}
                 disabled={!draftState.canPublish}
                 title={
                   draftState.hasUnsavedChanges

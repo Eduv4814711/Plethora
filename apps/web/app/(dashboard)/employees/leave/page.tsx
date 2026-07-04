@@ -194,9 +194,9 @@ export default function LeaveManagementPage() {
           </svg>
         </Link>
         <div>
-          <h1 className="page-title">Leave Management</h1>
-          <p className="text-neutral-500 dark:text-neutral-400 mt-0.5 text-sm">
-            Manage leave requests and records per South African BCEA
+          <h1 className="page-title">Leave</h1>
+          <p className="text-neutral-600 dark:text-neutral-400 mt-0.5 text-sm">
+            Record and approve leave for your team, in line with South African labour law (BCEA).
           </p>
         </div>
       </div>

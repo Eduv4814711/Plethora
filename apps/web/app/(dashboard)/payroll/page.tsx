@@ -327,7 +327,7 @@ export default function PayrollPage() {
         description="Manage payroll runs, review financial metrics, and control the pay period workflow."
         actions={
           <>
-            <Button type="button" onClick={() => setShowForm(!showForm)}>
+            <Button type="button" variant={showForm ? "secondary" : "primary"} onClick={() => setShowForm(!showForm)}>
               {showForm ? "Cancel" : "New payroll run"}
             </Button>
             <SarsExportsDropdown token={token!} />
@@ -938,23 +938,44 @@ function PayrollRunForm({ token, onSuccess }: { token: string; onSuccess: () => 
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
   const [periodLabel, setPeriodLabel] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!periodStart || !periodEnd) return;
-    await authFetch("/payroll/runs", token, {
-      method: "POST",
-      body: JSON.stringify({
-        periodStart: new Date(`${periodStart}T00:00:00.000Z`).toISOString(),
-        periodEnd: new Date(`${periodEnd}T23:59:59.999Z`).toISOString(),
-      }),
-    });
-    onSuccess();
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await authFetch("/payroll/runs", token, {
+        method: "POST",
+        body: JSON.stringify({
+          periodStart: new Date(`${periodStart}T00:00:00.000Z`).toISOString(),
+          periodEnd: new Date(`${periodEnd}T23:59:59.999Z`).toISOString(),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof err.message === "string" ? err.message : "Could not create the payroll run. Please try again."
+        );
+      }
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create the payroll run. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <form onSubmit={handleSubmit} className="card-wireframe p-6">
       <h3 className="section-title mb-4">New payroll run</h3>
+      {error && (
+        <AlertBanner variant="error" className="mb-4">
+          {error}
+        </AlertBanner>
+      )}
       <div className="max-w-md space-y-2">
         <label htmlFor="new-payroll-period" className="label-text block">
           Pay period
@@ -976,8 +997,8 @@ function PayrollRunForm({ token, onSuccess }: { token: string; onSuccess: () => 
           </p>
         )}
       </div>
-      <Button type="submit" className="mt-4" disabled={!periodKey}>
-        Create run
+      <Button type="submit" className="mt-4" disabled={!periodKey} loading={submitting}>
+        Create payroll run
       </Button>
     </form>
   );
@@ -1288,6 +1309,15 @@ function PayrollRunCard({
   };
 
   const handleMarkPaid = async () => {
+    const confirmed = await confirm({
+      title: "Mark this payroll run as paid?",
+      message:
+        "Only do this once the money has actually been paid out. A paid run is final and cannot be reverted to draft.",
+      confirmLabel: "Mark as paid",
+      danger: false,
+    });
+    if (!confirmed) return;
+
     setActionLoading(true);
     setActionError(null);
     try {

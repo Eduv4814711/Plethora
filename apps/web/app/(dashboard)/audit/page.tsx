@@ -57,44 +57,56 @@ export default function AuditPage() {
 
   return (
     <div className="animate-fade-in">
-      <h1 className="page-title mb-6">Audit Logs</h1>
-
-      <div className="card-wireframe overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-50 dark:bg-neutral-700">
-            <tr>
-              <th className="px-4 py-2 text-left">Timestamp</th>
-              <th className="px-4 py-2 text-left">User</th>
-              <th className="px-4 py-2 text-left">Action</th>
-              <th className="px-4 py-2 text-left">Entity</th>
-            </tr>
-          </thead>
-          <tbody>
-            {logs.map((log) => (
-              <tr
-                key={log.id}
-                className="border-t border-neutral-200 dark:border-neutral-700"
-              >
-                <td className="px-4 py-2 text-neutral-600 dark:text-neutral-400">
-                  {new Date(log.timestamp).toLocaleString()}
-                </td>
-                <td className="px-4 py-2">
-                  {log.user?.name ?? "—"}
-                </td>
-                <td className="px-4 py-2 font-medium">{log.action}</td>
-                <td className="px-4 py-2">
-                  {log.entityType}
-                  {log.entityId && ` #${log.entityId.slice(0, 8)}`}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="mb-6">
+        <h1 className="page-title">Audit Logs</h1>
+        <p className="mt-1 text-sm text-neutral-600">
+          A record of who changed what, and when. Showing the 50 most recent changes.
+        </p>
       </div>
 
-      {logs.length === 0 && (
-        <p className="text-neutral-500 py-8 text-center">No audit logs</p>
-      )}
+      <div className="card-wireframe overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-neutral-50 dark:bg-neutral-700">
+              <tr>
+                <th className="px-4 py-2.5 text-left font-semibold">Date & time</th>
+                <th className="px-4 py-2.5 text-left font-semibold">User</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Action</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Record</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((log) => (
+                <tr
+                  key={log.id}
+                  className="border-t border-neutral-200 dark:border-neutral-700"
+                >
+                  <td className="px-4 py-2.5 whitespace-nowrap text-neutral-600 dark:text-neutral-400">
+                    {new Date(log.timestamp).toLocaleString()}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    {log.user?.name ?? "—"}
+                  </td>
+                  <td className="px-4 py-2.5 font-medium">{log.action}</td>
+                  <td className="px-4 py-2.5">
+                    {log.entityType}
+                    {log.entityId && (
+                      <span className="font-mono text-xs text-neutral-500"> #{log.entityId.slice(0, 8)}</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {logs.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-10 text-center text-sm text-neutral-600">
+                    No changes recorded yet. Activity will appear here as people use the system.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

@@ -165,8 +165,8 @@ export default function DashboardPage() {
             <div className="h-9 w-48 rounded-full bg-neutral-200" />
           </div>
         </div>
-        <div className="grid shrink-0 grid-cols-2 gap-2 py-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
+        <div className="grid shrink-0 grid-cols-2 gap-2 py-2 sm:grid-cols-3 lg:grid-cols-5">
+          {[1, 2, 3, 4, 5].map((i) => (
             <div key={`kpi-${i}`} className="h-[4.25rem] rounded-security-lg border border-neutral-200/80 bg-white shadow-sm" />
           ))}
         </div>
@@ -182,9 +182,10 @@ export default function DashboardPage() {
   const guardsByDay = data?.guardsOnDutyByDay ?? defaultGuardsByDay;
   const employeesTotal = (data?.employeesByStatus ?? []).reduce((s, e) => s + e.value, 0) || 0;
   const shiftsOverTimeData = data?.shiftsOverTime?.length ? data.shiftsOverTime : defaultShiftData;
-  const peakGuardsThisWeek = Math.max(...guardsByDay.map((d) => d.value), 0);
   const taskUrgentCount = (data?.taskStats?.overdue ?? 0) + (data?.taskStats?.dueToday ?? 0);
   const alertTally = (data?.alerts ?? []).reduce((sum, a) => sum + (typeof a.count === "number" ? a.count : 1), 0);
+  const pendingPayrollCount = (data?.payrollStatus?.draft ?? 0) + (data?.payrollStatus?.calculated ?? 0);
+  const alertsList = data?.alerts ?? [];
 
   const DashboardCard = ({ title, children, className = "", action }: { title: string; children: React.ReactNode; className?: string; action?: React.ReactNode }) => (
     <article className={`card-dashboard flex h-full min-h-0 flex-col overflow-hidden p-3 lg:p-3.5 ${className}`}>
@@ -287,12 +288,35 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <section className="grid shrink-0 grid-cols-2 gap-2 py-2 lg:grid-cols-4 lg:gap-2.5 lg:py-2.5" aria-label="Key metrics">
-        <KpiTile label="Peak on duty" value={peakGuardsThisWeek} hint="This week" />
+      <section className="grid shrink-0 grid-cols-2 gap-2 py-2 sm:grid-cols-3 lg:grid-cols-5 lg:gap-2.5 lg:py-2.5" aria-label="Key metrics">
+        <KpiTile label="Total employees" value={employeesTotal} hint="All statuses" />
+        <KpiTile label="Guards on duty" value={data?.guardsOnDuty ?? 0} hint="Right now" />
         <KpiTile label="Active sites" value={data?.activeSitesCount ?? 0} />
-        <KpiTile label="Tasks urgent" value={taskUrgentCount} hint="Overdue + today" accent={taskUrgentCount > 0 ? "alert" : "default"} />
-        <KpiTile label="Open alerts" value={alertTally} accent={alertTally > 0 ? "alert" : "default"} />
+        <KpiTile label="Pending payroll" value={pendingPayrollCount} hint="Runs not yet paid" accent={pendingPayrollCount > 0 ? "alert" : "default"} />
+        <KpiTile label="Needs attention" value={alertTally + taskUrgentCount} hint="Alerts + urgent tasks" accent={alertTally + taskUrgentCount > 0 ? "alert" : "default"} />
       </section>
+
+      {alertsList.length > 0 && (
+        <section
+          className="mb-2 shrink-0 rounded-security-lg border border-security-amber-200 bg-security-amber-50/70 px-3 py-2"
+          aria-label="Items needing attention"
+        >
+          <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-800 lg:text-sm">
+            {alertsList.slice(0, 4).map((alert, i) => (
+              <li key={`${alert.type}-${i}`} className="flex min-w-0 items-center gap-1.5">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-security-amber-500" aria-hidden />
+                <span className="truncate">
+                  {alert.message}
+                  {typeof alert.count === "number" ? ` (${alert.count})` : ""}
+                </span>
+              </li>
+            ))}
+            {alertsList.length > 4 && (
+              <li className="text-neutral-600">+{alertsList.length - 4} more</li>
+            )}
+          </ul>
+        </section>
+      )}
 
       <section
         className="grid min-h-0 flex-1 grid-cols-1 gap-2.5 overflow-hidden max-lg:auto-rows-auto md:grid-cols-2 md:gap-3 xl:grid-cols-4 xl:grid-rows-2 xl:gap-3"
@@ -316,7 +340,7 @@ export default function DashboardPage() {
           action={
             canSites ? (
               <Link href="/sites" className="text-xs font-semibold text-security-navy-800 hover:text-security-navy-900">
-                Manage →
+                View sites →
               </Link>
             ) : undefined
           }
@@ -488,7 +512,7 @@ export default function DashboardPage() {
                   </Link>
                 ))}
                 <Link href="/payroll" className="btn-primary mt-auto w-full shrink-0 py-1.5 text-center text-xs lg:text-sm">
-                  Generate payrun
+                  Run payroll
                 </Link>
               </>
             ) : (

@@ -70,12 +70,12 @@ export default function ReportsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="page-title">Reports</h1>
-          <p className="text-neutral-500 dark:text-neutral-400 mt-0.5 text-sm">
-            Visual analytics for workforce, shifts, attendance, and payroll
+          <p className="text-neutral-600 dark:text-neutral-400 mt-0.5 text-sm">
+            Charts showing your team, shifts, attendance, and payroll over time.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <label htmlFor="reports-period" className="text-sm text-neutral-600 dark:text-neutral-400">Pay periods:</label>
+          <label htmlFor="reports-period" className="text-sm text-neutral-600 dark:text-neutral-400">Show:</label>
           <select
             id="reports-period"
             value={payPeriodCount}

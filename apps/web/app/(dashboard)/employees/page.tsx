@@ -219,8 +219,8 @@ export default function EmployeesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
         <div>
           <h1 className="page-title">Team</h1>
-          <p className="text-sm text-neutral-500 mt-1">
-            Manage your workforce
+          <p className="text-sm text-neutral-600 mt-1">
+            Add employees, keep their details up to date, and organise them into groups.
           </p>
           {searchQuery.trim().length >= 2 && (
             <p className="text-xs text-neutral-600 mt-2">
@@ -229,27 +229,27 @@ export default function EmployeesPage() {
             </p>
           )}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <Link
             href="/employees/leave"
-            className="btn-primary h-11 shrink-0 flex items-center gap-2"
+            className="btn-secondary h-11 shrink-0 flex items-center gap-2"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            Leave Management
+            Leave
           </Link>
           <button
             onClick={() => setShowManageGroups(!showManageGroups)}
-            className="btn-primary h-11 shrink-0"
+            className="btn-secondary h-11 shrink-0"
           >
-            {showManageGroups ? "Hide Groups" : "Manage Groups"}
+            {showManageGroups ? "Hide groups" : "Manage groups"}
           </button>
           <button
             onClick={() => setShowForm(!showForm)}
-            className="btn-primary h-11 shrink-0"
+            className={`${showForm ? "btn-secondary" : "btn-primary"} h-11 shrink-0`}
           >
-            {showForm ? "Cancel" : "Add Team Member"}
+            {showForm ? "Cancel" : "Add team member"}
           </button>
         </div>
       </div>
@@ -436,9 +436,22 @@ export default function EmployeesPage() {
       )}
 
       {employees.length === 0 && (
-        <div className="card-wireframe text-center py-16">
-          <p className="text-sm font-semibold text-black">No team members yet</p>
-          <p className="text-xs mt-1 text-black">Add your first team member to get started</p>
+        <div className="card-wireframe text-center py-16 px-6">
+          <p className="text-base font-semibold text-black">
+            {statusFilter !== "all" || searchQuery.trim().length >= 2
+              ? "No team members match your filters"
+              : "No team members yet"}
+          </p>
+          <p className="text-sm mt-2 text-neutral-600 max-w-md mx-auto">
+            {statusFilter !== "all" || searchQuery.trim().length >= 2
+              ? "Try a different status or clear the search to see everyone."
+              : "Add your first team member to start building rosters, tracking attendance, and preparing payroll."}
+          </p>
+          {statusFilter === "all" && searchQuery.trim().length < 2 && (
+            <button onClick={() => setShowForm(true)} className="btn-primary mt-6">
+              Add team member
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -483,11 +496,7 @@ function EmployeeTeamCard({
             {(emp.employeeType === "office" ? "Office" : "Guard")}: {emp.group?.name ?? "—"}
           </p>
         </div>
-        <span
-          className={`shrink-0 px-3 py-1 rounded-[10px] text-xs font-bold uppercase border-2 border-neutral-200 ${
-            emp.status === "active" ? "bg-neutral-200 text-black" : "bg-neutral-100 text-black"
-          }`}
-        >
+        <span className={`shrink-0 uppercase ${statusColors[emp.status] ?? "badge-neutral"}`}>
           {emp.status}
         </span>
       </div>
@@ -585,7 +594,7 @@ function EmployeeTeamCard({
             onClick={() => onChangeStatus(emp.id)}
             className="text-xs font-medium uppercase tracking-wider text-black hover:underline"
           >
-            Change Status
+            Change status
           </button>
         )}
       </div>
@@ -746,7 +755,10 @@ function ManageGroupsSection({
   return (
     <div className="card-wireframe mb-6 p-4">
       {confirmDialog}
-      <h3 className="text-sm font-medium text-neutral-700 mb-4">Manage Groups</h3>
+      <h3 className="text-sm font-semibold text-neutral-800 mb-1">Groups</h3>
+      <p className="text-xs text-neutral-600 mb-4">
+        Groups organise your team (for example by region or client). Each team member belongs to one group.
+      </p>
       <form onSubmit={handleAdd} className="flex flex-wrap gap-2 mb-4">
         <input
           type="text"
@@ -764,14 +776,21 @@ function ManageGroupsSection({
           className="flex-1 min-w-[140px] px-2 py-1.5 text-sm border-2 border-neutral-200 rounded-[10px] bg-white input-modern"
         />
         <button type="submit" disabled={saving} className="btn-secondary text-xs py-1.5 px-3">
-          {saving ? "…" : "Add Group"}
+          {saving ? "Adding..." : "Add group"}
         </button>
       </form>
       <div className="space-y-1">
         {groups.map((g) => (
           <div key={g.id} className="flex items-center justify-between py-1.5 px-2 text-sm rounded hover:bg-neutral-100/80">
             <span>{g.name}</span>
-            <button type="button" onClick={() => handleDelete(g.id)} className="text-red-500 hover:text-red-600 text-xs">×</button>
+            <button
+              type="button"
+              onClick={() => handleDelete(g.id)}
+              className="rounded px-1.5 py-0.5 text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700"
+              aria-label={`Delete group ${g.name}`}
+            >
+              Delete
+            </button>
           </div>
         ))}
         {groups.length === 0 && <p className="text-neutral-400 text-xs py-1">No groups yet. Add one above.</p>}
@@ -840,6 +859,7 @@ function EmployeeForm({
   const [mentallyUnstable, setMentallyUnstable] = useState<boolean | "">("");
   const [trainingCompleted, setTrainingCompleted] = useState<boolean | "">("");
   const [activeTab, setActiveTab] = useState<"basic" | "labour" | "bank" | "psira">("basic");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -855,25 +875,31 @@ function EmployeeForm({
     e.preventDefault();
     setError("");
     if (!employeeNumber.trim()) {
-      setError("Team member ID is required.");
+      setActiveTab("basic");
+      setError("Team member ID is required. Enter it on the Basic details tab.");
       return;
     }
     if (employeeType === "security" && !psiraNumber.trim()) {
-      setError("PSIRA number is required for security guards.");
+      setActiveTab("psira");
+      setError("PSIRA number is required for security guards. Enter it on the PSIRA tab.");
       return;
     }
     if (employeeType === "security" && !gradeId) {
-      setError("Pay grade is required for security guards.");
+      setActiveTab("basic");
+      setError("Pay grade is required for security guards. Choose one on the Basic details tab.");
       return;
     }
     if (!groupId) {
-      setError("Group is required for all team members.");
+      setActiveTab("basic");
+      setError("Every team member needs a group. Choose one on the Basic details tab.");
       return;
     }
     if (employeeType === "office" && (!monthlySalary || parseFloat(monthlySalary) <= 0)) {
-      setError("Monthly salary is required for office staff.");
+      setActiveTab("basic");
+      setError("Monthly salary is required for office staff. Enter it on the Basic details tab.");
       return;
     }
+    setSubmitting(true);
     try {
       const payload: Record<string, unknown> = {
         employeeNumber: employeeNumber.trim(),
@@ -928,12 +954,14 @@ function EmployeeForm({
       });
       if (!res.ok) {
         const data = await res.json();
-        const msg = data?.message?.psiraNumber?.[0] ?? data?.message?.gradeId?.[0] ?? data?.message?.groupId?.[0] ?? data?.message?.monthlySalary?.[0] ?? data?.message?.employeeNumber?.[0] ?? (typeof data?.message === "string" ? data.message : null) ?? "Failed to create";
+        const msg = data?.message?.psiraNumber?.[0] ?? data?.message?.gradeId?.[0] ?? data?.message?.groupId?.[0] ?? data?.message?.monthlySalary?.[0] ?? data?.message?.employeeNumber?.[0] ?? (typeof data?.message === "string" ? data.message : null) ?? "Could not save the team member. Please check the details and try again.";
         throw new Error(msg);
       }
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed");
+      setError(err instanceof Error ? err.message : "Could not save the team member. Please check the details and try again.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -942,12 +970,14 @@ function EmployeeForm({
       onSubmit={handleSubmit}
       className="card-wireframe mb-6 p-6 max-h-[85vh] overflow-y-auto"
     >
-      <div className="mb-4 pb-3 border-b-2 border-neutral-200 flex items-baseline justify-between gap-4">
-        <h3 className="text-base font-semibold text-neutral-900 tracking-tight">New Team Member</h3>
-        <span className="text-[10px] uppercase tracking-widest text-neutral-500">Add team member</span>
+      <div className="mb-4 pb-3 border-b-2 border-neutral-200">
+        <h3 className="text-base font-semibold text-neutral-900 tracking-tight">Add a team member</h3>
+        <p className="mt-1 text-xs text-neutral-600">
+          Fields marked with <span className="text-red-600 font-semibold">*</span> are required. You can fill in the other tabs later.
+        </p>
       </div>
       {error && (
-        <div className="mb-4 p-3 text-sm text-red-800 bg-red-50 border border-red-200 rounded-md">
+        <div className="mb-4 p-3 text-sm text-red-800 bg-red-50 border border-red-200 rounded-md" role="alert">
           {error}
         </div>
       )}
@@ -996,65 +1026,117 @@ function EmployeeForm({
                   : "text-neutral-600 hover:text-neutral-900"
               )}
             >
-              {tab === "basic" ? "Basic" : tab === "labour" ? "Labour Law (BCEA)" : tab === "bank" ? "Bank Details" : "PSIRA"}
+              {tab === "basic" ? "Basic details" : tab === "labour" ? "Employment (BCEA)" : tab === "bank" ? "Bank & tax" : "PSIRA"}
             </button>
           ))}
         </div>
 
         {activeTab === "basic" && (
         <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-neutral-200">
-          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 mb-2">Basic</h4>
+          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 mb-3">Basic details</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <input
-              placeholder="Team Member ID *"
-              value={employeeNumber}
-              onChange={(e) => setEmployeeNumber(e.target.value)}
-              className="input-compact"
-              required
-            />
-            <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-compact">
-              <option value="applicant">Applicant</option>
-              <option value="hired">Hired</option>
-              <option value="training">Training</option>
-              <option value="active">Active</option>
-              <option value="reliever">Reliever</option>
-              <option value="suspended">Suspended</option>
-              <option value="offboarded">Offboarded</option>
-            </select>
-            <input placeholder="First name *" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className="input-compact" />
-            <input placeholder="Last name *" value={lastName} onChange={(e) => setLastName(e.target.value)} required className="input-compact" />
-            <input
-              placeholder="ID number (13-digit RSA ID)"
-              value={idNumber}
-              onChange={(e) => {
-                const v = e.target.value;
-                setIdNumber(v);
-                const parsed = parseSAIdNumber(v);
-                if (parsed) {
-                  setDateOfBirth(parsed.dateOfBirth ?? "");
-                  if (parsed.gender) setGender(parsed.gender);
-                }
-              }}
-              className="input-compact"
-              title="13-digit SA ID – DOB & gender auto-fill"
-            />
-            <input placeholder="Phone (e.g. 0821234567 or +27821234567)" value={phone} onChange={(e) => setPhone(e.target.value)} className="input-compact" title="WhatsApp number for clock-in, payslip, etc." />
-            <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-compact" />
-            {employeeType === "office" ? (
+            <div className="flex flex-col gap-1">
+              <label htmlFor="new-emp-number" className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+                Team member ID <span className="text-red-600">*</span>
+              </label>
               <input
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="Monthly salary (R) *"
-                value={monthlySalary}
-                onChange={(e) => setMonthlySalary(e.target.value)}
+                id="new-emp-number"
+                placeholder="e.g. EMP-0042"
+                value={employeeNumber}
+                onChange={(e) => setEmployeeNumber(e.target.value)}
                 className="input-compact"
                 required
               />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="new-emp-status" className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+                Employment status
+              </label>
+              <select id="new-emp-status" value={status} onChange={(e) => setStatus(e.target.value)} className="input-compact">
+                <option value="applicant">Applicant</option>
+                <option value="hired">Hired</option>
+                <option value="training">Training</option>
+                <option value="active">Active</option>
+                <option value="reliever">Reliever</option>
+                <option value="suspended">Suspended</option>
+                <option value="offboarded">Offboarded</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="new-emp-first-name" className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+                First name <span className="text-red-600">*</span>
+              </label>
+              <input id="new-emp-first-name" placeholder="e.g. Thabo" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className="input-compact" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="new-emp-last-name" className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+                Last name <span className="text-red-600">*</span>
+              </label>
+              <input id="new-emp-last-name" placeholder="e.g. Mokoena" value={lastName} onChange={(e) => setLastName(e.target.value)} required className="input-compact" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="new-emp-id-number" className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+                SA ID number
+              </label>
+              <input
+                id="new-emp-id-number"
+                placeholder="13-digit ID – fills in birth date & gender"
+                value={idNumber}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setIdNumber(v);
+                  const parsed = parseSAIdNumber(v);
+                  if (parsed) {
+                    setDateOfBirth(parsed.dateOfBirth ?? "");
+                    if (parsed.gender) setGender(parsed.gender);
+                  }
+                }}
+                className="input-compact"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="new-emp-phone" className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+                Phone (WhatsApp)
+              </label>
+              <input id="new-emp-phone" placeholder="e.g. 0821234567" value={phone} onChange={(e) => setPhone(e.target.value)} className="input-compact" title="WhatsApp number for clock-in, payslip, etc." />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="new-emp-email" className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+                Email
+              </label>
+              <input id="new-emp-email" type="email" placeholder="e.g. name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} className="input-compact" />
+            </div>
+            {employeeType === "office" ? (
+              <div className="flex flex-col gap-1">
+                <label htmlFor="new-emp-salary" className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+                  Monthly salary (R) <span className="text-red-600">*</span>
+                </label>
+                <input
+                  id="new-emp-salary"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="e.g. 15000"
+                  value={monthlySalary}
+                  onChange={(e) => setMonthlySalary(e.target.value)}
+                  className="input-compact"
+                  required
+                />
+              </div>
             ) : (
-              <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} groupId={groupId} className="input-compact" required />
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+                  Pay grade <span className="text-red-600">*</span>
+                </label>
+                <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} groupId={groupId} className="input-compact" required />
+              </div>
             )}
-            <GroupSelect token={token} value={groupId} onChange={setGroupId} className="input-compact" required />
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+                Group <span className="text-red-600">*</span>
+              </label>
+              <GroupSelect token={token} value={groupId} onChange={setGroupId} className="input-compact" required />
+            </div>
           </div>
         </section>
         )}
@@ -1198,8 +1280,8 @@ function EmployeeForm({
       </div>
 
       <div className="mt-4 pt-4 border-t-2 border-neutral-200">
-        <button type="submit" className="btn-primary text-sm py-2">
-          Create Team Member
+        <button type="submit" disabled={submitting} className="btn-primary text-sm py-2">
+          {submitting ? "Saving..." : "Save team member"}
         </button>
       </div>
     </form>
@@ -1331,19 +1413,23 @@ function EditModal({
     e.preventDefault();
     setError("");
     if (employeeType === "security" && !psiraNumber.trim()) {
-      setError("PSIRA number is required for security guards.");
+      setActiveTab("psira");
+      setError("PSIRA number is required for security guards. Enter it on the PSIRA tab.");
       return;
     }
     if (employeeType === "security" && !gradeId) {
-      setError("Pay grade is required for security guards.");
+      setActiveTab("basic");
+      setError("Pay grade is required for security guards. Choose one on the Basic details tab.");
       return;
     }
     if (!groupId) {
-      setError("Group is required for all team members.");
+      setActiveTab("basic");
+      setError("Every team member needs a group. Choose one on the Basic details tab.");
       return;
     }
     if (employeeType === "office" && (!monthlySalary || parseFloat(monthlySalary) <= 0)) {
-      setError("Monthly salary is required for office staff.");
+      setActiveTab("basic");
+      setError("Monthly salary is required for office staff. Enter it on the Basic details tab.");
       return;
     }
     setSaving(true);
@@ -1482,7 +1568,7 @@ function EditModal({
                       : "text-neutral-600 hover:text-neutral-900"
                   )}
                 >
-                  {tab === "basic" ? "Basic" : tab === "labour" ? "Labour Law (BCEA)" : tab === "bank" ? "Bank Details" : "PSIRA"}
+                  {tab === "basic" ? "Basic details" : tab === "labour" ? "Employment (BCEA)" : tab === "bank" ? "Bank & tax" : "PSIRA"}
                 </button>
               ))}
             </div>
@@ -1685,7 +1771,7 @@ function EditModal({
                 Cancel
               </button>
               <button type="submit" disabled={saving} className="flex-1 btn-primary">
-                {saving ? "Saving..." : "Save"}
+                {saving ? "Saving..." : "Save changes"}
               </button>
               {canDeleteEmployees && (
                 <button
@@ -1714,9 +1800,9 @@ function EditModal({
                     }
                   }}
                   disabled={deleting}
-                  className="flex-1 btn-primary bg-security-navy-700 border-neutral-200 hover:bg-security-navy-800 disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="flex-1 btn-destructive"
                 >
-                  {deleting ? "Deleting..." : "Delete"}
+                  {deleting ? "Deleting..." : "Delete team member"}
                 </button>
               )}
             </div>
@@ -1781,7 +1867,7 @@ function StatusModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="card-wireframe w-full max-w-sm shadow-xl">
         <div className="p-6 border-b-2 border-neutral-200">
-          <h3 className="text-lg font-semibold text-neutral-900">Change Status</h3>
+          <h3 className="text-lg font-semibold text-neutral-900">Change employment status</h3>
           <p className="text-sm text-neutral-500 mt-1">
             {employee.firstName} {employee.lastName}
           </p>
@@ -1817,7 +1903,7 @@ function StatusModal({
               Cancel
             </button>
             <button type="submit" disabled={saving} className="flex-1 btn-primary">
-              {saving ? "Updating..." : "Update"}
+              {saving ? "Updating..." : "Update status"}
             </button>
           </div>
         </form>
