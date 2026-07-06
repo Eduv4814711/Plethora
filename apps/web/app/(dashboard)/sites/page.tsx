@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { canManageSitesModule } from "@/lib/permissions";
 import { buildSiteRosterReadinessHints } from "@/lib/roster-readiness-hints";
+import { SiteOperationalActions } from "@/components/site-operational-actions";
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
   guarding: "Guarding",
@@ -385,15 +386,9 @@ function SiteCard({
           )}
 
           {coverageReady ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
-              <span>Guards assigned. Next step: build the roster for this site.</span>
-              <button
-                type="button"
-                onClick={() => router.push(`/rostering?siteId=${site.id}`)}
-                className="btn-primary"
-              >
-                Create roster
-              </button>
+            <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
+              <p>Guards assigned. Next: build the roster, then record attendance when shifts are done.</p>
+              <SiteOperationalActions siteId={site.id} layout="stack" />
             </div>
           ) : (
             <p className="text-xs text-neutral-500 dark:text-neutral-400">

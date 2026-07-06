@@ -89,6 +89,9 @@ export function RosterSpreadsheet({
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-700">
+      <p className="border-b border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 md:hidden">
+        Swipe sideways to see all days →
+      </p>
       {editable && onAddPlaceholderGuard && (
         <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900/80">
           <span className="text-xs text-neutral-500 dark:text-neutral-400">

@@ -6,6 +6,7 @@ import autoTable from "jspdf-autotable";
 import { authFetch } from "@/lib/api";
 import Link from "next/link";
 import { GuardSearchPicker } from "@/components/guard-search-picker";
+import { SiteTimesheetRowCard } from "@/components/site-timesheet-row-card";
 import {
   addSiteTimesheetRow,
   approveSiteTimesheet,
@@ -258,7 +259,7 @@ export function SiteTimesheetsSection({
           </p>
         </div>
         {sheet && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
             {!locked && (
               <button
                 type="button"
@@ -274,13 +275,15 @@ export function SiteTimesheetsSection({
                     setLoading(false);
                   }
                 }}
-                className="btn-secondary"
+                className="btn-secondary w-full sm:w-auto"
                 title="Pull the latest published shifts and clock-ins into this timesheet"
               >
                 Refresh from shifts
               </button>
             )}
-            <button type="button" onClick={exportPdf} className="btn-secondary">Download PDF</button>
+            <button type="button" onClick={exportPdf} className="btn-secondary w-full sm:w-auto">
+              Download PDF
+            </button>
             <button
               type="button"
               onClick={async () => {
@@ -293,7 +296,7 @@ export function SiteTimesheetsSection({
                 a.click();
                 URL.revokeObjectURL(url);
               }}
-              className="btn-secondary"
+              className="btn-secondary w-full sm:w-auto"
             >
               Download CSV
             </button>
@@ -306,7 +309,7 @@ export function SiteTimesheetsSection({
                   await unlockSiteTimesheet(token, sheet.id, reason);
                   await load();
                 }}
-                className="btn-secondary"
+                className="btn-secondary w-full sm:w-auto"
               >
                 Admin unlock
               </button>
@@ -323,7 +326,7 @@ export function SiteTimesheetsSection({
                   await approveSiteTimesheet(token, sheet.id);
                   await load();
                 }}
-                className="btn-primary"
+                className="btn-primary w-full sm:w-auto"
               >
                 Approve timesheet
               </button>
@@ -369,37 +372,90 @@ export function SiteTimesheetsSection({
           )}
 
           {!locked && (
-            <div className="grid gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm dark:border-neutral-700 dark:bg-neutral-900 md:grid-cols-6">
-              <input type="date" value={newRow.workDate} onChange={(e) => setNewRow({ ...newRow, workDate: e.target.value })} className="input-compact" />
-              <GuardSearchPicker
-                guards={guardOptions}
-                value={newRow.actualGuardId || null}
-                onChange={(id) => setNewRow({ ...newRow, actualGuardId: id ?? "" })}
-                placeholder="Choose reliever/guard…"
-                className="input-compact md:col-span-2"
-                allowClear={false}
-              />
-              <select value={newRow.actualShiftType} onChange={(e) => setNewRow({ ...newRow, actualShiftType: e.target.value, actualShiftCode: e.target.value === "night" ? "N" : "D" })} className="input-compact">
-                <option value="day">Day shift</option>
-                <option value="night">Night shift</option>
-              </select>
-              <input value={newRow.comments} onChange={(e) => setNewRow({ ...newRow, comments: e.target.value })} placeholder="Reason/comment" className="input-compact" />
-              <button
-                type="button"
-                disabled={!newRow.actualGuardId}
-                onClick={async () => {
-                  await addSiteTimesheetRow(token, sheet.id, newRow);
-                  setNewRow({ ...newRow, actualGuardId: "", comments: "" });
-                  await load();
-                }}
-                className="btn-secondary disabled:opacity-50"
-              >
-                Add reliever
-              </button>
+            <div className="grid gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm dark:border-neutral-700 dark:bg-neutral-900 sm:grid-cols-2 lg:grid-cols-6">
+              <div className="sm:col-span-2">
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Date</label>
+                <input
+                  type="date"
+                  value={newRow.workDate}
+                  onChange={(e) => setNewRow({ ...newRow, workDate: e.target.value })}
+                  className="input-modern mt-1 w-full"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Guard</label>
+                <GuardSearchPicker
+                  guards={guardOptions}
+                  value={newRow.actualGuardId || null}
+                  onChange={(id) => setNewRow({ ...newRow, actualGuardId: id ?? "" })}
+                  placeholder="Choose reliever or guard…"
+                  className="input-modern mt-1 w-full"
+                  allowClear={false}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Shift</label>
+                <select
+                  value={newRow.actualShiftType}
+                  onChange={(e) =>
+                    setNewRow({
+                      ...newRow,
+                      actualShiftType: e.target.value,
+                      actualShiftCode: e.target.value === "night" ? "N" : "D",
+                    })
+                  }
+                  className="input-modern mt-1 w-full"
+                >
+                  <option value="day">Day shift</option>
+                  <option value="night">Night shift</option>
+                </select>
+              </div>
+              <div className="flex flex-col justify-end gap-2 sm:col-span-2 lg:col-span-1">
+                <input
+                  value={newRow.comments}
+                  onChange={(e) => setNewRow({ ...newRow, comments: e.target.value })}
+                  placeholder="Reason (optional)"
+                  className="input-modern w-full"
+                />
+                <button
+                  type="button"
+                  disabled={!newRow.actualGuardId}
+                  onClick={async () => {
+                    await addSiteTimesheetRow(token, sheet.id, newRow);
+                    setNewRow({ ...newRow, actualGuardId: "", comments: "" });
+                    await load();
+                  }}
+                  className="btn-secondary w-full disabled:opacity-50"
+                >
+                  Add reliever
+                </button>
+              </div>
             </div>
           )}
 
-          <div className="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-700">
+          <div className="space-y-3 lg:hidden">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              Tap each day below to confirm who worked, then approve when correct.
+            </p>
+            {sheet.rows.map((row) => (
+              <SiteTimesheetRowCard
+                key={row.id}
+                row={row}
+                guards={guardOptions}
+                locked={locked}
+                saving={savingRowId === row.id}
+                rowShiftType={rowShiftType}
+                displayShiftTime={displayShiftTime}
+                combineDateTime={combineDateTime}
+                combineClockOut={combineClockOut}
+                hoursBetween={hoursBetween}
+                onUpdate={(r, patch) => void updateRow(r, patch)}
+                onApprove={(r) => void approveRowAttendance(r)}
+              />
+            ))}
+          </div>
+
+          <div className="hidden lg:block overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-700">
             <table className="min-w-[1320px] w-full text-left text-xs">
               <thead className="bg-neutral-100 text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">
                 <tr>

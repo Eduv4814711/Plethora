@@ -57,6 +57,7 @@ export default function RosteringPage() {
   const workspaceRef = useRef<ManualRosteringWorkspaceHandle>(null);
   const [patternContext, setPatternContext] = useState<PatternBuilderContext | null>(null);
   const [patternCycleLength, setPatternCycleLength] = useState(6);
+  const [mobileSetupOpen, setMobileSetupOpen] = useState(false);
 
   const canLeaveDraft = () =>
     !draftState.hasUnsavedChanges ||
@@ -168,9 +169,35 @@ export default function RosteringPage() {
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-7.5rem)] min-h-[600px] w-full max-w-[1600px] flex-col lg:flex-row gap-4 p-2 lg:p-3 min-h-0">
-      <aside className="lg:w-72 shrink-0 min-w-0 min-h-0 lg:h-full">
-        <div className="rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/80 p-4 space-y-4 shadow-sm min-w-0 w-full max-h-[45dvh] overflow-y-auto overflow-x-hidden overscroll-y-contain lg:max-h-[calc(100dvh-7.5rem)] lg:h-full">
+    <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-col gap-3 p-2 sm:p-3 lg:h-[calc(100dvh-7.5rem)] lg:min-h-[600px] lg:flex-row">
+      <div className="lg:hidden">
+        <button
+          type="button"
+          onClick={() => setMobileSetupOpen((v) => !v)}
+          className="btn-secondary w-full flex items-center justify-between gap-2 text-sm"
+          aria-expanded={mobileSetupOpen}
+        >
+          <span>
+            {mobileSetupOpen ? "Hide setup" : "Show setup"} — site, period &amp; patterns
+          </span>
+          <svg
+            className={`h-4 w-4 shrink-0 transition-transform ${mobileSetupOpen ? "rotate-180" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      </div>
+
+      <aside
+        className={`shrink-0 min-w-0 min-h-0 lg:w-72 lg:h-full ${
+          mobileSetupOpen ? "block" : "hidden lg:block"
+        }`}
+      >
+        <div className="rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/80 p-4 space-y-4 shadow-sm min-w-0 w-full max-h-[min(70dvh,32rem)] overflow-y-auto overflow-x-hidden overscroll-y-contain lg:max-h-[calc(100dvh-7.5rem)] lg:h-full">
           <div>
             <h1 className="text-xl font-bold text-neutral-900 dark:text-neutral-100">Roster builder</h1>
             <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
@@ -304,18 +331,19 @@ export default function RosteringPage() {
         </div>
       </aside>
 
-      <main className="flex-1 min-w-0 min-h-0 flex flex-col rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/80 shadow-sm overflow-hidden">
-        <div className="shrink-0 px-4 py-3 border-b border-neutral-200 dark:border-neutral-700 bg-neutral-50/50 dark:bg-neutral-900/50 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-neutral-700 dark:text-neutral-200">
-              {selectedSiteId ? selectedSite?.name : "Select a site to begin"}
-            </p>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-              Build the roster, review issues, publish shifts, then share the PDF.
-            </p>
-          </div>
+      <main className="flex min-h-[420px] flex-1 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900/80 lg:min-h-0">
+        <div className="shrink-0 border-b border-neutral-200 bg-neutral-50/50 px-3 py-3 dark:border-neutral-700 dark:bg-neutral-900/50 sm:px-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-neutral-700 dark:text-neutral-200 truncate">
+                {selectedSiteId ? selectedSite?.name : "Select a site to begin"}
+              </p>
+              <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+                Fill the grid → fix issues → publish → share PDF
+              </p>
+            </div>
           {selectedSiteId && (
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
               {draftState.hasUnsavedChanges && (
                 <span className="text-xs font-medium text-amber-700 dark:text-amber-300 px-2 py-1 rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60">
                   {draftState.pendingCount} unsaved
@@ -331,7 +359,7 @@ export default function RosteringPage() {
                   type="button"
                   onClick={() => void workspaceRef.current?.discardChanges()}
                   disabled={draftState.isSaving || draftState.isPublishing}
-                  className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="btn-secondary w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Discard changes
                 </button>
@@ -340,7 +368,7 @@ export default function RosteringPage() {
                 type="button"
                 onClick={() => void workspaceRef.current?.saveRoster()}
                 disabled={!draftState.hasUnsavedChanges || draftState.isSaving}
-                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-primary w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {draftState.isSaving
                   ? "Saving…"
@@ -367,18 +395,19 @@ export default function RosteringPage() {
                       ? "Fix roster issues before publishing"
                       : undefined
                 }
-                className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-secondary w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {draftState.isPublishing ? "Publishing…" : "Publish shifts"}
               </button>
             </div>
           )}
+          </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-auto p-4">
+        <div className="flex-1 min-h-0 overflow-auto p-3 sm:p-4">
           {selectedSiteId ? (
             <div className="space-y-4">
-              <div className="grid gap-2 rounded-xl border border-neutral-200 bg-neutral-50/70 p-3 text-xs dark:border-neutral-700 dark:bg-neutral-900/40 sm:grid-cols-4">
+              <div className="grid gap-2 rounded-xl border border-neutral-200 bg-neutral-50/70 p-3 text-xs dark:border-neutral-700 dark:bg-neutral-900/40 sm:grid-cols-2 xl:grid-cols-4">
                 {[
                   ["Build", "Fill the grid manually or with patterns"],
                   ["Review", "Fix red issues before publishing"],

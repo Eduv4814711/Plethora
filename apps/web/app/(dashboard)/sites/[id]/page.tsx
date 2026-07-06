@@ -9,6 +9,7 @@ import { canManageSitesModule } from "@/lib/permissions";
 import { rosterSiteRulesLines } from "@/lib/roster-site-rules-defaults";
 import { buildSiteRosterReadinessHints } from "@/lib/roster-readiness-hints";
 import { useConfirmDialog } from "@/components/ui";
+import { SiteOperationalActions } from "@/components/site-operational-actions";
 
 const SERVICE_TYPE_LABELS: Record<string, string> = {
   guarding: "Guarding",
@@ -251,27 +252,25 @@ export default function SiteDetailPage() {
 
   return (
     <div className="space-y-8 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-center gap-4 min-w-0">
           <Link
             href="/sites"
-            className="p-2.5 rounded-lg border-2 border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 hover:border-neutral-300 dark:hover:border-neutral-600 transition-all"
+            className="p-2.5 rounded-lg border-2 border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 hover:border-neutral-300 dark:hover:border-neutral-600 transition-all shrink-0"
             aria-label="Back to sites"
           >
             <svg className="w-5 h-5 text-neutral-600 dark:text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
-          <div>
-            <h1 className="page-title">{site.name}</h1>
+          <div className="min-w-0">
+            <h1 className="page-title truncate">{site.name}</h1>
             <p className="text-neutral-500 dark:text-neutral-400 mt-0.5 text-sm">
-              Manage posts — schedule guards on{" "}
-              <Link href="/rostering" className="font-medium text-orange-600 dark:text-orange-400 hover:underline">
-                Rostering
-              </Link>
+              Assign guards to posts, then use the shortcuts below for rostering and attendance.
             </p>
           </div>
         </div>
+        <SiteOperationalActions siteId={siteId} layout="stack" className="shrink-0" />
       </div>
 
       <div className="card-elevated p-4 space-y-5">

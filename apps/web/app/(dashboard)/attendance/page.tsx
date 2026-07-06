@@ -7,6 +7,7 @@ import { authFetch } from "@/lib/api";
 import { format, parseISO } from "date-fns";
 import { fetchCurrentPayPeriod, fetchPayPeriods, type PayPeriodOption } from "@/lib/api";
 import { PayPeriodSelect } from "@/components/pay-period-select";
+import { OperationalWorkflowSteps } from "@/components/operational-workflow-steps";
 import { SiteTimesheetsSection } from "./SiteTimesheetsSection";
 
 interface SiteOption {
@@ -20,11 +21,11 @@ function emptyDateRange() {
 }
 
 const WORKFLOW_STEPS = [
-  "Roster created",
-  "Timesheet created",
-  "Record who worked",
-  "Review & approve",
-  "Ready for payroll",
+  "Pick site & period",
+  "Check who was scheduled",
+  "Confirm who worked",
+  "Approve timesheet",
+  "Send to payroll",
 ];
 
 export default function AttendancePage() {
@@ -128,33 +129,20 @@ export default function AttendancePage() {
         </p>
       </div>
 
-      <div className="card-wireframe mb-6 overflow-hidden">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-5 py-3 text-xs text-neutral-600 dark:text-neutral-400 sm:px-6">
-          {WORKFLOW_STEPS.map((step, i) => (
-            <div key={step} className="flex items-center gap-2">
-              <span className="flex items-center gap-1.5">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-neutral-200 text-[10px] font-semibold text-neutral-700 dark:bg-neutral-700 dark:text-neutral-200">
-                  {i + 1}
-                </span>
-                <span className="font-medium text-neutral-700 dark:text-neutral-300">{step}</span>
-              </span>
-              {i < WORKFLOW_STEPS.length - 1 && (
-                <svg className="h-3.5 w-3.5 text-neutral-300 dark:text-neutral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              )}
-            </div>
-          ))}
-        </div>
+      <div className="card-wireframe mb-6 overflow-hidden p-4 sm:p-5">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
+          How attendance works
+        </p>
+        <OperationalWorkflowSteps steps={WORKFLOW_STEPS} />
       </div>
 
       <div className="card-wireframe mb-8 overflow-hidden">
-        <div className="border-b border-neutral-200 bg-neutral-50/70 px-5 py-4 dark:border-neutral-700 dark:bg-neutral-900/40 sm:px-6">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="border-b border-neutral-200 bg-neutral-50/70 px-4 py-4 dark:border-neutral-700 dark:bg-neutral-900/40 sm:px-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h3 className="section-title">Choose roster period &amp; site</h3>
+              <h3 className="section-title">Step 1 — Choose period and site</h3>
               <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-                Pick the pay period and the site whose timesheet you want to review.
+                Select the pay period, then the site you are recording attendance for.
               </p>
             </div>
             {periodLabel && (
@@ -168,10 +156,10 @@ export default function AttendancePage() {
           </div>
         </div>
 
-        <div className="grid gap-4 p-5 sm:p-6 xl:grid-cols-[minmax(18rem,1.1fr)_minmax(20rem,1fr)]">
+        <div className="grid gap-4 p-4 sm:p-6 lg:grid-cols-2">
           <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-950/60">
             <label className="block text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-              Roster / pay period
+              Pay period
             </label>
             <div className="mt-2 grid gap-2">
               {token && (
@@ -183,15 +171,15 @@ export default function AttendancePage() {
                   className="input-modern w-full"
                 />
               )}
-              <div className="grid grid-cols-3 gap-2">
-                <button type="button" onClick={goPrevPeriod} className="btn-secondary px-2 py-2 text-xs">
-                  Previous
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <button type="button" onClick={goPrevPeriod} className="btn-secondary px-2 py-2.5 text-sm">
+                  ← Previous
                 </button>
-                <button type="button" onClick={goCurrentPeriod} className="btn-secondary px-2 py-2 text-xs">
-                  Current
+                <button type="button" onClick={goCurrentPeriod} className="btn-secondary px-2 py-2.5 text-sm">
+                  Current period
                 </button>
-                <button type="button" onClick={goNextPeriod} className="btn-secondary px-2 py-2 text-xs">
-                  Next
+                <button type="button" onClick={goNextPeriod} className="btn-secondary px-2 py-2.5 text-sm">
+                  Next →
                 </button>
               </div>
             </div>
@@ -214,7 +202,7 @@ export default function AttendancePage() {
               ))}
             </select>
             <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
-              Each site keeps its own timesheet for the selected period.
+              Each site has its own timesheet for this period.
             </p>
           </section>
         </div>
