@@ -163,6 +163,31 @@ export type SiteTimesheet = {
   };
 };
 
+export type SiteTimesheetCaptureOverviewSite = {
+  siteId: string;
+  siteName: string;
+  status: "caught_up" | "needs_capture" | "no_shifts";
+  dueDays: number;
+  pendingRows: number;
+  reviewedRows: number;
+  lastCapturedDate: string | null;
+  timesheetStatus: "draft" | "approved" | "locked" | "none";
+};
+
+export type SiteTimesheetCaptureOverview = {
+  periodStart: string;
+  periodEnd: string;
+  captureThrough: string | null;
+  asOfDate: string;
+  sites: SiteTimesheetCaptureOverviewSite[];
+  summary: {
+    totalSites: number;
+    needsCapture: number;
+    caughtUp: number;
+    noShifts: number;
+  };
+};
+
 async function parseJson<T>(res: Response): Promise<T> {
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error || data?.message || `Request failed (${res.status})`);
@@ -325,6 +350,12 @@ export async function publishRoster(
     body: JSON.stringify(body),
   });
   return parseJson<PublishRosterResponse>(res);
+}
+
+export async function fetchSiteTimesheetCaptureOverview(token: string, startDate: string, endDate: string) {
+  const q = new URLSearchParams({ startDate, endDate });
+  const res = await authFetch(`/rosters/site-timesheets/capture-overview?${q}`, token);
+  return parseJson<SiteTimesheetCaptureOverview>(res);
 }
 
 export async function fetchSiteTimesheet(token: string, siteId: string, startDate: string, endDate: string) {

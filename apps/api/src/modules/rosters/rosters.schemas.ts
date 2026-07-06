@@ -92,6 +92,11 @@ export const siteTimesheetQuerySchema = z.object({
   endDate: z.string().min(1),
 });
 
+export const siteTimesheetCaptureOverviewQuerySchema = z.object({
+  startDate: z.string().min(1),
+  endDate: z.string().min(1),
+});
+
 export const siteTimesheetRowUpdateSchema = z.object({
   actualGuardId: z.string().min(1).nullable().optional(),
   actualShiftCode: z.string().nullable().optional(),

@@ -12,6 +12,7 @@ import {
   manualOverrideSchema,
   patternGridQuerySchema,
   publishRosterSchema,
+  siteTimesheetCaptureOverviewQuerySchema,
   siteTimesheetQuerySchema,
   siteTimesheetRowCreateSchema,
   siteTimesheetRowUpdateSchema,
@@ -36,6 +37,7 @@ import {
   approveSiteTimesheet,
   buildSiteTimesheetCsv,
   getSiteTimesheet,
+  getSiteTimesheetCaptureOverview,
   resyncSiteTimesheet,
   unlockSiteTimesheet,
   updateSiteTimesheetRow,
@@ -106,6 +108,19 @@ export async function rostersRoutes(app: FastifyInstance) {
     );
     if (!grid) return reply.code(404).send({ error: "Site not found" });
     return reply.send(grid);
+  });
+
+  app.get("/site-timesheets/capture-overview", { preHandler: protect }, async (request, reply) => {
+    const parsed = siteTimesheetCaptureOverviewQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
+    }
+    const overview = await getSiteTimesheetCaptureOverview(
+      request.user!.companyId,
+      parsed.data.startDate,
+      parsed.data.endDate
+    );
+    return reply.send(overview);
   });
 
   app.get("/site-timesheets", { preHandler: protect }, async (request, reply) => {

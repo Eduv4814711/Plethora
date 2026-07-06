@@ -1,11 +1,12 @@
 import { format } from "date-fns";
-import type { Prisma, SiteTimesheetAttendance, SiteTimesheetRowStatus } from "@prisma/client";
+import type { Prisma, SiteRosterShiftCode, SiteTimesheetAttendance, SiteTimesheetRowStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { dateKey, dateOnly } from "./rosters.service.js";
 
 type Tx = Prisma.TransactionClient | typeof prisma;
 
 const WORKING_CODES = new Set(["D", "N", "R"]);
+const WORKING_SHIFT_CODES: SiteRosterShiftCode[] = ["D", "N", "R"];
 const PAYABLE_STATUSES = new Set<SiteTimesheetAttendance>([
   "present",
   "late",
@@ -385,6 +386,128 @@ function serializeRow(
     discrepancyCodes:
       discrepancyCodes ??
       (Array.isArray(row.discrepancyCodes) ? (row.discrepancyCodes as string[]) : []),
+  };
+}
+
+export type SiteCaptureOverviewSite = {
+  siteId: string;
+  siteName: string;
+  status: "caught_up" | "needs_capture" | "no_shifts";
+  dueDays: number;
+  pendingRows: number;
+  reviewedRows: number;
+  lastCapturedDate: string | null;
+  timesheetStatus: "draft" | "approved" | "locked" | "none";
+};
+
+export async function getSiteTimesheetCaptureOverview(companyId: string, startDate: string, endDate: string) {
+  const start = dateOnly(startDate);
+  const end = dateOnly(endDate);
+  const today = dateOnly(new Date());
+
+  const sites = await prisma.site.findMany({
+    where: { companyId },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+
+  if (start.getTime() > today.getTime()) {
+    return {
+      periodStart: dateKey(start),
+      periodEnd: dateKey(end),
+      captureThrough: null as string | null,
+      asOfDate: dateKey(today),
+      sites: sites.map((site) => ({
+        siteId: site.id,
+        siteName: site.name,
+        status: "no_shifts" as const,
+        dueDays: 0,
+        pendingRows: 0,
+        reviewedRows: 0,
+        lastCapturedDate: null,
+        timesheetStatus: "none" as const,
+      })),
+      summary: { totalSites: sites.length, needsCapture: 0, caughtUp: 0, noShifts: sites.length },
+    };
+  }
+
+  const captureEnd = end.getTime() < today.getTime() ? end : today;
+
+  const rosteredSiteIds = await prisma.siteRosterGeneratedShift.findMany({
+    where: {
+      companyId,
+      rosterDate: { gte: start, lte: captureEnd },
+      shiftCode: { in: WORKING_SHIFT_CODES },
+    },
+    distinct: ["siteId"],
+    select: { siteId: true },
+  });
+  const rosteredSet = new Set(rosteredSiteIds.map((r) => r.siteId));
+
+  const siteStatuses: SiteCaptureOverviewSite[] = await Promise.all(
+    sites.map(async (site) => {
+      if (!rosteredSet.has(site.id)) {
+        return {
+          siteId: site.id,
+          siteName: site.name,
+          status: "no_shifts" as const,
+          dueDays: 0,
+          pendingRows: 0,
+          reviewedRows: 0,
+          lastCapturedDate: null,
+          timesheetStatus: "none" as const,
+        };
+      }
+
+      const sheet = await getOrCreateTimesheet(prisma, companyId, site.id, start, end);
+      await seedRows(prisma, companyId, sheet.id, site.id, start, end);
+
+      const [rows, timesheet] = await Promise.all([
+        prisma.siteTimesheetRow.findMany({
+          where: {
+            siteTimesheetId: sheet.id,
+            workDate: { gte: start, lte: captureEnd },
+          },
+          select: { workDate: true, approvalStatus: true },
+        }),
+        prisma.siteTimesheet.findUnique({
+          where: { id: sheet.id },
+          select: { status: true },
+        }),
+      ]);
+
+      const pendingRows = rows.filter((r) => r.approvalStatus === "pending");
+      const pendingDates = new Set(pendingRows.map((r) => dateKey(r.workDate)));
+      const capturedDates = rows
+        .filter((r) => r.approvalStatus !== "pending")
+        .map((r) => dateKey(r.workDate))
+        .sort();
+
+      return {
+        siteId: site.id,
+        siteName: site.name,
+        status: (pendingRows.length > 0 ? "needs_capture" : "caught_up") as "needs_capture" | "caught_up",
+        dueDays: pendingDates.size,
+        pendingRows: pendingRows.length,
+        reviewedRows: rows.length - pendingRows.length,
+        lastCapturedDate: capturedDates.at(-1) ?? null,
+        timesheetStatus: timesheet?.status ?? "draft",
+      };
+    })
+  );
+
+  return {
+    periodStart: dateKey(start),
+    periodEnd: dateKey(end),
+    captureThrough: dateKey(captureEnd),
+    asOfDate: dateKey(today),
+    sites: siteStatuses,
+    summary: {
+      totalSites: sites.length,
+      needsCapture: siteStatuses.filter((s) => s.status === "needs_capture").length,
+      caughtUp: siteStatuses.filter((s) => s.status === "caught_up").length,
+      noShifts: siteStatuses.filter((s) => s.status === "no_shifts").length,
+    },
   };
 }
 

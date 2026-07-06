@@ -9,6 +9,7 @@ import { fetchCurrentPayPeriod, fetchPayPeriods, type PayPeriodOption } from "@/
 import { PayPeriodSelect } from "@/components/pay-period-select";
 import { OperationalWorkflowSteps } from "@/components/operational-workflow-steps";
 import { SiteTimesheetsSection } from "./SiteTimesheetsSection";
+import { AttendanceCaptureDashboard } from "@/components/attendance-capture-dashboard";
 
 interface SiteOption {
   id: string;
@@ -205,6 +206,16 @@ export default function AttendancePage() {
               Each site has its own timesheet for this period.
             </p>
           </section>
+
+          {token && (
+            <AttendanceCaptureDashboard
+              token={token}
+              periodStart={format(dateRange.start, "yyyy-MM-dd")}
+              periodEnd={format(dateRange.end, "yyyy-MM-dd")}
+              selectedSiteId={siteId || undefined}
+              onSelectSite={setSiteId}
+            />
+          )}
         </div>
       </div>
 
