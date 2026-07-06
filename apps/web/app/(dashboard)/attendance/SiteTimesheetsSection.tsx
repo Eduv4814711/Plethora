@@ -457,27 +457,23 @@ export function SiteTimesheetsSection({
             ))}
           </div>
 
-          <div className="hidden 2xl:block space-y-2">
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              Scroll sideways if needed — notes and approve actions stay on the right.
-            </p>
-            <div className="-mx-4 overflow-x-auto rounded-lg border border-neutral-200 px-4 pb-1 sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10 dark:border-neutral-700">
-            <table className="min-w-[1520px] w-full text-left text-xs">
+          <div className="hidden 2xl:block">
+            <div className="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-700">
+            <table className="site-timesheet-table w-full table-fixed text-left text-[11px]">
+              <colgroup>
+                <col className="w-[7%]" />
+                <col className="w-[24%]" />
+                <col className="w-[10%]" />
+                <col className="w-[12%]" />
+                <col className="w-[9%]" />
+                <col className="w-[13%]" />
+                <col className="w-[13%]" />
+                <col className="w-[6%]" />
+              </colgroup>
               <thead className="bg-neutral-100 text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">
                 <tr>
-                  {[
-                    { label: "Date", className: "min-w-[5.5rem]" },
-                    { label: "Scheduled", className: "min-w-[9rem]" },
-                    { label: "Actual worked", className: "min-w-[11rem]" },
-                    { label: "Planned", className: "min-w-[4.5rem]" },
-                    { label: "Actual shift", className: "min-w-[6.5rem]" },
-                    { label: "Start / End", className: "min-w-[11rem]" },
-                    { label: "Status", className: "min-w-[6.5rem]" },
-                    { label: "Discrepancies", className: "min-w-[8rem]" },
-                    { label: "Comments", className: "min-w-[11rem]" },
-                    { label: "Approve", className: "sticky right-0 z-20 min-w-[7rem] bg-neutral-100 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.12)] dark:bg-neutral-900 dark:shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.35)]" },
-                  ].map(({ label, className }) => (
-                    <th key={label} className={`px-3 py-2 font-semibold ${className}`}>{label}</th>
+                  {["Date", "Who worked", "Shift", "Start / End", "Status", "Issues", "Notes", "Action"].map((label) => (
+                    <th key={label} className="px-2 py-1.5 font-semibold">{label}</th>
                   ))}
                 </tr>
               </thead>
@@ -489,16 +485,33 @@ export function SiteTimesheetsSection({
                         ? "bg-amber-50/60 dark:bg-amber-950/20"
                         : "bg-white dark:bg-neutral-950"
                       : "bg-emerald-50/40 dark:bg-emerald-950/15";
-                  const stickyActionClass = `sticky right-0 z-10 px-3 py-2 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.12)] dark:shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.35)] ${rowSurfaceClass}`;
+                  const cellClass = `px-2 py-1.5 align-top ${rowSurfaceClass}`;
+                  const guardChanged =
+                    !!row.actualGuardId &&
+                    !!row.plannedGuardId &&
+                    row.actualGuardId !== row.plannedGuardId;
 
                   return (
                   <tr
                     key={row.id}
                     className={rowSurfaceClass}
                   >
-                    <td className="px-3 py-2 font-medium align-top">{row.workDate}<br /><span className="text-neutral-500">{row.dayOfWeek}</span></td>
-                    <td className="px-3 py-2 align-top break-words">{row.plannedGuardName ?? "Unrostered"}<br /><span className="text-neutral-500">{row.employeeNumber ?? row.psiraNumber ?? ""}</span></td>
-                    <td className="px-3 py-2 align-top">
+                    <td className={`${cellClass} font-medium leading-tight`}>
+                      {row.workDate}
+                      <br />
+                      <span className="text-neutral-500">{row.dayOfWeek}</span>
+                    </td>
+                    <td className={cellClass}>
+                      {!row.plannedGuardName ? (
+                        <p className="mb-1 text-[10px] font-medium text-amber-700">Unrostered</p>
+                      ) : guardChanged ? (
+                        <p className="mb-1 text-[10px] leading-tight text-neutral-500">
+                          Scheduled: {row.plannedGuardName}
+                          {row.employeeNumber || row.psiraNumber
+                            ? ` (${row.employeeNumber ?? row.psiraNumber})`
+                            : ""}
+                        </p>
+                      ) : null}
                       <GuardSearchPicker
                         guards={guardOptions}
                         value={row.actualGuardId}
@@ -506,24 +519,28 @@ export function SiteTimesheetsSection({
                         disabled={locked || savingRowId === row.id}
                         onChange={(guardId) => void updateRow(row, { actualGuardId: guardId })}
                         clearLabel="Nobody worked"
-                        truncateLabel={false}
+                        truncateLabel
+                        compact
+                        className="input-compact !px-2 !py-1 text-[11px]"
                       />
                     </td>
-                    <td className="px-3 py-2">{label(row.plannedShiftType ?? row.plannedShiftCode)}</td>
-                    <td className="px-3 py-2">
+                    <td className={cellClass}>
+                      <p className="mb-0.5 text-[10px] leading-tight text-neutral-500">
+                        Plan: {label(row.plannedShiftType ?? row.plannedShiftCode)}
+                      </p>
                       <select
                         disabled={locked}
                         value={row.actualShiftType ?? ""}
                         onChange={(e) => void updateRow(row, { actualShiftType: e.target.value || null, actualShiftCode: e.target.value === "night" ? "N" : e.target.value === "day" ? "D" : null })}
-                        className="input-compact"
+                        className="input-compact w-full !px-2 !py-1 text-[11px]"
                       >
                         <option value="">Not worked</option>
                         <option value="day">Day</option>
                         <option value="night">Night</option>
                       </select>
                     </td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-1">
+                    <td className={cellClass}>
+                      <div className="flex items-center gap-0.5">
                         <input
                           type="time"
                           disabled={locked || savingRowId === row.id}
@@ -537,7 +554,7 @@ export function SiteTimesheetsSection({
                             if (clockIn === (row.clockIn ?? null)) return;
                             void updateRow(row, { clockIn, hoursWorked: hoursBetween(clockIn, row.clockOut) });
                           }}
-                          className="input-compact w-24"
+                          className="input-compact w-[4.25rem] !px-1 !py-1 text-[11px]"
                           title="Actual start time"
                         />
                         <span className="text-neutral-400">/</span>
@@ -555,49 +572,55 @@ export function SiteTimesheetsSection({
                             if (clockOut === (row.clockOut ?? null)) return;
                             void updateRow(row, { clockOut, hoursWorked: hoursBetween(clockIn, clockOut) });
                           }}
-                          className="input-compact w-24"
+                          className="input-compact w-[4.25rem] !px-1 !py-1 text-[11px]"
                           title="Actual end time"
                         />
                       </div>
                     </td>
-                    <td className="px-3 py-2">
-                      <select disabled={locked} value={row.attendanceStatus} onChange={(e) => void updateRow(row, { attendanceStatus: e.target.value as SiteTimesheetAttendance })} className="input-compact">
+                    <td className={cellClass}>
+                      <select
+                        disabled={locked}
+                        value={row.attendanceStatus}
+                        onChange={(e) => void updateRow(row, { attendanceStatus: e.target.value as SiteTimesheetAttendance })}
+                        className="input-compact w-full !px-2 !py-1 text-[11px]"
+                      >
                         {ATTENDANCE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
                     </td>
-                    <td className="px-3 py-2">
-                      <div className="flex max-w-xs flex-wrap gap-1">
+                    <td className={cellClass}>
+                      <div className="flex flex-wrap gap-0.5">
                         {row.discrepancyCodes.length ? row.discrepancyCodes.map((code) => (
-                          <span key={code} className="rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">{label(code)}</span>
+                          <span key={code} className="rounded-full border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium leading-tight text-amber-800">{label(code)}</span>
                         )) : <span className="text-neutral-400">None</span>}
                       </div>
                     </td>
-                    <td className="px-3 py-2 align-top">
+                    <td className={cellClass}>
                       <input
                         disabled={locked}
                         defaultValue={row.comments ?? ""}
                         onBlur={(e) => void updateRow(row, { comments: e.target.value })}
-                        className="input-compact w-full min-w-[10rem]"
-                        placeholder="Note (optional)"
+                        className="input-compact w-full !px-2 !py-1 text-[11px]"
+                        placeholder="Notes"
+                        title="Supervisor note (optional)"
                       />
                     </td>
-                    <td className={stickyActionClass}>
+                    <td className={cellClass}>
                       {row.approvalStatus === "approved" || locked ? (
-                        <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                        <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
                           Approved
                         </span>
                       ) : row.approvalStatus === "reviewed" ? (
-                        <div className="flex flex-col gap-1">
-                          <span className="inline-flex w-fit items-center rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="inline-flex w-fit items-center rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
                             Reviewed
                           </span>
                           <button
                             type="button"
                             disabled={savingRowId === row.id}
                             onClick={() => void updateRow(row, { approvalStatus: "pending" })}
-                            className="text-left text-[10px] text-neutral-500 underline-offset-2 hover:text-neutral-700 hover:underline dark:hover:text-neutral-300"
+                            className="text-left text-[9px] text-neutral-500 underline-offset-2 hover:text-neutral-700 hover:underline dark:hover:text-neutral-300"
                           >
-                            Undo review
+                            Undo
                           </button>
                         </div>
                       ) : (
@@ -606,9 +629,9 @@ export function SiteTimesheetsSection({
                           disabled={savingRowId === row.id}
                           onClick={() => void approveRowAttendance(row)}
                           title="Approve attendance for this day"
-                          className="btn-primary w-full min-w-[6.5rem] px-3 py-2 text-xs leading-snug disabled:opacity-50"
+                          className="w-full rounded-security border-2 border-security-navy bg-security-navy px-2 py-1.5 text-[11px] font-semibold leading-tight text-white hover:bg-security-navy-800 disabled:opacity-50"
                         >
-                          {savingRowId === row.id ? "Saving…" : "Approve"}
+                          {savingRowId === row.id ? "…" : "Approve"}
                         </button>
                       )}
                     </td>

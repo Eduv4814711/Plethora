@@ -49,6 +49,8 @@ type GuardSearchPickerProps = {
   clearLabel?: string;
   /** When false, the selected name can wrap instead of truncating (better for wide tables). */
   truncateLabel?: boolean;
+  /** Tighter layout for dense tables — removes min-width on the container. */
+  compact?: boolean;
 };
 
 export function GuardSearchPicker({
@@ -62,6 +64,7 @@ export function GuardSearchPicker({
   allowClear = true,
   clearLabel = "Nobody worked",
   truncateLabel = true,
+  compact = false,
 }: GuardSearchPickerProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -99,7 +102,7 @@ export function GuardSearchPicker({
   const displayText = selected ? guardLabel(selected) : placeholder;
 
   return (
-    <div ref={containerRef} className="relative min-w-44">
+    <div ref={containerRef} className={compact ? "relative min-w-0" : "relative min-w-44"}>
       <button
         type="button"
         disabled={disabled}
