@@ -35,6 +35,18 @@ export const PATTERN_PRESETS: PatternPreset[] = [
     sequence: ["D", "D", "D", "D", "O", "O", "O", "O"],
   },
   {
+    id: "7on7off-day",
+    label: "7 on / 7 off (day)",
+    description: "Seven day shifts, seven off",
+    sequence: ["D", "D", "D", "D", "D", "D", "D", "O", "O", "O", "O", "O", "O", "O"],
+  },
+  {
+    id: "7on7off-night",
+    label: "7 on / 7 off (night)",
+    description: "Seven night shifts, seven off",
+    sequence: ["N", "N", "N", "N", "N", "N", "N", "O", "O", "O", "O", "O", "O", "O"],
+  },
+  {
     id: "day-night-alt",
     label: "Day / night alternate",
     description: "Alternating day and night",
