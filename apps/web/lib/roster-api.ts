@@ -432,4 +432,4 @@ export const SHIFT_CODE_COLORS: Record<RosterShiftCode, string> = {
   blank: "bg-white text-neutral-400 dark:bg-neutral-950 dark:text-neutral-600",
 };
 
-export const CYCLE_LENGTH_PRESETS = [3, 6, 9, 12];
+export const CYCLE_LENGTH_PRESETS = [3, 6, 7, 9, 12];
