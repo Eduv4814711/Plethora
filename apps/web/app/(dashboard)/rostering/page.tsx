@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch, fetchCurrentPayPeriod, fetchPayPeriods, fetchRosterPeriodCalendars, type PayPeriodOption, type RosterPeriodCalendarConfig } from "@/lib/api";
 import { PayPeriodSelect } from "@/components/pay-period-select";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { format, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import {
   ManualRosteringWorkspace,
   type ManualRosteringWorkspaceHandle,
@@ -70,6 +70,33 @@ export default function RosteringPage() {
     setPeriodEnd(period.periodEnd);
     setRosterPeriodLabel(period.rosterLabel);
     return true;
+  };
+
+  const applyCustomPeriod = (start: string, end: string, opts?: { skipConfirm?: boolean }) => {
+    if (!start || !end) return false;
+    if (end < start) return false;
+    if (!opts?.skipConfirm && !canLeaveDraft()) return false;
+    setPeriodKey("");
+    setPeriodStart(start);
+    setPeriodEnd(end);
+    setRosterPeriodLabel("Custom roster period");
+    return true;
+  };
+
+  const handleCustomPeriodStart = (start: string) => {
+    if (!canLeaveDraft()) return;
+    const end = !periodEnd || periodEnd < start ? start : periodEnd;
+    applyCustomPeriod(start, end, { skipConfirm: true });
+  };
+
+  const handleCustomPeriodEnd = (end: string) => {
+    if (!canLeaveDraft()) return;
+    if (!periodStart) {
+      applyCustomPeriod(end, end, { skipConfirm: true });
+      return;
+    }
+    if (end < periodStart) return;
+    applyCustomPeriod(periodStart, end, { skipConfirm: true });
   };
 
   const shiftPayPeriod = (direction: -1 | 1) => {
@@ -158,6 +185,12 @@ export default function RosteringPage() {
   const periodLabel =
     rosterPeriodLabel ||
     (periodStart && periodEnd ? `${periodStart} – ${periodEnd}` : "Select period");
+
+  const periodRangeInvalid = Boolean(periodStart && periodEnd && periodEnd < periodStart);
+  const formattedPeriodRange =
+    periodStart && periodEnd && !periodRangeInvalid
+      ? `${format(parseISO(periodStart), "d MMM yyyy")} – ${format(parseISO(periodEnd), "d MMM yyyy")}`
+      : null;
 
   if (loading) {
     return (
@@ -251,10 +284,47 @@ export default function RosteringPage() {
             </label>
             <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 px-3 py-2.5">
               <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100">{periodLabel}</p>
-              <p className="text-[11px] text-neutral-500 mt-0.5">
-                {periodStart} – {periodEnd}
-              </p>
+              {formattedPeriodRange ? (
+                <p className="text-[11px] text-neutral-500 mt-0.5">{formattedPeriodRange}</p>
+              ) : (
+                <p className="text-[11px] text-neutral-500 mt-0.5">
+                  {periodStart} – {periodEnd}
+                </p>
+              )}
             </div>
+            <div className="grid grid-cols-1 gap-2">
+              <label className="space-y-1 block min-w-0">
+                <span className="text-[10px] font-medium text-neutral-500 dark:text-neutral-400">
+                  Roster start date
+                </span>
+                <input
+                  type="date"
+                  value={periodStart}
+                  onChange={(e) => handleCustomPeriodStart(e.target.value)}
+                  className="input-modern w-full py-2 text-sm"
+                  aria-label="Roster start date"
+                />
+              </label>
+              <label className="space-y-1 block min-w-0">
+                <span className="text-[10px] font-medium text-neutral-500 dark:text-neutral-400">
+                  Roster end date
+                </span>
+                <input
+                  type="date"
+                  value={periodEnd}
+                  min={periodStart || undefined}
+                  onChange={(e) => handleCustomPeriodEnd(e.target.value)}
+                  className="input-modern w-full py-2 text-sm"
+                  aria-label="Roster end date"
+                />
+              </label>
+            </div>
+            {periodRangeInvalid && (
+              <p className="text-[11px] text-red-600 dark:text-red-400">End date must be on or after start date.</p>
+            )}
+            <p className="text-[10px] text-neutral-400 leading-snug">
+              Or jump to a pay-aligned period:
+            </p>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -405,7 +475,7 @@ export default function RosteringPage() {
         </div>
 
         <div className="flex-1 min-h-0 overflow-auto p-3 sm:p-4">
-          {selectedSiteId ? (
+          {selectedSiteId && !periodRangeInvalid ? (
             <div className="space-y-4">
               <div className="grid gap-2 rounded-xl border border-neutral-200 bg-neutral-50/70 p-3 text-xs dark:border-neutral-700 dark:bg-neutral-900/40 sm:grid-cols-2 xl:grid-cols-4">
                 {[
@@ -431,6 +501,13 @@ export default function RosteringPage() {
                 onDraftStateChange={setDraftState}
                 onPatternContextChange={setPatternContext}
               />
+            </div>
+          ) : periodRangeInvalid ? (
+            <div className="h-full min-h-[320px] flex flex-col items-center justify-center rounded-xl border border-dashed border-red-300 dark:border-red-800 text-center px-6">
+              <p className="text-sm font-semibold text-red-700 dark:text-red-300">Fix the roster dates</p>
+              <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400 max-w-sm">
+                The end date must be on or after the start date before you can build the roster.
+              </p>
             </div>
           ) : (
             <div className="h-full min-h-[320px] flex flex-col items-center justify-center rounded-xl border border-dashed border-neutral-300 dark:border-neutral-600 text-center px-6">
