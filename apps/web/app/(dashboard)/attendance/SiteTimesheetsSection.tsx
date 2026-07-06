@@ -7,6 +7,8 @@ import { authFetch } from "@/lib/api";
 import Link from "next/link";
 import { GuardSearchPicker } from "@/components/guard-search-picker";
 import { SiteTimesheetRowCard } from "@/components/site-timesheet-row-card";
+import { ShiftTimeSelect } from "@/components/shift-time-select";
+import { defaultShiftTime, displayShiftTime } from "@/lib/shift-times";
 import {
   addSiteTimesheetRow,
   approveSiteTimesheet,
@@ -40,13 +42,6 @@ function label(value: string | null | undefined) {
   return value ? value.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase()) : "Not set";
 }
 
-function timeValue(iso: string | null | undefined) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
 function normalizeShiftType(value: string | null | undefined): "day" | "night" | null {
   if (!value) return null;
   if (value === "day" || value === "D") return "day";
@@ -58,21 +53,6 @@ function rowShiftType(row: SiteTimesheetRow): "day" | "night" | null {
   return normalizeShiftType(
     row.actualShiftType ?? row.plannedShiftType ?? row.actualShiftCode ?? row.plannedShiftCode
   );
-}
-
-/** Day 06:00–18:00, night 18:00–06:00 — matches site shift defaults. */
-function defaultShiftTime(shiftType: "day" | "night" | null, which: "start" | "end"): string {
-  if (shiftType === "night") return which === "start" ? "18:00" : "06:00";
-  if (shiftType === "day") return which === "start" ? "06:00" : "18:00";
-  return "";
-}
-
-function displayShiftTime(
-  iso: string | null | undefined,
-  shiftType: "day" | "night" | null,
-  which: "start" | "end"
-): string {
-  return timeValue(iso) || defaultShiftTime(shiftType, which);
 }
 
 /** Combine a work date (yyyy-MM-dd) with an HH:mm time into a local-time ISO string. */
@@ -103,6 +83,18 @@ function hoursBetween(clockIn: string | null, clockOut: string | null): number |
   // Night shifts: an end at/earlier than the start rolls over to the next day.
   if (end <= start) end += 24 * 60 * 60 * 1000;
   return Math.round(((end - start) / (1000 * 60 * 60)) * 100) / 100;
+}
+
+function shiftTypeTimesPatch(
+  workDate: string,
+  shiftType: "day" | "night" | null
+): { clockIn: string | null; clockOut: string | null; hoursWorked: number | null } {
+  if (!shiftType) return { clockIn: null, clockOut: null, hoursWorked: null };
+  const startTime = defaultShiftTime(shiftType, "start");
+  const clockIn = combineDateTime(workDate, startTime);
+  const endTime = defaultShiftTime(shiftType, "end");
+  const clockOut = combineClockOut(workDate, endTime, clockIn);
+  return { clockIn, clockOut, hoursWorked: hoursBetween(clockIn, clockOut) };
 }
 
 function buildRowApprovalPatch(row: SiteTimesheetRow): Partial<SiteTimesheetRow> {
@@ -531,7 +523,15 @@ export function SiteTimesheetsSection({
                       <select
                         disabled={locked}
                         value={row.actualShiftType ?? ""}
-                        onChange={(e) => void updateRow(row, { actualShiftType: e.target.value || null, actualShiftCode: e.target.value === "night" ? "N" : e.target.value === "day" ? "D" : null })}
+                        onChange={(e) => {
+                          const shiftType =
+                            e.target.value === "night" ? "night" : e.target.value === "day" ? "day" : null;
+                          void updateRow(row, {
+                            actualShiftType: e.target.value || null,
+                            actualShiftCode: e.target.value === "night" ? "N" : e.target.value === "day" ? "D" : null,
+                            ...shiftTypeTimesPatch(row.workDate, shiftType),
+                          });
+                        }}
                         className="input-compact w-full !px-2 !py-1 text-[11px]"
                       >
                         <option value="">Not worked</option>
@@ -541,39 +541,31 @@ export function SiteTimesheetsSection({
                     </td>
                     <td className={cellClass}>
                       <div className="flex items-center gap-0.5">
-                        <input
-                          type="time"
+                        <ShiftTimeSelect
+                          value={displayShiftTime(row.clockIn, rowShiftType(row), "start")}
                           disabled={locked || savingRowId === row.id}
-                          key={`${row.id}-in-${row.clockIn ?? "default"}`}
-                          defaultValue={displayShiftTime(row.clockIn, rowShiftType(row), "start")}
-                          onBlur={(e) => {
-                            const shiftType = rowShiftType(row);
-                            const displayed = displayShiftTime(row.clockIn, shiftType, "start");
-                            if (e.target.value === displayed && row.clockIn) return;
-                            const clockIn = combineDateTime(row.workDate, e.target.value);
+                          onChange={(time) => {
+                            const clockIn = combineDateTime(row.workDate, time);
                             if (clockIn === (row.clockIn ?? null)) return;
                             void updateRow(row, { clockIn, hoursWorked: hoursBetween(clockIn, row.clockOut) });
                           }}
                           className="input-compact w-[4.25rem] !px-1 !py-1 text-[11px]"
-                          title="Actual start time"
+                          title="Start time"
                         />
                         <span className="text-neutral-400">/</span>
-                        <input
-                          type="time"
+                        <ShiftTimeSelect
+                          value={displayShiftTime(row.clockOut, rowShiftType(row), "end")}
                           disabled={locked || savingRowId === row.id}
-                          key={`${row.id}-out-${row.clockOut ?? "default"}`}
-                          defaultValue={displayShiftTime(row.clockOut, rowShiftType(row), "end")}
-                          onBlur={(e) => {
+                          onChange={(time) => {
                             const shiftType = rowShiftType(row);
-                            const displayed = displayShiftTime(row.clockOut, shiftType, "end");
-                            if (e.target.value === displayed && row.clockOut) return;
-                            const clockIn = row.clockIn ?? combineDateTime(row.workDate, displayShiftTime(null, shiftType, "start"));
-                            const clockOut = combineClockOut(row.workDate, e.target.value, clockIn);
+                            const clockIn =
+                              row.clockIn ?? combineDateTime(row.workDate, displayShiftTime(null, shiftType, "start"));
+                            const clockOut = combineClockOut(row.workDate, time, clockIn);
                             if (clockOut === (row.clockOut ?? null)) return;
                             void updateRow(row, { clockOut, hoursWorked: hoursBetween(clockIn, clockOut) });
                           }}
                           className="input-compact w-[4.25rem] !px-1 !py-1 text-[11px]"
-                          title="Actual end time"
+                          title="End time"
                         />
                       </div>
                     </td>

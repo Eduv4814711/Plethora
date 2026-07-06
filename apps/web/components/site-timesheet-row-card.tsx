@@ -1,6 +1,8 @@
 "use client";
 
 import { GuardSearchPicker } from "@/components/guard-search-picker";
+import { ShiftTimeSelect } from "@/components/shift-time-select";
+import { defaultShiftTime } from "@/lib/shift-times";
 import type { SiteTimesheetAttendance, SiteTimesheetRow } from "@/lib/roster-api";
 
 type GuardOption = {
@@ -118,12 +120,24 @@ export function SiteTimesheetRowCard({
           <select
             disabled={locked}
             value={row.actualShiftType ?? ""}
-            onChange={(e) =>
-              onUpdate(row, {
-                actualShiftType: e.target.value || null,
-                actualShiftCode: e.target.value === "night" ? "N" : e.target.value === "day" ? "D" : null,
-              })
-            }
+            onChange={(e) => {
+              const nextType = e.target.value;
+              const shiftType = nextType === "night" ? "night" : nextType === "day" ? "day" : null;
+              const patch: Partial<SiteTimesheetRow> = {
+                actualShiftType: nextType || null,
+                actualShiftCode: nextType === "night" ? "N" : nextType === "day" ? "D" : null,
+              };
+              if (shiftType) {
+                const startTime = defaultShiftTime(shiftType, "start");
+                const clockIn = combineDateTime(row.workDate, startTime);
+                const endTime = defaultShiftTime(shiftType, "end");
+                const clockOut = combineClockOut(row.workDate, endTime, clockIn);
+                patch.clockIn = clockIn;
+                patch.clockOut = clockOut;
+                patch.hoursWorked = hoursBetween(clockIn, clockOut);
+              }
+              onUpdate(row, patch);
+            }}
             className="input-modern mt-1 w-full"
           >
             <option value="">Not worked</option>
@@ -151,36 +165,30 @@ export function SiteTimesheetRowCard({
       <div>
         <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Start / end time</label>
         <div className="mt-1 flex items-center gap-2">
-          <input
-            type="time"
+          <ShiftTimeSelect
+            value={displayShiftTime(row.clockIn, shiftType, "start")}
             disabled={locked || saving}
-            key={`${row.id}-m-in-${row.clockIn ?? "default"}`}
-            defaultValue={displayShiftTime(row.clockIn, shiftType, "start")}
-            onBlur={(e) => {
-              const displayed = displayShiftTime(row.clockIn, shiftType, "start");
-              if (e.target.value === displayed && row.clockIn) return;
-              const clockIn = combineDateTime(row.workDate, e.target.value);
+            onChange={(time) => {
+              const clockIn = combineDateTime(row.workDate, time);
               if (clockIn === (row.clockIn ?? null)) return;
               onUpdate(row, { clockIn, hoursWorked: hoursBetween(clockIn, row.clockOut) });
             }}
             className="input-modern flex-1"
+            title="Start time"
           />
           <span className="text-neutral-400">to</span>
-          <input
-            type="time"
+          <ShiftTimeSelect
+            value={displayShiftTime(row.clockOut, shiftType, "end")}
             disabled={locked || saving}
-            key={`${row.id}-m-out-${row.clockOut ?? "default"}`}
-            defaultValue={displayShiftTime(row.clockOut, shiftType, "end")}
-            onBlur={(e) => {
-              const displayed = displayShiftTime(row.clockOut, shiftType, "end");
-              if (e.target.value === displayed && row.clockOut) return;
+            onChange={(time) => {
               const clockIn =
                 row.clockIn ?? combineDateTime(row.workDate, displayShiftTime(null, shiftType, "start"));
-              const clockOut = combineClockOut(row.workDate, e.target.value, clockIn);
+              const clockOut = combineClockOut(row.workDate, time, clockIn);
               if (clockOut === (row.clockOut ?? null)) return;
               onUpdate(row, { clockOut, hoursWorked: hoursBetween(clockIn, clockOut) });
             }}
             className="input-modern flex-1"
+            title="End time"
           />
         </div>
       </div>
