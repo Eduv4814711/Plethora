@@ -47,6 +47,8 @@ type GuardSearchPickerProps = {
   defaultGuardId?: string | null;
   allowClear?: boolean;
   clearLabel?: string;
+  /** When false, the selected name can wrap instead of truncating (better for wide tables). */
+  truncateLabel?: boolean;
 };
 
 export function GuardSearchPicker({
@@ -59,6 +61,7 @@ export function GuardSearchPicker({
   defaultGuardId = null,
   allowClear = true,
   clearLabel = "Nobody worked",
+  truncateLabel = true,
 }: GuardSearchPickerProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -105,7 +108,10 @@ export function GuardSearchPicker({
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span className={`min-w-0 truncate ${!selected ? "text-neutral-500" : ""}`}>
+        <span
+          className={`min-w-0 ${truncateLabel ? "truncate" : "whitespace-normal break-words leading-snug"} ${!selected ? "text-neutral-500" : ""}`}
+          title={truncateLabel ? displayText : undefined}
+        >
           {displayText}
         </span>
         <svg

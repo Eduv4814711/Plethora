@@ -340,13 +340,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               type="button"
               onClick={() => setProfileOpen((o) => !o)}
               className="flex min-h-11 items-center gap-2 rounded-security py-1.5 pl-1.5 pr-2 text-white/85 hover:text-white hover:bg-security-navy-800 transition-colors touch-manipulation sm:pr-3"
-              title="Profile"
-              aria-label="Profile"
+              title={user.name ?? "Profile"}
+              aria-label={user.name ? `Profile, ${user.name}` : "Profile"}
             >
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-security-navy-400 text-sm font-semibold text-white sm:h-8 sm:w-8">
                 {user.name?.charAt(0)?.toUpperCase() ?? "U"}
               </div>
-              <span className="hidden max-w-[100px] truncate text-sm font-medium sm:inline md:max-w-[140px]">{user.name}</span>
+              <span className="hidden max-w-[9rem] text-sm font-medium leading-tight sm:inline md:max-w-[12rem] lg:max-w-[16rem] xl:max-w-none xl:whitespace-nowrap">
+                {user.name}
+              </span>
               <svg className="hidden h-4 w-4 shrink-0 opacity-70 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>

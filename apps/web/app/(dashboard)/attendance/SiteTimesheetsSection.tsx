@@ -433,9 +433,11 @@ export function SiteTimesheetsSection({
             </div>
           )}
 
-          <div className="space-y-3 lg:hidden">
+          <div className="space-y-3 2xl:hidden">
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              Tap each day below to confirm who worked, then approve when correct.
+              Review each day below, confirm who worked and shift times, then tap{" "}
+              <span className="font-medium text-neutral-700 dark:text-neutral-300">Approve this day</span> when
+              correct.
             </p>
             {sheet.rows.map((row) => (
               <SiteTimesheetRowCard
@@ -455,30 +457,48 @@ export function SiteTimesheetsSection({
             ))}
           </div>
 
-          <div className="hidden lg:block overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-700">
-            <table className="min-w-[1320px] w-full text-left text-xs">
+          <div className="hidden 2xl:block space-y-2">
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              Scroll sideways if needed — notes and approve actions stay on the right.
+            </p>
+            <div className="-mx-4 overflow-x-auto rounded-lg border border-neutral-200 px-4 pb-1 sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10 dark:border-neutral-700">
+            <table className="min-w-[1520px] w-full text-left text-xs">
               <thead className="bg-neutral-100 text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">
                 <tr>
-                  {["Date", "Scheduled", "Actual worked", "Planned", "Actual shift", "Start / End", "Status", "Discrepancies", "Comments", "Attendance"].map((h) => (
-                    <th key={h} className="px-3 py-2 font-semibold">{h}</th>
+                  {[
+                    { label: "Date", className: "min-w-[5.5rem]" },
+                    { label: "Scheduled", className: "min-w-[9rem]" },
+                    { label: "Actual worked", className: "min-w-[11rem]" },
+                    { label: "Planned", className: "min-w-[4.5rem]" },
+                    { label: "Actual shift", className: "min-w-[6.5rem]" },
+                    { label: "Start / End", className: "min-w-[11rem]" },
+                    { label: "Status", className: "min-w-[6.5rem]" },
+                    { label: "Discrepancies", className: "min-w-[8rem]" },
+                    { label: "Comments", className: "min-w-[11rem]" },
+                    { label: "Approve", className: "sticky right-0 z-20 min-w-[7rem] bg-neutral-100 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.12)] dark:bg-neutral-900 dark:shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.35)]" },
+                  ].map(({ label, className }) => (
+                    <th key={label} className={`px-3 py-2 font-semibold ${className}`}>{label}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
-                {sheet.rows.map((row) => (
+                {sheet.rows.map((row) => {
+                  const rowSurfaceClass =
+                    row.approvalStatus === "pending"
+                      ? row.discrepancyCodes.length
+                        ? "bg-amber-50/60 dark:bg-amber-950/20"
+                        : "bg-white dark:bg-neutral-950"
+                      : "bg-emerald-50/40 dark:bg-emerald-950/15";
+                  const stickyActionClass = `sticky right-0 z-10 px-3 py-2 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.12)] dark:shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.35)] ${rowSurfaceClass}`;
+
+                  return (
                   <tr
                     key={row.id}
-                    className={
-                      row.approvalStatus === "pending"
-                        ? row.discrepancyCodes.length
-                          ? "bg-amber-50/60 dark:bg-amber-950/20"
-                          : ""
-                        : "bg-emerald-50/40 dark:bg-emerald-950/15"
-                    }
+                    className={rowSurfaceClass}
                   >
-                    <td className="px-3 py-2 font-medium">{row.workDate}<br /><span className="text-neutral-500">{row.dayOfWeek}</span></td>
-                    <td className="px-3 py-2">{row.plannedGuardName ?? "Unrostered"}<br /><span className="text-neutral-500">{row.employeeNumber ?? row.psiraNumber ?? ""}</span></td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 font-medium align-top">{row.workDate}<br /><span className="text-neutral-500">{row.dayOfWeek}</span></td>
+                    <td className="px-3 py-2 align-top break-words">{row.plannedGuardName ?? "Unrostered"}<br /><span className="text-neutral-500">{row.employeeNumber ?? row.psiraNumber ?? ""}</span></td>
+                    <td className="px-3 py-2 align-top">
                       <GuardSearchPicker
                         guards={guardOptions}
                         value={row.actualGuardId}
@@ -486,6 +506,7 @@ export function SiteTimesheetsSection({
                         disabled={locked || savingRowId === row.id}
                         onChange={(guardId) => void updateRow(row, { actualGuardId: guardId })}
                         clearLabel="Nobody worked"
+                        truncateLabel={false}
                       />
                     </td>
                     <td className="px-3 py-2">{label(row.plannedShiftType ?? row.plannedShiftCode)}</td>
@@ -551,16 +572,16 @@ export function SiteTimesheetsSection({
                         )) : <span className="text-neutral-400">None</span>}
                       </div>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 align-top">
                       <input
                         disabled={locked}
                         defaultValue={row.comments ?? ""}
                         onBlur={(e) => void updateRow(row, { comments: e.target.value })}
-                        className="input-compact min-w-48"
-                        placeholder="Supervisor/controller comment"
+                        className="input-compact w-full min-w-[10rem]"
+                        placeholder="Note (optional)"
                       />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className={stickyActionClass}>
                       {row.approvalStatus === "approved" || locked ? (
                         <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
                           Approved
@@ -584,16 +605,19 @@ export function SiteTimesheetsSection({
                           type="button"
                           disabled={savingRowId === row.id}
                           onClick={() => void approveRowAttendance(row)}
-                          className="btn-primary whitespace-nowrap px-2.5 py-1.5 text-[11px] disabled:opacity-50"
+                          title="Approve attendance for this day"
+                          className="btn-primary w-full min-w-[6.5rem] px-3 py-2 text-xs leading-snug disabled:opacity-50"
                         >
-                          {savingRowId === row.id ? "Saving…" : "Approve attendance"}
+                          {savingRowId === row.id ? "Saving…" : "Approve"}
                         </button>
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
+            </div>
           </div>
         </>
       )}
