@@ -201,6 +201,62 @@ export async function usersRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get("/team-member-candidates", { preHandler: protect }, async (request, reply) => {
+    const user = request.user!;
+    const q = request.query as Record<string, string | undefined>;
+    const searchQuery = (q.q ?? "").trim();
+    const limit = Math.min(Math.max(Number(q.limit) || 10, 1), 20);
+
+    if (searchQuery.length < 2) {
+      return reply.send({ data: [] });
+    }
+
+    const [employees, companyUsers] = await Promise.all([
+      prisma.employee.findMany({
+        where: {
+          companyId: user.companyId,
+          status: { not: "offboarded" },
+          OR: [
+            { firstName: { contains: searchQuery, mode: "insensitive" } },
+            { lastName: { contains: searchQuery, mode: "insensitive" } },
+            { employeeNumber: { contains: searchQuery, mode: "insensitive" } },
+            { email: { contains: searchQuery, mode: "insensitive" } },
+          ],
+        },
+        select: {
+          id: true,
+          employeeNumber: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          jobRole: true,
+          status: true,
+        },
+        take: limit,
+        orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      }),
+      prisma.user.findMany({
+        where: { companyId: user.companyId },
+        select: { email: true },
+      }),
+    ]);
+
+    const userEmails = new Set(companyUsers.map((u) => u.email.toLowerCase()));
+
+    const data = employees.map((e) => ({
+      id: e.id,
+      employeeNumber: e.employeeNumber,
+      firstName: e.firstName,
+      lastName: e.lastName,
+      email: e.email,
+      jobRole: e.jobRole,
+      status: e.status,
+      hasUserAccount: !!e.email && userEmails.has(e.email.toLowerCase()),
+    }));
+
+    return reply.send({ data });
+  });
+
   app.get("/:id", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;

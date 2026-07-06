@@ -1,3 +1,27 @@
+export const PASSWORD_MIN_LENGTH = 12;
+
+export const PASSWORD_REQUIREMENTS_HINT =
+  "At least 12 characters. Avoid common words, your name, or the company name.";
+
+function apiErrorMessage(err: Record<string, unknown>, fallback: string): string {
+  if (typeof err.message === "string" && err.message) return err.message;
+  const fieldErrors = err.message as Record<string, string[]> | undefined;
+  if (fieldErrors && typeof fieldErrors === "object" && !Array.isArray(fieldErrors)) {
+    const passwordErr = fieldErrors.password?.[0];
+    if (passwordErr) return passwordErr;
+    const first = Object.values(fieldErrors).flat()[0];
+    if (first) return first;
+  }
+  const details = err.details as { fieldErrors?: Record<string, string[]> } | undefined;
+  const detailFe = details?.fieldErrors;
+  if (detailFe) {
+    const first = Object.values(detailFe).flat()[0];
+    if (first) return first;
+  }
+  if (typeof err.error === "string" && err.error) return err.error;
+  return fallback;
+}
+
 function trimSlashes(value: string): string {
   return value.replace(/^\/+|\/+$/g, "");
 }
@@ -157,28 +181,7 @@ export async function onboardCompany(payload: OnboardPayload): Promise<LoginResp
  * Pass `legacyRefreshToken` once when migrating from localStorage.
  */
 export async function refreshSession(legacyRefreshToken?: string): Promise<LoginResponse> {
-  const csrf = getCsrfTokenFromDocument();
   const url = `${API_BASE}/auth/refresh`;
-  // #region agent log
-  fetch("http://127.0.0.1:7661/ingest/453706ed-2456-4856-80b5-ae7dd19b5077", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "2915a3" },
-    body: JSON.stringify({
-      sessionId: "2915a3",
-      runId: "pre-fix",
-      hypothesisId: "A,D",
-      location: "api.ts:refreshSession:request",
-      message: "Refresh request prepared",
-      data: {
-        apiBase: API_BASE,
-        hasCsrfHeader: !!csrf,
-        hasLegacyBodyToken: !!legacyRefreshToken,
-        webOrigin: typeof window !== "undefined" ? window.location.origin : null,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
   const res = await fetch(url, {
     ...AUTH_FETCH_INIT,
     method: "POST",
@@ -188,26 +191,7 @@ export async function refreshSession(legacyRefreshToken?: string): Promise<Login
     ),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    // #region agent log
-    fetch("http://127.0.0.1:7661/ingest/453706ed-2456-4856-80b5-ae7dd19b5077", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "2915a3" },
-      body: JSON.stringify({
-        sessionId: "2915a3",
-        runId: "pre-fix",
-        hypothesisId: "A,C",
-        location: "api.ts:refreshSession:response",
-        message: "Refresh request failed",
-        data: {
-          status: res.status,
-          error: err?.error ?? null,
-          message: err?.message ?? null,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
+    await res.json().catch(() => ({}));
     throw new Error("Token refresh failed");
   }
   return res.json();
@@ -250,8 +234,8 @@ export async function completeSetupPassword(token: string, password: string): Pr
     body: JSON.stringify({ token, password }),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error || err?.message || "Failed to set password");
+    const err = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    throw new Error(apiErrorMessage(err, "Failed to set password"));
   }
 }
 
@@ -485,21 +469,6 @@ export async function authFetch(url: string, token: string, init?: RequestInit):
 
   let res = await doFetch(token);
   if (res.status === 401 && tokenRefreshCallback) {
-    // #region agent log
-    fetch("http://127.0.0.1:7661/ingest/453706ed-2456-4856-80b5-ae7dd19b5077", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "2915a3" },
-      body: JSON.stringify({
-        sessionId: "2915a3",
-        runId: "pre-fix",
-        hypothesisId: "B,C",
-        location: "api.ts:authFetch:401",
-        message: "API returned 401 — attempting token refresh",
-        data: { url },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     const newToken = await tokenRefreshCallback();
     if (newToken) {
       res = await doFetch(newToken);
@@ -530,6 +499,32 @@ export async function listUsers(token: string): Promise<{ data: UserListItem[]; 
     throw new Error(err.message || "Failed to fetch users");
   }
   return res.json();
+}
+
+export interface TeamMemberCandidate {
+  id: string;
+  employeeNumber: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  jobRole: string | null;
+  status: string;
+  hasUserAccount: boolean;
+}
+
+export async function searchTeamMemberCandidates(
+  token: string,
+  q: string
+): Promise<TeamMemberCandidate[]> {
+  const trimmed = q.trim();
+  if (trimmed.length < 2) return [];
+  const res = await authFetch(
+    `/users/team-member-candidates?q=${encodeURIComponent(trimmed)}`,
+    token
+  );
+  if (!res.ok) return [];
+  const body = (await res.json()) as { data?: TeamMemberCandidate[] };
+  return body.data ?? [];
 }
 
 export async function createUser(

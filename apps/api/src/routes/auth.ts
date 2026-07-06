@@ -71,7 +71,9 @@ const setupPasswordValidateSchema = z.object({
 
 const setupPasswordCompleteSchema = z.object({
   token: z.string().min(20),
-  password: z.string().min(PASSWORD_MIN_LENGTH),
+  password: z
+    .string()
+    .min(PASSWORD_MIN_LENGTH, `Password must be at least ${PASSWORD_MIN_LENGTH} characters`),
 });
 
 const refreshBodySchema = z.object({
@@ -214,7 +216,13 @@ export async function authRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const parsed = setupPasswordCompleteSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
+        const fieldErrors = parsed.error.flatten().fieldErrors;
+        const firstMsg = Object.values(fieldErrors).flat()[0];
+        return reply.code(400).send({
+          error: "Validation error",
+          message: firstMsg ?? "Invalid request",
+          details: { fieldErrors },
+        });
       }
 
       const policyMsg = passwordPolicyError(parsed.data.password);

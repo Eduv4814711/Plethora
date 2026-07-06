@@ -63,61 +63,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     source = "unknown"
   ): Promise<string | null> => {
     refreshInFlightRef.current += 1;
-    const inFlight = refreshInFlightRef.current;
-    // #region agent log
-    fetch("http://127.0.0.1:7661/ingest/453706ed-2456-4856-80b5-ae7dd19b5077", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "2915a3" },
-      body: JSON.stringify({
-        sessionId: "2915a3",
-        runId: "pre-fix",
-        hypothesisId: "B",
-        location: "auth-context.tsx:doRefresh:start",
-        message: "Token refresh started",
-        data: { source, inFlight, hasLegacyToken: !!legacyRefreshToken },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     try {
       const data = await refreshSession(legacyRefreshToken);
       applySession(data);
-      // #region agent log
-      fetch("http://127.0.0.1:7661/ingest/453706ed-2456-4856-80b5-ae7dd19b5077", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "2915a3" },
-        body: JSON.stringify({
-          sessionId: "2915a3",
-          runId: "pre-fix",
-          hypothesisId: "B",
-          location: "auth-context.tsx:doRefresh:success",
-          message: "Token refresh succeeded",
-          data: { source, inFlight },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       return data.accessToken;
     } catch (err) {
-      // #region agent log
-      fetch("http://127.0.0.1:7661/ingest/453706ed-2456-4856-80b5-ae7dd19b5077", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "2915a3" },
-        body: JSON.stringify({
-          sessionId: "2915a3",
-          runId: "pre-fix",
-          hypothesisId: "A,B,C",
-          location: "auth-context.tsx:doRefresh:fail",
-          message: "Token refresh failed — clearing session",
-          data: {
-            source,
-            inFlight,
-            error: err instanceof Error ? err.message : String(err),
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       setUser(null);
       setToken(null);
       return null;
@@ -133,21 +83,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     refreshTimerRef.current = setTimeout(() => {
       refreshTimerRef.current = null;
-      // #region agent log
-      fetch("http://127.0.0.1:7661/ingest/453706ed-2456-4856-80b5-ae7dd19b5077", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "2915a3" },
-        body: JSON.stringify({
-          sessionId: "2915a3",
-          runId: "pre-fix",
-          hypothesisId: "A,C",
-          location: "auth-context.tsx:scheduleProactiveRefresh",
-          message: "Proactive refresh timer fired",
-          data: { intervalMs: PROACTIVE_REFRESH_MS },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       doRefreshRef.current(undefined, "proactive-timer").then((newToken) => {
         if (newToken) scheduleProactiveRefresh();
       });

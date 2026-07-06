@@ -16,6 +16,7 @@ import {
 } from "@/lib/permissions";
 import { DateInput } from "@/components/date-input";
 import { useConfirmDialog } from "@/components/ui";
+import { TeamMemberUserPicker } from "@/components/team-member-user-picker";
 import { clsx } from "clsx";
 
 type Tab = "profile" | "business" | "settings" | "users" | "migrate" | "factory_reset";
@@ -834,6 +835,8 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
   const [addAccountKind, setAddAccountKind] = useState<"admin" | "assign">("assign");
   const [addStaffRoleInput, setAddStaffRoleInput] = useState(ROLE_LABELS.supervisor);
   const [addStaffRoleFieldError, setAddStaffRoleFieldError] = useState<string | null>(null);
+  const [selectedTeamMemberId, setSelectedTeamMemberId] = useState<string | null>(null);
+  const [teamMemberJobRoleHint, setTeamMemberJobRoleHint] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
@@ -859,6 +862,18 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
 
   const toggleCustomModule = (href: string, setList: React.Dispatch<React.SetStateAction<string[]>>) => {
     setList((prev) => (prev.includes(href) ? prev.filter((x) => x !== href) : [...prev, href]));
+  };
+
+  const resetAddFormState = () => {
+    setAddForm({ name: "", email: "", role: "supervisor" });
+    setSelectedTeamMemberId(null);
+    setTeamMemberJobRoleHint(null);
+    setAddStaffRoleInput(ROLE_LABELS.supervisor);
+    setAddStaffRoleFieldError(null);
+    setAddAccountKind("assign");
+    setAddAdminFullAccess(true);
+    setAddGrantAppModules(true);
+    setAddCustomModules(defaultModulesForRole("supervisor"));
   };
 
   const fetchUsers = useCallback(async () => {
@@ -942,13 +957,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
       const created = await createUser(token, payload);
       setLatestSetupLink(created.setupLink ?? null);
       setSetupLinkCopied(false);
-      setAddForm({ name: "", email: "", role: "supervisor" });
-      setAddStaffRoleInput(ROLE_LABELS.supervisor);
-      setAddStaffRoleFieldError(null);
-      setAddAccountKind("assign");
-      setAddAdminFullAccess(true);
-      setAddGrantAppModules(true);
-      setAddCustomModules(defaultModulesForRole("supervisor"));
+      resetAddFormState();
       setShowAddForm(false);
       await fetchUsers();
     } catch (err) {
@@ -1143,7 +1152,10 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
           </span>
           <button
             type="button"
-            onClick={() => setShowAddForm((v) => !v)}
+            onClick={() => {
+              if (showAddForm) resetAddFormState();
+              setShowAddForm((v) => !v);
+            }}
             className="btn-primary text-sm"
           >
             {showAddForm ? "Cancel" : "Add User"}
@@ -1156,6 +1168,39 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
             className="p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 space-y-4"
           >
             <h4 className="font-medium text-neutral-800 dark:text-white">New User</h4>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                Team member (optional)
+              </label>
+              <TeamMemberUserPicker
+                token={token}
+                selectedId={selectedTeamMemberId}
+                existingUserEmails={users.map((u) => u.email)}
+                onSelect={(candidate) => {
+                  setSelectedTeamMemberId(candidate.id);
+                  setTeamMemberJobRoleHint(candidate.jobRole);
+                  setAddForm((f) => ({
+                    ...f,
+                    name: `${candidate.firstName} ${candidate.lastName}`.trim(),
+                    email: candidate.email ?? "",
+                  }));
+                }}
+                onClear={() => {
+                  setSelectedTeamMemberId(null);
+                  setTeamMemberJobRoleHint(null);
+                  setAddForm((f) => ({ ...f, name: "", email: "" }));
+                }}
+                disabled={submitting}
+              />
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1.5">
+                Search someone from Team to fill in their details, or type below.
+                {teamMemberJobRoleHint && (
+                  <span className="block mt-1 text-neutral-600 dark:text-neutral-300">
+                    Team role on file: {teamMemberJobRoleHint}
+                  </span>
+                )}
+              </p>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Name</label>
@@ -1178,6 +1223,11 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                   placeholder="jane@company.com"
                   required
                 />
+                {selectedTeamMemberId && !addForm.email && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                    This team member has no email on file. Enter one to continue.
+                  </p>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-1 gap-4">

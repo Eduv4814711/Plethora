@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { completeSetupPassword, validateSetupPasswordToken } from "@/lib/api";
+import { completeSetupPassword, validateSetupPasswordToken, PASSWORD_MIN_LENGTH, PASSWORD_REQUIREMENTS_HINT } from "@/lib/api";
 
 export default function SetupPasswordClient() {
   const params = useSearchParams();
@@ -51,8 +51,8 @@ export default function SetupPasswordClient() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      setError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters.`);
       return;
     }
     if (password !== confirmPassword) {
@@ -113,8 +113,8 @@ export default function SetupPasswordClient() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="input-modern pr-11"
-                  placeholder="Minimum 8 characters"
-                  minLength={8}
+                  placeholder={`Minimum ${PASSWORD_MIN_LENGTH} characters`}
+                  minLength={PASSWORD_MIN_LENGTH}
                   required
                 />
                 <button
@@ -129,6 +129,7 @@ export default function SetupPasswordClient() {
                   </svg>
                 </button>
               </div>
+              <p className="text-xs text-security-navy-500 mt-1">{PASSWORD_REQUIREMENTS_HINT}</p>
             </div>
 
             <div>
@@ -141,7 +142,7 @@ export default function SetupPasswordClient() {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="input-modern"
-                minLength={8}
+                minLength={PASSWORD_MIN_LENGTH}
                 required
               />
             </div>
