@@ -1,9 +1,12 @@
 import "dotenv/config";
 import { buildApp } from "./app.js";
 import { env } from "./lib/env.js";
+import { databaseHostFromUrl, verifyDatabaseConnection } from "./lib/db-connectivity.js";
 
 let app;
 try {
+  await verifyDatabaseConnection();
+  console.log(`Database connected (${databaseHostFromUrl(process.env.DATABASE_URL)})`);
   app = await buildApp();
 } catch (err) {
   console.error("FATAL: API failed to initialize (check environment variables, logs above):", err);

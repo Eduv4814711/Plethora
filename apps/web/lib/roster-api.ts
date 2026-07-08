@@ -163,6 +163,79 @@ export type SiteTimesheet = {
   };
 };
 
+export type GuardPickerOption = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  employeeNumber?: string | null;
+  psiraNumber?: string | null;
+};
+
+function isSelectableSecurityGuard(
+  e: GuardPickerOption & { employeeType?: string; status?: string; jobRole?: string | null }
+) {
+  return (
+    (e.employeeType ?? "security") === "security" &&
+    e.status !== "offboarded" &&
+    !(e.jobRole ?? "").startsWith("roster_placeholder:")
+  );
+}
+
+/** Paginates through security guards — the list API caps at 100 per page. */
+export async function fetchSecurityGuardOptions(token: string): Promise<GuardPickerOption[]> {
+  const limit = 100;
+  let offset = 0;
+  const all: GuardPickerOption[] = [];
+  for (;;) {
+    const res = await authFetch(`/employees?limit=${limit}&offset=${offset}&employeeType=security`, token);
+    const json = await res.json();
+    const batch = (json.data ?? []).filter(isSelectableSecurityGuard);
+    all.push(...batch);
+    const total = Number(json.total) || 0;
+    offset += limit;
+    if (offset >= total || batch.length === 0) break;
+  }
+  return all;
+}
+
+function guardOptionFromTimesheetName(
+  id: string | null,
+  name: string | null,
+  employeeNumber?: string | null,
+  psiraNumber?: string | null
+): GuardPickerOption | null {
+  if (!id || !name?.trim()) return null;
+  const parts = name.trim().split(/\s+/);
+  return {
+    id,
+    firstName: parts[0] ?? name,
+    lastName: parts.slice(1).join(" ") || "",
+    employeeNumber: employeeNumber ?? null,
+    psiraNumber: psiraNumber ?? null,
+  };
+}
+
+/** Ensures scheduled/actual guards on timesheet rows always appear in pickers. */
+export function mergeTimesheetGuardOptions(
+  guards: GuardPickerOption[],
+  rows: SiteTimesheetRow[]
+): GuardPickerOption[] {
+  const byId = new Map(guards.map((g) => [g.id, g]));
+  for (const row of rows) {
+    for (const opt of [
+      guardOptionFromTimesheetName(row.plannedGuardId, row.plannedGuardName, row.employeeNumber, row.psiraNumber),
+      guardOptionFromTimesheetName(row.actualGuardId, row.actualGuardName, row.employeeNumber, row.psiraNumber),
+    ]) {
+      if (opt && !byId.has(opt.id)) byId.set(opt.id, opt);
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) =>
+    `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`, undefined, {
+      sensitivity: "base",
+    })
+  );
+}
+
 export type SiteTimesheetCaptureOverviewSite = {
   siteId: string;
   siteName: string;

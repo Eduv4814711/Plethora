@@ -12,9 +12,12 @@ import { defaultShiftTime, displayShiftTime } from "@/lib/shift-times";
 import {
   addSiteTimesheetRow,
   approveSiteTimesheet,
+  fetchSecurityGuardOptions,
   fetchSiteTimesheet,
+  mergeTimesheetGuardOptions,
   resyncSiteTimesheet,
   siteTimesheetCsvUrl,
+  type GuardPickerOption,
   type SiteTimesheet,
   type SiteTimesheetAttendance,
   type SiteTimesheetRow,
@@ -22,7 +25,7 @@ import {
   updateSiteTimesheetRow,
 } from "@/lib/roster-api";
 
-type GuardOption = { id: string; firstName: string; lastName: string; employeeNumber?: string | null; psiraNumber?: string | null };
+type GuardOption = GuardPickerOption;
 
 const ATTENDANCE_OPTIONS: { value: SiteTimesheetAttendance; label: string }[] = [
   { value: "pending", label: "Pending" },
@@ -153,13 +156,13 @@ export function SiteTimesheetsSection({
     setLoading(true);
     setError(null);
     try {
-      const [nextSheet, employeesRes] = await Promise.all([
+      const [nextSheet, guardEmployees] = await Promise.all([
         fetchSiteTimesheet(token, siteId, periodStart, periodEnd),
-        authFetch("/employees?limit=500", token).then((r) => r.json()),
+        fetchSecurityGuardOptions(token),
       ]);
       if (loadId !== loadIdRef.current) return;
       setSheet(nextSheet);
-      setGuards((employeesRes.data ?? []).filter((e: GuardOption & { employeeType?: string; status?: string; jobRole?: string | null }) => (e.employeeType ?? "security") === "security" && e.status !== "offboarded" && !(e.jobRole ?? "").startsWith("roster_placeholder:")));
+      setGuards(guardEmployees);
     } catch (err) {
       if (loadId !== loadIdRef.current) return;
       setError(err instanceof Error ? err.message : "Failed to load site timesheet");
@@ -172,7 +175,10 @@ export function SiteTimesheetsSection({
     void load();
   }, [token, siteId, periodStart, periodEnd]);
 
-  const guardOptions = useMemo(() => guards, [guards]);
+  const guardOptions = useMemo(
+    () => mergeTimesheetGuardOptions(guards, sheet?.rows ?? []),
+    [guards, sheet?.rows]
+  );
   const reviewedCount = sheet?.rows.filter((r) => r.approvalStatus !== "pending").length ?? 0;
   const pendingReviewCount = sheet ? sheet.rows.length - reviewedCount : 0;
 
@@ -508,6 +514,7 @@ export function SiteTimesheetsSection({
                         guards={guardOptions}
                         value={row.actualGuardId}
                         defaultGuardId={row.plannedGuardId}
+                        defaultGuardLabel={row.plannedGuardName}
                         disabled={locked || savingRowId === row.id}
                         onChange={(guardId) => void updateRow(row, { actualGuardId: guardId })}
                         clearLabel="Nobody worked"

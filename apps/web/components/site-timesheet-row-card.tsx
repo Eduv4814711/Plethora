@@ -106,6 +106,7 @@ export function SiteTimesheetRowCard({
             guards={guards}
             value={row.actualGuardId}
             defaultGuardId={row.plannedGuardId}
+            defaultGuardLabel={row.plannedGuardName}
             disabled={locked || saving}
             onChange={(guardId) => onUpdate(row, { actualGuardId: guardId })}
             clearLabel="Nobody worked"

@@ -45,6 +45,8 @@ type GuardSearchPickerProps = {
   className?: string;
   /** Shown when value is empty — e.g. the scheduled guard on a timesheet row. */
   defaultGuardId?: string | null;
+  /** Display fallback when defaultGuardId is set but not present in guards. */
+  defaultGuardLabel?: string | null;
   allowClear?: boolean;
   clearLabel?: string;
   /** When false, the selected name can wrap instead of truncating (better for wide tables). */
@@ -61,6 +63,7 @@ export function GuardSearchPicker({
   placeholder = "Search employee…",
   className = "input-compact",
   defaultGuardId = null,
+  defaultGuardLabel = null,
   allowClear = true,
   clearLabel = "Nobody worked",
   truncateLabel = true,
@@ -73,7 +76,7 @@ export function GuardSearchPicker({
 
   const effectiveId = value || defaultGuardId || "";
   const selected = guards.find((g) => g.id === effectiveId) ?? null;
-  const isDefaultOnly = !value && !!defaultGuardId && effectiveId === defaultGuardId;
+  const hasDisplayValue = !!selected || (!value && !!defaultGuardId && !!defaultGuardLabel);
 
   const filtered = useMemo(
     () => guards.filter((g) => matchesSearch(g, search)),
@@ -99,7 +102,11 @@ export function GuardSearchPicker({
     setSearch("");
   }, [open]);
 
-  const displayText = selected ? guardLabel(selected) : placeholder;
+  const displayText = selected
+    ? guardLabel(selected)
+    : !value && defaultGuardId && defaultGuardLabel
+      ? defaultGuardLabel
+      : placeholder;
 
   return (
     <div ref={containerRef} className={compact ? "relative min-w-0" : "relative min-w-44"}>
@@ -112,7 +119,7 @@ export function GuardSearchPicker({
         aria-expanded={open}
       >
         <span
-          className={`min-w-0 ${truncateLabel ? "truncate" : "whitespace-normal break-words leading-snug"} ${!selected ? "text-neutral-500" : ""}`}
+          className={`min-w-0 ${truncateLabel ? "truncate" : "whitespace-normal break-words leading-snug"} ${!hasDisplayValue ? "text-neutral-500" : ""}`}
           title={truncateLabel ? displayText : undefined}
         >
           {displayText}
@@ -127,7 +134,7 @@ export function GuardSearchPicker({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      {isDefaultOnly && selected && (
+      {!value && defaultGuardId && (selected || defaultGuardLabel) && (
         <p className="mt-0.5 text-[10px] text-neutral-500">Scheduled guard — change if someone else worked</p>
       )}
 
