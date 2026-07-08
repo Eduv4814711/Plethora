@@ -24,16 +24,17 @@ function guardLabel(guard: GuardPickerOption) {
 function matchesSearch(guard: GuardPickerOption, query: string) {
   const term = query.trim().toLowerCase();
   if (!term) return true;
-  const haystack = [
+  const fields = [
     guard.firstName,
     guard.lastName,
     guard.employeeNumber,
     guard.psiraNumber,
+    guardName(guard),
+    `${guard.firstName ?? ""}${guard.lastName ?? ""}`,
   ]
     .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-  return haystack.includes(term);
+    .map((s) => s!.toLowerCase());
+  return fields.some((field) => field.includes(term));
 }
 
 type GuardSearchPickerProps = {

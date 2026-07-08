@@ -198,6 +198,47 @@ export async function fetchSecurityGuardOptions(token: string): Promise<GuardPic
   return all;
 }
 
+type EmployeeListRow = GuardPickerOption & { status?: string };
+
+function toGuardPickerOption(e: EmployeeListRow): GuardPickerOption {
+  return {
+    id: e.id,
+    firstName: e.firstName,
+    lastName: e.lastName,
+    employeeNumber: e.employeeNumber ?? null,
+    psiraNumber: e.psiraNumber ?? null,
+  };
+}
+
+/** Paginates through employees for pickers — the list API caps at 100 per page. */
+export async function fetchEmployeePickerOptions(
+  token: string,
+  options?: { statuses?: string[] }
+): Promise<GuardPickerOption[]> {
+  const statusFilter = options?.statuses ? new Set(options.statuses) : null;
+  const limit = 100;
+  let offset = 0;
+  const all: GuardPickerOption[] = [];
+  for (;;) {
+    const res = await authFetch(`/employees?limit=${limit}&offset=${offset}`, token);
+    if (!res.ok) break;
+    const json = await res.json();
+    const rows: EmployeeListRow[] = json.data ?? [];
+    const batch = rows
+      .filter((e) => !statusFilter || (e.status && statusFilter.has(e.status)))
+      .map(toGuardPickerOption);
+    all.push(...batch);
+    const total = Number(json.total) || 0;
+    offset += limit;
+    if (offset >= total || rows.length === 0) break;
+  }
+  return all.sort((a, b) =>
+    `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`, undefined, {
+      sensitivity: "base",
+    })
+  );
+}
+
 function guardOptionFromTimesheetName(
   id: string | null,
   name: string | null,

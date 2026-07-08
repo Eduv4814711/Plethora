@@ -5,6 +5,7 @@ import { format, differenceInCalendarDays, parseISO } from "date-fns";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch, buildApiUrl } from "@/lib/api";
+import { fetchEmployeePickerOptions } from "@/lib/roster-api";
 import { DateInput } from "@/components/date-input";
 import { GuardSearchPicker } from "@/components/guard-search-picker";
 import { useConfirmDialog } from "@/components/ui";
@@ -200,19 +201,10 @@ export default function LeaveManagementPage() {
 
   const loadEmployees = useCallback(() => {
     if (!token) return;
-    authFetch("/employees?limit=500", token)
-      .then((r) => r.json())
-      .then((d) => {
-        const list = (d.data || []).filter((e: { status: string }) =>
-          ["active", "training", "hired", "reliever"].includes(e.status)
-        );
-        setEmployees(list.map((e: { id: string; firstName: string; lastName: string; employeeNumber: string }) => ({
-          id: e.id,
-          firstName: e.firstName,
-          lastName: e.lastName,
-          employeeNumber: e.employeeNumber,
-        })));
-      })
+    fetchEmployeePickerOptions(token, {
+      statuses: ["active", "training", "hired", "reliever"],
+    })
+      .then(setEmployees)
       .catch(console.error);
   }, [token]);
 
