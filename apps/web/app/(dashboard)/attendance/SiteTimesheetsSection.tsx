@@ -24,6 +24,7 @@ import {
   unlockSiteTimesheet,
   updateSiteTimesheetRow,
 } from "@/lib/roster-api";
+import { sortSiteTimesheetRows } from "@/lib/site-timesheet-utils";
 
 type GuardOption = GuardPickerOption;
 
@@ -154,9 +155,10 @@ export function SiteTimesheetsSection({
   const loadIdRef = useRef(0);
   const displaySiteName = sheet?.siteName ?? siteName;
 
-  const load = async () => {
+  const load = async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
     const loadId = ++loadIdRef.current;
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const [nextSheet, guardEmployees] = await Promise.all([
@@ -164,13 +166,13 @@ export function SiteTimesheetsSection({
         fetchSecurityGuardOptions(token),
       ]);
       if (loadId !== loadIdRef.current) return;
-      setSheet(nextSheet);
+      setSheet({ ...nextSheet, rows: sortSiteTimesheetRows(nextSheet.rows) });
       setGuards(guardEmployees);
     } catch (err) {
       if (loadId !== loadIdRef.current) return;
       setError(err instanceof Error ? err.message : "Failed to load site timesheet");
     } finally {
-      if (loadId === loadIdRef.current) setLoading(false);
+      if (loadId === loadIdRef.current && !silent) setLoading(false);
     }
   };
 
@@ -181,6 +183,10 @@ export function SiteTimesheetsSection({
   const guardOptions = useMemo(
     () => mergeTimesheetGuardOptions(guards, sheet?.rows ?? []),
     [guards, sheet?.rows]
+  );
+  const displayRows = useMemo(
+    () => (sheet ? sortSiteTimesheetRows(sheet.rows) : []),
+    [sheet?.rows]
   );
   const reviewedCount = sheet?.rows.filter((r) => r.approvalStatus !== "pending").length ?? 0;
   const pendingReviewCount = sheet ? sheet.rows.length - reviewedCount : 0;
@@ -198,11 +204,13 @@ export function SiteTimesheetsSection({
         current
           ? {
               ...current,
-              rows: current.rows.map((r) => (r.id === row.id ? res.row : r)),
+              rows: sortSiteTimesheetRows(
+                current.rows.map((r) => (r.id === row.id ? res.row : r))
+              ),
             }
           : current
       );
-      await load();
+      await load({ silent: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save timesheet row");
     } finally {
@@ -225,7 +233,7 @@ export function SiteTimesheetsSection({
     autoTable(doc, {
       startY: 36,
       head: [["Date", "Day", "Scheduled", "Actual", "Planned", "Actual shift", "Status", "Hours", "Discrepancies", "Comments"]],
-      body: sheet.rows.map((row) => [
+      body: displayRows.map((row) => [
         row.workDate,
         row.dayOfWeek,
         row.plannedGuardName ?? "",
@@ -271,7 +279,7 @@ export function SiteTimesheetsSection({
                   setError(null);
                   try {
                     const refreshed = await resyncSiteTimesheet(token, siteId, periodStart, periodEnd);
-                    setSheet(refreshed);
+                    setSheet({ ...refreshed, rows: sortSiteTimesheetRows(refreshed.rows) });
                   } catch (err) {
                     setError(err instanceof Error ? err.message : "Failed to refresh from shifts");
                   } finally {
@@ -442,7 +450,7 @@ export function SiteTimesheetsSection({
               <span className="font-medium text-neutral-700 dark:text-neutral-300">Approve this day</span> when
               correct.
             </p>
-            {sheet.rows.map((row) => (
+            {displayRows.map((row) => (
               <SiteTimesheetRowCard
                 key={row.id}
                 row={row}
@@ -481,7 +489,7 @@ export function SiteTimesheetsSection({
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
-                {sheet.rows.map((row) => {
+                {displayRows.map((row) => {
                   const rowSurfaceClass =
                     row.approvalStatus === "pending"
                       ? row.discrepancyCodes.length
