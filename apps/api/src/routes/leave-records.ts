@@ -1,17 +1,31 @@
 import type { FastifyInstance } from "fastify";
+import { randomUUID } from "crypto";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
+import { readStreamToBuffer, storage } from "../lib/storage.js";
 import {
   createLeaveRecordsForRange,
   deleteLeaveRecordsForRange,
   LeaveAvailabilityError,
   replaceLeaveRecordRange,
+  validateLeaveDateRange,
 } from "../services/leave-availability.service.js";
 
 const SA_LEAVE_TYPES = ["annual", "sick", "family_responsibility", "maternity", "parental", "unpaid"] as const;
+
+const SICK_NOTE_ALLOWED_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "application/pdf",
+];
+const SICK_NOTE_MAX_BYTES = 10 * 1024 * 1024;
 
 const createLeaveRecordSchema = z.object({
   employeeId: z.string().min(1),
@@ -70,7 +84,144 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
       orderBy: { date: "asc" },
     });
 
-    return reply.send({ data: records });
+    const sickNotes = await prisma.leaveSickNote.findMany({
+      where: { companyId: user.companyId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        employeeId: true,
+        startDate: true,
+        endDate: true,
+        fileName: true,
+        mimeType: true,
+        fileUrl: true,
+        fileSize: true,
+        createdAt: true,
+      },
+    });
+
+    return reply.send({ data: records, sickNotes });
+  });
+
+  app.post("/sick-note", { preHandler: protect }, async (request, reply) => {
+    const companyId = request.user!.companyId;
+    const userId = request.user!.sub;
+    const q = request.query as Record<string, string | undefined>;
+    const employeeId = q.employeeId?.trim();
+    const startDate = q.startDate?.trim();
+    const endDate = q.endDate?.trim() || startDate;
+
+    if (!employeeId || !startDate) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "employeeId and startDate are required",
+      });
+    }
+
+    let range;
+    try {
+      range = validateLeaveDateRange(startDate, endDate);
+    } catch (err) {
+      if (err instanceof LeaveAvailabilityError) {
+        return reply.code(400).send({ error: "Validation error", message: err.message });
+      }
+      throw err;
+    }
+
+    const employee = await prisma.employee.findFirst({
+      where: { id: employeeId, companyId },
+      select: { id: true },
+    });
+    if (!employee) {
+      return reply.code(404).send({ error: "Employee not found" });
+    }
+
+    const sickLeaveCount = await prisma.leaveRecord.count({
+      where: {
+        employeeId,
+        type: "sick",
+        date: { gte: range.start, lte: range.end },
+      },
+    });
+    if (sickLeaveCount === 0) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "Add sick leave for this period before uploading a sick note",
+      });
+    }
+
+    const data = await request.file();
+    if (!data) {
+      return reply.code(400).send({
+        error: "No file",
+        message: "Please attach a sick note image or PDF",
+      });
+    }
+
+    const mimetype = data.mimetype;
+    if (!SICK_NOTE_ALLOWED_TYPES.includes(mimetype) && !mimetype.startsWith("image/")) {
+      return reply.code(400).send({
+        error: "Invalid file type",
+        message: "Allowed: images (JPEG, PNG, GIF, WebP) or PDF",
+      });
+    }
+
+    let fileBuffer: Buffer;
+    try {
+      fileBuffer = await readStreamToBuffer(data.file, SICK_NOTE_MAX_BYTES);
+    } catch (err) {
+      if (err instanceof Error && err.message === "FILE_TOO_LARGE") {
+        return reply.code(400).send({
+          error: "File too large",
+          message: "Maximum file size is 10MB",
+        });
+      }
+      request.log.error(err);
+      return reply.code(500).send({ error: "Upload failed", message: "Could not read the file" });
+    }
+
+    const ext = mimetype.split("/")[1]?.replace("jpeg", "jpg") || "bin";
+    const storageName = `${randomUUID()}.${ext}`;
+    const key = `leave-sick-notes/${companyId}/${employeeId}/${storageName}`;
+
+    try {
+      await storage.uploadFile({
+        key,
+        body: fileBuffer,
+        contentType: mimetype,
+      });
+    } catch (err) {
+      request.log.error(err);
+      return reply.code(500).send({ error: "Upload failed", message: "Could not save the file" });
+    }
+
+    const fileUrl = storage.getAssetUrl(key);
+    const originalName = data.filename || storageName;
+
+    const sickNote = await prisma.leaveSickNote.create({
+      data: {
+        companyId,
+        employeeId,
+        startDate: range.start,
+        endDate: range.end,
+        fileName: originalName,
+        mimeType: mimetype,
+        fileUrl,
+        fileSize: fileBuffer.length,
+        uploadedBy: userId,
+      },
+    });
+
+    await createAuditLog({
+      userId: userId!,
+      companyId,
+      action: "leave_sick_note.upload",
+      entityType: "leave_sick_note",
+      entityId: sickNote.id,
+      metadata: { employeeId, startDate, endDate: endDate ?? startDate, fileName: originalName },
+    });
+
+    return reply.code(201).send(sickNote);
   });
 
   app.post("/", { preHandler: protect }, async (request, reply) => {
@@ -202,6 +353,31 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
 
       if (deleted === 0) {
         return reply.code(404).send({ error: "Leave record not found" });
+      }
+
+      const range = validateLeaveDateRange(parsed.data.startDate, parsed.data.endDate);
+      const sickNotes = await prisma.leaveSickNote.findMany({
+        where: {
+          companyId,
+          employeeId: parsed.data.employeeId,
+          startDate: range.start,
+          endDate: range.end,
+        },
+      });
+      for (const note of sickNotes) {
+        const key = storage.resolveKeyFromUrl(note.fileUrl);
+        if (key) {
+          try {
+            await storage.deleteFile(key);
+          } catch {
+            // ignore missing objects
+          }
+        }
+      }
+      if (sickNotes.length > 0) {
+        await prisma.leaveSickNote.deleteMany({
+          where: { id: { in: sickNotes.map((n) => n.id) } },
+        });
       }
 
       await createAuditLog({

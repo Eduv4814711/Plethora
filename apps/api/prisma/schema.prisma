@@ -87,6 +87,7 @@ model Company {
   academyComplianceDocuments AcademyComplianceDocument[]
   academyPolicyDocuments  AcademyPolicyDocument[]
   academyRenewalAlerts    AcademyRenewalAlert[]
+  leaveSickNotes          LeaveSickNote[]
 }
 
 model User {
@@ -227,6 +228,7 @@ model Employee {
   actualSiteTimesheetRows     SiteTimesheetRow[]        @relation("ActualTimesheetGuard")
   timesheets                  Timesheet[]
   leaveRecords                LeaveRecord[]
+  leaveSickNotes              LeaveSickNote[]
   leaveRequests               LeaveRequest[]
   employeeDeductions          EmployeeDeduction[]
   whatsappMessages            WhatsAppMessage[]
@@ -835,6 +837,26 @@ model LeaveRecord {
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@index([employeeId, date])
+}
+
+model LeaveSickNote {
+  id         String   @id @default(cuid())
+  companyId  String
+  employeeId String
+  startDate  DateTime @db.Date
+  endDate    DateTime @db.Date
+  fileName   String
+  mimeType   String
+  fileUrl    String
+  fileSize   Int?
+  uploadedBy String?
+  createdAt  DateTime @default(now())
+
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([employeeId, startDate, endDate])
 }
 
 model LeaveRequest {

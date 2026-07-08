@@ -4,8 +4,9 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { format, differenceInCalendarDays, parseISO } from "date-fns";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { authFetch } from "@/lib/api";
+import { authFetch, buildApiUrl } from "@/lib/api";
 import { DateInput } from "@/components/date-input";
+import { GuardSearchPicker } from "@/components/guard-search-picker";
 import { useConfirmDialog } from "@/components/ui";
 
 /** South African leave types per BCEA (Basic Conditions of Employment Act) */
@@ -47,6 +48,35 @@ interface LeaveRecordRange {
   endDate: string;
   days: number;
   hours: string;
+}
+
+interface LeaveSickNote {
+  id: string;
+  employeeId: string;
+  startDate: string;
+  endDate: string;
+  fileName: string;
+  mimeType: string;
+  fileUrl: string;
+  fileSize: number | null;
+  createdAt: string;
+}
+
+function sickNoteForRange(notes: LeaveSickNote[], range: LeaveRecordRange): LeaveSickNote | undefined {
+  return notes.find(
+    (n) =>
+      n.employeeId === range.employee.id &&
+      n.startDate.slice(0, 10) === range.startDate &&
+      n.endDate.slice(0, 10) === range.endDate
+  );
+}
+
+function sickNoteHref(fileUrl: string): string {
+  if (/^https?:\/\//i.test(fileUrl)) return fileUrl;
+  const path = fileUrl.startsWith("/uploads/")
+    ? fileUrl.slice("/uploads/".length)
+    : fileUrl.replace(/^\/+/, "");
+  return buildApiUrl(`/uploads/${path}`);
 }
 
 function groupLeaveRecordsIntoRanges(records: LeaveRecord[]): LeaveRecordRange[] {
@@ -117,6 +147,7 @@ export default function LeaveManagementPage() {
   const [tab, setTab] = useState<"requests" | "records" | "add">("requests");
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [records, setRecords] = useState<LeaveRecord[]>([]);
+  const [sickNotes, setSickNotes] = useState<LeaveSickNote[]>([]);
   const [employees, setEmployees] = useState<{ id: string; firstName: string; lastName: string; employeeNumber: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("pending");
@@ -125,6 +156,7 @@ export default function LeaveManagementPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [addForm, setAddForm] = useState({ employeeId: "", startDate: "", endDate: "", type: "annual" as string, hours: "8" });
+  const [sickNoteFile, setSickNoteFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [editingRange, setEditingRange] = useState<LeaveRecordRange | null>(null);
@@ -159,7 +191,10 @@ export default function LeaveManagementPage() {
     if (dateTo) params.set("end", dateTo);
     authFetch(`/payroll/leave-records?${params}`, token)
       .then((r) => r.json())
-      .then((d) => setRecords(d.data || []))
+      .then((d) => {
+        setRecords(d.data || []);
+        setSickNotes(d.sickNotes || []);
+      })
       .catch(console.error);
   }, [token, employeeFilter, dateFrom, dateTo]);
 
@@ -250,7 +285,32 @@ export default function LeaveManagementPage() {
         }),
       });
       if (res.ok) {
+        if (addForm.type === "sick" && sickNoteFile) {
+          const q = new URLSearchParams({
+            employeeId: addForm.employeeId,
+            startDate: addForm.startDate,
+            endDate,
+          });
+          const formData = new FormData();
+          formData.append("file", sickNoteFile);
+          const uploadRes = await authFetch(`/payroll/leave-records/sick-note?${q}`, token, {
+            method: "POST",
+            body: formData,
+          });
+          if (!uploadRes.ok) {
+            const uploadErr = await uploadRes.json().catch(() => ({}));
+            setAddError(
+              typeof uploadErr?.message === "string"
+                ? `Leave saved, but sick note upload failed: ${uploadErr.message}`
+                : "Leave saved, but sick note upload failed"
+            );
+            loadRecords();
+            setTab("records");
+            return;
+          }
+        }
         setAddForm({ employeeId: "", startDate: "", endDate: "", type: "annual", hours: "8" });
+        setSickNoteFile(null);
         loadRecords();
         setTab("records");
       } else {
@@ -533,6 +593,7 @@ export default function LeaveManagementPage() {
                   <th className="px-4 py-3 text-left font-medium text-neutral-700 dark:text-neutral-300">Employee</th>
                   <th className="px-4 py-3 text-left font-medium text-neutral-700 dark:text-neutral-300">Leave type</th>
                   <th className="px-4 py-3 text-left font-medium text-neutral-700 dark:text-neutral-300">Period</th>
+                  <th className="px-4 py-3 text-left font-medium text-neutral-700 dark:text-neutral-300">Sick note</th>
                   <th className="px-4 py-3 text-right font-medium text-neutral-700 dark:text-neutral-300">Actions</th>
                 </tr>
               </thead>
@@ -550,6 +611,27 @@ export default function LeaveManagementPage() {
                       {formatLeavePeriod(r.startDate, r.endDate)}
                       {r.days > 1 && (
                         <span className="text-neutral-500 dark:text-neutral-400 ml-1.5">({r.days} days)</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {r.type === "sick" ? (
+                        (() => {
+                          const note = sickNoteForRange(sickNotes, r);
+                          return note ? (
+                            <a
+                              href={sickNoteHref(note.fileUrl)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm font-medium text-security-navy-700 hover:underline dark:text-security-navy-300"
+                            >
+                              View note
+                            </a>
+                          ) : (
+                            <span className="text-xs text-neutral-500 dark:text-neutral-400">—</span>
+                          );
+                        })()
+                      ) : (
+                        <span className="text-xs text-neutral-500 dark:text-neutral-400">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -667,7 +749,7 @@ export default function LeaveManagementPage() {
       )}
 
       {tab === "add" && (
-        <div className="card-wireframe p-6 max-w-md">
+        <div className="card-wireframe p-6 mx-auto w-full max-w-md">
           <h2 className="section-title text-neutral-900 dark:text-neutral-100 mb-4">Add Leave Record</h2>
           <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
             Record approved leave directly (e.g. after approving a request, or for manual entries). Choose a date range — the employee will be marked unavailable for rostering on each day.
@@ -680,17 +762,14 @@ export default function LeaveManagementPage() {
           <form onSubmit={handleAddLeave} className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">Employee</label>
-              <select
-                value={addForm.employeeId}
-                onChange={(e) => setAddForm((f) => ({ ...f, employeeId: e.target.value }))}
+              <GuardSearchPicker
+                guards={employees}
+                value={addForm.employeeId || null}
+                onChange={(employeeId) => setAddForm((f) => ({ ...f, employeeId: employeeId ?? "" }))}
+                allowClear={false}
+                placeholder="Select employee"
                 className="input-modern w-full"
-                required
-              >
-                <option value="">Select employee</option>
-                {employees.map((e) => (
-                  <option key={e.id} value={e.id}>{e.firstName} {e.lastName} ({e.employeeNumber})</option>
-                ))}
-              </select>
+              />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -731,7 +810,11 @@ export default function LeaveManagementPage() {
               <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">Leave Type</label>
               <select
                 value={addForm.type}
-                onChange={(e) => setAddForm((f) => ({ ...f, type: e.target.value }))}
+                onChange={(e) => {
+                  const type = e.target.value;
+                  setAddForm((f) => ({ ...f, type }));
+                  if (type !== "sick") setSickNoteFile(null);
+                }}
                 className="input-modern w-full"
               >
                 {SA_LEAVE_TYPES.map((t) => (
@@ -739,6 +822,27 @@ export default function LeaveManagementPage() {
                 ))}
               </select>
             </div>
+            {addForm.type === "sick" && (
+              <div>
+                <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">
+                  Sick note (optional)
+                </label>
+                <p className="mb-2 text-xs text-neutral-500 dark:text-neutral-400">
+                  Attach a photo or PDF of the medical certificate for your records.
+                </p>
+                <input
+                  type="file"
+                  accept="image/*,.pdf,application/pdf"
+                  onChange={(e) => setSickNoteFile(e.target.files?.[0] ?? null)}
+                  className="block w-full text-sm text-neutral-600 file:mr-3 file:rounded-md file:border-0 file:bg-neutral-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-neutral-800 hover:file:bg-neutral-200 dark:text-neutral-300 dark:file:bg-neutral-800 dark:file:text-neutral-100 dark:hover:file:bg-neutral-700"
+                />
+                {sickNoteFile && (
+                  <p className="mt-1.5 text-xs text-neutral-600 dark:text-neutral-400">
+                    Selected: {sickNoteFile.name}
+                  </p>
+                )}
+              </div>
+            )}
             <div>
               <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">Hours</label>
               <input
@@ -751,7 +855,7 @@ export default function LeaveManagementPage() {
                 className="input-modern w-full"
               />
             </div>
-            <button type="submit" disabled={saving || !addForm.startDate} className="btn-primary">
+            <button type="submit" disabled={saving || !addForm.startDate} className="btn-primary w-full">
               {saving ? "Adding…" : leaveDayCount > 1 ? `Add ${leaveDayCount} days leave` : "Add Leave"}
             </button>
           </form>
