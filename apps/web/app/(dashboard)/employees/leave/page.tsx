@@ -5,7 +5,7 @@ import { format, differenceInCalendarDays, parseISO } from "date-fns";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch, buildApiUrl } from "@/lib/api";
-import { fetchEmployeePickerOptions } from "@/lib/roster-api";
+import { fetchEmployeePickerOptions, type GuardPickerOption } from "@/lib/roster-api";
 import { DateInput } from "@/components/date-input";
 import { GuardSearchPicker } from "@/components/guard-search-picker";
 import { useConfirmDialog } from "@/components/ui";
@@ -149,7 +149,7 @@ export default function LeaveManagementPage() {
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [records, setRecords] = useState<LeaveRecord[]>([]);
   const [sickNotes, setSickNotes] = useState<LeaveSickNote[]>([]);
-  const [employees, setEmployees] = useState<{ id: string; firstName: string; lastName: string; employeeNumber: string }[]>([]);
+  const [employees, setEmployees] = useState<GuardPickerOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("pending");
   const [actioning, setActioning] = useState<string | null>(null);
