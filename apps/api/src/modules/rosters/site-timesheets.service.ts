@@ -36,6 +36,38 @@ function normalizeShiftType(value: string | null | undefined): string | null {
   return value;
 }
 
+function rowShiftSortOrder(row: {
+  plannedShiftType?: string | null;
+  plannedShiftCode?: string | null;
+  actualShiftType?: string | null;
+  actualShiftCode?: string | null;
+}): number {
+  const shift =
+    normalizeShiftType(row.plannedShiftType ?? row.plannedShiftCode) ??
+    normalizeShiftType(row.actualShiftType ?? row.actualShiftCode);
+  if (shift === "day") return 0;
+  if (shift === "night") return 1;
+  return 2;
+}
+
+function compareSiteTimesheetRows<
+  T extends {
+    id: string;
+    workDate: Date | string;
+    plannedShiftType?: string | null;
+    plannedShiftCode?: string | null;
+    actualShiftType?: string | null;
+    actualShiftCode?: string | null;
+  },
+>(a: T, b: T): number {
+  const dateA = typeof a.workDate === "string" ? a.workDate : dateKey(a.workDate);
+  const dateB = typeof b.workDate === "string" ? b.workDate : dateKey(b.workDate);
+  if (dateA !== dateB) return dateA.localeCompare(dateB);
+  const shiftDiff = rowShiftSortOrder(a) - rowShiftSortOrder(b);
+  if (shiftDiff !== 0) return shiftDiff;
+  return a.id.localeCompare(b.id);
+}
+
 function inferredAttendanceStatus(input: {
   plannedShiftCode?: string | null;
   actualShiftCode?: string | null;
@@ -525,14 +557,16 @@ export async function getSiteTimesheet(companyId: string, siteId: string, startD
     include: {
       rows: {
         include: { plannedGuard: true, actualGuard: true },
-        orderBy: [{ workDate: "asc" }, { createdAt: "asc" }],
+        orderBy: [{ workDate: "asc" }, { id: "asc" }],
       },
     },
   });
 
   if (!timesheet) return null;
   const discrepancyMap = computeDiscrepancyMap(site, timesheet.rows);
-  const rows = timesheet.rows.map((row) => serializeRow(row, discrepancyMap.get(row.id) ?? []));
+  const rows = [...timesheet.rows]
+    .sort(compareSiteTimesheetRows)
+    .map((row) => serializeRow(row, discrepancyMap.get(row.id) ?? []));
   const totals = rows.reduce(
     (acc, row) => {
       if (row.actualShiftType === "day") acc.dayShifts += 1;
