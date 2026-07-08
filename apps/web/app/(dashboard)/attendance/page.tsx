@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
@@ -41,6 +41,27 @@ export default function AttendancePage() {
   const [periodKey, setPeriodKey] = useState("");
   const [periodLabel, setPeriodLabel] = useState("");
   const [payPeriodOptions, setPayPeriodOptions] = useState<PayPeriodOption[]>([]);
+  const timesheetSectionRef = useRef<HTMLDivElement>(null);
+  const pendingTimesheetScrollRef = useRef(false);
+
+  const handleCaptureSiteSelect = (nextSiteId: string) => {
+    pendingTimesheetScrollRef.current = true;
+    setSiteId(nextSiteId);
+    if (nextSiteId === siteId) {
+      pendingTimesheetScrollRef.current = false;
+      requestAnimationFrame(() => {
+        timesheetSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (!siteId || !pendingTimesheetScrollRef.current) return;
+    pendingTimesheetScrollRef.current = false;
+    requestAnimationFrame(() => {
+      timesheetSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [siteId]);
 
   useEffect(() => {
     const deepLinkedSite = searchParams.get("siteId");
@@ -213,20 +234,22 @@ export default function AttendancePage() {
               periodStart={format(dateRange.start, "yyyy-MM-dd")}
               periodEnd={format(dateRange.end, "yyyy-MM-dd")}
               selectedSiteId={siteId || undefined}
-              onSelectSite={setSiteId}
+              onSelectSite={handleCaptureSiteSelect}
             />
           )}
         </div>
       </div>
 
       {siteId && token ? (
-        <SiteTimesheetsSection
-          token={token}
-          siteId={siteId}
-          siteName={sites.find((s) => s.id === siteId)?.name}
-          periodStart={format(dateRange.start, "yyyy-MM-dd")}
-          periodEnd={format(dateRange.end, "yyyy-MM-dd")}
-        />
+        <div ref={timesheetSectionRef} id="attendance-site-timesheet" className="scroll-mt-6">
+          <SiteTimesheetsSection
+            token={token}
+            siteId={siteId}
+            siteName={sites.find((s) => s.id === siteId)?.name}
+            periodStart={format(dateRange.start, "yyyy-MM-dd")}
+            periodEnd={format(dateRange.end, "yyyy-MM-dd")}
+          />
+        </div>
       ) : (
         <div className="card-wireframe p-8 text-center">
           <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">

@@ -127,6 +127,27 @@ export function patternDayIndexForDate(anchor: string, date: string, cycleLength
   return mod;
 }
 
+/** Spread guard phases evenly across a repeating cycle (matches roster-scheduler defaultStaggerOffsets). */
+export function defaultStaggerOffsets(guardCount: number, cycleLength: number): number[] {
+  if (guardCount <= 0 || cycleLength <= 0) return [];
+  return Array.from({ length: guardCount }, (_, i) => Math.floor((i * cycleLength) / guardCount));
+}
+
+export function shiftCodeForStaggeredPattern(
+  anchorDate: string,
+  rosterDate: string,
+  cycleCodes: RosterShiftCode[],
+  guardIndex: number,
+  guardCount: number
+): RosterShiftCode {
+  if (cycleCodes.length === 0) return "blank";
+  if (guardCount <= 0) return cycleCodes[patternDayIndexForDate(anchorDate, rosterDate, cycleCodes.length)]!;
+  const cycleLength = cycleCodes.length;
+  const patternDay = patternDayIndexForDate(anchorDate, rosterDate, cycleLength);
+  const staggerOffset = Math.floor((guardIndex * cycleLength) / guardCount);
+  return cycleCodes[(patternDay + staggerOffset) % cycleLength]!;
+}
+
 /** Collapse calendar edits into unique (guard, pattern-day) cells for saving a repeating cycle. */
 export function buildCellsForPatternSave(
   rows: { guardId: string; cells: { dateKey?: string; shiftCode: RosterShiftCode; isLocked?: boolean; patternDayIndex?: number }[] }[],
