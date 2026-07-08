@@ -222,8 +222,14 @@ export function mergeTimesheetGuardOptions(
 ): GuardPickerOption[] {
   const byId = new Map(guards.map((g) => [g.id, g]));
   for (const row of rows) {
+    const plannedUsesSharedNumbers = !row.actualGuardId || row.actualGuardId === row.plannedGuardId;
     for (const opt of [
-      guardOptionFromTimesheetName(row.plannedGuardId, row.plannedGuardName, row.employeeNumber, row.psiraNumber),
+      guardOptionFromTimesheetName(
+        row.plannedGuardId,
+        row.plannedGuardName,
+        plannedUsesSharedNumbers ? row.employeeNumber : null,
+        plannedUsesSharedNumbers ? row.psiraNumber : null
+      ),
       guardOptionFromTimesheetName(row.actualGuardId, row.actualGuardName, row.employeeNumber, row.psiraNumber),
     ]) {
       if (opt && !byId.has(opt.id)) byId.set(opt.id, opt);

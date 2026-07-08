@@ -26,7 +26,7 @@ import {
   type RosterShiftCode,
   type RosterSiteConfig,
 } from "@/lib/roster-api";
-import { patternDayIndexForDate } from "@/lib/roster-pattern-utils";
+import { patternDayIndexForDate, shiftCodeForStaggeredPattern } from "@/lib/roster-pattern-utils";
 import {
   buildShiftSheetRowsFromRosterGrid,
   downloadPdfBlob,
@@ -556,17 +556,22 @@ export const ManualRosteringWorkspace = forwardRef<
   const applyPatternToAll = useCallback(
     (cycleCodes: RosterShiftCode[]) => {
       if (!grid || cycleCodes.length === 0) return;
-      const cycleLength = cycleCodes.length;
       const anchorDate = periodStart;
       const guardIds = new Set(grid.rows.map((row) => row.guardId));
 
       setGrid((current) => {
         if (!current) return current;
-        const updatedRows = current.rows.map((row) => {
+        const updatedRows = current.rows.map((row, guardIndex) => {
           const cells = row.cells.map((cell) => {
             if (!cell.dateKey) return cell;
-            const idx = patternDayIndexForDate(anchorDate, cell.dateKey, cycleLength);
-            return { ...cell, shiftCode: cycleCodes[idx]! };
+            const shiftCode = shiftCodeForStaggeredPattern(
+              anchorDate,
+              cell.dateKey,
+              cycleCodes,
+              guardIndex,
+              current.rows.length
+            );
+            return { ...cell, shiftCode };
           });
           return { ...row, cells, totals: recalcRowTotals(cells) };
         });
@@ -586,12 +591,17 @@ export const ManualRosteringWorkspace = forwardRef<
 
       setPendingChanges((prev) => {
         const next = new Map(prev);
-        for (const row of grid.rows) {
+        for (const [guardIndex, row] of grid.rows.entries()) {
           if (!guardIds.has(row.guardId)) continue;
           for (const cell of row.cells) {
             if (!cell.dateKey) continue;
-            const idx = patternDayIndexForDate(anchorDate, cell.dateKey, cycleLength);
-            const shiftCode = cycleCodes[idx]!;
+            const shiftCode = shiftCodeForStaggeredPattern(
+              anchorDate,
+              cell.dateKey,
+              cycleCodes,
+              guardIndex,
+              grid.rows.length
+            );
             const cellKey = `${row.guardId}:${cell.dateKey}`;
             const original = baselineCellsRef.current.get(cellKey) ?? "blank";
             if (shiftCode === original) next.delete(cellKey);
@@ -610,7 +620,7 @@ export const ManualRosteringWorkspace = forwardRef<
 
       setPublishSummary(null);
       setError(null);
-      setStatusMsg("Pattern applied to all guard rows — save roster to keep changes.");
+      setStatusMsg("Staggered pattern applied to all guards — save roster to keep changes.");
       setTimeout(() => setStatusMsg(null), 4000);
     },
     [grid, periodStart]
