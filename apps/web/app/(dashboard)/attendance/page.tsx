@@ -223,6 +223,7 @@ export default function AttendancePage() {
         <SiteTimesheetsSection
           token={token}
           siteId={siteId}
+          siteName={sites.find((s) => s.id === siteId)?.name}
           periodStart={format(dateRange.start, "yyyy-MM-dd")}
           periodEnd={format(dateRange.end, "yyyy-MM-dd")}
         />

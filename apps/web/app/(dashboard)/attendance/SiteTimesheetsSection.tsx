@@ -126,11 +126,13 @@ function buildRowApprovalPatch(row: SiteTimesheetRow): Partial<SiteTimesheetRow>
 export function SiteTimesheetsSection({
   token,
   siteId,
+  siteName,
   periodStart,
   periodEnd,
 }: {
   token: string;
   siteId: string;
+  siteName?: string;
   periodStart: string;
   periodEnd: string;
 }) {
@@ -150,6 +152,7 @@ export function SiteTimesheetsSection({
 
   const locked = sheet?.status === "approved" || sheet?.status === "locked";
   const loadIdRef = useRef(0);
+  const displaySiteName = sheet?.siteName ?? siteName;
 
   const load = async () => {
     const loadId = ++loadIdRef.current;
@@ -250,7 +253,9 @@ export function SiteTimesheetsSection({
     <section className="space-y-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-neutral-950">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">Site Timesheet</h2>
+          <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
+            Site Timesheet{displaySiteName ? ` — ${displaySiteName}` : ""}
+          </h2>
           <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
             Review and edit who actually worked, then approve. The approved timesheet is the official attendance
             record and the source for payroll actuals. Download it as audit evidence of who worked each day.
