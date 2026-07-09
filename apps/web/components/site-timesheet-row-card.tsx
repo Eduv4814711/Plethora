@@ -3,7 +3,8 @@
 import { GuardSearchPicker } from "@/components/guard-search-picker";
 import { ShiftTimeSelect } from "@/components/shift-time-select";
 import { defaultShiftTime } from "@/lib/shift-times";
-import type { SiteTimesheetAttendance, SiteTimesheetRow } from "@/lib/roster-api";
+import type { SiteTimesheetRow } from "@/lib/roster-api";
+import { formatAttendanceStatus } from "@/lib/site-timesheet-utils";
 
 type GuardOption = {
   id: string;
@@ -12,20 +13,6 @@ type GuardOption = {
   employeeNumber?: string | null;
   psiraNumber?: string | null;
 };
-
-const ATTENDANCE_OPTIONS: { value: SiteTimesheetAttendance; label: string }[] = [
-  { value: "pending", label: "Pending" },
-  { value: "present", label: "Present" },
-  { value: "absent", label: "Absent" },
-  { value: "late", label: "Late" },
-  { value: "left_early", label: "Left early" },
-  { value: "reliever", label: "Reliever" },
-  { value: "shift_swapped", label: "Shift swapped" },
-  { value: "leave", label: "Leave" },
-  { value: "sick_leave", label: "Sick leave" },
-  { value: "training", label: "Training" },
-  { value: "off", label: "Off" },
-];
 
 function label(value: string | null | undefined) {
   return value ? value.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase()) : "Not set";
@@ -160,18 +147,12 @@ export function SiteTimesheetRowCard({
         </div>
         <div>
           <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Status</label>
-          <select
-            disabled={locked}
-            value={row.attendanceStatus}
-            onChange={(e) => onUpdate(row, { attendanceStatus: e.target.value as SiteTimesheetAttendance })}
-            className="input-modern mt-1 w-full"
+          <p
+            className="mt-1 text-sm font-medium text-neutral-800 dark:text-neutral-200"
+            title="Set automatically when you approve this shift"
           >
-            {ATTENDANCE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+            {formatAttendanceStatus(row.attendanceStatus)}
+          </p>
         </div>
       </div>
 
@@ -267,9 +248,13 @@ export function SiteTimesheetRowCard({
         <button
           type="button"
           disabled={saving}
+          onMouseDown={(e) => {
+            // Prevent OB input blur→save from disabling this button before click fires.
+            e.preventDefault();
+          }}
           onClick={() => onApprove(row)}
           className="btn-primary w-full disabled:opacity-50"
-          title="Enter OB number above, then approve attendance for this day"
+          title="Click to approve. You will be told if the OB number is missing or already used."
         >
           {saving ? "Saving…" : "Approve this day"}
         </button>

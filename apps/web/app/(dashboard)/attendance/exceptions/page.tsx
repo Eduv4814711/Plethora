@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
@@ -14,6 +14,15 @@ import {
 } from "@/lib/msr-api";
 import { AlertBanner, Badge, EmptyState, PageHeader } from "@/components/ui";
 
+type ExceptionShiftFilter = "all" | "day" | "night";
+
+/** Classify exception by shift start hour in local time (day before 18:00, night from 18:00). */
+function exceptionShiftType(ex: AttendanceException): "day" | "night" | null {
+  if (!ex.shift?.startTime) return null;
+  const hour = new Date(ex.shift.startTime).getHours();
+  return hour >= 18 ? "night" : "day";
+}
+
 export default function AttendanceExceptionsPage() {
   const { token } = useAuth();
   const [items, setItems] = useState<AttendanceException[]>([]);
@@ -24,6 +33,7 @@ export default function AttendanceExceptionsPage() {
   const [statusFilter, setStatusFilter] = useState("OPEN");
   const [severityFilter, setSeverityFilter] = useState("");
   const [siteFilter, setSiteFilter] = useState("");
+  const [shiftFilter, setShiftFilter] = useState<ExceptionShiftFilter>("all");
   const [sites, setSites] = useState<{ id: string; name: string }[]>([]);
   const [actingId, setActingId] = useState<string | null>(null);
   const [reviewNote, setReviewNote] = useState("");
@@ -98,6 +108,15 @@ export default function AttendanceExceptionsPage() {
       setDetecting(false);
     }
   };
+
+  const filteredItems = useMemo(() => {
+    if (shiftFilter === "all") return items;
+    return items.filter((ex) => {
+      const shift = exceptionShiftType(ex);
+      if (!shift) return true;
+      return shift === shiftFilter;
+    });
+  }, [items, shiftFilter]);
 
   if (loading) {
     return <div className="animate-pulse h-48 bg-neutral-200 rounded-lg" />;
@@ -184,12 +203,22 @@ export default function AttendanceExceptionsPage() {
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
         </select>
+        <select
+          value={shiftFilter}
+          onChange={(e) => setShiftFilter(e.target.value as ExceptionShiftFilter)}
+          className="input-compact w-auto"
+          aria-label="Filter by shift type"
+        >
+          <option value="all">All shifts</option>
+          <option value="day">Day shift</option>
+          <option value="night">Night shift</option>
+        </select>
       </div>
 
       {error && <AlertBanner variant="error" className="mb-4">{error}</AlertBanner>}
 
       <div className="space-y-3">
-        {items.map((ex) => (
+        {filteredItems.map((ex) => (
           <article key={ex.id} className="card-dashboard p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
@@ -197,6 +226,7 @@ export default function AttendanceExceptionsPage() {
                 <p className="text-sm text-neutral-600 mt-0.5">
                   {ex.employee ? `${ex.employee.firstName} ${ex.employee.lastName}` : "Unknown guard"}
                   {ex.site ? ` · ${ex.site.name}` : ""}
+                  {exceptionShiftType(ex) ? ` · ${exceptionShiftType(ex)} shift` : ""}
                 </p>
                 {ex.shift && (
                   <p className="text-xs text-neutral-500 mt-0.5">
@@ -248,11 +278,15 @@ export default function AttendanceExceptionsPage() {
         ))}
       </div>
 
-      {items.length === 0 && (
+      {filteredItems.length === 0 && (
         <EmptyState
           className="mt-6"
           title="No exceptions to review"
-          description="Run a scan to detect missed clock-ins and other attendance issues."
+          description={
+            items.length > 0 && shiftFilter !== "all"
+              ? `No ${shiftFilter}-shift exceptions match the current filters. Try All shifts.`
+              : "Run a scan to detect missed clock-ins and other attendance issues."
+          }
           action={
             <button type="button" className="btn-secondary text-sm py-1.5" onClick={handleDetect} disabled={detecting}>
               Scan for issues

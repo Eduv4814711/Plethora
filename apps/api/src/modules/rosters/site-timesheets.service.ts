@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import type { Prisma, SiteRosterShiftCode, SiteTimesheetAttendance, SiteTimesheetRowStatus } from "@prisma/client";
+import { createAuditLog } from "../../lib/audit.js";
 import { prisma } from "../../lib/prisma.js";
 import { dateKey, dateOnly } from "./rosters.service.js";
 
@@ -28,12 +29,62 @@ function dayOfWeek(date: Date): string {
   return format(date, "EEE");
 }
 
-function normalizeShiftType(value: string | null | undefined): string | null {
+export type CaptureShiftTypeFilter = "day" | "night" | "all";
+
+export function normalizeShiftType(value: string | null | undefined): "day" | "night" | null {
   if (!value) return null;
-  if (value === "day" || value === "night") return value;
-  if (value === "D") return "day";
-  if (value === "N") return "night";
-  return value;
+  if (value === "day" || value === "D") return "day";
+  if (value === "night" || value === "N") return "night";
+  return null;
+}
+
+/** Prefer planned shift so uncaptured rostered rows still classify correctly. */
+export function resolveRowShiftType(row: {
+  plannedShiftType?: string | null;
+  plannedShiftCode?: string | null;
+  actualShiftType?: string | null;
+  actualShiftCode?: string | null;
+}): "day" | "night" | null {
+  return (
+    normalizeShiftType(row.plannedShiftType ?? row.plannedShiftCode) ??
+    normalizeShiftType(row.actualShiftType ?? row.actualShiftCode)
+  );
+}
+
+export function rowMatchesShiftTypeFilter(
+  row: {
+    plannedShiftType?: string | null;
+    plannedShiftCode?: string | null;
+    actualShiftType?: string | null;
+    actualShiftCode?: string | null;
+  },
+  shiftType: CaptureShiftTypeFilter
+): boolean {
+  if (shiftType === "all") return true;
+  return resolveRowShiftType(row) === shiftType;
+}
+
+function rosterShiftWhereForFilter(
+  companyId: string,
+  start: Date,
+  captureEnd: Date,
+  shiftType: CaptureShiftTypeFilter
+): Prisma.SiteRosterGeneratedShiftWhereInput {
+  const base = {
+    companyId,
+    rosterDate: { gte: start, lte: captureEnd },
+  };
+  if (shiftType === "all") {
+    return { ...base, shiftCode: { in: WORKING_SHIFT_CODES } };
+  }
+  const primaryCode = shiftType === "day" ? "D" : "N";
+  return {
+    ...base,
+    OR: [
+      { shiftCode: primaryCode },
+      { shiftCode: "R", shiftType },
+    ],
+  };
 }
 
 function rowShiftSortOrder(row: {
@@ -42,12 +93,48 @@ function rowShiftSortOrder(row: {
   actualShiftType?: string | null;
   actualShiftCode?: string | null;
 }): number {
-  const shift =
-    normalizeShiftType(row.plannedShiftType ?? row.plannedShiftCode) ??
-    normalizeShiftType(row.actualShiftType ?? row.actualShiftCode);
+  const shift = resolveRowShiftType(row);
   if (shift === "day") return 0;
   if (shift === "night") return 1;
   return 2;
+}
+
+/** Match key: guard + operational date + day|night (avoids day/night collisions). */
+function shiftMatchKey(guardId: string, date: Date | string, shiftType: "day" | "night" | null | undefined): string {
+  const d = typeof date === "string" ? date : dateKey(date);
+  return `${guardId}:${d}:${shiftType ?? "unknown"}`;
+}
+
+function plannedRowMatchKey(row: {
+  plannedGuardId?: string | null;
+  workDate: Date | string;
+  plannedShiftType?: string | null;
+  plannedShiftCode?: string | null;
+  actualShiftType?: string | null;
+  actualShiftCode?: string | null;
+}): string | null {
+  if (!row.plannedGuardId) return null;
+  return shiftMatchKey(row.plannedGuardId, row.workDate, resolveRowShiftType(row));
+}
+
+function countPendingByShift(
+  rows: Array<{
+    approvalStatus: string;
+    plannedShiftType?: string | null;
+    plannedShiftCode?: string | null;
+    actualShiftType?: string | null;
+    actualShiftCode?: string | null;
+  }>
+): { pendingDayRows: number; pendingNightRows: number } {
+  let pendingDayRows = 0;
+  let pendingNightRows = 0;
+  for (const row of rows) {
+    if (row.approvalStatus !== "pending") continue;
+    const shift = resolveRowShiftType(row);
+    if (shift === "day") pendingDayRows += 1;
+    else if (shift === "night") pendingNightRows += 1;
+  }
+  return { pendingDayRows, pendingNightRows };
 }
 
 function compareSiteTimesheetRows<
@@ -160,15 +247,17 @@ async function seedRows(tx: Tx, companyId: string, timesheetId: string, siteId: 
     }),
   ]);
 
-  const shiftByGuardDate = new Map<string, (typeof shifts)[number]>();
+  const shiftByGuardDateType = new Map<string, (typeof shifts)[number]>();
   for (const shift of shifts) {
-    shiftByGuardDate.set(`${shift.employeeId}:${dateKey(shift.startTime)}`, shift);
+    const type = normalizeShiftType(shift.shiftType) ?? (shift.startTime.getHours() >= 12 ? "night" : "day");
+    shiftByGuardDateType.set(shiftMatchKey(shift.employeeId, shift.startTime, type), shift);
   }
 
   const rows: Prisma.SiteTimesheetRowCreateManyInput[] = [];
   for (const p of planned) {
     if (!WORKING_CODES.has(p.shiftCode)) continue;
-    const shift = shiftByGuardDate.get(`${p.guardId}:${dateKey(p.rosterDate)}`);
+    const plannedType = normalizeShiftType(p.shiftType) ?? (p.shiftCode === "N" ? "night" : "day");
+    const shift = shiftByGuardDateType.get(shiftMatchKey(p.guardId, p.rosterDate, plannedType));
     const attendance = shift?.attendances[0];
     rows.push({
       companyId,
@@ -224,23 +313,26 @@ async function resyncRows(tx: Tx, companyId: string, timesheetId: string, siteId
     }),
   ]);
 
-  const shiftByGuardDate = new Map<string, (typeof shifts)[number]>();
+  const shiftByGuardDateType = new Map<string, (typeof shifts)[number]>();
   for (const shift of shifts) {
-    shiftByGuardDate.set(`${shift.employeeId}:${dateKey(shift.startTime)}`, shift);
+    const type = normalizeShiftType(shift.shiftType) ?? (shift.startTime.getHours() >= 12 ? "night" : "day");
+    shiftByGuardDateType.set(shiftMatchKey(shift.employeeId, shift.startTime, type), shift);
   }
 
   const rowByPlanned = new Map<string, (typeof existingRows)[number]>();
   for (const row of existingRows) {
-    if (row.plannedGuardId) rowByPlanned.set(`${row.plannedGuardId}:${dateKey(row.workDate)}`, row);
+    const key = plannedRowMatchKey(row);
+    if (key) rowByPlanned.set(key, row);
   }
 
   // 1. Add rows for newly published roster cells that have no row yet.
   const toCreate: Prisma.SiteTimesheetRowCreateManyInput[] = [];
   for (const p of planned) {
     if (!WORKING_CODES.has(p.shiftCode)) continue;
-    const key = `${p.guardId}:${dateKey(p.rosterDate)}`;
+    const plannedType = normalizeShiftType(p.shiftType) ?? (p.shiftCode === "N" ? "night" : "day");
+    const key = shiftMatchKey(p.guardId, p.rosterDate, plannedType);
     if (rowByPlanned.has(key)) continue;
-    const shift = shiftByGuardDate.get(key);
+    const shift = shiftByGuardDateType.get(key);
     const attendance = shift?.attendances[0];
     toCreate.push({
       companyId,
@@ -284,7 +376,8 @@ async function resyncRows(tx: Tx, companyId: string, timesheetId: string, siteId
     if (!row.plannedGuardId) continue; // manual/reliever row
     if (row.attendanceStatus !== "pending") continue; // already actioned by an operator
     if (row.approvalStatus !== "pending") continue;
-    const shift = shiftByGuardDate.get(`${row.plannedGuardId}:${dateKey(row.workDate)}`);
+    const rowType = resolveRowShiftType(row);
+    const shift = shiftByGuardDateType.get(shiftMatchKey(row.plannedGuardId, row.workDate, rowType));
     if (!shift) continue;
     const attendance = shift.attendances[0];
     const worked =
@@ -428,12 +521,88 @@ export type SiteCaptureOverviewSite = {
   status: "caught_up" | "needs_capture" | "no_shifts";
   dueDays: number;
   pendingRows: number;
+  pendingDayRows: number;
+  pendingNightRows: number;
   reviewedRows: number;
   lastCapturedDate: string | null;
   timesheetStatus: "draft" | "approved" | "locked" | "none";
 };
 
-export async function getSiteTimesheetCaptureOverview(companyId: string, startDate: string, endDate: string) {
+function emptyCaptureSite(
+  siteId: string,
+  siteName: string,
+  timesheetStatus: SiteCaptureOverviewSite["timesheetStatus"] = "none"
+): SiteCaptureOverviewSite {
+  return {
+    siteId,
+    siteName,
+    status: "no_shifts",
+    dueDays: 0,
+    pendingRows: 0,
+    pendingDayRows: 0,
+    pendingNightRows: 0,
+    reviewedRows: 0,
+    lastCapturedDate: null,
+    timesheetStatus,
+  };
+}
+
+/** Pure helper: compute capture status for a site from already-loaded rows. */
+export function computeSiteCaptureFromRows(input: {
+  siteId: string;
+  siteName: string;
+  timesheetStatus: "draft" | "approved" | "locked" | "none";
+  rows: Array<{
+    workDate: Date | string;
+    approvalStatus: string;
+    plannedShiftType?: string | null;
+    plannedShiftCode?: string | null;
+    actualShiftType?: string | null;
+    actualShiftCode?: string | null;
+  }>;
+  shiftType: CaptureShiftTypeFilter;
+}): SiteCaptureOverviewSite {
+  // Day/night pending breakdown always uses the full row set so controllers see
+  // the other shift even while filtering the needs-attention status.
+  const allPending = countPendingByShift(input.rows);
+  const scoped = input.rows.filter((r) => rowMatchesShiftTypeFilter(r, input.shiftType));
+  if (scoped.length === 0) {
+    return {
+      ...emptyCaptureSite(input.siteId, input.siteName, input.timesheetStatus),
+      pendingDayRows: allPending.pendingDayRows,
+      pendingNightRows: allPending.pendingNightRows,
+    };
+  }
+
+  const pendingRows = scoped.filter((r) => r.approvalStatus === "pending");
+  const pendingDates = new Set(
+    pendingRows.map((r) => (typeof r.workDate === "string" ? r.workDate : dateKey(r.workDate)))
+  );
+  const capturedDates = scoped
+    .filter((r) => r.approvalStatus !== "pending")
+    .map((r) => (typeof r.workDate === "string" ? r.workDate : dateKey(r.workDate)))
+    .sort();
+
+  return {
+    siteId: input.siteId,
+    siteName: input.siteName,
+    status: pendingRows.length > 0 ? "needs_capture" : "caught_up",
+    dueDays: pendingDates.size,
+    pendingRows: pendingRows.length,
+    pendingDayRows: allPending.pendingDayRows,
+    pendingNightRows: allPending.pendingNightRows,
+    reviewedRows: scoped.length - pendingRows.length,
+    lastCapturedDate: capturedDates.at(-1) ?? null,
+    timesheetStatus: input.timesheetStatus,
+  };
+}
+
+export async function getSiteTimesheetCaptureOverview(
+  companyId: string,
+  startDate: string,
+  endDate: string,
+  shiftType: CaptureShiftTypeFilter = "all"
+) {
   const start = dateOnly(startDate);
   const end = dateOnly(endDate);
   const today = dateOnly(new Date());
@@ -450,28 +619,23 @@ export async function getSiteTimesheetCaptureOverview(companyId: string, startDa
       periodEnd: dateKey(end),
       captureThrough: null as string | null,
       asOfDate: dateKey(today),
-      sites: sites.map((site) => ({
-        siteId: site.id,
-        siteName: site.name,
-        status: "no_shifts" as const,
-        dueDays: 0,
-        pendingRows: 0,
-        reviewedRows: 0,
-        lastCapturedDate: null,
-        timesheetStatus: "none" as const,
-      })),
-      summary: { totalSites: sites.length, needsCapture: 0, caughtUp: 0, noShifts: sites.length },
+      shiftType,
+      sites: sites.map((site) => emptyCaptureSite(site.id, site.name)),
+      summary: {
+        totalSites: sites.length,
+        needsCapture: 0,
+        caughtUp: 0,
+        noShifts: sites.length,
+        pendingDayRows: 0,
+        pendingNightRows: 0,
+      },
     };
   }
 
   const captureEnd = end.getTime() < today.getTime() ? end : today;
 
   const rosteredSiteIds = await prisma.siteRosterGeneratedShift.findMany({
-    where: {
-      companyId,
-      rosterDate: { gte: start, lte: captureEnd },
-      shiftCode: { in: WORKING_SHIFT_CODES },
-    },
+    where: rosterShiftWhereForFilter(companyId, start, captureEnd, shiftType),
     distinct: ["siteId"],
     select: { siteId: true },
   });
@@ -480,16 +644,7 @@ export async function getSiteTimesheetCaptureOverview(companyId: string, startDa
   const siteStatuses: SiteCaptureOverviewSite[] = await Promise.all(
     sites.map(async (site) => {
       if (!rosteredSet.has(site.id)) {
-        return {
-          siteId: site.id,
-          siteName: site.name,
-          status: "no_shifts" as const,
-          dueDays: 0,
-          pendingRows: 0,
-          reviewedRows: 0,
-          lastCapturedDate: null,
-          timesheetStatus: "none" as const,
-        };
+        return emptyCaptureSite(site.id, site.name);
       }
 
       const sheet = await getOrCreateTimesheet(prisma, companyId, site.id, start, end);
@@ -501,7 +656,14 @@ export async function getSiteTimesheetCaptureOverview(companyId: string, startDa
             siteTimesheetId: sheet.id,
             workDate: { gte: start, lte: captureEnd },
           },
-          select: { workDate: true, approvalStatus: true },
+          select: {
+            workDate: true,
+            approvalStatus: true,
+            plannedShiftType: true,
+            plannedShiftCode: true,
+            actualShiftType: true,
+            actualShiftCode: true,
+          },
         }),
         prisma.siteTimesheet.findUnique({
           where: { id: sheet.id },
@@ -509,37 +671,33 @@ export async function getSiteTimesheetCaptureOverview(companyId: string, startDa
         }),
       ]);
 
-      const pendingRows = rows.filter((r) => r.approvalStatus === "pending");
-      const pendingDates = new Set(pendingRows.map((r) => dateKey(r.workDate)));
-      const capturedDates = rows
-        .filter((r) => r.approvalStatus !== "pending")
-        .map((r) => dateKey(r.workDate))
-        .sort();
-
-      return {
+      return computeSiteCaptureFromRows({
         siteId: site.id,
         siteName: site.name,
-        status: (pendingRows.length > 0 ? "needs_capture" : "caught_up") as "needs_capture" | "caught_up",
-        dueDays: pendingDates.size,
-        pendingRows: pendingRows.length,
-        reviewedRows: rows.length - pendingRows.length,
-        lastCapturedDate: capturedDates.at(-1) ?? null,
-        timesheetStatus: timesheet?.status ?? "draft",
-      };
+        timesheetStatus: (timesheet?.status as SiteCaptureOverviewSite["timesheetStatus"]) ?? "draft",
+        rows,
+        shiftType,
+      });
     })
   );
+
+  const pendingDayRows = siteStatuses.reduce((n, s) => n + s.pendingDayRows, 0);
+  const pendingNightRows = siteStatuses.reduce((n, s) => n + s.pendingNightRows, 0);
 
   return {
     periodStart: dateKey(start),
     periodEnd: dateKey(end),
     captureThrough: dateKey(captureEnd),
     asOfDate: dateKey(today),
+    shiftType,
     sites: siteStatuses,
     summary: {
       totalSites: sites.length,
       needsCapture: siteStatuses.filter((s) => s.status === "needs_capture").length,
       caughtUp: siteStatuses.filter((s) => s.status === "caught_up").length,
       noShifts: siteStatuses.filter((s) => s.status === "no_shifts").length,
+      pendingDayRows,
+      pendingNightRows,
     },
   };
 }
@@ -619,6 +777,40 @@ function normalizeOccurrenceBookNumber(value: string | null | undefined): string
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function occurrenceBookNumbersMatch(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/**
+ * OB numbers must be unique within a site timesheet (same site + pay period).
+ * Comparison is case-insensitive after trim.
+ */
+async function findDuplicateOccurrenceBookNumber(
+  tx: Tx,
+  args: {
+    companyId: string;
+    siteTimesheetId: string;
+    occurrenceBookNumber: string;
+    excludeRowId?: string;
+  }
+): Promise<{ id: string; workDate: Date } | null> {
+  const rows = await tx.siteTimesheetRow.findMany({
+    where: {
+      companyId: args.companyId,
+      siteTimesheetId: args.siteTimesheetId,
+      occurrenceBookNumber: { not: null },
+      ...(args.excludeRowId ? { id: { not: args.excludeRowId } } : {}),
+    },
+    select: { id: true, workDate: true, occurrenceBookNumber: true },
+  });
+  const match = rows.find(
+    (r) =>
+      r.occurrenceBookNumber != null &&
+      occurrenceBookNumbersMatch(r.occurrenceBookNumber, args.occurrenceBookNumber)
+  );
+  return match ? { id: match.id, workDate: match.workDate } : null;
+}
+
 export async function updateSiteTimesheetRow(
   companyId: string,
   rowId: string,
@@ -635,7 +827,7 @@ export async function updateSiteTimesheetRow(
     occurrenceBookNumber?: string | null;
     comments?: string | null;
   },
-  actor?: { role: string }
+  actor?: { role: string; userId?: string }
 ) {
   const existing = await prisma.siteTimesheetRow.findFirst({
     where: { id: rowId, companyId },
@@ -665,15 +857,29 @@ export async function updateSiteTimesheetRow(
 
   const approving =
     input.approvalStatus === "reviewed" || input.approvalStatus === "approved";
+  const obForApprove =
+    nextOccurrenceBookNumber !== undefined ? nextOccurrenceBookNumber : existingOb;
   if (approving) {
-    const obNumber =
-      nextOccurrenceBookNumber !== undefined
-        ? nextOccurrenceBookNumber
-        : existingOb;
-    if (!obNumber) {
+    if (!obForApprove) {
       return {
         error:
           "Occurrence Book (OB) number is required before you can approve this shift.",
+      };
+    }
+  }
+
+  const obToCheck =
+    nextOccurrenceBookNumber !== undefined ? nextOccurrenceBookNumber : approving ? obForApprove : null;
+  if (obToCheck) {
+    const duplicate = await findDuplicateOccurrenceBookNumber(prisma, {
+      companyId,
+      siteTimesheetId: existing.siteTimesheetId,
+      occurrenceBookNumber: obToCheck,
+      excludeRowId: rowId,
+    });
+    if (duplicate) {
+      return {
+        error: `Occurrence Book (OB) number "${obToCheck}" is already used on ${dateKey(duplicate.workDate)}. Each shift needs its own OB number.`,
       };
     }
   }
@@ -708,6 +914,21 @@ export async function updateSiteTimesheetRow(
   });
 
   if (!updated) return null;
+
+  await createAuditLog({
+    userId: actor?.userId,
+    companyId,
+    action: approving ? "site_timesheet.row_approve" : "site_timesheet.row_update",
+    entityType: "SiteTimesheetRow",
+    entityId: rowId,
+    metadata: {
+      siteTimesheetId: existing.siteTimesheetId,
+      workDate: dateKey(existing.workDate),
+      approvalStatus: input.approvalStatus ?? existing.approvalStatus,
+      attendanceStatus: input.attendanceStatus ?? existing.attendanceStatus,
+    },
+  });
+
   const sheetContext = await prisma.siteTimesheet.findUnique({
     where: { id: existing.siteTimesheetId },
     include: { site: true, rows: true },
@@ -741,6 +962,22 @@ export async function addSiteTimesheetRow(
   }
   const occurrenceBookNumber =
     normalizeOccurrenceBookNumber(input.occurrenceBookNumber) ?? null;
+  if (!occurrenceBookNumber) {
+    return {
+      error:
+        "Occurrence Book (OB) number is required before you can add a reliever to the timesheet.",
+    };
+  }
+  const duplicate = await findDuplicateOccurrenceBookNumber(prisma, {
+    companyId,
+    siteTimesheetId,
+    occurrenceBookNumber,
+  });
+  if (duplicate) {
+    return {
+      error: `Occurrence Book (OB) number "${occurrenceBookNumber}" is already used on ${dateKey(duplicate.workDate)}. Each shift needs its own OB number.`,
+    };
+  }
   const row = await prisma.$transaction(async (tx) => {
     const created = await tx.siteTimesheetRow.create({
       data: {
@@ -765,6 +1002,18 @@ export async function addSiteTimesheetRow(
     });
   });
   if (!row) return null;
+  await createAuditLog({
+    companyId,
+    action: "site_timesheet.row_add",
+    entityType: "SiteTimesheetRow",
+    entityId: row.id,
+    metadata: {
+      siteTimesheetId,
+      workDate: input.workDate,
+      actualGuardId: input.actualGuardId,
+      actualShiftType: input.actualShiftType,
+    },
+  });
   const sheetContext = await prisma.siteTimesheet.findUnique({
     where: { id: siteTimesheetId },
     include: { site: true, rows: true },
@@ -773,22 +1022,130 @@ export async function addSiteTimesheetRow(
   return { row: serializeRow(row, discrepancyMap.get(row.id) ?? []) };
 }
 
-export async function approveSiteTimesheet(companyId: string, timesheetId: string, userId: string, notes?: string) {
-  const sheet = await prisma.siteTimesheet.findFirst({ where: { id: timesheetId, companyId } });
-  if (!sheet) return null;
-  await prisma.siteTimesheet.update({
-    where: { id: timesheetId },
-    data: {
-      status: "approved",
-      reviewedBy: userId,
-      reviewedAt: new Date(),
-      approvedBy: userId,
-      approvedAt: new Date(),
-      approvalNotes: notes,
-      rows: { updateMany: { where: {}, data: { approvalStatus: "approved" } } },
+/**
+ * Approve a site timesheet for payroll.
+ * - shiftType omitted or "all": every row must already be reviewed (and have OB when approving working rows).
+ * - shiftType day|night: only matching rows are marked approved; sheet stays draft until all rows are approved.
+ * Short-term policy: full sheet lock requires zero pending rows across all shifts.
+ */
+export async function approveSiteTimesheet(
+  companyId: string,
+  timesheetId: string,
+  userId: string,
+  options?: { notes?: string; shiftType?: CaptureShiftTypeFilter }
+) {
+  const sheet = await prisma.siteTimesheet.findFirst({
+    where: { id: timesheetId, companyId },
+    include: {
+      rows: {
+        select: {
+          id: true,
+          approvalStatus: true,
+          occurrenceBookNumber: true,
+          plannedShiftType: true,
+          plannedShiftCode: true,
+          actualShiftType: true,
+          actualShiftCode: true,
+          attendanceStatus: true,
+        },
+      },
     },
   });
-  return { success: true };
+  if (!sheet) return null;
+  if (sheet.status === "approved" || sheet.status === "locked") {
+    return { error: "Timesheet is already approved and locked." };
+  }
+
+  const shiftType: CaptureShiftTypeFilter = options?.shiftType ?? "all";
+  const targetRows =
+    shiftType === "all"
+      ? sheet.rows
+      : sheet.rows.filter((r) => rowMatchesShiftTypeFilter(r, shiftType));
+
+  if (targetRows.length === 0) {
+    return {
+      error:
+        shiftType === "all"
+          ? "This timesheet has no rows to approve."
+          : `No ${shiftType}-shift rows to approve. Switch shift type or review the other shift first.`,
+    };
+  }
+
+  const pendingInScope = targetRows.filter((r) => r.approvalStatus === "pending");
+  if (pendingInScope.length > 0) {
+    const label = shiftType === "all" ? "rows" : `${shiftType}-shift rows`;
+    return {
+      error: `${pendingInScope.length} ${label} still need individual review (and an OB number) before you can approve for payroll.`,
+    };
+  }
+
+  const missingOb = targetRows.filter((r) => {
+    if (r.attendanceStatus === "off" || r.attendanceStatus === "pending") return false;
+    return !normalizeOccurrenceBookNumber(r.occurrenceBookNumber);
+  });
+  if (missingOb.length > 0) {
+    return {
+      error: `${missingOb.length} row(s) are missing an Occurrence Book (OB) number.`,
+    };
+  }
+
+  const targetIds = targetRows.map((r) => r.id);
+  const remainingPending = sheet.rows.filter(
+    (r) => !targetIds.includes(r.id) && r.approvalStatus === "pending"
+  );
+  const lockSheet = remainingPending.length === 0;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.siteTimesheetRow.updateMany({
+      where: { id: { in: targetIds }, siteTimesheetId: timesheetId },
+      data: { approvalStatus: "approved" },
+    });
+    if (lockSheet) {
+      await tx.siteTimesheet.update({
+        where: { id: timesheetId },
+        data: {
+          status: "locked",
+          reviewedBy: userId,
+          reviewedAt: new Date(),
+          approvedBy: userId,
+          approvedAt: new Date(),
+          approvalNotes: options?.notes,
+        },
+      });
+    } else {
+      await tx.siteTimesheet.update({
+        where: { id: timesheetId },
+        data: {
+          status: "draft",
+          reviewedBy: userId,
+          reviewedAt: new Date(),
+          approvalNotes: options?.notes,
+        },
+      });
+    }
+  });
+
+  await createAuditLog({
+    userId,
+    companyId,
+    action: lockSheet ? "site_timesheet.approve_lock" : "site_timesheet.approve_partial",
+    entityType: "SiteTimesheet",
+    entityId: timesheetId,
+    metadata: {
+      shiftType,
+      approvedRowCount: targetIds.length,
+      remainingPending: remainingPending.length,
+      locked: lockSheet,
+    },
+  });
+
+  return {
+    success: true as const,
+    locked: lockSheet,
+    approvedRowCount: targetIds.length,
+    remainingPending: remainingPending.length,
+    shiftType,
+  };
 }
 
 export async function unlockSiteTimesheet(companyId: string, timesheetId: string, userId: string, reason?: string) {
@@ -798,11 +1155,26 @@ export async function unlockSiteTimesheet(companyId: string, timesheetId: string
     where: { id: timesheetId },
     data: { status: "draft", unlockedBy: userId, unlockedAt: new Date(), unlockReason: reason },
   });
+  await createAuditLog({
+    userId,
+    companyId,
+    action: "site_timesheet.unlock",
+    entityType: "SiteTimesheet",
+    entityId: timesheetId,
+    metadata: { reason: reason ?? null, previousStatus: sheet.status },
+  });
   return { success: true };
 }
 
-export function buildSiteTimesheetCsv(sheet: Awaited<ReturnType<typeof getSiteTimesheet>>): string {
+export function buildSiteTimesheetCsv(
+  sheet: Awaited<ReturnType<typeof getSiteTimesheet>>,
+  shiftType: CaptureShiftTypeFilter = "all"
+): string {
   if (!sheet) return "";
+  const rows =
+    shiftType === "all"
+      ? sheet.rows
+      : sheet.rows.filter((row) => rowMatchesShiftTypeFilter(row, shiftType));
   const header = [
     "Site",
     "Period Start",
@@ -827,7 +1199,7 @@ export function buildSiteTimesheetCsv(sheet: Awaited<ReturnType<typeof getSiteTi
   const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
   return [
     header.map(escape).join(","),
-    ...sheet.rows.map((row) =>
+    ...rows.map((row) =>
       [
         sheet.siteName,
         sheet.periodStart,

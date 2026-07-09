@@ -5,6 +5,7 @@ import { format, parseISO } from "date-fns";
 import { clsx } from "clsx";
 import {
   fetchSiteTimesheetCaptureOverview,
+  type AttendanceShiftTypeFilter,
   type SiteTimesheetCaptureOverview,
   type SiteTimesheetCaptureOverviewSite,
 } from "@/lib/roster-api";
@@ -14,12 +15,19 @@ type AttendanceCaptureDashboardProps = {
   token: string;
   periodStart: string;
   periodEnd: string;
+  shiftType: AttendanceShiftTypeFilter;
   selectedSiteId?: string;
   onSelectSite: (siteId: string) => void;
 };
 
 function formatDisplayDate(isoDate: string) {
   return format(parseISO(isoDate), "d MMM yyyy");
+}
+
+function shiftTypeLabel(shiftType: AttendanceShiftTypeFilter): string {
+  if (shiftType === "day") return "day-shift";
+  if (shiftType === "night") return "night-shift";
+  return "";
 }
 
 function SiteStatusBadge({ status }: { status: SiteTimesheetCaptureOverviewSite["status"] }) {
@@ -32,6 +40,7 @@ export function AttendanceCaptureDashboard({
   token,
   periodStart,
   periodEnd,
+  shiftType,
   selectedSiteId,
   onSelectSite,
 }: AttendanceCaptureDashboardProps) {
@@ -45,7 +54,7 @@ export function AttendanceCaptureDashboard({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetchSiteTimesheetCaptureOverview(token, periodStart, periodEnd)
+    fetchSiteTimesheetCaptureOverview(token, periodStart, periodEnd, shiftType)
       .then((data) => {
         if (!cancelled) setOverview(data);
       })
@@ -58,7 +67,7 @@ export function AttendanceCaptureDashboard({
     return () => {
       cancelled = true;
     };
-  }, [token, periodStart, periodEnd]);
+  }, [token, periodStart, periodEnd, shiftType]);
 
   const needsCapture = useMemo(
     () => overview?.sites.filter((s) => s.status === "needs_capture") ?? [],
@@ -95,6 +104,21 @@ export function AttendanceCaptureDashboard({
   const captureLabel = overview.captureThrough
     ? formatDisplayDate(overview.captureThrough)
     : "This period has not started yet";
+  const shiftLabel = shiftTypeLabel(shiftType);
+  const pendingDay = overview.summary.pendingDayRows ?? 0;
+  const pendingNight = overview.summary.pendingNightRows ?? 0;
+  const pendingBreakdown =
+    pendingDay > 0 || pendingNight > 0
+      ? [
+          pendingDay > 0 ? `${pendingDay} day-shift approval${pendingDay === 1 ? "" : "s"} pending` : null,
+          pendingNight > 0 ? `${pendingNight} night-shift approval${pendingNight === 1 ? "" : "s"} pending` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : null;
+  const needCapturePhrase = shiftLabel
+    ? `${overview.summary.needsCapture} site${overview.summary.needsCapture === 1 ? "" : "s"} need ${shiftLabel} capture`
+    : `${overview.summary.needsCapture} site${overview.summary.needsCapture === 1 ? "" : "s"} need capture`;
 
   const panelId = "attendance-capture-panel";
 
@@ -132,12 +156,14 @@ export function AttendanceCaptureDashboard({
             </h4>
             {expanded ? (
               <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-                Sites with rostered shifts still waiting for review are listed below. Open a site to capture who worked.
+                {shiftLabel
+                  ? `Sites with rostered ${shiftLabel} shifts still waiting for review are listed below. Open a site to capture who worked.`
+                  : "Sites with rostered shifts still waiting for review are listed below. Open a site to capture who worked."}
               </p>
             ) : (
               <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
                 {overview.summary.needsCapture > 0
-                  ? `${overview.summary.needsCapture} site${overview.summary.needsCapture === 1 ? "" : "s"} need capture · ${overview.summary.caughtUp} up to date`
+                  ? `${needCapturePhrase}${pendingBreakdown ? ` · ${pendingBreakdown}` : ""} · ${overview.summary.caughtUp} up to date`
                   : overview.captureThrough
                     ? `All rostered sites captured through ${captureLabel}`
                     : "No roster activity in this period yet"}
@@ -164,10 +190,20 @@ export function AttendanceCaptureDashboard({
 
       {expanded && (
         <div id={panelId} className="mt-4 space-y-4">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-3 dark:border-amber-900/40 dark:bg-amber-950/20">
               <p className="text-2xl font-bold text-amber-900 dark:text-amber-100">{overview.summary.needsCapture}</p>
-              <p className="text-xs font-medium text-amber-800/90 dark:text-amber-200/90">Sites need capture</p>
+              <p className="text-xs font-medium text-amber-800/90 dark:text-amber-200/90">
+                {shiftLabel ? `Sites need ${shiftLabel} capture` : "Sites need capture"}
+              </p>
+            </div>
+            <div className="rounded-lg border border-amber-200/80 bg-amber-50/50 px-3 py-3 dark:border-amber-900/40 dark:bg-amber-950/10">
+              <p className="text-2xl font-bold text-amber-900 dark:text-amber-100">{pendingDay}</p>
+              <p className="text-xs font-medium text-amber-800/90 dark:text-amber-200/90">Day approvals pending</p>
+            </div>
+            <div className="rounded-lg border border-amber-200/80 bg-amber-50/50 px-3 py-3 dark:border-amber-900/40 dark:bg-amber-950/10">
+              <p className="text-2xl font-bold text-amber-900 dark:text-amber-100">{pendingNight}</p>
+              <p className="text-xs font-medium text-amber-800/90 dark:text-amber-200/90">Night approvals pending</p>
             </div>
             <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/80 px-3 py-3 dark:border-emerald-900/40 dark:bg-emerald-950/20">
               <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">{overview.summary.caughtUp}</p>
@@ -198,7 +234,15 @@ export function AttendanceCaptureDashboard({
                         <p className="truncate font-medium text-neutral-900 dark:text-neutral-100">{site.siteName}</p>
                         <p className="mt-0.5 text-xs text-neutral-600 dark:text-neutral-400">
                           {site.dueDays} day{site.dueDays === 1 ? "" : "s"} · {site.pendingRows} shift
-                          {site.pendingRows === 1 ? "" : "s"} pending review
+                          {site.pendingRows === 1 ? "" : "s"} pending
+                          {(site.pendingDayRows ?? 0) > 0 || (site.pendingNightRows ?? 0) > 0
+                            ? ` (${[
+                                (site.pendingDayRows ?? 0) > 0 ? `${site.pendingDayRows} day` : null,
+                                (site.pendingNightRows ?? 0) > 0 ? `${site.pendingNightRows} night` : null,
+                              ]
+                                .filter(Boolean)
+                                .join(", ")})`
+                            : ""}
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">

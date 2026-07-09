@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { createHmac } from "node:crypto";
 
 const processAndSend = vi.fn().mockResolvedValue(undefined);
 const processLocationAndSend = vi.fn().mockResolvedValue(undefined);
@@ -17,6 +18,7 @@ vi.mock("../../lib/config.js", async (importOriginal) => {
         phoneNumberId: "123456789",
         verifyToken: "test-verify-token",
         accessToken: "token",
+        appSecret: "",
       },
     },
   };
@@ -132,5 +134,75 @@ describe("WhatsApp webhook", () => {
     expect(res.statusCode).toBe(200);
     expect(sendUnsupportedTypeReply).toHaveBeenCalledWith("27821234567");
     expect(processAndSend).not.toHaveBeenCalled();
+  });
+
+  it("rejects POST when app secret is set and signature is invalid", async () => {
+    const { config } = await import("../../lib/config.js");
+    config.whatsapp.appSecret = "test-app-secret";
+    try {
+      const payload = {
+        object: "whatsapp_business_account",
+        entry: [],
+      };
+      const res = await app.inject({
+        method: "POST",
+        url: "/webhook",
+        headers: {
+          "x-hub-signature-256": "sha256=deadbeef",
+        },
+        payload,
+      });
+      expect(res.statusCode).toBe(403);
+    } finally {
+      config.whatsapp.appSecret = "";
+    }
+  });
+
+  it("accepts POST when signature matches app secret", async () => {
+    const { config } = await import("../../lib/config.js");
+    config.whatsapp.appSecret = "test-app-secret";
+    try {
+      processAndSend.mockClear();
+      const payload = {
+        object: "whatsapp_business_account",
+        entry: [
+          {
+            changes: [
+              {
+                field: "messages",
+                value: {
+                  messaging_product: "whatsapp",
+                  metadata: { phone_number_id: "123456789" },
+                  messages: [
+                    {
+                      from: "27821234567",
+                      id: "wamid.signed",
+                      timestamp: "1710000000",
+                      type: "text",
+                      text: { body: "clock in" },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+      const raw = JSON.stringify(payload);
+      const signature = `sha256=${createHmac("sha256", "test-app-secret").update(raw, "utf8").digest("hex")}`;
+      const res = await app.inject({
+        method: "POST",
+        url: "/webhook",
+        headers: {
+          "content-type": "application/json",
+          "x-hub-signature-256": signature,
+        },
+        payload: raw,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(processAndSend).toHaveBeenCalledWith("27821234567", "clock in");
+    } finally {
+      config.whatsapp.appSecret = "";
+    }
   });
 });

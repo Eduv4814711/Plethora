@@ -522,6 +522,7 @@ model Attendance {
 
   shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
 
+  @@unique([shiftId])
   @@index([shiftId])
 }
 
@@ -846,6 +847,8 @@ model SiteTimesheetRow {
   plannedGuard  Employee?     @relation("PlannedTimesheetGuard", fields: [plannedGuardId], references: [id], onDelete: SetNull)
   actualGuard   Employee?     @relation("ActualTimesheetGuard", fields: [actualGuardId], references: [id], onDelete: SetNull)
 
+  /// One planned roster cell per timesheet (guard + date + shift). Reliever rows omit plannedGuardId.
+  @@unique([siteTimesheetId, workDate, plannedGuardId, plannedShiftType])
   @@index([companyId, workDate])
   @@index([companyId, actualGuardId, workDate])
   @@index([siteTimesheetId, workDate])

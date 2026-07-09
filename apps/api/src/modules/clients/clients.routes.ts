@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authMiddleware } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { normalizeModuleAccess, requireRole } from "../../middleware/rbac.js";
+import type { JWTPayload } from "../../lib/types.js";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { getExceptionAnalytics } from "../attendance-exceptions/exceptions.service.js";
@@ -20,6 +21,57 @@ export function clientOwnsSite(
   siteClientId: string | null | undefined
 ): boolean {
   return !!siteClientId && siteClientId === clientId;
+}
+
+export function isFullAdminUser(user: Pick<JWTPayload, "role" | "moduleAccess">): boolean {
+  return user.role === "admin" && !normalizeModuleAccess(user.moduleAccess);
+}
+
+type PortalClientResolution =
+  | { ok: true; clientId: string; clientName: string | null }
+  | { ok: false; statusCode: 400 | 403; message: string };
+
+export async function resolveClientPortalAccess(
+  user: JWTPayload,
+  queryClientId?: string
+): Promise<PortalClientResolution> {
+  const client = await resolveClientForUser(user.companyId, user.sub);
+
+  if (user.role === "client") {
+    if (!client) {
+      return {
+        ok: false,
+        statusCode: 403,
+        message: "No client profile linked to this account",
+      };
+    }
+    if (queryClientId && queryClientId !== client.id) {
+      return { ok: false, statusCode: 403, message: "Cannot view other clients" };
+    }
+    return { ok: true, clientId: client.id, clientName: client.name };
+  }
+
+  if (user.role === "admin") {
+    if (!isFullAdminUser(user)) {
+      return {
+        ok: false,
+        statusCode: 403,
+        message: "Full administrator access required for client portal preview",
+      };
+    }
+    if (!queryClientId) {
+      return { ok: false, statusCode: 400, message: "clientId required for admin preview" };
+    }
+    const target = await prisma.client.findFirst({
+      where: { id: queryClientId, companyId: user.companyId },
+    });
+    if (!target) {
+      return { ok: false, statusCode: 403, message: "Client not found in your company" };
+    }
+    return { ok: true, clientId: target.id, clientName: target.name };
+  }
+
+  return { ok: false, statusCode: 403, message: "Client portal access only" };
 }
 
 export async function clientsRoutes(app: FastifyInstance) {
@@ -159,22 +211,12 @@ export async function clientPortalRoutes(app: FastifyInstance) {
 
   app.get("/dashboard", { preHandler: protect as never }, async (request, reply) => {
     const user = request.user!;
-    const client = await resolveClientForUser(user.companyId, user.sub);
-    if (!client && user.role === "client") {
-      return reply.code(403).send({
-        error: "Forbidden",
-        message: "No client profile linked to this account",
-      });
-    }
-    // Admin preview: require ?clientId=
     const q = request.query as { clientId?: string };
-    const clientId = client?.id ?? q.clientId;
-    if (!clientId) {
-      return reply.code(400).send({ error: "Validation error", message: "clientId required for admin preview" });
+    const access = await resolveClientPortalAccess(user, q.clientId);
+    if (!access.ok) {
+      return reply.code(access.statusCode).send({ error: access.statusCode === 400 ? "Validation error" : "Forbidden", message: access.message });
     }
-    if (client && client.id !== clientId) {
-      return reply.code(403).send({ error: "Forbidden", message: "Cannot view other clients" });
-    }
+    const clientId = access.clientId;
 
     const sites = await prisma.site.findMany({
       where: { companyId: user.companyId, clientId },
@@ -204,7 +246,7 @@ export async function clientPortalRoutes(app: FastifyInstance) {
     ]);
 
     return reply.send({
-      client: { id: clientId, name: client?.name ?? "Client" },
+      client: { id: clientId, name: access.clientName ?? "Client" },
       sitesCount: sites.length,
       guardsDeployed: sites.reduce((n, s) => n + s._count.assignedGuards, 0),
       clientVisibleIncidents: incidents,
@@ -215,15 +257,12 @@ export async function clientPortalRoutes(app: FastifyInstance) {
 
   app.get("/sites", { preHandler: protect as never }, async (request, reply) => {
     const user = request.user!;
-    const client = await resolveClientForUser(user.companyId, user.sub);
     const q = request.query as { clientId?: string };
-    const clientId = client?.id ?? q.clientId;
-    if (!clientId) {
-      return reply.code(400).send({ error: "Validation error", message: "clientId required" });
+    const access = await resolveClientPortalAccess(user, q.clientId);
+    if (!access.ok) {
+      return reply.code(access.statusCode).send({ error: access.statusCode === 400 ? "Validation error" : "Forbidden", message: access.message });
     }
-    if (client && client.id !== clientId) {
-      return reply.code(403).send({ error: "Forbidden", message: "Cannot view other clients" });
-    }
+    const clientId = access.clientId;
     const sites = await prisma.site.findMany({
       where: { companyId: user.companyId, clientId },
       select: {
@@ -247,15 +286,12 @@ export async function clientPortalRoutes(app: FastifyInstance) {
 
   app.get("/incidents", { preHandler: protect as never }, async (request, reply) => {
     const user = request.user!;
-    const client = await resolveClientForUser(user.companyId, user.sub);
     const q = request.query as { clientId?: string };
-    const clientId = client?.id ?? q.clientId;
-    if (!clientId) {
-      return reply.code(400).send({ error: "Validation error", message: "clientId required" });
+    const access = await resolveClientPortalAccess(user, q.clientId);
+    if (!access.ok) {
+      return reply.code(access.statusCode).send({ error: access.statusCode === 400 ? "Validation error" : "Forbidden", message: access.message });
     }
-    if (client && client.id !== clientId) {
-      return reply.code(403).send({ error: "Forbidden", message: "Cannot view other clients" });
-    }
+    const clientId = access.clientId;
     const sites = await prisma.site.findMany({
       where: { companyId: user.companyId, clientId },
       select: { id: true },
@@ -286,15 +322,12 @@ export async function clientPortalRoutes(app: FastifyInstance) {
 
   app.get("/attendance-summary", { preHandler: protect as never }, async (request, reply) => {
     const user = request.user!;
-    const client = await resolveClientForUser(user.companyId, user.sub);
     const q = request.query as { clientId?: string; periodStart?: string; periodEnd?: string };
-    const clientId = client?.id ?? q.clientId;
-    if (!clientId) {
-      return reply.code(400).send({ error: "Validation error", message: "clientId required" });
+    const access = await resolveClientPortalAccess(user, q.clientId);
+    if (!access.ok) {
+      return reply.code(access.statusCode).send({ error: access.statusCode === 400 ? "Validation error" : "Forbidden", message: access.message });
     }
-    if (client && client.id !== clientId) {
-      return reply.code(403).send({ error: "Forbidden", message: "Cannot view other clients" });
-    }
+    const clientId = access.clientId;
     const sites = await prisma.site.findMany({
       where: { companyId: user.companyId, clientId },
       select: { id: true, name: true },

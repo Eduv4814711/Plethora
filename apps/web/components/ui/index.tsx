@@ -298,7 +298,7 @@ export function ConfirmModal({
         <h2 id="confirm-modal-title" className="text-lg font-semibold text-black">
           {title}
         </h2>
-        <p className="mt-2 text-sm text-neutral-600">{message}</p>
+        <p className="mt-2 whitespace-pre-line text-sm text-neutral-600">{message}</p>
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           <Button variant="secondary" onClick={onCancel} disabled={loading}>
             {cancelLabel}

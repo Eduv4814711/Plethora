@@ -5,7 +5,7 @@ import { upsertAlert } from "../alerts/alerts.service.js";
 import { createNotification, notifyModuleUsers } from "../notifications/notifications.service.js";
 import { createApprovalRequest } from "../approvals/approvals.service.js";
 
-function severityToAlertPriority(severity: IncidentSeverity) {
+export function severityToAlertPriority(severity: IncidentSeverity) {
   if (severity === "CRITICAL") return "CRITICAL" as const;
   if (severity === "HIGH") return "MEDIUM" as const;
   return "LOW" as const;

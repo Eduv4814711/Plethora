@@ -290,22 +290,29 @@ export type SiteTimesheetCaptureOverviewSite = {
   status: "caught_up" | "needs_capture" | "no_shifts";
   dueDays: number;
   pendingRows: number;
+  pendingDayRows: number;
+  pendingNightRows: number;
   reviewedRows: number;
   lastCapturedDate: string | null;
   timesheetStatus: "draft" | "approved" | "locked" | "none";
 };
+
+export type AttendanceShiftTypeFilter = "day" | "night" | "all";
 
 export type SiteTimesheetCaptureOverview = {
   periodStart: string;
   periodEnd: string;
   captureThrough: string | null;
   asOfDate: string;
+  shiftType?: AttendanceShiftTypeFilter;
   sites: SiteTimesheetCaptureOverviewSite[];
   summary: {
     totalSites: number;
     needsCapture: number;
     caughtUp: number;
     noShifts: number;
+    pendingDayRows: number;
+    pendingNightRows: number;
   };
 };
 
@@ -473,8 +480,13 @@ export async function publishRoster(
   return parseJson<PublishRosterResponse>(res);
 }
 
-export async function fetchSiteTimesheetCaptureOverview(token: string, startDate: string, endDate: string) {
-  const q = new URLSearchParams({ startDate, endDate });
+export async function fetchSiteTimesheetCaptureOverview(
+  token: string,
+  startDate: string,
+  endDate: string,
+  shiftType: AttendanceShiftTypeFilter = "all"
+) {
+  const q = new URLSearchParams({ startDate, endDate, shiftType });
   const res = await authFetch(`/rosters/site-timesheets/capture-overview?${q}`, token);
   return parseJson<SiteTimesheetCaptureOverview>(res);
 }
@@ -529,7 +541,7 @@ export async function addSiteTimesheetRow(
     actualShiftCode: string;
     actualShiftType: string;
     attendanceStatus: SiteTimesheetAttendance;
-    occurrenceBookNumber?: string | null;
+    occurrenceBookNumber: string;
     comments?: string | null;
     hoursWorked?: number | null;
     overtimeHours?: number | null;
@@ -542,12 +554,25 @@ export async function addSiteTimesheetRow(
   return parseJson<{ row: SiteTimesheetRow }>(res);
 }
 
-export async function approveSiteTimesheet(token: string, timesheetId: string, notes?: string) {
+export async function approveSiteTimesheet(
+  token: string,
+  timesheetId: string,
+  options?: { notes?: string; shiftType?: AttendanceShiftTypeFilter }
+) {
   const res = await authFetch(`/rosters/site-timesheets/${timesheetId}/approve`, token, {
     method: "POST",
-    body: JSON.stringify({ notes }),
+    body: JSON.stringify({
+      notes: options?.notes,
+      shiftType: options?.shiftType ?? "all",
+    }),
   });
-  return parseJson<{ success: boolean }>(res);
+  return parseJson<{
+    success: boolean;
+    locked: boolean;
+    approvedRowCount: number;
+    remainingPending: number;
+    shiftType: AttendanceShiftTypeFilter;
+  }>(res);
 }
 
 export async function unlockSiteTimesheet(token: string, timesheetId: string, reason?: string) {
@@ -558,8 +583,14 @@ export async function unlockSiteTimesheet(token: string, timesheetId: string, re
   return parseJson<{ success: boolean }>(res);
 }
 
-export function siteTimesheetCsvUrl(siteId: string, startDate: string, endDate: string) {
+export function siteTimesheetCsvUrl(
+  siteId: string,
+  startDate: string,
+  endDate: string,
+  shiftType: AttendanceShiftTypeFilter = "all"
+) {
   const q = new URLSearchParams({ siteId, startDate, endDate });
+  if (shiftType !== "all") q.set("shiftType", shiftType);
   return `/rosters/site-timesheets/export.csv?${q}`;
 }
 

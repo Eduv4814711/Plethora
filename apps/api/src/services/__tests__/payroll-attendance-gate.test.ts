@@ -132,4 +132,49 @@ describe("aggregateTimesheets per-site behaviour", () => {
     };
     expect(shiftWhere.where.siteId).toBeUndefined();
   });
+
+  it("excludes absent site-timesheet rows from payroll hours", async () => {
+    vi.mocked(prisma.siteTimesheetRow.findMany).mockResolvedValue([
+      {
+        actualGuardId: "G1",
+        workDate: new Date("2026-05-06T00:00:00.000Z"),
+        clockIn: null,
+        hoursWorked: 8,
+        overtimeHours: null,
+        attendanceStatus: "present",
+      },
+    ] as never);
+    vi.mocked(prisma.siteTimesheet.findMany).mockResolvedValue([{ siteId: "A" }] as never);
+    vi.mocked(prisma.shift.findMany).mockResolvedValue([] as never);
+
+    await aggregateTimesheets(companyId, periodStart, periodEnd);
+
+    expect(prisma.siteTimesheetRow.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          attendanceStatus: {
+            in: ["present", "late", "left_early", "reliever", "shift_swapped", "leave", "sick_leave", "training"],
+          },
+          siteTimesheet: expect.objectContaining({
+            status: { in: ["approved", "locked"] },
+          }),
+        }),
+      })
+    );
+  });
+
+  it("treats locked site timesheets the same as approved for the payroll gate", async () => {
+    vi.mocked(prisma.shift.findMany).mockResolvedValue([{ siteId: "A" }] as never);
+    vi.mocked(prisma.siteTimesheet.findMany).mockResolvedValue([{ siteId: "A" }] as never);
+
+    const result = await findSitesNeedingApproval(companyId, periodStart, periodEnd);
+    expect(result).toEqual([]);
+    expect(prisma.siteTimesheet.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: { in: ["approved", "locked"] },
+        }),
+      })
+    );
+  });
 });

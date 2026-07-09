@@ -135,3 +135,58 @@ describe("site timesheet OB number admin lock", () => {
     ).toEqual({ ok: true });
   });
 });
+
+function occurrenceBookNumbersMatch(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+function findDuplicateOccurrenceBookRow(
+  rows: Array<{ id: string; workDate: string; occurrenceBookNumber?: string | null }>,
+  occurrenceBookNumber: string,
+  excludeRowId?: string
+): { id: string; workDate: string } | null {
+  const needle = occurrenceBookNumber.trim();
+  if (!needle) return null;
+  const match = rows.find(
+    (r) =>
+      r.id !== excludeRowId &&
+      r.occurrenceBookNumber != null &&
+      r.occurrenceBookNumber.trim().length > 0 &&
+      occurrenceBookNumbersMatch(r.occurrenceBookNumber, needle)
+  );
+  return match ? { id: match.id, workDate: match.workDate } : null;
+}
+
+describe("site timesheet OB number uniqueness", () => {
+  const rows = [
+    { id: "r1", workDate: "2026-07-10", occurrenceBookNumber: "1234" },
+    { id: "r2", workDate: "2026-07-11", occurrenceBookNumber: "OB-99" },
+    { id: "r3", workDate: "2026-07-12", occurrenceBookNumber: null },
+  ];
+
+  it("detects a duplicate OB number on another row", () => {
+    expect(findDuplicateOccurrenceBookRow(rows, "1234", "r2")).toEqual({
+      id: "r1",
+      workDate: "2026-07-10",
+    });
+  });
+
+  it("treats OB numbers as case-insensitive", () => {
+    expect(findDuplicateOccurrenceBookRow(rows, " ob-99 ", "r1")).toEqual({
+      id: "r2",
+      workDate: "2026-07-11",
+    });
+  });
+
+  it("allows the same OB on the same row (self)", () => {
+    expect(findDuplicateOccurrenceBookRow(rows, "1234", "r1")).toBeNull();
+  });
+
+  it("allows a new unused OB number", () => {
+    expect(findDuplicateOccurrenceBookRow(rows, "5678")).toBeNull();
+  });
+
+  it("ignores blank OB numbers", () => {
+    expect(findDuplicateOccurrenceBookRow(rows, "   ")).toBeNull();
+  });
+});

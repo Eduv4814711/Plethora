@@ -90,11 +90,13 @@ export const siteTimesheetQuerySchema = z.object({
   siteId: z.string().min(1),
   startDate: z.string().min(1),
   endDate: z.string().min(1),
+  shiftType: z.enum(["day", "night", "all"]).optional().default("all"),
 });
 
 export const siteTimesheetCaptureOverviewQuerySchema = z.object({
   startDate: z.string().min(1),
   endDate: z.string().min(1),
+  shiftType: z.enum(["day", "night", "all"]).default("all"),
 });
 
 export const siteTimesheetRowUpdateSchema = z.object({
@@ -141,7 +143,11 @@ export const siteTimesheetRowCreateSchema = z.object({
     "training",
     "off",
   ]),
-  occurrenceBookNumber: z.string().max(80).nullable().optional(),
+  occurrenceBookNumber: z
+    .string()
+    .trim()
+    .min(1, "Occurrence Book (OB) number is required")
+    .max(80),
   comments: z.string().nullable().optional(),
   hoursWorked: z.number().nullable().optional(),
   overtimeHours: z.number().nullable().optional(),
@@ -149,6 +155,8 @@ export const siteTimesheetRowCreateSchema = z.object({
 
 export const approveSiteTimesheetSchema = z.object({
   notes: z.string().optional(),
+  /** When day|night, only those rows are approved; sheet locks only when no pending rows remain. */
+  shiftType: z.enum(["day", "night", "all"]).optional().default("all"),
 });
 
 export const unlockSiteTimesheetSchema = z.object({

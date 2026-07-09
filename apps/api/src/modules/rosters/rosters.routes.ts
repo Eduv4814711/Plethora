@@ -118,7 +118,8 @@ export async function rostersRoutes(app: FastifyInstance) {
     const overview = await getSiteTimesheetCaptureOverview(
       request.user!.companyId,
       parsed.data.startDate,
-      parsed.data.endDate
+      parsed.data.endDate,
+      parsed.data.shiftType
     );
     return reply.send(overview);
   });
@@ -150,12 +151,14 @@ export async function rostersRoutes(app: FastifyInstance) {
       parsed.data.endDate
     );
     if (!sheet) return reply.code(404).send({ error: "Site not found" });
+    const shiftSuffix =
+      parsed.data.shiftType && parsed.data.shiftType !== "all" ? `-${parsed.data.shiftType}` : "";
     reply.header("content-type", "text/csv; charset=utf-8");
     reply.header(
       "content-disposition",
-      `attachment; filename="site-timesheet-${sheet.siteName.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${sheet.periodStart}.csv"`
+      `attachment; filename="site-timesheet-${sheet.siteName.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${sheet.periodStart}${shiftSuffix}.csv"`
     );
-    return reply.send(buildSiteTimesheetCsv(sheet));
+    return reply.send(buildSiteTimesheetCsv(sheet, parsed.data.shiftType));
   });
 
   app.post("/site-timesheets/resync", { preHandler: protect }, async (request, reply) => {
@@ -184,7 +187,7 @@ export async function rostersRoutes(app: FastifyInstance) {
       request.user!.companyId,
       rowId,
       parsed.data,
-      { role: request.user!.role }
+      { role: request.user!.role, userId: request.user!.sub }
     );
     if (!result) return reply.code(404).send({ error: "Timesheet row not found" });
     if ("error" in result) return reply.code(409).send({ error: result.error });
@@ -213,9 +216,10 @@ export async function rostersRoutes(app: FastifyInstance) {
       request.user!.companyId,
       timesheetId,
       request.user!.sub,
-      parsed.data.notes
+      { notes: parsed.data.notes, shiftType: parsed.data.shiftType }
     );
     if (!result) return reply.code(404).send({ error: "Timesheet not found" });
+    if ("error" in result) return reply.code(409).send({ error: result.error });
     return reply.send(result);
   });
 

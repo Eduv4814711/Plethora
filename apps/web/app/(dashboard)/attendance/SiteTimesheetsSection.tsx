@@ -22,27 +22,26 @@ import {
   type SiteTimesheet,
   type SiteTimesheetAttendance,
   type SiteTimesheetRow,
+  type AttendanceShiftTypeFilter,
   unlockSiteTimesheet,
   updateSiteTimesheetRow,
 } from "@/lib/roster-api";
-import { sortSiteTimesheetRows } from "@/lib/site-timesheet-utils";
+import {
+  findDuplicateOccurrenceBookRow,
+  formatAttendanceStatus,
+  resolveAttendanceStatusOnApprove,
+  rowMatchesShiftTypeFilter,
+  sortSiteTimesheetRows,
+} from "@/lib/site-timesheet-utils";
 import { isFullAdmin } from "@/lib/permissions";
+import { ConfirmModal } from "@/components/ui";
 
 type GuardOption = GuardPickerOption;
 
-const ATTENDANCE_OPTIONS: { value: SiteTimesheetAttendance; label: string }[] = [
-  { value: "pending", label: "Pending" },
-  { value: "present", label: "Present" },
-  { value: "absent", label: "Absent" },
-  { value: "late", label: "Late" },
-  { value: "left_early", label: "Left early" },
-  { value: "reliever", label: "Reliever" },
-  { value: "shift_swapped", label: "Shift swapped" },
-  { value: "leave", label: "Leave" },
-  { value: "sick_leave", label: "Sick leave" },
-  { value: "training", label: "Training" },
-  { value: "off", label: "Off" },
-];
+type NoticeDialog = {
+  title: string;
+  message: string;
+};
 
 function label(value: string | null | undefined) {
   return value ? value.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase()) : "Not set";
@@ -107,24 +106,52 @@ function buildRowApprovalPatch(
   row: SiteTimesheetRow,
   occurrenceBookNumber: string
 ): Partial<SiteTimesheetRow> {
-  const shiftType = rowShiftType(row);
-  const actualGuardId = row.actualGuardId ?? row.plannedGuardId;
+  const plannedShiftType = normalizeShiftType(row.plannedShiftType ?? row.plannedShiftCode);
+  const explicitNotWorked =
+    row.actualGuardId === null &&
+    (row.actualShiftType === null || row.actualShiftType === "") &&
+    !row.clockIn &&
+    !row.clockOut;
+
+  // If the controller cleared who worked / shift, keep that and mark absent.
+  // Otherwise default missing fields from the rostered plan when approving.
+  const actualGuardId = explicitNotWorked
+    ? null
+    : (row.actualGuardId ?? row.plannedGuardId);
+  const shiftType = explicitNotWorked
+    ? null
+    : normalizeShiftType(row.actualShiftType ?? row.actualShiftCode) ?? plannedShiftType;
+  const actualShiftType = explicitNotWorked ? null : (row.actualShiftType ?? shiftType);
+  const actualShiftCode = explicitNotWorked
+    ? null
+    : (row.actualShiftCode ??
+      (shiftType === "night" ? "N" : shiftType === "day" ? "D" : null));
+
   const startTime = displayShiftTime(row.clockIn, shiftType, "start");
   const endTime = displayShiftTime(row.clockOut, shiftType, "end");
-  const clockIn = row.clockIn ?? (startTime ? combineDateTime(row.workDate, startTime) : null);
-  const clockOut =
-    row.clockOut ?? (endTime ? combineClockOut(row.workDate, endTime, clockIn) : null);
+  const clockIn = explicitNotWorked
+    ? null
+    : (row.clockIn ?? (startTime ? combineDateTime(row.workDate, startTime) : null));
+  const clockOut = explicitNotWorked
+    ? null
+    : (row.clockOut ?? (endTime ? combineClockOut(row.workDate, endTime, clockIn) : null));
 
   return {
     actualGuardId,
     clockIn,
     clockOut,
-    hoursWorked: row.hoursWorked ?? hoursBetween(clockIn, clockOut),
-    attendanceStatus: row.attendanceStatus === "pending" ? "present" : row.attendanceStatus,
-    actualShiftType: row.actualShiftType ?? shiftType,
-    actualShiftCode:
-      row.actualShiftCode ??
-      (shiftType === "night" ? "N" : shiftType === "day" ? "D" : null),
+    hoursWorked: explicitNotWorked ? null : (row.hoursWorked ?? hoursBetween(clockIn, clockOut)),
+    attendanceStatus: resolveAttendanceStatusOnApprove({
+      plannedGuardId: row.plannedGuardId,
+      actualGuardId,
+      plannedShiftCode: row.plannedShiftCode,
+      actualShiftCode,
+      actualShiftType,
+      clockIn,
+      clockOut,
+    }),
+    actualShiftType,
+    actualShiftCode,
     occurrenceBookNumber,
     approvalStatus: "reviewed",
   };
@@ -136,12 +163,14 @@ export function SiteTimesheetsSection({
   siteName,
   periodStart,
   periodEnd,
+  shiftType = "all",
 }: {
   token: string;
   siteId: string;
   siteName?: string;
   periodStart: string;
   periodEnd: string;
+  shiftType?: AttendanceShiftTypeFilter;
 }) {
   const { user } = useAuth();
   const canEditLockedOb = Boolean(user && isFullAdmin(user));
@@ -150,6 +179,8 @@ export function SiteTimesheetsSection({
   const [loading, setLoading] = useState(false);
   const [savingRowId, setSavingRowId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Centered notice so approve blockers are never missed at the top of a long page. */
+  const [notice, setNotice] = useState<NoticeDialog | null>(null);
   /** Draft OB numbers typed in the on-page field before Approve. */
   const [obDrafts, setObDrafts] = useState<Record<string, string>>({});
   /** Filter timesheet rows by planned/actual guard name. */
@@ -167,6 +198,11 @@ export function SiteTimesheetsSection({
   const locked = sheet?.status === "approved" || sheet?.status === "locked";
   const loadIdRef = useRef(0);
   const displaySiteName = sheet?.siteName ?? siteName;
+
+  const showNotice = (title: string, message: string) => {
+    setNotice({ title, message });
+    setError(message);
+  };
 
   const load = async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
@@ -202,10 +238,14 @@ export function SiteTimesheetsSection({
     () => (sheet ? sortSiteTimesheetRows(sheet.rows) : []),
     [sheet?.rows]
   );
+  const shiftScopedRows = useMemo(
+    () => sortedRows.filter((row) => rowMatchesShiftTypeFilter(row, shiftType)),
+    [sortedRows, shiftType]
+  );
   const displayRows = useMemo(() => {
     const q = guardFilter.trim().toLowerCase();
-    if (!q) return sortedRows;
-    return sortedRows.filter((row) => {
+    if (!q) return shiftScopedRows;
+    return shiftScopedRows.filter((row) => {
       const haystack = [
         row.actualGuardName,
         row.plannedGuardName,
@@ -217,10 +257,20 @@ export function SiteTimesheetsSection({
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [sortedRows, guardFilter]);
-  const reviewedCount = sheet?.rows.filter((r) => r.approvalStatus !== "pending").length ?? 0;
-  const pendingReviewCount = sheet ? sheet.rows.length - reviewedCount : 0;
+  }, [shiftScopedRows, guardFilter]);
+  const reviewedCount = shiftScopedRows.filter((r) => r.approvalStatus !== "pending").length;
+  const pendingReviewCount = shiftScopedRows.length - reviewedCount;
+  const otherShiftPendingCount = useMemo(() => {
+    if (shiftType === "all") return 0;
+    const other: AttendanceShiftTypeFilter = shiftType === "day" ? "night" : "day";
+    return sortedRows.filter(
+      (r) => rowMatchesShiftTypeFilter(r, other) && r.approvalStatus === "pending"
+    ).length;
+  }, [sortedRows, shiftType]);
   const guardFilterActive = guardFilter.trim().length > 0;
+  const shiftFilterActive = shiftType !== "all";
+  const shiftLabel =
+    shiftType === "day" ? "day-shift" : shiftType === "night" ? "night-shift" : "all";
 
   const updateRow = async (row: SiteTimesheetRow, patch: Partial<SiteTimesheetRow>) => {
     const nextPatch =
@@ -243,7 +293,9 @@ export function SiteTimesheetsSection({
       );
       await load({ silent: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save timesheet row");
+      const message = err instanceof Error ? err.message : "Failed to save timesheet row";
+      showNotice("Could not save", message);
+      throw err instanceof Error ? err : new Error(message);
     } finally {
       setSavingRowId(null);
     }
@@ -256,13 +308,51 @@ export function SiteTimesheetsSection({
     setObDrafts((prev) => ({ ...prev, [rowId]: value }));
   };
 
+  const assertUniqueObNumber = (obNumber: string, excludeRowId?: string): boolean => {
+    if (!sheet) return true;
+    const duplicate = findDuplicateOccurrenceBookRow(sheet.rows, obNumber, excludeRowId);
+    if (!duplicate) return true;
+    const message = `Occurrence Book (OB) number "${obNumber.trim()}" is already used on ${duplicate.workDate}. Each shift needs its own OB number.`;
+    showNotice("OB number already used", message);
+    return false;
+  };
+
   const approveRowAttendance = async (row: SiteTimesheetRow) => {
     const obNumber = getObDraft(row).trim();
     if (!obNumber) {
-      window.alert("OB number is required to approve shift");
+      showNotice(
+        "Cannot approve this shift",
+        "Enter the Occurrence Book (OB) number in the OB No. field first, then click Approve again."
+      );
       return;
     }
-    await updateRow(row, buildRowApprovalPatch(row, obNumber));
+    if (!assertUniqueObNumber(obNumber, row.id)) return;
+    try {
+      setError(null);
+      await updateRow(row, buildRowApprovalPatch(row, obNumber));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to approve this shift";
+      // Notice already shown by updateRow; keep banner in sync.
+      setError(message);
+    }
+  };
+
+  const explainSheetApproveBlocked = (): string | null => {
+    if (pendingReviewCount > 0) {
+      const shiftPart =
+        shiftType === "all"
+          ? `${pendingReviewCount} row${pendingReviewCount === 1 ? "" : "s"} still need review`
+          : `${pendingReviewCount} ${shiftLabel} row${pendingReviewCount === 1 ? "" : "s"} still need review`;
+      return (
+        `Cannot approve the timesheet yet.\n\n` +
+        `${shiftPart}.\n\n` +
+        `For each pending row:\n` +
+        `1. Enter a unique Occurrence Book (OB) number\n` +
+        `2. Click Approve on that row\n\n` +
+        `When every visible row is reviewed, you can approve the timesheet for payroll.`
+      );
+    }
+    return null;
   };
 
   const saveObNumber = async (row: SiteTimesheetRow) => {
@@ -270,7 +360,14 @@ export function SiteTimesheetsSection({
     const current = (row.occurrenceBookNumber ?? "").trim();
     if (!next || next === current) return;
     if (current && !canEditLockedOb) {
-      setError("Occurrence Book (OB) number can only be changed by an administrator once it has been entered.");
+      showNotice(
+        "OB number locked",
+        "Occurrence Book (OB) number can only be changed by an administrator once it has been entered."
+      );
+      setObDraft(row.id, current);
+      return;
+    }
+    if (!assertUniqueObNumber(next, row.id)) {
       setObDraft(row.id, current);
       return;
     }
@@ -279,16 +376,22 @@ export function SiteTimesheetsSection({
 
   const exportPdf = () => {
     if (!sheet) return;
+    const exportRows = shiftScopedRows;
     const doc = new jsPDF({ orientation: "landscape" });
     doc.setFontSize(16);
     doc.text("Site Timesheet", 14, 16);
     doc.setFontSize(10);
-    doc.text(`${sheet.siteName} | ${sheet.periodStart} to ${sheet.periodEnd} | Generated ${new Date().toLocaleDateString()}`, 14, 24);
+    const shiftNote = shiftType === "all" ? "All shifts" : `${shiftLabel} only`;
+    doc.text(
+      `${sheet.siteName} | ${sheet.periodStart} to ${sheet.periodEnd} | ${shiftNote} | Generated ${new Date().toLocaleDateString()}`,
+      14,
+      24
+    );
     doc.text(`Status: ${label(sheet.status)} | Approved: ${sheet.approvedAt ? new Date(sheet.approvedAt).toLocaleString() : "Not approved"}`, 14, 30);
     autoTable(doc, {
       startY: 36,
       head: [["Date", "Day", "Scheduled", "Actual", "Planned", "Actual shift", "Status", "Hours", "OB Number", "Discrepancies", "Comments"]],
-      body: sortedRows.map((row) => [
+      body: exportRows.map((row) => [
         row.workDate,
         row.dayOfWeek,
         row.plannedGuardName ?? "",
@@ -306,7 +409,8 @@ export function SiteTimesheetsSection({
     });
     const y = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 180;
     doc.text("Supervisor signature: ____________________    Manager signature: ____________________", 14, y + 12);
-    doc.save(`site-timesheet-${sheet.siteName}-${sheet.periodStart}.pdf`);
+    const suffix = shiftType === "all" ? "" : `-${shiftType}`;
+    doc.save(`site-timesheet-${sheet.siteName}-${sheet.periodStart}${suffix}.pdf`);
   };
 
   if (loading && !sheet) {
@@ -315,6 +419,16 @@ export function SiteTimesheetsSection({
 
   return (
     <section className="space-y-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-neutral-950">
+      <ConfirmModal
+        open={Boolean(notice)}
+        title={notice?.title ?? ""}
+        message={notice?.message ?? ""}
+        confirmLabel="Got it"
+        cancelLabel="Close"
+        danger={false}
+        onCancel={() => setNotice(null)}
+        onConfirm={() => setNotice(null)}
+      />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
@@ -355,7 +469,10 @@ export function SiteTimesheetsSection({
               type="button"
               onClick={async () => {
                 try {
-                  const res = await authFetch(siteTimesheetCsvUrl(siteId, periodStart, periodEnd), token);
+                  const res = await authFetch(
+                    siteTimesheetCsvUrl(siteId, periodStart, periodEnd, shiftType),
+                    token
+                  );
                   if (!res.ok) {
                     const body = await res.json().catch(() => ({}));
                     throw new Error(
@@ -368,7 +485,8 @@ export function SiteTimesheetsSection({
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a");
                   a.href = url;
-                  a.download = `site-timesheet-${sheet.siteName}-${sheet.periodStart}.csv`;
+                  const suffix = shiftType === "all" ? "" : `-${shiftType}`;
+                  a.download = `site-timesheet-${sheet.siteName}-${sheet.periodStart}${suffix}.csv`;
                   a.click();
                   URL.revokeObjectURL(url);
                 } catch (err) {
@@ -400,24 +518,46 @@ export function SiteTimesheetsSection({
             ) : (
               <button
                 type="button"
+                title={
+                  pendingReviewCount > 0
+                    ? `Click for details — review all ${shiftLabel} rows (OB number + Approve) before locking for payroll`
+                    : otherShiftPendingCount > 0
+                      ? `Approves ${shiftLabel} rows only. ${otherShiftPendingCount} other-shift row(s) still pending — sheet stays unlocked until those are reviewed.`
+                      : "Approve reviewed rows and lock the timesheet for payroll when nothing is pending"
+                }
                 onClick={async () => {
-                  const unreviewed = sheet.rows.filter((r) => r.approvalStatus === "pending").length;
+                  const blocked = explainSheetApproveBlocked();
+                  if (blocked) {
+                    showNotice("Cannot approve timesheet yet", blocked);
+                    return;
+                  }
                   const message =
-                    unreviewed > 0
-                      ? `${unreviewed} row(s) have not been individually approved yet. Approve and lock this site timesheet for payroll anyway?`
-                      : "Approve and lock this site timesheet for payroll?";
+                    otherShiftPendingCount > 0
+                      ? `Approve ${shiftScopedRows.length} reviewed ${shiftLabel} row(s)? The timesheet will stay open because ${otherShiftPendingCount} other-shift row(s) still need review. Payroll lock requires every shift to be reviewed.`
+                      : `Approve and lock this site timesheet for payroll (${shiftScopedRows.length} ${shiftLabel} row(s))?`;
                   if (!window.confirm(message)) return;
                   try {
                     setError(null);
-                    await approveSiteTimesheet(token, sheet.id);
+                    const result = await approveSiteTimesheet(token, sheet.id, { shiftType });
+                    if (!result.locked && result.remainingPending > 0) {
+                      const noticeMsg =
+                        `${result.approvedRowCount} row(s) approved. ${result.remainingPending} row(s) on the other shift still need review before payroll lock.`;
+                      showNotice("Partially approved", noticeMsg);
+                    }
                     await load();
                   } catch (err) {
-                    setError(err instanceof Error ? err.message : "Failed to approve timesheet");
+                    const failMessage =
+                      err instanceof Error ? err.message : "Failed to approve timesheet";
+                    showNotice("Could not approve timesheet", failMessage);
                   }
                 }}
-                className="btn-primary w-full sm:w-auto"
+                className={
+                  pendingReviewCount > 0
+                    ? "btn-primary w-full sm:w-auto opacity-70"
+                    : "btn-primary w-full sm:w-auto"
+                }
               >
-                Approve timesheet
+                {shiftType === "all" ? "Approve timesheet" : `Approve ${shiftLabel}`}
               </button>
             )}
           </div>
@@ -428,7 +568,10 @@ export function SiteTimesheetsSection({
 
       {locked && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
-          <span>Attendance approved for this period. Next step: process payroll from the verified hours.</span>
+          <span>
+            Attendance {sheet?.status === "locked" ? "locked" : "approved"} for this period. Next step: process payroll
+            from the verified hours.
+          </span>
           <Link href="/payroll" className="btn-primary">Go to Payroll</Link>
         </div>
       )}
@@ -438,14 +581,17 @@ export function SiteTimesheetsSection({
           <div className="grid gap-2 text-xs sm:grid-cols-7">
             {[
               ["Status", label(sheet.status)],
-              ["Reviewed", `${reviewedCount}/${sheet.rows.length}`],
+              [
+                shiftType === "all" ? "Reviewed" : `Reviewed (${shiftLabel})`,
+                `${reviewedCount}/${shiftScopedRows.length}`,
+              ],
               ["Day shifts", sheet.totals.dayShifts],
               ["Night shifts", sheet.totals.nightShifts],
               ["Hours", sheet.totals.totalHours],
               ["Relievers", sheet.totals.relieverShifts],
               ["Discrepancies", sheet.totals.discrepancies],
             ].map(([title, value]) => (
-              <div key={title} className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
+              <div key={String(title)} className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
                 <p className="text-neutral-500">{title}</p>
                 <p className="mt-1 font-semibold text-neutral-900 dark:text-neutral-100">{value}</p>
               </div>
@@ -454,10 +600,24 @@ export function SiteTimesheetsSection({
 
           {!locked && pendingReviewCount > 0 && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-              Review each row, enter the Occurrence Book (OB) number, then click{" "}
-              <span className="font-medium">Approve attendance</span> to confirm who worked, shift times, and status.
-              {" "}
-              <span className="font-medium">{pendingReviewCount}</span> row{pendingReviewCount === 1 ? "" : "s"} still need review.
+              Review each {shiftType === "all" ? "" : `${shiftLabel} `}row, enter the Occurrence Book (OB) number, then
+              click <span className="font-medium">Approve</span> to confirm who worked and shift times. Status is set
+              automatically.{" "}
+              <span className="font-medium">{pendingReviewCount}</span>{" "}
+              {shiftType === "all" ? "row" : `${shiftLabel} row`}
+              {pendingReviewCount === 1 ? "" : "s"} still need review
+              {otherShiftPendingCount > 0
+                ? ` · ${otherShiftPendingCount} on the other shift also pending`
+                : ""}
+              .
+            </div>
+          )}
+
+          {!locked && pendingReviewCount === 0 && otherShiftPendingCount > 0 && (
+            <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-200">
+              All visible {shiftLabel} rows are reviewed. Switch to the other shift to finish{" "}
+              <span className="font-medium">{otherShiftPendingCount}</span> pending row
+              {otherShiftPendingCount === 1 ? "" : "s"} before the timesheet can lock for payroll.
             </div>
           )}
 
@@ -509,7 +669,7 @@ export function SiteTimesheetsSection({
               </div>
               <div>
                 <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
-                  OB number
+                  OB number <span className="text-amber-600">*</span>
                 </label>
                 <input
                   value={newRow.occurrenceBookNumber}
@@ -520,7 +680,14 @@ export function SiteTimesheetsSection({
                   className="input-modern mt-1 w-full"
                   maxLength={80}
                   autoComplete="off"
+                  required
+                  aria-required="true"
                 />
+                {!newRow.occurrenceBookNumber.trim() && (
+                  <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                    OB number is required before adding a reliever.
+                  </p>
+                )}
               </div>
               <div className="flex flex-col justify-end gap-2 sm:col-span-2">
                 <input
@@ -531,15 +698,26 @@ export function SiteTimesheetsSection({
                 />
                 <button
                   type="button"
+                  disabled={!newRow.actualGuardId || !newRow.occurrenceBookNumber.trim()}
                   onClick={async () => {
                     if (!newRow.actualGuardId) {
                       setError("Select a guard before adding them to the timesheet.");
                       return;
                     }
+                    const obNumber = newRow.occurrenceBookNumber.trim();
+                    if (!obNumber) {
+                      showNotice(
+                        "OB number required",
+                        "Occurrence Book (OB) number is required before adding a reliever."
+                      );
+                      return;
+                    }
+                    if (!assertUniqueObNumber(obNumber)) return;
                     try {
+                      setError(null);
                       await addSiteTimesheetRow(token, sheet.id, {
                         ...newRow,
-                        occurrenceBookNumber: newRow.occurrenceBookNumber.trim() || null,
+                        occurrenceBookNumber: obNumber,
                       });
                       setNewRow((prev) => ({
                         ...prev,
@@ -552,7 +730,7 @@ export function SiteTimesheetsSection({
                       setError(err instanceof Error ? err.message : "Failed to add reliever row");
                     }
                   }}
-                  className={`btn-secondary w-full ${!newRow.actualGuardId ? "opacity-50" : ""}`}
+                  className="btn-secondary w-full disabled:opacity-50"
                 >
                   Add reliever
                 </button>
@@ -581,7 +759,14 @@ export function SiteTimesheetsSection({
             <div className="flex shrink-0 items-center gap-2">
               {guardFilterActive && (
                 <p className="text-xs text-neutral-500">
-                  Showing {displayRows.length} of {sortedRows.length} day
+                  Showing {displayRows.length} of {shiftScopedRows.length} day
+                  {shiftScopedRows.length === 1 ? "" : "s"}
+                </p>
+              )}
+              {!guardFilterActive && shiftFilterActive && (
+                <p className="text-xs text-neutral-500">
+                  Showing {shiftScopedRows.length} of {sortedRows.length}{" "}
+                  {shiftType === "day" ? "day" : "night"} shift
                   {sortedRows.length === 1 ? "" : "s"}
                 </p>
               )}
@@ -601,12 +786,18 @@ export function SiteTimesheetsSection({
               No timesheet days match “{guardFilter.trim()}”. Clear the filter to see all guards again.
             </div>
           )}
+          {!guardFilterActive && shiftFilterActive && displayRows.length === 0 && (
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-3 text-sm text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
+              No {shiftType === "day" ? "day" : "night"}-shift rows for this site in the selected period. Switch shift
+              type above to review the other shift.
+            </div>
+          )}
 
           <div className="space-y-3 2xl:hidden">
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
               Review each day below, confirm who worked and shift times, enter the Occurrence Book (OB) number, then tap{" "}
-              <span className="font-medium text-neutral-700 dark:text-neutral-300">Approve this day</span> when
-              correct.
+              <span className="font-medium text-neutral-700 dark:text-neutral-300">Approve this day</span>. Status is set
+              automatically.
             </p>
             {displayRows.map((row) => (
               <SiteTimesheetRowCard
@@ -753,14 +944,12 @@ export function SiteTimesheetsSection({
                       </div>
                     </td>
                     <td className={cellClass}>
-                      <select
-                        disabled={locked}
-                        value={row.attendanceStatus}
-                        onChange={(e) => void updateRow(row, { attendanceStatus: e.target.value as SiteTimesheetAttendance })}
-                        className="input-compact w-full !px-2 !py-1 text-[11px]"
+                      <span
+                        className="font-medium text-neutral-800 dark:text-neutral-200"
+                        title="Set automatically when you approve this shift"
                       >
-                        {ATTENDANCE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </select>
+                        {formatAttendanceStatus(row.attendanceStatus)}
+                      </span>
                     </td>
                     <td className={cellClass}>
                       <div className="flex flex-wrap gap-0.5">
@@ -807,8 +996,8 @@ export function SiteTimesheetsSection({
                             placeholder="OB No."
                             title={
                               savedOb
-                                ? "Admin only: change Occurrence Book number"
-                                : "Occurrence Book number (required to approve)"
+                                ? "Admin only: change Occurrence Book number (must be unique on this timesheet)"
+                                : "Occurrence Book number — required to approve; must be unique on this timesheet"
                             }
                             aria-label={`Occurrence Book number for ${row.workDate}`}
                           />
@@ -838,8 +1027,12 @@ export function SiteTimesheetsSection({
                         <button
                           type="button"
                           disabled={savingRowId === row.id}
+                          onMouseDown={(e) => {
+                            // Prevent OB input blur→save from disabling this button before click fires.
+                            e.preventDefault();
+                          }}
                           onClick={() => void approveRowAttendance(row)}
-                          title="Enter OB number, then approve attendance for this day"
+                          title="Click to approve. You will be told if the OB number is missing or already used."
                           className="w-full rounded-security border-2 border-security-navy bg-security-navy px-2 py-1.5 text-[11px] font-semibold leading-tight text-white hover:bg-security-navy-800 disabled:opacity-50"
                         >
                           {savingRowId === row.id ? "…" : "Approve"}
