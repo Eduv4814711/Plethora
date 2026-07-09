@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { authFetch } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
 import { GuardSearchPicker } from "@/components/guard-search-picker";
 import { SiteTimesheetRowCard } from "@/components/site-timesheet-row-card";
@@ -25,6 +26,7 @@ import {
   updateSiteTimesheetRow,
 } from "@/lib/roster-api";
 import { sortSiteTimesheetRows } from "@/lib/site-timesheet-utils";
+import { isFullAdmin } from "@/lib/permissions";
 
 type GuardOption = GuardPickerOption;
 
@@ -141,6 +143,8 @@ export function SiteTimesheetsSection({
   periodStart: string;
   periodEnd: string;
 }) {
+  const { user } = useAuth();
+  const canEditLockedOb = Boolean(user && isFullAdmin(user));
   const [sheet, setSheet] = useState<SiteTimesheet | null>(null);
   const [guards, setGuards] = useState<GuardOption[]>([]);
   const [loading, setLoading] = useState(false);
@@ -148,12 +152,15 @@ export function SiteTimesheetsSection({
   const [error, setError] = useState<string | null>(null);
   /** Draft OB numbers typed in the on-page field before Approve. */
   const [obDrafts, setObDrafts] = useState<Record<string, string>>({});
+  /** Filter timesheet rows by planned/actual guard name. */
+  const [guardFilter, setGuardFilter] = useState("");
   const [newRow, setNewRow] = useState({
     workDate: periodStart,
     actualGuardId: "",
     actualShiftType: "day",
     actualShiftCode: "D",
     attendanceStatus: "reliever" as SiteTimesheetAttendance,
+    occurrenceBookNumber: "",
     comments: "",
   });
 
@@ -183,6 +190,7 @@ export function SiteTimesheetsSection({
   };
 
   useEffect(() => {
+    setGuardFilter("");
     void load();
   }, [token, siteId, periodStart, periodEnd]);
 
@@ -190,12 +198,29 @@ export function SiteTimesheetsSection({
     () => mergeTimesheetGuardOptions(guards, sheet?.rows ?? []),
     [guards, sheet?.rows]
   );
-  const displayRows = useMemo(
+  const sortedRows = useMemo(
     () => (sheet ? sortSiteTimesheetRows(sheet.rows) : []),
     [sheet?.rows]
   );
+  const displayRows = useMemo(() => {
+    const q = guardFilter.trim().toLowerCase();
+    if (!q) return sortedRows;
+    return sortedRows.filter((row) => {
+      const haystack = [
+        row.actualGuardName,
+        row.plannedGuardName,
+        row.employeeNumber,
+        row.psiraNumber,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [sortedRows, guardFilter]);
   const reviewedCount = sheet?.rows.filter((r) => r.approvalStatus !== "pending").length ?? 0;
   const pendingReviewCount = sheet ? sheet.rows.length - reviewedCount : 0;
+  const guardFilterActive = guardFilter.trim().length > 0;
 
   const updateRow = async (row: SiteTimesheetRow, patch: Partial<SiteTimesheetRow>) => {
     const nextPatch =
@@ -240,6 +265,18 @@ export function SiteTimesheetsSection({
     await updateRow(row, buildRowApprovalPatch(row, obNumber));
   };
 
+  const saveObNumber = async (row: SiteTimesheetRow) => {
+    const next = getObDraft(row).trim();
+    const current = (row.occurrenceBookNumber ?? "").trim();
+    if (!next || next === current) return;
+    if (current && !canEditLockedOb) {
+      setError("Occurrence Book (OB) number can only be changed by an administrator once it has been entered.");
+      setObDraft(row.id, current);
+      return;
+    }
+    await updateRow(row, { occurrenceBookNumber: next });
+  };
+
   const exportPdf = () => {
     if (!sheet) return;
     const doc = new jsPDF({ orientation: "landscape" });
@@ -251,7 +288,7 @@ export function SiteTimesheetsSection({
     autoTable(doc, {
       startY: 36,
       head: [["Date", "Day", "Scheduled", "Actual", "Planned", "Actual shift", "Status", "Hours", "OB Number", "Discrepancies", "Comments"]],
-      body: displayRows.map((row) => [
+      body: sortedRows.map((row) => [
         row.workDate,
         row.dayOfWeek,
         row.plannedGuardName ?? "",
@@ -425,8 +462,8 @@ export function SiteTimesheetsSection({
           )}
 
           {!locked && (
-            <div className="grid gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm dark:border-neutral-700 dark:bg-neutral-900 sm:grid-cols-2 lg:grid-cols-6">
-              <div className="sm:col-span-2">
+            <div className="grid gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm dark:border-neutral-700 dark:bg-neutral-900 sm:grid-cols-2 lg:grid-cols-7">
+              <div>
                 <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Date</label>
                 <input
                   type="date"
@@ -470,7 +507,22 @@ export function SiteTimesheetsSection({
                   <option value="night">Night shift</option>
                 </select>
               </div>
-              <div className="flex flex-col justify-end gap-2 sm:col-span-2 lg:col-span-1">
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                  OB number
+                </label>
+                <input
+                  value={newRow.occurrenceBookNumber}
+                  onChange={(e) =>
+                    setNewRow((prev) => ({ ...prev, occurrenceBookNumber: e.target.value }))
+                  }
+                  placeholder="Enter OB number"
+                  className="input-modern mt-1 w-full"
+                  maxLength={80}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="flex flex-col justify-end gap-2 sm:col-span-2">
                 <input
                   value={newRow.comments}
                   onChange={(e) => setNewRow((prev) => ({ ...prev, comments: e.target.value }))}
@@ -485,8 +537,16 @@ export function SiteTimesheetsSection({
                       return;
                     }
                     try {
-                      await addSiteTimesheetRow(token, sheet.id, newRow);
-                      setNewRow((prev) => ({ ...prev, actualGuardId: "", comments: "" }));
+                      await addSiteTimesheetRow(token, sheet.id, {
+                        ...newRow,
+                        occurrenceBookNumber: newRow.occurrenceBookNumber.trim() || null,
+                      });
+                      setNewRow((prev) => ({
+                        ...prev,
+                        actualGuardId: "",
+                        occurrenceBookNumber: "",
+                        comments: "",
+                      }));
                       await load();
                     } catch (err) {
                       setError(err instanceof Error ? err.message : "Failed to add reliever row");
@@ -497,6 +557,48 @@ export function SiteTimesheetsSection({
                   Add reliever
                 </button>
               </div>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-950 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1">
+              <label
+                htmlFor="site-timesheet-guard-filter"
+                className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500"
+              >
+                Search / filter by guard
+              </label>
+              <input
+                id="site-timesheet-guard-filter"
+                type="search"
+                value={guardFilter}
+                onChange={(e) => setGuardFilter(e.target.value)}
+                placeholder="Type a guard name or employee number…"
+                className="input-modern mt-1 w-full"
+                autoComplete="off"
+              />
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {guardFilterActive && (
+                <p className="text-xs text-neutral-500">
+                  Showing {displayRows.length} of {sortedRows.length} day
+                  {sortedRows.length === 1 ? "" : "s"}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => setGuardFilter("")}
+                disabled={!guardFilterActive}
+                className="btn-secondary disabled:opacity-40"
+              >
+                Clear filter
+              </button>
+            </div>
+          </div>
+
+          {guardFilterActive && displayRows.length === 0 && (
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-3 text-sm text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
+              No timesheet days match “{guardFilter.trim()}”. Clear the filter to see all guards again.
             </div>
           )}
 
@@ -515,6 +617,8 @@ export function SiteTimesheetsSection({
                 saving={savingRowId === row.id}
                 occurrenceBookNumber={getObDraft(row)}
                 onOccurrenceBookNumberChange={(value) => setObDraft(row.id, value)}
+                onOccurrenceBookNumberSave={() => void saveObNumber(row)}
+                canEditLockedOb={canEditLockedOb}
                 rowShiftType={rowShiftType}
                 displayShiftTime={displayShiftTime}
                 combineDateTime={combineDateTime}
@@ -676,21 +780,40 @@ export function SiteTimesheetsSection({
                       />
                     </td>
                     <td className={cellClass}>
-                      {locked || row.approvalStatus === "approved" ? (
-                        <span className="font-medium text-neutral-800 dark:text-neutral-200" title="Occurrence Book number">
-                          {row.occurrenceBookNumber || "—"}
-                        </span>
-                      ) : (
-                        <input
-                          value={getObDraft(row)}
-                          onChange={(e) => setObDraft(row.id, e.target.value)}
-                          disabled={savingRowId === row.id}
-                          className="input-compact w-full !px-2 !py-1 text-[11px]"
-                          placeholder="OB No."
-                          title="Occurrence Book number (required to approve)"
-                          aria-label={`Occurrence Book number for ${row.workDate}`}
-                        />
-                      )}
+                      {(() => {
+                        const savedOb = (row.occurrenceBookNumber ?? "").trim();
+                        const obLocked = Boolean(savedOb) && !canEditLockedOb;
+                        if (locked || row.approvalStatus === "approved" || obLocked) {
+                          return (
+                            <span
+                              className="font-medium text-neutral-800 dark:text-neutral-200"
+                              title={
+                                obLocked
+                                  ? "OB number is locked. Only an administrator can change it."
+                                  : "Occurrence Book number"
+                              }
+                            >
+                              {savedOb || row.occurrenceBookNumber || "—"}
+                            </span>
+                          );
+                        }
+                        return (
+                          <input
+                            value={getObDraft(row)}
+                            onChange={(e) => setObDraft(row.id, e.target.value)}
+                            onBlur={() => void saveObNumber(row)}
+                            disabled={savingRowId === row.id}
+                            className="input-compact w-full !px-2 !py-1 text-[11px]"
+                            placeholder="OB No."
+                            title={
+                              savedOb
+                                ? "Admin only: change Occurrence Book number"
+                                : "Occurrence Book number (required to approve)"
+                            }
+                            aria-label={`Occurrence Book number for ${row.workDate}`}
+                          />
+                        );
+                      })()}
                     </td>
                     <td className={cellClass}>
                       {row.approvalStatus === "approved" || locked ? (

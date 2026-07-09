@@ -141,6 +141,7 @@ export const siteTimesheetRowCreateSchema = z.object({
     "training",
     "off",
   ]),
+  occurrenceBookNumber: z.string().max(80).nullable().optional(),
   comments: z.string().nullable().optional(),
   hoursWorked: z.number().nullable().optional(),
   overtimeHours: z.number().nullable().optional(),

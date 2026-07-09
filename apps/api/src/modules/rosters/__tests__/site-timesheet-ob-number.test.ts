@@ -75,3 +75,63 @@ describe("site timesheet OB number approval gate", () => {
     expect(result.ok).toBe(true);
   });
 });
+
+function canChangeSavedObNumber(args: {
+  existingOccurrenceBookNumber?: string | null;
+  occurrenceBookNumber?: string | null;
+  actorRole: string;
+}): { ok: true } | { ok: false; error: string } {
+  const next = normalizeOccurrenceBookNumber(args.occurrenceBookNumber);
+  const existing =
+    normalizeOccurrenceBookNumber(args.existingOccurrenceBookNumber) ?? null;
+  if (next === undefined || !existing) return { ok: true };
+  if (next !== existing && args.actorRole !== "admin") {
+    return {
+      ok: false,
+      error:
+        "Occurrence Book (OB) number can only be changed by an administrator once it has been entered.",
+    };
+  }
+  return { ok: true };
+}
+
+describe("site timesheet OB number admin lock", () => {
+  it("allows first-time OB entry by non-admin", () => {
+    expect(
+      canChangeSavedObNumber({
+        existingOccurrenceBookNumber: null,
+        occurrenceBookNumber: "OB-1",
+        actorRole: "supervisor",
+      })
+    ).toEqual({ ok: true });
+  });
+
+  it("blocks non-admin from changing a saved OB number", () => {
+    const result = canChangeSavedObNumber({
+      existingOccurrenceBookNumber: "OB-1",
+      occurrenceBookNumber: "OB-2",
+      actorRole: "supervisor",
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it("allows admin to change a saved OB number", () => {
+    expect(
+      canChangeSavedObNumber({
+        existingOccurrenceBookNumber: "OB-1",
+        occurrenceBookNumber: "OB-2",
+        actorRole: "admin",
+      })
+    ).toEqual({ ok: true });
+  });
+
+  it("allows re-submitting the same saved OB number", () => {
+    expect(
+      canChangeSavedObNumber({
+        existingOccurrenceBookNumber: "OB-1",
+        occurrenceBookNumber: " OB-1 ",
+        actorRole: "supervisor",
+      })
+    ).toEqual({ ok: true });
+  });
+});

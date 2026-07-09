@@ -38,6 +38,10 @@ type SiteTimesheetRowCardProps = {
   saving: boolean;
   occurrenceBookNumber: string;
   onOccurrenceBookNumberChange: (value: string) => void;
+  /** Persist OB when leaving the field (e.g. admin correction). */
+  onOccurrenceBookNumberSave?: () => void;
+  /** Full admins may edit an OB number after it has been saved. */
+  canEditLockedOb?: boolean;
   rowShiftType: (row: SiteTimesheetRow) => "day" | "night" | null;
   displayShiftTime: (
     iso: string | null | undefined,
@@ -58,6 +62,8 @@ export function SiteTimesheetRowCard({
   saving,
   occurrenceBookNumber,
   onOccurrenceBookNumberChange,
+  onOccurrenceBookNumberSave,
+  canEditLockedOb = false,
   rowShiftType,
   displayShiftTime,
   combineDateTime,
@@ -69,6 +75,8 @@ export function SiteTimesheetRowCard({
   const shiftType = rowShiftType(row);
   const needsReview = row.approvalStatus === "pending";
   const reviewed = row.approvalStatus === "reviewed" || row.approvalStatus === "approved";
+  const savedOb = (row.occurrenceBookNumber ?? "").trim();
+  const obLocked = Boolean(savedOb) && !canEditLockedOb;
 
   return (
     <article
@@ -226,18 +234,30 @@ export function SiteTimesheetRowCard({
         <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
           Occurrence Book (OB) number
         </label>
-        {locked || row.approvalStatus === "approved" ? (
-          <p className="mt-1 text-sm font-medium text-neutral-800 dark:text-neutral-200">
-            {row.occurrenceBookNumber || "—"}
-          </p>
+        {locked || row.approvalStatus === "approved" || obLocked ? (
+          <div className="mt-1">
+            <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+              {savedOb || row.occurrenceBookNumber || "—"}
+            </p>
+            {obLocked && !locked && row.approvalStatus !== "approved" && (
+              <p className="mt-0.5 text-[11px] text-neutral-500">
+                Locked — only an administrator can change this.
+              </p>
+            )}
+          </div>
         ) : (
           <input
             value={occurrenceBookNumber}
             onChange={(e) => onOccurrenceBookNumberChange(e.target.value)}
+            onBlur={() => onOccurrenceBookNumberSave?.()}
             disabled={saving}
             className="input-modern mt-1 w-full"
             placeholder="Enter OB number"
-            title="Occurrence Book number (required to approve)"
+            title={
+              savedOb
+                ? "Admin only: change Occurrence Book number"
+                : "Occurrence Book number (required to approve)"
+            }
             aria-label={`Occurrence Book number for ${row.workDate}`}
           />
         )}

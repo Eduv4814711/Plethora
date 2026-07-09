@@ -180,7 +180,12 @@ export async function rostersRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
     }
-    const result = await updateSiteTimesheetRow(request.user!.companyId, rowId, parsed.data);
+    const result = await updateSiteTimesheetRow(
+      request.user!.companyId,
+      rowId,
+      parsed.data,
+      { role: request.user!.role }
+    );
     if (!result) return reply.code(404).send({ error: "Timesheet row not found" });
     if ("error" in result) return reply.code(409).send({ error: result.error });
     return reply.send(result);

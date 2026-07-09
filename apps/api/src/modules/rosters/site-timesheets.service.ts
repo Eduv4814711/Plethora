@@ -634,7 +634,8 @@ export async function updateSiteTimesheetRow(
     approvalStatus?: SiteTimesheetRowStatus;
     occurrenceBookNumber?: string | null;
     comments?: string | null;
-  }
+  },
+  actor?: { role: string }
 ) {
   const existing = await prisma.siteTimesheetRow.findFirst({
     where: { id: rowId, companyId },
@@ -650,13 +651,25 @@ export async function updateSiteTimesheetRow(
   }
 
   const nextOccurrenceBookNumber = normalizeOccurrenceBookNumber(input.occurrenceBookNumber);
+  const existingOb =
+    normalizeOccurrenceBookNumber(existing.occurrenceBookNumber) ?? null;
+  if (nextOccurrenceBookNumber !== undefined && existingOb) {
+    const changing = nextOccurrenceBookNumber !== existingOb;
+    if (changing && actor?.role !== "admin") {
+      return {
+        error:
+          "Occurrence Book (OB) number can only be changed by an administrator once it has been entered.",
+      };
+    }
+  }
+
   const approving =
     input.approvalStatus === "reviewed" || input.approvalStatus === "approved";
   if (approving) {
     const obNumber =
       nextOccurrenceBookNumber !== undefined
         ? nextOccurrenceBookNumber
-        : normalizeOccurrenceBookNumber(existing.occurrenceBookNumber) ?? null;
+        : existingOb;
     if (!obNumber) {
       return {
         error:
@@ -712,6 +725,7 @@ export async function addSiteTimesheetRow(
     actualShiftCode: string;
     actualShiftType: string;
     attendanceStatus: SiteTimesheetAttendance;
+    occurrenceBookNumber?: string | null;
     comments?: string | null;
     hoursWorked?: number | null;
     overtimeHours?: number | null;
@@ -725,6 +739,8 @@ export async function addSiteTimesheetRow(
   if (!(await guardBelongsToCompany(input.actualGuardId, companyId))) {
     return { error: "Guard not found." };
   }
+  const occurrenceBookNumber =
+    normalizeOccurrenceBookNumber(input.occurrenceBookNumber) ?? null;
   const row = await prisma.$transaction(async (tx) => {
     const created = await tx.siteTimesheetRow.create({
       data: {
@@ -737,6 +753,7 @@ export async function addSiteTimesheetRow(
         actualShiftType: input.actualShiftType,
         attendanceStatus: input.attendanceStatus,
         approvalStatus: "reviewed",
+        occurrenceBookNumber,
         comments: input.comments,
         hoursWorked: input.hoursWorked,
         overtimeHours: input.overtimeHours,

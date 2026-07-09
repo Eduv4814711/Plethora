@@ -529,6 +529,7 @@ export async function addSiteTimesheetRow(
     actualShiftCode: string;
     actualShiftType: string;
     attendanceStatus: SiteTimesheetAttendance;
+    occurrenceBookNumber?: string | null;
     comments?: string | null;
     hoursWorked?: number | null;
     overtimeHours?: number | null;
