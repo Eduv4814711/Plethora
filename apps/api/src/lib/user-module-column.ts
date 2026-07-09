@@ -158,20 +158,17 @@ export async function findUniqueUserAuthScalars(
   }
 }
 
+/** Public branding fields returned on /auth/me for every authenticated user. */
 const ME_COMPANY_SELECT = {
   id: true,
   name: true,
   legalName: true,
-  registrationNumber: true,
-  taxNumber: true,
   address: true,
   phone: true,
   email: true,
   logoUrl: true,
   website: true,
   fax: true,
-  psiraRegistration: true,
-  uifReference: true,
   settings: true,
 } as const;
 

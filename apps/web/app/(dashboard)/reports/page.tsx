@@ -42,11 +42,21 @@ export default function ReportsPage() {
     setLoading(true);
     setError(null);
     authFetch(`/reports?payPeriodCount=${payPeriodCount}`, token)
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error(
+            (body as { message?: string; error?: string }).message ||
+              (body as { error?: string }).error ||
+              "Unable to load reports"
+          );
+        }
+        return r.json();
+      })
       .then(setData)
       .catch((err) => {
         console.error(err);
-        setError("Unable to load reports. Check the connection and try again.");
+        setError(err instanceof Error ? err.message : "Unable to load reports. Check the connection and try again.");
         setData(null);
       })
       .finally(() => setLoading(false));

@@ -105,7 +105,17 @@ export default function AttendancePage() {
   useEffect(() => {
     if (!token) return;
     authFetch("/sites?limit=100", token)
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error(
+            (body as { message?: string; error?: string }).message ||
+              (body as { error?: string }).error ||
+              "Unable to load sites"
+          );
+        }
+        return r.json();
+      })
       .then((d) => setSites(d.data || []))
       .catch(console.error);
   }, [token]);

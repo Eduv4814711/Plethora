@@ -51,7 +51,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const refreshInFlightRef = useRef(0);
+  /** Single-flight: concurrent refresh (proactive timer + 401 retry) must share one request. */
+  const refreshPromiseRef = useRef<Promise<string | null> | null>(null);
 
   const applySession = (data: LoginResponse) => {
     setUser(data.user);
@@ -60,20 +61,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const doRefresh = async (
     legacyRefreshToken?: string,
-    source = "unknown"
+    _source = "unknown"
   ): Promise<string | null> => {
-    refreshInFlightRef.current += 1;
-    try {
-      const data = await refreshSession(legacyRefreshToken);
-      applySession(data);
-      return data.accessToken;
-    } catch (err) {
-      setUser(null);
-      setToken(null);
-      return null;
-    } finally {
-      refreshInFlightRef.current -= 1;
+    if (refreshPromiseRef.current) {
+      return refreshPromiseRef.current;
     }
+
+    const promise = (async (): Promise<string | null> => {
+      try {
+        const data = await refreshSession(legacyRefreshToken);
+        applySession(data);
+        return data.accessToken;
+      } catch {
+        setUser(null);
+        setToken(null);
+        return null;
+      } finally {
+        refreshPromiseRef.current = null;
+      }
+    })();
+
+    refreshPromiseRef.current = promise;
+    return promise;
   };
 
   const doRefreshRef = useRef(doRefresh);

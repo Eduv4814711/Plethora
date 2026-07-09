@@ -128,3 +128,11 @@ export function requireAdmin() {
     }
   };
 }
+
+/** Tax / statutory company fields — full admin, or settings/payroll module access. */
+export function canViewSensitiveCompanyFields(user: JWTPayload): boolean {
+  if (user.role === "admin" && !normalizeModuleAccess(user.moduleAccess)) {
+    return true;
+  }
+  return userMatchesAnyModule(user, ["/settings", "/payroll"]);
+}

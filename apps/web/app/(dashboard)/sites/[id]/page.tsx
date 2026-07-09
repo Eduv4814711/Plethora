@@ -225,14 +225,36 @@ export default function SiteDetailPage() {
 
     if (source === postId) return;
 
-    await authFetch(`/sites/${siteId}/posts/${source}/guards/${guard.id}`, token, { method: "DELETE" });
+    const del = await authFetch(`/sites/${siteId}/posts/${source}/guards/${guard.id}`, token, {
+      method: "DELETE",
+    });
+    if (!del.ok) {
+      const body = await del.json().catch(() => ({}));
+      setDeleteError(
+        (body as { message?: string; error?: string }).message ||
+          (body as { error?: string }).error ||
+          "Failed to move guard from the previous post"
+      );
+      return;
+    }
 
     const res = await authFetch(`/sites/${siteId}/posts/${postId}/guards`, token, {
       method: "POST",
       body: JSON.stringify({ employeeId: guard.id }),
     });
 
-    if (res.ok) refresh();
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setDeleteError(
+        (body as { message?: string; error?: string }).message ||
+          (body as { error?: string }).error ||
+          "Failed to assign guard to the new post"
+      );
+      return;
+    }
+
+    setDeleteError(null);
+    refresh();
   };
 
   const handleRemoveFromPost = async (postId: string, employeeId: string) => {

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
+import { requireAdmin } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 
@@ -10,6 +11,7 @@ const updateCompanySchema = z.object({
 
 export async function companiesRoutes(app: FastifyInstance) {
   const protect = [authMiddleware];
+  const adminProtect = [authMiddleware, requireAdmin()];
 
   // Only return the caller's company (tenant isolation; no platform admin)
   app.get("/", { preHandler: protect }, async (request, reply) => {
@@ -47,8 +49,8 @@ export async function companiesRoutes(app: FastifyInstance) {
     });
   });
 
-  // Only allow updating the caller's company
-  app.put("/:id", { preHandler: protect }, async (request, reply) => {
+  // Full admin only — company rename is a privileged settings action
+  app.put("/:id", { preHandler: adminProtect }, async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
     if (id !== user.companyId) {

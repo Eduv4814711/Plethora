@@ -98,9 +98,22 @@ export default function DashboardPage() {
     if (dateRange) params.set("dateRange", dateRange);
     if (selectedSiteIds.length) params.set("siteIds", selectedSiteIds.join(","));
     authFetch(`/dashboard?${params.toString()}`, token)
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error(
+            (body as { message?: string; error?: string }).message ||
+              (body as { error?: string }).error ||
+              "Unable to load dashboard"
+          );
+        }
+        return r.json();
+      })
       .then(setData)
-      .catch(console.error)
+      .catch((err) => {
+        console.error(err);
+        setData(null);
+      })
       .finally(() => setLoading(false));
   }, [token, dateRange, selectedSiteIds]);
 

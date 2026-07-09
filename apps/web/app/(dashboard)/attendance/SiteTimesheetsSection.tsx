@@ -298,14 +298,26 @@ export function SiteTimesheetsSection({
             <button
               type="button"
               onClick={async () => {
-                const res = await authFetch(siteTimesheetCsvUrl(siteId, periodStart, periodEnd), token);
-                const blob = await res.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `site-timesheet-${sheet.siteName}-${sheet.periodStart}.csv`;
-                a.click();
-                URL.revokeObjectURL(url);
+                try {
+                  const res = await authFetch(siteTimesheetCsvUrl(siteId, periodStart, periodEnd), token);
+                  if (!res.ok) {
+                    const body = await res.json().catch(() => ({}));
+                    throw new Error(
+                      (body as { message?: string; error?: string }).message ||
+                        (body as { error?: string }).error ||
+                        "Failed to download CSV"
+                    );
+                  }
+                  const blob = await res.blob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `site-timesheet-${sheet.siteName}-${sheet.periodStart}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Failed to download CSV");
+                }
               }}
               className="btn-secondary w-full sm:w-auto"
             >
@@ -317,8 +329,13 @@ export function SiteTimesheetsSection({
                 onClick={async () => {
                   const reason = window.prompt("Reason for unlocking this approved timesheet?");
                   if (reason == null) return;
-                  await unlockSiteTimesheet(token, sheet.id, reason);
-                  await load();
+                  try {
+                    setError(null);
+                    await unlockSiteTimesheet(token, sheet.id, reason);
+                    await load();
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to unlock timesheet");
+                  }
                 }}
                 className="btn-secondary w-full sm:w-auto"
               >
@@ -334,8 +351,13 @@ export function SiteTimesheetsSection({
                       ? `${unreviewed} row(s) have not been individually approved yet. Approve and lock this site timesheet for payroll anyway?`
                       : "Approve and lock this site timesheet for payroll?";
                   if (!window.confirm(message)) return;
-                  await approveSiteTimesheet(token, sheet.id);
-                  await load();
+                  try {
+                    setError(null);
+                    await approveSiteTimesheet(token, sheet.id);
+                    await load();
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to approve timesheet");
+                  }
                 }}
                 className="btn-primary w-full sm:w-auto"
               >

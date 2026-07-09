@@ -3,7 +3,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { basename } from "node:path";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireAdmin } from "../middleware/rbac.js";
+import { canViewSensitiveCompanyFields, requireAdmin } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 import { runAutoRosterForCompany } from "../services/auto-roster.service.js";
@@ -140,6 +140,22 @@ export async function settingsRoutes(app: FastifyInstance) {
 
     if (!company) {
       return reply.code(404).send({ error: "Company not found" });
+    }
+
+    // Branding + calendar settings are needed app-wide; statutory refs stay restricted.
+    if (!canViewSensitiveCompanyFields(request.user!)) {
+      return reply.send({
+        id: company.id,
+        name: company.name,
+        legalName: company.legalName,
+        address: company.address,
+        phone: company.phone,
+        email: company.email,
+        logoUrl: company.logoUrl,
+        website: company.website,
+        fax: company.fax,
+        settings: company.settings,
+      });
     }
 
     return reply.send(company);

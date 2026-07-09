@@ -163,6 +163,14 @@ export default function EmployeesPage() {
         params.set("limit", String(pageSize));
         params.set("offset", String(offset));
         const res = await authFetch(`/employees?${params.toString()}`, token);
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(
+            (body as { message?: string; error?: string }).message ||
+              (body as { error?: string }).error ||
+              "Unable to load team members"
+          );
+        }
         const payload = await res.json();
         const page = Array.isArray(payload?.data) ? payload.data : [];
         total = Number(payload?.total ?? page.length);
@@ -175,7 +183,9 @@ export default function EmployeesPage() {
     } catch (err) {
       console.error(err);
       setEmployees([]);
-      setFetchError("Unable to load team members. Check the connection and try again.");
+      setFetchError(
+        err instanceof Error ? err.message : "Unable to load team members. Check the connection and try again."
+      );
     }
   };
 
