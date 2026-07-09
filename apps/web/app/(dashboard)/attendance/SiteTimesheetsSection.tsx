@@ -389,31 +389,38 @@ export function SiteTimesheetsSection({
                 <input
                   type="date"
                   value={newRow.workDate}
-                  onChange={(e) => setNewRow({ ...newRow, workDate: e.target.value })}
+                  onChange={(e) => setNewRow((prev) => ({ ...prev, workDate: e.target.value }))}
                   className="input-modern mt-1 w-full"
                 />
               </div>
               <div className="sm:col-span-2">
-                <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Guard</label>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                  Guard <span className="text-amber-600">*</span>
+                </label>
                 <GuardSearchPicker
                   guards={guardOptions}
                   value={newRow.actualGuardId || null}
-                  onChange={(id) => setNewRow({ ...newRow, actualGuardId: id ?? "" })}
+                  onChange={(id) => setNewRow((prev) => ({ ...prev, actualGuardId: id ?? "" }))}
                   placeholder="Choose reliever or guard…"
                   className="input-modern mt-1 w-full"
                   allowClear={false}
                 />
+                {!newRow.actualGuardId && (
+                  <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                    Select who worked — required before you can add them to the timesheet.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Shift</label>
                 <select
                   value={newRow.actualShiftType}
                   onChange={(e) =>
-                    setNewRow({
-                      ...newRow,
+                    setNewRow((prev) => ({
+                      ...prev,
                       actualShiftType: e.target.value,
                       actualShiftCode: e.target.value === "night" ? "N" : "D",
-                    })
+                    }))
                   }
                   className="input-modern mt-1 w-full"
                 >
@@ -424,19 +431,26 @@ export function SiteTimesheetsSection({
               <div className="flex flex-col justify-end gap-2 sm:col-span-2 lg:col-span-1">
                 <input
                   value={newRow.comments}
-                  onChange={(e) => setNewRow({ ...newRow, comments: e.target.value })}
+                  onChange={(e) => setNewRow((prev) => ({ ...prev, comments: e.target.value }))}
                   placeholder="Reason (optional)"
                   className="input-modern w-full"
                 />
                 <button
                   type="button"
-                  disabled={!newRow.actualGuardId}
                   onClick={async () => {
-                    await addSiteTimesheetRow(token, sheet.id, newRow);
-                    setNewRow({ ...newRow, actualGuardId: "", comments: "" });
-                    await load();
+                    if (!newRow.actualGuardId) {
+                      setError("Select a guard before adding them to the timesheet.");
+                      return;
+                    }
+                    try {
+                      await addSiteTimesheetRow(token, sheet.id, newRow);
+                      setNewRow((prev) => ({ ...prev, actualGuardId: "", comments: "" }));
+                      await load();
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Failed to add reliever row");
+                    }
                   }}
-                  className="btn-secondary w-full disabled:opacity-50"
+                  className={`btn-secondary w-full ${!newRow.actualGuardId ? "opacity-50" : ""}`}
                 >
                   Add reliever
                 </button>
