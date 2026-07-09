@@ -12,6 +12,7 @@ import { generatePayslipPDFFromTemplate } from "../../services/payslip-pdf.servi
 import { generateRosterPDF } from "../../services/roster-pdf.service.js";
 import { sendText, sendDocument, sendInteractiveList } from "./send.service.js";
 import { createAuditLog } from "../../lib/audit.js";
+import { triggerPostClockExceptionSync } from "../../modules/attendance-exceptions/post-clock-sync.js";
 import { getCompanyTimezone } from "../../lib/timezone.js";
 import { addDays, format } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
@@ -182,7 +183,7 @@ async function completeWhatsAppClockOut(
       clockOut: null,
       status: "clocked_in",
     },
-    include: { shift: true },
+    include: { shift: { select: { siteId: true, startTime: true, endTime: true } } },
   });
 
   if (!attendance) {
@@ -226,6 +227,8 @@ async function completeWhatsAppClockOut(
       overtimeHours,
     },
   });
+
+  triggerPostClockExceptionSync(employee.companyId, attendance.shift.siteId);
 
   const timeZone = await getCompanyTimezone(employee.companyId);
   return {
@@ -503,6 +506,8 @@ export async function processIncomingLocation(
         longitude,
       },
     });
+
+    triggerPostClockExceptionSync(employee.companyId, shift.siteId);
 
     const siteName = shift.site?.name ?? "your post";
     const timeZone = await getCompanyTimezone(employee.companyId);

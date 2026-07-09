@@ -18,7 +18,9 @@ import { AlertBanner, EmptyState } from "@/components/ui";
 const STATUS_LABELS: Record<TaskStatus, string> = {
   todo: "To Do",
   in_progress: "In Progress",
+  blocked: "Blocked",
   done: "Done",
+  cancelled: "Cancelled",
 };
 
 const PRIORITY_LABELS: Record<TaskPriority, string> = {
@@ -26,6 +28,7 @@ const PRIORITY_LABELS: Record<TaskPriority, string> = {
   medium: "Medium",
   high: "High",
   urgent: "Urgent",
+  critical: "Critical",
 };
 
 const PRIORITY_COLORS: Record<TaskPriority, string> = {
@@ -33,11 +36,25 @@ const PRIORITY_COLORS: Record<TaskPriority, string> = {
   medium: "badge-warning",
   high: "badge-warning",
   urgent: "badge-error",
+  critical: "badge-error",
 };
+
+const QUICK_FILTERS = [
+  { value: "all", label: "All" },
+  { value: "my", label: "My Tasks" },
+  { value: "overdue", label: "Overdue" },
+  { value: "due_today", label: "Due Today" },
+  { value: "critical", label: "Critical" },
+] as const;
+
+type QuickFilter = (typeof QUICK_FILTERS)[number]["value"];
 
 function TaskCard({ task }: { task: Task }) {
   const dueStr = task.dueDate ? new Date(task.dueDate).toLocaleDateString() : null;
-  const isOverdue = task.dueDate && task.status !== "done" && new Date(task.dueDate) < new Date();
+  const isOverdue =
+    task.dueDate &&
+    !["done", "cancelled"].includes(task.status) &&
+    new Date(task.dueDate) < new Date();
 
   return (
     <Link
@@ -46,14 +63,12 @@ function TaskCard({ task }: { task: Task }) {
     >
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-semibold text-black truncate flex-1">{task.title}</h3>
-        <span
-          className={`shrink-0 ${PRIORITY_COLORS[task.priority]}`}
-        >
-          {PRIORITY_LABELS[task.priority]}
+        <span className={`shrink-0 ${PRIORITY_COLORS[task.priority] ?? "badge-neutral"}`}>
+          {PRIORITY_LABELS[task.priority] ?? task.priority}
         </span>
       </div>
       <div className="mt-2 flex flex-wrap gap-2 text-sm text-neutral-600">
-        <span>{STATUS_LABELS[task.status]}</span>
+        <span>{STATUS_LABELS[task.status] ?? task.status}</span>
         {task.project && (
           <span className="text-neutral-500">• {task.project.name}</span>
         )}
@@ -61,6 +76,20 @@ function TaskCard({ task }: { task: Task }) {
           <span className="text-neutral-500">• {task.assigneeDisplayName}</span>
         )}
       </div>
+      {typeof task.completionPercentage === "number" && task.status !== "done" && task.status !== "cancelled" && (
+        <div className="mt-2">
+          <div className="flex justify-between text-xs text-neutral-500 mb-0.5">
+            <span>Progress</span>
+            <span>{task.completionPercentage}%</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-neutral-200 overflow-hidden">
+            <div
+              className="h-full bg-security-navy-600 rounded-full"
+              style={{ width: `${Math.min(100, Math.max(0, task.completionPercentage))}%` }}
+            />
+          </div>
+        </div>
+      )}
       {dueStr && (
         <p className={`mt-1 text-xs ${isOverdue ? "text-red-600 font-medium" : "text-neutral-500"}`}>
           Due {dueStr}
@@ -79,6 +108,7 @@ export default function TasksPage() {
   const [showForm, setShowForm] = useState(false);
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
   const [formTitle, setFormTitle] = useState("");
   const [formProjectId, setFormProjectId] = useState<string>("");
   const [formPriority, setFormPriority] = useState<TaskPriority>("medium");
@@ -92,9 +122,10 @@ export default function TasksPage() {
 
   const refresh = async () => {
     if (!token) return;
-    const params: { projectId?: string; status?: TaskStatus } = {};
+    const params: { projectId?: string; status?: TaskStatus; filter?: "overdue" | "due_today" | "my" | "critical" } = {};
     if (projectFilter !== "all") params.projectId = projectFilter;
     if (statusFilter !== "all") params.status = statusFilter as TaskStatus;
+    if (quickFilter !== "all") params.filter = quickFilter;
 
     setFetchError("");
     try {
@@ -122,7 +153,7 @@ export default function TasksPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, projectFilter, statusFilter]);
+  }, [token, projectFilter, statusFilter, quickFilter]);
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -198,7 +229,9 @@ export default function TasksPage() {
             <option value="all">All Statuses</option>
             <option value="todo">To Do</option>
             <option value="in_progress">In Progress</option>
+            <option value="blocked">Blocked</option>
             <option value="done">Done</option>
+            <option value="cancelled">Cancelled</option>
           </select>
           <Link
             href="/tasks/projects"
@@ -213,6 +246,23 @@ export default function TasksPage() {
       </div>
 
       {fetchError && <AlertBanner variant="error" className="mb-6">{fetchError}</AlertBanner>}
+
+      <div className="mb-4 flex flex-wrap gap-1.5" role="group" aria-label="Quick filters">
+        {QUICK_FILTERS.map((f) => (
+          <button
+            key={f.value}
+            type="button"
+            onClick={() => setQuickFilter(f.value)}
+            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+              quickFilter === f.value
+                ? "bg-security-navy-700 text-white"
+                : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
 
       {showForm && (
         <div className="card-dashboard mb-6 p-4">
@@ -250,6 +300,7 @@ export default function TasksPage() {
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
                 <option value="urgent">Urgent</option>
+                <option value="critical">Critical</option>
               </select>
               <div className="w-48">
                 <AssigneePicker value={formAssignee} onChange={setFormAssignee} />
@@ -284,10 +335,10 @@ export default function TasksPage() {
       {tasks.length === 0 && (
         <EmptyState
           className="mt-6"
-          title={projectFilter !== "all" || statusFilter !== "all" ? "No tasks match these filters" : "No tasks created yet"}
+          title={projectFilter !== "all" || statusFilter !== "all" || quickFilter !== "all" ? "No tasks match these filters" : "No tasks created yet"}
           description={
-            projectFilter !== "all" || statusFilter !== "all"
-              ? "Adjust the project or status filters to find operational work."
+            projectFilter !== "all" || statusFilter !== "all" || quickFilter !== "all"
+              ? "Adjust the filters to find operational work."
               : "Create tasks to assign work, track follow-ups, and keep operations moving."
           }
           action={

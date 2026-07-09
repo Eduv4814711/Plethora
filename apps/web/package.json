@@ -6,7 +6,7 @@
     "node": "24.x"
   },
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "node scripts/check-port.mjs && next dev --port 3000",
     "build": "next build",
     "start": "next start",
     "lint": "echo 'next lint was removed in Next.js 16; use npm run build --workspace=web for typecheck'"

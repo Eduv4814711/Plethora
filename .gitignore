@@ -7,6 +7,8 @@ coverage
 *.tsbuildinfo
 .turbo
 uploads
+*.ndjson
+apps/web/.debug-*
 .cursor/*
 !.cursor/skills/
 .cursor/skills/*

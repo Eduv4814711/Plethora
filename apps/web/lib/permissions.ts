@@ -22,6 +22,10 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/tasks", label: "Tasks", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
   { href: "/whatsapp", label: "WhatsApp", roles: ["admin", "operations_manager", "hr_payroll", "supervisor", "controller"] },
   { href: "/reports", label: "Reports", roles: ["admin", "operations_manager", "hr_payroll"] },
+  { href: "/approvals", label: "Approvals", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
+  { href: "/incidents", label: "Incidents", roles: ["admin", "operations_manager", "supervisor", "controller"] },
+  { href: "/documents", label: "Documents", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
+  { href: "/client-portal", label: "Client Portal", roles: ["admin", "client"] },
   {
     href: "/academy",
     label: "Academy",
@@ -35,7 +39,16 @@ export const NAV_ITEMS: NavItem[] = [
 export const MAIN_NAV_HREFS = ["/", "/employees", "/sites", "/rostering", "/attendance", "/payroll", "/tasks"];
 
 /** Nav items shown in the "More" dropdown (remaining items). */
-export const MORE_NAV_HREFS = ["/whatsapp", "/reports", "/academy", "/audit"];
+export const MORE_NAV_HREFS = [
+  "/whatsapp",
+  "/reports",
+  "/approvals",
+  "/incidents",
+  "/documents",
+  "/client-portal",
+  "/academy",
+  "/audit",
+];
 
 /** Modules an admin can assign to a user (same as primary nav; Audit only effective for admin accounts). */
 export const MODULE_ASSIGN_OPTIONS: { href: string; label: string }[] = NAV_ITEMS.map(({ href, label }) => ({
@@ -55,6 +68,7 @@ export function normalizeUserModuleAccess(raw: unknown): string[] | null {
 
 /** Suggested module paths for a role (admin UI pre-fill). Not applied at runtime without saving. */
 export function defaultModulesForRole(role: string): string[] {
+  if (role === "client") return ["/client-portal"];
   const userRole = role as UserRole;
   return NAV_ITEMS.filter(
     (n) => n.roles.includes(userRole) && (n.href !== "/audit" || userRole === "admin")

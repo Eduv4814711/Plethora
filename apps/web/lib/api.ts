@@ -478,7 +478,13 @@ export async function authFetch(url: string, token: string, init?: RequestInit):
 }
 
 // User management (admin only)
-export type UserRole = "admin" | "operations_manager" | "hr_payroll" | "supervisor" | "controller";
+export type UserRole =
+  | "admin"
+  | "operations_manager"
+  | "hr_payroll"
+  | "supervisor"
+  | "controller"
+  | "client";
 
 export interface UserListItem {
   id: string;
@@ -911,8 +917,8 @@ export async function migrationAdminBulkCreate(
 }
 
 // Task Manager
-export type TaskStatus = "todo" | "in_progress" | "done";
-export type TaskPriority = "low" | "medium" | "high" | "urgent";
+export type TaskStatus = "todo" | "in_progress" | "blocked" | "done" | "cancelled";
+export type TaskPriority = "low" | "medium" | "high" | "urgent" | "critical";
 
 export interface TaskProject {
   id: string;
@@ -935,6 +941,9 @@ export interface Task {
   assigneeType?: string | null;
   assigneeId?: string | null;
   assigneeDisplayName?: string | null;
+  completionPercentage?: number | null;
+  siteId?: string | null;
+  site?: { id: string; name: string } | null;
   recurrenceRule?: Record<string, unknown> | null;
   project?: { id: string; name: string; color?: string | null } | null;
   createdBy?: { id: string; name: string; email: string };
@@ -1045,12 +1054,20 @@ export async function listTaskAssignees(
 
 export async function listTasks(
   token: string,
-  params?: { projectId?: string; status?: TaskStatus; assigneeId?: string; limit?: number; offset?: number }
+  params?: {
+    projectId?: string;
+    status?: TaskStatus;
+    assigneeId?: string;
+    filter?: "overdue" | "due_today" | "my" | "critical";
+    limit?: number;
+    offset?: number;
+  }
 ): Promise<{ data: Task[]; total: number; limit: number; offset: number }> {
   const q = new URLSearchParams();
   if (params?.projectId) q.set("projectId", params.projectId);
   if (params?.status) q.set("status", params.status);
   if (params?.assigneeId) q.set("assigneeId", params.assigneeId);
+  if (params?.filter) q.set("filter", params.filter);
   if (params?.limit) q.set("limit", String(params.limit));
   if (params?.offset) q.set("offset", String(params.offset));
   const res = await authFetch(`/tasks?${q.toString()}`, token);
@@ -1109,6 +1126,8 @@ export async function updateTask(
     dueDate: string | null;
     assigneeType: "employee" | "user" | null;
     assigneeId: string | null;
+    siteId: string | null;
+    completionPercentage: number;
     recurrenceRule: Record<string, unknown> | null;
   }>
 ): Promise<Task> {

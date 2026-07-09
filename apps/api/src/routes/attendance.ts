@@ -10,6 +10,7 @@ import {
 } from "../services/attendance.service.js";
 import { AttendanceValidationError } from "../services/attendance.service.js";
 import { createAuditLog } from "../lib/audit.js";
+import { triggerPostClockExceptionSync } from "../modules/attendance-exceptions/post-clock-sync.js";
 const optionalCoords = z
   .object({
     latitude: z.number().min(-90).max(90).optional(),
@@ -298,6 +299,8 @@ export async function attendanceRoutes(app: FastifyInstance) {
         metadata: { shiftId: parsed.data.shiftId },
       });
 
+      triggerPostClockExceptionSync(request.user!.companyId, shiftWithSite?.siteId);
+
       return reply.code(201).send(attendance);
     } catch (err) {
       if (err instanceof AttendanceValidationError) {
@@ -408,6 +411,8 @@ export async function attendanceRoutes(app: FastifyInstance) {
       entityId: parsed.data.attendanceId,
       metadata: { shiftId: attendance.shiftId, hoursWorked, overtimeHours },
     });
+
+    triggerPostClockExceptionSync(user.companyId, attendance.shift.siteId);
 
     return reply.send(updated);
   });

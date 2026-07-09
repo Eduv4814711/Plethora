@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
@@ -154,11 +155,16 @@ export default function AttendancePage() {
 
   return (
     <div className="animate-fade-in">
-      <div className="mb-6">
-        <h1 className="page-title">Attendance</h1>
-        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-          Confirm who actually worked at each site, then approve the timesheet so payroll pays the right hours.
-        </p>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="page-title">Attendance</h1>
+          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+            Confirm who actually worked at each site, then approve the timesheet so payroll pays the right hours.
+          </p>
+        </div>
+        <Link href="/attendance/exceptions" className="btn-secondary text-sm py-2 shrink-0 self-start">
+          Review exceptions
+        </Link>
       </div>
 
       <div className="card-wireframe mb-6 overflow-hidden p-4 sm:p-5">

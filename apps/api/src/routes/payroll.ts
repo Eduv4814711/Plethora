@@ -16,6 +16,7 @@ import { buildIrp5DataForTaxYear, irp5ToCsv } from "../services/irp5.service.js"
 import { fetchPayslipData, buildPayslipTemplateData } from "../services/payslip-data.service.js";
 import { generatePayslipPDFFromTemplate } from "../services/payslip-pdf.service.js";
 import { createAuditLog } from "../lib/audit.js";
+import { assertPayrollNotBlocked } from "../modules/attendance-exceptions/exceptions.service.js";
 import {
   auditPayrollApproval,
   auditPayrollCalculation,
@@ -150,6 +151,26 @@ export async function payrollRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const companyId = request.user!.companyId;
 
+    const runBefore = await prisma.payrollRun.findFirst({
+      where: { id, companyId },
+    });
+    if (!runBefore) {
+      return reply.code(404).send({ error: "Payroll run not found" });
+    }
+
+    const readiness = await assertPayrollNotBlocked(
+      companyId,
+      runBefore.periodStart,
+      runBefore.periodEnd
+    );
+    if (readiness.blocked) {
+      return reply.code(400).send({
+        error: "Payroll blocked",
+        message: readiness.message,
+        payrollReadiness: readiness,
+      });
+    }
+
     let calcResult;
     try {
       calcResult = await calculatePayroll(id, companyId);
@@ -198,6 +219,19 @@ export async function payrollRoutes(app: FastifyInstance) {
       return reply.code(400).send({
         error: "Invalid transition",
         message: `Cannot approve payroll in status ${run.status}. Must be calculated first.`,
+      });
+    }
+
+    const readiness = await assertPayrollNotBlocked(
+      user.companyId,
+      run.periodStart,
+      run.periodEnd
+    );
+    if (readiness.blocked) {
+      return reply.code(400).send({
+        error: "Payroll blocked",
+        message: readiness.message,
+        payrollReadiness: readiness,
       });
     }
 

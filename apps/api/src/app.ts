@@ -52,6 +52,14 @@ import { taskAttachmentsRoutes } from "./routes/task-attachments.js";
 import { taskRemindersRoutes } from "./routes/task-reminders.js";
 import { academyRoutes } from "./routes/academy/index.js";
 import { internalCronRoutes } from "./routes/internal-cron.js";
+import { alertsRoutes } from "./modules/alerts/alerts.routes.js";
+import { attendanceExceptionsRoutes } from "./modules/attendance-exceptions/exceptions.routes.js";
+import { documentsRoutes } from "./modules/documents/documents.routes.js";
+import { incidentsRoutes } from "./modules/incidents/incidents.routes.js";
+import { approvalsRoutes } from "./modules/approvals/approvals.routes.js";
+import { notificationsRoutes } from "./modules/notifications/notifications.routes.js";
+import { clientsRoutes, clientPortalRoutes } from "./modules/clients/clients.routes.js";
+import { reportsExtendedRoutes } from "./modules/reports-extended/reports-extended.routes.js";
 import { corsOriginFromEnv, env } from "./lib/env.js";
 
 function isValidationError(err: unknown): boolean {
@@ -65,6 +73,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     await mkdir(join(uploadsRoot, "logos"), { recursive: true });
     await mkdir(join(uploadsRoot, "tasks"), { recursive: true });
     await mkdir(join(uploadsRoot, "academy"), { recursive: true });
+    await mkdir(join(uploadsRoot, "documents"), { recursive: true });
+    await mkdir(join(uploadsRoot, "incidents"), { recursive: true });
   }
 
   const app = Fastify({
@@ -193,11 +203,20 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(searchRoutes, { prefix: "/search" });
   await app.register(migrationsRoutes, { prefix: "/migrations" });
   await app.register(reportsRoutes, { prefix: "/reports" });
+  await app.register(reportsExtendedRoutes, { prefix: "/reports/extended" });
   await app.register(taskProjectsRoutes, { prefix: "/task-projects" });
   await app.register(tasksRoutes, { prefix: "/tasks" });
   await app.register(taskCommentsRoutes, { prefix: "/task-comments" });
   await app.register(taskAttachmentsRoutes, { prefix: "/task-attachments" });
   await app.register(taskRemindersRoutes, { prefix: "/task-reminders" });
+  await app.register(alertsRoutes, { prefix: "/alerts" });
+  await app.register(attendanceExceptionsRoutes, { prefix: "/attendance-exceptions" });
+  await app.register(documentsRoutes, { prefix: "/documents" });
+  await app.register(incidentsRoutes, { prefix: "/incidents" });
+  await app.register(approvalsRoutes, { prefix: "/approvals" });
+  await app.register(notificationsRoutes, { prefix: "/notifications" });
+  await app.register(clientsRoutes, { prefix: "/clients" });
+  await app.register(clientPortalRoutes, { prefix: "/client-portal" });
   await app.register(academyRoutes, { prefix: "/academy" });
   await app.register(internalCronRoutes, { prefix: "/internal" });
 

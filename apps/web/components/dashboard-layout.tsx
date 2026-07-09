@@ -6,6 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
 import { SearchDropdown } from "@/components/search-dropdown";
+import { NotificationBell } from "@/components/notification-bell";
 import { CompanySetupModal } from "@/components/company-setup-modal";
 import {
   NAV_ITEMS,
@@ -287,6 +288,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="flex items-center gap-0.5 sm:gap-2 shrink-0">
+          <NotificationBell />
           <div ref={searchRef} className="relative flex items-center">
             {(user.role === "admin" || normalizeUserModuleAccess(user.moduleAccess)) && (
             <>

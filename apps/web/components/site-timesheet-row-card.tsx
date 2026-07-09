@@ -36,6 +36,8 @@ type SiteTimesheetRowCardProps = {
   guards: GuardOption[];
   locked: boolean;
   saving: boolean;
+  occurrenceBookNumber: string;
+  onOccurrenceBookNumberChange: (value: string) => void;
   rowShiftType: (row: SiteTimesheetRow) => "day" | "night" | null;
   displayShiftTime: (
     iso: string | null | undefined,
@@ -54,6 +56,8 @@ export function SiteTimesheetRowCard({
   guards,
   locked,
   saving,
+  occurrenceBookNumber,
+  onOccurrenceBookNumberChange,
   rowShiftType,
   displayShiftTime,
   combineDateTime,
@@ -218,12 +222,34 @@ export function SiteTimesheetRowCard({
         />
       </div>
 
+      <div>
+        <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+          Occurrence Book (OB) number
+        </label>
+        {locked || row.approvalStatus === "approved" ? (
+          <p className="mt-1 text-sm font-medium text-neutral-800 dark:text-neutral-200">
+            {row.occurrenceBookNumber || "—"}
+          </p>
+        ) : (
+          <input
+            value={occurrenceBookNumber}
+            onChange={(e) => onOccurrenceBookNumberChange(e.target.value)}
+            disabled={saving}
+            className="input-modern mt-1 w-full"
+            placeholder="Enter OB number"
+            title="Occurrence Book number (required to approve)"
+            aria-label={`Occurrence Book number for ${row.workDate}`}
+          />
+        )}
+      </div>
+
       {!locked && row.approvalStatus === "pending" && (
         <button
           type="button"
           disabled={saving}
           onClick={() => onApprove(row)}
           className="btn-primary w-full disabled:opacity-50"
+          title="Enter OB number above, then approve attendance for this day"
         >
           {saving ? "Saving…" : "Approve this day"}
         </button>

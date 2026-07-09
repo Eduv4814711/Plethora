@@ -119,6 +119,7 @@ export const siteTimesheetRowUpdateSchema = z.object({
     "off",
   ]).optional(),
   approvalStatus: z.enum(["pending", "reviewed", "approved"]).optional(),
+  occurrenceBookNumber: z.string().max(80).nullable().optional(),
   comments: z.string().nullable().optional(),
 });
 

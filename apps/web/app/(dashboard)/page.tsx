@@ -5,6 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch, getWhatsAppContacts, sendWhatsAppMessage } from "@/lib/api";
+import {
+  acknowledgeAlert,
+  resolveAlert,
+  dismissAlert,
+  type AlertCounts,
+  type OperationalAlert,
+} from "@/lib/msr-api";
 import { canAccessRoute } from "@/lib/permissions";
 import { format } from "date-fns";
 import {
@@ -39,7 +46,12 @@ interface DashboardData {
   activeSitesCount: number;
   activeSitesDelta?: number;
   payrollStatus: Record<string, number>;
-  alerts: { type: string; message: string; count?: number }[];
+  alerts: { type: string; message: string; count?: number; priority?: string; id?: string }[];
+  alertCounts?: AlertCounts;
+  operationalAlerts?: OperationalAlert[];
+  payrollReadiness?: { status: string; openExceptions: number } | null;
+  pendingApprovalsInbox?: number;
+  openCriticalIncidents?: number;
   taskStats?: { overdue: number; dueToday: number };
   topPriorityTasks?: TopTask[];
   shiftsOverTime?: { name: string; value: number }[];
@@ -76,6 +88,36 @@ const DATE_RANGES = [
   { value: "month", label: "Month" },
 ] as const;
 
+const PRIORITY_TABS = [
+  { value: "CRITICAL", label: "Critical" },
+  { value: "MEDIUM", label: "Medium" },
+  { value: "LOW", label: "Low" },
+  { value: "all", label: "All" },
+] as const;
+
+type PriorityTab = (typeof PRIORITY_TABS)[number]["value"];
+
+function alertViewHref(alert: OperationalAlert): string | null {
+  switch (alert.sourceModule) {
+    case "ATTENDANCE":
+      return "/attendance/exceptions";
+    case "TASKS":
+      return alert.sourceId ? `/tasks/${alert.sourceId}` : "/tasks";
+    case "INCIDENTS":
+      return alert.sourceId ? `/incidents/${alert.sourceId}` : "/incidents";
+    case "SITES":
+      return alert.siteId ? `/sites/${alert.siteId}` : "/sites";
+    case "DOCUMENTS":
+      return "/documents";
+    case "APPROVALS":
+      return "/approvals";
+    case "PAYROLL":
+      return "/payroll";
+    default:
+      return null;
+  }
+}
+
 export default function DashboardPage() {
   const { token, user } = useAuth();
   const router = useRouter();
@@ -86,6 +128,8 @@ export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<string>("month");
   const [siteFilterOpen, setSiteFilterOpen] = useState(false);
   const [whatsappContacts, setWhatsappContacts] = useState<{ id: string; firstName: string; lastName: string; phone: string | null; whatsappUrl: string | null }[]>([]);
+  const [priorityTab, setPriorityTab] = useState<PriorityTab>("all");
+  const [alertActionId, setAlertActionId] = useState<string | null>(null);
 
   const canSites = user ? canAccessRoute("/sites", user.role, user.moduleAccess) : false;
   const canWhatsApp = user ? canAccessRoute("/whatsapp", user.role, user.moduleAccess) : false;
@@ -121,6 +165,12 @@ export default function DashboardPage() {
     if (!token) return;
     setLoading(true);
     fetchDashboard();
+  }, [token, fetchDashboard]);
+
+  useEffect(() => {
+    if (!token) return;
+    const interval = setInterval(fetchDashboard, 60_000);
+    return () => clearInterval(interval);
   }, [token, fetchDashboard]);
 
   useEffect(() => {
@@ -199,6 +249,35 @@ export default function DashboardPage() {
   const alertTally = (data?.alerts ?? []).reduce((sum, a) => sum + (typeof a.count === "number" ? a.count : 1), 0);
   const pendingPayrollCount = (data?.payrollStatus?.draft ?? 0) + (data?.payrollStatus?.calculated ?? 0);
   const alertsList = data?.alerts ?? [];
+  const alertCounts = data?.alertCounts;
+  const operationalAlerts = data?.operationalAlerts ?? [];
+  const filteredOperationalAlerts =
+    priorityTab === "all"
+      ? operationalAlerts
+      : operationalAlerts.filter((a) => a.priority === priorityTab);
+
+  const handleAlertAction = async (id: string, action: "acknowledge" | "resolve" | "dismiss") => {
+    if (!token) return;
+    setAlertActionId(id);
+    try {
+      if (action === "acknowledge") await acknowledgeAlert(token, id);
+      else if (action === "resolve") await resolveAlert(token, id);
+      else await dismissAlert(token, id);
+      fetchDashboard();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAlertActionId(null);
+    }
+  };
+
+  const payrollReadinessLabel = (() => {
+    const s = data?.payrollReadiness?.status;
+    if (!s) return null;
+    if (s === "READY" || s === "APPROVED_MANUALLY") return { text: "Payroll ready", variant: "success" as const };
+    if (s === "BLOCKED_BY_EXCEPTIONS") return { text: "Payroll blocked", variant: "error" as const };
+    return { text: "Attendance review needed", variant: "warning" as const };
+  })();
 
   const DashboardCard = ({ title, children, className = "", action }: { title: string; children: React.ReactNode; className?: string; action?: React.ReactNode }) => (
     <article className={`card-dashboard flex h-full min-h-0 flex-col overflow-hidden p-3 lg:p-3.5 ${className}`}>
@@ -308,6 +387,145 @@ export default function DashboardPage() {
         <KpiTile label="Pending payroll" value={pendingPayrollCount} hint="Runs not yet paid" accent={pendingPayrollCount > 0 ? "alert" : "default"} />
         <KpiTile label="Needs attention" value={alertTally + taskUrgentCount} hint="Alerts + urgent tasks" accent={alertTally + taskUrgentCount > 0 ? "alert" : "default"} />
       </section>
+
+      {payrollReadinessLabel && (
+        <div className="mb-2 shrink-0">
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
+              payrollReadinessLabel.variant === "success"
+                ? "bg-emerald-100 text-emerald-800"
+                : payrollReadinessLabel.variant === "error"
+                  ? "bg-red-100 text-red-800"
+                  : "bg-amber-100 text-amber-800"
+            }`}
+          >
+            {payrollReadinessLabel.text}
+            {typeof data?.payrollReadiness?.openExceptions === "number" && data.payrollReadiness.openExceptions > 0
+              ? ` · ${data.payrollReadiness.openExceptions} open exception${data.payrollReadiness.openExceptions === 1 ? "" : "s"}`
+              : ""}
+          </span>
+        </div>
+      )}
+
+      <section className="mb-2 grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-3" aria-label="Action items">
+        {(data?.pendingApprovalsInbox ?? 0) > 0 && (
+          <Link
+            href="/approvals"
+            className="flex items-center justify-between rounded-security-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm hover:bg-amber-100"
+          >
+            <span className="font-medium text-neutral-900">Pending approvals</span>
+            <span className="font-bold tabular-nums text-amber-800">{data?.pendingApprovalsInbox}</span>
+          </Link>
+        )}
+        {(data?.openCriticalIncidents ?? 0) > 0 && (
+          <Link
+            href="/incidents?severity=CRITICAL"
+            className="flex items-center justify-between rounded-security-lg border border-red-200 bg-red-50 px-3 py-2 text-sm hover:bg-red-100"
+          >
+            <span className="font-medium text-neutral-900">Critical incidents</span>
+            <span className="font-bold tabular-nums text-red-800">{data?.openCriticalIncidents}</span>
+          </Link>
+        )}
+        {(data?.topPriorityTasks?.length ?? 0) > 0 && (
+          <div className="rounded-security-lg border border-neutral-200 bg-white px-3 py-2 text-sm">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-600">Tasks needing attention</p>
+            <ul className="space-y-1">
+              {data!.topPriorityTasks!.slice(0, 3).map((t) => (
+                <li key={t.id}>
+                  <Link href={`/tasks/${t.id}`} className="truncate font-medium text-security-navy-800 hover:underline">
+                    {t.title}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
+
+      {(operationalAlerts.length > 0 || alertCounts) && (
+        <section className="mb-2 shrink-0 rounded-security-lg border border-neutral-200 bg-white px-3 py-3 shadow-sm" aria-label="Operational alerts">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-800">Operational alerts</h2>
+            <div className="flex flex-wrap gap-1" role="group" aria-label="Alert priority">
+              {PRIORITY_TABS.map((tab) => {
+                const count =
+                  tab.value === "all"
+                    ? alertCounts?.allOpen ?? operationalAlerts.length
+                    : alertCounts?.[tab.value.toLowerCase() as keyof AlertCounts] ?? 0;
+                return (
+                  <button
+                    key={tab.value}
+                    type="button"
+                    onClick={() => setPriorityTab(tab.value)}
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+                      priorityTab === tab.value
+                        ? "bg-security-navy-700 text-white"
+                        : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+                    }`}
+                  >
+                    {tab.label} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <ul className="space-y-2">
+            {filteredOperationalAlerts.slice(0, 8).map((alert) => {
+              const viewHref = alertViewHref(alert);
+              const isCritical = alert.priority === "CRITICAL";
+              return (
+              <li
+                key={alert.id}
+                className={`flex flex-col gap-2 rounded-security border px-3 py-2 sm:flex-row sm:items-center sm:justify-between ${
+                  isCritical ? "border-red-200 bg-red-50/60" : "border-neutral-100 bg-neutral-50/80"
+                }`}
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-neutral-900 truncate">{alert.title}</p>
+                  <p className="text-xs text-neutral-600 truncate">{alert.message}</p>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-1.5">
+                  {viewHref && (
+                    <Link href={viewHref} className="btn-secondary text-xs py-1 px-2">
+                      View
+                    </Link>
+                  )}
+                  {alert.status === "OPEN" && (
+                    <button
+                      type="button"
+                      className="btn-secondary text-xs py-1 px-2"
+                      disabled={alertActionId === alert.id}
+                      onClick={() => handleAlertAction(alert.id, "acknowledge")}
+                    >
+                      Acknowledge
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn-primary text-xs py-1 px-2"
+                    disabled={alertActionId === alert.id}
+                    onClick={() => handleAlertAction(alert.id, "resolve")}
+                  >
+                    Resolve
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary text-xs py-1 px-2"
+                    disabled={alertActionId === alert.id}
+                    onClick={() => handleAlertAction(alert.id, "dismiss")}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </li>
+            );
+            })}
+            {filteredOperationalAlerts.length === 0 && (
+              <li className="text-sm text-neutral-600 py-2">No alerts at this priority level.</li>
+            )}
+          </ul>
+        </section>
+      )}
 
       {alertsList.length > 0 && (
         <section

@@ -17,9 +17,10 @@ import {
 import { DateInput } from "@/components/date-input";
 import { useConfirmDialog } from "@/components/ui";
 import { TeamMemberUserPicker } from "@/components/team-member-user-picker";
+import { ClientsSettingsSection } from "@/components/clients-settings-section";
 import { clsx } from "clsx";
 
-type Tab = "profile" | "business" | "settings" | "users" | "migrate" | "factory_reset";
+type Tab = "profile" | "business" | "settings" | "users" | "clients" | "migrate" | "factory_reset";
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Admin",
@@ -27,6 +28,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   hr_payroll: "HR & Payroll",
   supervisor: "Supervisor",
   controller: "Controller",
+  client: "Client",
 };
 
 /** Shown when "Assign Role" is selected (add/edit user). */
@@ -71,7 +73,7 @@ export default function SettingsPage() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab") as Tab | null;
   const isFullAdminUser = user ? isFullAdmin(user) : false;
-  const tabIds: Tab[] = ["profile", "business", "settings", "users", "migrate", "factory_reset"];
+  const tabIds: Tab[] = ["profile", "business", "settings", "users", "clients", "migrate", "factory_reset"];
   const [activeTab, setActiveTab] = useState<Tab>(tabParam && tabIds.includes(tabParam) ? tabParam : "profile");
 
   useEffect(() => {
@@ -87,6 +89,7 @@ export default function SettingsPage() {
     { id: "business", label: "Business Details" },
     { id: "settings", label: "Business Settings" },
     { id: "users", label: "Users", adminOnly: true },
+    { id: "clients", label: "Clients", adminOnly: true },
     { id: "migrate", label: "Bulk Import/Export", href: "/settings/migrate" },
     { id: "factory_reset", label: "Factory Reset", adminOnly: true },
   ];
@@ -193,6 +196,9 @@ export default function SettingsPage() {
         )}
         {activeTab === "users" && isFullAdminUser && token && (
           <UsersSection token={token} currentUserId={user?.id} />
+        )}
+        {activeTab === "clients" && isFullAdminUser && token && (
+          <ClientsSettingsSection token={token} />
         )}
         {activeTab === "factory_reset" && isFullAdminUser && token && (
           <FactoryResetSection token={token} refresh={refresh} logout={logout} />

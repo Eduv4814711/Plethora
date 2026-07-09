@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { authFetch } from "@/lib/api";
+import { authFetch, listTaskAssignees } from "@/lib/api";
 import { canManageSitesModule } from "@/lib/permissions";
 import { buildSiteRosterReadinessHints } from "@/lib/roster-readiness-hints";
 import { SiteOperationalActions } from "@/components/site-operational-actions";
@@ -65,8 +65,17 @@ interface Site {
   physicalAddress: string | null;
   contactPersonName: string | null;
   contactPersonPhone: string | null;
+  clientContactEmail?: string | null;
   contractOrServiceAgreement: string | null;
+  contractStartDate?: string | null;
+  contractEndDate?: string | null;
   serviceType: string | null;
+  clientId?: string | null;
+  supervisorId?: string | null;
+  supervisor?: { id: string; name: string; email: string } | null;
+  riskLevel?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | null;
+  siteStatus?: "ACTIVE" | "INACTIVE" | "PENDING" | "SUSPENDED" | null;
+  siteInstructions?: string | null;
   latitude?: number | string | null;
   longitude?: number | string | null;
   geofenceRadiusMeters?: number | null;
@@ -76,6 +85,30 @@ interface Site {
   rosterNightShiftGender?: string | null;
   posts: Post[];
   assignedGuards: AssignedGuard[];
+}
+
+const RISK_LABELS: Record<string, string> = {
+  LOW: "Low risk",
+  MEDIUM: "Medium risk",
+  HIGH: "High risk",
+  CRITICAL: "Critical risk",
+};
+
+const SITE_STATUS_LABELS: Record<string, string> = {
+  ACTIVE: "Active",
+  INACTIVE: "Inactive",
+  PENDING: "Pending",
+  SUSPENDED: "Suspended",
+};
+
+function contractExpiryHint(endDate: string | null | undefined): { label: string; urgent: boolean } | null {
+  if (!endDate) return null;
+  const end = new Date(endDate);
+  if (Number.isNaN(end.getTime())) return null;
+  const days = Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  if (days < 0) return { label: "Contract expired", urgent: true };
+  if (days <= 60) return { label: `Contract ends in ${days} day${days === 1 ? "" : "s"}`, urgent: days <= 30 };
+  return null;
 }
 
 interface Guard {
@@ -282,6 +315,42 @@ function SiteCard({
                     {SERVICE_TYPE_LABELS[site.serviceType] || site.serviceType}
                   </span>
                 )}
+                {site.riskLevel && (
+                  <span
+                    className={`inline-block px-2.5 py-0.5 rounded-lg text-xs font-medium ${
+                      site.riskLevel === "CRITICAL" || site.riskLevel === "HIGH"
+                        ? "bg-red-100 text-red-700"
+                        : site.riskLevel === "MEDIUM"
+                          ? "bg-amber-100 text-amber-800"
+                          : "bg-neutral-100 text-neutral-700"
+                    }`}
+                  >
+                    {RISK_LABELS[site.riskLevel] ?? site.riskLevel}
+                  </span>
+                )}
+                {site.siteStatus && (
+                  <span className="inline-block px-2.5 py-0.5 rounded-lg text-xs font-medium bg-security-navy-50 text-security-navy-800">
+                    {SITE_STATUS_LABELS[site.siteStatus] ?? site.siteStatus}
+                  </span>
+                )}
+                {site.supervisor?.name && (
+                  <span className="inline-block px-2.5 py-0.5 rounded-lg text-xs font-medium bg-neutral-100 text-neutral-700" title="Site supervisor">
+                    Supervisor: {site.supervisor.name}
+                  </span>
+                )}
+                {(() => {
+                  const hint = contractExpiryHint(site.contractEndDate);
+                  if (!hint) return null;
+                  return (
+                    <span
+                      className={`inline-block px-2.5 py-0.5 rounded-lg text-xs font-medium ${
+                        hint.urgent ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"
+                      }`}
+                    >
+                      {hint.label}
+                    </span>
+                  );
+                })()}
                 <span
                   className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-medium ${
                     hasError
@@ -428,6 +497,130 @@ function useGuards(token: string) {
   return guards;
 }
 
+function useSupervisorUsers(token: string) {
+  const [users, setUsers] = useState<{ id: string; displayName: string }[]>([]);
+  useEffect(() => {
+    if (!token) return;
+    listTaskAssignees(token)
+      .then((r) => setUsers(r.users.map((u) => ({ id: u.id, displayName: u.displayName }))))
+      .catch(() => setUsers([]));
+  }, [token]);
+  return users;
+}
+
+function useClients(token: string) {
+  const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    if (!token) return;
+    import("@/lib/msr-api")
+      .then(({ listClients }) => listClients(token))
+      .then((list) => setClients(list.map((c) => ({ id: c.id, name: c.name }))))
+      .catch(() => setClients([]));
+  }, [token]);
+  return clients;
+}
+
+function SiteMoreDetailsFields({
+  clientId,
+  setClientId,
+  clients,
+  clientContactEmail,
+  setClientContactEmail,
+  contractStartDate,
+  setContractStartDate,
+  contractEndDate,
+  setContractEndDate,
+  supervisorId,
+  setSupervisorId,
+  riskLevel,
+  setRiskLevel,
+  siteStatus,
+  setSiteStatus,
+  siteInstructions,
+  setSiteInstructions,
+  supervisorUsers,
+}: {
+  clientId: string;
+  setClientId: (v: string) => void;
+  clients: { id: string; name: string }[];
+  clientContactEmail: string;
+  setClientContactEmail: (v: string) => void;
+  contractStartDate: string;
+  setContractStartDate: (v: string) => void;
+  contractEndDate: string;
+  setContractEndDate: (v: string) => void;
+  supervisorId: string;
+  setSupervisorId: (v: string) => void;
+  riskLevel: string;
+  setRiskLevel: (v: string) => void;
+  siteStatus: string;
+  setSiteStatus: (v: string) => void;
+  siteInstructions: string;
+  setSiteInstructions: (v: string) => void;
+  supervisorUsers: { id: string; displayName: string }[];
+}) {
+  return (
+    <div className="md:col-span-2 border-t border-neutral-200 dark:border-neutral-700 pt-4 mt-2 space-y-4">
+      <h4 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">More details</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">Client</label>
+          <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="input-modern">
+            <option value="">No client linked</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">Client contact email</label>
+          <input type="email" value={clientContactEmail} onChange={(e) => setClientContactEmail(e.target.value)} className="input-modern" placeholder="client@example.com" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">Site supervisor</label>
+          <select value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)} className="input-modern">
+            <option value="">No supervisor assigned</option>
+            {supervisorUsers.map((u) => (
+              <option key={u.id} value={u.id}>{u.displayName}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">Contract start</label>
+          <input type="date" value={contractStartDate} onChange={(e) => setContractStartDate(e.target.value)} className="input-modern" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">Contract end</label>
+          <input type="date" value={contractEndDate} onChange={(e) => setContractEndDate(e.target.value)} className="input-modern" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">Risk level</label>
+          <select value={riskLevel} onChange={(e) => setRiskLevel(e.target.value)} className="input-modern">
+            <option value="">Not set</option>
+            <option value="LOW">Low</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="HIGH">High</option>
+            <option value="CRITICAL">Critical</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">Site status</label>
+          <select value={siteStatus} onChange={(e) => setSiteStatus(e.target.value)} className="input-modern">
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
+            <option value="PENDING">Pending</option>
+            <option value="SUSPENDED">Suspended</option>
+          </select>
+        </div>
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">Site instructions</label>
+          <textarea value={siteInstructions} onChange={(e) => setSiteInstructions(e.target.value)} className="input-modern w-full" rows={3} placeholder="Special instructions for guards at this site" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SiteForm({
   token,
   onSuccess,
@@ -438,6 +631,8 @@ function SiteForm({
   onCancel: () => void;
 }) {
   const guards = useGuards(token);
+  const supervisorUsers = useSupervisorUsers(token);
+  const clients = useClients(token);
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
   const [physicalAddress, setPhysicalAddress] = useState("");
@@ -450,6 +645,15 @@ function SiteForm({
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
   const [geofenceRadiusMeters, setGeofenceRadiusMeters] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [clientContactEmail, setClientContactEmail] = useState("");
+  const [contractStartDate, setContractStartDate] = useState("");
+  const [contractEndDate, setContractEndDate] = useState("");
+  const [supervisorId, setSupervisorId] = useState("");
+  const [riskLevel, setRiskLevel] = useState<string>("");
+  const [siteStatus, setSiteStatus] = useState<string>("ACTIVE");
+  const [siteInstructions, setSiteInstructions] = useState("");
+  const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -490,6 +694,14 @@ function SiteForm({
           contractOrServiceAgreement: contractAgreementType === "other" ? (contractAgreementCustom || undefined) : (contractAgreementType || undefined),
           serviceType: serviceType || undefined,
           assignedGuardIds: assignedGuardIds.length ? assignedGuardIds : undefined,
+          clientContactEmail: clientContactEmail || undefined,
+          clientId: clientId || undefined,
+          contractStartDate: contractStartDate || undefined,
+          contractEndDate: contractEndDate || undefined,
+          supervisorId: supervisorId || undefined,
+          riskLevel: riskLevel || undefined,
+          siteStatus: siteStatus || undefined,
+          siteInstructions: siteInstructions || undefined,
           ...geoBody,
         }),
       });
@@ -614,6 +826,39 @@ function SiteForm({
           )}
         </div>
 
+        <div className="md:col-span-2">
+          <button
+            type="button"
+            onClick={() => setShowMoreDetails((v) => !v)}
+            className="text-sm font-medium text-security-navy-700 hover:underline"
+          >
+            {showMoreDetails ? "Hide more details" : "More details (contract, supervisor, risk)"}
+          </button>
+        </div>
+
+        {showMoreDetails && (
+          <SiteMoreDetailsFields
+            clientId={clientId}
+            setClientId={setClientId}
+            clients={clients}
+            clientContactEmail={clientContactEmail}
+            setClientContactEmail={setClientContactEmail}
+            contractStartDate={contractStartDate}
+            setContractStartDate={setContractStartDate}
+            contractEndDate={contractEndDate}
+            setContractEndDate={setContractEndDate}
+            supervisorId={supervisorId}
+            setSupervisorId={setSupervisorId}
+            riskLevel={riskLevel}
+            setRiskLevel={setRiskLevel}
+            siteStatus={siteStatus}
+            setSiteStatus={setSiteStatus}
+            siteInstructions={siteInstructions}
+            setSiteInstructions={setSiteInstructions}
+            supervisorUsers={supervisorUsers}
+          />
+        )}
+
         <div className="md:col-span-2 border-t border-neutral-200 dark:border-neutral-700 pt-4 mt-2">
           <h4 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 mb-2">Clock-in geofence (optional)</h4>
           <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-3">
@@ -713,6 +958,8 @@ function EditSiteModal({
   onSuccess: () => void;
 }) {
   const guards = useGuards(token);
+  const supervisorUsers = useSupervisorUsers(token);
+  const clients = useClients(token);
   const [name, setName] = useState(site.name);
   const [location, setLocation] = useState(site.location ?? "");
   const [physicalAddress, setPhysicalAddress] = useState(site.physicalAddress ?? "");
@@ -735,6 +982,19 @@ function EditSiteModal({
   const [geofenceRadiusMeters, setGeofenceRadiusMeters] = useState(
     site.geofenceRadiusMeters != null ? String(site.geofenceRadiusMeters) : ""
   );
+  const [clientId, setClientId] = useState(site.clientId ?? "");
+  const [clientContactEmail, setClientContactEmail] = useState(site.clientContactEmail ?? "");
+  const [contractStartDate, setContractStartDate] = useState(
+    site.contractStartDate ? site.contractStartDate.slice(0, 10) : ""
+  );
+  const [contractEndDate, setContractEndDate] = useState(
+    site.contractEndDate ? site.contractEndDate.slice(0, 10) : ""
+  );
+  const [supervisorId, setSupervisorId] = useState(site.supervisorId ?? site.supervisor?.id ?? "");
+  const [riskLevel, setRiskLevel] = useState<string>(site.riskLevel ?? "");
+  const [siteStatus, setSiteStatus] = useState<string>(site.siteStatus ?? "ACTIVE");
+  const [siteInstructions, setSiteInstructions] = useState(site.siteInstructions ?? "");
+  const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [clearGeofence, setClearGeofence] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -784,6 +1044,14 @@ function EditSiteModal({
           contractOrServiceAgreement: contractAgreementType === "other" ? (contractAgreementCustom || undefined) : (contractAgreementType || undefined),
           serviceType: serviceType || undefined,
           assignedGuardIds,
+          clientContactEmail: clientContactEmail || null,
+          clientId: clientId || null,
+          contractStartDate: contractStartDate || null,
+          contractEndDate: contractEndDate || null,
+          supervisorId: supervisorId || null,
+          riskLevel: riskLevel || undefined,
+          siteStatus: siteStatus || undefined,
+          siteInstructions: siteInstructions || undefined,
           ...geoPayload,
         }),
       });
@@ -860,6 +1128,39 @@ function EditSiteModal({
                 />
               )}
             </div>
+
+            <div className="md:col-span-2">
+              <button
+                type="button"
+                onClick={() => setShowMoreDetails((v) => !v)}
+                className="text-sm font-medium text-security-navy-700 hover:underline"
+              >
+                {showMoreDetails ? "Hide more details" : "More details (contract, supervisor, risk)"}
+              </button>
+            </div>
+
+            {showMoreDetails && (
+              <SiteMoreDetailsFields
+                clientId={clientId}
+                setClientId={setClientId}
+                clients={clients}
+                clientContactEmail={clientContactEmail}
+                setClientContactEmail={setClientContactEmail}
+                contractStartDate={contractStartDate}
+                setContractStartDate={setContractStartDate}
+                contractEndDate={contractEndDate}
+                setContractEndDate={setContractEndDate}
+                supervisorId={supervisorId}
+                setSupervisorId={setSupervisorId}
+                riskLevel={riskLevel}
+                setRiskLevel={setRiskLevel}
+                siteStatus={siteStatus}
+                setSiteStatus={setSiteStatus}
+                siteInstructions={siteInstructions}
+                setSiteInstructions={setSiteInstructions}
+                supervisorUsers={supervisorUsers}
+              />
+            )}
 
             <div className="md:col-span-2 border-t border-neutral-200 dark:border-neutral-700 pt-4">
               <h4 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 mb-2">Clock-in geofence</h4>

@@ -5,6 +5,9 @@ import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { startOfMonth, subMonths, format, startOfDay, endOfDay } from "date-fns";
+import { getAlertCounts } from "../modules/alerts/alerts.service.js";
+import { getPayrollReadiness } from "../modules/attendance-exceptions/exceptions.service.js";
+import { syncContractExpiryAlerts } from "../modules/documents/documents.service.js";
 
 function parseDateRange(q: Record<string, string | undefined>): { start: Date; end: Date } {
   const now = new Date();
@@ -180,15 +183,82 @@ export async function dashboardRoutes(app: FastifyInstance) {
       {} as Record<string, number>
     );
 
-    const alerts: { type: string; message: string; count?: number }[] = [];
+    const alerts: {
+      type: string;
+      message: string;
+      count?: number;
+      priority?: string;
+      id?: string;
+    }[] = [];
     if (missedShifts > 0) {
-      alerts.push({ type: "missed_shifts", message: "Missed shifts", count: missedShifts });
+      alerts.push({
+        type: "missed_shifts",
+        message: "Guard missed clock-in",
+        count: missedShifts,
+        priority: "CRITICAL",
+      });
     }
     if (pendingApprovals > 0) {
       alerts.push({
         type: "pending_approvals",
-        message: "Payroll runs pending approval",
+        message: "Payroll approval pending",
         count: pendingApprovals,
+        priority: "MEDIUM",
+      });
+    }
+
+    // Best-effort: refresh contract expiry alerts (non-blocking for dashboard)
+    void syncContractExpiryAlerts(companyId).catch(() => undefined);
+
+    const [operationalAlertCounts, payrollReadiness, pendingApprovalsInbox, openCriticalIncidents] =
+      await Promise.all([
+        getAlertCounts(companyId),
+        getPayrollReadiness(companyId),
+        prisma.approvalRequest.count({ where: { companyId, status: "PENDING" } }),
+        prisma.incident.count({
+          where: {
+            companyId,
+            severity: "CRITICAL",
+            status: { in: ["SUBMITTED", "UNDER_REVIEW"] },
+          },
+        }),
+      ]);
+
+    const persistedAlerts = await prisma.operationalAlert.findMany({
+      where: {
+        companyId,
+        status: { in: ["OPEN", "ACKNOWLEDGED"] },
+        ...(siteIds?.length ? { siteId: { in: siteIds } } : {}),
+      },
+      orderBy: [{ createdAt: "desc" }],
+      take: 30,
+      select: {
+        id: true,
+        title: true,
+        message: true,
+        priority: true,
+        status: true,
+        sourceModule: true,
+        sourceId: true,
+        siteId: true,
+        createdAt: true,
+      },
+    });
+
+    const priorityOrder = { CRITICAL: 0, MEDIUM: 1, LOW: 2 } as const;
+    persistedAlerts.sort(
+      (a, b) =>
+        priorityOrder[a.priority] - priorityOrder[b.priority] ||
+        b.createdAt.getTime() - a.createdAt.getTime()
+    );
+
+    for (const a of persistedAlerts) {
+      alerts.push({
+        type: a.sourceModule.toLowerCase(),
+        message: a.title,
+        priority: a.priority,
+        id: a.id,
+        count: 1,
       });
     }
 
@@ -242,7 +312,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
                 companyId,
                 assigneeType: "user",
                 assigneeId: userId,
-                status: { not: "done" },
+                status: { notIn: ["done", "cancelled"] },
                 dueDate: { lt: todayStart },
               },
             }),
@@ -251,7 +321,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
                 companyId,
                 assigneeType: "user",
                 assigneeId: userId,
-                status: { not: "done" },
+                status: { notIn: ["done", "cancelled"] },
                 dueDate: { gte: todayStart, lte: todayEnd },
               },
             }),
@@ -260,7 +330,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
                 companyId,
                 assigneeType: "user",
                 assigneeId: userId,
-                status: { not: "done" },
+                status: { notIn: ["done", "cancelled"] },
               },
               select: { id: true, title: true, dueDate: true, priority: true },
               orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
@@ -288,6 +358,16 @@ export async function dashboardRoutes(app: FastifyInstance) {
       activeSitesDelta,
       payrollStatus: payrollByStatus,
       alerts,
+      alertCounts: operationalAlertCounts,
+      operationalAlerts: persistedAlerts,
+      payrollReadiness: payrollReadiness
+        ? {
+            status: payrollReadiness.status,
+            openExceptions: payrollReadiness.openExceptions,
+          }
+        : null,
+      pendingApprovalsInbox,
+      openCriticalIncidents,
       taskStats: { overdue: tasksOverdue, dueToday: tasksDueToday },
       topPriorityTasks: topPriorityTasks.map((t) => ({
         id: t.id,

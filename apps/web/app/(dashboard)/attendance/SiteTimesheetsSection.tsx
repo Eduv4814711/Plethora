@@ -101,7 +101,10 @@ function shiftTypeTimesPatch(
   return { clockIn, clockOut, hoursWorked: hoursBetween(clockIn, clockOut) };
 }
 
-function buildRowApprovalPatch(row: SiteTimesheetRow): Partial<SiteTimesheetRow> {
+function buildRowApprovalPatch(
+  row: SiteTimesheetRow,
+  occurrenceBookNumber: string
+): Partial<SiteTimesheetRow> {
   const shiftType = rowShiftType(row);
   const actualGuardId = row.actualGuardId ?? row.plannedGuardId;
   const startTime = displayShiftTime(row.clockIn, shiftType, "start");
@@ -120,6 +123,7 @@ function buildRowApprovalPatch(row: SiteTimesheetRow): Partial<SiteTimesheetRow>
     actualShiftCode:
       row.actualShiftCode ??
       (shiftType === "night" ? "N" : shiftType === "day" ? "D" : null),
+    occurrenceBookNumber,
     approvalStatus: "reviewed",
   };
 }
@@ -142,6 +146,8 @@ export function SiteTimesheetsSection({
   const [loading, setLoading] = useState(false);
   const [savingRowId, setSavingRowId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Draft OB numbers typed in the on-page field before Approve. */
+  const [obDrafts, setObDrafts] = useState<Record<string, string>>({});
   const [newRow, setNewRow] = useState({
     workDate: periodStart,
     actualGuardId: "",
@@ -218,8 +224,20 @@ export function SiteTimesheetsSection({
     }
   };
 
+  const getObDraft = (row: SiteTimesheetRow) =>
+    obDrafts[row.id] ?? row.occurrenceBookNumber ?? "";
+
+  const setObDraft = (rowId: string, value: string) => {
+    setObDrafts((prev) => ({ ...prev, [rowId]: value }));
+  };
+
   const approveRowAttendance = async (row: SiteTimesheetRow) => {
-    await updateRow(row, buildRowApprovalPatch(row));
+    const obNumber = getObDraft(row).trim();
+    if (!obNumber) {
+      window.alert("OB number is required to approve shift");
+      return;
+    }
+    await updateRow(row, buildRowApprovalPatch(row, obNumber));
   };
 
   const exportPdf = () => {
@@ -232,7 +250,7 @@ export function SiteTimesheetsSection({
     doc.text(`Status: ${label(sheet.status)} | Approved: ${sheet.approvedAt ? new Date(sheet.approvedAt).toLocaleString() : "Not approved"}`, 14, 30);
     autoTable(doc, {
       startY: 36,
-      head: [["Date", "Day", "Scheduled", "Actual", "Planned", "Actual shift", "Status", "Hours", "Discrepancies", "Comments"]],
+      head: [["Date", "Day", "Scheduled", "Actual", "Planned", "Actual shift", "Status", "Hours", "OB Number", "Discrepancies", "Comments"]],
       body: displayRows.map((row) => [
         row.workDate,
         row.dayOfWeek,
@@ -242,6 +260,7 @@ export function SiteTimesheetsSection({
         row.actualShiftType ?? row.actualShiftCode ?? "",
         label(row.attendanceStatus),
         row.hoursWorked ?? "",
+        row.occurrenceBookNumber ?? "",
         row.discrepancyCodes.map(label).join("; "),
         row.comments ?? "",
       ]),
@@ -398,7 +417,8 @@ export function SiteTimesheetsSection({
 
           {!locked && pendingReviewCount > 0 && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-              Review each row and click <span className="font-medium">Approve attendance</span> to confirm who worked, shift times, and status.
+              Review each row, enter the Occurrence Book (OB) number, then click{" "}
+              <span className="font-medium">Approve attendance</span> to confirm who worked, shift times, and status.
               {" "}
               <span className="font-medium">{pendingReviewCount}</span> row{pendingReviewCount === 1 ? "" : "s"} still need review.
             </div>
@@ -482,7 +502,7 @@ export function SiteTimesheetsSection({
 
           <div className="space-y-3 2xl:hidden">
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              Review each day below, confirm who worked and shift times, then tap{" "}
+              Review each day below, confirm who worked and shift times, enter the Occurrence Book (OB) number, then tap{" "}
               <span className="font-medium text-neutral-700 dark:text-neutral-300">Approve this day</span> when
               correct.
             </p>
@@ -493,6 +513,8 @@ export function SiteTimesheetsSection({
                 guards={guardOptions}
                 locked={locked}
                 saving={savingRowId === row.id}
+                occurrenceBookNumber={getObDraft(row)}
+                onOccurrenceBookNumberChange={(value) => setObDraft(row.id, value)}
                 rowShiftType={rowShiftType}
                 displayShiftTime={displayShiftTime}
                 combineDateTime={combineDateTime}
@@ -509,17 +531,18 @@ export function SiteTimesheetsSection({
             <table className="site-timesheet-table w-full table-fixed text-left text-[11px]">
               <colgroup>
                 <col className="w-[7%]" />
-                <col className="w-[24%]" />
-                <col className="w-[10%]" />
-                <col className="w-[12%]" />
+                <col className="w-[20%]" />
                 <col className="w-[9%]" />
-                <col className="w-[13%]" />
-                <col className="w-[13%]" />
-                <col className="w-[6%]" />
+                <col className="w-[11%]" />
+                <col className="w-[8%]" />
+                <col className="w-[11%]" />
+                <col className="w-[10%]" />
+                <col className="w-[10%]" />
+                <col className="w-[7%]" />
               </colgroup>
               <thead className="bg-neutral-100 text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">
                 <tr>
-                  {["Date", "Who worked", "Shift", "Start / End", "Status", "Issues", "Notes", "Action"].map((label) => (
+                  {["Date", "Who worked", "Shift", "Start / End", "Status", "Issues", "Notes", "OB No.", "Action"].map((label) => (
                     <th key={label} className="px-2 py-1.5 font-semibold">{label}</th>
                   ))}
                 </tr>
@@ -653,6 +676,23 @@ export function SiteTimesheetsSection({
                       />
                     </td>
                     <td className={cellClass}>
+                      {locked || row.approvalStatus === "approved" ? (
+                        <span className="font-medium text-neutral-800 dark:text-neutral-200" title="Occurrence Book number">
+                          {row.occurrenceBookNumber || "—"}
+                        </span>
+                      ) : (
+                        <input
+                          value={getObDraft(row)}
+                          onChange={(e) => setObDraft(row.id, e.target.value)}
+                          disabled={savingRowId === row.id}
+                          className="input-compact w-full !px-2 !py-1 text-[11px]"
+                          placeholder="OB No."
+                          title="Occurrence Book number (required to approve)"
+                          aria-label={`Occurrence Book number for ${row.workDate}`}
+                        />
+                      )}
+                    </td>
+                    <td className={cellClass}>
                       {row.approvalStatus === "approved" || locked ? (
                         <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
                           Approved
@@ -676,7 +716,7 @@ export function SiteTimesheetsSection({
                           type="button"
                           disabled={savingRowId === row.id}
                           onClick={() => void approveRowAttendance(row)}
-                          title="Approve attendance for this day"
+                          title="Enter OB number, then approve attendance for this day"
                           className="w-full rounded-security border-2 border-security-navy bg-security-navy px-2 py-1.5 text-[11px] font-semibold leading-tight text-white hover:bg-security-navy-800 disabled:opacity-50"
                         >
                           {savingRowId === row.id ? "…" : "Approve"}

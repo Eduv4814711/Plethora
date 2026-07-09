@@ -414,6 +414,7 @@ function serializeRow(
     overtimeHours: row.overtimeHours != null ? Number(row.overtimeHours) : null,
     attendanceStatus: row.attendanceStatus,
     approvalStatus: row.approvalStatus,
+    occurrenceBookNumber: row.occurrenceBookNumber,
     comments: row.comments,
     discrepancyCodes:
       discrepancyCodes ??
@@ -611,6 +612,13 @@ async function guardBelongsToCompany(guardId: string, companyId: string): Promis
   return employee != null;
 }
 
+function normalizeOccurrenceBookNumber(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export async function updateSiteTimesheetRow(
   companyId: string,
   rowId: string,
@@ -624,6 +632,7 @@ export async function updateSiteTimesheetRow(
     overtimeHours?: number | null;
     attendanceStatus?: SiteTimesheetAttendance;
     approvalStatus?: SiteTimesheetRowStatus;
+    occurrenceBookNumber?: string | null;
     comments?: string | null;
   }
 ) {
@@ -640,6 +649,22 @@ export async function updateSiteTimesheetRow(
     return { error: "Guard not found." };
   }
 
+  const nextOccurrenceBookNumber = normalizeOccurrenceBookNumber(input.occurrenceBookNumber);
+  const approving =
+    input.approvalStatus === "reviewed" || input.approvalStatus === "approved";
+  if (approving) {
+    const obNumber =
+      nextOccurrenceBookNumber !== undefined
+        ? nextOccurrenceBookNumber
+        : normalizeOccurrenceBookNumber(existing.occurrenceBookNumber) ?? null;
+    if (!obNumber) {
+      return {
+        error:
+          "Occurrence Book (OB) number is required before you can approve this shift.",
+      };
+    }
+  }
+
   const updated = await prisma.$transaction(async (tx) => {
     await tx.siteTimesheetRow.update({
       where: { id: rowId },
@@ -653,6 +678,9 @@ export async function updateSiteTimesheetRow(
         overtimeHours: input.overtimeHours,
         attendanceStatus: input.attendanceStatus,
         approvalStatus: input.approvalStatus,
+        ...(nextOccurrenceBookNumber !== undefined
+          ? { occurrenceBookNumber: nextOccurrenceBookNumber }
+          : {}),
         comments: input.comments,
       },
     });
@@ -775,6 +803,7 @@ export function buildSiteTimesheetCsv(sheet: Awaited<ReturnType<typeof getSiteTi
     "Overtime",
     "Attendance Status",
     "Approval Status",
+    "OB Number",
     "Discrepancies",
     "Comments",
   ];
@@ -799,6 +828,7 @@ export function buildSiteTimesheetCsv(sheet: Awaited<ReturnType<typeof getSiteTi
         row.overtimeHours,
         row.attendanceStatus,
         row.approvalStatus,
+        row.occurrenceBookNumber,
         row.discrepancyCodes.join("; "),
         row.comments,
       ].map(escape).join(",")

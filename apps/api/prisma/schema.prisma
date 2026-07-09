@@ -88,6 +88,16 @@ model Company {
   academyPolicyDocuments  AcademyPolicyDocument[]
   academyRenewalAlerts    AcademyRenewalAlert[]
   leaveSickNotes          LeaveSickNote[]
+
+  // Management System Review — operational modules
+  operationalAlerts       OperationalAlert[]
+  attendanceExceptions    AttendanceException[]
+  managedDocuments        ManagedDocument[]
+  incidents               Incident[]
+  approvalRequests        ApprovalRequest[]
+  appNotifications        AppNotification[]
+  clients                 Client[]
+  payrollPeriodReadiness  PayrollPeriodReadiness[]
 }
 
 model User {
@@ -122,6 +132,19 @@ model User {
   academyInstructorDocumentsVerified AcademyInstructorDocument[] @relation("AcademyInstructorDocumentVerifiedBy")
   refreshTokens                    RefreshToken[]
 
+  // MSR relations
+  supervisedSites                  Site[]                    @relation("SiteSupervisor")
+  alertsAssigned                   OperationalAlert[]        @relation("AlertAssignedTo")
+  alertsResolved                   OperationalAlert[]        @relation("AlertResolvedBy")
+  exceptionsReviewed               AttendanceException[]     @relation("ExceptionReviewedBy")
+  documentsUploaded                ManagedDocument[]         @relation("DocumentUploadedBy")
+  incidentsReported                Incident[]                @relation("IncidentReportedBy")
+  incidentsSupervised              Incident[]                @relation("IncidentAssignedSupervisor")
+  approvalsRequested               ApprovalRequest[]         @relation("ApprovalRequestedBy")
+  approvalsToReview                ApprovalRequest[]         @relation("ApprovalApprover")
+  notificationsReceived            AppNotification[]
+  clientProfile                    Client?
+
   @@index([companyId])
 }
 
@@ -151,6 +174,7 @@ enum UserRole {
   hr_payroll
   supervisor
   controller
+  client
 }
 
 model Employee {
@@ -235,6 +259,9 @@ model Employee {
   whatsAppClockPendings       WhatsAppClockPending[]
   academyLinkedStudents       Student[]              @relation("AcademyStudentEmployee")
   academyCourseRunsInstructed CourseRun[]            @relation("CourseRunInstructor")
+  attendanceExceptions        AttendanceException[]
+  managedDocuments            ManagedDocument[]
+  operationalAlerts           OperationalAlert[]
 
   @@unique([companyId, employeeNumber])
   @@index([companyId])
@@ -265,9 +292,20 @@ model Site {
   physicalAddress            String? // Full physical address
   contactPersonName          String?
   contactPersonPhone         String?
+  /// Extended client contact (email) — complements contactPersonName/Phone
+  clientContactEmail         String?
   contractOrServiceAgreement String? // Contract reference or description
+  contractStartDate          DateTime?
+  contractEndDate            DateTime?
   serviceType                String? // guarding, access_control, patrols, etc.
   monthlyRevenue             Decimal? @db.Decimal(12, 2) // Optional - for labour % and profitability
+  /// Site supervisor (User with supervisor/ops role)
+  supervisorId               String?
+  riskLevel                  SiteRiskLevel @default(LOW)
+  siteStatus                 SiteOperationalStatus @default(ACTIVE)
+  siteInstructions           String?  @db.Text
+  /// Linked client for portal isolation (optional)
+  clientId                   String?
   /// Geofence center (WGS84). All three geofence fields must be set to enforce clock-in location on WhatsApp.
   latitude                   Decimal? @db.Decimal(10, 7)
   longitude                  Decimal? @db.Decimal(10, 7)
@@ -298,6 +336,8 @@ model Site {
   updatedAt                  DateTime @updatedAt
 
   company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  supervisor     User?            @relation("SiteSupervisor", fields: [supervisorId], references: [id], onDelete: SetNull)
+  client         Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
   posts                    SitePost[]
   assignedGuards           SiteAssignment[]
   guardSiteEligibilities   GuardSiteEligibility[]
@@ -309,8 +349,18 @@ model Site {
   siteRosterGeneratedShifts SiteRosterGeneratedShift[]
   siteTimesheets SiteTimesheet[]
   siteTimesheetRows SiteTimesheetRow[]
+  operationalAlerts OperationalAlert[]
+  attendanceExceptions AttendanceException[]
+  managedDocuments ManagedDocument[]
+  incidents Incident[]
+  tasks Task[]
 
   @@index([companyId])
+  @@index([companyId, siteStatus])
+  @@index([supervisorId])
+  @@index([clientId])
+  @@index([contractEndDate])
+  @@index([riskLevel])
 }
 
 model RosterAutomationRun {
@@ -781,6 +831,8 @@ model SiteTimesheetRow {
   overtimeHours         Decimal?                @db.Decimal(10, 2)
   attendanceStatus      SiteTimesheetAttendance @default(pending)
   approvalStatus        SiteTimesheetRowStatus  @default(pending)
+  /// Occurrence book (OB) number recorded when the controller approves the row.
+  occurrenceBookNumber  String?
   comments              String?
   discrepancyCodes      Json?
   sourceShiftId         String?
@@ -938,7 +990,9 @@ model TaskProject {
 enum TaskStatus {
   todo
   in_progress
+  blocked
   done
+  cancelled
 }
 
 enum TaskPriority {
@@ -946,37 +1000,51 @@ enum TaskPriority {
   medium
   high
   urgent
+  critical
 }
 
 model Task {
-  id             String       @id @default(cuid())
-  companyId      String
-  projectId      String?
-  title          String
-  description    String?
-  status         TaskStatus   @default(todo)
-  priority       TaskPriority @default(medium)
-  dueDate        DateTime?
-  completedAt    DateTime?
-  assigneeType   String? // "employee" | "user"
-  assigneeId     String?
-  recurrenceRule Json? // { frequency, interval?, daysOfWeek?, endDate? }
-  createdById    String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id                   String       @id @default(cuid())
+  companyId            String
+  projectId            String?
+  siteId               String?
+  title                String
+  description          String?
+  status               TaskStatus   @default(todo)
+  priority             TaskPriority @default(medium)
+  dueDate              DateTime?
+  completedAt          DateTime?
+  completionPercentage Int          @default(0)
+  assigneeType         String? // "employee" | "user"
+  assigneeId           String?
+  recurrenceRule       Json? // { frequency, interval?, daysOfWeek?, endDate? }
+  recurrenceEnabled    Boolean      @default(false)
+  parentTaskId         String?
+  notificationSettings Json?
+  createdById          String
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
 
   company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   project     TaskProject?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  site        Site?            @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  parentTask  Task?            @relation("TaskRecurrence", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  childTasks  Task[]           @relation("TaskRecurrence")
   createdBy   User             @relation(fields: [createdById], references: [id], onDelete: Cascade)
   comments    TaskComment[]
   attachments TaskAttachment[]
   reminders   TaskReminder[]
+  managedDocuments ManagedDocument[]
+  incidents   Incident[]       @relation("IncidentFollowUpTask")
 
   @@index([companyId])
   @@index([projectId])
+  @@index([siteId])
   @@index([assigneeId])
   @@index([status])
   @@index([dueDate])
+  @@index([priority])
+  @@index([parentTaskId])
 }
 
 model TaskComment {
@@ -1919,4 +1987,432 @@ model SiteRosterGeneratedShift {
 
   @@unique([siteId, guardId, rosterDate])
   @@index([companyId, siteId, rosterDate])
+}
+
+// =============================================================================
+// Management System Review — operational models (alerts, exceptions, docs, etc.)
+// =============================================================================
+
+enum SiteRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SiteOperationalStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+  SUSPENDED
+}
+
+enum AlertPriority {
+  CRITICAL
+  MEDIUM
+  LOW
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
+enum AlertSourceModule {
+  DASHBOARD
+  ATTENDANCE
+  ROSTERING
+  PAYROLL
+  TASKS
+  SITES
+  DOCUMENTS
+  INCIDENTS
+  REPORTS
+  WHATSAPP
+  APPROVALS
+}
+
+model OperationalAlert {
+  id             String            @id @default(cuid())
+  companyId      String
+  title          String
+  message        String
+  priority       AlertPriority
+  status         AlertStatus       @default(OPEN)
+  sourceModule   AlertSourceModule
+  /// Deduplication key e.g. "missed_clock_in:shiftId:abc"
+  dedupeKey      String?
+  sourceId       String?
+  assignedToId   String?
+  siteId         String?
+  employeeId     String?
+  metadata       Json?
+  acknowledgedAt DateTime?
+  resolvedAt     DateTime?
+  resolvedById   String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignedTo User?     @relation("AlertAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  resolvedBy User?     @relation("AlertResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+  site       Site?     @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, dedupeKey])
+  @@index([companyId, status, priority])
+  @@index([companyId, sourceModule])
+  @@index([siteId])
+  @@index([assignedToId])
+  @@index([createdAt])
+}
+
+enum AttendanceExceptionType {
+  LATE_ARRIVAL
+  EARLY_DEPARTURE
+  MISSED_CLOCK_IN
+  MISSED_CLOCK_OUT
+  ABSENT
+  OUTSIDE_GEOFENCE
+  UNSCHEDULED_CLOCK_IN
+  PENDING_SUPERVISOR_REVIEW
+  MANUAL_ADJUSTMENT_REQUIRED
+  SHIFT_NOT_FOUND
+  DUPLICATE_CLOCK_EVENT
+}
+
+enum ExceptionSeverity {
+  CRITICAL
+  MEDIUM
+  LOW
+}
+
+enum ExceptionReviewStatus {
+  OPEN
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  RESOLVED
+}
+
+model AttendanceException {
+  id            String                  @id @default(cuid())
+  companyId     String
+  attendanceId  String?
+  shiftId       String?
+  employeeId    String?
+  siteId        String?
+  exceptionType AttendanceExceptionType
+  severity      ExceptionSeverity
+  description   String
+  minutesLate   Int?
+  minutesEarly  Int?
+  detectedAt    DateTime                @default(now())
+  status        ExceptionReviewStatus   @default(OPEN)
+  reviewedById  String?
+  reviewedAt    DateTime?
+  reviewNote    String?
+  /// Deduplication key e.g. "MISSED_CLOCK_IN:shift:abc"
+  dedupeKey     String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  site       Site?     @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  reviewedBy User?     @relation("ExceptionReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, dedupeKey])
+  @@index([companyId, status, severity])
+  @@index([companyId, exceptionType])
+  @@index([siteId])
+  @@index([employeeId])
+  @@index([shiftId])
+  @@index([detectedAt])
+}
+
+enum DocumentCategory {
+  EMPLOYEE
+  SITE
+  CLIENT
+  PAYROLL
+  ATTENDANCE
+  INCIDENT
+  EQUIPMENT
+  COMPLIANCE
+  TASK
+  OTHER
+}
+
+enum DocumentStatus {
+  ACTIVE
+  EXPIRED
+  ARCHIVED
+  PENDING_REVIEW
+}
+
+model ManagedDocument {
+  id           String           @id @default(cuid())
+  companyId    String
+  title        String
+  documentType String
+  category     DocumentCategory
+  fileUrl      String
+  fileName     String
+  mimeType     String
+  size         Int
+  employeeId   String?
+  siteId       String?
+  clientId     String?
+  incidentId   String?
+  taskId       String?
+  uploadedById String
+  expiryDate   DateTime?
+  status       DocumentStatus   @default(ACTIVE)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  site       Site?     @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  client     Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  incident   Incident? @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  task       Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  uploadedBy User      @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([companyId, category])
+  @@index([companyId, status])
+  @@index([employeeId])
+  @@index([siteId])
+  @@index([clientId])
+  @@index([expiryDate])
+}
+
+enum IncidentType {
+  THEFT
+  BREAK_IN
+  ASSAULT
+  GUARD_MISCONDUCT
+  CLIENT_COMPLAINT
+  EQUIPMENT_DAMAGE
+  SITE_EMERGENCY
+  SAFETY_RISK
+  ABSENTEEISM
+  TRESPASSING
+  FIRE
+  MEDICAL_EMERGENCY
+  OTHER
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  CLOSED
+}
+
+enum SupervisorApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  QUERY_RAISED
+}
+
+model Incident {
+  id                       String                    @id @default(cuid())
+  companyId                String
+  incidentNumber           String
+  siteId                   String
+  reportedById             String
+  assignedSupervisorId     String?
+  incidentDateTime         DateTime
+  incidentType             IncidentType
+  severity                 IncidentSeverity
+  title                    String
+  description              String                    @db.Text
+  peopleInvolved           String?                   @db.Text
+  witnesses                String?                   @db.Text
+  clientVisible            Boolean                   @default(false)
+  status                   IncidentStatus            @default(DRAFT)
+  supervisorApprovalStatus SupervisorApprovalStatus  @default(PENDING)
+  supervisorNote           String?
+  followUpRequired         Boolean                   @default(false)
+  followUpTaskId           String?
+  closedAt                 DateTime?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+
+  company            Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site               Site               @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  reportedBy         User               @relation("IncidentReportedBy", fields: [reportedById], references: [id], onDelete: Cascade)
+  assignedSupervisor User?              @relation("IncidentAssignedSupervisor", fields: [assignedSupervisorId], references: [id], onDelete: SetNull)
+  followUpTask       Task?              @relation("IncidentFollowUpTask", fields: [followUpTaskId], references: [id], onDelete: SetNull)
+  attachments        IncidentAttachment[]
+  managedDocuments   ManagedDocument[]
+
+  @@unique([companyId, incidentNumber])
+  @@index([companyId, status])
+  @@index([companyId, severity])
+  @@index([siteId])
+  @@index([incidentDateTime])
+  @@index([clientVisible])
+}
+
+model IncidentAttachment {
+  id           String   @id @default(cuid())
+  incidentId   String
+  filename     String
+  mimeType     String
+  size         Int
+  url          String
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId])
+}
+
+enum ApprovalType {
+  ATTENDANCE_EXCEPTION
+  MISSED_CLOCK_IN
+  MISSED_CLOCK_OUT
+  OVERTIME
+  LEAVE
+  SICK_NOTE
+  SITE_TIMESHEET
+  INCIDENT
+  TASK_COMPLETION
+  PAYROLL_READINESS
+  DOCUMENT_REVIEW
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  QUERY_RAISED
+}
+
+model ApprovalRequest {
+  id            String         @id @default(cuid())
+  companyId     String
+  approvalType  ApprovalType
+  entityType    String
+  entityId      String
+  requestedById String
+  approverId    String?
+  status        ApprovalStatus @default(PENDING)
+  comment       String?
+  requestedAt   DateTime       @default(now())
+  reviewedAt    DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  requestedBy User    @relation("ApprovalRequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
+  approver    User?   @relation("ApprovalApprover", fields: [approverId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status])
+  @@index([companyId, approvalType])
+  @@index([approverId, status])
+  @@index([entityType, entityId])
+}
+
+enum NotificationChannel {
+  IN_APP
+  WHATSAPP
+  EMAIL
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  READ
+}
+
+model AppNotification {
+  id          String              @id @default(cuid())
+  companyId   String
+  userId      String
+  title       String
+  message     String
+  channel     NotificationChannel @default(IN_APP)
+  status      NotificationStatus  @default(PENDING)
+  /// Deduplication key to avoid spam
+  dedupeKey   String?
+  sourceModule String?
+  sourceId    String?
+  linkUrl     String?
+  metadata    Json?
+  sentAt      DateTime?
+  readAt      DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, dedupeKey])
+  @@index([userId, status])
+  @@index([companyId, createdAt])
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  email     String?
+  phone     String?
+  userId    String?  @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user             User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sites            Site[]
+  managedDocuments ManagedDocument[]
+
+  @@index([companyId])
+  @@index([userId])
+}
+
+enum PayrollReadinessStatus {
+  READY
+  PENDING_ATTENDANCE_REVIEW
+  BLOCKED_BY_EXCEPTIONS
+  APPROVED_MANUALLY
+}
+
+/// Extends payroll period readiness tracking (keyed by company + period)
+model PayrollPeriodReadiness {
+  id             String                 @id @default(cuid())
+  companyId      String
+  periodStart    DateTime
+  periodEnd      DateTime
+  status         PayrollReadinessStatus @default(PENDING_ATTENDANCE_REVIEW)
+  notes          String?
+  reviewedById   String?
+  reviewedAt     DateTime?
+  openExceptions Int                    @default(0)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, periodStart, periodEnd])
+  @@index([companyId, status])
 }

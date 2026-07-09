@@ -4,6 +4,11 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import {
+  downloadExtendedReport,
+  listExtendedReportTypes,
+  type ExtendedReportType,
+} from "@/lib/msr-api";
+import {
   BarChart,
   Bar,
   XAxis,
@@ -36,6 +41,63 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [payPeriodCount, setPayPeriodCount] = useState(6);
   const [error, setError] = useState<string | null>(null);
+  const [reportTypes, setReportTypes] = useState<ExtendedReportType[]>([]);
+  const [selectedReportType, setSelectedReportType] = useState("");
+  const [exporting, setExporting] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportStart, setExportStart] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  });
+  const [exportEnd, setExportEnd] = useState(() => new Date().toISOString().slice(0, 10));
+  const [exportSiteId, setExportSiteId] = useState("");
+  const [sites, setSites] = useState<{ id: string; name: string }[]>([]);
+  const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
+  const [exportClientId, setExportClientId] = useState("");
+
+  useEffect(() => {
+    if (!token) return;
+    Promise.all([
+      authFetch("/sites?limit=200", token).then((r) => r.json()),
+      import("@/lib/msr-api").then(({ listClients }) => listClients(token)),
+    ])
+      .then(([sitesRes, clientList]) => {
+        setSites((sitesRes.data ?? []).map((s: { id: string; name: string }) => ({ id: s.id, name: s.name })));
+        setClients(clientList.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name })));
+      })
+      .catch(() => {
+        setSites([]);
+        setClients([]);
+      });
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    listExtendedReportTypes(token)
+      .then((r) => {
+        setReportTypes(r.types);
+        if (r.types[0]) setSelectedReportType(r.types[0].id);
+      })
+      .catch(() => setReportTypes([]));
+  }, [token]);
+
+  const handleExport = async (format: "csv" | "excel" | "pdf") => {
+    if (!token || !selectedReportType) return;
+    setExporting(format);
+    setExportError(null);
+    try {
+      await downloadExtendedReport(token, selectedReportType, format, {
+        startDate: exportStart,
+        endDate: exportEnd,
+        ...(exportSiteId ? { siteId: exportSiteId } : {}),
+        ...(exportClientId ? { clientId: exportClientId } : {}),
+      });
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setExporting(null);
+    }
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -105,6 +167,85 @@ export default function ReportsPage() {
           {error}
         </div>
       )}
+
+      <div className="card-dashboard mb-8 p-5">
+        <h2 className="section-title text-neutral-900 mb-1">Export operational reports</h2>
+        <p className="text-sm text-neutral-600 mb-4">
+          Download attendance, incidents, and performance reports for sharing or records.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          <div>
+            <label className="label-text block mb-1">From</label>
+            <input type="date" className="input-modern w-full" value={exportStart} onChange={(e) => setExportStart(e.target.value)} />
+          </div>
+          <div>
+            <label className="label-text block mb-1">To</label>
+            <input type="date" className="input-modern w-full" value={exportEnd} onChange={(e) => setExportEnd(e.target.value)} />
+          </div>
+          <div>
+            <label className="label-text block mb-1">Site</label>
+            <select className="input-modern w-full" value={exportSiteId} onChange={(e) => setExportSiteId(e.target.value)}>
+              <option value="">All sites</option>
+              {sites.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label-text block mb-1">Client</label>
+            <select className="input-modern w-full" value={exportClientId} onChange={(e) => setExportClientId(e.target.value)}>
+              <option value="">All clients</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+          <div className="flex-1 min-w-0">
+            <label htmlFor="extended-report-type" className="label-text block mb-1">Report type</label>
+            <select
+              id="extended-report-type"
+              value={selectedReportType}
+              onChange={(e) => setSelectedReportType(e.target.value)}
+              className="input-modern w-full max-w-md"
+            >
+              {reportTypes.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="btn-secondary text-sm py-2"
+              disabled={!selectedReportType || exporting !== null}
+              onClick={() => handleExport("csv")}
+            >
+              {exporting === "csv" ? "Exporting…" : "Export CSV"}
+            </button>
+            <button
+              type="button"
+              className="btn-secondary text-sm py-2"
+              disabled={!selectedReportType || exporting !== null}
+              onClick={() => handleExport("excel")}
+            >
+              {exporting === "excel" ? "Exporting…" : "Export Excel"}
+            </button>
+            <button
+              type="button"
+              className="btn-primary text-sm py-2"
+              disabled={!selectedReportType || exporting !== null}
+              onClick={() => handleExport("pdf")}
+            >
+              {exporting === "pdf" ? "Exporting…" : "Export PDF"}
+            </button>
+          </div>
+        </div>
+        {exportError && (
+          <p className="mt-3 text-sm text-red-600" role="alert">{exportError}</p>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Payroll by status - Pie */}

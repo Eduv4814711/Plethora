@@ -4,6 +4,8 @@ import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
+import { upsertAlert } from "../modules/alerts/alerts.service.js";
+import { createNotification } from "../modules/notifications/notifications.service.js";
 
 const TASK_ROLES = ["admin", "operations_manager", "hr_payroll", "supervisor"] as const;
 
@@ -30,11 +32,14 @@ const createTaskSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   projectId: z.string().optional().nullable(),
-  status: z.enum(["todo", "in_progress", "done"]).optional().default("todo"),
-  priority: z.enum(["low", "medium", "high", "urgent"]).optional().default("medium"),
+  status: z.enum(["todo", "in_progress", "blocked", "done", "cancelled"]).optional().default("todo"),
+  priority: z.enum(["low", "medium", "high", "urgent", "critical"]).optional().default("medium"),
   dueDate: z.string().optional().transform(sanitizeDate),
   assigneeType: z.enum(["employee", "user"]).optional().nullable(),
   assigneeId: z.string().optional().nullable(),
+  siteId: z.string().optional().nullable(),
+  completionPercentage: z.number().int().min(0).max(100).optional(),
+  recurrenceEnabled: z.boolean().optional(),
   recurrenceRule: recurrenceRuleSchema,
 });
 
@@ -42,11 +47,14 @@ const updateTaskSchema = z.object({
   title: z.string().min(1).optional(),
   description: z.string().optional().nullable(),
   projectId: z.string().optional().nullable(),
-  status: z.enum(["todo", "in_progress", "done"]).optional(),
-  priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+  status: z.enum(["todo", "in_progress", "blocked", "done", "cancelled"]).optional(),
+  priority: z.enum(["low", "medium", "high", "urgent", "critical"]).optional(),
   dueDate: z.string().optional().nullable().transform((v) => (v === null ? null : sanitizeDate(v ?? undefined))),
   assigneeType: z.enum(["employee", "user"]).optional().nullable(),
   assigneeId: z.string().optional().nullable(),
+  siteId: z.string().optional().nullable(),
+  completionPercentage: z.number().int().min(0).max(100).optional(),
+  recurrenceEnabled: z.boolean().optional(),
   recurrenceRule: recurrenceRuleSchema,
 });
 
@@ -165,6 +173,9 @@ export async function tasksRoutes(app: FastifyInstance) {
     const projectId = q.projectId;
     const status = q.status;
     const assigneeId = q.assigneeId;
+    const siteId = q.siteId;
+    const priority = q.priority;
+    const filter = q.filter; // overdue | due_today | my | critical
     const dueBefore = q.dueBefore ? sanitizeDate(q.dueBefore) : undefined;
     const dueAfter = q.dueAfter ? sanitizeDate(q.dueAfter) : undefined;
 
@@ -172,8 +183,29 @@ export async function tasksRoutes(app: FastifyInstance) {
     if (projectId) where.projectId = projectId;
     if (status) where.status = status;
     if (assigneeId) where.assigneeId = assigneeId;
+    if (siteId) where.siteId = siteId;
+    if (priority) where.priority = priority;
+    if (filter === "my") {
+      where.assigneeType = "user";
+      where.assigneeId = user.sub;
+    }
+    if (filter === "critical") where.priority = "critical";
+    if (filter === "overdue") {
+      where.status = { notIn: ["done", "cancelled"] };
+      where.dueDate = { lt: new Date() };
+    }
+    if (filter === "due_today") {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setHours(23, 59, 59, 999);
+      where.status = { notIn: ["done", "cancelled"] };
+      where.dueDate = { gte: start, lte: end };
+    }
     if (dueBefore || dueAfter) {
-      where.dueDate = {};
+      where.dueDate = {
+        ...((where.dueDate as object) ?? {}),
+      };
       if (dueBefore) (where.dueDate as Record<string, Date>).lte = dueBefore;
       if (dueAfter) (where.dueDate as Record<string, Date>).gte = dueAfter;
     }
@@ -257,11 +289,14 @@ export async function tasksRoutes(app: FastifyInstance) {
         title: d.title,
         description: d.description,
         projectId: d.projectId ?? undefined,
-        status: d.status as "todo" | "in_progress" | "done",
-        priority: d.priority as "low" | "medium" | "high" | "urgent",
+        siteId: d.siteId ?? undefined,
+        status: d.status,
+        priority: d.priority,
         dueDate: d.dueDate,
+        completionPercentage: d.completionPercentage ?? 0,
         assigneeType: d.assigneeType ?? undefined,
         assigneeId: d.assigneeId ?? undefined,
+        recurrenceEnabled: d.recurrenceEnabled ?? !!d.recurrenceRule,
         recurrenceRule: d.recurrenceRule as object | undefined,
       },
       include: taskDetailInclude,
@@ -281,6 +316,38 @@ export async function tasksRoutes(app: FastifyInstance) {
       entityId: task.id,
       metadata: { title: task.title },
     });
+
+    if (task.assigneeType === "user" && task.assigneeId) {
+      await createNotification({
+        companyId,
+        userId: task.assigneeId,
+        title: "Task assigned",
+        message: `You were assigned: ${task.title}`,
+        dedupeKey: `task_assigned:${task.id}:${task.assigneeId}`,
+        sourceModule: "TASKS",
+        sourceId: task.id,
+        linkUrl: `/tasks/${task.id}`,
+      }).catch(() => undefined);
+    }
+
+    if (
+      task.dueDate &&
+      task.dueDate < new Date() &&
+      task.status !== "done" &&
+      task.status !== "cancelled"
+    ) {
+      await upsertAlert({
+        companyId,
+        title: "Task overdue",
+        message: task.title,
+        priority: task.priority === "critical" ? "CRITICAL" : "MEDIUM",
+        sourceModule: "TASKS",
+        dedupeKey: `task_overdue:${task.id}`,
+        sourceId: task.id,
+        siteId: task.siteId,
+        assignedToId: task.assigneeType === "user" ? task.assigneeId : undefined,
+      }).catch(() => undefined);
+    }
 
     return reply.code(201).send({ ...task, assigneeDisplayName });
   });
@@ -369,12 +436,37 @@ export async function tasksRoutes(app: FastifyInstance) {
     if (d.title !== undefined) updateData.title = d.title;
     if (d.description !== undefined) updateData.description = d.description;
     if (d.projectId !== undefined) updateData.projectId = d.projectId;
-    if (d.status !== undefined) updateData.status = d.status;
+    if (d.siteId !== undefined) updateData.siteId = d.siteId;
+    if (d.status !== undefined) {
+      updateData.status = d.status;
+      if (d.status === "done") {
+        updateData.completedAt = new Date();
+        updateData.completionPercentage = 100;
+      }
+      if (d.status === "blocked") {
+        await upsertAlert({
+          companyId: user.companyId,
+          title: "Task blocked",
+          message: existing.title,
+          priority: "MEDIUM",
+          sourceModule: "TASKS",
+          dedupeKey: `task_blocked:${id}`,
+          sourceId: id,
+        }).catch(() => undefined);
+      }
+    }
     if (d.priority !== undefined) updateData.priority = d.priority;
     if (d.dueDate !== undefined) updateData.dueDate = d.dueDate;
+    if (d.completionPercentage !== undefined) {
+      updateData.completionPercentage = d.completionPercentage;
+    }
     if (d.assigneeType !== undefined) updateData.assigneeType = d.assigneeType;
     if (d.assigneeId !== undefined) updateData.assigneeId = d.assigneeId;
-    if (d.recurrenceRule !== undefined) updateData.recurrenceRule = d.recurrenceRule;
+    if (d.recurrenceEnabled !== undefined) updateData.recurrenceEnabled = d.recurrenceEnabled;
+    if (d.recurrenceRule !== undefined) {
+      updateData.recurrenceRule = d.recurrenceRule;
+      if (d.recurrenceEnabled === undefined) updateData.recurrenceEnabled = !!d.recurrenceRule;
+    }
 
     const updatedCount = await prisma.task.updateMany({
       where: { id, companyId: user.companyId },
@@ -406,6 +498,25 @@ export async function tasksRoutes(app: FastifyInstance) {
       entityId: task.id,
       metadata: { title: task.title },
     });
+
+    if (
+      task.dueDate &&
+      task.dueDate < new Date() &&
+      task.status !== "done" &&
+      task.status !== "cancelled"
+    ) {
+      await upsertAlert({
+        companyId: user.companyId,
+        title: "Task overdue",
+        message: task.title,
+        priority: task.priority === "critical" ? "CRITICAL" : "MEDIUM",
+        sourceModule: "TASKS",
+        dedupeKey: `task_overdue:${task.id}`,
+        sourceId: task.id,
+        siteId: task.siteId,
+        assignedToId: task.assigneeType === "user" ? task.assigneeId : undefined,
+      }).catch(() => undefined);
+    }
 
     return reply.send({ ...task, assigneeDisplayName });
   });

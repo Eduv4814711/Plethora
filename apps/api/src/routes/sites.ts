@@ -7,6 +7,7 @@ import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 import { runAutoRosterForSite } from "../services/auto-roster.service.js";
 import { mapSiteForApi, siteDetailInclude } from "../lib/site-post-api.js";
+import { syncContractExpiryAlerts } from "../modules/documents/documents.service.js";
 
 const SERVICE_TYPES = [
   "guarding",
@@ -70,7 +71,15 @@ const createSiteSchema = z
     physicalAddress: z.string().optional(),
     contactPersonName: z.string().optional(),
     contactPersonPhone: z.string().optional(),
+    clientContactEmail: z.string().email().optional().nullable(),
     contractOrServiceAgreement: z.string().optional(),
+    contractStartDate: z.string().optional().nullable(),
+    contractEndDate: z.string().optional().nullable(),
+    supervisorId: z.string().optional().nullable(),
+    riskLevel: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
+    siteStatus: z.enum(["ACTIVE", "INACTIVE", "PENDING", "SUSPENDED"]).optional(),
+    siteInstructions: z.string().max(10000).optional().nullable(),
+    clientId: z.string().optional().nullable(),
     serviceType: z
       .union([z.enum(SERVICE_TYPES), z.literal("")])
       .optional()
@@ -104,7 +113,15 @@ const updateSiteSchema = z
     physicalAddress: z.string().optional(),
     contactPersonName: z.string().optional(),
     contactPersonPhone: z.string().optional(),
+    clientContactEmail: z.string().email().optional().nullable(),
     contractOrServiceAgreement: z.string().optional(),
+    contractStartDate: z.string().optional().nullable(),
+    contractEndDate: z.string().optional().nullable(),
+    supervisorId: z.string().optional().nullable(),
+    riskLevel: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
+    siteStatus: z.enum(["ACTIVE", "INACTIVE", "PENDING", "SUSPENDED"]).optional(),
+    siteInstructions: z.string().max(10000).optional().nullable(),
+    clientId: z.string().optional().nullable(),
     serviceType: z
       .union([z.enum(SERVICE_TYPES), z.literal("")])
       .optional()
@@ -130,6 +147,13 @@ const updateSiteSchema = z
     }
     refineShiftGuardsNotBothZero(data, ctx);
   });
+
+function parseOptionalDate(v: string | null | undefined): Date | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null || v === "") return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
 
 const POST_SHIFT_TYPES = ["day", "night"] as const;
 
@@ -204,7 +228,15 @@ export async function sitesRoutes(app: FastifyInstance) {
         physicalAddress: d.physicalAddress,
         contactPersonName: d.contactPersonName,
         contactPersonPhone: d.contactPersonPhone,
+        clientContactEmail: d.clientContactEmail ?? undefined,
         contractOrServiceAgreement: d.contractOrServiceAgreement,
+        contractStartDate: parseOptionalDate(d.contractStartDate ?? undefined) ?? undefined,
+        contractEndDate: parseOptionalDate(d.contractEndDate ?? undefined) ?? undefined,
+        supervisorId: d.supervisorId ?? undefined,
+        riskLevel: d.riskLevel ?? undefined,
+        siteStatus: d.siteStatus ?? undefined,
+        siteInstructions: d.siteInstructions ?? undefined,
+        clientId: d.clientId ?? undefined,
         serviceType: d.serviceType,
         monthlyRevenue: d.monthlyRevenue,
         latitude:
@@ -258,6 +290,10 @@ export async function sitesRoutes(app: FastifyInstance) {
       entityType: "site",
       entityId: site.id,
     });
+
+    if (d.contractEndDate) {
+      await syncContractExpiryAlerts(companyId, site.id).catch(() => undefined);
+    }
 
     if (siteWithAssigned?.autoRosterEnabled) {
       void runAutoRosterForSite({
@@ -366,7 +402,32 @@ export async function sitesRoutes(app: FastifyInstance) {
 
     const wasAutoEnabled = existing.autoRosterEnabled;
 
-    const updateData = { ...rest, ...geoPatch, ...rosterPatch };
+    const {
+      contractStartDate,
+      contractEndDate,
+      siteInstructions,
+      ...restFields
+    } = rest as typeof rest & {
+      contractStartDate?: string | null;
+      contractEndDate?: string | null;
+      siteInstructions?: string | null;
+    };
+
+    const updateData: Record<string, unknown> = {
+      ...restFields,
+      ...geoPatch,
+      ...rosterPatch,
+    };
+    if (contractStartDate !== undefined) {
+      updateData.contractStartDate = parseOptionalDate(contractStartDate);
+    }
+    if (contractEndDate !== undefined) {
+      updateData.contractEndDate = parseOptionalDate(contractEndDate);
+    }
+    if (siteInstructions !== undefined) {
+      updateData.siteInstructions =
+        siteInstructions && siteInstructions.trim() ? siteInstructions : null;
+    }
     const hasSiteFieldUpdates = Object.keys(updateData).length > 0;
 
     if (hasSiteFieldUpdates) {
@@ -414,6 +475,10 @@ export async function sitesRoutes(app: FastifyInstance) {
       entityType: "site",
       entityId: id,
     });
+
+    if (contractEndDate !== undefined) {
+      await syncContractExpiryAlerts(companyId, id).catch(() => undefined);
+    }
 
     const nowEnabled = siteWithAssigned.autoRosterEnabled;
     const autoConfigChanged =

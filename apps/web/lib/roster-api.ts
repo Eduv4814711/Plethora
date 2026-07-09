@@ -135,6 +135,7 @@ export type SiteTimesheetRow = {
   overtimeHours: number | null;
   attendanceStatus: SiteTimesheetAttendance;
   approvalStatus: "pending" | "reviewed" | "approved";
+  occurrenceBookNumber: string | null;
   comments: string | null;
   discrepancyCodes: string[];
 };
@@ -495,7 +496,22 @@ export async function resyncSiteTimesheet(token: string, siteId: string, startDa
 export async function updateSiteTimesheetRow(
   token: string,
   rowId: string,
-  body: Partial<Pick<SiteTimesheetRow, "actualGuardId" | "actualShiftCode" | "actualShiftType" | "clockIn" | "clockOut" | "hoursWorked" | "overtimeHours" | "attendanceStatus" | "approvalStatus" | "comments">>
+  body: Partial<
+    Pick<
+      SiteTimesheetRow,
+      | "actualGuardId"
+      | "actualShiftCode"
+      | "actualShiftType"
+      | "clockIn"
+      | "clockOut"
+      | "hoursWorked"
+      | "overtimeHours"
+      | "attendanceStatus"
+      | "approvalStatus"
+      | "occurrenceBookNumber"
+      | "comments"
+    >
+  >
 ) {
   const res = await authFetch(`/rosters/site-timesheets/rows/${rowId}`, token, {
     method: "PUT",
