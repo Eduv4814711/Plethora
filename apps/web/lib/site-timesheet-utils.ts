@@ -11,7 +11,7 @@ export function normalizeShiftType(value: string | null | undefined): "day" | "n
 
 /** Working shifts need Duty ON and Duty OFF before full row review. */
 export function rowNeedsObNumbers(attendanceStatus: SiteTimesheetAttendance | string): boolean {
-  if (attendanceStatus === "off" || attendanceStatus === "pending") return false;
+  if (attendanceStatus === "off") return false;
   if (attendanceStatus === "leave" || attendanceStatus === "sick_leave") return false;
   return true;
 }

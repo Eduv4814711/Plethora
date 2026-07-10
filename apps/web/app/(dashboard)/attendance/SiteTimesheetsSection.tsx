@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { authFetch } from "@/lib/api";
@@ -325,10 +325,18 @@ export function SiteTimesheetsSection({
     setDutyOffDrafts((prev) => ({ ...prev, [rowId]: value }));
   };
 
-  const saveDutyOnNumber = async (row: SiteTimesheetRow) => {
-    const next = getDutyOnDraft(row).trim();
+  const saveDutyOnNumber = async (row: SiteTimesheetRow, draftOverride?: string) => {
+    const next = (draftOverride ?? getDutyOnDraft(row)).trim();
     const current = resolveDutyOnFromRow(row);
-    if (next === current) return;
+    const needsOb = rowNeedsObNumbers(row.attendanceStatus);
+    const confirmingPartialApproval =
+      Boolean(next) && needsOb && row.approvalStatus === "pending" && next === current;
+    if (next === current) {
+      if (confirmingPartialApproval) {
+        await updateRow(row, { dutyOnObNumber: next });
+      }
+      return;
+    }
     if (!canEditLockedOb && current && next !== current) {
       showNotice(
         "Duty ON locked",
@@ -340,8 +348,21 @@ export function SiteTimesheetsSection({
     await updateRow(row, { dutyOnObNumber: next || null });
   };
 
-  const saveDutyOffNumber = async (row: SiteTimesheetRow) => {
-    const next = getDutyOffDraft(row).trim();
+  const handleDutyOnKeyDown = (
+    e: KeyboardEvent<HTMLInputElement>,
+    row: SiteTimesheetRow
+  ) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const value = e.currentTarget.value;
+    setDutyOnDraft(row.id, value);
+    void saveDutyOnNumber(row, value).then(() => {
+      e.currentTarget.blur();
+    });
+  };
+
+  const saveDutyOffNumber = async (row: SiteTimesheetRow, draftOverride?: string) => {
+    const next = (draftOverride ?? getDutyOffDraft(row)).trim();
     const current = resolveDutyOffFromRow(row);
     if (next === current) return;
     if (!canEditLockedOb && current && next !== current) {
@@ -857,8 +878,8 @@ export function SiteTimesheetsSection({
                 dutyOffObNumber={getDutyOffDraft(row)}
                 onDutyOnObNumberChange={(value) => setDutyOnDraft(row.id, value)}
                 onDutyOffObNumberChange={(value) => setDutyOffDraft(row.id, value)}
-                onDutyOnObNumberSave={() => void saveDutyOnNumber(row)}
-                onDutyOffObNumberSave={() => void saveDutyOffNumber(row)}
+                onDutyOnObNumberSave={(value?: string) => void saveDutyOnNumber(row, value)}
+                onDutyOffObNumberSave={(value?: string) => void saveDutyOffNumber(row, value)}
                 canEditLockedOb={canEditLockedOb}
                 rowShiftType={rowShiftType}
                 displayShiftTime={displayShiftTime}
@@ -1044,10 +1065,11 @@ export function SiteTimesheetsSection({
                             value={getDutyOnDraft(row)}
                             onChange={(e) => setDutyOnDraft(row.id, e.target.value)}
                             onBlur={() => void saveDutyOnNumber(row)}
+                            onKeyDown={(e) => handleDutyOnKeyDown(e, row)}
                             disabled={savingRowId === row.id}
                             className="input-compact w-full !px-2 !py-1 text-[11px]"
                             placeholder="Duty ON"
-                            title="Duty ON OB — saves as partial approval"
+                            title="Duty ON OB — press Enter to save as partial approval"
                             aria-label={`Duty ON OB for ${row.workDate}`}
                           />
                         );

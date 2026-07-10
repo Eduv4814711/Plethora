@@ -34,8 +34,8 @@ type SiteTimesheetRowCardProps = {
   dutyOffObNumber: string;
   onDutyOnObNumberChange: (value: string) => void;
   onDutyOffObNumberChange: (value: string) => void;
-  onDutyOnObNumberSave?: () => void;
-  onDutyOffObNumberSave?: () => void;
+  onDutyOnObNumberSave?: (value?: string) => void;
+  onDutyOffObNumberSave?: (value?: string) => void;
   canEditLockedOb?: boolean;
   rowShiftType: (row: SiteTimesheetRow) => "day" | "night" | null;
   displayShiftTime: (
@@ -251,10 +251,17 @@ export function SiteTimesheetRowCard({
               value={dutyOnObNumber}
               onChange={(e) => onDutyOnObNumberChange(e.target.value)}
               onBlur={() => onDutyOnObNumberSave?.()}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return;
+                e.preventDefault();
+                const value = e.currentTarget.value;
+                onDutyOnObNumberChange(value);
+                onDutyOnObNumberSave?.(value);
+              }}
               disabled={saving}
               className="input-modern mt-1 w-full"
               placeholder="Duty ON OB"
-              title="Duty ON OB — saves as partial approval"
+              title="Duty ON OB — press Enter to save as partial approval"
               aria-label={`Duty ON OB for ${row.workDate}`}
             />
           )}

@@ -99,10 +99,14 @@ describe("rowNeedsObNumbers", () => {
     expect(rowNeedsObNumbers("reliever")).toBe(true);
   });
 
-  it("skips OB for off, leave, and pending", () => {
+  it("skips OB for off and leave", () => {
     expect(rowNeedsObNumbers("off")).toBe(false);
     expect(rowNeedsObNumbers("leave")).toBe(false);
-    expect(rowNeedsObNumbers("pending")).toBe(false);
+    expect(rowNeedsObNumbers("sick_leave")).toBe(false);
+  });
+
+  it("requires OB for pending rostered shifts awaiting review", () => {
+    expect(rowNeedsObNumbers("pending")).toBe(true);
   });
 });
 

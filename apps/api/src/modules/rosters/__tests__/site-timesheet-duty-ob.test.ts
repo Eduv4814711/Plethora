@@ -82,6 +82,84 @@ describe("duty ON / duty OFF OB workflow (service)", () => {
     );
   });
 
+  it("saves Duty ON for pending rostered shifts and moves row to partially_reviewed", async () => {
+    vi.mocked(prisma.siteTimesheetRow.findFirst).mockResolvedValue({
+      ...baseRow,
+      attendanceStatus: "pending",
+    } as never);
+    vi.mocked(prisma.$transaction).mockImplementation(async (fn) => {
+      const updated = {
+        ...baseRow,
+        attendanceStatus: "pending",
+        dutyOnObNumber: "0232",
+        approvalStatus: "partially_reviewed",
+      };
+      return fn({
+        siteTimesheetRow: {
+          update: vi.fn(),
+          findUnique: vi.fn().mockResolvedValue(updated),
+        },
+        siteTimesheet: { update: vi.fn() },
+      });
+    });
+    vi.mocked(prisma.siteTimesheet.findUnique).mockResolvedValue({
+      id: "ts-1",
+      site: {},
+      rows: [],
+    } as never);
+
+    const result = await updateSiteTimesheetRow("co-1", "row-1", { dutyOnObNumber: "0232" });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        row: expect.objectContaining({
+          dutyOnObNumber: "0232",
+          approvalStatus: "partially_reviewed",
+        }),
+      })
+    );
+  });
+
+  it("promotes pending row with existing Duty ON to partially_reviewed on re-save", async () => {
+    vi.mocked(prisma.siteTimesheetRow.findFirst).mockResolvedValue({
+      ...baseRow,
+      attendanceStatus: "pending",
+      dutyOnObNumber: "345",
+      approvalStatus: "pending",
+    } as never);
+    vi.mocked(prisma.$transaction).mockImplementation(async (fn) => {
+      const updated = {
+        ...baseRow,
+        attendanceStatus: "pending",
+        dutyOnObNumber: "345",
+        approvalStatus: "partially_reviewed",
+      };
+      return fn({
+        siteTimesheetRow: {
+          update: vi.fn(),
+          findUnique: vi.fn().mockResolvedValue(updated),
+        },
+        siteTimesheet: { update: vi.fn() },
+      });
+    });
+    vi.mocked(prisma.siteTimesheet.findUnique).mockResolvedValue({
+      id: "ts-1",
+      site: {},
+      rows: [],
+    } as never);
+
+    const result = await updateSiteTimesheetRow("co-1", "row-1", { dutyOnObNumber: "345" });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        row: expect.objectContaining({
+          dutyOnObNumber: "345",
+          approvalStatus: "partially_reviewed",
+        }),
+      })
+    );
+  });
+
   it("blocks approve when Duty OFF is missing", async () => {
     vi.mocked(prisma.siteTimesheetRow.findFirst).mockResolvedValue({
       ...baseRow,
