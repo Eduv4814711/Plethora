@@ -3,6 +3,8 @@ import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { toGeoNumber } from "../../lib/geo.js";
 import { upsertAlert } from "../alerts/alerts.service.js";
+import { parsePayrollCalendarSettings } from "../../lib/payroll-calendar-settings.js";
+import { getCurrentPayPeriod } from "../../services/payroll-period.service.js";
 import { createApprovalRequest } from "../approvals/approvals.service.js";
 import {
   detectExceptionsForShift,
@@ -475,9 +477,14 @@ export async function assertPayrollNotBlocked(
 }
 
 export async function getPayrollReadiness(companyId: string) {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { settings: true },
+  });
+  const calendarSettings = parsePayrollCalendarSettings(company?.settings);
+  const period = getCurrentPayPeriod(calendarSettings);
+  const start = period.periodStart;
+  const end = period.periodEnd;
   let row = await prisma.payrollPeriodReadiness.findUnique({
     where: {
       companyId_periodStart_periodEnd: {

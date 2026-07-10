@@ -130,6 +130,7 @@ export default function DashboardPage() {
   const [whatsappContacts, setWhatsappContacts] = useState<{ id: string; firstName: string; lastName: string; phone: string | null; whatsappUrl: string | null }[]>([]);
   const [priorityTab, setPriorityTab] = useState<PriorityTab>("all");
   const [alertActionId, setAlertActionId] = useState<string | null>(null);
+  const [alertsSectionOpen, setAlertsSectionOpen] = useState(true);
 
   const canSites = user ? canAccessRoute("/sites", user.role, user.moduleAccess) : false;
   const canWhatsApp = user ? canAccessRoute("/whatsapp", user.role, user.moduleAccess) : false;
@@ -217,7 +218,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-[1600px] animate-pulse flex-col overflow-hidden">
+      <div className="mx-auto flex min-h-0 w-full max-w-[1600px] animate-pulse flex-col">
         <div className="flex shrink-0 flex-col gap-3 border-b border-neutral-200/80 pb-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
             <div className="h-3 w-32 rounded-full bg-security-navy-200/80" />
@@ -302,7 +303,7 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="animate-fade-in mx-auto flex h-full min-h-0 w-full min-w-0 max-w-[1600px] flex-col overflow-hidden max-lg:overflow-y-auto max-lg:pb-6">
+    <div className="animate-fade-in mx-auto flex min-h-0 w-full min-w-0 max-w-[1600px] flex-col pb-6">
       <header className="flex shrink-0 flex-col gap-3 border-b border-neutral-200/80 pb-3 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:pb-2.5">
         <div className="min-w-0 shrink-0 lg:flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-security-navy-700 lg:text-xs">
@@ -383,7 +384,7 @@ export default function DashboardPage() {
       <section className="grid shrink-0 grid-cols-2 gap-2 py-2 sm:grid-cols-3 lg:grid-cols-5 lg:gap-2.5 lg:py-2.5" aria-label="Key metrics">
         <KpiTile label="Total employees" value={employeesTotal} hint="All statuses" />
         <KpiTile label="Guards on duty" value={data?.guardsOnDuty ?? 0} hint="Right now" />
-        <KpiTile label="Active sites" value={data?.activeSitesCount ?? 0} />
+        <KpiTile label="Active sites" value={data?.activeSitesCount ?? 0} hint="Operational" />
         <KpiTile label="Pending payroll" value={pendingPayrollCount} hint="Runs not yet paid" accent={pendingPayrollCount > 0 ? "alert" : "default"} />
         <KpiTile label="Needs attention" value={alertTally + taskUrgentCount} hint="Alerts + urgent tasks" accent={alertTally + taskUrgentCount > 0 ? "alert" : "default"} />
       </section>
@@ -444,86 +445,112 @@ export default function DashboardPage() {
 
       {(operationalAlerts.length > 0 || alertCounts) && (
         <section className="mb-2 shrink-0 rounded-security-lg border border-neutral-200 bg-white px-3 py-3 shadow-sm" aria-label="Operational alerts">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-800">Operational alerts</h2>
-            <div className="flex flex-wrap gap-1" role="group" aria-label="Alert priority">
-              {PRIORITY_TABS.map((tab) => {
-                const count =
-                  tab.value === "all"
-                    ? alertCounts?.allOpen ?? operationalAlerts.length
-                    : alertCounts?.[tab.value.toLowerCase() as keyof AlertCounts] ?? 0;
-                return (
-                  <button
-                    key={tab.value}
-                    type="button"
-                    onClick={() => setPriorityTab(tab.value)}
-                    className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
-                      priorityTab === tab.value
-                        ? "bg-security-navy-700 text-white"
-                        : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
-                    }`}
-                  >
-                    {tab.label} ({count})
-                  </button>
-                );
-              })}
+          <button
+            type="button"
+            onClick={() => setAlertsSectionOpen((open) => !open)}
+            className="flex w-full items-center justify-between gap-2 text-left"
+            aria-expanded={alertsSectionOpen}
+            aria-controls="dashboard-operational-alerts"
+          >
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-800">Operational alerts</h2>
+              {!alertsSectionOpen && (
+                <span className="text-xs text-neutral-600">
+                  {alertCounts?.allOpen ?? operationalAlerts.length} open
+                </span>
+              )}
             </div>
-          </div>
-          <ul className="space-y-2">
-            {filteredOperationalAlerts.slice(0, 8).map((alert) => {
-              const viewHref = alertViewHref(alert);
-              const isCritical = alert.priority === "CRITICAL";
-              return (
-              <li
-                key={alert.id}
-                className={`flex flex-col gap-2 rounded-security border px-3 py-2 sm:flex-row sm:items-center sm:justify-between ${
-                  isCritical ? "border-red-200 bg-red-50/60" : "border-neutral-100 bg-neutral-50/80"
-                }`}
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-neutral-900 truncate">{alert.title}</p>
-                  <p className="text-xs text-neutral-600 truncate">{alert.message}</p>
-                </div>
-                <div className="flex shrink-0 flex-wrap gap-1.5">
-                  {viewHref && (
-                    <Link href={viewHref} className="btn-secondary text-xs py-1 px-2">
-                      View
-                    </Link>
-                  )}
-                  {alert.status === "OPEN" && (
+            <svg
+              className={`h-4 w-4 shrink-0 text-neutral-600 transition-transform ${alertsSectionOpen ? "rotate-180" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {alertsSectionOpen && (
+            <div id="dashboard-operational-alerts" className="mt-2">
+              <div className="mb-2 flex flex-wrap gap-1" role="group" aria-label="Alert priority">
+                {PRIORITY_TABS.map((tab) => {
+                  const count =
+                    tab.value === "all"
+                      ? alertCounts?.allOpen ?? operationalAlerts.length
+                      : alertCounts?.[tab.value.toLowerCase() as keyof AlertCounts] ?? 0;
+                  return (
                     <button
+                      key={tab.value}
                       type="button"
-                      className="btn-secondary text-xs py-1 px-2"
-                      disabled={alertActionId === alert.id}
-                      onClick={() => handleAlertAction(alert.id, "acknowledge")}
+                      onClick={() => setPriorityTab(tab.value)}
+                      className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
+                        priorityTab === tab.value
+                          ? "bg-security-navy-700 text-white"
+                          : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+                      }`}
                     >
-                      Acknowledge
+                      {tab.label} ({count})
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className="btn-primary text-xs py-1 px-2"
-                    disabled={alertActionId === alert.id}
-                    onClick={() => handleAlertAction(alert.id, "resolve")}
-                  >
-                    Resolve
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-secondary text-xs py-1 px-2"
-                    disabled={alertActionId === alert.id}
-                    onClick={() => handleAlertAction(alert.id, "dismiss")}
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </li>
-            );
-            })}
-            {filteredOperationalAlerts.length === 0 && (
-              <li className="text-sm text-neutral-600 py-2">No alerts at this priority level.</li>
-            )}
-          </ul>
+                  );
+                })}
+              </div>
+              <ul className="max-h-72 space-y-2 overflow-y-auto overscroll-y-contain pr-1">
+                {filteredOperationalAlerts.map((alert) => {
+                  const viewHref = alertViewHref(alert);
+                  const isCritical = alert.priority === "CRITICAL";
+                  return (
+                    <li
+                      key={alert.id}
+                      className={`flex flex-col gap-2 rounded-security border px-3 py-2 sm:flex-row sm:items-center sm:justify-between ${
+                        isCritical ? "border-red-200 bg-red-50/60" : "border-neutral-100 bg-neutral-50/80"
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-neutral-900">{alert.title}</p>
+                        <p className="truncate text-xs text-neutral-600">{alert.message}</p>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-1.5">
+                        {viewHref && (
+                          <Link href={viewHref} className="btn-secondary px-2 py-1 text-xs">
+                            View
+                          </Link>
+                        )}
+                        {alert.status === "OPEN" && (
+                          <button
+                            type="button"
+                            className="btn-secondary px-2 py-1 text-xs"
+                            disabled={alertActionId === alert.id}
+                            onClick={() => handleAlertAction(alert.id, "acknowledge")}
+                          >
+                            Acknowledge
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="btn-primary px-2 py-1 text-xs"
+                          disabled={alertActionId === alert.id}
+                          onClick={() => handleAlertAction(alert.id, "resolve")}
+                        >
+                          Resolve
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-secondary px-2 py-1 text-xs"
+                          disabled={alertActionId === alert.id}
+                          onClick={() => handleAlertAction(alert.id, "dismiss")}
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+                {filteredOperationalAlerts.length === 0 && (
+                  <li className="py-2 text-sm text-neutral-600">No alerts at this priority level.</li>
+                )}
+              </ul>
+            </div>
+          )}
         </section>
       )}
 
@@ -550,7 +577,7 @@ export default function DashboardPage() {
       )}
 
       <section
-        className="grid min-h-0 flex-1 grid-cols-1 gap-2.5 overflow-hidden max-lg:auto-rows-auto md:grid-cols-2 md:gap-3 xl:grid-cols-4 xl:grid-rows-2 xl:gap-3"
+        className="grid min-h-[28rem] shrink-0 grid-cols-1 gap-2.5 max-lg:auto-rows-auto md:grid-cols-2 md:gap-3 lg:min-h-[32rem] xl:grid-cols-4 xl:grid-rows-2 xl:gap-3"
         aria-label="Dashboard widgets"
       >
         <DashboardCard title="Guards on duty">

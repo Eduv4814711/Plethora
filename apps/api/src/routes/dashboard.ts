@@ -8,6 +8,12 @@ import { startOfMonth, subMonths, format, startOfDay, endOfDay } from "date-fns"
 import { getAlertCounts } from "../modules/alerts/alerts.service.js";
 import { getPayrollReadiness } from "../modules/attendance-exceptions/exceptions.service.js";
 import { syncContractExpiryAlerts } from "../modules/documents/documents.service.js";
+import { parsePayrollCalendarSettings } from "../lib/payroll-calendar-settings.js";
+import { getCurrentPayPeriod } from "../services/payroll-period.service.js";
+import {
+  getGuardsOnDutyByDay as computeGuardsOnDutyByDay,
+  getGuardsOnDutyNow,
+} from "../services/dashboard-guards-on-duty.service.js";
 
 function parseDateRange(q: Record<string, string | undefined>): { start: Date; end: Date } {
   const now = new Date();
@@ -35,41 +41,6 @@ function parseDateRange(q: Record<string, string | undefined>): { start: Date; e
     start: startOfMonth(now),
     end: endOfDay(now),
   };
-}
-
-async function getGuardsOnDutyByDay(
-  companyId: string,
-  siteIds: string[] | undefined,
-  weekStart: Date,
-  dayNames: string[]
-): Promise<{ name: string; value: number }[]> {
-  const rows = siteIds?.length
-    ? await prisma.$queryRaw<{ dayIndex: number; count: bigint }[]>(Prisma.sql`
-        SELECT d.day_index::int AS "dayIndex", count(s.id)::bigint AS count
-        FROM generate_series(0, 6) AS d(day_index)
-        LEFT JOIN "Shift" s
-          ON s."companyId" = ${companyId}
-          AND s."status" IN ('assigned', 'active', 'completed', 'verified')
-          AND s."startTime" <= (${weekStart}::timestamp + ((d.day_index + 1) * interval '1 day') - interval '1 millisecond')
-          AND s."endTime" >= (${weekStart}::timestamp + (d.day_index * interval '1 day'))
-          AND s."siteId" IN (${Prisma.join(siteIds)})
-        GROUP BY d.day_index
-        ORDER BY d.day_index ASC
-      `)
-    : await prisma.$queryRaw<{ dayIndex: number; count: bigint }[]>(Prisma.sql`
-        SELECT d.day_index::int AS "dayIndex", count(s.id)::bigint AS count
-        FROM generate_series(0, 6) AS d(day_index)
-        LEFT JOIN "Shift" s
-          ON s."companyId" = ${companyId}
-          AND s."status" IN ('assigned', 'active', 'completed', 'verified')
-          AND s."startTime" <= (${weekStart}::timestamp + ((d.day_index + 1) * interval '1 day') - interval '1 millisecond')
-          AND s."endTime" >= (${weekStart}::timestamp + (d.day_index * interval '1 day'))
-        GROUP BY d.day_index
-        ORDER BY d.day_index ASC
-      `);
-
-  const counts = new Map(rows.map((row) => [Number(row.dayIndex), Number(row.count)]));
-  return dayNames.map((name, index) => ({ name, value: counts.get(index) ?? 0 }));
 }
 
 export async function dashboardRoutes(app: FastifyInstance) {
@@ -111,39 +82,19 @@ export async function dashboardRoutes(app: FastifyInstance) {
 
     const [guardsOnDutyByDay, guardsOnDuty, activeSitesCount, activeSitesLastMonth, payrollStatus, missedShifts, pendingApprovals, employeesByStatus, shiftsByStatus] =
       await Promise.all([
-        getGuardsOnDutyByDay(companyId, siteIds, startOfWeek, dayNames),
-        prisma.shift.count({
+        computeGuardsOnDutyByDay(companyId, startOfWeek, dayNames, { siteIds }),
+        getGuardsOnDutyNow(companyId, now, { siteIds }),
+        prisma.site.count({
           where: {
-            ...shiftWhereBase,
-            status: "active",
-            startTime: { lte: now },
-            endTime: { gte: now },
+            ...activeSitesWhere,
+            siteStatus: "ACTIVE",
           },
         }),
         prisma.site.count({
           where: {
             ...activeSitesWhere,
-            shifts: {
-              some: {
-                status: "active",
-                startTime: { lte: now },
-                endTime: { gte: now },
-              },
-            },
-          },
-        }),
-        prisma.site.count({
-          where: {
-            ...activeSitesWhere,
-            shifts: {
-              some: {
-                status: { in: ["assigned", "active", "completed", "verified"] },
-                startTime: {
-                  gte: startOfMonth(subMonths(now, 1)),
-                  lte: endOfDay(subMonths(now, 1)),
-                },
-              },
-            },
+            siteStatus: "ACTIVE",
+            createdAt: { lt: startOfMonth(now) },
           },
         }),
         prisma.payrollRun.groupBy({
@@ -200,8 +151,8 @@ export async function dashboardRoutes(app: FastifyInstance) {
     }
     if (pendingApprovals > 0) {
       alerts.push({
-        type: "pending_approvals",
-        message: "Payroll approval pending",
+        type: "pending_payroll_run_approvals",
+        message: "Payroll run awaiting final approval",
         count: pendingApprovals,
         priority: "MEDIUM",
       });
@@ -210,7 +161,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
     // Best-effort: refresh contract expiry alerts (non-blocking for dashboard)
     void syncContractExpiryAlerts(companyId).catch(() => undefined);
 
-    const [operationalAlertCounts, payrollReadiness, pendingApprovalsInbox, openCriticalIncidents] =
+    const [operationalAlertCounts, payrollReadiness, pendingApprovalsInbox, openCriticalIncidents, companyRow, pendingSiteTimesheetRows] =
       await Promise.all([
         getAlertCounts(companyId),
         getPayrollReadiness(companyId),
@@ -222,7 +173,17 @@ export async function dashboardRoutes(app: FastifyInstance) {
             status: { in: ["SUBMITTED", "UNDER_REVIEW"] },
           },
         }),
+        prisma.company.findUnique({ where: { id: companyId }, select: { settings: true } }),
+        prisma.siteTimesheetRow.count({
+          where: {
+            companyId,
+            approvalStatus: { in: ["pending", "partially_reviewed"] },
+            ...(siteIds?.length ? { siteId: { in: siteIds } } : {}),
+          },
+        }),
       ]);
+
+    const payPeriod = getCurrentPayPeriod(parsePayrollCalendarSettings(companyRow?.settings));
 
     const persistedAlerts = await prisma.operationalAlert.findMany({
       where: {
@@ -364,8 +325,17 @@ export async function dashboardRoutes(app: FastifyInstance) {
         ? {
             status: payrollReadiness.status,
             openExceptions: payrollReadiness.openExceptions,
+            periodStart: payrollReadiness.periodStart.toISOString(),
+            periodEnd: payrollReadiness.periodEnd.toISOString(),
           }
         : null,
+      pendingPayrollRunApprovals: pendingApprovals,
+      pendingSiteTimesheetRows,
+      currentPayPeriod: {
+        periodStart: payPeriod.periodStart.toISOString(),
+        periodEnd: payPeriod.periodEnd.toISOString(),
+        label: payPeriod.label,
+      },
       pendingApprovalsInbox,
       openCriticalIncidents,
       taskStats: { overdue: tasksOverdue, dueToday: tasksDueToday },

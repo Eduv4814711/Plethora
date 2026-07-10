@@ -391,7 +391,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             "lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.25rem)] lg:pb-4 xl:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.5rem)] xl:pb-5 [@media(max-height:860px)]:lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+0.75rem)] [@media(max-height:860px)]:lg:pb-3",
           "overscroll-y-contain",
           isDashboardHome
-            ? "overflow-y-auto lg:overflow-hidden"
+            ? "overflow-y-auto"
             : isWhatsAppPage
               ? "overflow-hidden"
               : isAcademyPage
@@ -401,7 +401,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       >
         {hasAccess ? (
           isAcademyPage || isDashboardHome ? (
-            <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col lg:h-full">{children}</div>
+            <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">{children}</div>
           ) : (
             children
           )

@@ -253,10 +253,16 @@ export default function PayrollPage() {
       authFetch("/payroll/reserve", token).then((r) => r.ok ? r.json() : null).catch(() => null),
     ])
       .then(([dashboard, reserve]) => {
-        const pa = dashboard?.alerts?.find((a: { type: string }) => a.type === "pending_approvals");
+        const pa =
+          dashboard?.pendingPayrollRunApprovals ??
+          dashboard?.alerts?.find(
+            (a: { type: string }) =>
+              a.type === "pending_payroll_run_approvals" || a.type === "pending_approvals"
+          )?.count ??
+          0;
         setMetrics((m) => ({
           ...m,
-          pendingApprovals: pa?.count ?? 0,
+          pendingApprovals: typeof pa === "number" ? pa : pa?.count ?? 0,
           reserve: reserve ?? null,
         }));
       })
@@ -290,10 +296,16 @@ export default function PayrollPage() {
       authFetch("/payroll/reserve", token).then((r) => r.ok ? r.json() : null).catch(() => null),
     ])
       .then(([dashboard, reserve]) => {
-        const pa = dashboard?.alerts?.find((a: { type: string }) => a.type === "pending_approvals");
+        const pa =
+          dashboard?.pendingPayrollRunApprovals ??
+          dashboard?.alerts?.find(
+            (a: { type: string }) =>
+              a.type === "pending_payroll_run_approvals" || a.type === "pending_approvals"
+          )?.count ??
+          0;
         setMetrics((m) => ({
           ...m,
-          pendingApprovals: pa?.count ?? 0,
+          pendingApprovals: typeof pa === "number" ? pa : pa?.count ?? 0,
           reserve: reserve ?? null,
         }));
       })

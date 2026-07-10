@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import type { Prisma, SiteRosterShiftCode, SiteTimesheetAttendance, SiteTimesheetRowStatus } from "@prisma/client";
 import { createAuditLog } from "../../lib/audit.js";
 import { prisma } from "../../lib/prisma.js";
+import { getCompanyTimezone, inferShiftTypeFromStartTime } from "../../lib/timezone.js";
 import { dateKey, dateOnly } from "./rosters.service.js";
 
 type Tx = Prisma.TransactionClient | typeof prisma;
@@ -247,9 +248,11 @@ async function seedRows(tx: Tx, companyId: string, timesheetId: string, siteId: 
     }),
   ]);
 
+  const timeZone = await getCompanyTimezone(companyId);
   const shiftByGuardDateType = new Map<string, (typeof shifts)[number]>();
   for (const shift of shifts) {
-    const type = normalizeShiftType(shift.shiftType) ?? (shift.startTime.getHours() >= 12 ? "night" : "day");
+    const type =
+      normalizeShiftType(shift.shiftType) ?? inferShiftTypeFromStartTime(shift.startTime, timeZone);
     shiftByGuardDateType.set(shiftMatchKey(shift.employeeId, shift.startTime, type), shift);
   }
 
@@ -313,9 +316,11 @@ async function resyncRows(tx: Tx, companyId: string, timesheetId: string, siteId
     }),
   ]);
 
+  const timeZone = await getCompanyTimezone(companyId);
   const shiftByGuardDateType = new Map<string, (typeof shifts)[number]>();
   for (const shift of shifts) {
-    const type = normalizeShiftType(shift.shiftType) ?? (shift.startTime.getHours() >= 12 ? "night" : "day");
+    const type =
+      normalizeShiftType(shift.shiftType) ?? inferShiftTypeFromStartTime(shift.startTime, timeZone);
     shiftByGuardDateType.set(shiftMatchKey(shift.employeeId, shift.startTime, type), shift);
   }
 
