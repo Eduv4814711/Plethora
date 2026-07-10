@@ -120,7 +120,10 @@ export const siteTimesheetRowUpdateSchema = z.object({
     "training",
     "off",
   ]).optional(),
-  approvalStatus: z.enum(["pending", "reviewed", "approved"]).optional(),
+  approvalStatus: z.enum(["pending", "partially_reviewed", "reviewed", "approved"]).optional(),
+  dutyOnObNumber: z.string().max(80).nullable().optional(),
+  dutyOffObNumber: z.string().max(80).nullable().optional(),
+  /** @deprecated Use dutyOnObNumber */
   occurrenceBookNumber: z.string().max(80).nullable().optional(),
   comments: z.string().nullable().optional(),
 });
@@ -143,14 +146,16 @@ export const siteTimesheetRowCreateSchema = z.object({
     "training",
     "off",
   ]),
-  occurrenceBookNumber: z
-    .string()
-    .trim()
-    .min(1, "Occurrence Book (OB) number is required")
-    .max(80),
+  dutyOnObNumber: z.string().trim().min(1, "Duty ON OB number is required").max(80).optional(),
+  dutyOffObNumber: z.string().trim().max(80).nullable().optional(),
+  /** @deprecated Use dutyOnObNumber */
+  occurrenceBookNumber: z.string().trim().min(1).max(80).optional(),
   comments: z.string().nullable().optional(),
   hoursWorked: z.number().nullable().optional(),
   overtimeHours: z.number().nullable().optional(),
+}).refine((data) => Boolean(data.dutyOnObNumber?.trim() || data.occurrenceBookNumber?.trim()), {
+  message: "Duty ON OB number is required",
+  path: ["dutyOnObNumber"],
 });
 
 export const approveSiteTimesheetSchema = z.object({

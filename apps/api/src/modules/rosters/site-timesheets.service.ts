@@ -129,7 +129,7 @@ function countPendingByShift(
   let pendingDayRows = 0;
   let pendingNightRows = 0;
   for (const row of rows) {
-    if (row.approvalStatus !== "pending") continue;
+    if (!isRowPendingReview(row.approvalStatus)) continue;
     const shift = resolveRowShiftType(row);
     if (shift === "day") pendingDayRows += 1;
     else if (shift === "night") pendingNightRows += 1;
@@ -507,7 +507,9 @@ function serializeRow(
     overtimeHours: row.overtimeHours != null ? Number(row.overtimeHours) : null,
     attendanceStatus: row.attendanceStatus,
     approvalStatus: row.approvalStatus,
-    occurrenceBookNumber: row.occurrenceBookNumber,
+    dutyOnObNumber: row.dutyOnObNumber ?? row.occurrenceBookNumber,
+    dutyOffObNumber: row.dutyOffObNumber,
+    occurrenceBookNumber: row.dutyOnObNumber ?? row.occurrenceBookNumber,
     comments: row.comments,
     discrepancyCodes:
       discrepancyCodes ??
@@ -574,12 +576,12 @@ export function computeSiteCaptureFromRows(input: {
     };
   }
 
-  const pendingRows = scoped.filter((r) => r.approvalStatus === "pending");
+  const pendingRows = scoped.filter((r) => isRowPendingReview(r.approvalStatus));
   const pendingDates = new Set(
     pendingRows.map((r) => (typeof r.workDate === "string" ? r.workDate : dateKey(r.workDate)))
   );
   const capturedDates = scoped
-    .filter((r) => r.approvalStatus !== "pending")
+    .filter((r) => isRowFullyReviewed(r.approvalStatus))
     .map((r) => (typeof r.workDate === "string" ? r.workDate : dateKey(r.workDate)))
     .sort();
 
@@ -591,7 +593,7 @@ export function computeSiteCaptureFromRows(input: {
     pendingRows: pendingRows.length,
     pendingDayRows: allPending.pendingDayRows,
     pendingNightRows: allPending.pendingNightRows,
-    reviewedRows: scoped.length - pendingRows.length,
+    reviewedRows: scoped.filter((r) => isRowFullyReviewed(r.approvalStatus)).length,
     lastCapturedDate: capturedDates.at(-1) ?? null,
     timesheetStatus: input.timesheetStatus,
   };
@@ -770,45 +772,33 @@ async function guardBelongsToCompany(guardId: string, companyId: string): Promis
   return employee != null;
 }
 
-function normalizeOccurrenceBookNumber(value: string | null | undefined): string | null | undefined {
+export function normalizeObNumber(value: string | null | undefined): string | null | undefined {
   if (value === undefined) return undefined;
   if (value === null) return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function occurrenceBookNumbersMatch(a: string, b: string): boolean {
-  return a.trim().toLowerCase() === b.trim().toLowerCase();
+/** Working shifts need Duty ON and Duty OFF before full row review. */
+export function rowNeedsObNumbers(attendanceStatus: SiteTimesheetAttendance): boolean {
+  if (attendanceStatus === "off" || attendanceStatus === "pending") return false;
+  if (attendanceStatus === "leave" || attendanceStatus === "sick_leave") return false;
+  return true;
 }
 
-/**
- * OB numbers must be unique within a site timesheet (same site + pay period).
- * Comparison is case-insensitive after trim.
- */
-async function findDuplicateOccurrenceBookNumber(
-  tx: Tx,
-  args: {
-    companyId: string;
-    siteTimesheetId: string;
-    occurrenceBookNumber: string;
-    excludeRowId?: string;
-  }
-): Promise<{ id: string; workDate: Date } | null> {
-  const rows = await tx.siteTimesheetRow.findMany({
-    where: {
-      companyId: args.companyId,
-      siteTimesheetId: args.siteTimesheetId,
-      occurrenceBookNumber: { not: null },
-      ...(args.excludeRowId ? { id: { not: args.excludeRowId } } : {}),
-    },
-    select: { id: true, workDate: true, occurrenceBookNumber: true },
-  });
-  const match = rows.find(
-    (r) =>
-      r.occurrenceBookNumber != null &&
-      occurrenceBookNumbersMatch(r.occurrenceBookNumber, args.occurrenceBookNumber)
-  );
-  return match ? { id: match.id, workDate: match.workDate } : null;
+export function isRowPendingReview(approvalStatus: string): boolean {
+  return approvalStatus === "pending" || approvalStatus === "partially_reviewed";
+}
+
+export function isRowFullyReviewed(approvalStatus: string): boolean {
+  return approvalStatus === "reviewed" || approvalStatus === "approved";
+}
+
+function resolveDutyOnFromRow(row: {
+  dutyOnObNumber?: string | null;
+  occurrenceBookNumber?: string | null;
+}): string | null {
+  return normalizeObNumber(row.dutyOnObNumber ?? row.occurrenceBookNumber) ?? null;
 }
 
 export async function updateSiteTimesheetRow(
@@ -824,6 +814,8 @@ export async function updateSiteTimesheetRow(
     overtimeHours?: number | null;
     attendanceStatus?: SiteTimesheetAttendance;
     approvalStatus?: SiteTimesheetRowStatus;
+    dutyOnObNumber?: string | null;
+    dutyOffObNumber?: string | null;
     occurrenceBookNumber?: string | null;
     comments?: string | null;
   },
@@ -842,45 +834,55 @@ export async function updateSiteTimesheetRow(
     return { error: "Guard not found." };
   }
 
-  const nextOccurrenceBookNumber = normalizeOccurrenceBookNumber(input.occurrenceBookNumber);
-  const existingOb =
-    normalizeOccurrenceBookNumber(existing.occurrenceBookNumber) ?? null;
-  if (nextOccurrenceBookNumber !== undefined && existingOb) {
-    const changing = nextOccurrenceBookNumber !== existingOb;
-    if (changing && actor?.role !== "admin") {
-      return {
-        error:
-          "Occurrence Book (OB) number can only be changed by an administrator once it has been entered.",
-      };
+  const nextDutyOn =
+    input.dutyOnObNumber !== undefined
+      ? normalizeObNumber(input.dutyOnObNumber)
+      : input.occurrenceBookNumber !== undefined
+        ? normalizeObNumber(input.occurrenceBookNumber)
+        : undefined;
+  const nextDutyOff =
+    input.dutyOffObNumber !== undefined ? normalizeObNumber(input.dutyOffObNumber) : undefined;
+
+  const existingDutyOn = resolveDutyOnFromRow(existing);
+  const existingDutyOff = normalizeObNumber(existing.dutyOffObNumber) ?? null;
+
+  if (nextDutyOn !== undefined && existingDutyOn && nextDutyOn !== existingDutyOn && actor?.role !== "admin") {
+    return {
+      error: "Duty ON OB number can only be changed by an administrator once it has been entered.",
+    };
+  }
+  if (nextDutyOff !== undefined && existingDutyOff && nextDutyOff !== existingDutyOff && actor?.role !== "admin") {
+    return {
+      error: "Duty OFF OB number can only be changed by an administrator once it has been entered.",
+    };
+  }
+
+  const approving = input.approvalStatus === "reviewed" || input.approvalStatus === "approved";
+  const resolvedDutyOn = nextDutyOn !== undefined ? nextDutyOn : existingDutyOn;
+  const resolvedDutyOff = nextDutyOff !== undefined ? nextDutyOff : existingDutyOff;
+  const attendanceStatus = input.attendanceStatus ?? existing.attendanceStatus;
+  const needsOb = rowNeedsObNumbers(attendanceStatus);
+
+  if (approving && needsOb) {
+    if (!resolvedDutyOn) {
+      return { error: "Duty ON OB number is required before you can approve this shift." };
+    }
+    if (!resolvedDutyOff) {
+      return { error: "Duty OFF OB number is required before you can approve this shift." };
     }
   }
 
-  const approving =
-    input.approvalStatus === "reviewed" || input.approvalStatus === "approved";
-  const obForApprove =
-    nextOccurrenceBookNumber !== undefined ? nextOccurrenceBookNumber : existingOb;
-  if (approving) {
-    if (!obForApprove) {
-      return {
-        error:
-          "Occurrence Book (OB) number is required before you can approve this shift.",
-      };
-    }
-  }
-
-  const obToCheck =
-    nextOccurrenceBookNumber !== undefined ? nextOccurrenceBookNumber : approving ? obForApprove : null;
-  if (obToCheck) {
-    const duplicate = await findDuplicateOccurrenceBookNumber(prisma, {
-      companyId,
-      siteTimesheetId: existing.siteTimesheetId,
-      occurrenceBookNumber: obToCheck,
-      excludeRowId: rowId,
-    });
-    if (duplicate) {
-      return {
-        error: `Occurrence Book (OB) number "${obToCheck}" is already used on ${dateKey(duplicate.workDate)}. Each shift needs its own OB number.`,
-      };
+  let nextApprovalStatus: SiteTimesheetRowStatus | undefined = input.approvalStatus;
+  if (!approving && input.approvalStatus === undefined) {
+    if (!needsOb) {
+      // off/leave rows can be reviewed without OB fields
+    } else {
+      const dutyOnAfter = nextDutyOn !== undefined ? nextDutyOn : existingDutyOn;
+      if (!dutyOnAfter) {
+        nextApprovalStatus = "pending";
+      } else if (!isRowFullyReviewed(existing.approvalStatus)) {
+        nextApprovalStatus = "partially_reviewed";
+      }
     }
   }
 
@@ -896,10 +898,11 @@ export async function updateSiteTimesheetRow(
         hoursWorked: input.hoursWorked,
         overtimeHours: input.overtimeHours,
         attendanceStatus: input.attendanceStatus,
-        approvalStatus: input.approvalStatus,
-        ...(nextOccurrenceBookNumber !== undefined
-          ? { occurrenceBookNumber: nextOccurrenceBookNumber }
+        ...(nextApprovalStatus !== undefined ? { approvalStatus: nextApprovalStatus } : {}),
+        ...(nextDutyOn !== undefined
+          ? { dutyOnObNumber: nextDutyOn, occurrenceBookNumber: nextDutyOn }
           : {}),
+        ...(nextDutyOff !== undefined ? { dutyOffObNumber: nextDutyOff } : {}),
         comments: input.comments,
       },
     });
@@ -924,7 +927,7 @@ export async function updateSiteTimesheetRow(
     metadata: {
       siteTimesheetId: existing.siteTimesheetId,
       workDate: dateKey(existing.workDate),
-      approvalStatus: input.approvalStatus ?? existing.approvalStatus,
+      approvalStatus: nextApprovalStatus ?? existing.approvalStatus,
       attendanceStatus: input.attendanceStatus ?? existing.attendanceStatus,
     },
   });
@@ -946,6 +949,8 @@ export async function addSiteTimesheetRow(
     actualShiftCode: string;
     actualShiftType: string;
     attendanceStatus: SiteTimesheetAttendance;
+    dutyOnObNumber?: string | null;
+    dutyOffObNumber?: string | null;
     occurrenceBookNumber?: string | null;
     comments?: string | null;
     hoursWorked?: number | null;
@@ -960,24 +965,14 @@ export async function addSiteTimesheetRow(
   if (!(await guardBelongsToCompany(input.actualGuardId, companyId))) {
     return { error: "Guard not found." };
   }
-  const occurrenceBookNumber =
-    normalizeOccurrenceBookNumber(input.occurrenceBookNumber) ?? null;
-  if (!occurrenceBookNumber) {
+  const dutyOnObNumber =
+    normalizeObNumber(input.dutyOnObNumber ?? input.occurrenceBookNumber) ?? null;
+  if (!dutyOnObNumber) {
     return {
-      error:
-        "Occurrence Book (OB) number is required before you can add a reliever to the timesheet.",
+      error: "Duty ON OB number is required before you can add a reliever to the timesheet.",
     };
   }
-  const duplicate = await findDuplicateOccurrenceBookNumber(prisma, {
-    companyId,
-    siteTimesheetId,
-    occurrenceBookNumber,
-  });
-  if (duplicate) {
-    return {
-      error: `Occurrence Book (OB) number "${occurrenceBookNumber}" is already used on ${dateKey(duplicate.workDate)}. Each shift needs its own OB number.`,
-    };
-  }
+  const dutyOffObNumber = normalizeObNumber(input.dutyOffObNumber) ?? null;
   const row = await prisma.$transaction(async (tx) => {
     const created = await tx.siteTimesheetRow.create({
       data: {
@@ -989,8 +984,10 @@ export async function addSiteTimesheetRow(
         actualShiftCode: input.actualShiftCode,
         actualShiftType: input.actualShiftType,
         attendanceStatus: input.attendanceStatus,
-        approvalStatus: "reviewed",
-        occurrenceBookNumber,
+        approvalStatus: "partially_reviewed",
+        dutyOnObNumber,
+        dutyOffObNumber,
+        occurrenceBookNumber: dutyOnObNumber,
         comments: input.comments,
         hoursWorked: input.hoursWorked,
         overtimeHours: input.overtimeHours,
@@ -1041,6 +1038,8 @@ export async function approveSiteTimesheet(
         select: {
           id: true,
           approvalStatus: true,
+          dutyOnObNumber: true,
+          dutyOffObNumber: true,
           occurrenceBookNumber: true,
           plannedShiftType: true,
           plannedShiftCode: true,
@@ -1071,27 +1070,29 @@ export async function approveSiteTimesheet(
     };
   }
 
-  const pendingInScope = targetRows.filter((r) => r.approvalStatus === "pending");
+  const pendingInScope = targetRows.filter((r) => isRowPendingReview(r.approvalStatus));
   if (pendingInScope.length > 0) {
     const label = shiftType === "all" ? "rows" : `${shiftType}-shift rows`;
     return {
-      error: `${pendingInScope.length} ${label} still need individual review (and an OB number) before you can approve for payroll.`,
+      error: `${pendingInScope.length} ${label} still need individual review (Duty ON/OFF OB and Approve) before you can approve for payroll.`,
     };
   }
 
   const missingOb = targetRows.filter((r) => {
-    if (r.attendanceStatus === "off" || r.attendanceStatus === "pending") return false;
-    return !normalizeOccurrenceBookNumber(r.occurrenceBookNumber);
+    if (!rowNeedsObNumbers(r.attendanceStatus)) return false;
+    const dutyOn = resolveDutyOnFromRow(r);
+    const dutyOff = normalizeObNumber(r.dutyOffObNumber) ?? null;
+    return !dutyOn || !dutyOff;
   });
   if (missingOb.length > 0) {
     return {
-      error: `${missingOb.length} row(s) are missing an Occurrence Book (OB) number.`,
+      error: `${missingOb.length} row(s) are missing Duty ON and/or Duty OFF OB numbers.`,
     };
   }
 
   const targetIds = targetRows.map((r) => r.id);
   const remainingPending = sheet.rows.filter(
-    (r) => !targetIds.includes(r.id) && r.approvalStatus === "pending"
+    (r) => !targetIds.includes(r.id) && isRowPendingReview(r.approvalStatus)
   );
   const lockSheet = remainingPending.length === 0;
 
@@ -1192,7 +1193,8 @@ export function buildSiteTimesheetCsv(
     "Overtime",
     "Attendance Status",
     "Approval Status",
-    "OB Number",
+    "Duty ON OB",
+    "Duty OFF OB",
     "Discrepancies",
     "Comments",
   ];
@@ -1217,7 +1219,8 @@ export function buildSiteTimesheetCsv(
         row.overtimeHours,
         row.attendanceStatus,
         row.approvalStatus,
-        row.occurrenceBookNumber,
+        row.dutyOnObNumber ?? row.occurrenceBookNumber,
+        row.dutyOffObNumber,
         row.discrepancyCodes.join("; "),
         row.comments,
       ].map(escape).join(",")

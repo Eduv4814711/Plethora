@@ -45,6 +45,12 @@ describe("resolveRowShiftType / rowMatchesShiftTypeFilter", () => {
 });
 
 describe("computeSiteCaptureFromRows (shift-aware needs attention)", () => {
+  const dayPartial = {
+    workDate: "2026-07-08",
+    approvalStatus: "partially_reviewed",
+    plannedShiftType: "day",
+    plannedShiftCode: "D",
+  };
   const dayPending = {
     workDate: "2026-07-08",
     approvalStatus: "pending",
@@ -69,6 +75,19 @@ describe("computeSiteCaptureFromRows (shift-aware needs attention)", () => {
     plannedShiftType: "night",
     plannedShiftCode: "N",
   };
+
+  it("counts partially reviewed as pending when shiftType=day", () => {
+    const result = computeSiteCaptureFromRows({
+      siteId: "site-1",
+      siteName: "Control Room",
+      timesheetStatus: "draft",
+      rows: [dayPartial, nightReviewed],
+      shiftType: "day",
+    });
+    expect(result.status).toBe("needs_capture");
+    expect(result.pendingRows).toBe(1);
+    expect(result.reviewedRows).toBe(0);
+  });
 
   it("counts only day pending when shiftType=day", () => {
     const result = computeSiteCaptureFromRows({

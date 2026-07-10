@@ -832,7 +832,11 @@ model SiteTimesheetRow {
   overtimeHours         Decimal?                @db.Decimal(10, 2)
   attendanceStatus      SiteTimesheetAttendance @default(pending)
   approvalStatus        SiteTimesheetRowStatus  @default(pending)
-  /// Occurrence book (OB) number recorded when the controller approves the row.
+  /// Duty ON occurrence book number (start of shift).
+  dutyOnObNumber        String?
+  /// Duty OFF occurrence book number (end of shift).
+  dutyOffObNumber       String?
+  /// Deprecated: mirrored from dutyOnObNumber for backward compatibility.
   occurrenceBookNumber  String?
   comments              String?
   discrepancyCodes      Json?
@@ -877,6 +881,7 @@ enum SiteTimesheetAttendance {
 
 enum SiteTimesheetRowStatus {
   pending
+  partially_reviewed
   reviewed
   approved
 }

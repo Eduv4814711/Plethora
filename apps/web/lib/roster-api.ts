@@ -134,7 +134,10 @@ export type SiteTimesheetRow = {
   hoursWorked: number | null;
   overtimeHours: number | null;
   attendanceStatus: SiteTimesheetAttendance;
-  approvalStatus: "pending" | "reviewed" | "approved";
+  approvalStatus: "pending" | "partially_reviewed" | "reviewed" | "approved";
+  dutyOnObNumber: string | null;
+  dutyOffObNumber: string | null;
+  /** @deprecated Use dutyOnObNumber */
   occurrenceBookNumber: string | null;
   comments: string | null;
   discrepancyCodes: string[];
@@ -520,6 +523,8 @@ export async function updateSiteTimesheetRow(
       | "overtimeHours"
       | "attendanceStatus"
       | "approvalStatus"
+      | "dutyOnObNumber"
+      | "dutyOffObNumber"
       | "occurrenceBookNumber"
       | "comments"
     >
@@ -541,7 +546,10 @@ export async function addSiteTimesheetRow(
     actualShiftCode: string;
     actualShiftType: string;
     attendanceStatus: SiteTimesheetAttendance;
-    occurrenceBookNumber: string;
+    dutyOnObNumber: string;
+    dutyOffObNumber?: string | null;
+    /** @deprecated Use dutyOnObNumber */
+    occurrenceBookNumber?: string;
     comments?: string | null;
     hoursWorked?: number | null;
     overtimeHours?: number | null;

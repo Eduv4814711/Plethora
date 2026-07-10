@@ -4,7 +4,14 @@ import { GuardSearchPicker } from "@/components/guard-search-picker";
 import { ShiftTimeSelect } from "@/components/shift-time-select";
 import { defaultShiftTime } from "@/lib/shift-times";
 import type { SiteTimesheetRow } from "@/lib/roster-api";
-import { formatAttendanceStatus } from "@/lib/site-timesheet-utils";
+import {
+  formatApprovalStatus,
+  formatAttendanceStatus,
+  isRowFullyReviewed,
+  isRowPendingReview,
+  resolveDutyOffFromRow,
+  resolveDutyOnFromRow,
+} from "@/lib/site-timesheet-utils";
 
 type GuardOption = {
   id: string;
@@ -23,11 +30,12 @@ type SiteTimesheetRowCardProps = {
   guards: GuardOption[];
   locked: boolean;
   saving: boolean;
-  occurrenceBookNumber: string;
-  onOccurrenceBookNumberChange: (value: string) => void;
-  /** Persist OB when leaving the field (e.g. admin correction). */
-  onOccurrenceBookNumberSave?: () => void;
-  /** Full admins may edit an OB number after it has been saved. */
+  dutyOnObNumber: string;
+  dutyOffObNumber: string;
+  onDutyOnObNumberChange: (value: string) => void;
+  onDutyOffObNumberChange: (value: string) => void;
+  onDutyOnObNumberSave?: () => void;
+  onDutyOffObNumberSave?: () => void;
   canEditLockedOb?: boolean;
   rowShiftType: (row: SiteTimesheetRow) => "day" | "night" | null;
   displayShiftTime: (
@@ -47,9 +55,12 @@ export function SiteTimesheetRowCard({
   guards,
   locked,
   saving,
-  occurrenceBookNumber,
-  onOccurrenceBookNumberChange,
-  onOccurrenceBookNumberSave,
+  dutyOnObNumber,
+  dutyOffObNumber,
+  onDutyOnObNumberChange,
+  onDutyOffObNumberChange,
+  onDutyOnObNumberSave,
+  onDutyOffObNumberSave,
   canEditLockedOb = false,
   rowShiftType,
   displayShiftTime,
@@ -60,18 +71,24 @@ export function SiteTimesheetRowCard({
   onApprove,
 }: SiteTimesheetRowCardProps) {
   const shiftType = rowShiftType(row);
-  const needsReview = row.approvalStatus === "pending";
-  const reviewed = row.approvalStatus === "reviewed" || row.approvalStatus === "approved";
-  const savedOb = (row.occurrenceBookNumber ?? "").trim();
-  const obLocked = Boolean(savedOb) && !canEditLockedOb;
+  const pendingReview = isRowPendingReview(row.approvalStatus);
+  const partiallyReviewed = row.approvalStatus === "partially_reviewed";
+  const reviewed = isRowFullyReviewed(row.approvalStatus);
+  const savedDutyOn = resolveDutyOnFromRow(row);
+  const savedDutyOff = resolveDutyOffFromRow(row);
+  const dutyOnLocked = Boolean(savedDutyOn) && !canEditLockedOb;
+  const dutyOffLocked = Boolean(savedDutyOff) && !canEditLockedOb;
+  const dutyOffEnabled = Boolean(savedDutyOn) || Boolean(dutyOnObNumber.trim());
 
   return (
     <article
       className={`rounded-xl border p-4 space-y-3 ${
-        needsReview
+        pendingReview
           ? row.discrepancyCodes.length
             ? "border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20"
-            : "border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-950"
+            : partiallyReviewed
+              ? "border-amber-200 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/15"
+              : "border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-950"
           : "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900 dark:bg-emerald-950/15"
       }`}
     >
@@ -82,7 +99,11 @@ export function SiteTimesheetRowCard({
         </div>
         {reviewed ? (
           <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
-            {locked ? "Approved" : "Reviewed"}
+            {locked ? "Approved" : formatApprovalStatus(row.approvalStatus)}
+          </span>
+        ) : partiallyReviewed ? (
+          <span className="shrink-0 rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+            Partial
           </span>
         ) : (
           <span className="shrink-0 rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
@@ -211,50 +232,71 @@ export function SiteTimesheetRowCard({
         />
       </div>
 
-      <div>
-        <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
-          Occurrence Book (OB) number
-        </label>
-        {locked || row.approvalStatus === "approved" || obLocked ? (
-          <div className="mt-1">
-            <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
-              {savedOb || row.occurrenceBookNumber || "—"}
-            </p>
-            {obLocked && !locked && row.approvalStatus !== "approved" && (
-              <p className="mt-0.5 text-[11px] text-neutral-500">
-                Locked — only an administrator can change this.
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Duty ON OB</label>
+          {locked || row.approvalStatus === "approved" || dutyOnLocked ? (
+            <div className="mt-1">
+              <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                {savedDutyOn || "—"}
               </p>
-            )}
-          </div>
-        ) : (
-          <input
-            value={occurrenceBookNumber}
-            onChange={(e) => onOccurrenceBookNumberChange(e.target.value)}
-            onBlur={() => onOccurrenceBookNumberSave?.()}
-            disabled={saving}
-            className="input-modern mt-1 w-full"
-            placeholder="Enter OB number"
-            title={
-              savedOb
-                ? "Admin only: change Occurrence Book number"
-                : "Occurrence Book number (required to approve)"
-            }
-            aria-label={`Occurrence Book number for ${row.workDate}`}
-          />
-        )}
+              {dutyOnLocked && !locked && row.approvalStatus !== "approved" && (
+                <p className="mt-0.5 text-[11px] text-neutral-500">
+                  Locked — only an administrator can change this.
+                </p>
+              )}
+            </div>
+          ) : (
+            <input
+              value={dutyOnObNumber}
+              onChange={(e) => onDutyOnObNumberChange(e.target.value)}
+              onBlur={() => onDutyOnObNumberSave?.()}
+              disabled={saving}
+              className="input-modern mt-1 w-full"
+              placeholder="Duty ON OB"
+              title="Duty ON OB — saves as partial approval"
+              aria-label={`Duty ON OB for ${row.workDate}`}
+            />
+          )}
+        </div>
+        <div>
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Duty OFF OB</label>
+          {locked || row.approvalStatus === "approved" || dutyOffLocked ? (
+            <div className="mt-1">
+              <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                {savedDutyOff || "—"}
+              </p>
+              {dutyOffLocked && !locked && row.approvalStatus !== "approved" && (
+                <p className="mt-0.5 text-[11px] text-neutral-500">
+                  Locked — only an administrator can change this.
+                </p>
+              )}
+            </div>
+          ) : (
+            <input
+              value={dutyOffObNumber}
+              onChange={(e) => onDutyOffObNumberChange(e.target.value)}
+              onBlur={() => onDutyOffObNumberSave?.()}
+              disabled={saving || !dutyOffEnabled}
+              className="input-modern mt-1 w-full disabled:opacity-50"
+              placeholder={dutyOffEnabled ? "Duty OFF OB" : "Enter Duty ON first"}
+              title="Duty OFF OB — required before approve"
+              aria-label={`Duty OFF OB for ${row.workDate}`}
+            />
+          )}
+        </div>
       </div>
 
-      {!locked && row.approvalStatus === "pending" && (
+      {!locked && pendingReview && (
         <button
           type="button"
           disabled={saving}
           onMouseDown={(e) => {
-            // Prevent OB input blur→save from disabling this button before click fires.
             e.preventDefault();
           }}
           onClick={() => onApprove(row)}
           className="btn-primary w-full disabled:opacity-50"
-          title="Click to approve. You will be told if the OB number is missing or already used."
+          title="Enter Duty ON and Duty OFF OB numbers, then approve."
         >
           {saving ? "Saving…" : "Approve this day"}
         </button>

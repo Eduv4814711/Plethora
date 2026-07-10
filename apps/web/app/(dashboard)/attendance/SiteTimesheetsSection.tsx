@@ -27,10 +27,15 @@ import {
   updateSiteTimesheetRow,
 } from "@/lib/roster-api";
 import {
-  findDuplicateOccurrenceBookRow,
   formatAttendanceStatus,
+  formatApprovalStatus,
+  isRowFullyReviewed,
+  isRowPendingReview,
   resolveAttendanceStatusOnApprove,
+  resolveDutyOffFromRow,
+  resolveDutyOnFromRow,
   rowMatchesShiftTypeFilter,
+  rowNeedsObNumbers,
   sortSiteTimesheetRows,
 } from "@/lib/site-timesheet-utils";
 import { isFullAdmin } from "@/lib/permissions";
@@ -104,7 +109,8 @@ function shiftTypeTimesPatch(
 
 function buildRowApprovalPatch(
   row: SiteTimesheetRow,
-  occurrenceBookNumber: string
+  dutyOnObNumber: string,
+  dutyOffObNumber: string
 ): Partial<SiteTimesheetRow> {
   const plannedShiftType = normalizeShiftType(row.plannedShiftType ?? row.plannedShiftCode);
   const explicitNotWorked =
@@ -152,7 +158,9 @@ function buildRowApprovalPatch(
     }),
     actualShiftType,
     actualShiftCode,
-    occurrenceBookNumber,
+    dutyOnObNumber,
+    dutyOffObNumber,
+    occurrenceBookNumber: dutyOnObNumber,
     approvalStatus: "reviewed",
   };
 }
@@ -181,8 +189,9 @@ export function SiteTimesheetsSection({
   const [error, setError] = useState<string | null>(null);
   /** Centered notice so approve blockers are never missed at the top of a long page. */
   const [notice, setNotice] = useState<NoticeDialog | null>(null);
-  /** Draft OB numbers typed in the on-page field before Approve. */
-  const [obDrafts, setObDrafts] = useState<Record<string, string>>({});
+  /** Draft Duty ON/OFF OB numbers before Approve. */
+  const [dutyOnDrafts, setDutyOnDrafts] = useState<Record<string, string>>({});
+  const [dutyOffDrafts, setDutyOffDrafts] = useState<Record<string, string>>({});
   /** Filter timesheet rows by planned/actual guard name. */
   const [guardFilter, setGuardFilter] = useState("");
   const [newRow, setNewRow] = useState({
@@ -191,7 +200,8 @@ export function SiteTimesheetsSection({
     actualShiftType: "day",
     actualShiftCode: "D",
     attendanceStatus: "reliever" as SiteTimesheetAttendance,
-    occurrenceBookNumber: "",
+    dutyOnObNumber: "",
+    dutyOffObNumber: "",
     comments: "",
   });
 
@@ -258,13 +268,13 @@ export function SiteTimesheetsSection({
       return haystack.includes(q);
     });
   }, [shiftScopedRows, guardFilter]);
-  const reviewedCount = shiftScopedRows.filter((r) => r.approvalStatus !== "pending").length;
-  const pendingReviewCount = shiftScopedRows.length - reviewedCount;
+  const reviewedCount = shiftScopedRows.filter((r) => isRowFullyReviewed(r.approvalStatus)).length;
+  const pendingReviewCount = shiftScopedRows.filter((r) => isRowPendingReview(r.approvalStatus)).length;
   const otherShiftPendingCount = useMemo(() => {
     if (shiftType === "all") return 0;
     const other: AttendanceShiftTypeFilter = shiftType === "day" ? "night" : "day";
     return sortedRows.filter(
-      (r) => rowMatchesShiftTypeFilter(r, other) && r.approvalStatus === "pending"
+      (r) => rowMatchesShiftTypeFilter(r, other) && isRowPendingReview(r.approvalStatus)
     ).length;
   }, [sortedRows, shiftType]);
   const guardFilterActive = guardFilter.trim().length > 0;
@@ -301,38 +311,76 @@ export function SiteTimesheetsSection({
     }
   };
 
-  const getObDraft = (row: SiteTimesheetRow) =>
-    obDrafts[row.id] ?? row.occurrenceBookNumber ?? "";
+  const getDutyOnDraft = (row: SiteTimesheetRow) =>
+    dutyOnDrafts[row.id] ?? resolveDutyOnFromRow(row);
 
-  const setObDraft = (rowId: string, value: string) => {
-    setObDrafts((prev) => ({ ...prev, [rowId]: value }));
+  const getDutyOffDraft = (row: SiteTimesheetRow) =>
+    dutyOffDrafts[row.id] ?? resolveDutyOffFromRow(row);
+
+  const setDutyOnDraft = (rowId: string, value: string) => {
+    setDutyOnDrafts((prev) => ({ ...prev, [rowId]: value }));
   };
 
-  const assertUniqueObNumber = (obNumber: string, excludeRowId?: string): boolean => {
-    if (!sheet) return true;
-    const duplicate = findDuplicateOccurrenceBookRow(sheet.rows, obNumber, excludeRowId);
-    if (!duplicate) return true;
-    const message = `Occurrence Book (OB) number "${obNumber.trim()}" is already used on ${duplicate.workDate}. Each shift needs its own OB number.`;
-    showNotice("OB number already used", message);
-    return false;
+  const setDutyOffDraft = (rowId: string, value: string) => {
+    setDutyOffDrafts((prev) => ({ ...prev, [rowId]: value }));
+  };
+
+  const saveDutyOnNumber = async (row: SiteTimesheetRow) => {
+    const next = getDutyOnDraft(row).trim();
+    const current = resolveDutyOnFromRow(row);
+    if (next === current) return;
+    if (!canEditLockedOb && current && next !== current) {
+      showNotice(
+        "Duty ON locked",
+        "Duty ON OB number can only be changed by an administrator once it has been entered."
+      );
+      setDutyOnDraft(row.id, current);
+      return;
+    }
+    await updateRow(row, { dutyOnObNumber: next || null });
+  };
+
+  const saveDutyOffNumber = async (row: SiteTimesheetRow) => {
+    const next = getDutyOffDraft(row).trim();
+    const current = resolveDutyOffFromRow(row);
+    if (next === current) return;
+    if (!canEditLockedOb && current && next !== current) {
+      showNotice(
+        "Duty OFF locked",
+        "Duty OFF OB number can only be changed by an administrator once it has been entered."
+      );
+      setDutyOffDraft(row.id, current);
+      return;
+    }
+    await updateRow(row, { dutyOffObNumber: next || null });
   };
 
   const approveRowAttendance = async (row: SiteTimesheetRow) => {
-    const obNumber = getObDraft(row).trim();
-    if (!obNumber) {
+    const dutyOn = getDutyOnDraft(row).trim();
+    const dutyOff = getDutyOffDraft(row).trim();
+    const needsOb = rowNeedsObNumbers(row.attendanceStatus);
+    if (needsOb && !dutyOn) {
       showNotice(
         "Cannot approve this shift",
-        "Enter the Occurrence Book (OB) number in the OB No. field first, then click Approve again."
+        "Enter the Duty ON OB number first, then Duty OFF OB, then click Approve again."
       );
       return;
     }
-    if (!assertUniqueObNumber(obNumber, row.id)) return;
+    if (needsOb && !dutyOff) {
+      showNotice(
+        "Cannot approve this shift",
+        "Enter the Duty OFF OB number before approving this shift."
+      );
+      return;
+    }
     try {
       setError(null);
-      await updateRow(row, buildRowApprovalPatch(row, obNumber));
+      await updateRow(
+        row,
+        buildRowApprovalPatch(row, dutyOn, dutyOff)
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to approve this shift";
-      // Notice already shown by updateRow; keep banner in sync.
       setError(message);
     }
   };
@@ -347,31 +395,12 @@ export function SiteTimesheetsSection({
         `Cannot approve the timesheet yet.\n\n` +
         `${shiftPart}.\n\n` +
         `For each pending row:\n` +
-        `1. Enter a unique Occurrence Book (OB) number\n` +
-        `2. Click Approve on that row\n\n` +
+        `1. Enter Duty ON OB (saves as partial approval)\n` +
+        `2. Enter Duty OFF OB and click Approve on that row\n\n` +
         `When every visible row is reviewed, you can approve the timesheet for payroll.`
       );
     }
     return null;
-  };
-
-  const saveObNumber = async (row: SiteTimesheetRow) => {
-    const next = getObDraft(row).trim();
-    const current = (row.occurrenceBookNumber ?? "").trim();
-    if (!next || next === current) return;
-    if (current && !canEditLockedOb) {
-      showNotice(
-        "OB number locked",
-        "Occurrence Book (OB) number can only be changed by an administrator once it has been entered."
-      );
-      setObDraft(row.id, current);
-      return;
-    }
-    if (!assertUniqueObNumber(next, row.id)) {
-      setObDraft(row.id, current);
-      return;
-    }
-    await updateRow(row, { occurrenceBookNumber: next });
   };
 
   const exportPdf = () => {
@@ -390,7 +419,7 @@ export function SiteTimesheetsSection({
     doc.text(`Status: ${label(sheet.status)} | Approved: ${sheet.approvedAt ? new Date(sheet.approvedAt).toLocaleString() : "Not approved"}`, 14, 30);
     autoTable(doc, {
       startY: 36,
-      head: [["Date", "Day", "Scheduled", "Actual", "Planned", "Actual shift", "Status", "Hours", "OB Number", "Discrepancies", "Comments"]],
+      head: [["Date", "Day", "Scheduled", "Actual", "Planned", "Actual shift", "Status", "Hours", "Duty ON OB", "Duty OFF OB", "Discrepancies", "Comments"]],
       body: exportRows.map((row) => [
         row.workDate,
         row.dayOfWeek,
@@ -400,7 +429,8 @@ export function SiteTimesheetsSection({
         row.actualShiftType ?? row.actualShiftCode ?? "",
         label(row.attendanceStatus),
         row.hoursWorked ?? "",
-        row.occurrenceBookNumber ?? "",
+        row.dutyOnObNumber ?? row.occurrenceBookNumber ?? "",
+        row.dutyOffObNumber ?? "",
         row.discrepancyCodes.map(label).join("; "),
         row.comments ?? "",
       ]),
@@ -669,25 +699,40 @@ export function SiteTimesheetsSection({
               </div>
               <div>
                 <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
-                  OB number <span className="text-amber-600">*</span>
+                  Duty ON OB <span className="text-amber-600">*</span>
                 </label>
                 <input
-                  value={newRow.occurrenceBookNumber}
+                  value={newRow.dutyOnObNumber}
                   onChange={(e) =>
-                    setNewRow((prev) => ({ ...prev, occurrenceBookNumber: e.target.value }))
+                    setNewRow((prev) => ({ ...prev, dutyOnObNumber: e.target.value }))
                   }
-                  placeholder="Enter OB number"
+                  placeholder="Duty ON OB"
                   className="input-modern mt-1 w-full"
                   maxLength={80}
                   autoComplete="off"
                   required
                   aria-required="true"
                 />
-                {!newRow.occurrenceBookNumber.trim() && (
+                {!newRow.dutyOnObNumber.trim() && (
                   <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
-                    OB number is required before adding a reliever.
+                    Duty ON OB is required before adding a reliever.
                   </p>
                 )}
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                  Duty OFF OB
+                </label>
+                <input
+                  value={newRow.dutyOffObNumber}
+                  onChange={(e) =>
+                    setNewRow((prev) => ({ ...prev, dutyOffObNumber: e.target.value }))
+                  }
+                  placeholder="Optional — enter later"
+                  className="input-modern mt-1 w-full"
+                  maxLength={80}
+                  autoComplete="off"
+                />
               </div>
               <div className="flex flex-col justify-end gap-2 sm:col-span-2">
                 <input
@@ -698,31 +743,32 @@ export function SiteTimesheetsSection({
                 />
                 <button
                   type="button"
-                  disabled={!newRow.actualGuardId || !newRow.occurrenceBookNumber.trim()}
+                  disabled={!newRow.actualGuardId || !newRow.dutyOnObNumber.trim()}
                   onClick={async () => {
                     if (!newRow.actualGuardId) {
                       setError("Select a guard before adding them to the timesheet.");
                       return;
                     }
-                    const obNumber = newRow.occurrenceBookNumber.trim();
-                    if (!obNumber) {
+                    const dutyOn = newRow.dutyOnObNumber.trim();
+                    if (!dutyOn) {
                       showNotice(
-                        "OB number required",
-                        "Occurrence Book (OB) number is required before adding a reliever."
+                        "Duty ON required",
+                        "Duty ON OB number is required before adding a reliever."
                       );
                       return;
                     }
-                    if (!assertUniqueObNumber(obNumber)) return;
                     try {
                       setError(null);
                       await addSiteTimesheetRow(token, sheet.id, {
                         ...newRow,
-                        occurrenceBookNumber: obNumber,
+                        dutyOnObNumber: dutyOn,
+                        dutyOffObNumber: newRow.dutyOffObNumber.trim() || null,
                       });
                       setNewRow((prev) => ({
                         ...prev,
                         actualGuardId: "",
-                        occurrenceBookNumber: "",
+                        dutyOnObNumber: "",
+                        dutyOffObNumber: "",
                         comments: "",
                       }));
                       await load();
@@ -795,7 +841,8 @@ export function SiteTimesheetsSection({
 
           <div className="space-y-3 2xl:hidden">
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              Review each day below, confirm who worked and shift times, enter the Occurrence Book (OB) number, then tap{" "}
+              Review each day below, confirm who worked and shift times, enter Duty ON OB (partial approval), then Duty OFF OB
+              and tap{" "}
               <span className="font-medium text-neutral-700 dark:text-neutral-300">Approve this day</span>. Status is set
               automatically.
             </p>
@@ -806,9 +853,12 @@ export function SiteTimesheetsSection({
                 guards={guardOptions}
                 locked={locked}
                 saving={savingRowId === row.id}
-                occurrenceBookNumber={getObDraft(row)}
-                onOccurrenceBookNumberChange={(value) => setObDraft(row.id, value)}
-                onOccurrenceBookNumberSave={() => void saveObNumber(row)}
+                dutyOnObNumber={getDutyOnDraft(row)}
+                dutyOffObNumber={getDutyOffDraft(row)}
+                onDutyOnObNumberChange={(value) => setDutyOnDraft(row.id, value)}
+                onDutyOffObNumberChange={(value) => setDutyOffDraft(row.id, value)}
+                onDutyOnObNumberSave={() => void saveDutyOnNumber(row)}
+                onDutyOffObNumberSave={() => void saveDutyOffNumber(row)}
                 canEditLockedOb={canEditLockedOb}
                 rowShiftType={rowShiftType}
                 displayShiftTime={displayShiftTime}
@@ -826,18 +876,19 @@ export function SiteTimesheetsSection({
             <table className="site-timesheet-table w-full table-fixed text-left text-[11px]">
               <colgroup>
                 <col className="w-[7%]" />
-                <col className="w-[20%]" />
-                <col className="w-[9%]" />
-                <col className="w-[11%]" />
+                <col className="w-[18%]" />
                 <col className="w-[8%]" />
-                <col className="w-[11%]" />
                 <col className="w-[10%]" />
+                <col className="w-[7%]" />
                 <col className="w-[10%]" />
+                <col className="w-[9%]" />
+                <col className="w-[8%]" />
+                <col className="w-[8%]" />
                 <col className="w-[7%]" />
               </colgroup>
               <thead className="bg-neutral-100 text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">
                 <tr>
-                  {["Date", "Who worked", "Shift", "Start / End", "Status", "Issues", "Notes", "OB No.", "Action"].map((label) => (
+                  {["Date", "Who worked", "Shift", "Start / End", "Status", "Issues", "Notes", "Duty ON OB", "Duty OFF OB", "Action"].map((label) => (
                     <th key={label} className="px-2 py-1.5 font-semibold">{label}</th>
                   ))}
                 </tr>
@@ -845,11 +896,13 @@ export function SiteTimesheetsSection({
               <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
                 {displayRows.map((row) => {
                   const rowSurfaceClass =
-                    row.approvalStatus === "pending"
-                      ? row.discrepancyCodes.length
-                        ? "bg-amber-50/60 dark:bg-amber-950/20"
-                        : "bg-white dark:bg-neutral-950"
-                      : "bg-emerald-50/40 dark:bg-emerald-950/15";
+                    isRowFullyReviewed(row.approvalStatus)
+                      ? "bg-emerald-50/40 dark:bg-emerald-950/15"
+                      : row.approvalStatus === "partially_reviewed"
+                        ? "bg-amber-50/50 dark:bg-amber-950/20"
+                        : row.discrepancyCodes.length
+                          ? "bg-amber-50/60 dark:bg-amber-950/20"
+                          : "bg-white dark:bg-neutral-950";
                   const cellClass = `px-2 py-1.5 align-top ${rowSurfaceClass}`;
                   const guardChanged =
                     !!row.actualGuardId &&
@@ -970,36 +1023,66 @@ export function SiteTimesheetsSection({
                     </td>
                     <td className={cellClass}>
                       {(() => {
-                        const savedOb = (row.occurrenceBookNumber ?? "").trim();
-                        const obLocked = Boolean(savedOb) && !canEditLockedOb;
-                        if (locked || row.approvalStatus === "approved" || obLocked) {
+                        const savedDutyOn = resolveDutyOnFromRow(row);
+                        const dutyOnLocked = Boolean(savedDutyOn) && !canEditLockedOb;
+                        if (locked || row.approvalStatus === "approved" || dutyOnLocked) {
                           return (
                             <span
                               className="font-medium text-neutral-800 dark:text-neutral-200"
                               title={
-                                obLocked
-                                  ? "OB number is locked. Only an administrator can change it."
-                                  : "Occurrence Book number"
+                                dutyOnLocked
+                                  ? "Duty ON OB is locked. Only an administrator can change it."
+                                  : "Duty ON OB number"
                               }
                             >
-                              {savedOb || row.occurrenceBookNumber || "—"}
+                              {savedDutyOn || "—"}
                             </span>
                           );
                         }
                         return (
                           <input
-                            value={getObDraft(row)}
-                            onChange={(e) => setObDraft(row.id, e.target.value)}
-                            onBlur={() => void saveObNumber(row)}
+                            value={getDutyOnDraft(row)}
+                            onChange={(e) => setDutyOnDraft(row.id, e.target.value)}
+                            onBlur={() => void saveDutyOnNumber(row)}
                             disabled={savingRowId === row.id}
                             className="input-compact w-full !px-2 !py-1 text-[11px]"
-                            placeholder="OB No."
-                            title={
-                              savedOb
-                                ? "Admin only: change Occurrence Book number (must be unique on this timesheet)"
-                                : "Occurrence Book number — required to approve; must be unique on this timesheet"
-                            }
-                            aria-label={`Occurrence Book number for ${row.workDate}`}
+                            placeholder="Duty ON"
+                            title="Duty ON OB — saves as partial approval"
+                            aria-label={`Duty ON OB for ${row.workDate}`}
+                          />
+                        );
+                      })()}
+                    </td>
+                    <td className={cellClass}>
+                      {(() => {
+                        const savedDutyOn = resolveDutyOnFromRow(row);
+                        const savedDutyOff = resolveDutyOffFromRow(row);
+                        const dutyOffLocked = Boolean(savedDutyOff) && !canEditLockedOb;
+                        const dutyOffEnabled = Boolean(savedDutyOn) || Boolean(getDutyOnDraft(row).trim());
+                        if (locked || row.approvalStatus === "approved" || dutyOffLocked) {
+                          return (
+                            <span
+                              className="font-medium text-neutral-800 dark:text-neutral-200"
+                              title={
+                                dutyOffLocked
+                                  ? "Duty OFF OB is locked. Only an administrator can change it."
+                                  : "Duty OFF OB number"
+                              }
+                            >
+                              {savedDutyOff || "—"}
+                            </span>
+                          );
+                        }
+                        return (
+                          <input
+                            value={getDutyOffDraft(row)}
+                            onChange={(e) => setDutyOffDraft(row.id, e.target.value)}
+                            onBlur={() => void saveDutyOffNumber(row)}
+                            disabled={savingRowId === row.id || !dutyOffEnabled}
+                            className="input-compact w-full !px-2 !py-1 text-[11px] disabled:opacity-50"
+                            placeholder={dutyOffEnabled ? "Duty OFF" : "Duty ON first"}
+                            title="Duty OFF OB — required before approve"
+                            aria-label={`Duty OFF OB for ${row.workDate}`}
                           />
                         );
                       })()}
@@ -1023,16 +1106,33 @@ export function SiteTimesheetsSection({
                             Undo
                           </button>
                         </div>
+                      ) : row.approvalStatus === "partially_reviewed" ? (
+                        <div className="flex flex-col gap-1">
+                          <span className="inline-flex w-fit items-center rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+                            Partial
+                          </span>
+                          <button
+                            type="button"
+                            disabled={savingRowId === row.id}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                            }}
+                            onClick={() => void approveRowAttendance(row)}
+                            title="Enter Duty OFF OB, then approve."
+                            className="w-full rounded-security border-2 border-security-navy bg-security-navy px-2 py-1.5 text-[11px] font-semibold leading-tight text-white hover:bg-security-navy-800 disabled:opacity-50"
+                          >
+                            {savingRowId === row.id ? "…" : "Approve"}
+                          </button>
+                        </div>
                       ) : (
                         <button
                           type="button"
                           disabled={savingRowId === row.id}
                           onMouseDown={(e) => {
-                            // Prevent OB input blur→save from disabling this button before click fires.
                             e.preventDefault();
                           }}
                           onClick={() => void approveRowAttendance(row)}
-                          title="Click to approve. You will be told if the OB number is missing or already used."
+                          title="Enter Duty ON and Duty OFF OB numbers, then approve."
                           className="w-full rounded-security border-2 border-security-navy bg-security-navy px-2 py-1.5 text-[11px] font-semibold leading-tight text-white hover:bg-security-navy-800 disabled:opacity-50"
                         >
                           {savingRowId === row.id ? "…" : "Approve"}

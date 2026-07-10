@@ -36,11 +36,13 @@ function row(partial: {
   approvalStatus: string;
   plannedShiftType?: string | null;
   plannedShiftCode?: string | null;
-  occurrenceBookNumber?: string | null;
+  dutyOnObNumber?: string | null;
+  dutyOffObNumber?: string | null;
   attendanceStatus?: string;
 }) {
   return {
-    occurrenceBookNumber: "OB-1",
+    dutyOnObNumber: "OB-1",
+    dutyOffObNumber: "OB-2",
     attendanceStatus: "present",
     plannedShiftType: null,
     plannedShiftCode: null,
@@ -55,6 +57,37 @@ describe("approveSiteTimesheet (shift-safe)", () => {
     vi.mocked(prisma.siteTimesheet.findFirst).mockReset();
     vi.mocked(prisma.$transaction).mockClear();
     vi.mocked(createAuditLog).mockClear();
+  });
+
+  it("rejects when day rows are still partially reviewed under shiftType=day", async () => {
+    vi.mocked(prisma.siteTimesheet.findFirst).mockResolvedValue({
+      id: timesheetId,
+      status: "draft",
+      rows: [
+        row({
+          id: "d1",
+          approvalStatus: "partially_reviewed",
+          plannedShiftType: "day",
+          plannedShiftCode: "D",
+        }),
+        row({
+          id: "n1",
+          approvalStatus: "reviewed",
+          plannedShiftType: "night",
+          plannedShiftCode: "N",
+        }),
+      ],
+    } as never);
+
+    const result = await approveSiteTimesheet(companyId, timesheetId, userId, {
+      shiftType: "day",
+    });
+    expect(result).toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("still need individual review"),
+      })
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("rejects when day rows are still pending under shiftType=day", async () => {
