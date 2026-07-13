@@ -31,6 +31,8 @@ const authScalarsBase = {
   role: true,
   roleLabel: true,
   companyId: true,
+  accessVersion: true,
+  isSystemOwner: true,
 } as const;
 
 const authScalarsLegacyBase = {
@@ -66,7 +68,7 @@ export async function findFirstUserAuthScalars(
     }
     try {
       const row = await prisma.user.findFirst({ where, select: authScalarsBase });
-      return row ? { ...row, moduleAccess: null } : null;
+      return row ? { ...row, moduleAccess: null, accessVersion: 1, isSystemOwner: false } : null;
     } catch (fallbackErr) {
       if (!isMissingRoleLabelColumnError(fallbackErr) && !isMissingPasswordSetupColumnError(fallbackErr)) {
         throw fallbackErr;
@@ -81,6 +83,8 @@ export async function findFirstUserAuthScalars(
             passwordSetupTokenConsumedAt: null,
             roleLabel: null,
             moduleAccess: null,
+            accessVersion: 1,
+            isSystemOwner: false,
           }
         : null;
     }
@@ -103,7 +107,12 @@ export async function findManyUserAuthScalars(
     }
     try {
       const rows = await prisma.user.findMany({ where, orderBy, select: authScalarsBase });
-      return rows.map((row) => ({ ...row, moduleAccess: null }));
+      return rows.map((row) => ({
+        ...row,
+        moduleAccess: null,
+        accessVersion: 1,
+        isSystemOwner: false,
+      }));
     } catch (fallbackErr) {
       if (!isMissingRoleLabelColumnError(fallbackErr) && !isMissingPasswordSetupColumnError(fallbackErr)) {
         throw fallbackErr;
@@ -117,6 +126,8 @@ export async function findManyUserAuthScalars(
         passwordSetupTokenConsumedAt: null,
         roleLabel: null,
         moduleAccess: null,
+        accessVersion: 1,
+        isSystemOwner: false,
       }));
     }
   }
@@ -137,7 +148,7 @@ export async function findUniqueUserAuthScalars(
     }
     try {
       const row = await prisma.user.findUnique({ where, select: authScalarsBase });
-      return row ? { ...row, moduleAccess: null } : null;
+      return row ? { ...row, moduleAccess: null, accessVersion: 1, isSystemOwner: false } : null;
     } catch (fallbackErr) {
       if (!isMissingRoleLabelColumnError(fallbackErr) && !isMissingPasswordSetupColumnError(fallbackErr)) {
         throw fallbackErr;
@@ -152,6 +163,8 @@ export async function findUniqueUserAuthScalars(
             passwordSetupTokenConsumedAt: null,
             roleLabel: null,
             moduleAccess: null,
+            accessVersion: 1,
+            isSystemOwner: false,
           }
         : null;
     }

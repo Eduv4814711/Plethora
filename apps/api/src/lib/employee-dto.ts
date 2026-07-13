@@ -1,8 +1,10 @@
 import type { Prisma } from "@prisma/client";
-import type { JWTPayload } from "./types.js";
-import { normalizeModuleAccess } from "../middleware/rbac.js";
+import type { UserAccessRecord } from "../services/user-access.service.js";
+import { hasPermission } from "../services/user-access.service.js";
+import { PERMISSIONS } from "./permissions.js";
 
-export const employeeListSelect = {
+/** Operational fields safe for rostering, attendance, and general ops */
+export const employeeOperationalSelect = {
   id: true,
   companyId: true,
   employeeNumber: true,
@@ -10,8 +12,6 @@ export const employeeListSelect = {
   lastName: true,
   phone: true,
   status: true,
-  hourlyRate: true,
-  monthlySalary: true,
   employeeType: true,
   jobRole: true,
   gender: true,
@@ -19,12 +19,14 @@ export const employeeListSelect = {
   groupId: true,
   psiraNumber: true,
   psiraExpiryDate: true,
+  trainingCompleted: true,
+  commencementDate: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.EmployeeSelect;
 
-export const employeeDetailSelect = {
-  ...employeeListSelect,
+/** HR-private fields */
+export const employeeHrPrivateSelect = {
   idNumber: true,
   dateOfBirth: true,
   maritalStatus: true,
@@ -32,13 +34,10 @@ export const employeeDetailSelect = {
   physicalAddress: true,
   postalAddress: true,
   postalCode: true,
-  commencementDate: true,
   occupation: true,
   placeOfWork: true,
   ordinaryHours: true,
   ordinaryDays: true,
-  overtimeRate: true,
-  payFrequency: true,
   leaveEntitlement: true,
   noticePeriod: true,
   previousService: true,
@@ -53,63 +52,112 @@ export const employeeDetailSelect = {
   militaryPoliceService: true,
   criminalInvestigation: true,
   mentallyUnstable: true,
-  trainingCompleted: true,
 } satisfies Prisma.EmployeeSelect;
 
-export const employeePayrollSelect = {
-  ...employeeDetailSelect,
+/** Compensation and finance fields */
+export const employeeCompensationSelect = {
+  hourlyRate: true,
+  monthlySalary: true,
+  overtimeRate: true,
+  payFrequency: true,
   taxNumber: true,
+  taxDirectiveNumber: true,
+  taxDirectiveRate: true,
   bankName: true,
   bankAccountNumber: true,
   bankBranchCode: true,
 } satisfies Prisma.EmployeeSelect;
 
+export const employeeGradeOperationalSelect = {
+  id: true,
+  name: true,
+  groupId: true,
+} satisfies Prisma.PayGradeSelect;
+
+/** @deprecated use employeeOperationalSelect */
+export const employeeListSelect = employeeOperationalSelect;
+
+/** @deprecated use combined selects */
+export const employeeDetailSelect = {
+  ...employeeOperationalSelect,
+  ...employeeHrPrivateSelect,
+} satisfies Prisma.EmployeeSelect;
+
+/** @deprecated use employeeCompensationSelect */
+export const employeePayrollSelect = {
+  ...employeeDetailSelect,
+  ...employeeCompensationSelect,
+} satisfies Prisma.EmployeeSelect;
+
 export const employeePrivateAdminSelect = employeePayrollSelect;
 
-const SENSITIVE_KEYS = [
-  "idNumber",
+export const FORBIDDEN_OPERATIONAL_FIELDS = [
+  "hourlyRate",
+  "monthlySalary",
+  "overtimeRate",
   "taxNumber",
+  "taxDirectiveNumber",
+  "taxDirectiveRate",
   "bankName",
   "bankAccountNumber",
   "bankBranchCode",
+  "idNumber",
+  "dateOfBirth",
+  "maritalStatus",
+  "physicalAddress",
+  "postalAddress",
+  "postalCode",
+  "nextOfKin1Name",
+  "nextOfKin1Phone",
+  "nextOfKin2Name",
+  "nextOfKin2Phone",
+  "nextOfKin3Name",
+  "nextOfKin3Phone",
+  "criminalInvestigation",
+  "mentallyUnstable",
+  "militaryPoliceService",
+  "residedOutsideSA",
 ] as const;
 
-type SensitiveKey = (typeof SENSITIVE_KEYS)[number];
-
-export function canViewEmployeeSensitiveFields(user: JWTPayload): boolean {
-  if (user.role === "admin" && !normalizeModuleAccess(user.moduleAccess)) {
-    return true;
-  }
-  if (user.role === "hr_payroll") return true;
-  const modules = normalizeModuleAccess(user.moduleAccess);
-  if (!modules) return false;
-  return modules.some(
-    (m) => m === "/employees" || m === "/payroll" || m.startsWith("/payroll/")
+export function rejectForbiddenOperationalFields(
+  body: Record<string, unknown>
+): { forbidden: string[] } | null {
+  const forbidden = FORBIDDEN_OPERATIONAL_FIELDS.filter(
+    (key) => body[key] !== undefined && body[key] !== null && body[key] !== ""
   );
+  return forbidden.length > 0 ? { forbidden: [...forbidden] } : null;
 }
 
-function stripSensitive<T extends Record<string, unknown>>(row: T): Omit<T, SensitiveKey> {
-  const out = { ...row };
-  for (const key of SENSITIVE_KEYS) {
-    if (key in out) delete out[key];
+export function canReadEmployeePrivate(access?: UserAccessRecord): boolean {
+  return hasPermission(access, PERMISSIONS.EMPLOYEES_READ_PRIVATE);
+}
+
+export function canManageEmployeePrivate(access?: UserAccessRecord): boolean {
+  return hasPermission(access, PERMISSIONS.EMPLOYEES_MANAGE_PRIVATE);
+}
+
+export function canReadCompensation(access?: UserAccessRecord): boolean {
+  return hasPermission(access, PERMISSIONS.COMPENSATION_READ);
+}
+
+export function canManageCompensation(access?: UserAccessRecord): boolean {
+  return hasPermission(access, PERMISSIONS.COMPENSATION_MANAGE);
+}
+
+/** @deprecated use permission-based checks with request.access */
+export function canViewEmployeeSensitiveFields(_user: unknown): boolean {
+  return false;
+}
+
+export function compensationSetupPending(employee: {
+  hourlyRate?: unknown;
+  monthlySalary?: unknown;
+  employeeType?: string;
+}): boolean {
+  if (employee.employeeType === "office") {
+    return employee.monthlySalary == null;
   }
-  return out as Omit<T, SensitiveKey>;
-}
-
-export function sanitizeEmployeeForList<T extends Record<string, unknown>>(
-  row: T,
-  user: JWTPayload
-): T | Omit<T, SensitiveKey> {
-  if (canViewEmployeeSensitiveFields(user)) return row;
-  return stripSensitive(row);
-}
-
-export function sanitizeEmployeeForDetail<T extends Record<string, unknown>>(
-  row: T,
-  user: JWTPayload
-): T | Omit<T, SensitiveKey> {
-  if (canViewEmployeeSensitiveFields(user)) return row;
-  return stripSensitive(row);
+  return employee.hourlyRate == null;
 }
 
 export function maskBankAccountLast4(account?: string | null): string | null {
@@ -117,4 +165,34 @@ export function maskBankAccountLast4(account?: string | null): string | null {
   const digits = account.replace(/\D/g, "");
   if (digits.length < 4) return "****";
   return `****${digits.slice(-4)}`;
+}
+
+export function enrichOperationalEmployee<T extends Record<string, unknown>>(
+  row: T,
+  compensation?: { hourlyRate?: unknown; monthlySalary?: unknown; employeeType?: string } | null
+): T & { compensationSetupPending: boolean } {
+  return {
+    ...row,
+    compensationSetupPending: compensationSetupPending({
+      hourlyRate: compensation?.hourlyRate,
+      monthlySalary: compensation?.monthlySalary,
+      employeeType: (compensation?.employeeType ?? row.employeeType) as string | undefined,
+    }),
+  };
+}
+
+/** @deprecated no longer strips — use operational select instead */
+export function sanitizeEmployeeForList<T extends Record<string, unknown>>(
+  row: T,
+  _user: unknown
+): T {
+  return row;
+}
+
+/** @deprecated no longer strips — use operational select instead */
+export function sanitizeEmployeeForDetail<T extends Record<string, unknown>>(
+  row: T,
+  _user: unknown
+): T {
+  return row;
 }

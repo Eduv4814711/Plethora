@@ -1,8 +1,24 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
-import { authMiddleware } from "../middleware/auth.js";
+import { authProtect } from "../middleware/auth-protect.js";
 import { requireRole, normalizeModuleAccess } from "../middleware/rbac.js";
+import { requirePermission } from "../middleware/permissions.js";
+import {
+  PERMISSIONS,
+  isSensitivePermission,
+  defaultPresetForRole,
+  permissionsForPreset,
+  type PresetKey,
+  PERMISSION_PRESETS,
+} from "../lib/permissions.js";
+import {
+  setUserPermissions,
+  hasPermission,
+  incrementAccessVersion,
+  type UserAccessRecord,
+} from "../services/user-access.service.js";
+import { defaultModulesForRole } from "../lib/module-access.js";
 import { prisma } from "../lib/prisma.js";
 import {
   findManyUsersForCompany,
@@ -57,6 +73,8 @@ const createUserSchema = z.object({
   role: z.enum(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"]),
   roleLabel: roleLabelSchema,
   moduleAccess: moduleAccessSchema,
+  permissions: z.array(z.string()).optional(),
+  presetKey: z.string().optional(),
 });
 
 const updateUserSchema = z.object({
@@ -66,10 +84,31 @@ const updateUserSchema = z.object({
   role: z.enum(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"]).optional(),
   roleLabel: roleLabelSchema,
   moduleAccess: moduleAccessSchema,
+  permissions: z.array(z.string()).optional(),
+  presetKey: z.string().optional(),
 });
 
+function validatePermissionGrant(
+  actorAccess: UserAccessRecord | undefined,
+  requested: string[]
+): string | null {
+  if (!actorAccess) return "Authentication required";
+  if (actorAccess.isSystemOwner) return null;
+  const sensitive = requested.filter(isSensitivePermission);
+  if (sensitive.length > 0 && !hasPermission(actorAccess, PERMISSIONS.PERMISSIONS_GRANT_SENSITIVE)) {
+    return "Insufficient permissions to grant sensitive access";
+  }
+  for (const perm of requested) {
+    if (isSensitivePermission(perm)) continue;
+    if (!hasPermission(actorAccess, perm) && !hasPermission(actorAccess, PERMISSIONS.PERMISSIONS_MANAGE_OPERATIONAL)) {
+      return `Cannot grant permission you do not hold: ${perm}`;
+    }
+  }
+  return null;
+}
+
 export async function usersRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin"])];
+  const protect = [...authProtect, requirePermission(PERMISSIONS.USERS_MANAGE)];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
@@ -106,6 +145,24 @@ export async function usersRoutes(app: FastifyInstance) {
       const check = validatePassword(parsed.data.password);
       if (!check.valid) return badRequest(reply, check.message ?? "Password does not meet policy");
     }
+
+    let permissionUpdate: string[];
+    if (parsed.data.presetKey) {
+      const preset = PERMISSION_PRESETS[parsed.data.presetKey as PresetKey];
+      if (!preset) {
+        return reply.code(400).send({ error: "Validation error", message: "Unknown permission preset" });
+      }
+      permissionUpdate = preset.permissions;
+    } else if (parsed.data.permissions) {
+      permissionUpdate = parsed.data.permissions;
+    } else {
+      permissionUpdate = permissionsForPreset(defaultPresetForRole(parsed.data.role, false));
+    }
+    const grantError = validatePermissionGrant(request.access, permissionUpdate);
+    if (grantError) {
+      return reply.code(403).send({ error: "Forbidden", message: grantError });
+    }
+
     const setupToken = inviteMode ? generatePasswordSetupToken() : null;
     const setupTokenHash = setupToken ? hashPasswordSetupToken(setupToken) : null;
     const setupTokenExpiresAt = inviteMode ? new Date(Date.now() + 24 * 60 * 60 * 1000) : null;
@@ -125,10 +182,13 @@ export async function usersRoutes(app: FastifyInstance) {
       role: parsed.data.role,
       roleLabel: normalizeRoleLabel(parsed.data.roleLabel),
     };
-    const createData =
-      parsed.data.moduleAccess != null && parsed.data.moduleAccess.length > 0
-        ? { ...baseCreate, moduleAccess: parsed.data.moduleAccess }
-        : baseCreate;
+    const createData = {
+      ...baseCreate,
+      moduleAccess:
+        parsed.data.moduleAccess != null && parsed.data.moduleAccess.length > 0
+          ? parsed.data.moduleAccess
+          : defaultModulesForRole(parsed.data.role),
+    };
 
     try {
       let user;
@@ -184,6 +244,19 @@ export async function usersRoutes(app: FastifyInstance) {
         entityType: "user",
         entityId: user.id,
       });
+
+      const sensitiveGranted = permissionUpdate.filter(isSensitivePermission);
+      await setUserPermissions(user.id, permissionUpdate);
+      if (sensitiveGranted.length > 0) {
+        await createAuditLog({
+          userId: request.user!.sub,
+          companyId,
+          action: "permission.sensitive.grant",
+          entityType: "user",
+          entityId: user.id,
+          metadata: { permissions: sensitiveGranted },
+        });
+      }
 
       return reply.code(201).send({
         ...user,
@@ -307,6 +380,24 @@ export async function usersRoutes(app: FastifyInstance) {
           : parsed.data.moduleAccess;
     }
 
+    let permissionUpdate: string[] | undefined;
+    if (parsed.data.presetKey) {
+      const preset = PERMISSION_PRESETS[parsed.data.presetKey as PresetKey];
+      if (!preset) {
+        return reply.code(400).send({ error: "Validation error", message: "Unknown permission preset" });
+      }
+      permissionUpdate = preset.permissions;
+    } else if (parsed.data.permissions) {
+      permissionUpdate = parsed.data.permissions;
+    }
+
+    if (permissionUpdate) {
+      const grantError = validatePermissionGrant(request.access, permissionUpdate);
+      if (grantError) {
+        return reply.code(403).send({ error: "Forbidden", message: grantError });
+      }
+    }
+
     let updated;
     try {
       updated = await prisma.user.update({
@@ -353,6 +444,27 @@ export async function usersRoutes(app: FastifyInstance) {
         },
       });
       updated = { ...updated, roleLabel: null, moduleAccess: null };
+    }
+
+    if (permissionUpdate) {
+      const sensitiveGranted = permissionUpdate.filter(isSensitivePermission);
+      await setUserPermissions(id, permissionUpdate);
+      if (sensitiveGranted.length > 0) {
+        await createAuditLog({
+          userId: request.user!.sub,
+          companyId,
+          action: "permission.sensitive.grant",
+          entityType: "user",
+          entityId: id,
+          metadata: { permissions: sensitiveGranted },
+        });
+      }
+    } else if (parsed.data.role) {
+      const presetKey = defaultPresetForRole(parsed.data.role, false);
+      await setUserPermissions(id, permissionsForPreset(presetKey));
+    } else if (parsed.data.moduleAccess !== undefined) {
+      // Module-only changes must invalidate JWTs that embed moduleAccess
+      await incrementAccessVersion(id);
     }
 
     await createAuditLog({

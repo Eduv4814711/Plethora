@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { PayrollStatus } from "@prisma/client";
 import { Prisma } from "@prisma/client";
-import { authMiddleware } from "../middleware/auth.js";
+import { authProtect } from "../middleware/auth-protect.js";
 import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { startOfMonth, subMonths, format, startOfDay, endOfDay } from "date-fns";
@@ -46,7 +46,7 @@ function parseDateRange(q: Record<string, string | undefined>): { start: Date; e
 export async function dashboardRoutes(app: FastifyInstance) {
   app.get("/", {
     preHandler: [
-      authMiddleware,
+      ...authProtect,
       requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"], { module: "/" }),
     ],
   }, async (request, reply) => {

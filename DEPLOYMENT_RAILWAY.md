@@ -231,6 +231,42 @@ Railway will rebuild only the service affected by its watch patterns:
 - API watches `apps/api/**`, `package.json`, `package-lock.json`.
 - Web watches `apps/web/**`, `package.json`, `package-lock.json`.
 
+## RBAC + permissions cutover (one-time)
+
+After shipping the user-permissions RBAC release, cut over production in this
+order. Do not skip steps or reverse them.
+
+1. **Ship the release unit** — commit/push the RBAC + debug overhaul as one
+   deployable set. Do **not** commit local artefacts such as
+   `apps/api/permission-migration-report.csv` (gitignored; review offline only).
+2. **Schema migrate** — API start already runs `prisma migrate deploy` via
+   `start:with-migrate`. Confirm the `user_permissions` / `accessVersion`
+   migration applied in Railway logs.
+3. **Permission backfill (once)** — against the production database only:
+
+   ```bash
+   # From a machine with production DATABASE_URL (e.g. Railway shell / one-off)
+   cd apps/api && npm run db:migrate-permissions
+   ```
+
+   Review the generated CSV report offline. Confirm system owner rows and
+   `moduleAccess` backfill look correct before proceeding.
+4. **Deploy** — deploy **api** first, then **web** (Railway services).
+5. **Force re-login** — tell all users to sign out and sign in. Existing JWTs
+   lack the new `accessVersion` / permission claims and will hit `ACCESS_STALE`
+   until refreshed.
+6. **Post-deploy smoke**
+   - System owner: dashboard, sites, attendance capture overview, employees list
+   - Operational admin: reports OK; `/reports/financial` returns 403; no
+     salary/ID on team cards
+   - Finance/owner: payroll calculate → different user approve → different user
+     mark paid
+   - Confidential document download via signed `/documents/download?...` (not
+     raw `/uploads/documents/...`)
+
+Public static files under `/uploads/` are limited to **logos** only. Document
+and other non-logo assets are not world-readable.
+
 ## Troubleshooting
 
 Build fails on dependency install:
@@ -274,6 +310,8 @@ Uploads:
 - The example uses `UPLOADS_DIR=/tmp/uploads`, which is ephemeral.
 - Add a Railway Volume and point `UPLOADS_DIR` at the mounted path if upload
   persistence is required.
+- Public static serving is limited to `/uploads/logos/`. Document and other
+  non-logo files must be fetched via authenticated signed download routes.
 
 PDF generation:
 

@@ -75,10 +75,13 @@ export function defaultModulesForRole(role: string): string[] {
   ).map((n) => n.href);
 }
 
-/** Full tenant administrator: may use all modules and admin-only APIs. Scoped admins have role admin + explicit module list. */
-export function isFullAdmin(user: { role: string; moduleAccess?: unknown }): boolean {
+/** Full tenant administrator: may use all modules and admin-only APIs. */
+export function isFullAdmin(user: { role: string; moduleAccess?: unknown; isSystemOwner?: boolean }): boolean {
+  if (user.isSystemOwner) return true;
   return user.role === "admin" && !normalizeUserModuleAccess(user.moduleAccess);
 }
+
+export { can } from "./capabilities";
 
 function navItemForPath(pathname: string): NavItem | undefined {
   return NAV_ITEMS.find((n) => {
@@ -122,6 +125,7 @@ export function canAccessRoute(pathname: string, role: string, moduleAccess?: un
     return true;
   }
 
+  // System owners with explicit module list still follow module paths for nav
   const custom = normalizeUserModuleAccess(moduleAccess);
   if (!custom) return false;
 

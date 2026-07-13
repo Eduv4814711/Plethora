@@ -114,10 +114,15 @@ model User {
   roleLabel                    String?
   /// When null, module access follows `role` defaults. When a non-empty JSON array of paths (e.g. ["/employees","/payroll"]), only those modules apply; Admin with null = full access, Admin with a list = scoped like other users.
   moduleAccess                 Json?
+  /// Incremented when permissions or role access change; JWT must match or request is rejected.
+  accessVersion                Int       @default(1)
+  /// Deliberate system-owner flag (first admin per company). Grants all permissions when set.
+  isSystemOwner                Boolean   @default(false)
   createdAt                    DateTime  @default(now())
   updatedAt                    DateTime  @updatedAt
 
   company                  Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  permissions              UserPermission[]
   auditLogs                AuditLog[]
   tasksCreated             Task[]
   taskComments             TaskComment[]
@@ -175,6 +180,26 @@ enum UserRole {
   supervisor
   controller
   client
+}
+
+model UserPermission {
+  id         String @id @default(cuid())
+  userId     String
+  permission String
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permission])
+  @@index([userId])
+}
+
+model PermissionPreset {
+  id          String @id @default(cuid())
+  key         String @unique
+  name        String
+  description String?
+  permissions Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Employee {
@@ -534,6 +559,11 @@ model PayrollRun {
   status               PayrollStatus
   lockedAt             DateTime?
   calculatedAt         DateTime?
+  calculatedById       String?
+  approvedById         String?
+  approvedAt           DateTime?
+  markedPaidById       String?
+  markedPaidAt         DateTime?
   calculationSnapshot  Json?
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
@@ -2154,6 +2184,14 @@ enum DocumentCategory {
   OTHER
 }
 
+enum DocumentSensitivity {
+  PUBLIC_OPERATIONAL
+  INTERNAL_OPERATIONAL
+  HR_CONFIDENTIAL
+  PAYROLL_CONFIDENTIAL
+  MEDICAL_RESTRICTED
+}
+
 enum DocumentStatus {
   ACTIVE
   EXPIRED
@@ -2167,6 +2205,7 @@ model ManagedDocument {
   title        String
   documentType String
   category     DocumentCategory
+  sensitivity  DocumentSensitivity @default(INTERNAL_OPERATIONAL)
   fileUrl      String
   fileName     String
   mimeType     String

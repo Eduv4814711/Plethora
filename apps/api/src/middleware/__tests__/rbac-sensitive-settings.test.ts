@@ -1,43 +1,36 @@
-import { describe, expect, it } from "vitest";
-import { canViewSensitiveCompanyFields, normalizeModuleAccess } from "../rbac.js";
-import type { JWTPayload } from "../../lib/types.js";
+import { describe, it, expect } from "vitest";
+import { canViewSensitiveCompanyFields } from "../rbac.js";
+import { PERMISSIONS } from "../../lib/permissions.js";
+import type { UserAccessRecord } from "../../services/user-access.service.js";
 
-function user(partial: Partial<JWTPayload>): JWTPayload {
+function access(permissions: string[], isSystemOwner = false): UserAccessRecord {
   return {
-    sub: "u1",
-    email: "u@example.com",
+    userId: "u1",
     companyId: "c1",
-    role: "controller",
-    ...partial,
+    accessVersion: 1,
+    isSystemOwner,
+    permissions: new Set(permissions),
   };
 }
 
 describe("canViewSensitiveCompanyFields", () => {
-  it("allows full admins (admin with no moduleAccess list)", () => {
-    expect(
-      canViewSensitiveCompanyFields(user({ role: "admin", moduleAccess: null }))
-    ).toBe(true);
+  it("allows system owners", () => {
+    expect(canViewSensitiveCompanyFields(access([], true))).toBe(true);
   });
 
-  it("allows users with /settings or /payroll module access", () => {
-    expect(
-      canViewSensitiveCompanyFields(user({ moduleAccess: ["/settings"] }))
-    ).toBe(true);
-    expect(
-      canViewSensitiveCompanyFields(user({ moduleAccess: ["/payroll", "/attendance"] }))
-    ).toBe(true);
+  it("allows users with settings.manage_statutory permission", () => {
+    expect(canViewSensitiveCompanyFields(access([PERMISSIONS.SETTINGS_MANAGE_STATUTORY]))).toBe(true);
   });
 
-  it("denies scoped admins and controllers without settings/payroll", () => {
-    expect(
-      canViewSensitiveCompanyFields(user({ role: "admin", moduleAccess: ["/rostering"] }))
-    ).toBe(false);
-    expect(
-      canViewSensitiveCompanyFields(user({ role: "controller", moduleAccess: ["/attendance"] }))
-    ).toBe(false);
+  it("denies operational users without statutory permission", () => {
+    expect(canViewSensitiveCompanyFields(access([PERMISSIONS.SETTINGS_MANAGE_OPERATIONAL]))).toBe(false);
+    expect(canViewSensitiveCompanyFields(undefined)).toBe(false);
   });
+});
 
-  it("normalizeModuleAccess treats empty arrays as null", () => {
+describe("normalizeModuleAccess", () => {
+  it("treats empty array as null", async () => {
+    const { normalizeModuleAccess } = await import("../rbac.js");
     expect(normalizeModuleAccess([])).toBeNull();
     expect(normalizeModuleAccess(["/employees"])).toEqual(["/employees"]);
   });

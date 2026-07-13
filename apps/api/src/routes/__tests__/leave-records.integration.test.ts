@@ -5,11 +5,9 @@ import { prisma } from "../../lib/prisma.js";
 import {
   authHeader,
   isIntegrationDatabaseAvailable,
+  provisionTestAdminUser,
 } from "../../test-utils/tenant-harness.js";
 import { randomBytes } from "node:crypto";
-import jwt from "jsonwebtoken";
-import { config } from "../../lib/config.js";
-import { hashPassword } from "../../services/auth.service.js";
 import { normalizeLeaveDate } from "../../services/leave-availability.service.js";
 
 const dbReady = await isIntegrationDatabaseAvailable();
@@ -29,21 +27,12 @@ describe.runIf(dbReady)("leave records API (integration)", () => {
     });
     companyId = company.id;
 
-    const user = await prisma.user.create({
-      data: {
-        companyId,
-        name: "Leave Admin",
-        email: `leave-admin-${runId}@plethora-test.local`,
-        passwordHash: await hashPassword("leave-test-password-32chars!!"),
-        role: "admin",
-      },
-    });
-
-    accessToken = jwt.sign(
-      { sub: user.id, email: user.email, companyId, role: user.role },
-      config.jwt.accessSecret,
-      { expiresIn: "1h" }
+    const admin = await provisionTestAdminUser(
+      companyId,
+      `leave-admin-${runId}@plethora-test.local`,
+      "Leave Admin"
     );
+    accessToken = admin.accessToken;
 
     const employee = await prisma.employee.create({
       data: {

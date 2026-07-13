@@ -1,4 +1,4 @@
-import type { DocumentCategory, DocumentStatus, Prisma } from "@prisma/client";
+import type { DocumentCategory, DocumentSensitivity, DocumentStatus, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { upsertAlert } from "../alerts/alerts.service.js";
@@ -112,10 +112,14 @@ export async function listDocuments(
     expiringWithinDays?: number;
     limit?: number;
     offset?: number;
+    authorizedSensitivities?: DocumentSensitivity[];
   }
 ) {
   const where: Prisma.ManagedDocumentWhereInput = {
     companyId,
+    ...(query.authorizedSensitivities?.length
+      ? { sensitivity: { in: query.authorizedSensitivities } }
+      : { sensitivity: { in: ["PUBLIC_OPERATIONAL", "INTERNAL_OPERATIONAL"] } }),
     ...(query.category ? { category: query.category } : {}),
     ...(query.status ? { status: query.status } : {}),
     ...(query.employeeId ? { employeeId: query.employeeId } : {}),
@@ -154,6 +158,7 @@ export async function createDocumentRecord(params: {
   title: string;
   documentType: string;
   category: DocumentCategory;
+  sensitivity?: DocumentSensitivity;
   fileUrl: string;
   fileName: string;
   mimeType: string;
@@ -171,6 +176,7 @@ export async function createDocumentRecord(params: {
       title: params.title,
       documentType: params.documentType,
       category: params.category,
+      sensitivity: params.sensitivity ?? inferSensitivityFromCategory(params.category),
       fileUrl: params.fileUrl,
       fileName: params.fileName,
       mimeType: params.mimeType,
@@ -200,4 +206,15 @@ export async function createDocumentRecord(params: {
   }
 
   return doc;
+}
+
+function inferSensitivityFromCategory(category: DocumentCategory): DocumentSensitivity {
+  switch (category) {
+    case "PAYROLL":
+      return "PAYROLL_CONFIDENTIAL";
+    case "EMPLOYEE":
+      return "HR_CONFIDENTIAL";
+    default:
+      return "INTERNAL_OPERATIONAL";
+  }
 }

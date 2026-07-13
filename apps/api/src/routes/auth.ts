@@ -9,8 +9,11 @@ import {
   logoutUser,
 } from "../services/auth.service.js";
 import { authMiddleware } from "../middleware/auth.js";
-import { prisma } from "../lib/prisma.js";
+import { accessMiddleware } from "../middleware/permissions.js";
+import { loadUserAccess } from "../services/user-access.service.js";
+import { ALL_PERMISSIONS } from "../lib/permissions.js";
 import { findUniqueUserForMe } from "../lib/user-module-column.js";
+import { prisma } from "../lib/prisma.js";
 import { validatePassword, PASSWORD_MIN_LENGTH } from "../lib/password-policy.js";
 import { badRequest } from "../lib/api-response.js";
 import {
@@ -294,7 +297,7 @@ export async function authRoutes(app: FastifyInstance) {
     return sendAuthSuccess(reply, result);
   });
 
-  app.get("/me", { preHandler: [authMiddleware] }, async (request, reply) => {
+  app.get("/me", { preHandler: [authMiddleware, accessMiddleware] }, async (request, reply) => {
     if (!request.user) {
       return reply.code(401).send({ error: "Unauthorized" });
     }
@@ -305,7 +308,19 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "User not found" });
     }
 
-    return reply.send(user);
+    const access = request.access ?? (await loadUserAccess(request.user.sub));
+    const permissions = access?.isSystemOwner
+      ? [...ALL_PERMISSIONS]
+      : access
+        ? [...access.permissions]
+        : [];
+
+    return reply.send({
+      ...user,
+      accessVersion: access?.accessVersion ?? 1,
+      isSystemOwner: access?.isSystemOwner ?? false,
+      permissions,
+    });
   });
 
   app.post("/logout", { preHandler: [authMiddleware] }, async (request, reply) => {

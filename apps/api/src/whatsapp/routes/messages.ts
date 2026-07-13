@@ -1,11 +1,11 @@
 import type { FastifyInstance } from "fastify";
-import { authMiddleware } from "../../middleware/auth.js";
+import { authProtect } from "../../middleware/auth-protect.js";
 import { requireRole } from "../../middleware/rbac.js";
 import { prisma } from "../../lib/prisma.js";
 
 export async function messagesRoutes(app: FastifyInstance) {
   const protect = [
-    authMiddleware,
+    ...authProtect,
     requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
       module: "/whatsapp",
     }),

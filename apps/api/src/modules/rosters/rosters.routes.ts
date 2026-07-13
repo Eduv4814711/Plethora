@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { authMiddleware } from "../../middleware/auth.js";
+import { authProtect } from "../../middleware/auth-protect.js";
 import { requireRole } from "../../middleware/rbac.js";
 import {
   activatePatternSchema,
@@ -43,22 +43,29 @@ import {
   updateSiteTimesheetRow,
 } from "./site-timesheets.service.js";
 
-const protect = [
-  authMiddleware,
-  requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
-    module: "/rostering",
-  }),
+const ROSTER_ROLES = ["admin", "operations_manager", "hr_payroll", "supervisor", "controller"] as const;
+
+/** Pattern planning, live roster, and roster generation */
+const rosterProtect = [
+  ...authProtect,
+  requireRole([...ROSTER_ROLES], { module: "/rostering" }),
+];
+
+/** Site timesheets are used from both Rostering and Attendance screens */
+const siteTimesheetProtect = [
+  ...authProtect,
+  requireRole([...ROSTER_ROLES], { anyOfModules: ["/rostering", "/attendance"] }),
 ];
 
 export async function rostersRoutes(app: FastifyInstance) {
-  app.get("/sites/:siteId/config", { preHandler: protect }, async (request, reply) => {
+  app.get("/sites/:siteId/config", { preHandler: rosterProtect }, async (request, reply) => {
     const { siteId } = request.params as { siteId: string };
     const config = await getSiteRosterConfig(request.user!.companyId, siteId);
     if (!config) return reply.code(404).send({ error: "Site not found" });
     return reply.send(config);
   });
 
-  app.post("/sites/:siteId/placeholder-guards", { preHandler: protect }, async (request, reply) => {
+  app.post("/sites/:siteId/placeholder-guards", { preHandler: rosterProtect }, async (request, reply) => {
     const { siteId } = request.params as { siteId: string };
     const parsed = addPlaceholderGuardSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
@@ -74,7 +81,7 @@ export async function rostersRoutes(app: FastifyInstance) {
     return reply.code(201).send(result);
   });
 
-  app.get("/pattern-grid", { preHandler: protect }, async (request, reply) => {
+  app.get("/pattern-grid", { preHandler: rosterProtect }, async (request, reply) => {
     const parsed = patternGridQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
@@ -94,7 +101,7 @@ export async function rostersRoutes(app: FastifyInstance) {
     return reply.send(grid);
   });
 
-  app.get("/live-roster", { preHandler: protect }, async (request, reply) => {
+  app.get("/live-roster", { preHandler: rosterProtect }, async (request, reply) => {
     const parsed = liveRosterQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
@@ -110,7 +117,7 @@ export async function rostersRoutes(app: FastifyInstance) {
     return reply.send(grid);
   });
 
-  app.get("/site-timesheets/capture-overview", { preHandler: protect }, async (request, reply) => {
+  app.get("/site-timesheets/capture-overview", { preHandler: siteTimesheetProtect }, async (request, reply) => {
     const parsed = siteTimesheetCaptureOverviewQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
@@ -124,7 +131,7 @@ export async function rostersRoutes(app: FastifyInstance) {
     return reply.send(overview);
   });
 
-  app.get("/site-timesheets", { preHandler: protect }, async (request, reply) => {
+  app.get("/site-timesheets", { preHandler: siteTimesheetProtect }, async (request, reply) => {
     const parsed = siteTimesheetQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
@@ -139,7 +146,7 @@ export async function rostersRoutes(app: FastifyInstance) {
     return reply.send(sheet);
   });
 
-  app.get("/site-timesheets/export.csv", { preHandler: protect }, async (request, reply) => {
+  app.get("/site-timesheets/export.csv", { preHandler: siteTimesheetProtect }, async (request, reply) => {
     const parsed = siteTimesheetQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
@@ -161,7 +168,7 @@ export async function rostersRoutes(app: FastifyInstance) {
     return reply.send(buildSiteTimesheetCsv(sheet, parsed.data.shiftType));
   });
 
-  app.post("/site-timesheets/resync", { preHandler: protect }, async (request, reply) => {
+  app.post("/site-timesheets/resync", { preHandler: siteTimesheetProtect }, async (request, reply) => {
     const parsed = siteTimesheetQuerySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
@@ -177,7 +184,7 @@ export async function rostersRoutes(app: FastifyInstance) {
     return reply.send(result.timesheet);
   });
 
-  app.put("/site-timesheets/rows/:rowId", { preHandler: protect }, async (request, reply) => {
+  app.put("/site-timesheets/rows/:rowId", { preHandler: siteTimesheetProtect }, async (request, reply) => {
     const { rowId } = request.params as { rowId: string };
     const parsed = siteTimesheetRowUpdateSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -194,7 +201,7 @@ export async function rostersRoutes(app: FastifyInstance) {
     return reply.send(result);
   });
 
-  app.post("/site-timesheets/:timesheetId/rows", { preHandler: protect }, async (request, reply) => {
+  app.post("/site-timesheets/:timesheetId/rows", { preHandler: siteTimesheetProtect }, async (request, reply) => {
     const { timesheetId } = request.params as { timesheetId: string };
     const parsed = siteTimesheetRowCreateSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -206,7 +213,7 @@ export async function rostersRoutes(app: FastifyInstance) {
     return reply.code(201).send(result);
   });
 
-  app.post("/site-timesheets/:timesheetId/approve", { preHandler: protect }, async (request, reply) => {
+  app.post("/site-timesheets/:timesheetId/approve", { preHandler: siteTimesheetProtect }, async (request, reply) => {
     const { timesheetId } = request.params as { timesheetId: string };
     const parsed = approveSiteTimesheetSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
@@ -223,7 +230,7 @@ export async function rostersRoutes(app: FastifyInstance) {
     return reply.send(result);
   });
 
-  app.post("/site-timesheets/:timesheetId/unlock", { preHandler: protect }, async (request, reply) => {
+  app.post("/site-timesheets/:timesheetId/unlock", { preHandler: siteTimesheetProtect }, async (request, reply) => {
     const { timesheetId } = request.params as { timesheetId: string };
     const parsed = unlockSiteTimesheetSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
@@ -242,7 +249,7 @@ export async function rostersRoutes(app: FastifyInstance) {
     return reply.send(result);
   });
 
-  app.post("/patterns", { preHandler: protect }, async (request, reply) => {
+  app.post("/patterns", { preHandler: rosterProtect }, async (request, reply) => {
     const parsed = createPatternSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
@@ -252,7 +259,7 @@ export async function rostersRoutes(app: FastifyInstance) {
     return reply.code(201).send(created);
   });
 
-  app.put("/patterns/:patternId", { preHandler: protect }, async (request, reply) => {
+  app.put("/patterns/:patternId", { preHandler: rosterProtect }, async (request, reply) => {
     const { patternId } = request.params as { patternId: string };
     const parsed = updatePatternSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -263,7 +270,7 @@ export async function rostersRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
-  app.post("/patterns/:patternId/activate", { preHandler: protect }, async (request, reply) => {
+  app.post("/patterns/:patternId/activate", { preHandler: rosterProtect }, async (request, reply) => {
     const { patternId } = request.params as { patternId: string };
     const parsed = activatePatternSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
@@ -278,7 +285,7 @@ export async function rostersRoutes(app: FastifyInstance) {
     return reply.send(activated);
   });
 
-  app.post("/generate", { preHandler: protect }, async (request, reply) => {
+  app.post("/generate", { preHandler: rosterProtect }, async (request, reply) => {
     const parsed = generateRosterSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
@@ -294,7 +301,7 @@ export async function rostersRoutes(app: FastifyInstance) {
     return reply.send(result);
   });
 
-  app.post("/overrides", { preHandler: protect }, async (request, reply) => {
+  app.post("/overrides", { preHandler: rosterProtect }, async (request, reply) => {
     const parsed = manualOverrideSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
@@ -304,7 +311,7 @@ export async function rostersRoutes(app: FastifyInstance) {
     return reply.send(result);
   });
 
-  app.post("/overrides/bulk", { preHandler: protect }, async (request, reply) => {
+  app.post("/overrides/bulk", { preHandler: rosterProtect }, async (request, reply) => {
     const parsed = bulkManualOverridesSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
@@ -314,7 +321,7 @@ export async function rostersRoutes(app: FastifyInstance) {
     return reply.send(result);
   });
 
-  app.post("/publish", { preHandler: protect }, async (request, reply) => {
+  app.post("/publish", { preHandler: rosterProtect }, async (request, reply) => {
     const parsed = publishRosterSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });

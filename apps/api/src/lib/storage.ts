@@ -1,6 +1,7 @@
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { mkdir, unlink, writeFile, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { uploadsRoot } from "./uploads-root.js";
+import { createSignedDownloadPath } from "./signed-url.js";
 
 export type StorageDriver = "local";
 
@@ -20,6 +21,7 @@ export interface StorageService {
   /** URL persisted or returned to clients. */
   getAssetUrl(key: string): string;
   resolveKeyFromUrl(url: string): string | null;
+  readLocalFile(key: string): Promise<Buffer>;
 }
 
 export function normalizeStorageKey(key: string): string {
@@ -71,12 +73,25 @@ export const storage: StorageService = {
     return `/uploads/${normalizeStorageKey(key)}`;
   },
 
-  async getSignedUrl(key: string): Promise<string> {
+  async getSignedUrl(key: string, expiresInSeconds = 900): Promise<string> {
+    const normalized = normalizeStorageKey(key);
+    if (normalized.startsWith("logos/")) {
+      return this.getPublicUrl(normalized);
+    }
+    return createSignedDownloadPath(normalized, expiresInSeconds).path;
+  },
+
+  /**
+   * URL stored in the DB / returned for logos. Non-logo keys resolve to
+   * `/uploads/...` paths that are NOT publicly served — clients must use
+   * `getSignedUrl` (or document download) to fetch the bytes.
+   */
+  getAssetUrl(key: string): string {
     return this.getPublicUrl(key);
   },
 
-  getAssetUrl(key: string): string {
-    return this.getPublicUrl(key);
+  async readLocalFile(key: string): Promise<Buffer> {
+    return readFile(join(uploadsRoot, normalizeStorageKey(key)));
   },
 
   resolveKeyFromUrl(url: string): string | null {

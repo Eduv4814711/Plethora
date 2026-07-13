@@ -8,6 +8,8 @@ import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma.js";
 import { config } from "../lib/config.js";
 import { hashPassword } from "../services/auth.service.js";
+import { grantSystemOwner } from "../services/user-access.service.js";
+import { DEFAULT_TEST_MODULE_ACCESS } from "./tenant-harness.js";
 import { getSpanningPeriodContainingBounds } from "../services/payroll-period.service.js";
 
 export type CoreOpsFixture = {
@@ -36,9 +38,19 @@ function signAccessToken(user: {
   email: string;
   companyId: string;
   role: UserRole;
+  accessVersion?: number;
+  moduleAccess?: string[] | null;
 }): string {
   return jwt.sign(
-    { sub: user.id, email: user.email, companyId: user.companyId, role: user.role },
+    {
+      sub: user.id,
+      email: user.email,
+      companyId: user.companyId,
+      role: user.role,
+      accessVersion: user.accessVersion ?? 1,
+      ...(user.moduleAccess?.length ? { moduleAccess: user.moduleAccess } : {}),
+      isSystemOwner: true,
+    },
     config.jwt.accessSecret,
     { expiresIn: "1h" }
   );
@@ -74,7 +86,14 @@ export async function provisionCoreOpsFixture(): Promise<CoreOpsFixture> {
       email,
       passwordHash: await hashPassword("core-ops-test-password-32chars!!"),
       role: "admin",
+      isSystemOwner: true,
+      moduleAccess: [...DEFAULT_TEST_MODULE_ACCESS],
     },
+  });
+  await grantSystemOwner(user.id);
+  const accessRecord = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { accessVersion: true },
   });
 
   const group = await prisma.employeeGroup.create({
@@ -279,6 +298,8 @@ export async function provisionCoreOpsFixture(): Promise<CoreOpsFixture> {
     email: user.email,
     companyId: company.id,
     role: user.role,
+    accessVersion: accessRecord?.accessVersion ?? 1,
+    moduleAccess: [...DEFAULT_TEST_MODULE_ACCESS],
   });
 
   return {

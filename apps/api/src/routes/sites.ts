@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { authMiddleware } from "../middleware/auth.js";
+import { authProtect } from "../middleware/auth-protect.js";
 import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
@@ -173,17 +173,17 @@ const assignGuardSchema = z.object({
 
 export async function sitesRoutes(app: FastifyInstance) {
   const protect = [
-    authMiddleware,
+    ...authProtect,
     requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"], { module: "/sites" }),
   ];
   const readProtect = [
-    authMiddleware,
+    ...authProtect,
     requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
       anyOfModules: ["/sites", "/rostering"],
     }),
   ];
   const manageSites = [
-    authMiddleware,
+    ...authProtect,
     requireRole(["admin", "operations_manager", "supervisor"], { module: "/sites" }),
   ];
 

@@ -5,11 +5,9 @@ import { prisma } from "../../lib/prisma.js";
 import {
   authHeader,
   isIntegrationDatabaseAvailable,
+  provisionTestAdminUser,
 } from "../../test-utils/tenant-harness.js";
 import { randomBytes } from "node:crypto";
-import jwt from "jsonwebtoken";
-import { config } from "../../lib/config.js";
-import { hashPassword } from "../auth.service.js";
 
 const dbReady = await isIntegrationDatabaseAvailable();
 
@@ -17,6 +15,8 @@ describe.runIf(dbReady)("payroll lifecycle smoke test (integration)", () => {
   let app: FastifyInstance;
   let companyId: string;
   let accessToken: string;
+  let approverAccessToken: string;
+  let payerAccessToken: string;
   let payrollRunId: string;
   let runId: string;
 
@@ -34,21 +34,26 @@ describe.runIf(dbReady)("payroll lifecycle smoke test (integration)", () => {
     });
     companyId = company.id;
 
-    const user = await prisma.user.create({
-      data: {
-        companyId,
-        name: "Payroll Admin",
-        email: `payroll-smoke-${runId}@plethora-test.local`,
-        passwordHash: await hashPassword("payroll-smoke-password-32chars!!"),
-        role: "admin",
-      },
-    });
-
-    accessToken = jwt.sign(
-      { sub: user.id, email: user.email, companyId, role: user.role },
-      config.jwt.accessSecret,
-      { expiresIn: "1h" }
+    const admin = await provisionTestAdminUser(
+      companyId,
+      `payroll-smoke-${runId}@plethora-test.local`,
+      "Payroll Admin"
     );
+    accessToken = admin.accessToken;
+
+    const approver = await provisionTestAdminUser(
+      companyId,
+      `payroll-approver-${runId}@plethora-test.local`,
+      "Payroll Approver"
+    );
+    approverAccessToken = approver.accessToken;
+
+    const payer = await provisionTestAdminUser(
+      companyId,
+      `payroll-payer-${runId}@plethora-test.local`,
+      "Payroll Payer"
+    );
+    payerAccessToken = payer.accessToken;
 
     const grade = await prisma.payGrade.create({
       data: { companyId, name: "Grade A", hourlyRate: 50, sortOrder: 0 },
@@ -262,7 +267,7 @@ describe.runIf(dbReady)("payroll lifecycle smoke test (integration)", () => {
     const approveRes = await app.inject({
       method: "POST",
       url: `/payroll/runs/${payrollRunId}/approve`,
-      headers: authHeader(accessToken),
+      headers: authHeader(approverAccessToken),
     });
     expect(approveRes.statusCode).toBe(200);
     expect(approveRes.json().status).toBe("approved");
@@ -270,7 +275,7 @@ describe.runIf(dbReady)("payroll lifecycle smoke test (integration)", () => {
     const paidRes = await app.inject({
       method: "POST",
       url: `/payroll/runs/${payrollRunId}/mark-paid`,
-      headers: authHeader(accessToken),
+      headers: authHeader(payerAccessToken),
     });
     expect(paidRes.statusCode).toBe(200);
     expect(paidRes.json().status).toBe("paid");

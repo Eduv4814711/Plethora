@@ -14,6 +14,7 @@ import {
   defaultModulesForRole,
   isFullAdmin,
 } from "@/lib/permissions";
+import { can, PERMISSIONS } from "@/lib/capabilities";
 import { DateInput } from "@/components/date-input";
 import { useConfirmDialog } from "@/components/ui";
 import { TeamMemberUserPicker } from "@/components/team-member-user-picker";
@@ -73,6 +74,9 @@ export default function SettingsPage() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab") as Tab | null;
   const isFullAdminUser = user ? isFullAdmin(user) : false;
+  const canManageSettings = can(user, PERMISSIONS.SETTINGS_MANAGE_OPERATIONAL) || isFullAdminUser;
+  const canManageStatutory = can(user, PERMISSIONS.SETTINGS_MANAGE_STATUTORY) || isFullAdminUser;
+  const canManageUsers = can(user, PERMISSIONS.USERS_MANAGE) || isFullAdminUser;
   const tabIds: Tab[] = ["profile", "business", "settings", "users", "clients", "migrate", "factory_reset"];
   const [activeTab, setActiveTab] = useState<Tab>(tabParam && tabIds.includes(tabParam) ? tabParam : "profile");
 
@@ -84,14 +88,14 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const tabs: { id: Tab; label: string; adminOnly?: boolean; href?: string }[] = [
+  const tabs: { id: Tab; label: string; adminOnly?: boolean; href?: string; visible?: boolean }[] = [
     { id: "profile", label: "Profile" },
-    { id: "business", label: "Business Details" },
-    { id: "settings", label: "Business Settings" },
-    { id: "users", label: "Users", adminOnly: true },
-    { id: "clients", label: "Clients", adminOnly: true },
-    { id: "migrate", label: "Bulk Import/Export", href: "/settings/migrate" },
-    { id: "factory_reset", label: "Factory Reset", adminOnly: true },
+    { id: "business", label: "Business Details", visible: canManageSettings },
+    { id: "settings", label: "Business Settings", visible: canManageSettings },
+    { id: "users", label: "Users", adminOnly: true, visible: canManageUsers },
+    { id: "clients", label: "Clients", adminOnly: true, visible: isFullAdminUser },
+    { id: "migrate", label: "Bulk Import/Export", href: "/settings/migrate", visible: canManageSettings },
+    { id: "factory_reset", label: "Factory Reset", adminOnly: true, visible: isFullAdminUser },
   ];
 
   if (loading && !settings) {
@@ -117,32 +121,31 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {!isFullAdminUser && activeTab !== "profile" && (
+      {!canManageSettings && activeTab !== "profile" && (
         <div className="mb-4 p-3 text-sm text-neutral-700 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-neutral-200 dark:border-neutral-600">
-          Only full administrators can edit business details and settings.
+          You do not have permission to edit business details and settings.
         </div>
       )}
 
       <div className="flex gap-1 mb-6 border-b border-neutral-200 dark:border-neutral-700 overflow-x-auto">
         {tabs
-          .filter((t) => !t.adminOnly || isFullAdminUser)
+          .filter((t) => t.visible !== false)
           .map((tab) => {
-            const tabProps = {
-              key: tab.id,
-              className: clsx(
-                "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors",
-                activeTab === tab.id
-                  ? "bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-neutral-200 dark:border-neutral-700 border-b-transparent -mb-px"
-                  : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
-              ),
-            };
+            const tabClassName = clsx(
+              "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors",
+              activeTab === tab.id
+                ? "bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-neutral-200 dark:border-neutral-700 border-b-transparent -mb-px"
+                : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
+            );
             return tab.href ? (
-              <Link href={tab.href} {...tabProps}>
+              <Link key={tab.id} href={tab.href} className={tabClassName}>
                 {tab.label}
               </Link>
             ) : (
               <button
-                {...tabProps}
+                key={tab.id}
+                type="button"
+                className={tabClassName}
                 onClick={() => setActiveTab(tab.id)}
               >
                 {tab.label}
@@ -157,7 +160,8 @@ export default function SettingsPage() {
         )}
         {activeTab === "business" && (
           <BusinessDetailsSection
-            readOnly={!isFullAdminUser}
+            readOnly={!canManageSettings}
+            canEditStatutory={canManageStatutory}
             settings={settings}
             saving={saving}
             saveError={saveError}
@@ -177,7 +181,7 @@ export default function SettingsPage() {
         )}
         {activeTab === "settings" && (
           <BusinessSettingsSection
-            readOnly={!isFullAdminUser}
+            readOnly={!canManageSettings}
             settings={settings}
             saving={saving}
             saveError={saveError}
@@ -194,7 +198,7 @@ export default function SettingsPage() {
             }}
           />
         )}
-        {activeTab === "users" && isFullAdminUser && token && (
+        {activeTab === "users" && canManageUsers && token && (
           <UsersSection token={token} currentUserId={user?.id} />
         )}
         {activeTab === "clients" && isFullAdminUser && token && (
@@ -236,12 +240,14 @@ function BusinessDetailsSection({
   saveError,
   onSave,
   readOnly,
+  canEditStatutory = false,
 }: {
   settings: ReturnType<typeof useSettings>["settings"];
   saving: boolean;
   saveError: string | null;
   onSave: (data: Record<string, string>) => Promise<void>;
   readOnly?: boolean;
+  canEditStatutory?: boolean;
 }) {
   const [form, setForm] = useState({
     name: "",
@@ -353,7 +359,7 @@ function BusinessDetailsSection({
                 value={form.taxNumber}
                 onChange={(e) => setForm((f) => ({ ...f, taxNumber: e.target.value }))}
                 className="input-modern"
-                readOnly={readOnly}
+                readOnly={readOnly || !canEditStatutory}
               />
             </div>
             <div>
@@ -364,7 +370,7 @@ function BusinessDetailsSection({
                 onChange={(e) => setForm((f) => ({ ...f, uifReference: e.target.value }))}
                 className="input-modern"
                 placeholder="UIF reference (starts with U)"
-                readOnly={readOnly}
+                readOnly={readOnly || !canEditStatutory}
               />
             </div>
             <div>
@@ -375,7 +381,7 @@ function BusinessDetailsSection({
                 onChange={(e) => setForm((f) => ({ ...f, payeReference: e.target.value }))}
                 className="input-modern"
                 placeholder="PAYE reference (starts with 7)"
-                readOnly={readOnly}
+                readOnly={readOnly || !canEditStatutory}
               />
             </div>
             <div>
@@ -386,7 +392,7 @@ function BusinessDetailsSection({
                 onChange={(e) => setForm((f) => ({ ...f, sdlReference: e.target.value }))}
                 className="input-modern"
                 placeholder="SDL reference (starts with L)"
-                readOnly={readOnly}
+                readOnly={readOnly || !canEditStatutory}
               />
             </div>
             <div>

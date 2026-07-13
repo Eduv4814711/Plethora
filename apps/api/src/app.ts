@@ -121,10 +121,12 @@ export async function buildApp(): Promise<FastifyInstance> {
     limits: { fileSize: 10 * 1024 * 1024 },
   });
 
+  // Only logos are world-readable. Documents/tasks/incidents/etc. must use
+  // authenticated signed download routes — never bare /uploads/<non-logo>/...
   if (isLocalStorage()) {
     await app.register(fastifyStatic, {
-      root: uploadsRoot,
-      prefix: "/uploads/",
+      root: join(uploadsRoot, "logos"),
+      prefix: "/uploads/logos/",
     });
   }
 

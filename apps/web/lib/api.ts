@@ -78,8 +78,10 @@ export interface AuthUser {
   role: string;
   roleLabel?: string | null;
   companyId: string;
-  /** Non-empty list = admin-assigned modules only; omitted/null = use role defaults */
   moduleAccess?: string[] | null;
+  accessVersion?: number;
+  isSystemOwner?: boolean;
+  permissions?: string[];
 }
 
 export interface LoginResponse {
@@ -451,8 +453,37 @@ export async function uploadLogo(token: string, file: File): Promise<{ url: stri
 /** Callback for refreshing token on 401. Set by AuthProvider. */
 let tokenRefreshCallback: (() => Promise<string | null>) | null = null;
 
+/** Called when API reports ACCESS_STALE (permissions/modules changed). Forces re-login. */
+let accessStaleCallback: (() => void) | null = null;
+
 export function registerTokenRefreshCallback(cb: () => Promise<string | null>) {
   tokenRefreshCallback = cb;
+}
+
+export function registerAccessStaleCallback(cb: (() => void) | null) {
+  accessStaleCallback = cb;
+}
+
+export class AccessStaleError extends Error {
+  readonly code = "ACCESS_STALE";
+  constructor(message = "Your access has changed. Please sign in again.") {
+    super(message);
+    this.name = "AccessStaleError";
+  }
+}
+
+/** Parse a failed API response into a user-facing Error (handles ACCESS_STALE). */
+export async function apiErrorFromResponse(res: Response, fallback = "Request failed"): Promise<Error> {
+  const body = (await res.json().catch(() => ({}))) as {
+    code?: string;
+    message?: string;
+    error?: string;
+  };
+  if (res.status === 401 && body.code === "ACCESS_STALE") {
+    accessStaleCallback?.();
+    return new AccessStaleError(body.message || undefined);
+  }
+  return new Error(body.message || body.error || fallback);
 }
 
 export async function authFetch(url: string, token: string, init?: RequestInit): Promise<Response> {
@@ -468,10 +499,24 @@ export async function authFetch(url: string, token: string, init?: RequestInit):
   };
 
   let res = await doFetch(token);
-  if (res.status === 401 && tokenRefreshCallback) {
-    const newToken = await tokenRefreshCallback();
-    if (newToken) {
-      res = await doFetch(newToken);
+  if (res.status === 401) {
+    const clone = res.clone();
+    const body = (await clone.json().catch(() => ({}))) as { code?: string; message?: string };
+    if (body.code === "ACCESS_STALE") {
+      accessStaleCallback?.();
+      return res;
+    }
+    if (tokenRefreshCallback) {
+      const newToken = await tokenRefreshCallback();
+      if (newToken) {
+        res = await doFetch(newToken);
+        if (res.status === 401) {
+          const retryBody = (await res.clone().json().catch(() => ({}))) as { code?: string };
+          if (retryBody.code === "ACCESS_STALE") {
+            accessStaleCallback?.();
+          }
+        }
+      }
     }
   }
   return res;

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { authMiddleware } from "../middleware/auth.js";
+import { authProtect } from "../middleware/auth-protect.js";
 import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
@@ -22,7 +22,7 @@ const updateProjectSchema = z.object({
 });
 
 export async function taskProjectsRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole([...TASK_ROLES], { module: "/tasks" })];
+  const protect = [...authProtect, requireRole([...TASK_ROLES], { module: "/tasks" })];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

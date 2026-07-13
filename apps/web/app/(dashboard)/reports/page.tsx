@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { authFetch } from "@/lib/api";
+import { authFetch, apiErrorFromResponse } from "@/lib/api";
+import { can, PERMISSIONS } from "@/lib/capabilities";
 import {
   downloadExtendedReport,
   listExtendedReportTypes,
@@ -36,7 +37,8 @@ interface ReportsData {
 const COLORS = ["#F57C00", "#f59e0b", "#10b981", "#ef4444", "#64748b", "#92400e"];
 
 export default function ReportsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canReadFinancial = can(user, PERMISSIONS.REPORTS_READ_FINANCIAL);
   const [data, setData] = useState<ReportsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [payPeriodCount, setPayPeriodCount] = useState(6);
@@ -103,18 +105,20 @@ export default function ReportsPage() {
     if (!token) return;
     setLoading(true);
     setError(null);
-    authFetch(`/reports?payPeriodCount=${payPeriodCount}`, token)
-      .then(async (r) => {
-        if (!r.ok) {
-          const body = await r.json().catch(() => ({}));
-          throw new Error(
-            (body as { message?: string; error?: string }).message ||
-              (body as { error?: string }).error ||
-              "Unable to load reports"
-          );
+    const load = async () => {
+      const operational = await authFetch(`/reports?payPeriodCount=${payPeriodCount}`, token);
+      if (!operational.ok) throw await apiErrorFromResponse(operational, "Unable to load reports");
+      const base = await operational.json();
+      if (canReadFinancial) {
+        const financial = await authFetch(`/reports/financial?payPeriodCount=${payPeriodCount}`, token);
+        if (financial.ok) {
+          const fin = await financial.json();
+          return { ...base, ...fin };
         }
-        return r.json();
-      })
+      }
+      return base;
+    };
+    load()
       .then(setData)
       .catch((err) => {
         console.error(err);
@@ -122,7 +126,7 @@ export default function ReportsPage() {
         setData(null);
       })
       .finally(() => setLoading(false));
-  }, [token, payPeriodCount]);
+  }, [token, payPeriodCount, canReadFinancial]);
 
   if (loading) {
     return (

@@ -5,6 +5,8 @@ import { format, differenceInCalendarDays, parseISO } from "date-fns";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch, buildApiUrl } from "@/lib/api";
+import { can } from "@/lib/permissions";
+import { PERMISSIONS } from "@/lib/capabilities";
 import { fetchEmployeePickerOptions, type GuardPickerOption } from "@/lib/roster-api";
 import { DateInput } from "@/components/date-input";
 import { GuardSearchPicker } from "@/components/guard-search-picker";
@@ -74,6 +76,9 @@ function sickNoteForRange(notes: LeaveSickNote[], range: LeaveRecordRange): Leav
 
 function sickNoteHref(fileUrl: string): string {
   if (/^https?:\/\//i.test(fileUrl)) return fileUrl;
+  if (fileUrl.startsWith("/documents/") || fileUrl.startsWith("/payroll/")) {
+    return buildApiUrl(fileUrl);
+  }
   const path = fileUrl.startsWith("/uploads/")
     ? fileUrl.slice("/uploads/".length)
     : fileUrl.replace(/^\/+/, "");
@@ -143,7 +148,11 @@ const statusColors: Record<string, string> = {
 };
 
 export default function LeaveManagementPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canReadLeave = can(user, PERMISSIONS.LEAVE_READ);
+  const canManageLeave = can(user, PERMISSIONS.LEAVE_MANAGE);
+  const canReadSickNotes = can(user, PERMISSIONS.SICK_NOTES_READ);
+  const canManageSickNotes = can(user, PERMISSIONS.SICK_NOTES_MANAGE);
   const { confirm, confirmDialog } = useConfirmDialog();
   const [tab, setTab] = useState<"requests" | "records" | "add">("requests");
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
@@ -176,16 +185,35 @@ export default function LeaveManagementPage() {
         : 0;
 
   const loadRequests = useCallback(() => {
-    if (!token) return;
+    if (!token || !canReadLeave) return;
     const params = statusFilter ? `?status=${statusFilter}` : "";
     authFetch(`/payroll/leave-requests${params}`, token)
       .then((r) => r.json())
       .then((d) => setRequests(d.data || []))
       .catch(console.error);
-  }, [token, statusFilter]);
+  }, [token, statusFilter, canReadLeave]);
+
+  const loadSickNotes = useCallback(() => {
+    if (!token || !canReadSickNotes) {
+      setSickNotes([]);
+      return;
+    }
+    const params = new URLSearchParams();
+    if (employeeFilter) params.set("employeeId", employeeFilter);
+    authFetch(`/payroll/leave-records/sick-notes?${params}`, token)
+      .then(async (r) => {
+        if (r.status === 403) {
+          setSickNotes([]);
+          return;
+        }
+        const d = await r.json();
+        setSickNotes(d.data || []);
+      })
+      .catch(() => setSickNotes([]));
+  }, [token, canReadSickNotes, employeeFilter]);
 
   const loadRecords = useCallback(() => {
-    if (!token) return;
+    if (!token || !canReadLeave) return;
     const params = new URLSearchParams();
     if (employeeFilter) params.set("employeeId", employeeFilter);
     if (dateFrom) params.set("start", dateFrom);
@@ -194,10 +222,10 @@ export default function LeaveManagementPage() {
       .then((r) => r.json())
       .then((d) => {
         setRecords(d.data || []);
-        setSickNotes(d.sickNotes || []);
       })
       .catch(console.error);
-  }, [token, employeeFilter, dateFrom, dateTo]);
+    loadSickNotes();
+  }, [token, employeeFilter, dateFrom, dateTo, canReadLeave, loadSickNotes]);
 
   const loadEmployees = useCallback(() => {
     if (!token) return;
@@ -221,6 +249,10 @@ export default function LeaveManagementPage() {
     if (tab === "requests") loadRequests();
     else if (tab === "records") loadRecords();
   }, [tab, loadRequests, loadRecords]);
+
+  useEffect(() => {
+    if (tab === "add" && !canManageLeave) setTab("requests");
+  }, [tab, canManageLeave]);
 
   const handleApprove = async (id: string) => {
     if (!token) return;
@@ -459,7 +491,9 @@ export default function LeaveManagementPage() {
 
       {/* Tabs */}
       <div className="flex gap-2 mb-6">
-        {(["requests", "records", "add"] as const).map((t) => (
+        {(["requests", "records", "add"] as const)
+          .filter((t) => t !== "add" || canManageLeave)
+          .map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -501,7 +535,7 @@ export default function LeaveManagementPage() {
                   <th className="px-4 py-3 text-left font-medium text-neutral-700 dark:text-neutral-300">Hours</th>
                   <th className="px-4 py-3 text-left font-medium text-neutral-700 dark:text-neutral-300">Status</th>
                   <th className="px-4 py-3 text-left font-medium text-neutral-700 dark:text-neutral-300">Submitted</th>
-                  {statusFilter === "pending" && (
+                  {statusFilter === "pending" && canManageLeave && (
                     <th className="px-4 py-3 text-left font-medium text-neutral-700 dark:text-neutral-300">Actions</th>
                   )}
                 </tr>
@@ -527,7 +561,7 @@ export default function LeaveManagementPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">{format(new Date(req.createdAt), "d MMM yyyy HH:mm")}</td>
-                    {statusFilter === "pending" && (
+                    {statusFilter === "pending" && canManageLeave && (
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
                           <button
@@ -586,7 +620,9 @@ export default function LeaveManagementPage() {
                   <th className="px-4 py-3 text-left font-medium text-neutral-700 dark:text-neutral-300">Leave type</th>
                   <th className="px-4 py-3 text-left font-medium text-neutral-700 dark:text-neutral-300">Period</th>
                   <th className="px-4 py-3 text-left font-medium text-neutral-700 dark:text-neutral-300">Sick note</th>
-                  <th className="px-4 py-3 text-right font-medium text-neutral-700 dark:text-neutral-300">Actions</th>
+                  {canManageLeave && (
+                    <th className="px-4 py-3 text-right font-medium text-neutral-700 dark:text-neutral-300">Actions</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -606,7 +642,7 @@ export default function LeaveManagementPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      {r.type === "sick" ? (
+                      {r.type === "sick" && canReadSickNotes ? (
                         (() => {
                           const note = sickNoteForRange(sickNotes, r);
                           return note ? (
@@ -626,6 +662,7 @@ export default function LeaveManagementPage() {
                         <span className="text-xs text-neutral-500 dark:text-neutral-400">—</span>
                       )}
                     </td>
+                    {canManageLeave && (
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
                         <button
@@ -646,6 +683,7 @@ export default function LeaveManagementPage() {
                         </button>
                       </div>
                     </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -740,7 +778,7 @@ export default function LeaveManagementPage() {
         </>
       )}
 
-      {tab === "add" && (
+      {tab === "add" && canManageLeave && (
         <div className="card-wireframe p-6 mx-auto w-full max-w-md">
           <h2 className="section-title text-neutral-900 dark:text-neutral-100 mb-4">Add Leave Record</h2>
           <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
@@ -814,7 +852,7 @@ export default function LeaveManagementPage() {
                 ))}
               </select>
             </div>
-            {addForm.type === "sick" && (
+            {addForm.type === "sick" && canManageSickNotes && (
               <div>
                 <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1.5">
                   Sick note (optional)

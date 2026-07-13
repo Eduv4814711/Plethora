@@ -58,6 +58,8 @@ async function main() {
         email: ADMIN_EMAIL,
         passwordHash,
         role: "admin",
+        isSystemOwner: true,
+        accessVersion: 1,
       },
     });
     console.log(`Created admin user: ${ADMIN_EMAIL}`);

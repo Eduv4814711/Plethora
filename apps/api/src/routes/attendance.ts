@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { authMiddleware } from "../middleware/auth.js";
+import { authProtect } from "../middleware/auth-protect.js";
 import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import {
@@ -38,7 +38,7 @@ const manualAttendanceSchema = z.object({
 
 export async function attendanceRoutes(app: FastifyInstance) {
   const protect = [
-    authMiddleware,
+    ...authProtect,
     requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], { module: "/attendance" }),
   ];
 
@@ -633,7 +633,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
   });
 
   const updateAttendanceProtect = [
-    authMiddleware,
+    ...authProtect,
     requireRole(["admin", "hr_payroll"], { module: "/attendance" }),
   ];
 

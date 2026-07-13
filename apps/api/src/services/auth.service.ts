@@ -3,8 +3,10 @@ import jwt from "jsonwebtoken";
 import { createHash, randomBytes } from "crypto";
 import { config } from "../lib/config.js";
 import type { UserRole } from "@prisma/client";
-import { normalizeModuleAccess } from "../middleware/rbac.js";
+import { resolveEffectiveModuleAccess } from "../lib/module-access.js";
 import { findFirstUserAuthScalars, findManyUserAuthScalars, findUniqueUserAuthScalars } from "../lib/user-module-column.js";
+import { loadUserAccess } from "./user-access.service.js";
+import { ALL_PERMISSIONS } from "../lib/permissions.js";
 import {
   isRefreshTokenActive,
   persistRefreshToken,
@@ -27,6 +29,9 @@ export interface AuthUserPublic {
   roleLabel?: string | null;
   companyId: string;
   moduleAccess: string[] | null;
+  accessVersion: number;
+  isSystemOwner: boolean;
+  permissions: string[];
 }
 
 export interface AuthResult {
@@ -53,14 +58,60 @@ function buildPayload(user: {
   companyId: string;
   role: UserRole;
   moduleAccess?: unknown;
+  accessVersion?: number;
+  isSystemOwner?: boolean;
 }) {
-  const moduleAccess = normalizeModuleAccess(user.moduleAccess);
+  const isSystemOwner = user.isSystemOwner === true;
+  const moduleAccess = resolveEffectiveModuleAccess({
+    role: user.role,
+    moduleAccess: user.moduleAccess,
+    isSystemOwner,
+  });
   return {
     sub: user.id,
     email: user.email,
     companyId: user.companyId,
     role: user.role,
+    accessVersion: user.accessVersion ?? 1,
+    isSystemOwner,
     ...(moduleAccess ? { moduleAccess } : {}),
+  };
+}
+
+async function buildPublicUser(user: {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  roleLabel?: string | null;
+  companyId: string;
+  moduleAccess?: unknown;
+  accessVersion?: number;
+  isSystemOwner?: boolean;
+}): Promise<AuthUserPublic> {
+  const access = await loadUserAccess(user.id);
+  const isSystemOwner = user.isSystemOwner ?? access?.isSystemOwner ?? false;
+  const moduleAccess = resolveEffectiveModuleAccess({
+    role: user.role,
+    moduleAccess: user.moduleAccess,
+    isSystemOwner,
+  });
+  const permissions = isSystemOwner
+    ? [...ALL_PERMISSIONS]
+    : access
+      ? [...access.permissions]
+      : [];
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    roleLabel: user.roleLabel ?? null,
+    companyId: user.companyId,
+    moduleAccess,
+    accessVersion: user.accessVersion ?? access?.accessVersion ?? 1,
+    isSystemOwner,
+    permissions,
   };
 }
 
@@ -70,10 +121,11 @@ function issueJwtPair(user: {
   companyId: string;
   role: UserRole;
   moduleAccess?: unknown;
+  accessVersion?: number;
+  isSystemOwner?: boolean;
   name: string;
   roleLabel?: string | null;
-}): AuthResult {
-  const moduleAccess = normalizeModuleAccess(user.moduleAccess);
+}): Promise<AuthResult> {
   const payload = buildPayload(user);
 
   const accessToken = jwt.sign(payload, config.jwt.accessSecret, {
@@ -89,20 +141,12 @@ function issueJwtPair(user: {
   const decoded = jwt.decode(accessToken) as { exp?: number };
   const expiresIn = decoded?.exp ? decoded.exp - Math.floor(Date.now() / 1000) : 900;
 
-  return {
-    user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      roleLabel: user.roleLabel ?? null,
-      companyId: user.companyId,
-      moduleAccess,
-    },
+  return buildPublicUser(user).then((publicUser) => ({
+    user: publicUser,
     accessToken,
     refreshToken,
     expiresIn,
-  };
+  }));
 }
 
 export async function login(
@@ -137,7 +181,7 @@ export async function login(
   }
   if (!matchedUser) return null;
 
-  const result = issueJwtPair(matchedUser);
+  const result = await issueJwtPair(matchedUser);
   await persistRefreshToken(matchedUser.id, result.refreshToken, meta);
   return result;
 }
@@ -150,6 +194,8 @@ export interface UserForTokens {
   roleLabel?: string | null;
   companyId: string;
   moduleAccess?: unknown;
+  accessVersion?: number;
+  isSystemOwner?: boolean;
 }
 
 export function generatePasswordSetupToken(): string {
@@ -164,7 +210,7 @@ export async function issueTokensForUser(
   user: UserForTokens,
   meta?: RefreshTokenMeta
 ): Promise<AuthResult> {
-  const result = issueJwtPair(user);
+  const result = await issueJwtPair(user);
   await persistRefreshToken(user.id, result.refreshToken, meta);
   return result;
 }
@@ -191,7 +237,7 @@ export async function refreshAccessToken(
     const user = await findUniqueUserAuthScalars({ id: decoded.sub });
     if (!user) return null;
 
-    const result = issueJwtPair(user);
+    const result = await issueJwtPair(user);
     const rotated = await rotateRefreshToken(
       refreshToken,
       result.refreshToken,

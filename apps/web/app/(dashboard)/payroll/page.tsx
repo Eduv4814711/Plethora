@@ -5,7 +5,8 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { clsx } from "clsx";
 import { useAuth } from "@/lib/auth-context";
-import { authFetch } from "@/lib/api";
+import { authFetch, apiErrorFromResponse } from "@/lib/api";
+import { can, PERMISSIONS } from "@/lib/capabilities";
 import { PayPeriodSelect } from "@/components/pay-period-select";
 import {
   AlertBanner,
@@ -27,7 +28,7 @@ function formatCurrency(n: number): string {
   }).format(n);
 }
 
-function SarsExportsDropdown({ token }: { token: string }) {
+function SarsExportsDropdown({ token, enabled }: { token: string; enabled: boolean }) {
   const [open, setOpen] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [emp201Period, setEmp201Period] = useState(format(new Date(), "yyyy-MM"));
@@ -215,7 +216,13 @@ function workflowStepClass(highlight?: "amber" | "emerald") {
 }
 
 export default function PayrollPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canCalculate = can(user, PERMISSIONS.PAYROLL_CALCULATE);
+  const canApprove = can(user, PERMISSIONS.PAYROLL_APPROVE);
+  const canRevert = can(user, PERMISSIONS.PAYROLL_REVERT);
+  const canMarkPaid = can(user, PERMISSIONS.PAYROLL_MARK_PAID);
+  const canExport = can(user, PERMISSIONS.PAYROLL_EXPORT);
+  const canReadRun = can(user, PERMISSIONS.PAYROLL_RUN_READ);
   const [runs, setRuns] = useState<PayrollRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -342,7 +349,7 @@ export default function PayrollPage() {
             <Button type="button" variant={showForm ? "secondary" : "primary"} onClick={() => setShowForm(!showForm)}>
               {showForm ? "Cancel" : "New payroll run"}
             </Button>
-            <SarsExportsDropdown token={token!} />
+            {canExport && <SarsExportsDropdown token={token!} enabled={canExport} />}
             <Link href="/employees/leave" className="btn-secondary text-sm">
               Leave requests
             </Link>
@@ -531,7 +538,18 @@ export default function PayrollPage() {
             <p className="text-sm text-neutral-600">{runs.length} run{runs.length === 1 ? "" : "s"}</p>
           </div>
           {runs.map((run) => (
-            <PayrollRunCard key={run.id} run={run} token={token!} onAction={refresh} />
+            <PayrollRunCard
+              key={run.id}
+              run={run}
+              token={token!}
+              onAction={refresh}
+              canCalculate={canCalculate}
+              canApprove={canApprove}
+              canRevert={canRevert}
+              canMarkPaid={canMarkPaid}
+              canExport={canExport}
+              canReadRun={canReadRun}
+            />
           ))}
         </section>
       ) : (
@@ -1150,10 +1168,22 @@ function PayrollRunCard({
   run,
   token,
   onAction,
+  canCalculate = false,
+  canApprove = false,
+  canRevert = false,
+  canMarkPaid = false,
+  canExport = false,
+  canReadRun = false,
 }: {
   run: PayrollRun;
   token: string;
   onAction: () => void;
+  canCalculate?: boolean;
+  canApprove?: boolean;
+  canRevert?: boolean;
+  canMarkPaid?: boolean;
+  canExport?: boolean;
+  canReadRun?: boolean;
 }) {
   const [items, setItems] = useState<PayrollItem[]>([]);
   const [showItems, setShowItems] = useState(false);
@@ -1450,16 +1480,19 @@ function PayrollRunCard({
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          {run.status === "draft" && (
+          {run.status === "draft" && canCalculate && (
             <Button type="button" size="sm" onClick={handleCalculate} loading={actionLoading}>
               Calculate
             </Button>
           )}
           {run.status === "calculated" && (
             <>
-              <Button type="button" size="sm" onClick={handleApprove} loading={actionLoading}>
-                Approve
-              </Button>
+              {canApprove && (
+                <Button type="button" size="sm" onClick={handleApprove} loading={actionLoading}>
+                  Approve
+                </Button>
+              )}
+              {canRevert && (
               <Button
                 type="button"
                 variant="secondary"
@@ -1472,13 +1505,17 @@ function PayrollRunCard({
               >
                 Revert to draft
               </Button>
+              )}
             </>
           )}
           {run.status === "approved" && (
             <>
+              {canMarkPaid && (
               <Button type="button" size="sm" onClick={handleMarkPaid} loading={actionLoading}>
                 Mark paid
               </Button>
+              )}
+              {canRevert && (
               <Button
                 type="button"
                 variant="secondary"
@@ -1491,11 +1528,14 @@ function PayrollRunCard({
               >
                 Revert to draft
               </Button>
+              )}
             </>
           )}
+          {canReadRun && (
           <Button type="button" variant="secondary" size="sm" onClick={toggleExpand}>
             {showItems ? "Hide items" : "View items"}
           </Button>
+          )}
         </div>
       </div>
 

@@ -1,9 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "crypto";
 import { z } from "zod";
-import { authMiddleware } from "../../middleware/auth.js";
+import { authProtect } from "../../middleware/auth-protect.js";
 import { requireRole } from "../../middleware/rbac.js";
+import { authorizedDocumentSensitivities } from "../../lib/permissions.js";
 import { readStreamToBuffer, storage } from "../../lib/storage.js";
+import { verifySignedDownload } from "../../lib/signed-url.js";
 import {
   createDocumentRecord,
   listDocuments,
@@ -11,6 +13,16 @@ import {
 } from "./documents.service.js";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
+
+async function withSignedFileUrl<T extends { fileUrl: string }>(
+  doc: T
+): Promise<T & { fileUrl: string }> {
+  const key = storage.resolveKeyFromUrl(doc.fileUrl);
+  if (!key || key.startsWith("logos/")) return doc;
+  // Non-logo files are not served via public /uploads — always return a signed path.
+  const signed = await storage.getSignedUrl(key);
+  return { ...doc, fileUrl: signed };
+}
 
 const ROLES = [
   "admin",
@@ -59,7 +71,7 @@ const metaSchema = z.object({
 
 export async function documentsRoutes(app: FastifyInstance) {
   const protect = [
-    authMiddleware,
+    ...authProtect,
     requireRole([...ROLES], {
       anyOfModules: ["/", "/documents", "/employees", "/sites", "/payroll"],
     }),
@@ -68,6 +80,7 @@ export async function documentsRoutes(app: FastifyInstance) {
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as Record<string, string | undefined>;
+    const sensitivities = authorizedDocumentSensitivities(request.access?.permissions ?? new Set());
     const result = await listDocuments(user.companyId, {
       category: q.category as never,
       status: q.status as never,
@@ -77,8 +90,30 @@ export async function documentsRoutes(app: FastifyInstance) {
       expiringWithinDays: q.expiringWithinDays ? Number(q.expiringWithinDays) : undefined,
       limit: q.limit ? Number(q.limit) : 50,
       offset: q.offset ? Number(q.offset) : 0,
+      authorizedSensitivities: sensitivities,
     });
-    return reply.send(result);
+    const items = await Promise.all(result.items.map((d) => withSignedFileUrl(d)));
+    return reply.send({ ...result, items });
+  });
+
+  app.get("/download", { preHandler: protect }, async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>;
+    const key = q.key?.trim();
+    if (!key || !verifySignedDownload(key, q.expires, q.sig)) {
+      return reply.code(403).send({ error: "Forbidden", message: "Invalid or expired download link" });
+    }
+    if (!key.startsWith(`documents/${request.user!.companyId}/`)) {
+      return reply.code(403).send({ error: "Forbidden", message: "Invalid download key" });
+    }
+    try {
+      const body = await storage.readLocalFile(key);
+      return reply
+        .header("Content-Type", "application/octet-stream")
+        .header("Content-Disposition", `attachment; filename="${key.split("/").pop()}"`)
+        .send(body);
+    } catch {
+      return reply.code(404).send({ error: "Not found", message: "File not found" });
+    }
   });
 
   app.post("/sync-expiry-alerts", { preHandler: protect }, async (request, reply) => {
@@ -138,6 +173,7 @@ export async function documentsRoutes(app: FastifyInstance) {
       return reply.code(500).send({ error: "Upload failed", message: "Could not save the file" });
     }
 
+    // Persist a stable storage path; clients receive a signed download URL below.
     const url = storage.getAssetUrl(key);
     const doc = await createDocumentRecord({
       companyId: user.companyId,
@@ -157,7 +193,7 @@ export async function documentsRoutes(app: FastifyInstance) {
       expiryDate: parsed.data.expiryDate ? new Date(parsed.data.expiryDate) : null,
     });
 
-    return reply.code(201).send(doc);
+    return reply.code(201).send(await withSignedFileUrl(doc));
   });
 
   app.get("/:id", { preHandler: protect }, async (request, reply) => {
@@ -174,7 +210,14 @@ export async function documentsRoutes(app: FastifyInstance) {
     if (!doc) {
       return reply.code(404).send({ error: "Not found", message: "Document not found" });
     }
-    return reply.send(doc);
+    const allowed = authorizedDocumentSensitivities(request.access?.permissions ?? new Set());
+    if (!allowed.includes(doc.sensitivity)) {
+      return reply.code(403).send({
+        error: "Forbidden",
+        message: "Insufficient permissions to view this document",
+      });
+    }
+    return reply.send(await withSignedFileUrl(doc));
   });
 
   app.patch("/:id/archive", { preHandler: protect }, async (request, reply) => {

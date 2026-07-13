@@ -9,6 +9,7 @@ import {
   logoutSession,
   refreshSession,
   registerTokenRefreshCallback,
+  registerAccessStaleCallback,
 } from "./api";
 
 type AuthState = {
@@ -100,8 +101,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     registerTokenRefreshCallback(() => doRefreshRef.current(undefined, "authFetch-401"));
+    registerAccessStaleCallback(() => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+      setUser(null);
+      setToken(null);
+      clearLegacyAuthStorage();
+      setError("Your access has changed. Please sign in again.");
+    });
     return () => {
       registerTokenRefreshCallback(() => Promise.resolve(null));
+      registerAccessStaleCallback(null);
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     };
   }, []);

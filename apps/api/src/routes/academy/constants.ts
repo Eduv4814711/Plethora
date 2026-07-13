@@ -1,5 +1,5 @@
 import type { UserRole } from "@prisma/client";
-import { authMiddleware } from "../../middleware/auth.js";
+import { authProtect } from "../../middleware/auth-protect.js";
 import { requireRole } from "../../middleware/rbac.js";
 
 export const ACADEMY_ROLES: UserRole[] = [
@@ -12,9 +12,9 @@ export const ACADEMY_ROLES: UserRole[] = [
 
 export const ACADEMY_MODULE = "/academy";
 
-/** Pre-handler stack for all academy routes (module-gated). */
+/** Pre-handler stack for all academy routes (module-gated + accessVersion). */
 export const academyProtect = [
-  authMiddleware,
+  ...authProtect,
   requireRole(ACADEMY_ROLES, { module: ACADEMY_MODULE }),
 ];
 
