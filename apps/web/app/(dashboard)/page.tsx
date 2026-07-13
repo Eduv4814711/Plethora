@@ -132,10 +132,10 @@ export default function DashboardPage() {
   const [alertActionId, setAlertActionId] = useState<string | null>(null);
   const [alertsSectionOpen, setAlertsSectionOpen] = useState(true);
 
-  const canSites = user ? canAccessRoute("/sites", user.role, user.moduleAccess) : false;
-  const canWhatsApp = user ? canAccessRoute("/whatsapp", user.role, user.moduleAccess) : false;
-  const canPayroll = user ? canAccessRoute("/payroll", user.role, user.moduleAccess) : false;
-  const canRostering = user ? canAccessRoute("/rostering", user.role, user.moduleAccess) : false;
+  const canSites = user ? canAccessRoute("/sites", user.role, user.moduleAccess, user.isSystemOwner) : false;
+  const canWhatsApp = user ? canAccessRoute("/whatsapp", user.role, user.moduleAccess, user.isSystemOwner) : false;
+  const canPayroll = user ? canAccessRoute("/payroll", user.role, user.moduleAccess, user.isSystemOwner) : false;
+  const canRostering = user ? canAccessRoute("/rostering", user.role, user.moduleAccess, user.isSystemOwner) : false;
 
   const fetchDashboard = useCallback(() => {
     if (!token) return;

@@ -36,7 +36,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!user || !pathname) return;
-    if (!canAccessRoute(pathname, user.role, user.moduleAccess)) {
+    if (!canAccessRoute(pathname, user.role, user.moduleAccess, user.isSystemOwner)) {
       router.replace(getDefaultRouteForUser(user));
     }
   }, [pathname, user, router]);
@@ -127,13 +127,20 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const allNavItems = NAV_ITEMS.filter((item) => canAccessRoute(item.href, user.role, user.moduleAccess));
+  const allNavItems = NAV_ITEMS.filter((item) =>
+    canAccessRoute(item.href, user.role, user.moduleAccess, user.isSystemOwner)
+  );
 
   const mainNavItems = allNavItems.filter((item) => MAIN_NAV_HREFS.includes(item.href));
   const moreNavItems = allNavItems.filter((item) => MORE_NAV_HREFS.includes(item.href));
-  const canAccessSettings = canAccessRoute("/settings", user.role, user.moduleAccess);
+  const canAccessSettings = canAccessRoute(
+    "/settings",
+    user.role,
+    user.moduleAccess,
+    user.isSystemOwner
+  );
 
-  const hasAccess = canAccessRoute(pathname, user.role, user.moduleAccess);
+  const hasAccess = canAccessRoute(pathname, user.role, user.moduleAccess, user.isSystemOwner);
   const isDashboardHome = pathname === "/";
   const isWhatsAppPage = pathname === "/whatsapp" || pathname.startsWith("/whatsapp/");
   const isAcademyPage = pathname === "/academy" || (pathname != null && pathname.startsWith("/academy/"));

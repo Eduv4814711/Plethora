@@ -10,7 +10,7 @@ import { writeFileSync } from "fs";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, "..", ".env") });
 
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import {
   PERMISSION_PRESETS,
   PRESET_KEYS,
@@ -54,11 +54,13 @@ async function main() {
         ? PRESET_KEYS.SYSTEM_OWNER
         : defaultPresetForRole(user.role, false);
       const permissions = PERMISSION_PRESETS[presetKey].permissions;
-      const moduleAccess = resolveEffectiveModuleAccess({
-        role: user.role,
-        moduleAccess: user.moduleAccess,
-        isSystemOwner,
-      });
+      const moduleAccess = isSystemOwner
+        ? null
+        : resolveEffectiveModuleAccess({
+            role: user.role,
+            moduleAccess: user.moduleAccess,
+            isSystemOwner: false,
+          });
 
       await prisma.$transaction(async (tx) => {
         await tx.userPermission.deleteMany({ where: { userId: user.id } });
@@ -72,7 +74,13 @@ async function main() {
           data: {
             isSystemOwner,
             accessVersion: { increment: 1 },
-            ...(moduleAccess ? { moduleAccess } : {}),
+            // System owner: clear module list so they are unrestricted forever.
+            // Others: persist effective list when present.
+            moduleAccess: isSystemOwner
+              ? Prisma.JsonNull
+              : moduleAccess
+                ? moduleAccess
+                : undefined,
           },
         });
       });

@@ -9,9 +9,10 @@ import { dirname, join } from "path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, "..", ".env") });
 
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import bcrypt from "bcrypt";
 import { ensureSiteEmployeeGroups } from "../src/lib/site-employee-groups.js";
+import { grantSystemOwner } from "../src/services/user-access.service.js";
 
 const prisma = new PrismaClient();
 
@@ -51,7 +52,7 @@ async function main() {
 
   if (!existingUser) {
     const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 12);
-    await prisma.user.create({
+    const created = await prisma.user.create({
       data: {
         companyId: company.id,
         name: "Admin",
@@ -62,10 +63,20 @@ async function main() {
         accessVersion: 1,
       },
     });
+    await grantSystemOwner(created.id);
     console.log(`Created admin user: ${ADMIN_EMAIL}`);
     console.log(`Login with: ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}`);
   } else {
-    console.log(`Admin user already exists: ${ADMIN_EMAIL}`);
+    await prisma.user.update({
+      where: { id: existingUser.id },
+      data: {
+        isSystemOwner: true,
+        moduleAccess: Prisma.JsonNull,
+        accessVersion: { increment: 1 },
+      },
+    });
+    await grantSystemOwner(existingUser.id);
+    console.log(`Admin user already exists: ${ADMIN_EMAIL} (ensured system owner + full module access)`);
     console.log(`If you forgot the password, run: npx tsx prisma/reset-admin.ts`);
   }
 

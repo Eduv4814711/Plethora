@@ -101,8 +101,8 @@ export function defaultModulesForRole(role: string): string[] {
 
 /**
  * Effective module list for JWT / requireRole.
- * - Explicit DB list wins
- * - System owners get all modules
+ * - System owners always get every module (ignore any partial DB list)
+ * - Explicit DB list wins for everyone else
  * - Otherwise fall back to role defaults (unblocks legacy null moduleAccess)
  */
 export function resolveEffectiveModuleAccess(opts: {
@@ -110,9 +110,9 @@ export function resolveEffectiveModuleAccess(opts: {
   moduleAccess?: unknown;
   isSystemOwner?: boolean;
 }): string[] | null {
+  if (opts.isSystemOwner) return [...ALL_MODULE_PATHS];
   const explicit = normalizeModuleAccess(opts.moduleAccess);
   if (explicit) return explicit;
-  if (opts.isSystemOwner) return [...ALL_MODULE_PATHS];
   const defaults = defaultModulesForRole(String(opts.role));
   return defaults.length > 0 ? defaults : null;
 }

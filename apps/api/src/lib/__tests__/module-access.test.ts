@@ -5,14 +5,17 @@ import {
 } from "../module-access.js";
 
 describe("resolveEffectiveModuleAccess", () => {
-  it("prefers explicit moduleAccess", () => {
-    expect(
-      resolveEffectiveModuleAccess({
-        role: "admin",
-        moduleAccess: ["/attendance"],
-        isSystemOwner: true,
-      })
-    ).toEqual(["/attendance"]);
+  it("gives system owners all modules even when DB has a partial list", () => {
+    const mods = resolveEffectiveModuleAccess({
+      role: "admin",
+      moduleAccess: ["/attendance"],
+      isSystemOwner: true,
+    });
+    expect(mods).toContain("/");
+    expect(mods).toContain("/sites");
+    expect(mods).toContain("/whatsapp");
+    expect(mods).toContain("/settings");
+    expect(mods?.length).toBeGreaterThan(1);
   });
 
   it("gives system owners all modules when DB list is null", () => {
@@ -24,6 +27,16 @@ describe("resolveEffectiveModuleAccess", () => {
     expect(mods).toContain("/");
     expect(mods).toContain("/sites");
     expect(mods).toContain("/whatsapp");
+  });
+
+  it("prefers explicit moduleAccess for non-owners", () => {
+    expect(
+      resolveEffectiveModuleAccess({
+        role: "admin",
+        moduleAccess: ["/attendance"],
+        isSystemOwner: false,
+      })
+    ).toEqual(["/attendance"]);
   });
 
   it("falls back to role defaults for non-owners with null moduleAccess", () => {

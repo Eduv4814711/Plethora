@@ -93,7 +93,12 @@ function navItemForPath(pathname: string): NavItem | undefined {
 /**
  * First route to open for a user. Non-admins without assigned modules → access-pending page.
  */
-export function getDefaultRouteForUser(user: { role: string; moduleAccess?: unknown }): string {
+export function getDefaultRouteForUser(user: {
+  role: string;
+  moduleAccess?: unknown;
+  isSystemOwner?: boolean;
+}): string {
+  if (user.isSystemOwner) return "/";
   const custom = normalizeUserModuleAccess(user.moduleAccess);
   if (custom) {
     for (const nav of NAV_ITEMS) {
@@ -108,24 +113,30 @@ export function getDefaultRouteForUser(user: { role: string; moduleAccess?: unkn
 }
 
 /**
- * Route access: full admin → all nav modules; anyone else → explicit module list only.
+ * Route access: system owner / full admin → all nav modules; anyone else → explicit module list only.
  */
-export function canAccessRoute(pathname: string, role: string, moduleAccess?: unknown): boolean {
+export function canAccessRoute(
+  pathname: string,
+  role: string,
+  moduleAccess?: unknown,
+  isSystemOwner?: boolean
+): boolean {
   const userRole = role as UserRole;
 
   if (pathname === ACCESS_PENDING_HREF || pathname.startsWith(`${ACCESS_PENDING_HREF}/`)) {
-    if (userRole === "admin") return false;
+    if (userRole === "admin" || isSystemOwner) return false;
     return normalizeUserModuleAccess(moduleAccess) == null;
   }
 
   const item = navItemForPath(pathname);
   if (!item) return false;
 
+  if (isSystemOwner) return true;
+
   if (userRole === "admin" && !normalizeUserModuleAccess(moduleAccess)) {
     return true;
   }
 
-  // System owners with explicit module list still follow module paths for nav
   const custom = normalizeUserModuleAccess(moduleAccess);
   if (!custom) return false;
 
@@ -138,8 +149,13 @@ export function canAccessRoute(pathname: string, role: string, moduleAccess?: un
 }
 
 /** Site create/edit/delete: must have `/sites` in assigned modules; full admin unrestricted. */
-export function canManageSitesModule(user: { role: string; moduleAccess?: unknown }): boolean {
-  if (!canAccessRoute("/sites", user.role, user.moduleAccess)) return false;
+export function canManageSitesModule(user: {
+  role: string;
+  moduleAccess?: unknown;
+  isSystemOwner?: boolean;
+}): boolean {
+  if (user.isSystemOwner) return true;
+  if (!canAccessRoute("/sites", user.role, user.moduleAccess, user.isSystemOwner)) return false;
   const custom = normalizeUserModuleAccess(user.moduleAccess);
   if (custom) return custom.includes("/sites");
   return user.role === "admin";
