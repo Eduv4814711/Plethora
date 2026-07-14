@@ -85,6 +85,49 @@ describe.runIf(dbReady)("system owner protect (integration)", () => {
       headers: authHeader(ownerToken),
     });
     expect(gated.statusCode).toBe(200);
+    expect(gated.json().message).not.toBe("Insufficient permissions for this action");
+  });
+
+  it("PUT with email leaves isSystemOwner true", async () => {
+    const newEmail = `protect-owner-renamed-${runId}@plethora-test.local`;
+    const putRes = await app.inject({
+      method: "PUT",
+      url: `/users/${ownerId}`,
+      headers: { ...authHeader(ownerToken), "content-type": "application/json" },
+      payload: { email: newEmail },
+    });
+    expect(putRes.statusCode).toBe(200);
+    expect(putRes.json().isSystemOwner).toBe(true);
+    const row = await prisma.user.findUnique({
+      where: { id: ownerId },
+      select: { isSystemOwner: true, email: true },
+    });
+    expect(row?.isSystemOwner).toBe(true);
+    expect(row?.email).toBe(newEmail);
+  });
+
+  it("PUT with role admin on owner preserves ownership (no demotion)", async () => {
+    const before = await prisma.user.findUnique({
+      where: { id: ownerId },
+      select: { isSystemOwner: true },
+    });
+    expect(before?.isSystemOwner).toBe(true);
+
+    const putRes = await app.inject({
+      method: "PUT",
+      url: `/users/${ownerId}`,
+      headers: { ...authHeader(ownerToken), "content-type": "application/json" },
+      payload: { role: "admin", moduleAccess: ["/employees"] },
+    });
+    expect(putRes.statusCode).toBe(200);
+    expect(putRes.json().isSystemOwner).toBe(true);
+
+    const row = await prisma.user.findUnique({
+      where: { id: ownerId },
+      select: { isSystemOwner: true, moduleAccess: true },
+    });
+    expect(row?.isSystemOwner).toBe(true);
+    expect(row?.moduleAccess).toBeNull();
   });
 
   it("PUT with presetKey on a system owner returns 400", async () => {
@@ -108,6 +151,16 @@ describe.runIf(dbReady)("system owner protect (integration)", () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it("normal administrator cannot edit a system owner", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: `/users/${ownerId}`,
+      headers: { ...authHeader(nonOwnerToken), "content-type": "application/json" },
+      payload: { name: "Hacked Name" },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
   it("DELETE of a system owner returns 403", async () => {
     const res = await app.inject({
       method: "DELETE",
@@ -117,8 +170,16 @@ describe.runIf(dbReady)("system owner protect (integration)", () => {
     expect(res.statusCode).toBe(403);
   });
 
+  it("normal administrator cannot delete a system owner", async () => {
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/users/${ownerId}`,
+      headers: authHeader(nonOwnerToken),
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
   it("revoke of sole remaining owner after demoting peer is blocked at 409", async () => {
-    // Ensure both are owners, then revoke second → leave one owner
     await grantSystemOwner(secondOwnerId);
     const revokeSecond = await app.inject({
       method: "POST",
@@ -161,6 +222,39 @@ describe.runIf(dbReady)("system owner protect (integration)", () => {
     });
     expect(revoke.statusCode).toBe(200);
     expect(revoke.json().isSystemOwner).toBe(false);
+  });
+
+  it("owner passes sensitive permission gate after setUserPermissions regression path", async () => {
+    const { setUserPermissions } = await import("../../services/user-access.service.js");
+    const { permissionsForPreset, PRESET_KEYS: KEYS } = await import("../../lib/permissions.js");
+    await setUserPermissions(ownerId, permissionsForPreset(KEYS.SUPERVISOR));
+
+    const row = await prisma.user.findUnique({
+      where: { id: ownerId },
+      select: { isSystemOwner: true, email: true },
+    });
+    expect(row?.isSystemOwner).toBe(true);
+
+    const login = await app.inject({
+      method: "POST",
+      url: "/auth/login",
+      headers: { "content-type": "application/json" },
+      payload: {
+        email: row!.email,
+        password: "integration-test-password-32chars!!",
+      },
+    });
+    expect(login.statusCode).toBe(200);
+    const body = login.json() as { accessToken: string; user: { isSystemOwner: boolean } };
+    expect(body.user.isSystemOwner).toBe(true);
+
+    const gated = await app.inject({
+      method: "GET",
+      url: "/users",
+      headers: authHeader(body.accessToken),
+    });
+    expect(gated.statusCode).toBe(200);
+    expect(JSON.stringify(gated.json())).not.toContain("Insufficient permissions for this action");
   });
 
   it("non-owner admin PUT still replaces permissions", async () => {

@@ -20,6 +20,7 @@ import {
   revokeSystemOwner,
   LastSystemOwnerError,
   SystemOwnerNotFoundError,
+  SystemOwnerForbiddenError,
   type UserAccessRecord,
 } from "../services/user-access.service.js";
 import { defaultModulesForRole } from "../lib/module-access.js";
@@ -207,6 +208,7 @@ export async function usersRoutes(app: FastifyInstance) {
             roleLabel: true,
             companyId: true,
             moduleAccess: true,
+            isSystemOwner: true,
             createdAt: true,
           },
         });
@@ -238,7 +240,7 @@ export async function usersRoutes(app: FastifyInstance) {
             createdAt: true,
           },
         });
-        user = { ...user, roleLabel: null, moduleAccess: null };
+        user = { ...user, roleLabel: null, moduleAccess: null, isSystemOwner: false };
       }
 
       await createAuditLog({
@@ -360,11 +362,18 @@ export async function usersRoutes(app: FastifyInstance) {
     const companyId = request.user!.companyId;
     const existing = await prisma.user.findFirst({
       where: { id, companyId },
-      select: { id: true, isSystemOwner: true, role: true },
+      select: { id: true, companyId: true, role: true, isSystemOwner: true, accessVersion: true },
     });
 
     if (!existing) {
       return reply.code(404).send({ error: "User not found" });
+    }
+
+    if (existing.isSystemOwner && !isSystemOwnerAccess(request.access)) {
+      return reply.code(403).send({
+        error: "Forbidden",
+        message: "Only a system owner can edit a system owner account",
+      });
     }
 
     if (existing.isSystemOwner && parsed.data.role && parsed.data.role !== "admin") {
@@ -512,23 +521,11 @@ export async function usersRoutes(app: FastifyInstance) {
   });
 
   app.post("/:id/grant-system-owner", { preHandler: protect }, async (request, reply) => {
-    if (!isSystemOwnerAccess(request.access)) {
-      return reply.code(403).send({
-        error: "Forbidden",
-        message: "Only a system owner can grant system-owner status",
-      });
-    }
     const { id } = request.params as { id: string };
     const companyId = request.user!.companyId;
-    const target = await prisma.user.findFirst({
-      where: { id, companyId },
-      select: { id: true, isSystemOwner: true },
-    });
-    if (!target) {
-      return reply.code(404).send({ error: "User not found" });
-    }
+    const actorUserId = request.user!.sub;
     try {
-      await grantSystemOwner(id);
+      await grantSystemOwner(id, { actorUserId });
       await prisma.user.update({
         where: { id },
         data: { moduleAccess: Prisma.JsonNull, role: "admin" },
@@ -537,10 +534,16 @@ export async function usersRoutes(app: FastifyInstance) {
       if (e instanceof SystemOwnerNotFoundError) {
         return reply.code(404).send({ error: "User not found" });
       }
+      if (e instanceof SystemOwnerForbiddenError) {
+        return reply.code(403).send({
+          error: "Forbidden",
+          message: e.message,
+        });
+      }
       throw e;
     }
     await createAuditLog({
-      userId: request.user!.sub,
+      userId: actorUserId,
       companyId,
       action: "user.system_owner.grant",
       entityType: "user",
@@ -551,19 +554,20 @@ export async function usersRoutes(app: FastifyInstance) {
   });
 
   app.post("/:id/revoke-system-owner", { preHandler: protect }, async (request, reply) => {
-    if (!isSystemOwnerAccess(request.access)) {
-      return reply.code(403).send({
-        error: "Forbidden",
-        message: "Only a system owner can revoke system-owner status",
-      });
-    }
     const { id } = request.params as { id: string };
     const companyId = request.user!.companyId;
+    const actorUserId = request.user!.sub;
     try {
-      await revokeSystemOwner(id, companyId);
+      await revokeSystemOwner(id, { actorUserId });
     } catch (e) {
       if (e instanceof SystemOwnerNotFoundError) {
         return reply.code(404).send({ error: "User not found" });
+      }
+      if (e instanceof SystemOwnerForbiddenError) {
+        return reply.code(403).send({
+          error: "Forbidden",
+          message: e.message,
+        });
       }
       if (e instanceof LastSystemOwnerError) {
         return reply.code(409).send({
@@ -574,7 +578,7 @@ export async function usersRoutes(app: FastifyInstance) {
       throw e;
     }
     await createAuditLog({
-      userId: request.user!.sub,
+      userId: actorUserId,
       companyId,
       action: "user.system_owner.revoke",
       entityType: "user",
@@ -590,7 +594,7 @@ export async function usersRoutes(app: FastifyInstance) {
 
     const existing = await prisma.user.findFirst({
       where: { id, companyId: user.companyId },
-      select: { id: true, isSystemOwner: true },
+      select: { id: true, companyId: true, role: true, isSystemOwner: true, accessVersion: true },
     });
 
     if (!existing) {

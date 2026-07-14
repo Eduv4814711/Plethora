@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authProtect } from "../middleware/auth-protect.js";
-import { requireAdmin, canViewSensitiveCompanyFields } from "../middleware/rbac.js";
+import { requireSystemOwner, canViewSensitiveCompanyFields } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 
@@ -29,7 +29,7 @@ function redactCompany(company: Record<string, unknown>, canViewSensitive: boole
 
 export async function companiesRoutes(app: FastifyInstance) {
   const protect = [...authProtect];
-  const adminProtect = [...authProtect, requireAdmin()];
+  const adminProtect = [...authProtect, requireSystemOwner()];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

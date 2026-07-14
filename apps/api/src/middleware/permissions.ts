@@ -78,5 +78,3 @@ export function requireAnyPermission(permissions: string[]) {
     }
   };
 }
-
-export type { UserAccessRecord };

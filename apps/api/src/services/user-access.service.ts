@@ -24,6 +24,13 @@ export class SystemOwnerNotFoundError extends Error {
   }
 }
 
+export class SystemOwnerForbiddenError extends Error {
+  constructor(message = "Only a system owner in the same company can change ownership") {
+    super(message);
+    this.name = "SystemOwnerForbiddenError";
+  }
+}
+
 const cache = new Map<string, { record: UserAccessRecord; expiresAt: number }>();
 const CACHE_TTL_MS = 30_000;
 
@@ -85,6 +92,29 @@ export async function countSystemOwners(companyId: string): Promise<number> {
   return prisma.user.count({
     where: { companyId, isSystemOwner: true },
   });
+}
+
+async function assertSameCompanySystemOwnerActor(
+  actorUserId: string,
+  targetUserId: string
+): Promise<{ targetCompanyId: string; targetIsSystemOwner: boolean }> {
+  const [actor, target] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: actorUserId },
+      select: { id: true, companyId: true, isSystemOwner: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, companyId: true, isSystemOwner: true },
+    }),
+  ]);
+  if (!target) {
+    throw new SystemOwnerNotFoundError();
+  }
+  if (!actor || !actor.isSystemOwner || actor.companyId !== target.companyId) {
+    throw new SystemOwnerForbiddenError();
+  }
+  return { targetCompanyId: target.companyId, targetIsSystemOwner: target.isSystemOwner };
 }
 
 /**
@@ -167,11 +197,34 @@ export async function applyPresetToUser(userId: string, presetPermissions: strin
   return setUserPermissions(userId, presetPermissions);
 }
 
-export async function grantSystemOwner(userId: string): Promise<UserAccessRecord> {
+export type GrantSystemOwnerOptions = {
+  /** When set, actor must be a system owner in the same company as the target. Omit for seed/repair bootstrap. */
+  actorUserId?: string;
+};
+
+/**
+ * Explicit ownership grant. Ordinary permission/preset updates must never call this.
+ */
+export async function grantSystemOwner(
+  targetUserId: string,
+  opts?: GrantSystemOwnerOptions
+): Promise<UserAccessRecord> {
+  if (opts?.actorUserId) {
+    await assertSameCompanySystemOwnerActor(opts.actorUserId, targetUserId);
+  } else {
+    const target = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true },
+    });
+    if (!target) {
+      throw new SystemOwnerNotFoundError();
+    }
+  }
+
   const updated = await prisma.$transaction(async (tx) => {
-    await tx.userPermission.deleteMany({ where: { userId } });
+    await tx.userPermission.deleteMany({ where: { userId: targetUserId } });
     return tx.user.update({
-      where: { id: userId },
+      where: { id: targetUserId },
       data: {
         isSystemOwner: true,
         accessVersion: { increment: 1 },
@@ -185,8 +238,8 @@ export async function grantSystemOwner(userId: string): Promise<UserAccessRecord
     });
   });
 
-  await revokeAllUserRefreshTokens(userId);
-  clearUserAccessCache(userId);
+  await revokeAllUserRefreshTokens(targetUserId);
+  clearUserAccessCache(targetUserId);
 
   return {
     userId: updated.id,
@@ -197,37 +250,44 @@ export async function grantSystemOwner(userId: string): Promise<UserAccessRecord
   };
 }
 
+export type RevokeSystemOwnerOptions = {
+  actorUserId: string;
+};
+
 /**
  * Explicit demotion. Refuses if this user is the company's last system owner.
  * Assigns OPERATIONAL_ADMIN permissions after clearing ownership.
  */
-export async function revokeSystemOwner(userId: string, companyId: string): Promise<UserAccessRecord> {
-  const user = await prisma.user.findFirst({
-    where: { id: userId, companyId },
-    select: { id: true, companyId: true, isSystemOwner: true },
-  });
-  if (!user) {
-    throw new SystemOwnerNotFoundError();
-  }
-  if (!user.isSystemOwner) {
-    return (await loadUserAccess(userId))!;
+export async function revokeSystemOwner(
+  targetUserId: string,
+  opts: RevokeSystemOwnerOptions
+): Promise<UserAccessRecord> {
+  const { targetCompanyId, targetIsSystemOwner } = await assertSameCompanySystemOwnerActor(
+    opts.actorUserId,
+    targetUserId
+  );
+
+  if (!targetIsSystemOwner) {
+    const access = await loadUserAccess(targetUserId);
+    if (!access) throw new SystemOwnerNotFoundError();
+    return access;
   }
 
-  const owners = await countSystemOwners(companyId);
+  const owners = await countSystemOwners(targetCompanyId);
   if (owners <= 1) {
     throw new LastSystemOwnerError();
   }
 
   const preset = permissionsForPreset(PRESET_KEYS.OPERATIONAL_ADMIN);
   const updated = await prisma.$transaction(async (tx) => {
-    await tx.userPermission.deleteMany({ where: { userId } });
+    await tx.userPermission.deleteMany({ where: { userId: targetUserId } });
     if (preset.length > 0) {
       await tx.userPermission.createMany({
-        data: preset.map((permission) => ({ userId, permission })),
+        data: preset.map((permission) => ({ userId: targetUserId, permission })),
       });
     }
     return tx.user.update({
-      where: { id: userId },
+      where: { id: targetUserId },
       data: {
         isSystemOwner: false,
         accessVersion: { increment: 1 },
@@ -242,8 +302,8 @@ export async function revokeSystemOwner(userId: string, companyId: string): Prom
     });
   });
 
-  await revokeAllUserRefreshTokens(userId);
-  clearUserAccessCache(userId);
+  await revokeAllUserRefreshTokens(targetUserId);
+  clearUserAccessCache(targetUserId);
 
   return {
     userId: updated.id,

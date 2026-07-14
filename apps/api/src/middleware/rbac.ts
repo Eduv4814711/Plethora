@@ -35,8 +35,9 @@ function userMatchesAnyModule(user: JWTPayload, modulePaths: string[]): boolean 
   return modulePaths.some((p) => matchesModule(list, p));
 }
 
+/** Authoritative ownership comes from DB-backed accessMiddleware, not the JWT claim alone. */
 function isOwner(request: FastifyRequest): boolean {
-  return request.access?.isSystemOwner === true || request.user?.isSystemOwner === true;
+  return request.access?.isSystemOwner === true;
 }
 
 /**
@@ -108,7 +109,8 @@ export function requireRole(
   };
 }
 
-export function requireAdmin() {
+/** System-owner only (not ordinary administrators). */
+export function requireSystemOwner() {
   return async function (request: FastifyRequest, reply: FastifyReply): Promise<void> {
     if (!request.user) {
       reply.code(401).send({ error: "Unauthorized", message: "Authentication required" });
@@ -124,6 +126,9 @@ export function requireAdmin() {
     }
   };
 }
+
+/** @deprecated Use requireSystemOwner — this gate has always meant system owner, not role=admin. */
+export const requireAdmin = requireSystemOwner;
 
 /** Tax / statutory company fields */
 export function canViewSensitiveCompanyFields(access?: UserAccessRecord): boolean {

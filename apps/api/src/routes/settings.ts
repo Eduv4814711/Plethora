@@ -3,7 +3,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { basename } from "node:path";
 import { authProtect } from "../middleware/auth-protect.js";
-import { canViewSensitiveCompanyFields, requireAdmin } from "../middleware/rbac.js";
+import { canViewSensitiveCompanyFields, requireSystemOwner } from "../middleware/rbac.js";
 import { requirePermission } from "../middleware/permissions.js";
 import { PERMISSIONS } from "../lib/permissions.js";
 import { prisma } from "../lib/prisma.js";
@@ -270,7 +270,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     return reply.send(company);
   });
 
-  app.post("/factory-reset", { preHandler: [...authProtect, requireAdmin()] }, async (request, reply) => {
+  app.post("/factory-reset", { preHandler: [...authProtect, requireSystemOwner()] }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
 

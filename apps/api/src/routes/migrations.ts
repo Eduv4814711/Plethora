@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { readFile } from "fs/promises";
 import { join } from "path";
 import { authProtect } from "../middleware/auth-protect.js";
-import { requireAdmin } from "../middleware/rbac.js";
+import { requireSystemOwner } from "../middleware/rbac.js";
 import { requireRole } from "../middleware/rbac.js";
 import { requirePermission, requireAnyPermission } from "../middleware/permissions.js";
 import { PERMISSIONS } from "../lib/permissions.js";
@@ -54,7 +54,7 @@ export async function migrationsRoutes(app: FastifyInstance) {
     ...authProtect,
     requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"], { module: "/settings" }),
   ];
-  const adminProtect = [...authProtect, requireAdmin()];
+  const adminProtect = [...authProtect, requireSystemOwner()];
 
   app.get("/export/employees-operational", {
     preHandler: [...protect, requirePermission(PERMISSIONS.EMPLOYEES_READ_OPERATIONAL)],

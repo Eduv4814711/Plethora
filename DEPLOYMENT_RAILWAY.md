@@ -258,13 +258,15 @@ order. Do not skip steps or reverse them.
 6. **Repair demoted system owners (if needed)** — older builds could clear
    `isSystemOwner` when saving a user’s profile/permissions. If the root admin
    gets “Insufficient permissions for this action” after an account update,
-   restore ownership (bumps `accessVersion`; **owners must re-login**):
+   restore ownership for an **explicit** company + user (bumps `accessVersion`;
+   **owners must re-login**). Never auto-pick the earliest admin:
 
    ```bash
-   cd apps/api && npm run db:repair-system-owner
+   cd apps/api
+   npx tsx scripts/repair-system-owner-access.ts --company-id <COMPANY_ID> --user-id <USER_ID> --dry-run
+   npx tsx scripts/repair-system-owner-access.ts --company-id <COMPANY_ID> --user-id <USER_ID>
+   # or: --company-id <COMPANY_ID> --email <EMAIL>
    ```
-
-   Or: `npx tsx scripts/repair-system-owner-access.ts`
 7. **Post-deploy smoke**
    - System owner: dashboard, sites, attendance capture overview, employees list
    - Operational admin: reports OK; `/reports/financial` returns 403; no
