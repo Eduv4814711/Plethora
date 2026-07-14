@@ -1,6 +1,10 @@
 /**
  * One-off: ensure each company's earliest admin is system owner with full access.
- * Run: npx tsx scripts/repair-system-owner-access.ts
+ * Run: npm run db:repair-system-owner
+ *   or: npx tsx scripts/repair-system-owner-access.ts
+ *
+ * Bumps accessVersion and revokes refresh tokens for repaired users — they must
+ * sign out and sign in again before full owner access applies to their JWT.
  */
 import { config } from "dotenv";
 import { fileURLToPath } from "url";

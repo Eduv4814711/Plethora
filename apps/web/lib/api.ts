@@ -540,6 +540,7 @@ export interface UserListItem {
   companyId: string;
   createdAt: string;
   moduleAccess?: unknown;
+  isSystemOwner?: boolean;
   setupLink?: string;
 }
 

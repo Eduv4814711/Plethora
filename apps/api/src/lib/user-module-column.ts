@@ -197,6 +197,7 @@ export async function findUniqueUserListRow(id: string, companyId: string) {
         roleLabel: true,
         companyId: true,
         moduleAccess: true,
+        isSystemOwner: true,
         createdAt: true,
       },
     });
@@ -219,7 +220,7 @@ export async function findUniqueUserListRow(id: string, companyId: string) {
         createdAt: true,
       },
     });
-    return row ? { ...row, roleLabel: null, moduleAccess: null } : null;
+    return row ? { ...row, roleLabel: null, moduleAccess: null, isSystemOwner: false } : null;
   }
 }
 
@@ -245,6 +246,7 @@ export async function findManyUsersForCompany(
         roleLabel: true,
         companyId: true,
         moduleAccess: true,
+        isSystemOwner: true,
         createdAt: true,
       },
     });
@@ -267,7 +269,7 @@ export async function findManyUsersForCompany(
         createdAt: true,
       },
     });
-    return rows.map((r) => ({ ...r, roleLabel: null, moduleAccess: null }));
+    return rows.map((r) => ({ ...r, roleLabel: null, moduleAccess: null, isSystemOwner: false }));
   }
 }
 

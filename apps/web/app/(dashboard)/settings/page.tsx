@@ -983,6 +983,37 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
     e.preventDefault();
     if (!editingUserId) return;
 
+    const editingUser = users.find((x) => x.id === editingUserId);
+    if (editingUser?.isSystemOwner) {
+      setSubmitting(true);
+      setError(null);
+      try {
+        const payload: Partial<{
+          name: string;
+          email: string;
+          password: string;
+          role: UserRole;
+          roleLabel: string | null;
+          moduleAccess: string[] | null;
+        }> = {
+          name: editForm.name,
+          email: editForm.email,
+          role: "admin",
+          roleLabel: null,
+          moduleAccess: null,
+        };
+        if (editForm.password) payload.password = editForm.password;
+        await updateUser(token, editingUserId, payload);
+        setEditingUserId(null);
+        await fetchUsers();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to update user");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     let resolvedEditRole: UserRole = editForm.role;
     let editModulesPayload = editCustomModules;
     let editRoleLabelForPayload: string | null = null;
@@ -1412,6 +1443,11 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                           {u.id === currentUserId && (
                             <span className="ml-2 text-xs text-neutral-500 dark:text-neutral-400">(you)</span>
                           )}
+                          {u.isSystemOwner && (
+                            <span className="ml-2 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-200">
+                              System owner
+                            </span>
+                          )}
                         </>
                       )}
                     </td>
@@ -1425,6 +1461,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                       {editingUserId === u.id
                         ? null
                         : (() => {
+                            if (u.isSystemOwner) return "Full access (owner)";
                             const m = normalizeUserModuleAccess(u.moduleAccess);
                             if (m) return `${m.length} assigned`;
                             if (u.role === "admin") return "Full admin";
@@ -1453,14 +1490,16 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                               >
                                 Edit
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteUser(u.id, u.name)}
-                                disabled={submitting}
-                                className="text-xs text-red-600 dark:text-red-400 hover:underline"
-                              >
-                                Delete
-                              </button>
+                              {!u.isSystemOwner && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteUser(u.id, u.name)}
+                                  disabled={submitting}
+                                  className="text-xs text-red-600 dark:text-red-400 hover:underline"
+                                >
+                                  Delete
+                                </button>
+                              )}
                             </>
                           )}
                         </div>
@@ -1472,6 +1511,11 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                       <td colSpan={5} className="py-4 px-4">
                         <form onSubmit={handleEditUser} className="space-y-4">
                           <h4 className="font-medium text-neutral-800 dark:text-white">Edit User</h4>
+                          {u.isSystemOwner && (
+                            <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                              System owners keep full access. Role and module limits cannot be changed here — transfer ownership first if demotion is required.
+                            </p>
+                          )}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                               <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Name</label>
@@ -1509,58 +1553,72 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                               <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                                 Account
                               </label>
-                              <select
-                                value={editAccountKind}
-                                onChange={(e) => {
-                                  const k = e.target.value as "admin" | "assign";
-                                  setEditAccountKind(k);
-                                  if (k === "admin") {
-                                    setEditForm((f) => ({ ...f, role: "admin" }));
-                                    setEditAdminFullAccess(true);
-                                    setEditCustomModules(defaultModulesForRole("admin"));
-                                  } else {
-                                    setEditForm((f) => ({ ...f, role: "supervisor" }));
-                                    setEditStaffRoleInput(ROLE_LABELS.supervisor);
-                                    setEditStaffRoleFieldError(null);
-                                    setEditGrantAppModules(true);
-                                    setEditCustomModules(defaultModulesForRole("supervisor"));
-                                  }
-                                }}
-                                className="input-modern"
-                              >
-                                <option value="admin">Admin</option>
-                                <option value="assign">Assign Role</option>
-                              </select>
-                              {editAccountKind === "assign" && (
+                              {u.isSystemOwner ? (
+                                <p className="text-sm text-neutral-700 dark:text-neutral-300 py-2">Admin · System owner</p>
+                              ) : (
                                 <>
-                                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mt-3 mb-1">
-                                    Role
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={editStaffRoleInput}
+                                  <select
+                                    value={editAccountKind}
                                     onChange={(e) => {
-                                      setEditStaffRoleInput(e.target.value);
-                                      setEditStaffRoleFieldError(null);
-                                    }}
-                                    onBlur={() => {
-                                      if (!editStaffRoleInput.trim()) {
-                                        setEditStaffRoleFieldError("Role is required.");
+                                      const k = e.target.value as "admin" | "assign";
+                                      setEditAccountKind(k);
+                                      if (k === "admin") {
+                                        setEditForm((f) => ({ ...f, role: "admin" }));
+                                        setEditAdminFullAccess(true);
+                                        setEditCustomModules(defaultModulesForRole("admin"));
+                                      } else {
+                                        setEditForm((f) => ({ ...f, role: "supervisor" }));
+                                        setEditStaffRoleInput(ROLE_LABELS.supervisor);
+                                        setEditStaffRoleFieldError(null);
+                                        setEditGrantAppModules(true);
+                                        setEditCustomModules(defaultModulesForRole("supervisor"));
                                       }
                                     }}
                                     className="input-modern"
-                                    placeholder="e.g. Site Supervisor, HR & Payroll, operations_manager"
-                                    autoComplete="off"
-                                  />
-                                  {editStaffRoleFieldError && (
-                                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
-                                      {editStaffRoleFieldError}
-                                    </p>
+                                  >
+                                    <option value="admin">Admin</option>
+                                    <option value="assign">Assign Role</option>
+                                  </select>
+                                  {editAccountKind === "assign" && (
+                                    <>
+                                      <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mt-3 mb-1">
+                                        Role
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={editStaffRoleInput}
+                                        onChange={(e) => {
+                                          setEditStaffRoleInput(e.target.value);
+                                          setEditStaffRoleFieldError(null);
+                                        }}
+                                        onBlur={() => {
+                                          if (!editStaffRoleInput.trim()) {
+                                            setEditStaffRoleFieldError("Role is required.");
+                                          }
+                                        }}
+                                        className="input-modern"
+                                        placeholder="e.g. Site Supervisor, HR & Payroll, operations_manager"
+                                        autoComplete="off"
+                                      />
+                                      {editStaffRoleFieldError && (
+                                        <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                                          {editStaffRoleFieldError}
+                                        </p>
+                                      )}
+                                    </>
                                   )}
                                 </>
                               )}
                             </div>
                           </div>
+                          {u.isSystemOwner ? (
+                            <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg p-4">
+                              <p className="text-sm font-medium text-neutral-800 dark:text-white">Module access</p>
+                              <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
+                                Full access (system owner) — not editable.
+                              </p>
+                            </div>
+                          ) : (
                           <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg p-4 space-y-3">
                             <p className="text-sm font-medium text-neutral-800 dark:text-white">Module access</p>
                             {editForm.role === "admin" ? (
@@ -1654,6 +1712,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                               </>
                             )}
                           </div>
+                          )}
                           <div className="flex gap-2">
                             <button type="submit" disabled={submitting} className="btn-primary text-sm">
                               {submitting ? "Saving..." : "Save"}

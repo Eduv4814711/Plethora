@@ -255,7 +255,17 @@ order. Do not skip steps or reverse them.
 5. **Force re-login** — tell all users to sign out and sign in. Existing JWTs
    lack the new `accessVersion` / permission claims and will hit `ACCESS_STALE`
    until refreshed.
-6. **Post-deploy smoke**
+6. **Repair demoted system owners (if needed)** — older builds could clear
+   `isSystemOwner` when saving a user’s profile/permissions. If the root admin
+   gets “Insufficient permissions for this action” after an account update,
+   restore ownership (bumps `accessVersion`; **owners must re-login**):
+
+   ```bash
+   cd apps/api && npm run db:repair-system-owner
+   ```
+
+   Or: `npx tsx scripts/repair-system-owner-access.ts`
+7. **Post-deploy smoke**
    - System owner: dashboard, sites, attendance capture overview, employees list
    - Operational admin: reports OK; `/reports/financial` returns 403; no
      salary/ID on team cards

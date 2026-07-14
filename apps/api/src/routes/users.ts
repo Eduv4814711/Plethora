@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { authProtect } from "../middleware/auth-protect.js";
-import { requireRole, normalizeModuleAccess } from "../middleware/rbac.js";
+import { normalizeModuleAccess, isSystemOwnerAccess } from "../middleware/rbac.js";
 import { requirePermission } from "../middleware/permissions.js";
 import {
   PERMISSIONS,
@@ -16,6 +16,10 @@ import {
   setUserPermissions,
   hasPermission,
   incrementAccessVersion,
+  grantSystemOwner,
+  revokeSystemOwner,
+  LastSystemOwnerError,
+  SystemOwnerNotFoundError,
   type UserAccessRecord,
 } from "../services/user-access.service.js";
 import { defaultModulesForRole } from "../lib/module-access.js";
@@ -356,11 +360,30 @@ export async function usersRoutes(app: FastifyInstance) {
     const companyId = request.user!.companyId;
     const existing = await prisma.user.findFirst({
       where: { id, companyId },
-      select: { id: true },
+      select: { id: true, isSystemOwner: true, role: true },
     });
 
     if (!existing) {
       return reply.code(404).send({ error: "User not found" });
+    }
+
+    if (existing.isSystemOwner && parsed.data.role && parsed.data.role !== "admin") {
+      return reply.code(400).send({
+        error: "Validation error",
+        message:
+          "Cannot change a system owner's role away from admin. Revoke system-owner status first via POST /users/:id/revoke-system-owner.",
+      });
+    }
+
+    if (
+      existing.isSystemOwner &&
+      (parsed.data.permissions !== undefined || parsed.data.presetKey !== undefined)
+    ) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message:
+          "System owner permissions cannot be changed via user update. Use POST /users/:id/revoke-system-owner to demote, then assign a preset.",
+      });
     }
 
     const updateData: Record<string, unknown> = {};
@@ -374,21 +397,29 @@ export async function usersRoutes(app: FastifyInstance) {
       updateData.passwordHash = await hashPassword(parsed.data.password);
     }
     if (parsed.data.moduleAccess !== undefined) {
-      updateData.moduleAccess =
-        parsed.data.moduleAccess === null || parsed.data.moduleAccess.length === 0
-          ? Prisma.JsonNull
-          : parsed.data.moduleAccess;
+      // System owners stay unrestricted even if the client sends a partial list —
+      // clear/null keeps them unlimited; otherwise store what was requested for non-owners.
+      if (existing.isSystemOwner) {
+        updateData.moduleAccess = Prisma.JsonNull;
+      } else {
+        updateData.moduleAccess =
+          parsed.data.moduleAccess === null || parsed.data.moduleAccess.length === 0
+            ? Prisma.JsonNull
+            : parsed.data.moduleAccess;
+      }
     }
 
     let permissionUpdate: string[] | undefined;
-    if (parsed.data.presetKey) {
-      const preset = PERMISSION_PRESETS[parsed.data.presetKey as PresetKey];
-      if (!preset) {
-        return reply.code(400).send({ error: "Validation error", message: "Unknown permission preset" });
+    if (!existing.isSystemOwner) {
+      if (parsed.data.presetKey) {
+        const preset = PERMISSION_PRESETS[parsed.data.presetKey as PresetKey];
+        if (!preset) {
+          return reply.code(400).send({ error: "Validation error", message: "Unknown permission preset" });
+        }
+        permissionUpdate = preset.permissions;
+      } else if (parsed.data.permissions) {
+        permissionUpdate = parsed.data.permissions;
       }
-      permissionUpdate = preset.permissions;
-    } else if (parsed.data.permissions) {
-      permissionUpdate = parsed.data.permissions;
     }
 
     if (permissionUpdate) {
@@ -411,6 +442,7 @@ export async function usersRoutes(app: FastifyInstance) {
           roleLabel: true,
           companyId: true,
           moduleAccess: true,
+          isSystemOwner: true,
           createdAt: true,
         },
       });
@@ -443,7 +475,7 @@ export async function usersRoutes(app: FastifyInstance) {
           createdAt: true,
         },
       });
-      updated = { ...updated, roleLabel: null, moduleAccess: null };
+      updated = { ...updated, roleLabel: null, moduleAccess: null, isSystemOwner: existing.isSystemOwner };
     }
 
     if (permissionUpdate) {
@@ -459,7 +491,7 @@ export async function usersRoutes(app: FastifyInstance) {
           metadata: { permissions: sensitiveGranted },
         });
       }
-    } else if (parsed.data.role) {
+    } else if (!existing.isSystemOwner && parsed.data.role) {
       const presetKey = defaultPresetForRole(parsed.data.role, false);
       await setUserPermissions(id, permissionsForPreset(presetKey));
     } else if (parsed.data.moduleAccess !== undefined) {
@@ -479,13 +511,86 @@ export async function usersRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
+  app.post("/:id/grant-system-owner", { preHandler: protect }, async (request, reply) => {
+    if (!isSystemOwnerAccess(request.access)) {
+      return reply.code(403).send({
+        error: "Forbidden",
+        message: "Only a system owner can grant system-owner status",
+      });
+    }
+    const { id } = request.params as { id: string };
+    const companyId = request.user!.companyId;
+    const target = await prisma.user.findFirst({
+      where: { id, companyId },
+      select: { id: true, isSystemOwner: true },
+    });
+    if (!target) {
+      return reply.code(404).send({ error: "User not found" });
+    }
+    try {
+      await grantSystemOwner(id);
+      await prisma.user.update({
+        where: { id },
+        data: { moduleAccess: Prisma.JsonNull, role: "admin" },
+      });
+    } catch (e) {
+      if (e instanceof SystemOwnerNotFoundError) {
+        return reply.code(404).send({ error: "User not found" });
+      }
+      throw e;
+    }
+    await createAuditLog({
+      userId: request.user!.sub,
+      companyId,
+      action: "user.system_owner.grant",
+      entityType: "user",
+      entityId: id,
+    });
+    const found = await findUniqueUserListRow(id, companyId);
+    return reply.send(found);
+  });
+
+  app.post("/:id/revoke-system-owner", { preHandler: protect }, async (request, reply) => {
+    if (!isSystemOwnerAccess(request.access)) {
+      return reply.code(403).send({
+        error: "Forbidden",
+        message: "Only a system owner can revoke system-owner status",
+      });
+    }
+    const { id } = request.params as { id: string };
+    const companyId = request.user!.companyId;
+    try {
+      await revokeSystemOwner(id, companyId);
+    } catch (e) {
+      if (e instanceof SystemOwnerNotFoundError) {
+        return reply.code(404).send({ error: "User not found" });
+      }
+      if (e instanceof LastSystemOwnerError) {
+        return reply.code(409).send({
+          error: "Last system owner",
+          message: e.message,
+        });
+      }
+      throw e;
+    }
+    await createAuditLog({
+      userId: request.user!.sub,
+      companyId,
+      action: "user.system_owner.revoke",
+      entityType: "user",
+      entityId: id,
+    });
+    const found = await findUniqueUserListRow(id, companyId);
+    return reply.send(found);
+  });
+
   app.delete("/:id", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
 
     const existing = await prisma.user.findFirst({
       where: { id, companyId: user.companyId },
-      select: { id: true },
+      select: { id: true, isSystemOwner: true },
     });
 
     if (!existing) {
@@ -494,6 +599,14 @@ export async function usersRoutes(app: FastifyInstance) {
 
     if (id === user.sub) {
       return reply.code(400).send({ error: "You cannot delete your own account" });
+    }
+
+    if (existing.isSystemOwner) {
+      return reply.code(403).send({
+        error: "Forbidden",
+        message:
+          "Cannot delete a system owner. Transfer ownership with grant-system-owner, then revoke this account's owner status first.",
+      });
     }
 
     try {
