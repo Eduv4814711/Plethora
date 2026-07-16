@@ -70,10 +70,16 @@ export const PERMISSIONS = {
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
 export function can(
-  user: { permissions?: string[] | null; isSystemOwner?: boolean } | null | undefined,
+  user: {
+    role?: string;
+    moduleAccess?: unknown;
+    permissions?: string[] | null;
+    isSystemOwner?: boolean;
+  } | null | undefined,
   permission: Permission
 ): boolean {
   if (!user) return false;
   if (user.isSystemOwner) return true;
+  if (user.role === "admin" && user.permissions === undefined && user.moduleAccess == null) return true;
   return user.permissions?.includes(permission) ?? false;
 }

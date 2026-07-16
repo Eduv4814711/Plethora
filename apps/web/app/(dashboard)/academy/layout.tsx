@@ -143,7 +143,9 @@ function isNavActive(pathname: string, href: string) {
 export default function AcademyLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "";
   const { user } = useAuth();
-  const canReports = user ? canAccessRoute("/reports", user.role, user.moduleAccess, user.isSystemOwner) : false;
+  const canReports = user
+    ? canAccessRoute("/reports", user.role, user.moduleAccess, user.isSystemOwner, user.permissions)
+    : false;
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
