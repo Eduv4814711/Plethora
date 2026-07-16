@@ -14,7 +14,7 @@ export async function runRelationshipsAudit(prisma) {
     SELECT s.id, s."employeeId", e.status
     FROM "Shift" s
     JOIN "Employee" e ON e.id = s."employeeId"
-    WHERE e.status = ANY(${INACTIVE_EMPLOYEE_STATUSES}::text[])
+    WHERE e.status::text = ANY(${INACTIVE_EMPLOYEE_STATUSES}::text[])
       AND s."startTime" > NOW() - INTERVAL '90 days'
     LIMIT 500
   `;
@@ -35,7 +35,7 @@ export async function runRelationshipsAudit(prisma) {
     SELECT g.id, g."guardId", e.status, g."rosterDate"
     FROM "SiteRosterGeneratedShift" g
     JOIN "Employee" e ON e.id = g."guardId"
-    WHERE e.status = ANY(${INACTIVE_EMPLOYEE_STATUSES}::text[])
+    WHERE e.status::text = ANY(${INACTIVE_EMPLOYEE_STATUSES}::text[])
       AND g."rosterDate" >= CURRENT_DATE - INTERVAL '30 days'
     LIMIT 500
   `;

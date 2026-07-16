@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { authMiddleware } from "../../middleware/auth.js";
+import { accessMiddleware, requirePermission } from "../../middleware/permissions.js";
+import { PERMISSIONS } from "../../lib/permissions.js";
 import {
   listNotificationsForUser,
   markAllNotificationsRead,
@@ -8,7 +10,8 @@ import {
 
 /** In-app notifications are scoped to the authenticated user — any logged-in role. */
 export async function notificationsRoutes(app: FastifyInstance) {
-  app.get("/", { preHandler: [authMiddleware] }, async (request, reply) => {
+  const protect = [authMiddleware, accessMiddleware, requirePermission(PERMISSIONS.DASHBOARD_READ)];
+  app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as { unreadOnly?: string; limit?: string };
     const result = await listNotificationsForUser(user.companyId, user.sub, {
@@ -18,7 +21,7 @@ export async function notificationsRoutes(app: FastifyInstance) {
     return reply.send(result);
   });
 
-  app.post("/:id/read", { preHandler: [authMiddleware] }, async (request, reply) => {
+  app.post("/:id/read", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
     const n = await markNotificationRead({
@@ -32,7 +35,7 @@ export async function notificationsRoutes(app: FastifyInstance) {
     return reply.send(n);
   });
 
-  app.post("/read-all", { preHandler: [authMiddleware] }, async (request, reply) => {
+  app.post("/read-all", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     await markAllNotificationsRead(user.companyId, user.sub);
     return reply.send({ ok: true });

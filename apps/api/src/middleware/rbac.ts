@@ -36,10 +36,6 @@ function userMatchesAnyModule(user: JWTPayload, modulePaths: string[]): boolean 
 }
 
 /** Authoritative ownership comes from DB-backed accessMiddleware, not the JWT claim alone. */
-function isOwner(request: FastifyRequest): boolean {
-  return request.access?.isSystemOwner === true;
-}
-
 /**
  * Module-path gate for navigation-assigned access.
  * System owners bypass. Everyone else needs matching moduleAccess (explicit or role defaults).
@@ -57,9 +53,7 @@ export function requireRole(
     const u = request.user;
     const access = request.access;
 
-    if (isOwner(request)) {
-      return;
-    }
+    if (access?.isSystemOwner) return;
 
     const adminOnlyRoute = roles.length === 1 && roles[0] === "admin";
     if (adminOnlyRoute) {
@@ -117,7 +111,7 @@ export function requireSystemOwner() {
       return;
     }
 
-    if (!isOwner(request)) {
+    if (!request.access?.isSystemOwner) {
       reply.code(403).send({
         error: "Forbidden",
         message: "Insufficient permissions for this action",
@@ -142,6 +136,5 @@ export function isSystemOwnerAccess(access?: UserAccessRecord): boolean {
 /** @deprecated Use canViewSensitiveCompanyFields(access) */
 export function canViewSensitiveCompanyFieldsFromJwt(user: JWTPayload): boolean {
   if (user.isSystemOwner) return true;
-  if (user.role === "admin" && !normalizeModuleAccess(user.moduleAccess)) return true;
   return userMatchesAnyModule(user, ["/settings", "/payroll"]);
 }

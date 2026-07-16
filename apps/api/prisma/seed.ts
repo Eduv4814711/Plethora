@@ -12,7 +12,8 @@ config({ path: join(__dirname, "..", ".env") });
 import { PrismaClient, Prisma } from "@prisma/client";
 import bcrypt from "bcrypt";
 import { ensureSiteEmployeeGroups } from "../src/lib/site-employee-groups.js";
-import { grantSystemOwner } from "../src/services/user-access.service.js";
+import { setUserPermissions } from "../src/services/user-access.service.js";
+import { permissionsForPreset, PRESET_KEYS } from "../src/lib/permissions.js";
 
 const prisma = new PrismaClient();
 
@@ -60,10 +61,11 @@ async function main() {
         passwordHash,
         role: "admin",
         isSystemOwner: true,
+        adminClass: "SYSTEM_ADMIN",
         accessVersion: 1,
       },
     });
-    await grantSystemOwner(created.id);
+    await setUserPermissions(created.id, permissionsForPreset(PRESET_KEYS.OPERATIONAL_ADMIN), { reason: "Development seed administrator" });
     console.log(`Created admin user: ${ADMIN_EMAIL}`);
     console.log(`Login with: ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}`);
   } else {
@@ -71,12 +73,13 @@ async function main() {
       where: { id: existingUser.id },
       data: {
         isSystemOwner: true,
+        adminClass: "SYSTEM_ADMIN",
         moduleAccess: Prisma.JsonNull,
         accessVersion: { increment: 1 },
       },
     });
-    await grantSystemOwner(existingUser.id);
-    console.log(`Admin user already exists: ${ADMIN_EMAIL} (ensured system owner + full module access)`);
+    await setUserPermissions(existingUser.id, permissionsForPreset(PRESET_KEYS.OPERATIONAL_ADMIN), { reason: "Development seed administrator" });
+    console.log(`Admin user already exists: ${ADMIN_EMAIL} (ensured System Owner access)`);
     console.log(`If you forgot the password, run: npx tsx prisma/reset-admin.ts`);
   }
 

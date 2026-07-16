@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { authMiddleware } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { accessMiddleware, requireAnyPermission } from "../../middleware/permissions.js";
+import { PERMISSIONS } from "../../lib/permissions.js";
 import {
   listAlertsQuerySchema,
   resolveAlertBodySchema,
@@ -13,20 +14,16 @@ import {
   resolveAlert,
 } from "./alerts.service.js";
 
-const ALERT_ROLES = [
-  "admin",
-  "operations_manager",
-  "hr_payroll",
-  "supervisor",
-  "controller",
-] as const;
-
-const ALERT_MODULES = ["/", "/attendance", "/sites", "/tasks", "/payroll", "/reports"] as const;
-
 export async function alertsRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole([...ALERT_ROLES], { anyOfModules: [...ALERT_MODULES] }),
+    accessMiddleware,
+    requireAnyPermission([
+      PERMISSIONS.DASHBOARD_READ,
+      PERMISSIONS.ATTENDANCE_READ,
+      PERMISSIONS.TASKS_READ,
+      PERMISSIONS.PAYROLL_STATUS_READ,
+    ]),
   ];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {

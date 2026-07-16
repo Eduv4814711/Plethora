@@ -93,13 +93,15 @@ export type RosterPatternSummary = {
 };
 
 export type PublishRosterResponse = {
-  success: boolean;
-  blocked: boolean;
+  success?: boolean;
+  blocked?: boolean;
   message: string;
-  publishedCount: number;
-  skippedCount: number;
-  replacedCount: number;
-  warnings: RosterWarning[];
+  publishedCount?: number;
+  skippedCount?: number;
+  replacedCount?: number;
+  warnings?: RosterWarning[];
+  approval?: { id: string; status: string };
+  publication?: { id: string; version: number };
 };
 
 export type SiteTimesheetAttendance =
@@ -474,7 +476,7 @@ export async function applyManualOverridesBulk(
 
 export async function publishRoster(
   token: string,
-  body: { siteId: string; startDate: string; endDate: string; replaceExisting?: boolean }
+  body: { siteId: string; startDate: string; endDate: string; replaceExisting?: boolean; reason: string }
 ) {
   const res = await authFetch("/rosters/publish", token, {
     method: "POST",
@@ -565,21 +567,19 @@ export async function addSiteTimesheetRow(
 export async function approveSiteTimesheet(
   token: string,
   timesheetId: string,
-  options?: { notes?: string; shiftType?: AttendanceShiftTypeFilter }
+  options: { reason: string; notes?: string; shiftType?: AttendanceShiftTypeFilter }
 ) {
   const res = await authFetch(`/rosters/site-timesheets/${timesheetId}/approve`, token, {
     method: "POST",
     body: JSON.stringify({
       notes: options?.notes,
+      reason: options.reason,
       shiftType: options?.shiftType ?? "all",
     }),
   });
   return parseJson<{
-    success: boolean;
-    locked: boolean;
-    approvedRowCount: number;
-    remainingPending: number;
-    shiftType: AttendanceShiftTypeFilter;
+    message: string;
+    approval: { id: string; status: string };
   }>(res);
 }
 

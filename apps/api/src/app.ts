@@ -52,6 +52,9 @@ import { taskAttachmentsRoutes } from "./routes/task-attachments.js";
 import { taskRemindersRoutes } from "./routes/task-reminders.js";
 import { academyRoutes } from "./routes/academy/index.js";
 import { internalCronRoutes } from "./routes/internal-cron.js";
+import { workQueueRoutes } from "./routes/work-queue.js";
+import { dataQualityRoutes } from "./routes/data-quality.js";
+import { accessReviewsRoutes } from "./routes/access-reviews.js";
 import { alertsRoutes } from "./modules/alerts/alerts.routes.js";
 import { attendanceExceptionsRoutes } from "./modules/attendance-exceptions/exceptions.routes.js";
 import { documentsRoutes } from "./modules/documents/documents.routes.js";
@@ -61,6 +64,7 @@ import { notificationsRoutes } from "./modules/notifications/notifications.route
 import { clientsRoutes, clientPortalRoutes } from "./modules/clients/clients.routes.js";
 import { reportsExtendedRoutes } from "./modules/reports-extended/reports-extended.routes.js";
 import { corsOriginFromEnv, env } from "./lib/env.js";
+import { adminChangesRoutes } from "./routes/admin-changes.js";
 
 function isValidationError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
@@ -113,7 +117,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(rateLimit, {
-    max: 100,
+    // Normal dashboard use fans out across several read APIs. Authentication
+    // endpoints retain their stricter per-route limit in auth.ts.
+    max: 600,
     timeWindow: "1 minute",
   });
 
@@ -176,6 +182,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(registerWhatsApp);
   await app.register(authRoutes, { prefix: "/auth" });
+  await app.register(adminChangesRoutes, { prefix: "/admin-changes" });
   await app.register(usersRoutes, { prefix: "/users" });
   await app.register(companiesRoutes, { prefix: "/companies" });
   await app.register(employeesRoutes, { prefix: "/employees" });
@@ -198,6 +205,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(leaveRecordsRoutes, { prefix: "/payroll/leave-records" });
   await app.register(leaveRequestsRoutes, { prefix: "/payroll/leave-requests" });
   await app.register(dashboardRoutes, { prefix: "/dashboard" });
+  await app.register(workQueueRoutes, { prefix: "/work-queue" });
+  await app.register(dataQualityRoutes, { prefix: "/data-quality" });
+  await app.register(accessReviewsRoutes, { prefix: "/access-reviews" });
   await app.register(auditRoutes, { prefix: "/audit" });
   await app.register(settingsRoutes, { prefix: "/settings" });
   await app.register(payPeriodsRoutes, { prefix: "/pay-periods" });

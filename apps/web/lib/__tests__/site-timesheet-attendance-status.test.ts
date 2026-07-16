@@ -65,6 +65,9 @@ describe("resolveAttendanceStatusOnApprove", () => {
         actualGuardId: "g1",
         plannedShiftCode: "L",
         actualShiftCode: "L",
+        actualShiftType: null,
+        clockIn: null,
+        clockOut: null,
       })
     ).toBe("leave");
     expect(
@@ -73,6 +76,9 @@ describe("resolveAttendanceStatusOnApprove", () => {
         actualGuardId: "g1",
         plannedShiftCode: "SL",
         actualShiftCode: "SL",
+        actualShiftType: null,
+        clockIn: null,
+        clockOut: null,
       })
     ).toBe("sick_leave");
     expect(
@@ -81,6 +87,9 @@ describe("resolveAttendanceStatusOnApprove", () => {
         actualGuardId: "g1",
         plannedShiftCode: "TR",
         actualShiftCode: "TR",
+        actualShiftType: null,
+        clockIn: null,
+        clockOut: null,
       })
     ).toBe("training");
   });
@@ -93,6 +102,8 @@ describe("resolveAttendanceStatusOnApprove", () => {
         plannedShiftCode: "O",
         actualShiftCode: null,
         actualShiftType: null,
+        clockIn: null,
+        clockOut: null,
       })
     ).toBe("off");
   });

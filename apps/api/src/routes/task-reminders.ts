@@ -1,10 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authProtect } from "../middleware/auth-protect.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requirePermission } from "../middleware/permissions.js";
+import { PERMISSIONS } from "../lib/permissions.js";
 import { prisma } from "../lib/prisma.js";
-
-const TASK_ROLES = ["admin", "operations_manager", "hr_payroll", "supervisor"] as const;
 
 function sanitizeDate(v: string | undefined): Date | undefined {
   if (!v) return undefined;
@@ -22,7 +21,7 @@ const createReminderSchema = z.object({
 });
 
 export async function taskRemindersRoutes(app: FastifyInstance) {
-  const protect = [...authProtect, requireRole([...TASK_ROLES], { module: "/tasks" })];
+  const protect = [...authProtect, requirePermission(PERMISSIONS.TASKS_MANAGE)];
 
   app.post("/tasks/:taskId/reminders", { preHandler: protect }, async (request, reply) => {
     const parsed = createReminderSchema.safeParse(request.body);

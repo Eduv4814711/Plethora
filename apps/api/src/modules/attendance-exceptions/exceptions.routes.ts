@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { authMiddleware } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { accessMiddleware, requirePermission } from "../../middleware/permissions.js";
+import { PERMISSIONS } from "../../lib/permissions.js";
 import {
   detectExceptionsBodySchema,
   listExceptionsQuerySchema,
@@ -15,21 +16,11 @@ import {
   reviewException,
 } from "./exceptions.service.js";
 
-const ROLES = [
-  "admin",
-  "operations_manager",
-  "hr_payroll",
-  "supervisor",
-  "controller",
-] as const;
-
 export async function attendanceExceptionsRoutes(app: FastifyInstance) {
-  const protect = [
-    authMiddleware,
-    requireRole([...ROLES], { module: "/attendance" }),
-  ];
+  const readProtect = [authMiddleware, accessMiddleware, requirePermission(PERMISSIONS.ATTENDANCE_READ)];
+  const protect = [authMiddleware, accessMiddleware, requirePermission(PERMISSIONS.ATTENDANCE_MANAGE)];
 
-  app.get("/", { preHandler: protect }, async (request, reply) => {
+  app.get("/", { preHandler: readProtect }, async (request, reply) => {
     const user = request.user!;
     const parsed = listExceptionsQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -42,7 +33,7 @@ export async function attendanceExceptionsRoutes(app: FastifyInstance) {
     return reply.send(result);
   });
 
-  app.get("/analytics", { preHandler: protect }, async (request, reply) => {
+  app.get("/analytics", { preHandler: readProtect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as { periodStart?: string; periodEnd?: string };
     const analytics = await getExceptionAnalytics(
@@ -53,7 +44,7 @@ export async function attendanceExceptionsRoutes(app: FastifyInstance) {
     return reply.send(analytics);
   });
 
-  app.get("/payroll-readiness", { preHandler: protect }, async (request, reply) => {
+  app.get("/payroll-readiness", { preHandler: readProtect }, async (request, reply) => {
     const user = request.user!;
     const readiness = await getPayrollReadiness(user.companyId);
     return reply.send(readiness ?? { status: "PENDING_ATTENDANCE_REVIEW", openExceptions: 0 });

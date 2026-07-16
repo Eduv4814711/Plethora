@@ -62,6 +62,7 @@ export const publishRosterSchema = z.object({
   startDate: z.string().min(1),
   endDate: z.string().min(1),
   replaceExisting: z.boolean().optional(),
+  reason: z.string().min(5).max(2000),
 });
 
 export const manualOverrideSchema = z.object({
@@ -160,6 +161,7 @@ export const siteTimesheetRowCreateSchema = z.object({
 
 export const approveSiteTimesheetSchema = z.object({
   notes: z.string().optional(),
+  reason: z.string().min(5).max(2000),
   /** When day|night, only those rows are approved; sheet locks only when no pending rows remain. */
   shiftType: z.enum(["day", "night", "all"]).optional().default("all"),
 });

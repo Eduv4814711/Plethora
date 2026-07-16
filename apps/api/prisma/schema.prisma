@@ -45,7 +45,7 @@ model Company {
   shifts                Shift[]
   payrollRuns           PayrollRun[]
   auditLogs             AuditLog[]
-  rosterAutomationRuns RosterAutomationRun[]
+  rosterAutomationRuns  RosterAutomationRun[]
   payRules              PayRule[]
   payGrades             PayGrade[]
   employeeGroups        EmployeeGroup[]
@@ -60,44 +60,48 @@ model Company {
   tasks                 Task[]
   whatsappMessages      WhatsAppMessage[]
 
-  siteRosterPatterns          SiteRosterPattern[]
-  siteRosterManualOverrides   SiteRosterManualOverride[]
-  siteRosterGeneratedShifts   SiteRosterGeneratedShift[]
-  siteTimesheets              SiteTimesheet[]
-  siteTimesheetRows           SiteTimesheetRow[]
+  siteRosterPatterns        SiteRosterPattern[]
+  siteRosterManualOverrides SiteRosterManualOverride[]
+  siteRosterGeneratedShifts SiteRosterGeneratedShift[]
+  siteTimesheets            SiteTimesheet[]
+  siteTimesheetRows         SiteTimesheetRow[]
 
-  academyBranches         AcademyBranch[]
-  academyStudents         Student[]
-  academyStudentDocuments StudentDocument[]
-  academyCourses          Course[]
-  academyCourseRuns       CourseRun[]
-  academyFeePlans         FeePlan[]
-  academyEnrolments       Enrolment[]
-  academyInvoices         AcademyInvoice[]
-  academyPayments         AcademyPayment[]
-  academyReceipts         AcademyReceipt[]
-  academyProfile          AcademyProfile?
-  academyInstructors      AcademyInstructor[]
+  academyBranches            AcademyBranch[]
+  academyStudents            Student[]
+  academyStudentDocuments    StudentDocument[]
+  academyCourses             Course[]
+  academyCourseRuns          CourseRun[]
+  academyFeePlans            FeePlan[]
+  academyEnrolments          Enrolment[]
+  academyInvoices            AcademyInvoice[]
+  academyPayments            AcademyPayment[]
+  academyReceipts            AcademyReceipt[]
+  academyProfile             AcademyProfile?
+  academyInstructors         AcademyInstructor[]
   academyInstructorDocuments AcademyInstructorDocument[]
-  academyClassrooms       AcademyClassroom[]
-  academyAttendanceSessions AcademyAttendanceSession[]
-  academyAttendanceRecords  AcademyAttendanceRecord[]
-  academyAssessments      AcademyAssessment[]
-  academyCertificates     AcademyCertificate[]
+  academyClassrooms          AcademyClassroom[]
+  academyAttendanceSessions  AcademyAttendanceSession[]
+  academyAttendanceRecords   AcademyAttendanceRecord[]
+  academyAssessments         AcademyAssessment[]
+  academyCertificates        AcademyCertificate[]
   academyComplianceDocuments AcademyComplianceDocument[]
-  academyPolicyDocuments  AcademyPolicyDocument[]
-  academyRenewalAlerts    AcademyRenewalAlert[]
-  leaveSickNotes          LeaveSickNote[]
+  academyPolicyDocuments     AcademyPolicyDocument[]
+  academyRenewalAlerts       AcademyRenewalAlert[]
+  leaveSickNotes             LeaveSickNote[]
 
   // Management System Review — operational modules
-  operationalAlerts       OperationalAlert[]
-  attendanceExceptions    AttendanceException[]
-  managedDocuments        ManagedDocument[]
-  incidents               Incident[]
-  approvalRequests        ApprovalRequest[]
-  appNotifications        AppNotification[]
-  clients                 Client[]
-  payrollPeriodReadiness  PayrollPeriodReadiness[]
+  operationalAlerts      OperationalAlert[]
+  attendanceExceptions   AttendanceException[]
+  managedDocuments       ManagedDocument[]
+  incidents              Incident[]
+  approvalRequests       ApprovalRequest[]
+  appNotifications       AppNotification[]
+  clients                Client[]
+  payrollPeriodReadiness PayrollPeriodReadiness[]
+  dataQualityIssues      DataQualityIssue[]
+  rosterPublications     RosterPublication[]
+  adminChangeRequests    AdminChangeRequest[]
+  platformAuditEvents    PlatformAuditEvent[]
 }
 
 model User {
@@ -116,39 +120,54 @@ model User {
   moduleAccess                 Json?
   /// Incremented when permissions or role access change; JWT must match or request is rejected.
   accessVersion                Int       @default(1)
+  /// Administrative account class. Authority still comes from explicit grants;
+  /// ROOT_ADMIN is restricted to the platform recovery surface.
+  adminClass                   AdminClass @default(STANDARD)
+  disabledAt                   DateTime?
+  disabledReason               String?
   /// Deliberate system-owner flag (first admin per company). Grants all permissions when set.
   isSystemOwner                Boolean   @default(false)
+  mfaRequired                  Boolean   @default(false)
+  mfaEnabled                   Boolean   @default(false)
+  mfaSecretEncrypted           String?
+  mfaEnrolledAt                DateTime?
+  lastLoginAt                  DateTime?
   createdAt                    DateTime  @default(now())
   updatedAt                    DateTime  @updatedAt
 
-  company                  Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  permissions              UserPermission[]
-  auditLogs                AuditLog[]
-  tasksCreated             Task[]
-  taskComments             TaskComment[]
-  taskAttachments          TaskAttachment[]
-  studentDocumentsUploaded StudentDocument[]
-  academyPaymentsVerified  AcademyPayment[]  @relation("AcademyPaymentVerifiedBy")
-  academyReceiptsIssued    AcademyReceipt[]  @relation("AcademyReceiptIssuedBy")
-  academyAttendanceMarked  AcademyAttendanceRecord[] @relation("AcademyAttendanceMarkedBy")
-  academyCertificatesIssued AcademyCertificate[] @relation("AcademyCertificateIssuedBy")
-  academyComplianceVerified AcademyComplianceDocument[] @relation("AcademyComplianceVerifiedBy")
+  company                            Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  permissions                        UserPermission[]
+  auditLogs                          AuditLog[]
+  tasksCreated                       Task[]
+  taskComments                       TaskComment[]
+  taskAttachments                    TaskAttachment[]
+  studentDocumentsUploaded           StudentDocument[]
+  academyPaymentsVerified            AcademyPayment[]            @relation("AcademyPaymentVerifiedBy")
+  academyReceiptsIssued              AcademyReceipt[]            @relation("AcademyReceiptIssuedBy")
+  academyAttendanceMarked            AcademyAttendanceRecord[]   @relation("AcademyAttendanceMarkedBy")
+  academyCertificatesIssued          AcademyCertificate[]        @relation("AcademyCertificateIssuedBy")
+  academyComplianceVerified          AcademyComplianceDocument[] @relation("AcademyComplianceVerifiedBy")
   academyInstructorDocumentsUploaded AcademyInstructorDocument[] @relation("AcademyInstructorDocumentUploadedBy")
   academyInstructorDocumentsVerified AcademyInstructorDocument[] @relation("AcademyInstructorDocumentVerifiedBy")
-  refreshTokens                    RefreshToken[]
+  refreshTokens                      RefreshToken[]
+  platformAuditEventsAsActor         PlatformAuditEvent[] @relation("PlatformAuditActor")
+  platformAuditEventsAsTarget        PlatformAuditEvent[] @relation("PlatformAuditTarget")
+  adminChangesRequested              AdminChangeRequest[] @relation("AdminChangeRequester")
+  adminChangesToApprove              AdminChangeRequest[] @relation("AdminChangeApprover")
+  adminChangesTargeting              AdminChangeRequest[] @relation("AdminChangeTarget")
 
   // MSR relations
-  supervisedSites                  Site[]                    @relation("SiteSupervisor")
-  alertsAssigned                   OperationalAlert[]        @relation("AlertAssignedTo")
-  alertsResolved                   OperationalAlert[]        @relation("AlertResolvedBy")
-  exceptionsReviewed               AttendanceException[]     @relation("ExceptionReviewedBy")
-  documentsUploaded                ManagedDocument[]         @relation("DocumentUploadedBy")
-  incidentsReported                Incident[]                @relation("IncidentReportedBy")
-  incidentsSupervised              Incident[]                @relation("IncidentAssignedSupervisor")
-  approvalsRequested               ApprovalRequest[]         @relation("ApprovalRequestedBy")
-  approvalsToReview                ApprovalRequest[]         @relation("ApprovalApprover")
-  notificationsReceived            AppNotification[]
-  clientProfile                    Client?
+  supervisedSites       Site[]                @relation("SiteSupervisor")
+  alertsAssigned        OperationalAlert[]    @relation("AlertAssignedTo")
+  alertsResolved        OperationalAlert[]    @relation("AlertResolvedBy")
+  exceptionsReviewed    AttendanceException[] @relation("ExceptionReviewedBy")
+  documentsUploaded     ManagedDocument[]     @relation("DocumentUploadedBy")
+  incidentsReported     Incident[]            @relation("IncidentReportedBy")
+  incidentsSupervised   Incident[]            @relation("IncidentAssignedSupervisor")
+  approvalsRequested    ApprovalRequest[]     @relation("ApprovalRequestedBy")
+  approvalsToReview     ApprovalRequest[]     @relation("ApprovalApprover")
+  notificationsReceived AppNotification[]
+  clientProfile         Client?
 
   @@index([companyId])
 }
@@ -164,8 +183,8 @@ model RefreshToken {
   userAgent         String?
   ipAddress         String?
 
-  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  replacedBy RefreshToken? @relation("RefreshTokenRotation", fields: [replacedByTokenId], references: [id], onDelete: SetNull)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replacedBy RefreshToken?  @relation("RefreshTokenRotation", fields: [replacedByTokenId], references: [id], onDelete: SetNull)
   replaces   RefreshToken[] @relation("RefreshTokenRotation")
 
   @@index([userId])
@@ -182,19 +201,52 @@ enum UserRole {
   client
 }
 
-model UserPermission {
-  id         String @id @default(cuid())
-  userId     String
-  permission String
-  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+enum AdminClass {
+  STANDARD
+  SYSTEM_ADMIN
+  ROOT_ADMIN
+}
 
-  @@unique([userId, permission])
+model UserPermission {
+  id                String                @id @default(cuid())
+  userId            String
+  permission        String
+  scopeType         PermissionScopeType   @default(COMPANY)
+  scopeId           String?
+  scopeKey          String                @default("company")
+  validFrom         DateTime              @default(now())
+  expiresAt         DateTime?
+  reason            String                @default("Initial access migration")
+  requestedById     String?
+  approvedById      String?
+  approvalRequestId String?
+  emergencyAccess   Boolean               @default(false)
+  status            PermissionGrantStatus @default(ACTIVE)
+  lastUsedAt        DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  user              User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permission, scopeKey])
   @@index([userId])
+  @@index([userId, status, validFrom, expiresAt])
+  @@index([scopeType, scopeId])
+}
+
+enum PermissionScopeType {
+  COMPANY
+  SITE
+}
+
+enum PermissionGrantStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
 }
 
 model PermissionPreset {
-  id          String @id @default(cuid())
-  key         String @unique
+  id          String   @id @default(cuid())
+  key         String   @unique
   name        String
   description String?
   permissions Json
@@ -221,29 +273,29 @@ model Employee {
   jobRole      String? // e.g. "Security Officer", "HR Manager"
 
   // Labour Law (BCEA) - office staff
-  dateOfBirth       DateTime?
-  gender            String? // M/F
-  maritalStatus     String? // single, married, divorced, widowed
-  email             String?
-  physicalAddress   String?
-  postalAddress     String?
-  postalCode        String?
-  taxNumber         String?
+  dateOfBirth        DateTime?
+  gender             String? // M/F
+  maritalStatus      String? // single, married, divorced, widowed
+  email              String?
+  physicalAddress    String?
+  postalAddress      String?
+  postalCode         String?
+  taxNumber          String?
   taxDirectiveNumber String?
-  taxDirectiveRate   Decimal? @db.Decimal(5, 2) // Fixed PAYE % from SARS directive (0–100)
-  bankName          String?
-  bankAccountNumber String?
-  bankBranchCode    String?
-  commencementDate  DateTime?
-  occupation        String?
-  placeOfWork       String?
-  ordinaryHours     String? // e.g. "45 hours/week"
-  ordinaryDays      String? // e.g. "Mon-Fri"
-  overtimeRate      Decimal?  @db.Decimal(10, 2)
-  payFrequency      String? // weekly, bi-weekly, monthly
-  leaveEntitlement  String?
-  noticePeriod      String?
-  previousService   String?
+  taxDirectiveRate   Decimal?  @db.Decimal(5, 2) // Fixed PAYE % from SARS directive (0–100)
+  bankName           String?
+  bankAccountNumber  String?
+  bankBranchCode     String?
+  commencementDate   DateTime?
+  occupation         String?
+  placeOfWork        String?
+  ordinaryHours      String? // e.g. "45 hours/week"
+  ordinaryDays       String? // e.g. "Mon-Fri"
+  overtimeRate       Decimal?  @db.Decimal(10, 2)
+  payFrequency       String? // weekly, bi-weekly, monthly
+  leaveEntitlement   String?
+  noticePeriod       String?
+  previousService    String?
 
   // PSIRA - security staff
   psiraNumber           String?
@@ -263,9 +315,9 @@ model Employee {
 
   gradeId                     String?
   groupId                     String?
-  company                     Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  grade                       PayGrade?              @relation(fields: [gradeId], references: [id], onDelete: SetNull)
-  group                       EmployeeGroup?         @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  company                     Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  grade                       PayGrade?                  @relation(fields: [gradeId], references: [id], onDelete: SetNull)
+  group                       EmployeeGroup?             @relation(fields: [groupId], references: [id], onDelete: SetNull)
   shifts                      Shift[]
   payrollItems                PayrollItem[]
   siteAssignments             SiteAssignment[]
@@ -273,8 +325,8 @@ model Employee {
   siteRosterPatternCells      SiteRosterPatternCell[]
   siteRosterManualOverrides   SiteRosterManualOverride[]
   siteRosterGeneratedShifts   SiteRosterGeneratedShift[]
-  plannedSiteTimesheetRows    SiteTimesheetRow[]        @relation("PlannedTimesheetGuard")
-  actualSiteTimesheetRows     SiteTimesheetRow[]        @relation("ActualTimesheetGuard")
+  plannedSiteTimesheetRows    SiteTimesheetRow[]         @relation("PlannedTimesheetGuard")
+  actualSiteTimesheetRows     SiteTimesheetRow[]         @relation("ActualTimesheetGuard")
   timesheets                  Timesheet[]
   leaveRecords                LeaveRecord[]
   leaveSickNotes              LeaveSickNote[]
@@ -282,8 +334,8 @@ model Employee {
   employeeDeductions          EmployeeDeduction[]
   whatsappMessages            WhatsAppMessage[]
   whatsAppClockPendings       WhatsAppClockPending[]
-  academyLinkedStudents       Student[]              @relation("AcademyStudentEmployee")
-  academyCourseRunsInstructed CourseRun[]            @relation("CourseRunInstructor")
+  academyLinkedStudents       Student[]                  @relation("AcademyStudentEmployee")
+  academyCourseRunsInstructed CourseRun[]                @relation("CourseRunInstructor")
   attendanceExceptions        AttendanceException[]
   managedDocuments            ManagedDocument[]
   operationalAlerts           OperationalAlert[]
@@ -310,75 +362,76 @@ enum EmployeeStatus {
 }
 
 model Site {
-  id                         String   @id @default(cuid())
-  companyId                  String
-  name                       String
-  location                   String? // Legacy/short name
-  physicalAddress            String? // Full physical address
-  contactPersonName          String?
-  contactPersonPhone         String?
+  id                             String                @id @default(cuid())
+  companyId                      String
+  name                           String
+  location                       String? // Legacy/short name
+  physicalAddress                String? // Full physical address
+  contactPersonName              String?
+  contactPersonPhone             String?
   /// Extended client contact (email) — complements contactPersonName/Phone
-  clientContactEmail         String?
-  contractOrServiceAgreement String? // Contract reference or description
-  contractStartDate          DateTime?
-  contractEndDate            DateTime?
-  serviceType                String? // guarding, access_control, patrols, etc.
-  monthlyRevenue             Decimal? @db.Decimal(12, 2) // Optional - for labour % and profitability
+  clientContactEmail             String?
+  contractOrServiceAgreement     String? // Contract reference or description
+  contractStartDate              DateTime?
+  contractEndDate                DateTime?
+  serviceType                    String? // guarding, access_control, patrols, etc.
+  monthlyRevenue                 Decimal?              @db.Decimal(12, 2) // Optional - for labour % and profitability
   /// Site supervisor (User with supervisor/ops role)
-  supervisorId               String?
-  riskLevel                  SiteRiskLevel @default(LOW)
-  siteStatus                 SiteOperationalStatus @default(ACTIVE)
-  siteInstructions           String?  @db.Text
+  supervisorId                   String?
+  riskLevel                      SiteRiskLevel         @default(LOW)
+  siteStatus                     SiteOperationalStatus @default(ACTIVE)
+  siteInstructions               String?               @db.Text
   /// Linked client for portal isolation (optional)
-  clientId                   String?
+  clientId                       String?
   /// Geofence center (WGS84). All three geofence fields must be set to enforce clock-in location on WhatsApp.
-  latitude                   Decimal? @db.Decimal(10, 7)
-  longitude                  Decimal? @db.Decimal(10, 7)
-  geofenceRadiusMeters       Int?
+  latitude                       Decimal?              @db.Decimal(10, 7)
+  longitude                      Decimal?              @db.Decimal(10, 7)
+  geofenceRadiusMeters           Int?
   /// Shown on the shift roster sheet / PDF under “Site rules” (e.g. gender mix per shift).
-  rosterSiteRules            String?  @db.Text
-  rosterDayShiftGender       String? // male | female | any — roster display only
-  rosterNightShiftGender     String? // male | female | any
+  rosterSiteRules                String?               @db.Text
+  rosterDayShiftGender           String? // male | female | any — roster display only
+  rosterNightShiftGender         String? // male | female | any
   /// Minimum guards rostered on each day / night shift (auto-roster and coverage checks).
-  rosterDayShiftGuardsRequired   Int @default(1)
-  rosterNightShiftGuardsRequired Int @default(1)
+  rosterDayShiftGuardsRequired   Int                   @default(1)
+  rosterNightShiftGuardsRequired Int                   @default(1)
   /// Extra lines on the shift roster sheet / PDF (operational notes).
-  rosterSheetNotes           String?  @db.Text
-  rosterDayShiftGenderMode     String?
-  rosterNightShiftGenderMode   String?
-  rosterDayShiftCustomMales    Int?
-  rosterDayShiftCustomFemales  Int?
-  rosterNightShiftCustomMales  Int?
-  rosterNightShiftCustomFemales Int?
-  dayShiftEnabled              Boolean  @default(true)
-  nightShiftEnabled            Boolean  @default(true)
+  rosterSheetNotes               String?               @db.Text
+  rosterDayShiftGenderMode       String?
+  rosterNightShiftGenderMode     String?
+  rosterDayShiftCustomMales      Int?
+  rosterDayShiftCustomFemales    Int?
+  rosterNightShiftCustomMales    Int?
+  rosterNightShiftCustomFemales  Int?
+  dayShiftEnabled                Boolean               @default(true)
+  nightShiftEnabled              Boolean               @default(true)
   /// Automatic roster generation from payroll calendar.
-  autoRosterEnabled            Boolean   @default(false)
-  autoRosterMinCoveragePercent Int       @default(100)
-  autoRosterLastRunAt          DateTime?
-  autoRosterLastStatus         String?
-  createdAt                  DateTime @default(now())
-  updatedAt                  DateTime @updatedAt
+  autoRosterEnabled              Boolean               @default(false)
+  autoRosterMinCoveragePercent   Int                   @default(100)
+  autoRosterLastRunAt            DateTime?
+  autoRosterLastStatus           String?
+  createdAt                      DateTime              @default(now())
+  updatedAt                      DateTime              @updatedAt
 
-  company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  supervisor     User?            @relation("SiteSupervisor", fields: [supervisorId], references: [id], onDelete: SetNull)
-  client         Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  posts                    SitePost[]
-  assignedGuards           SiteAssignment[]
-  guardSiteEligibilities   GuardSiteEligibility[]
-  coverageRequirements     CoverageRequirement[]
-  rosterAutomationRuns RosterAutomationRun[]
-  shifts         Shift[]
-  siteRosterPatterns SiteRosterPattern[]
+  company                   Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  supervisor                User?                      @relation("SiteSupervisor", fields: [supervisorId], references: [id], onDelete: SetNull)
+  client                    Client?                    @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  posts                     SitePost[]
+  assignedGuards            SiteAssignment[]
+  guardSiteEligibilities    GuardSiteEligibility[]
+  coverageRequirements      CoverageRequirement[]
+  rosterAutomationRuns      RosterAutomationRun[]
+  shifts                    Shift[]
+  siteRosterPatterns        SiteRosterPattern[]
   siteRosterManualOverrides SiteRosterManualOverride[]
   siteRosterGeneratedShifts SiteRosterGeneratedShift[]
-  siteTimesheets SiteTimesheet[]
-  siteTimesheetRows SiteTimesheetRow[]
-  operationalAlerts OperationalAlert[]
-  attendanceExceptions AttendanceException[]
-  managedDocuments ManagedDocument[]
-  incidents Incident[]
-  tasks Task[]
+  siteTimesheets            SiteTimesheet[]
+  siteTimesheetRows         SiteTimesheetRow[]
+  operationalAlerts         OperationalAlert[]
+  attendanceExceptions      AttendanceException[]
+  managedDocuments          ManagedDocument[]
+  incidents                 Incident[]
+  tasks                     Task[]
+  rosterPublications        RosterPublication[]
 
   @@index([companyId])
   @@index([companyId, siteStatus])
@@ -413,15 +466,15 @@ model RosterAutomationRun {
 }
 
 model SiteAssignment {
-  id             String                   @id @default(cuid())
+  id             String                  @id @default(cuid())
   siteId         String
   employeeId     String
-  assignedAt     DateTime                 @default(now())
-  assignmentType SiteGuardAssignmentType  @default(PERMANENT)
-  priority       Int                      @default(0)
+  assignedAt     DateTime                @default(now())
+  assignmentType SiteGuardAssignmentType @default(PERMANENT)
+  priority       Int                     @default(0)
   effectiveFrom  DateTime?
   effectiveTo    DateTime?
-  isActive       Boolean                  @default(true)
+  isActive       Boolean                 @default(true)
 
   site     Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
@@ -446,10 +499,10 @@ model SitePost {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  site                 Site                   @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  guardEligibilities   GuardSiteEligibility[]
-  coverageRequirements CoverageRequirement[]
-  siteRosterPatternCells SiteRosterPatternCell[]
+  site                      Site                       @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  guardEligibilities        GuardSiteEligibility[]
+  coverageRequirements      CoverageRequirement[]
+  siteRosterPatternCells    SiteRosterPatternCell[]
   siteRosterGeneratedShifts SiteRosterGeneratedShift[]
 
   @@index([siteId])
@@ -505,10 +558,12 @@ model Shift {
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
-  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee    Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  site        Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  attendances Attendance[]
+  company              Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee             Employee              @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  site                 Site                  @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  attendances          Attendance[]
+  sourceTimesheetRows  SiteTimesheetRow[]    @relation("TimesheetSourceShift")
+  attendanceExceptions AttendanceException[] @relation("ExceptionShift")
 
   @@index([companyId])
   @@index([companyId, startTime])
@@ -545,28 +600,30 @@ model Attendance {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  shift               Shift                 @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  sourceTimesheetRows SiteTimesheetRow[]    @relation("TimesheetSourceAttendance")
+  exceptions          AttendanceException[] @relation("ExceptionAttendance")
 
   @@unique([shiftId])
   @@index([shiftId])
 }
 
 model PayrollRun {
-  id                   String        @id @default(cuid())
-  companyId            String
-  periodStart          DateTime
-  periodEnd            DateTime
-  status               PayrollStatus
-  lockedAt             DateTime?
-  calculatedAt         DateTime?
-  calculatedById       String?
-  approvedById         String?
-  approvedAt           DateTime?
-  markedPaidById       String?
-  markedPaidAt         DateTime?
-  calculationSnapshot  Json?
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
+  id                  String        @id @default(cuid())
+  companyId           String
+  periodStart         DateTime
+  periodEnd           DateTime
+  status              PayrollStatus
+  lockedAt            DateTime?
+  calculatedAt        DateTime?
+  calculatedById      String?
+  approvedById        String?
+  approvedAt          DateTime?
+  markedPaidById      String?
+  markedPaidAt        DateTime?
+  calculationSnapshot Json?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
 
   company    Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   items      PayrollItem[]
@@ -607,6 +664,7 @@ model PayrollItem {
   employee   Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   payslip    Payslip?
 
+  @@unique([payrollRunId, employeeId])
   @@index([payrollRunId])
   @@index([employeeId])
 }
@@ -818,25 +876,25 @@ model Timesheet {
 }
 
 model SiteTimesheet {
-  id              String              @id @default(cuid())
-  companyId       String
-  siteId          String
-  periodStart     DateTime            @db.Date
-  periodEnd       DateTime            @db.Date
-  status          SiteTimesheetStatus  @default(draft)
-  reviewedBy      String?
-  reviewedAt      DateTime?
-  approvedBy      String?
-  approvedAt      DateTime?
-  unlockedBy      String?
-  unlockedAt      DateTime?
-  unlockReason    String?
-  approvalNotes   String?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  id            String              @id @default(cuid())
+  companyId     String
+  siteId        String
+  periodStart   DateTime            @db.Date
+  periodEnd     DateTime            @db.Date
+  status        SiteTimesheetStatus @default(draft)
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  approvedBy    String?
+  approvedAt    DateTime?
+  unlockedBy    String?
+  unlockedAt    DateTime?
+  unlockReason  String?
+  approvalNotes String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site    Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  company Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site    Site               @relation(fields: [siteId], references: [id], onDelete: Cascade)
   rows    SiteTimesheetRow[]
 
   @@unique([companyId, siteId, periodStart, periodEnd])
@@ -845,41 +903,43 @@ model SiteTimesheet {
 }
 
 model SiteTimesheetRow {
-  id                    String                  @id @default(cuid())
-  companyId             String
-  siteTimesheetId       String
-  siteId                String
-  workDate              DateTime                @db.Date
-  plannedGuardId        String?
-  actualGuardId         String?
-  plannedShiftCode      String?
-  plannedShiftType      String?
-  actualShiftCode       String?
-  actualShiftType       String?
-  clockIn               DateTime?
-  clockOut              DateTime?
-  hoursWorked           Decimal?                @db.Decimal(10, 2)
-  overtimeHours         Decimal?                @db.Decimal(10, 2)
-  attendanceStatus      SiteTimesheetAttendance @default(pending)
-  approvalStatus        SiteTimesheetRowStatus  @default(pending)
+  id                   String                  @id @default(cuid())
+  companyId            String
+  siteTimesheetId      String
+  siteId               String
+  workDate             DateTime                @db.Date
+  plannedGuardId       String?
+  actualGuardId        String?
+  plannedShiftCode     String?
+  plannedShiftType     String?
+  actualShiftCode      String?
+  actualShiftType      String?
+  clockIn              DateTime?
+  clockOut             DateTime?
+  hoursWorked          Decimal?                @db.Decimal(10, 2)
+  overtimeHours        Decimal?                @db.Decimal(10, 2)
+  attendanceStatus     SiteTimesheetAttendance @default(pending)
+  approvalStatus       SiteTimesheetRowStatus  @default(pending)
   /// Duty ON occurrence book number (start of shift).
-  dutyOnObNumber        String?
+  dutyOnObNumber       String?
   /// Duty OFF occurrence book number (end of shift).
-  dutyOffObNumber       String?
+  dutyOffObNumber      String?
   /// Deprecated: mirrored from dutyOnObNumber for backward compatibility.
-  occurrenceBookNumber  String?
-  comments              String?
-  discrepancyCodes      Json?
-  sourceShiftId         String?
-  sourceAttendanceId    String?
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
+  occurrenceBookNumber String?
+  comments             String?
+  discrepancyCodes     Json?
+  sourceShiftId        String?
+  sourceAttendanceId   String?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
 
-  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  siteTimesheet SiteTimesheet @relation(fields: [siteTimesheetId], references: [id], onDelete: Cascade)
-  site          Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  plannedGuard  Employee?     @relation("PlannedTimesheetGuard", fields: [plannedGuardId], references: [id], onDelete: SetNull)
-  actualGuard   Employee?     @relation("ActualTimesheetGuard", fields: [actualGuardId], references: [id], onDelete: SetNull)
+  company          Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  siteTimesheet    SiteTimesheet @relation(fields: [siteTimesheetId], references: [id], onDelete: Cascade)
+  site             Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  plannedGuard     Employee?     @relation("PlannedTimesheetGuard", fields: [plannedGuardId], references: [id], onDelete: SetNull)
+  actualGuard      Employee?     @relation("ActualTimesheetGuard", fields: [actualGuardId], references: [id], onDelete: SetNull)
+  sourceShift      Shift?        @relation("TimesheetSourceShift", fields: [sourceShiftId], references: [id], onDelete: SetNull)
+  sourceAttendance Attendance?   @relation("TimesheetSourceAttendance", fields: [sourceAttendanceId], references: [id], onDelete: SetNull)
 
   /// One planned roster cell per timesheet (guard + date + shift). Reliever rows omit plannedGuardId.
   @@unique([siteTimesheetId, workDate, plannedGuardId, plannedShiftType])
@@ -887,6 +947,8 @@ model SiteTimesheetRow {
   @@index([companyId, actualGuardId, workDate])
   @@index([siteTimesheetId, workDate])
   @@index([siteId, workDate])
+  @@index([sourceShiftId])
+  @@index([sourceAttendanceId])
 }
 
 enum SiteTimesheetStatus {
@@ -917,12 +979,19 @@ enum SiteTimesheetRowStatus {
 }
 
 model LeaveRecord {
-  id         String   @id @default(cuid())
-  employeeId String
-  date       DateTime @db.Date
-  type       String // "annual" | "sick" | "unpaid"
-  hours      Decimal  @default(8) @db.Decimal(5, 2)
-  createdAt  DateTime @default(now())
+  id                String    @id @default(cuid())
+  employeeId        String
+  date              DateTime  @db.Date
+  type              String // "annual" | "sick" | "unpaid"
+  hours             Decimal   @default(8) @db.Decimal(5, 2)
+  createdAt         DateTime  @default(now())
+  duplicateGroupKey String?
+  reviewedAt        DateTime?
+  reviewedById      String?
+  reviewReason      String?
+  voidedAt          DateTime?
+  voidedById        String?
+  voidReason        String?
 
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
@@ -988,24 +1057,76 @@ model Payslip {
 }
 
 model AuditLog {
-  id         String   @id @default(cuid())
-  userId     String?
-  companyId  String
-  action     String
-  entityType String
-  entityId   String?
-  metadata   Json?
-  timestamp  DateTime @default(now())
+  id                String   @id @default(cuid())
+  userId            String?
+  companyId         String
+  action            String
+  entityType        String
+  entityId          String?
+  metadata          Json?
+  requestId         String?
+  sessionId         String?
+  ipAddress         String?
+  userAgent         String?
+  reason            String?
+  source            String   @default("api")
+  result            String   @default("success")
+  riskLevel         String   @default("LOW")
+  beforeState       Json?
+  afterState        Json?
+  approvalRequestId String?
+  previousHash      String?
+  eventHash         String?
+  timestamp         DateTime @default(now())
 
   user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@index([companyId, timestamp])
+  @@index([companyId, action, timestamp])
+  @@index([companyId, riskLevel, timestamp])
+  @@index([requestId])
   @@index([companyId, entityType, entityId])
   @@index([entityType])
   @@index([entityId])
   @@index([timestamp])
+}
+
+/// Platform-level events are deliberately separate from tenant audit records.
+/// Application code only appends to this table; no update/delete API is exposed.
+model PlatformAuditEvent {
+  id              String   @id @default(cuid())
+  actorUserId     String?
+  targetCompanyId String?
+  targetUserId    String?
+  action          String
+  entityType      String
+  entityId        String?
+  requestId       String?
+  sessionId       String?
+  ipAddress       String?
+  userAgent       String?
+  reason          String?
+  source          String   @default("api")
+  result          String   @default("success")
+  riskLevel       String   @default("HIGH")
+  beforeState     Json?
+  afterState      Json?
+  metadata        Json?
+  previousHash    String?
+  eventHash       String
+  timestamp       DateTime @default(now())
+
+  actor         User?    @relation("PlatformAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  targetUser    User?    @relation("PlatformAuditTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  targetCompany Company? @relation(fields: [targetCompanyId], references: [id], onDelete: SetNull)
+
+  @@index([timestamp])
+  @@index([actorUserId, timestamp])
+  @@index([targetCompanyId, timestamp])
+  @@index([action, timestamp])
+  @@index([requestId])
 }
 
 // Task Manager
@@ -1063,17 +1184,17 @@ model Task {
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
 
-  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project     TaskProject?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  site        Site?            @relation(fields: [siteId], references: [id], onDelete: SetNull)
-  parentTask  Task?            @relation("TaskRecurrence", fields: [parentTaskId], references: [id], onDelete: SetNull)
-  childTasks  Task[]           @relation("TaskRecurrence")
-  createdBy   User             @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  comments    TaskComment[]
-  attachments TaskAttachment[]
-  reminders   TaskReminder[]
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project          TaskProject?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  site             Site?             @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  parentTask       Task?             @relation("TaskRecurrence", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  childTasks       Task[]            @relation("TaskRecurrence")
+  createdBy        User              @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  comments         TaskComment[]
+  attachments      TaskAttachment[]
+  reminders        TaskReminder[]
   managedDocuments ManagedDocument[]
-  incidents   Incident[]       @relation("IncidentFollowUpTask")
+  incidents        Incident[]        @relation("IncidentFollowUpTask")
 
   @@index([companyId])
   @@index([projectId])
@@ -1274,10 +1395,10 @@ model AcademyBranch {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  courseRuns CourseRun[]
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  courseRuns  CourseRun[]
   instructors AcademyInstructor[]
-  classrooms AcademyClassroom[]
+  classrooms  AcademyClassroom[]
 
   @@index([companyId])
 }
@@ -1309,23 +1430,23 @@ model Student {
   psiraPreRegistrationStatus AcademyPsiraPreRegistrationStatus @default(unknown)
   status                     AcademyStudentStatus              @default(prospect)
   employeeId                 String?
-  adminFeeStatus             AcademyAdminFeeStatus               @default(unpaid)
+  adminFeeStatus             AcademyAdminFeeStatus             @default(unpaid)
   adminFeePaidAt             DateTime?
-  adminFeeAmount             Decimal?                            @db.Decimal(12, 2)
+  adminFeeAmount             Decimal?                          @db.Decimal(12, 2)
   adminFeeMethod             String?
   adminFeeReference          String?
-  adminFeeNotes              String?                             @db.Text
+  adminFeeNotes              String?                           @db.Text
   adminFeeRecordedByUserId   String?
-  createdAt                  DateTime                            @default(now())
-  updatedAt                  DateTime                            @updatedAt
+  createdAt                  DateTime                          @default(now())
+  updatedAt                  DateTime                          @updatedAt
 
-  company         Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee        Employee?         @relation("AcademyStudentEmployee", fields: [employeeId], references: [id], onDelete: SetNull)
-  documents       StudentDocument[]
-  enrolments      Enrolment[]
-  academyInvoices AcademyInvoice[]
-  academyPayments AcademyPayment[]
-  academyAssessments AcademyAssessment[]
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee            Employee?            @relation("AcademyStudentEmployee", fields: [employeeId], references: [id], onDelete: SetNull)
+  documents           StudentDocument[]
+  enrolments          Enrolment[]
+  academyInvoices     AcademyInvoice[]
+  academyPayments     AcademyPayment[]
+  academyAssessments  AcademyAssessment[]
   academyCertificates AcademyCertificate[]
 
   @@unique([companyId, studentNumber])
@@ -1376,9 +1497,9 @@ model Course {
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
-  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  courseRuns CourseRun[]
-  academyAssessments AcademyAssessment[]
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  courseRuns          CourseRun[]
+  academyAssessments  AcademyAssessment[]
   academyCertificates AcademyCertificate[]
 
   @@unique([companyId, code])
@@ -1403,11 +1524,11 @@ model CourseRun {
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
 
-  company            Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  course             Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  branch             AcademyBranch @relation(fields: [academyBranchId], references: [id], onDelete: Restrict)
-  instructorEmployee Employee?     @relation("CourseRunInstructor", fields: [instructorEmployeeId], references: [id], onDelete: SetNull)
-  enrolments         Enrolment[]
+  company                   Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  course                    Course                     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  branch                    AcademyBranch              @relation(fields: [academyBranchId], references: [id], onDelete: Restrict)
+  instructorEmployee        Employee?                  @relation("CourseRunInstructor", fields: [instructorEmployeeId], references: [id], onDelete: SetNull)
+  enrolments                Enrolment[]
   academyAttendanceSessions AcademyAttendanceSession[]
 
   @@unique([companyId, runCode])
@@ -1449,13 +1570,13 @@ model Enrolment {
   createdAt                DateTime                         @default(now())
   updatedAt                DateTime                         @updatedAt
 
-  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  student         Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  courseRun       CourseRun        @relation(fields: [courseRunId], references: [id], onDelete: Cascade)
-  feePlan         FeePlan?         @relation(fields: [feePlanId], references: [id], onDelete: SetNull)
-  academyInvoices AcademyInvoice[]
+  company                  Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  student                  Student                   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseRun                CourseRun                 @relation(fields: [courseRunId], references: [id], onDelete: Cascade)
+  feePlan                  FeePlan?                  @relation(fields: [feePlanId], references: [id], onDelete: SetNull)
+  academyInvoices          AcademyInvoice[]
   academyAttendanceRecords AcademyAttendanceRecord[]
-  academyCertificates AcademyCertificate[]
+  academyCertificates      AcademyCertificate[]
 
   @@unique([studentId, courseRunId])
   @@index([companyId])
@@ -1619,27 +1740,27 @@ enum AcademyRenewalSeverity {
 }
 
 model AcademyProfile {
-  id                                String                     @id @default(cuid())
-  companyId                         String                     @unique
-  trainingCentreName                String
-  tradingName                       String?
-  psiraTrainingProviderNumber       String?
-  psiraBusinessRegistrationNumber   String?
-  accreditationStatus               AcademyAccreditationStatus @default(pending)
-  accreditationIssueDate            DateTime?                  @db.Date
-  reAccreditationDueDate            DateTime?                  @db.Date
-  province                          String?
-  city                              String?
-  physicalAddress                   String?                    @db.Text
-  postalAddress                     String?                    @db.Text
-  contactPerson                     String?
-  phoneNumber                       String?
-  landline                          String?
-  email                             String?
-  verificationReference             String?
-  notes                             String?                    @db.Text
-  createdAt                         DateTime                   @default(now())
-  updatedAt                         DateTime                   @updatedAt
+  id                              String                     @id @default(cuid())
+  companyId                       String                     @unique
+  trainingCentreName              String
+  tradingName                     String?
+  psiraTrainingProviderNumber     String?
+  psiraBusinessRegistrationNumber String?
+  accreditationStatus             AcademyAccreditationStatus @default(pending)
+  accreditationIssueDate          DateTime?                  @db.Date
+  reAccreditationDueDate          DateTime?                  @db.Date
+  province                        String?
+  city                            String?
+  physicalAddress                 String?                    @db.Text
+  postalAddress                   String?                    @db.Text
+  contactPerson                   String?
+  phoneNumber                     String?
+  landline                        String?
+  email                           String?
+  verificationReference           String?
+  notes                           String?                    @db.Text
+  createdAt                       DateTime                   @default(now())
+  updatedAt                       DateTime                   @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
@@ -1647,41 +1768,41 @@ model AcademyProfile {
 }
 
 model AcademyInstructor {
-  id                     String                @id @default(cuid())
-  companyId              String
-  fullName               String
-  idNumber               String?
-  dateOfBirth            DateTime?             @db.Date
-  gender                 String?
-  residentialAddress     String?               @db.Text
-  emergencyContact       String?
-  psiraInstructorNumber  String?
-  qualification          String?
-  instructorGrade        String?
-  accreditationScope     String?
-  accreditationStatus    String?
-  certificateNumber      String?
-  certificateIssueDate   DateTime?             @db.Date
-  certificateExpiryDate  DateTime?             @db.Date
-  phone                  String?
-  email                  String?
-  employmentType         String?
-  contractStartDate      DateTime?             @db.Date
-  contractEndDate        DateTime?             @db.Date
-  contractStatus         String?
-  status                 AcademyInstructorStatus @default(active)
-  assignedBranchId       String?
-  assignedCourseIds      Json?
-  complianceStatus       String?
-  archivedAt             DateTime?
-  notes                  String?               @db.Text
-  certificateDocumentId  String?
-  contractDocumentId     String?
-  createdAt              DateTime              @default(now())
-  updatedAt              DateTime              @updatedAt
+  id                    String                  @id @default(cuid())
+  companyId             String
+  fullName              String
+  idNumber              String?
+  dateOfBirth           DateTime?               @db.Date
+  gender                String?
+  residentialAddress    String?                 @db.Text
+  emergencyContact      String?
+  psiraInstructorNumber String?
+  qualification         String?
+  instructorGrade       String?
+  accreditationScope    String?
+  accreditationStatus   String?
+  certificateNumber     String?
+  certificateIssueDate  DateTime?               @db.Date
+  certificateExpiryDate DateTime?               @db.Date
+  phone                 String?
+  email                 String?
+  employmentType        String?
+  contractStartDate     DateTime?               @db.Date
+  contractEndDate       DateTime?               @db.Date
+  contractStatus        String?
+  status                AcademyInstructorStatus @default(active)
+  assignedBranchId      String?
+  assignedCourseIds     Json?
+  complianceStatus      String?
+  archivedAt            DateTime?
+  notes                 String?                 @db.Text
+  certificateDocumentId String?
+  contractDocumentId    String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
 
-  company        Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  assignedBranch AcademyBranch?       @relation(fields: [assignedBranchId], references: [id], onDelete: SetNull)
+  company        Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignedBranch AcademyBranch?              @relation(fields: [assignedBranchId], references: [id], onDelete: SetNull)
   sessions       AcademyAttendanceSession[]
   assessments    AcademyAssessment[]
   documents      AcademyInstructorDocument[]
@@ -1696,7 +1817,7 @@ model AcademyInstructor {
 }
 
 model AcademyInstructorDocument {
-  id                 String   @id @default(cuid())
+  id                 String    @id @default(cuid())
   companyId          String
   instructorId       String
   documentType       String
@@ -1704,20 +1825,20 @@ model AcademyInstructorDocument {
   fileName           String
   issueDate          DateTime? @db.Date
   expiryDate         DateTime? @db.Date
-  verificationStatus String   @default("pending_review")
+  verificationStatus String    @default("pending_review")
   uploadedByUserId   String?
-  uploadedAt         DateTime @default(now())
+  uploadedAt         DateTime  @default(now())
   verifiedByUserId   String?
   verifiedAt         DateTime?
-  notes              String?  @db.Text
+  notes              String?   @db.Text
   deletedAt          DateTime?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  company    Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company    Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   instructor AcademyInstructor @relation(fields: [instructorId], references: [id], onDelete: Cascade)
-  uploadedBy User?            @relation("AcademyInstructorDocumentUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
-  verifiedBy User?            @relation("AcademyInstructorDocumentVerifiedBy", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
+  uploadedBy User?             @relation("AcademyInstructorDocumentUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  verifiedBy User?             @relation("AcademyInstructorDocumentVerifiedBy", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
   @@index([instructorId])
@@ -1728,20 +1849,20 @@ model AcademyInstructorDocument {
 }
 
 model AcademyClassroom {
-  id                String               @id @default(cuid())
-  companyId         String
-  academyBranchId   String
-  classroomName     String
-  capacity          Int                  @default(0)
-  approvedCapacity  Int?
-  equipmentChecklist String?             @db.Text
-  status            AcademyClassroomStatus @default(available)
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
+  id                 String                 @id @default(cuid())
+  companyId          String
+  academyBranchId    String
+  classroomName      String
+  capacity           Int                    @default(0)
+  approvedCapacity   Int?
+  equipmentChecklist String?                @db.Text
+  status             AcademyClassroomStatus @default(available)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
 
-  company      Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  branch       AcademyBranch          @relation(fields: [academyBranchId], references: [id], onDelete: Cascade)
-  sessions     AcademyAttendanceSession[]
+  company  Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch   AcademyBranch              @relation(fields: [academyBranchId], references: [id], onDelete: Cascade)
+  sessions AcademyAttendanceSession[]
 
   @@index([companyId])
   @@index([academyBranchId])
@@ -1749,20 +1870,20 @@ model AcademyClassroom {
 }
 
 model AcademyAttendanceSession {
-  id            String               @id @default(cuid())
-  companyId     String
-  courseRunId   String?
-  classroomId   String?
-  instructorId  String?
-  sessionDate   DateTime             @db.Date
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
+  id           String   @id @default(cuid())
+  companyId    String
+  courseRunId  String?
+  classroomId  String?
+  instructorId String?
+  sessionDate  DateTime @db.Date
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  company      Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  courseRun    CourseRun?            @relation(fields: [courseRunId], references: [id], onDelete: SetNull)
-  classroom    AcademyClassroom?     @relation(fields: [classroomId], references: [id], onDelete: SetNull)
-  instructor   AcademyInstructor?    @relation(fields: [instructorId], references: [id], onDelete: SetNull)
-  records      AcademyAttendanceRecord[]
+  company    Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  courseRun  CourseRun?                @relation(fields: [courseRunId], references: [id], onDelete: SetNull)
+  classroom  AcademyClassroom?         @relation(fields: [classroomId], references: [id], onDelete: SetNull)
+  instructor AcademyInstructor?        @relation(fields: [instructorId], references: [id], onDelete: SetNull)
+  records    AcademyAttendanceRecord[]
 
   @@index([companyId])
   @@index([companyId, sessionDate])
@@ -1771,22 +1892,22 @@ model AcademyAttendanceSession {
 }
 
 model AcademyAttendanceRecord {
-  id              String                        @id @default(cuid())
-  companyId       String
-  sessionId       String
-  enrolmentId     String
-  checkInTime     DateTime?
-  checkOutTime    DateTime?
+  id               String                         @id @default(cuid())
+  companyId        String
+  sessionId        String
+  enrolmentId      String
+  checkInTime      DateTime?
+  checkOutTime     DateTime?
   attendanceStatus AcademySessionAttendanceStatus @default(present)
-  method          AcademyAttendanceMethod       @default(manual)
-  markedByUserId  String?
-  createdAt       DateTime                      @default(now())
-  updatedAt       DateTime                      @updatedAt
+  method           AcademyAttendanceMethod        @default(manual)
+  markedByUserId   String?
+  createdAt        DateTime                       @default(now())
+  updatedAt        DateTime                       @updatedAt
 
-  company      Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company      Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   session      AcademyAttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  enrolment    Enrolment               @relation(fields: [enrolmentId], references: [id], onDelete: Cascade)
-  markedByUser User?                   @relation("AcademyAttendanceMarkedBy", fields: [markedByUserId], references: [id], onDelete: SetNull)
+  enrolment    Enrolment                @relation(fields: [enrolmentId], references: [id], onDelete: Cascade)
+  markedByUser User?                    @relation("AcademyAttendanceMarkedBy", fields: [markedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([sessionId, enrolmentId])
   @@index([companyId])
@@ -1796,52 +1917,52 @@ model AcademyAttendanceRecord {
 }
 
 model AcademyAssessment {
-  id               String                 @id @default(cuid())
+  id               String                   @id @default(cuid())
   companyId        String
   learnerId        String
   courseId         String
   instructorId     String?
   assessmentType   String
-  assessmentDate   DateTime               @db.Date
+  assessmentDate   DateTime                 @db.Date
   venue            String?
-  attemptNumber    Int                    @default(1)
-  mark             Decimal?               @db.Decimal(5, 2)
+  attemptNumber    Int                      @default(1)
+  mark             Decimal?                 @db.Decimal(5, 2)
   result           AcademyAssessmentResult?
   moderationStatus String?
-  reassessmentDate DateTime?              @db.Date
-  createdAt        DateTime               @default(now())
-  updatedAt        DateTime               @updatedAt
+  reassessmentDate DateTime?                @db.Date
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
 
-  company      Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  learner      Student            @relation(fields: [learnerId], references: [id], onDelete: Cascade)
-  course       Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  instructor   AcademyInstructor? @relation(fields: [instructorId], references: [id], onDelete: SetNull)
+  company    Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  learner    Student            @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  course     Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  instructor AcademyInstructor? @relation(fields: [instructorId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
   @@index([assessmentDate])
 }
 
 model AcademyCertificate {
-  id               String                 @id @default(cuid())
-  companyId        String
+  id                String                   @id @default(cuid())
+  companyId         String
   certificateNumber String
-  learnerId        String
-  courseId         String
-  enrolmentId      String?
-  completionDate   DateTime?              @db.Date
-  issueDate        DateTime               @db.Date
-  verificationCode String                 @unique
-  pdfPath          String?
-  issuedByUserId   String?
-  status           AcademyCertificateStatus @default(active)
-  createdAt        DateTime               @default(now())
-  updatedAt        DateTime               @updatedAt
+  learnerId         String
+  courseId          String
+  enrolmentId       String?
+  completionDate    DateTime?                @db.Date
+  issueDate         DateTime                 @db.Date
+  verificationCode  String                   @unique
+  pdfPath           String?
+  issuedByUserId    String?
+  status            AcademyCertificateStatus @default(active)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
 
-  company     Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  learner     Student    @relation(fields: [learnerId], references: [id], onDelete: Cascade)
-  course      Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  enrolment   Enrolment? @relation(fields: [enrolmentId], references: [id], onDelete: SetNull)
-  issuedBy    User?      @relation("AcademyCertificateIssuedBy", fields: [issuedByUserId], references: [id], onDelete: SetNull)
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  learner   Student    @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  course    Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  enrolment Enrolment? @relation(fields: [enrolmentId], references: [id], onDelete: SetNull)
+  issuedBy  User?      @relation("AcademyCertificateIssuedBy", fields: [issuedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([companyId, certificateNumber])
   @@index([companyId])
@@ -1849,19 +1970,19 @@ model AcademyCertificate {
 }
 
 model AcademyComplianceDocument {
-  id             String                          @id @default(cuid())
-  companyId      String
-  documentName   String
-  documentType   String
-  issueDate      DateTime?                       @db.Date
-  expiryDate     DateTime?                       @db.Date
-  status         AcademyComplianceDocumentStatus @default(pending_review)
-  filePath       String?
+  id               String                          @id @default(cuid())
+  companyId        String
+  documentName     String
+  documentType     String
+  issueDate        DateTime?                       @db.Date
+  expiryDate       DateTime?                       @db.Date
+  status           AcademyComplianceDocumentStatus @default(pending_review)
+  filePath         String?
   verifiedByUserId String?
-  verifiedDate   DateTime?
-  notes          String?                         @db.Text
-  createdAt      DateTime                        @default(now())
-  updatedAt      DateTime                        @updatedAt
+  verifiedDate     DateTime?
+  notes            String?                         @db.Text
+  createdAt        DateTime                        @default(now())
+  updatedAt        DateTime                        @updatedAt
 
   company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   verifiedBy User?   @relation("AcademyComplianceVerifiedBy", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
@@ -1871,7 +1992,7 @@ model AcademyComplianceDocument {
 }
 
 model AcademyPolicyDocument {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   companyId      String
   policyType     String
   version        String
@@ -1889,17 +2010,17 @@ model AcademyPolicyDocument {
 }
 
 model AcademyRenewalAlert {
-  id          String               @id @default(cuid())
-  companyId   String
-  alertType   String
-  title       String
-  dueDate     DateTime             @db.Date
-  severity    AcademyRenewalSeverity @default(green)
-  status      String               @default("open")
-  relatedId   String?
-  notes       String?              @db.Text
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
+  id        String                 @id @default(cuid())
+  companyId String
+  alertType String
+  title     String
+  dueDate   DateTime               @db.Date
+  severity  AcademyRenewalSeverity @default(green)
+  status    String                 @default("open")
+  relatedId String?
+  notes     String?                @db.Text
+  createdAt DateTime               @default(now())
+  updatedAt DateTime               @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
@@ -1954,8 +2075,8 @@ model SiteRosterPattern {
   createdAt       DateTime                @default(now())
   updatedAt       DateTime                @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site    Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  company Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site    Site                    @relation(fields: [siteId], references: [id], onDelete: Cascade)
   cells   SiteRosterPatternCell[]
 
   @@index([companyId, siteId, status])
@@ -1973,9 +2094,9 @@ model SiteRosterPatternCell {
   isLocked        Boolean             @default(false)
   notes           String?
 
-  pattern SiteRosterPattern @relation(fields: [rosterPatternId], references: [id], onDelete: Cascade)
-  guard   Employee          @relation(fields: [guardId], references: [id], onDelete: Cascade)
-  sitePost SitePost?        @relation(fields: [sitePostId], references: [id], onDelete: SetNull)
+  pattern  SiteRosterPattern @relation(fields: [rosterPatternId], references: [id], onDelete: Cascade)
+  guard    Employee          @relation(fields: [guardId], references: [id], onDelete: Cascade)
+  sitePost SitePost?         @relation(fields: [sitePostId], references: [id], onDelete: SetNull)
 
   @@unique([rosterPatternId, guardId, patternDayIndex])
   @@index([rosterPatternId])
@@ -1983,18 +2104,18 @@ model SiteRosterPatternCell {
 }
 
 model SiteRosterManualOverride {
-  id                    String              @id @default(cuid())
+  id                    String               @id @default(cuid())
   companyId             String
   siteId                String
   guardId               String
-  rosterDate            DateTime            @db.Date
+  rosterDate            DateTime             @db.Date
   originalShiftCode     SiteRosterShiftCode?
   overrideShiftCode     SiteRosterShiftCode
   overrideShiftType     SiteRosterShiftType
   reason                String?
-  doesChangeBasePattern Boolean             @default(false)
+  doesChangeBasePattern Boolean              @default(false)
   createdBy             String?
-  createdAt             DateTime            @default(now())
+  createdAt             DateTime             @default(now())
 
   company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   site    Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
@@ -2005,22 +2126,22 @@ model SiteRosterManualOverride {
 }
 
 model SiteRosterGeneratedShift {
-  id              String                   @id @default(cuid())
+  id              String              @id @default(cuid())
   companyId       String
   siteId          String
   guardId         String
-  rosterDate      DateTime                 @db.Date
+  rosterDate      DateTime            @db.Date
   shiftCode       SiteRosterShiftCode
   shiftType       SiteRosterShiftType
-  source          String                   @default("pattern")
+  source          String              @default("pattern")
   rosterPatternId String?
   sitePostId      String?
-  createdAt       DateTime                 @default(now())
-  updatedAt       DateTime                 @updatedAt
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
-  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site    Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  guard   Employee @relation(fields: [guardId], references: [id], onDelete: Cascade)
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site     Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  guard    Employee  @relation(fields: [guardId], references: [id], onDelete: Cascade)
   sitePost SitePost? @relation(fields: [sitePostId], references: [id], onDelete: SetNull)
 
   @@unique([siteId, guardId, rosterDate])
@@ -2157,10 +2278,12 @@ model AttendanceException {
   createdAt     DateTime                @default(now())
   updatedAt     DateTime                @updatedAt
 
-  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
-  site       Site?     @relation(fields: [siteId], references: [id], onDelete: SetNull)
-  reviewedBy User?     @relation("ExceptionReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee   Employee?   @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  site       Site?       @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  reviewedBy User?       @relation("ExceptionReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  attendance Attendance? @relation("ExceptionAttendance", fields: [attendanceId], references: [id], onDelete: SetNull)
+  shift      Shift?      @relation("ExceptionShift", fields: [shiftId], references: [id], onDelete: SetNull)
 
   @@unique([companyId, dedupeKey])
   @@index([companyId, status, severity])
@@ -2200,7 +2323,7 @@ enum DocumentStatus {
 }
 
 model ManagedDocument {
-  id           String           @id @default(cuid())
+  id           String              @id @default(cuid())
   companyId    String
   title        String
   documentType String
@@ -2217,9 +2340,9 @@ model ManagedDocument {
   taskId       String?
   uploadedById String
   expiryDate   DateTime?
-  status       DocumentStatus   @default(ACTIVE)
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  status       DocumentStatus      @default(ACTIVE)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
 
   company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
@@ -2277,7 +2400,7 @@ enum SupervisorApprovalStatus {
 }
 
 model Incident {
-  id                       String                    @id @default(cuid())
+  id                       String                   @id @default(cuid())
   companyId                String
   incidentNumber           String
   siteId                   String
@@ -2287,24 +2410,24 @@ model Incident {
   incidentType             IncidentType
   severity                 IncidentSeverity
   title                    String
-  description              String                    @db.Text
-  peopleInvolved           String?                   @db.Text
-  witnesses                String?                   @db.Text
-  clientVisible            Boolean                   @default(false)
-  status                   IncidentStatus            @default(DRAFT)
-  supervisorApprovalStatus SupervisorApprovalStatus  @default(PENDING)
+  description              String                   @db.Text
+  peopleInvolved           String?                  @db.Text
+  witnesses                String?                  @db.Text
+  clientVisible            Boolean                  @default(false)
+  status                   IncidentStatus           @default(DRAFT)
+  supervisorApprovalStatus SupervisorApprovalStatus @default(PENDING)
   supervisorNote           String?
-  followUpRequired         Boolean                   @default(false)
+  followUpRequired         Boolean                  @default(false)
   followUpTaskId           String?
   closedAt                 DateTime?
-  createdAt                DateTime                  @default(now())
-  updatedAt                DateTime                  @updatedAt
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
 
-  company            Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site               Site               @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  reportedBy         User               @relation("IncidentReportedBy", fields: [reportedById], references: [id], onDelete: Cascade)
-  assignedSupervisor User?              @relation("IncidentAssignedSupervisor", fields: [assignedSupervisorId], references: [id], onDelete: SetNull)
-  followUpTask       Task?              @relation("IncidentFollowUpTask", fields: [followUpTaskId], references: [id], onDelete: SetNull)
+  company            Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site               Site                 @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  reportedBy         User                 @relation("IncidentReportedBy", fields: [reportedById], references: [id], onDelete: Cascade)
+  assignedSupervisor User?                @relation("IncidentAssignedSupervisor", fields: [assignedSupervisorId], references: [id], onDelete: SetNull)
+  followUpTask       Task?                @relation("IncidentFollowUpTask", fields: [followUpTaskId], references: [id], onDelete: SetNull)
   attachments        IncidentAttachment[]
   managedDocuments   ManagedDocument[]
 
@@ -2343,6 +2466,13 @@ enum ApprovalType {
   TASK_COMPLETION
   PAYROLL_READINESS
   DOCUMENT_REVIEW
+  ACCESS_CHANGE
+  PAYROLL_APPROVAL
+  ROSTER_PUBLICATION
+  SETTINGS_CHANGE
+  DATA_IMPORT
+  DESTRUCTIVE_ACTION
+  DATA_QUALITY_RESOLUTION
 }
 
 enum ApprovalStatus {
@@ -2362,6 +2492,10 @@ model ApprovalRequest {
   approverId    String?
   status        ApprovalStatus @default(PENDING)
   comment       String?
+  reason        String?
+  payload       Json?
+  riskLevel     String         @default("MEDIUM")
+  executedAt    DateTime?
   requestedAt   DateTime       @default(now())
   reviewedAt    DateTime?
   createdAt     DateTime       @default(now())
@@ -2375,6 +2509,113 @@ model ApprovalRequest {
   @@index([companyId, approvalType])
   @@index([approverId, status])
   @@index([entityType, entityId])
+}
+
+enum AdminChangeType {
+  APPOINT_SYSTEM_ADMIN
+  CHANGE_SYSTEM_ADMIN_ACCESS
+  REMOVE_SYSTEM_ADMIN
+}
+
+model AdminChangeRequest {
+  id                  String          @id @default(cuid())
+  companyId           String
+  targetUserId        String
+  changeType          AdminChangeType
+  requestedAdminClass AdminClass?
+  grants              Json?
+  reason              String
+  requestedById       String
+  approverId          String?
+  status              ApprovalStatus @default(PENDING)
+  reviewComment       String?
+  requestedAt         DateTime        @default(now())
+  reviewedAt          DateTime?
+  executedAt          DateTime?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  target      User    @relation("AdminChangeTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  requestedBy User    @relation("AdminChangeRequester", fields: [requestedById], references: [id], onDelete: Cascade)
+  approver    User?   @relation("AdminChangeApprover", fields: [approverId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status, requestedAt])
+  @@index([targetUserId, status])
+  @@index([approverId, status])
+}
+
+enum DataQualityIssueStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+enum DataQualitySeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+model DataQualityIssue {
+  id                 String                 @id @default(cuid())
+  companyId          String
+  ruleKey            String
+  entityType         String
+  entityId           String?
+  groupKey           String
+  title              String
+  description        String
+  severity           DataQualitySeverity
+  status             DataQualityIssueStatus @default(OPEN)
+  affectedRecords    Json?
+  proposedResolution Json?
+  reviewedById       String?
+  reviewReason       String?
+  reviewedAt         DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, ruleKey, groupKey])
+  @@index([companyId, status, severity])
+  @@index([companyId, entityType, entityId])
+}
+
+enum RosterPublicationStatus {
+  PENDING_APPROVAL
+  APPROVED
+  PUBLISHED
+  SUPERSEDED
+  REJECTED
+}
+
+model RosterPublication {
+  id                String                  @id @default(cuid())
+  companyId         String
+  siteId            String
+  periodStart       DateTime                @db.Date
+  periodEnd         DateTime                @db.Date
+  version           Int
+  status            RosterPublicationStatus @default(PENDING_APPROVAL)
+  snapshot          Json
+  requestedById     String
+  approvedById      String?
+  approvalRequestId String?
+  reason            String
+  publishedAt       DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site    Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, siteId, periodStart, periodEnd, version])
+  @@index([companyId, status, periodStart])
+  @@index([siteId, periodStart, periodEnd])
 }
 
 enum NotificationChannel {
@@ -2391,23 +2632,23 @@ enum NotificationStatus {
 }
 
 model AppNotification {
-  id          String              @id @default(cuid())
-  companyId   String
-  userId      String
-  title       String
-  message     String
-  channel     NotificationChannel @default(IN_APP)
-  status      NotificationStatus  @default(PENDING)
+  id           String              @id @default(cuid())
+  companyId    String
+  userId       String
+  title        String
+  message      String
+  channel      NotificationChannel @default(IN_APP)
+  status       NotificationStatus  @default(PENDING)
   /// Deduplication key to avoid spam
-  dedupeKey   String?
+  dedupeKey    String?
   sourceModule String?
-  sourceId    String?
-  linkUrl     String?
-  metadata    Json?
-  sentAt      DateTime?
-  readAt      DateTime?
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  sourceId     String?
+  linkUrl      String?
+  metadata     Json?
+  sentAt       DateTime?
+  readAt       DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)

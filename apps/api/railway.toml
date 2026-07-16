@@ -15,7 +15,7 @@ watchPatterns = [
 
 [deploy]
 # The start script applies committed Prisma migrations, then starts Fastify.
-startCommand = "cd apps/api && npm run start:with-migrate"
+startCommand = "cd apps/api && npm start"
 healthcheckPath = "/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"

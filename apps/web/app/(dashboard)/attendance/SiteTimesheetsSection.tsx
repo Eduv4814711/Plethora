@@ -587,15 +587,15 @@ export function SiteTimesheetsSection({
                       ? `Approve ${shiftScopedRows.length} reviewed ${shiftLabel} row(s)? The timesheet will stay open because ${otherShiftPendingCount} other-shift row(s) still need review. Payroll lock requires every shift to be reviewed.`
                       : `Approve and lock this site timesheet for payroll (${shiftScopedRows.length} ${shiftLabel} row(s))?`;
                   if (!window.confirm(message)) return;
+                  const reason = window.prompt("Why is this timesheet ready for payroll approval? This will be recorded in the audit trail.");
+                  if (!reason?.trim() || reason.trim().length < 5) {
+                    showNotice("Reason required", "Enter a reason of at least 5 characters before requesting approval.");
+                    return;
+                  }
                   try {
                     setError(null);
-                    const result = await approveSiteTimesheet(token, sheet.id, { shiftType });
-                    if (!result.locked && result.remainingPending > 0) {
-                      const noticeMsg =
-                        `${result.approvedRowCount} row(s) approved. ${result.remainingPending} row(s) on the other shift still need review before payroll lock.`;
-                      showNotice("Partially approved", noticeMsg);
-                    }
-                    await load();
+                    const result = await approveSiteTimesheet(token, sheet.id, { shiftType, reason: reason.trim() });
+                    showNotice("Approval requested", result.message);
                   } catch (err) {
                     const failMessage =
                       err instanceof Error ? err.message : "Failed to approve timesheet";

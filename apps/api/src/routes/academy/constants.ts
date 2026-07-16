@@ -1,21 +1,13 @@
-import type { UserRole } from "@prisma/client";
 import { authProtect } from "../../middleware/auth-protect.js";
-import { requireRole } from "../../middleware/rbac.js";
-
-export const ACADEMY_ROLES: UserRole[] = [
-  "admin",
-  "operations_manager",
-  "hr_payroll",
-  "supervisor",
-  "controller",
-];
+import { requirePermission } from "../../middleware/permissions.js";
+import { PERMISSIONS } from "../../lib/permissions.js";
 
 export const ACADEMY_MODULE = "/academy";
 
 /** Pre-handler stack for all academy routes (module-gated + accessVersion). */
 export const academyProtect = [
   ...authProtect,
-  requireRole(ACADEMY_ROLES, { module: ACADEMY_MODULE }),
+  requirePermission(PERMISSIONS.ACADEMY_MANAGE),
 ];
 
 /** MIME allowlist aligned with task attachments. */

@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
-import { listUsers, createUser, updateUser, deleteUser, factoryReset, FACTORY_RESET_MODULES, authFetch, type UserListItem, type UserRole, type FactoryResetModuleId } from "@/lib/api";
+import { listUsers, createUser, updateUser, deleteUser, getUserAccess, requestUserAccessChange, factoryReset, FACTORY_RESET_MODULES, authFetch, type EffectiveAccess, type UserListItem, type UserRole, type FactoryResetModuleId } from "@/lib/api";
 import {
   MODULE_ASSIGN_OPTIONS,
   normalizeUserModuleAccess,
@@ -21,7 +21,7 @@ import { TeamMemberUserPicker } from "@/components/team-member-user-picker";
 import { ClientsSettingsSection } from "@/components/clients-settings-section";
 import { clsx } from "clsx";
 
-type Tab = "profile" | "business" | "settings" | "users" | "clients" | "migrate" | "factory_reset";
+type Tab = "profile" | "business" | "settings" | "users" | "access_reviews" | "clients" | "migrate" | "factory_reset";
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Admin",
@@ -34,6 +34,20 @@ const ROLE_LABELS: Record<UserRole, string> = {
 
 /** Shown when "Assign Role" is selected (add/edit user). */
 const STAFF_ROLES: UserRole[] = ["operations_manager", "hr_payroll", "supervisor", "controller"];
+
+const PERMISSION_GROUP_LABELS: Record<string, string> = {
+  dashboard: "Dashboard & work queue", work_queue: "Dashboard & work queue", sites: "Sites", rosters: "Rostering",
+  attendance: "Attendance", timesheets: "Site timesheets", employees: "Employees", compensation: "Compensation",
+  payroll: "Payroll", payslip: "Payslips", pay_grades: "Pay grades", documents: "Documents", leave: "Leave",
+  sick_notes: "Sick notes", reports: "Reports", tasks: "Tasks", incidents: "Incidents", approvals: "Approvals",
+  academy: "Academy", settings: "Settings", users: "User accounts", permissions: "Access administration",
+  access_reviews: "Access reviews", mfa: "Multi-factor authentication", audit: "Audit", data_quality: "Data quality",
+};
+
+function readablePermission(permission: string) {
+  const [, action = permission] = permission.split(".");
+  return action.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 /** Map free-text to a staff UserRole. Returns null if unrecognized. */
 function parseStaffRoleInput(raw: string): UserRole | null {
@@ -77,7 +91,8 @@ export default function SettingsPage() {
   const canManageSettings = can(user, PERMISSIONS.SETTINGS_MANAGE_OPERATIONAL) || isFullAdminUser;
   const canManageStatutory = can(user, PERMISSIONS.SETTINGS_MANAGE_STATUTORY) || isFullAdminUser;
   const canManageUsers = can(user, PERMISSIONS.USERS_MANAGE) || isFullAdminUser;
-  const tabIds: Tab[] = ["profile", "business", "settings", "users", "clients", "migrate", "factory_reset"];
+  const canManageAccessReviews = can(user, PERMISSIONS.ACCESS_REVIEWS_MANAGE) || isFullAdminUser;
+  const tabIds: Tab[] = ["profile", "business", "settings", "users", "access_reviews", "clients", "migrate", "factory_reset"];
   const [activeTab, setActiveTab] = useState<Tab>(tabParam && tabIds.includes(tabParam) ? tabParam : "profile");
 
   useEffect(() => {
@@ -93,6 +108,7 @@ export default function SettingsPage() {
     { id: "business", label: "Business Details", visible: canManageSettings },
     { id: "settings", label: "Business Settings", visible: canManageSettings },
     { id: "users", label: "Users", adminOnly: true, visible: canManageUsers },
+    { id: "access_reviews", label: "Access Reviews", adminOnly: true, visible: canManageAccessReviews },
     { id: "clients", label: "Clients", adminOnly: true, visible: isFullAdminUser },
     { id: "migrate", label: "Bulk Import/Export", href: "/settings/migrate", visible: canManageSettings },
     { id: "factory_reset", label: "Factory Reset", adminOnly: true, visible: isFullAdminUser },
@@ -200,6 +216,9 @@ export default function SettingsPage() {
         )}
         {activeTab === "users" && canManageUsers && token && (
           <UsersSection token={token} currentUserId={user?.id} />
+        )}
+        {activeTab === "access_reviews" && canManageAccessReviews && token && (
+          <AccessReviewsSection token={token} />
         )}
         {activeTab === "clients" && isFullAdminUser && token && (
           <ClientsSettingsSection token={token} />
@@ -831,6 +850,68 @@ function BusinessSettingsSection({
   );
 }
 
+type AccessReviewUser = {
+  id: string; name: string; email: string; roleLabel: string; isSystemOwner: boolean;
+  mfa: { required: boolean; enabled: boolean }; lastLoginAt: string | null; lastReviewedAt: string | null;
+  recertificationDue: boolean; permissionCount: number; unusedPermissionCount: number;
+  temporaryGrantCount: number; emergencyGrantCount: number;
+};
+
+function AccessReviewsSection({ token }: { token: string }) {
+  const [records, setRecords] = useState<AccessReviewUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState<string | null>(null);
+  const [target, setTarget] = useState<AccessReviewUser | null>(null);
+  const [reason, setReason] = useState("");
+
+  const loadReviews = useCallback(async () => {
+    setLoading(true);
+    setMessage(null);
+    try {
+      const response = await authFetch("/access-reviews", token);
+      if (!response.ok) throw new Error("Unable to load access reviews.");
+      const body = await response.json();
+      setRecords(body.data ?? []);
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Unable to load access reviews");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => { loadReviews(); }, [loadReviews]);
+
+  const requestReview = async () => {
+    if (!target || reason.trim().length < 5) return;
+    setLoading(true);
+    setMessage(null);
+    try {
+      const response = await authFetch(`/access-reviews/${target.id}/recertification-requests`, token, { method: "POST", body: JSON.stringify({ reason: reason.trim() }) });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.message ?? body.error ?? "Unable to submit review.");
+      setTarget(null);
+      setReason("");
+      setMessage(body.message);
+    } catch (caught) {
+      setMessage(caught instanceof Error ? caught.message : "Unable to submit review");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const due = records.filter((record) => record.recertificationDue).length;
+  const temporary = records.reduce((sum, record) => sum + record.temporaryGrantCount, 0);
+  const emergency = records.reduce((sum, record) => sum + record.emergencyGrantCount, 0);
+
+  return <section>
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-bold text-neutral-900">Quarterly access review</h2><p className="mt-1 text-sm text-neutral-600">Recertify each person’s effective access with an independent approver.</p></div><button type="button" className="btn-secondary" onClick={loadReviews} disabled={loading}>Refresh</button></div>
+    <div className="mt-4 grid gap-3 sm:grid-cols-3"><div className="rounded-xl bg-amber-50 p-4"><p className="text-2xl font-bold text-amber-900">{due}</p><p className="text-sm text-amber-800">Reviews due</p></div><div className="rounded-xl bg-blue-50 p-4"><p className="text-2xl font-bold text-blue-900">{temporary}</p><p className="text-sm text-blue-800">Temporary grants</p></div><div className="rounded-xl bg-red-50 p-4"><p className="text-2xl font-bold text-red-900">{emergency}</p><p className="text-sm text-red-800">Emergency grants</p></div></div>
+    {message && <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-700">{message}</div>}
+    <div className="mt-5 overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="border-b border-neutral-200"><th className="px-3 py-2 text-left">Person</th><th className="px-3 py-2 text-left">Last activity</th><th className="px-3 py-2 text-left">Effective access</th><th className="px-3 py-2 text-left">Control status</th><th className="px-3 py-2 text-right">Action</th></tr></thead><tbody>{records.map((record) => <tr key={record.id} className="border-b border-neutral-100 align-top"><td className="px-3 py-3"><p className="font-semibold text-neutral-900">{record.name}</p><p className="text-xs text-neutral-500">{record.email} · {record.roleLabel}</p></td><td className="px-3 py-3 text-neutral-600">{record.lastLoginAt ? new Date(record.lastLoginAt).toLocaleDateString() : "Never"}</td><td className="px-3 py-3"><p>{record.permissionCount} permission(s)</p><p className="text-xs text-neutral-500">{record.unusedPermissionCount} unused · {record.temporaryGrantCount} temporary</p></td><td className="px-3 py-3"><span className={`rounded-full px-2 py-1 text-xs font-semibold ${record.recertificationDue ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>{record.recertificationDue ? "Recertification due" : "Current"}</span>{record.mfa.required && !record.mfa.enabled && <p className="mt-2 text-xs font-semibold text-red-700">MFA enrollment outstanding</p>}</td><td className="px-3 py-3 text-right"><button type="button" className="btn-secondary" onClick={() => { setTarget(record); setReason(""); }}>Request review</button></td></tr>)}</tbody></table>{!loading && records.length === 0 && <p className="py-10 text-center text-sm text-neutral-600">No users require access review.</p>}</div>
+    {target && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="access-review-title"><div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl"><h3 id="access-review-title" className="text-lg font-bold">Request access recertification</h3><p className="mt-2 text-sm text-neutral-600">A different authorised person must confirm {target.name}’s current access.</p><label className="mt-4 block"><span className="mb-1 block text-sm font-semibold">Review reason</span><textarea className="input-field min-h-28 w-full" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Explain why this access remains necessary." /></label><div className="mt-5 flex justify-end gap-2"><button type="button" className="btn-secondary" onClick={() => setTarget(null)}>Cancel</button><button type="button" className="btn-primary" onClick={requestReview} disabled={reason.trim().length < 5 || loading}>Submit for approval</button></div></div></div>}
+  </section>;
+}
+
 function UsersSection({ token, currentUserId }: { token: string; currentUserId?: string }) {
   const { confirm, confirmDialog } = useConfirmDialog();
   const [users, setUsers] = useState<UserListItem[]>([]);
@@ -868,6 +949,69 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
   const [editAccountKind, setEditAccountKind] = useState<"admin" | "assign">("assign");
   const [editStaffRoleInput, setEditStaffRoleInput] = useState(ROLE_LABELS.supervisor);
   const [editStaffRoleFieldError, setEditStaffRoleFieldError] = useState<string | null>(null);
+  const [accessUser, setAccessUser] = useState<UserListItem | null>(null);
+  const [accessDetails, setAccessDetails] = useState<EffectiveAccess | null>(null);
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
+  const [accessReason, setAccessReason] = useState("");
+  const [accessExpiry, setAccessExpiry] = useState("");
+  const [accessScope, setAccessScope] = useState<"COMPANY" | "SITE">("COMPANY");
+  const [accessSiteId, setAccessSiteId] = useState("");
+  const [siteOptions, setSiteOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [accessLoading, setAccessLoading] = useState(false);
+  const [accessMessage, setAccessMessage] = useState<string | null>(null);
+
+  const permissionGroups = Object.values(PERMISSIONS).reduce<Record<string, string[]>>((groups, permission) => {
+    const group = permission.split(".")[0];
+    (groups[group] ??= []).push(permission);
+    return groups;
+  }, {});
+
+  const openAccessReview = async (target: UserListItem) => {
+    setAccessUser(target);
+    setAccessLoading(true);
+    setAccessMessage(null);
+    setAccessReason("");
+    setAccessExpiry("");
+    setAccessScope("COMPANY");
+    setAccessSiteId("");
+    try {
+      const [details, sitesResponse] = await Promise.all([
+        getUserAccess(token, target.id),
+        authFetch("/sites?limit=200", token).then((response) => response.ok ? response.json() : { data: [] }),
+      ]);
+      setAccessDetails(details);
+      setSelectedPermissions(details.effectivePermissions);
+      setSiteOptions(sitesResponse.data ?? []);
+    } catch (caught) {
+      setAccessMessage(caught instanceof Error ? caught.message : "Unable to load access");
+    } finally {
+      setAccessLoading(false);
+    }
+  };
+
+  const submitAccessRequest = async () => {
+    if (!accessUser) return;
+    if (accessReason.trim().length < 5) return setAccessMessage("Enter a clear reason of at least 5 characters.");
+    if (accessScope === "SITE" && !accessSiteId) return setAccessMessage("Choose the site this access applies to.");
+    setAccessLoading(true);
+    setAccessMessage(null);
+    try {
+      const result = await requestUserAccessChange(token, accessUser.id, {
+        grants: selectedPermissions.map((permission) => ({
+          permission,
+          scopeType: accessScope,
+          scopeId: accessScope === "SITE" ? accessSiteId : null,
+          expiresAt: accessExpiry ? new Date(`${accessExpiry}T23:59:59`).toISOString() : null,
+        })),
+        reason: accessReason.trim(),
+      });
+      setAccessMessage(result.message);
+    } catch (caught) {
+      setAccessMessage(caught instanceof Error ? caught.message : "Unable to submit access change");
+    } finally {
+      setAccessLoading(false);
+    }
+  };
 
   const assignableModules = (role: UserRole) =>
     MODULE_ASSIGN_OPTIONS.filter((m) => m.href !== "/audit" || role === "admin");
@@ -994,13 +1138,11 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
           password: string;
           role: UserRole;
           roleLabel: string | null;
-          moduleAccess: string[] | null;
         }> = {
           name: editForm.name,
           email: editForm.email,
           role: "admin",
           roleLabel: null,
-          moduleAccess: null,
         };
         if (editForm.password) payload.password = editForm.password;
         await updateUser(token, editingUserId, payload);
@@ -1055,20 +1197,11 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
         password: string;
         role: UserRole;
         roleLabel: string | null;
-        moduleAccess: string[] | null;
       }> = {
         name: editForm.name,
         email: editForm.email,
         role: resolvedEditRole,
         roleLabel: editRoleLabelForPayload,
-        moduleAccess:
-          resolvedEditRole === "admin"
-            ? editAdminFullAccess
-              ? null
-              : editModulesPayload
-            : editGrantAppModules
-              ? editModulesPayload
-              : null,
       };
       if (editForm.password) payload.password = editForm.password;
       await updateUser(token, editingUserId, payload);
@@ -1151,10 +1284,8 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
             After you save changes, ask that person to <strong className="font-medium text-neutral-800 dark:text-neutral-200">sign out and back in</strong> so their screen updates.
           </li>
         </ul>
-        <p className="text-xs text-neutral-500 dark:text-neutral-500 pt-1">
-          Trouble saving? The database may need an update for permissions—your IT person can run{" "}
-          <code className="bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded font-mono text-[11px]">npm run db:add-module-access</code> or{" "}
-          <code className="bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded font-mono text-[11px]">npm run db:push</code> from the project folder.
+        <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          Access changes require approval by a different authorized person. The affected user is signed out automatically after approval.
         </p>
       </div>
 
@@ -1425,7 +1556,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                 <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Name</th>
                 <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Email</th>
                 <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Role</th>
-                <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Modules</th>
+                <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Effective access</th>
                 <th className="text-right py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300 w-32">Actions</th>
               </tr>
             </thead>
@@ -1448,6 +1579,11 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                               System owner
                             </span>
                           )}
+                          {u.adminClass === "SYSTEM_ADMIN" && !u.isSystemOwner && (
+                            <span className="ml-2 inline-flex items-center rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-800">
+                              System Admin
+                            </span>
+                          )}
                         </>
                       )}
                     </td>
@@ -1462,10 +1598,8 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                         ? null
                         : (() => {
                             if (u.isSystemOwner) return "Full access (owner)";
-                            const m = normalizeUserModuleAccess(u.moduleAccess);
-                            if (m) return `${m.length} assigned`;
-                            if (u.role === "admin") return "Full admin";
-                            return "None (pending)";
+                            if (u.adminClass === "SYSTEM_ADMIN") return "Explicit grants only";
+                            return "Individually assigned";
                           })()}
                     </td>
                     <td className="py-3 px-4 text-right">
@@ -1480,6 +1614,14 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                         </button>
                       ) : (
                         <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openAccessReview(u)}
+                            disabled={submitting}
+                            className="text-xs font-semibold text-security-navy-700 hover:underline"
+                          >
+                            Access
+                          </button>
                           {u.id !== currentUserId && (
                             <>
                               <button
@@ -1549,7 +1691,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                                 placeholder="Leave blank to keep current"
                               />
                             </div>
-                            <div>
+                            <div className="hidden">
                               <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
                                 Account
                               </label>
@@ -1735,6 +1877,53 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
             </tbody>
           </table>
         </div>
+        {accessUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="access-dialog-title">
+            <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl dark:bg-neutral-900">
+              <div className="flex items-start justify-between gap-4 border-b border-neutral-200 pb-4 dark:border-neutral-700">
+                <div>
+                  <h4 id="access-dialog-title" className="text-lg font-bold text-neutral-900 dark:text-white">Effective access for {accessUser.name}</h4>
+                  <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Choose the work this person needs. A different authorized person must approve the request.</p>
+                </div>
+                <button type="button" className="btn-secondary" onClick={() => { setAccessUser(null); setAccessDetails(null); }}>Close</button>
+              </div>
+              {accessLoading && !accessDetails ? (
+                <p className="py-10 text-center text-sm text-neutral-600">Loading approved access…</p>
+              ) : accessDetails?.isSystemOwner ? (
+                <div className="my-5 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">System owners always have full access. Transfer and revoke ownership before changing these permissions.</div>
+              ) : (
+                <>
+                  <div className="my-4 grid gap-3 rounded-xl bg-neutral-50 p-4 text-sm sm:grid-cols-3 dark:bg-neutral-800">
+                    <div><span className="block text-xs font-semibold text-neutral-500">MFA</span>{accessDetails?.mfaEnabled ? "Enabled" : accessDetails?.mfaRequired ? "Enrollment required" : "Not required"}</div>
+                    <div><span className="block text-xs font-semibold text-neutral-500">Last sign-in</span>{accessDetails?.lastLoginAt ? new Date(accessDetails.lastLoginAt).toLocaleString() : "No recorded sign-in"}</div>
+                    <div><span className="block text-xs font-semibold text-neutral-500">Selected permissions</span>{selectedPermissions.length}</div>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {Object.entries(permissionGroups).sort(([a], [b]) => a.localeCompare(b)).map(([group, permissions]) => (
+                      <fieldset key={group} className="rounded-xl border border-neutral-200 p-3 dark:border-neutral-700">
+                        <legend className="px-1 text-sm font-bold text-neutral-900 dark:text-white">{PERMISSION_GROUP_LABELS[group] ?? group.replace(/_/g, " ")}</legend>
+                        <div className="mt-2 space-y-2">{permissions.sort().map((permission) => (
+                          <label key={permission} className="flex cursor-pointer items-start gap-2 text-sm text-neutral-700 dark:text-neutral-300">
+                            <input type="checkbox" className="mt-0.5 rounded border-neutral-300" checked={selectedPermissions.includes(permission)} onChange={() => setSelectedPermissions((current) => current.includes(permission) ? current.filter((item) => item !== permission) : [...current, permission])} />
+                            <span>{readablePermission(permission)}</span>
+                          </label>
+                        ))}</div>
+                      </fieldset>
+                    ))}
+                  </div>
+                  <div className="mt-5 grid gap-4 rounded-xl border border-neutral-200 p-4 sm:grid-cols-3 dark:border-neutral-700">
+                    <label><span className="mb-1 block text-xs font-semibold">Scope</span><select className="input-modern" value={accessScope} onChange={(event) => setAccessScope(event.target.value as "COMPANY" | "SITE")}><option value="COMPANY">Whole company</option><option value="SITE">One site only</option></select></label>
+                    {accessScope === "SITE" && <label><span className="mb-1 block text-xs font-semibold">Site</span><select className="input-modern" value={accessSiteId} onChange={(event) => setAccessSiteId(event.target.value)}><option value="">Choose a site</option>{siteOptions.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>}
+                    <label><span className="mb-1 block text-xs font-semibold">Access expires</span><input type="date" className="input-modern" value={accessExpiry} onChange={(event) => setAccessExpiry(event.target.value)} /></label>
+                    <label className="sm:col-span-3"><span className="mb-1 block text-xs font-semibold">Reason for access</span><textarea className="input-modern min-h-20" value={accessReason} onChange={(event) => setAccessReason(event.target.value)} placeholder="Explain why this person needs these capabilities" /></label>
+                  </div>
+                  {accessMessage && <p className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-800">{accessMessage}</p>}
+                  <div className="mt-4 flex justify-end gap-2"><button type="button" className="btn-secondary" onClick={() => { setAccessUser(null); setAccessDetails(null); }}>Cancel</button><button type="button" className="btn-primary" disabled={accessLoading} onClick={submitAccessRequest}>{accessLoading ? "Submitting…" : "Submit for approval"}</button></div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

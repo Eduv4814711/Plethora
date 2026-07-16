@@ -1,6 +1,11 @@
 import { env } from "./env.js";
 
 export const config = {
+  security: {
+    // MFA is intentionally dormant for the current rollout phase. Keeping the
+    // implementation behind this switch makes later reactivation explicit.
+    mfaEnforcementEnabled: false,
+  },
   jwt: {
     accessSecret: env.jwtSecret,
     refreshSecret: env.jwtRefreshSecret,

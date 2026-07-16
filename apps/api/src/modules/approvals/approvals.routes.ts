@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { authMiddleware } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { authProtect } from "../../middleware/auth-protect.js";
+import { requirePermission } from "../../middleware/permissions.js";
+import { PERMISSIONS } from "../../lib/permissions.js";
 import {
   createApprovalRequest,
   listApprovals,
@@ -33,22 +34,28 @@ const createBodySchema = z.object({
     "TASK_COMPLETION",
     "PAYROLL_READINESS",
     "DOCUMENT_REVIEW",
+    "ACCESS_CHANGE",
+    "PAYROLL_APPROVAL",
+    "ROSTER_PUBLICATION",
+    "SETTINGS_CHANGE",
+    "DATA_IMPORT",
+    "DESTRUCTIVE_ACTION",
+    "DATA_QUALITY_RESOLUTION",
   ]),
   entityType: z.string().min(1),
   entityId: z.string().min(1),
   approverId: z.string().optional().nullable(),
   comment: z.string().max(2000).optional(),
+  reason: z.string().min(5).max(2000).optional(),
+  payload: z.record(z.unknown()).optional(),
+  riskLevel: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).optional(),
 });
 
 export async function approvalsRoutes(app: FastifyInstance) {
-  const protect = [
-    authMiddleware,
-    requireRole([...ROLES], {
-      anyOfModules: ["/", "/attendance", "/payroll", "/tasks", "/sites", "/approvals"],
-    }),
-  ];
+  const readProtect = [...authProtect, requirePermission(PERMISSIONS.APPROVALS_READ)];
+  const reviewProtect = [...authProtect, requirePermission(PERMISSIONS.APPROVALS_REVIEW)];
 
-  app.get("/", { preHandler: protect }, async (request, reply) => {
+  app.get("/", { preHandler: readProtect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as {
       status?: string;
@@ -63,7 +70,7 @@ export async function approvalsRoutes(app: FastifyInstance) {
     return reply.send(result);
   });
 
-  app.post("/", { preHandler: protect }, async (request, reply) => {
+  app.post("/", { preHandler: reviewProtect }, async (request, reply) => {
     const user = request.user!;
     const parsed = createBodySchema.safeParse(request.body);
     if (!parsed.success) {
@@ -80,7 +87,7 @@ export async function approvalsRoutes(app: FastifyInstance) {
     return reply.code(201).send(approval);
   });
 
-  app.post("/:id/review", { preHandler: protect }, async (request, reply) => {
+  app.post("/:id/review", { preHandler: reviewProtect }, async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
     const parsed = reviewBodySchema.safeParse(request.body);

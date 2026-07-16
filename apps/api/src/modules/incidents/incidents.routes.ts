@@ -1,8 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "crypto";
 import { z } from "zod";
-import { authMiddleware } from "../../middleware/auth.js";
+import { authProtect } from "../../middleware/auth-protect.js";
 import { requireRole } from "../../middleware/rbac.js";
+import { requirePermission } from "../../middleware/permissions.js";
+import { PERMISSIONS } from "../../lib/permissions.js";
 import { readStreamToBuffer, storage } from "../../lib/storage.js";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
@@ -74,11 +76,13 @@ const reviewSchema = z.object({
 
 export async function incidentsRoutes(app: FastifyInstance) {
   const protect = [
-    authMiddleware,
+    ...authProtect,
     requireRole([...ROLES], {
       anyOfModules: ["/", "/incidents", "/sites", "/reports"],
     }),
+    requirePermission(PERMISSIONS.INCIDENTS_READ),
   ];
+  const manageProtect = [...protect, requirePermission(PERMISSIONS.INCIDENTS_MANAGE)];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
@@ -107,7 +111,7 @@ export async function incidentsRoutes(app: FastifyInstance) {
     return reply.send(incident);
   });
 
-  app.post("/", { preHandler: protect }, async (request, reply) => {
+  app.post("/", { preHandler: manageProtect }, async (request, reply) => {
     const user = request.user!;
     const parsed = createSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -130,7 +134,7 @@ export async function incidentsRoutes(app: FastifyInstance) {
     return reply.code(201).send(result.incident);
   });
 
-  app.patch("/:id", { preHandler: protect }, async (request, reply) => {
+  app.patch("/:id", { preHandler: manageProtect }, async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
     const parsed = updateSchema.safeParse(request.body);
@@ -158,7 +162,7 @@ export async function incidentsRoutes(app: FastifyInstance) {
     return reply.send(result.incident);
   });
 
-  app.post("/:id/attachments", { preHandler: protect }, async (request, reply) => {
+  app.post("/:id/attachments", { preHandler: manageProtect }, async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
     const incident = await prisma.incident.findFirst({
@@ -217,7 +221,7 @@ export async function incidentsRoutes(app: FastifyInstance) {
     return reply.code(201).send(attachment);
   });
 
-  app.post("/:id/review", { preHandler: protect }, async (request, reply) => {
+  app.post("/:id/review", { preHandler: manageProtect }, async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
     const parsed = reviewSchema.safeParse(request.body);

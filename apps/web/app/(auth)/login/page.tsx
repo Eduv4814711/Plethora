@@ -16,7 +16,7 @@ function LoginForm() {
 
   useEffect(() => {
     if (user) {
-      router.replace("/");
+      router.replace(user.adminClass === "ROOT_ADMIN" ? "/platform" : "/");
     }
   }, [user, router]);
 
@@ -28,8 +28,6 @@ function LoginForm() {
     setSubmitting(true);
     try {
       await login(email, password);
-      router.push("/");
-      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -44,6 +42,7 @@ function LoginForm() {
           <div className="inline-flex items-center justify-center mb-4">
             <img src="/plethora-logo.svg" alt="Plethora" className="h-[7.5rem] w-auto object-contain" />
           </div>
+
           <p className="text-xs font-semibold uppercase tracking-widest text-security-navy-500 mt-2">
             Workforce & Payroll Management for Security Companies
           </p>
@@ -113,11 +112,6 @@ function LoginForm() {
           {error && (
             <div className="p-4 text-sm text-red-800 bg-red-50 border-2 border-red-200 rounded-security space-y-2" role="alert">
               <p className="font-medium">{error}</p>
-              {process.env.NODE_ENV !== "production" && (error === "Login failed" || error.includes("connect") || error.includes("server") || error.includes("404")) && (
-                <p className="text-xs mt-2 text-security-navy-600">
-                  Run <code className="bg-security-navy-100 px-1.5 py-0.5 rounded text-security-navy-700 font-mono">npm run dev:all</code> (or <code className="bg-security-navy-100 px-1.5 py-0.5 rounded text-security-navy-700 font-mono">npm run dev:api</code> in a separate terminal). Web on port 3000, API on 3001. First-time: <code className="bg-security-navy-100 px-1.5 py-0.5 rounded text-security-navy-700 font-mono">npm run db:push</code> and <code className="bg-security-navy-100 px-1.5 py-0.5 rounded text-security-navy-700 font-mono">npm run db:seed</code>.
-                </p>
-              )}
             </div>
           )}
 

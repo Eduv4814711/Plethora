@@ -76,9 +76,9 @@ export function defaultModulesForRole(role: string): string[] {
 }
 
 /** Full tenant administrator: may use all modules and admin-only APIs. */
-export function isFullAdmin(user: { role: string; moduleAccess?: unknown; isSystemOwner?: boolean }): boolean {
+export function isFullAdmin(user: { role: string; moduleAccess?: unknown; isSystemOwner?: boolean; permissions?: string[] | null }): boolean {
   if (user.isSystemOwner) return true;
-  return user.role === "admin" && !normalizeUserModuleAccess(user.moduleAccess);
+  return !!user.permissions?.includes("permissions.manage_operational") && !!user.permissions?.includes("users.manage");
 }
 
 export { can } from "./capabilities";
@@ -90,6 +90,23 @@ function navItemForPath(pathname: string): NavItem | undefined {
   });
 }
 
+const ROUTE_PERMISSIONS: Record<string, string[]> = {
+  "/": ["dashboard.read"],
+  "/employees": ["employees.read_operational"],
+  "/sites": ["sites.read"],
+  "/rostering": ["rosters.read", "timesheets.read"],
+  "/attendance": ["attendance.read"],
+  "/payroll": ["payroll.status.read", "payroll.run.read"],
+  "/tasks": ["tasks.read"],
+  "/reports": ["reports.read_operational", "reports.read_financial"],
+  "/approvals": ["approvals.read"],
+  "/incidents": ["incidents.read"],
+  "/documents": ["documents.read_operational", "documents.read_hr", "documents.read_payroll", "documents.read_medical"],
+  "/academy": ["academy.read"],
+  "/audit": ["audit.read", "data_quality.read"],
+  "/settings": ["settings.manage_operational", "settings.manage_statutory", "users.manage"],
+};
+
 /**
  * First route to open for a user. Non-admins without assigned modules → access-pending page.
  */
@@ -97,8 +114,13 @@ export function getDefaultRouteForUser(user: {
   role: string;
   moduleAccess?: unknown;
   isSystemOwner?: boolean;
+  permissions?: string[] | null;
 }): string {
   if (user.isSystemOwner) return "/";
+  if (user.permissions) {
+    const first = NAV_ITEMS.find((item) => canAccessRoute(item.href, user.role, user.moduleAccess, false, user.permissions));
+    if (first) return first.href;
+  }
   const custom = normalizeUserModuleAccess(user.moduleAccess);
   if (custom) {
     for (const nav of NAV_ITEMS) {
@@ -106,9 +128,8 @@ export function getDefaultRouteForUser(user: {
       if (nav.href === "/audit" && user.role !== "admin") continue;
       return nav.href;
     }
-    return custom[0] ?? (user.role === "admin" ? "/" : ACCESS_PENDING_HREF);
+    return custom[0] ?? ACCESS_PENDING_HREF;
   }
-  if (user.role === "admin") return "/";
   return ACCESS_PENDING_HREF;
 }
 
@@ -119,13 +140,14 @@ export function canAccessRoute(
   pathname: string,
   role: string,
   moduleAccess?: unknown,
-  isSystemOwner?: boolean
+  isSystemOwner?: boolean,
+  permissions?: string[] | null
 ): boolean {
   const userRole = role as UserRole;
 
   if (pathname === ACCESS_PENDING_HREF || pathname.startsWith(`${ACCESS_PENDING_HREF}/`)) {
-    if (userRole === "admin" || isSystemOwner) return false;
-    return normalizeUserModuleAccess(moduleAccess) == null;
+    if (isSystemOwner) return false;
+    return !permissions || permissions.length === 0;
   }
 
   const item = navItemForPath(pathname);
@@ -133,8 +155,9 @@ export function canAccessRoute(
 
   if (isSystemOwner) return true;
 
-  if (userRole === "admin" && !normalizeUserModuleAccess(moduleAccess)) {
-    return true;
+  if (permissions) {
+    const required = ROUTE_PERMISSIONS[item.href];
+    return !!required?.some((permission) => permissions.includes(permission));
   }
 
   const custom = normalizeUserModuleAccess(moduleAccess);
@@ -153,10 +176,8 @@ export function canManageSitesModule(user: {
   role: string;
   moduleAccess?: unknown;
   isSystemOwner?: boolean;
+  permissions?: string[] | null;
 }): boolean {
   if (user.isSystemOwner) return true;
-  if (!canAccessRoute("/sites", user.role, user.moduleAccess, user.isSystemOwner)) return false;
-  const custom = normalizeUserModuleAccess(user.moduleAccess);
-  if (custom) return custom.includes("/sites");
-  return user.role === "admin";
+  return user.permissions?.includes("sites.manage") ?? false;
 }

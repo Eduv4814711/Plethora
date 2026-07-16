@@ -8,8 +8,10 @@ function access(permissions: string[], isSystemOwner = false): UserAccessRecord 
     userId: "u1",
     companyId: "c1",
     accessVersion: 1,
+    adminClass: isSystemOwner ? "SYSTEM_ADMIN" : "STANDARD",
     isSystemOwner,
     permissions: new Set(permissions),
+    scopes: new Map(),
   };
 }
 

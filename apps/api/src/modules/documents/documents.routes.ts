@@ -3,7 +3,8 @@ import { randomUUID } from "crypto";
 import { z } from "zod";
 import { authProtect } from "../../middleware/auth-protect.js";
 import { requireRole } from "../../middleware/rbac.js";
-import { authorizedDocumentSensitivities } from "../../lib/permissions.js";
+import { requirePermission } from "../../middleware/permissions.js";
+import { authorizedDocumentSensitivities, PERMISSIONS } from "../../lib/permissions.js";
 import { readStreamToBuffer, storage } from "../../lib/storage.js";
 import { verifySignedDownload } from "../../lib/signed-url.js";
 import {
@@ -75,7 +76,9 @@ export async function documentsRoutes(app: FastifyInstance) {
     requireRole([...ROLES], {
       anyOfModules: ["/", "/documents", "/employees", "/sites", "/payroll"],
     }),
+    requirePermission(PERMISSIONS.DOCUMENTS_READ_OPERATIONAL),
   ];
+  const manageProtect = [...protect, requirePermission(PERMISSIONS.DOCUMENTS_MANAGE_OPERATIONAL)];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
@@ -116,13 +119,13 @@ export async function documentsRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post("/sync-expiry-alerts", { preHandler: protect }, async (request, reply) => {
+  app.post("/sync-expiry-alerts", { preHandler: manageProtect }, async (request, reply) => {
     const user = request.user!;
     const result = await syncDocumentExpiryAlerts(user.companyId);
     return reply.send(result);
   });
 
-  app.post("/upload", { preHandler: protect }, async (request, reply) => {
+  app.post("/upload", { preHandler: manageProtect }, async (request, reply) => {
     const user = request.user!;
     const data = await request.file();
     if (!data) {
@@ -220,7 +223,7 @@ export async function documentsRoutes(app: FastifyInstance) {
     return reply.send(await withSignedFileUrl(doc));
   });
 
-  app.patch("/:id/archive", { preHandler: protect }, async (request, reply) => {
+  app.patch("/:id/archive", { preHandler: manageProtect }, async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
     const doc = await prisma.managedDocument.findFirst({

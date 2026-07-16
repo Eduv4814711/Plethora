@@ -67,7 +67,7 @@ describe("findSitesNeedingApproval (payroll attendance gate)", () => {
   });
 });
 
-describe("aggregateTimesheets per-site behaviour", () => {
+describe("aggregateTimesheets approved-timesheet authority", () => {
   beforeEach(() => {
     vi.mocked(prisma.company.findUnique).mockReset();
     vi.mocked(prisma.publicHoliday.findMany).mockReset();
@@ -83,7 +83,7 @@ describe("aggregateTimesheets per-site behaviour", () => {
     vi.mocked(prisma.leaveRecord.findMany).mockResolvedValue([] as never);
   });
 
-  it("counts approved rows for one site AND raw shifts for an unapproved site", async () => {
+  it("counts approved rows and never falls back to raw shifts", async () => {
     // Site A is approved -> contributes via an approved site-timesheet row (guard G1).
     vi.mocked(prisma.siteTimesheetRow.findMany).mockResolvedValue([
       {
@@ -97,7 +97,7 @@ describe("aggregateTimesheets per-site behaviour", () => {
     ] as never);
     vi.mocked(prisma.siteTimesheet.findMany).mockResolvedValue([{ siteId: "A" }] as never);
 
-    // Site B has no approved timesheet -> raw shift falls back (guard G2).
+    // Raw attendance is deliberately ignored, even when a site has no approved sheet.
     vi.mocked(prisma.shift.findMany).mockResolvedValue([
       {
         employeeId: "G2",
@@ -111,26 +111,18 @@ describe("aggregateTimesheets per-site behaviour", () => {
     const g1 = result.find((r) => r.employeeId === "G1");
     const g2 = result.find((r) => r.employeeId === "G2");
     expect(g1?.basicHours).toBe(8);
-    expect(g2?.basicHours).toBe(8);
-
-    // Raw fallback must exclude the approved site so its hours are not double counted.
-    const shiftWhere = vi.mocked(prisma.shift.findMany).mock.calls[0][0] as {
-      where: { siteId?: { notIn: string[] } };
-    };
-    expect(shiftWhere.where.siteId).toEqual({ notIn: ["A"] });
+    expect(g2).toBeUndefined();
+    expect(prisma.shift.findMany).not.toHaveBeenCalled();
   });
 
-  it("does not restrict raw shifts when no site is approved", async () => {
+  it("returns no worked hours when there are no approved rows", async () => {
     vi.mocked(prisma.siteTimesheetRow.findMany).mockResolvedValue([] as never);
     vi.mocked(prisma.siteTimesheet.findMany).mockResolvedValue([] as never);
     vi.mocked(prisma.shift.findMany).mockResolvedValue([] as never);
 
-    await aggregateTimesheets(companyId, periodStart, periodEnd);
-
-    const shiftWhere = vi.mocked(prisma.shift.findMany).mock.calls[0][0] as {
-      where: { siteId?: { notIn: string[] } };
-    };
-    expect(shiftWhere.where.siteId).toBeUndefined();
+    const result = await aggregateTimesheets(companyId, periodStart, periodEnd);
+    expect(result).toEqual([]);
+    expect(prisma.shift.findMany).not.toHaveBeenCalled();
   });
 
   it("excludes absent site-timesheet rows from payroll hours", async () => {

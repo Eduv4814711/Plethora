@@ -1,17 +1,16 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authProtect } from "../middleware/auth-protect.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requirePermission } from "../middleware/permissions.js";
+import { PERMISSIONS } from "../lib/permissions.js";
 import { prisma } from "../lib/prisma.js";
-
-const TASK_ROLES = ["admin", "operations_manager", "hr_payroll", "supervisor"] as const;
 
 const createCommentSchema = z.object({
   body: z.string().min(1),
 });
 
 export async function taskCommentsRoutes(app: FastifyInstance) {
-  const protect = [...authProtect, requireRole([...TASK_ROLES], { module: "/tasks" })];
+  const protect = [...authProtect, requirePermission(PERMISSIONS.TASKS_MANAGE)];
 
   app.get("/tasks/:taskId/comments", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

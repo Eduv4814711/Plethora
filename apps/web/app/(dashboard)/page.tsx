@@ -40,6 +40,17 @@ interface TopTask {
   priority: string;
 }
 
+interface WorkQueueItem {
+  id: string;
+  kind: string;
+  priority: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+  title: string;
+  description: string;
+  count: number;
+  actionLabel: string;
+  actionHref: string;
+}
+
 interface DashboardData {
   guardsOnDuty: number;
   guardsOnDutyByDay?: { name: string; value: number }[];
@@ -130,12 +141,13 @@ export default function DashboardPage() {
   const [whatsappContacts, setWhatsappContacts] = useState<{ id: string; firstName: string; lastName: string; phone: string | null; whatsappUrl: string | null }[]>([]);
   const [priorityTab, setPriorityTab] = useState<PriorityTab>("all");
   const [alertActionId, setAlertActionId] = useState<string | null>(null);
-  const [alertsSectionOpen, setAlertsSectionOpen] = useState(true);
+  const [alertsSectionOpen, setAlertsSectionOpen] = useState(false);
+  const [workQueue, setWorkQueue] = useState<WorkQueueItem[]>([]);
 
-  const canSites = user ? canAccessRoute("/sites", user.role, user.moduleAccess, user.isSystemOwner) : false;
-  const canWhatsApp = user ? canAccessRoute("/whatsapp", user.role, user.moduleAccess, user.isSystemOwner) : false;
-  const canPayroll = user ? canAccessRoute("/payroll", user.role, user.moduleAccess, user.isSystemOwner) : false;
-  const canRostering = user ? canAccessRoute("/rostering", user.role, user.moduleAccess, user.isSystemOwner) : false;
+  const canSites = user ? canAccessRoute("/sites", user.role, user.moduleAccess, user.isSystemOwner, user.permissions) : false;
+  const canWhatsApp = user ? canAccessRoute("/whatsapp", user.role, user.moduleAccess, user.isSystemOwner, user.permissions) : false;
+  const canPayroll = user ? canAccessRoute("/payroll", user.role, user.moduleAccess, user.isSystemOwner, user.permissions) : false;
+  const canRostering = user ? canAccessRoute("/rostering", user.role, user.moduleAccess, user.isSystemOwner, user.permissions) : false;
 
   const fetchDashboard = useCallback(() => {
     if (!token) return;
@@ -167,6 +179,14 @@ export default function DashboardPage() {
     setLoading(true);
     fetchDashboard();
   }, [token, fetchDashboard]);
+
+  useEffect(() => {
+    if (!token) return;
+    authFetch("/work-queue", token)
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("Unable to load work queue")))
+      .then((body) => setWorkQueue(body.data ?? []))
+      .catch(() => setWorkQueue([]));
+  }, [token, data?.pendingApprovalsInbox, data?.payrollReadiness?.openExceptions]);
 
   useEffect(() => {
     if (!token) return;
@@ -408,6 +428,33 @@ export default function DashboardPage() {
         </div>
       )}
 
+      <section className="mb-3 shrink-0" aria-labelledby="work-queue-heading">
+        <div className="mb-2 flex items-end justify-between gap-3">
+          <div>
+            <h2 id="work-queue-heading" className="text-sm font-bold text-neutral-900">Your next actions</h2>
+            <p className="text-xs text-neutral-600">Prioritized work based on your approved access.</p>
+          </div>
+          {workQueue.length > 4 && <span className="text-xs font-medium text-neutral-500">Showing 4 of {workQueue.length}</span>}
+        </div>
+        {workQueue.length > 0 ? (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {workQueue.slice(0, 4).map((item) => (
+              <article key={item.id} className={`rounded-security-lg border bg-white p-3 shadow-sm ${item.priority === "CRITICAL" ? "border-red-300" : item.priority === "HIGH" ? "border-amber-300" : "border-neutral-200"}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${item.priority === "CRITICAL" ? "bg-red-100 text-red-800" : item.priority === "HIGH" ? "bg-amber-100 text-amber-800" : "bg-neutral-100 text-neutral-700"}`}>{item.priority}</span>
+                  <span className="text-lg font-bold tabular-nums text-neutral-900">{item.count}</span>
+                </div>
+                <h3 className="mt-2 text-sm font-semibold text-neutral-900">{item.title}</h3>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-neutral-600">{item.description}</p>
+                <Link href={item.actionHref} className="mt-3 inline-flex text-xs font-semibold text-security-navy-800 hover:underline">{item.actionLabel} →</Link>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-security-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">You are caught up. New approvals, exceptions and assigned tasks will appear here.</div>
+        )}
+      </section>
+
       <section className="mb-2 grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-3" aria-label="Action items">
         {(data?.pendingApprovalsInbox ?? 0) > 0 && (
           <Link
@@ -554,35 +601,13 @@ export default function DashboardPage() {
         </section>
       )}
 
-      {alertsList.length > 0 && (
-        <section
-          className="mb-2 shrink-0 rounded-security-lg border border-security-amber-200 bg-security-amber-50/70 px-3 py-2"
-          aria-label="Items needing attention"
-        >
-          <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-800 lg:text-sm">
-            {alertsList.slice(0, 4).map((alert, i) => (
-              <li key={`${alert.type}-${i}`} className="flex min-w-0 items-center gap-1.5">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-security-amber-500" aria-hidden />
-                <span className="truncate">
-                  {alert.message}
-                  {typeof alert.count === "number" ? ` (${alert.count})` : ""}
-                </span>
-              </li>
-            ))}
-            {alertsList.length > 4 && (
-              <li className="text-neutral-600">+{alertsList.length - 4} more</li>
-            )}
-          </ul>
-        </section>
-      )}
-
       <section
         className="grid min-h-[28rem] shrink-0 grid-cols-1 gap-2.5 max-lg:auto-rows-auto md:grid-cols-2 md:gap-3 lg:min-h-[32rem] xl:grid-cols-4 xl:grid-rows-2 xl:gap-3"
         aria-label="Dashboard widgets"
       >
         <DashboardCard title="Guards on duty">
           <ChartWrap>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={80}>
             <BarChart data={guardsByDay} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis dataKey="name" tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
@@ -628,7 +653,7 @@ export default function DashboardPage() {
         <DashboardCard title="Active guards rostered">
           <div className="flex flex-1 flex-col">
           <ChartWrap>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={80}>
                 <AreaChart data={shiftsOverTimeData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
@@ -677,7 +702,7 @@ export default function DashboardPage() {
         <DashboardCard title="Team by status">
           <div className="flex min-h-0 flex-1 flex-col gap-1.5">
             <ChartWrap>
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={80}>
                 <PieChart>
                   <Pie
                     data={(() => {
@@ -727,7 +752,7 @@ export default function DashboardPage() {
 
         <DashboardCard title="Shifts over time">
           <ChartWrap>
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={80}>
             <BarChart data={shiftsOverTimeData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barSize={28}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis dataKey="name" tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
