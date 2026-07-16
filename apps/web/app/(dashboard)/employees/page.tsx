@@ -5,8 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
-import { isFullAdmin, can } from "@/lib/permissions";
-import { PERMISSIONS } from "@/lib/capabilities";
+import { isFullAdmin } from "@/lib/permissions";
 import { DateInput } from "@/components/date-input";
 import { useConfirmDialog } from "@/components/ui";
 import { clsx } from "clsx";
@@ -31,7 +30,6 @@ interface Employee {
   phone?: string | null;
   status: string;
   hourlyRate?: number | null;
-  compensationSetupPending?: boolean;
   monthlySalary?: number | null;
   gradeId?: string | null;
   grade?: { name: string; hourlyRate: number } | null;
@@ -104,12 +102,6 @@ const TEAM_UNASSIGNED_FOLDER_KEY = "__unassigned__";
 export default function EmployeesPage() {
   const { token, user } = useAuth();
   const canDeleteEmployees = user ? isFullAdmin(user) : false;
-  const canManageOperational = can(user, PERMISSIONS.EMPLOYEES_MANAGE_OPERATIONAL);
-  const canReadPrivate = can(user, PERMISSIONS.EMPLOYEES_READ_PRIVATE);
-  const canReadCompensation = can(user, PERMISSIONS.COMPENSATION_READ);
-  const canManagePrivate = can(user, PERMISSIONS.EMPLOYEES_MANAGE_PRIVATE);
-  const canManageCompensation = can(user, PERMISSIONS.COMPENSATION_MANAGE);
-  const canReadPayRates = can(user, PERMISSIONS.PAY_GRADES_READ_RATES);
   const searchParams = useSearchParams();
   const searchQuery = searchParams.get("q") ?? "";
   const defaultCompanyName = (user as { company?: { name: string } } | null)?.company?.name ?? "";
@@ -171,14 +163,6 @@ export default function EmployeesPage() {
         params.set("limit", String(pageSize));
         params.set("offset", String(offset));
         const res = await authFetch(`/employees?${params.toString()}`, token);
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(
-            (body as { message?: string; error?: string }).message ||
-              (body as { error?: string }).error ||
-              "Unable to load team members"
-          );
-        }
         const payload = await res.json();
         const page = Array.isArray(payload?.data) ? payload.data : [];
         total = Number(payload?.total ?? page.length);
@@ -191,9 +175,7 @@ export default function EmployeesPage() {
     } catch (err) {
       console.error(err);
       setEmployees([]);
-      setFetchError(
-        err instanceof Error ? err.message : "Unable to load team members. Check the connection and try again."
-      );
+      setFetchError("Unable to load team members. Check the connection and try again.");
     }
   };
 
@@ -257,22 +239,18 @@ export default function EmployeesPage() {
             </svg>
             Leave
           </Link>
-          {canManageOperational && (
-            <button
-              onClick={() => setShowManageGroups(!showManageGroups)}
-              className="btn-secondary h-11 shrink-0"
-            >
-              {showManageGroups ? "Hide groups" : "Manage groups"}
-            </button>
-          )}
-          {canManageOperational && (
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className={`${showForm ? "btn-secondary" : "btn-primary"} h-11 shrink-0`}
-            >
-              {showForm ? "Cancel" : "Add team member"}
-            </button>
-          )}
+          <button
+            onClick={() => setShowManageGroups(!showManageGroups)}
+            className="btn-secondary h-11 shrink-0"
+          >
+            {showManageGroups ? "Hide groups" : "Manage groups"}
+          </button>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className={`${showForm ? "btn-secondary" : "btn-primary"} h-11 shrink-0`}
+          >
+            {showForm ? "Cancel" : "Add team member"}
+          </button>
         </div>
       </div>
 
@@ -323,13 +301,10 @@ export default function EmployeesPage() {
         </div>
       </div>
 
-      {showForm && canManageOperational && (
+      {showForm && (
         <EmployeeForm
           token={token!}
           defaultPlaceOfWork={defaultCompanyName}
-          canManagePrivate={canManagePrivate}
-          canManageCompensation={canManageCompensation}
-          canReadPayRates={canReadPayRates}
           onSuccess={() => {
             setShowForm(false);
             fetchEmployees();
@@ -337,15 +312,12 @@ export default function EmployeesPage() {
         />
       )}
 
-      {editingId && canManageOperational && (
+      {editingId && (
         <EditModal
           employeeId={editingId}
           token={token!}
           defaultPlaceOfWork={defaultCompanyName}
           canDeleteEmployees={canDeleteEmployees}
-          canManagePrivate={canManagePrivate}
-          canManageCompensation={canManageCompensation}
-          canReadPayRates={canReadPayRates}
           onClose={() => setEditingId(null)}
           onSuccess={() => {
             setEditingId(null);
@@ -354,7 +326,7 @@ export default function EmployeesPage() {
         />
       )}
 
-      {statusChangeId && canManageOperational && (
+      {statusChangeId && (
         <StatusModal
           employee={employees.find((e) => e.id === statusChangeId)!}
           token={token!}
@@ -366,7 +338,7 @@ export default function EmployeesPage() {
         />
       )}
 
-      {showManageGroups && canManageOperational && (
+      {showManageGroups && (
         <ManageGroupsSection
           groups={groups}
           token={token!}
@@ -451,9 +423,6 @@ export default function EmployeesPage() {
                             }
                             onEdit={setEditingId}
                             onChangeStatus={setStatusChangeId}
-                            canManageOperational={canManageOperational}
-                            canReadPrivate={canReadPrivate}
-                            canReadCompensation={canReadCompensation}
                           />
                         ))}
                       </div>
@@ -478,7 +447,7 @@ export default function EmployeesPage() {
               ? "Try a different status or clear the search to see everyone."
               : "Add your first team member to start building rosters, tracking attendance, and preparing payroll."}
           </p>
-          {statusFilter === "all" && searchQuery.trim().length < 2 && canManageOperational && (
+          {statusFilter === "all" && searchQuery.trim().length < 2 && (
             <button onClick={() => setShowForm(true)} className="btn-primary mt-6">
               Add team member
             </button>
@@ -501,18 +470,12 @@ function EmployeeTeamCard({
   onToggleExpand,
   onEdit,
   onChangeStatus,
-  canManageOperational,
-  canReadPrivate,
-  canReadCompensation,
 }: {
   emp: Employee;
   expandedId: string | null;
   onToggleExpand: (id: string) => void;
   onEdit: (id: string) => void;
   onChangeStatus: (id: string) => void;
-  canManageOperational: boolean;
-  canReadPrivate: boolean;
-  canReadCompensation: boolean;
 }) {
   return (
     <div
@@ -540,16 +503,13 @@ function EmployeeTeamCard({
 
       <div className="mt-4 p-4 rounded-[10px] bg-neutral-200 border-2 border-neutral-200">
         <div className="space-y-1.5 text-xs uppercase tracking-wider text-black font-medium">
-          {canReadPrivate && emp.idNumber && <p>ID: {emp.idNumber}</p>}
+          {emp.idNumber && <p>ID: {emp.idNumber}</p>}
           {emp.psiraNumber && <p>PSIRA: {emp.psiraNumber}</p>}
           {emp.phone && <p>PHONE: {emp.phone}</p>}
-          {emp.compensationSetupPending && (
-            <p className="text-amber-800">COMPENSATION SETUP PENDING</p>
-          )}
-          {canReadCompensation && (emp.grade || emp.hourlyRate != null || emp.monthlySalary != null) && (
+          {(emp.grade || emp.hourlyRate != null || emp.monthlySalary != null) && (
             <p>
               GRADE: {emp.grade
-                ? emp.grade.name
+                ? `${emp.grade.name} (${Number(emp.grade.hourlyRate).toFixed(2)}/HR)`
                 : emp.employeeType === "office" && emp.monthlySalary != null
                   ? `R${emp.monthlySalary}/MONTH`
                   : emp.hourlyRate != null
@@ -557,7 +517,6 @@ function EmployeeTeamCard({
                     : "—"}
             </p>
           )}
-          {!canReadCompensation && emp.grade && <p>GRADE: {emp.grade.name}</p>}
           {(emp.employeeType ?? "security") === "security" && (
             <p>
               SITE: {emp.assignedSites && emp.assignedSites.length > 0 ? emp.assignedSites.join(", ") : "Not assigned"}
@@ -585,62 +544,60 @@ function EmployeeTeamCard({
 
       {expandedId === emp.id && (
         <div className="mt-4 pt-4 border-t-2 border-neutral-200 space-y-3 text-sm">
-          {canReadPrivate && emp.email && (
+          {emp.email && (
             <p><span className="text-[10px] uppercase tracking-wider text-black">Email</span><br />{emp.email}</p>
           )}
-          {canReadPrivate && emp.dateOfBirth && (
+          {emp.dateOfBirth && (
             <p><span className="text-[10px] uppercase tracking-wider text-black">DOB</span><br />{toDateStr(emp.dateOfBirth)}</p>
           )}
           {emp.gender && (
             <p><span className="text-[10px] uppercase tracking-wider text-black">Gender</span><br />{emp.gender === "M" ? "Male" : "Female"}</p>
           )}
-          {canReadPrivate && emp.maritalStatus && (
+          {emp.maritalStatus && (
             <p><span className="text-[10px] uppercase tracking-wider text-black">Marital status</span><br />{emp.maritalStatus.charAt(0).toUpperCase() + emp.maritalStatus.slice(1)}</p>
           )}
-          {canReadPrivate && emp.physicalAddress && (
+          {emp.physicalAddress && (
             <p><span className="text-[10px] uppercase tracking-wider text-black">Address</span><br />{emp.physicalAddress}{emp.postalCode ? ` ${emp.postalCode}` : ""}</p>
           )}
           {emp.commencementDate && (
             <p><span className="text-[10px] uppercase tracking-wider text-black">Started</span><br />{toDateStr(emp.commencementDate)}</p>
           )}
-          {(canReadCompensation && (emp.bankName || emp.bankAccountNumber)) && (
+          {(emp.bankName || emp.bankAccountNumber) && (
             <p><span className="text-[10px] uppercase tracking-wider text-black">Bank</span><br />{emp.bankName || "—"}{emp.bankAccountNumber ? ` •••• ${String(emp.bankAccountNumber).slice(-4)}` : ""}</p>
           )}
-          {canReadPrivate && (emp.nextOfKin1Name || emp.nextOfKin1Phone) && (
+          {(emp.nextOfKin1Name || emp.nextOfKin1Phone) && (
             <p><span className="text-[10px] uppercase tracking-wider text-black">Next of kin</span><br />{emp.nextOfKin1Name || "—"} {emp.nextOfKin1Phone ? `• ${emp.nextOfKin1Phone}` : ""}</p>
           )}
           {emp.psiraExpiryDate && (
             <p><span className="text-[10px] uppercase tracking-wider text-black">PSIRA expiry</span><br />{toDateStr(emp.psiraExpiryDate)}</p>
           )}
-          {canReadPrivate && emp.occupation && (
+          {emp.occupation && (
             <p><span className="text-[10px] uppercase tracking-wider text-black">Occupation</span><br />{emp.occupation}</p>
           )}
-          {canReadPrivate && emp.placeOfWork && (
+          {emp.placeOfWork && (
             <p><span className="text-[10px] uppercase tracking-wider text-black">Place of work</span><br />{emp.placeOfWork}</p>
           )}
         </div>
       )}
 
-      {canManageOperational && (
-        <div className="mt-4 flex justify-end gap-4" onClick={(e) => e.stopPropagation()}>
+      <div className="mt-4 flex justify-end gap-4" onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          onClick={() => onEdit(emp.id)}
+          className="text-xs font-medium uppercase tracking-wider text-black hover:underline"
+        >
+          Edit
+        </button>
+        {emp.status !== "offboarded" && (
           <button
             type="button"
-            onClick={() => onEdit(emp.id)}
+            onClick={() => onChangeStatus(emp.id)}
             className="text-xs font-medium uppercase tracking-wider text-black hover:underline"
           >
-            Edit
+            Change status
           </button>
-          {emp.status !== "offboarded" && (
-            <button
-              type="button"
-              onClick={() => onChangeStatus(emp.id)}
-              className="text-xs font-medium uppercase tracking-wider text-black hover:underline"
-            >
-              Change status
-            </button>
-          )}
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -845,16 +802,10 @@ function ManageGroupsSection({
 function EmployeeForm({
   token,
   defaultPlaceOfWork,
-  canManagePrivate = false,
-  canManageCompensation = false,
-  canReadPayRates = false,
   onSuccess,
 }: {
   token: string;
   defaultPlaceOfWork?: string;
-  canManagePrivate?: boolean;
-  canManageCompensation?: boolean;
-  canReadPayRates?: boolean;
   onSuccess: () => void;
 }) {
   const [employeeType, setEmployeeType] = useState<"office" | "security">("security");
@@ -943,28 +894,58 @@ function EmployeeForm({
       setError("Every team member needs a group. Choose one on the Basic details tab.");
       return;
     }
-    if (employeeType === "office" && canManageCompensation && (!monthlySalary || parseFloat(monthlySalary) <= 0)) {
+    if (employeeType === "office" && (!monthlySalary || parseFloat(monthlySalary) <= 0)) {
       setActiveTab("basic");
       setError("Monthly salary is required for office staff. Enter it on the Basic details tab.");
       return;
     }
     setSubmitting(true);
     try {
-      // Operational create endpoint rejects HR-private / compensation fields.
       const payload: Record<string, unknown> = {
         employeeNumber: employeeNumber.trim(),
         firstName,
         lastName,
+        idNumber: idNumber || undefined,
         phone: phone.trim() === "" ? "" : phone.trim() || undefined,
+        email: email || undefined,
+        monthlySalary: employeeType === "office" && monthlySalary ? parseFloat(monthlySalary) : undefined,
         gradeId: employeeType === "security" ? gradeId : undefined,
         groupId,
         status,
         employeeType,
+        dateOfBirth: dateOfBirth || undefined,
         gender: gender || undefined,
+        maritalStatus: maritalStatus || undefined,
+        physicalAddress: physicalAddress || undefined,
+        postalAddress: postalAddress || undefined,
+        postalCode: postalCode || undefined,
+        taxNumber: taxNumber || undefined,
+        bankName: bankName || undefined,
+        bankAccountNumber: bankAccountNumber || undefined,
+        bankBranchCode: bankBranchCode || undefined,
         commencementDate: commencementDate || undefined,
+        occupation: occupation || undefined,
+        placeOfWork: placeOfWork || undefined,
+        ordinaryHours: ordinaryHours || undefined,
+        ordinaryDays: ordinaryDays || undefined,
+        overtimeRate: overtimeRate ? parseFloat(overtimeRate) : undefined,
+        payFrequency: payFrequency || undefined,
+        leaveEntitlement: leaveEntitlement || undefined,
+        noticePeriod: noticePeriod || undefined,
+        previousService: previousService || undefined,
         psiraNumber: psiraNumber || undefined,
         psiraExpiryDate: psiraExpiryDate || undefined,
         securityServiceType: securityServiceType || undefined,
+        nextOfKin1Name: nextOfKin1Name || undefined,
+        nextOfKin1Phone: nextOfKin1Phone || undefined,
+        nextOfKin2Name: nextOfKin2Name || undefined,
+        nextOfKin2Phone: nextOfKin2Phone || undefined,
+        nextOfKin3Name: nextOfKin3Name || undefined,
+        nextOfKin3Phone: nextOfKin3Phone || undefined,
+        residedOutsideSA: residedOutsideSA === "" ? undefined : residedOutsideSA,
+        militaryPoliceService: militaryPoliceService === "" ? undefined : militaryPoliceService,
+        criminalInvestigation: criminalInvestigation === "" ? undefined : criminalInvestigation,
+        mentallyUnstable: mentallyUnstable === "" ? undefined : mentallyUnstable,
         trainingCompleted: trainingCompleted === "" ? undefined : trainingCompleted,
       };
       const res = await authFetch("/employees", token, {
@@ -975,70 +956,6 @@ function EmployeeForm({
         const data = await res.json();
         const msg = data?.message?.psiraNumber?.[0] ?? data?.message?.gradeId?.[0] ?? data?.message?.groupId?.[0] ?? data?.message?.monthlySalary?.[0] ?? data?.message?.employeeNumber?.[0] ?? (typeof data?.message === "string" ? data.message : null) ?? "Could not save the team member. Please check the details and try again.";
         throw new Error(msg);
-      }
-      const created = (await res.json()) as { id?: string };
-      if (created?.id && (canManagePrivate || canManageCompensation)) {
-        if (canManagePrivate) {
-          const privRes = await authFetch(`/employees/${created.id}/hr-private`, token, {
-            method: "PATCH",
-            body: JSON.stringify({
-              idNumber: idNumber || undefined,
-              email: email || undefined,
-              dateOfBirth: dateOfBirth || undefined,
-              maritalStatus: maritalStatus || undefined,
-              physicalAddress: physicalAddress || undefined,
-              postalAddress: postalAddress || undefined,
-              postalCode: postalCode || undefined,
-              occupation: occupation || undefined,
-              placeOfWork: placeOfWork || undefined,
-              ordinaryHours: ordinaryHours || undefined,
-              ordinaryDays: ordinaryDays || undefined,
-              leaveEntitlement: leaveEntitlement || undefined,
-              noticePeriod: noticePeriod || undefined,
-              previousService: previousService || undefined,
-              nextOfKin1Name: nextOfKin1Name || undefined,
-              nextOfKin1Phone: nextOfKin1Phone || undefined,
-              nextOfKin2Name: nextOfKin2Name || undefined,
-              nextOfKin2Phone: nextOfKin2Phone || undefined,
-              nextOfKin3Name: nextOfKin3Name || undefined,
-              nextOfKin3Phone: nextOfKin3Phone || undefined,
-              residedOutsideSA: residedOutsideSA === "" ? undefined : residedOutsideSA,
-              militaryPoliceService: militaryPoliceService === "" ? undefined : militaryPoliceService,
-              criminalInvestigation: criminalInvestigation === "" ? undefined : criminalInvestigation,
-              mentallyUnstable: mentallyUnstable === "" ? undefined : mentallyUnstable,
-            }),
-          });
-          if (!privRes.ok) {
-            const data = await privRes.json().catch(() => ({}));
-            throw new Error(
-              typeof data?.message === "string"
-                ? data.message
-                : "Team member created, but employment details could not be saved"
-            );
-          }
-        }
-        if (canManageCompensation) {
-          const compRes = await authFetch(`/employees/${created.id}/compensation`, token, {
-            method: "PATCH",
-            body: JSON.stringify({
-              monthlySalary: employeeType === "office" && monthlySalary ? parseFloat(monthlySalary) : undefined,
-              overtimeRate: overtimeRate ? parseFloat(overtimeRate) : undefined,
-              payFrequency: payFrequency || undefined,
-              taxNumber: taxNumber || undefined,
-              bankName: bankName || undefined,
-              bankAccountNumber: bankAccountNumber || undefined,
-              bankBranchCode: bankBranchCode || undefined,
-            }),
-          });
-          if (!compRes.ok) {
-            const data = await compRes.json().catch(() => ({}));
-            throw new Error(
-              typeof data?.message === "string"
-                ? data.message
-                : "Team member created, but compensation details could not be saved"
-            );
-          }
-        }
       }
       onSuccess();
     } catch (err) {
@@ -1097,13 +1014,7 @@ function EmployeeForm({
         </section>
 
         <div className="flex gap-1 border-b-2 border-neutral-200 overflow-x-auto">
-          {(["basic", "labour", "psira", "bank"] as const)
-            .filter((tab) => {
-              if (tab === "labour") return canManagePrivate;
-              if (tab === "bank") return canManageCompensation;
-              return true;
-            })
-            .map((tab) => (
+          {(["basic", "labour", "psira", "bank"] as const).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -1382,9 +1293,6 @@ function EditModal({
   token,
   defaultPlaceOfWork,
   canDeleteEmployees,
-  canManagePrivate = false,
-  canManageCompensation = false,
-  canReadPayRates = false,
   onClose,
   onSuccess,
 }: {
@@ -1392,9 +1300,6 @@ function EditModal({
   token: string;
   defaultPlaceOfWork?: string;
   canDeleteEmployees: boolean;
-  canManagePrivate?: boolean;
-  canManageCompensation?: boolean;
-  canReadPayRates?: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -1449,97 +1354,60 @@ function EditModal({
   const [criminalInvestigation, setCriminalInvestigation] = useState<boolean | "">("");
   const [mentallyUnstable, setMentallyUnstable] = useState<boolean | "">("");
   const [trainingCompleted, setTrainingCompleted] = useState<boolean | "">("");
-  const [loadedPrivate, setLoadedPrivate] = useState(false);
-  const [loadedCompensation, setLoadedCompensation] = useState(false);
   const [activeTab, setActiveTab] = useState<"basic" | "labour" | "bank" | "psira">("basic");
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setLoadedPrivate(false);
-    setLoadedCompensation(false);
-    setError("");
-
-    (async () => {
-      try {
-        const opRes = await authFetch(`/employees/${employeeId}`, token);
-        if (!opRes.ok) throw new Error("Failed to load team member");
-        const emp = await opRes.json();
-        if (cancelled) return;
-
+    authFetch(`/employees/${employeeId}`, token)
+      .then((r) => r.json())
+      .then((emp) => {
         setEmployeeType((emp.employeeType || "security") as "office" | "security");
         setEmployeeNumber(emp.employeeNumber || "");
         setFirstName(emp.firstName);
         setLastName(emp.lastName);
+        setIdNumber(emp.idNumber || "");
         setPhone(emp.phone || "");
+        setEmail(emp.email || "");
+        setMonthlySalary(emp.monthlySalary != null ? String(emp.monthlySalary) : "");
         setGradeId(emp.gradeId || "");
         setGroupId(emp.groupId || "");
+        setDateOfBirth(toDateStr(emp.dateOfBirth));
         setGender(emp.gender || "");
+        setMaritalStatus(emp.maritalStatus || "");
+        setPhysicalAddress(emp.physicalAddress || "");
+        setPostalAddress(emp.postalAddress || "");
+        setPostalCode(emp.postalCode || "");
+        setTaxNumber(emp.taxNumber || "");
+        setBankName(emp.bankName || "");
+        setBankAccountNumber(emp.bankAccountNumber || "");
+        setBankBranchCode(emp.bankBranchCode || "");
         setCommencementDate(toDateStr(emp.commencementDate));
+        setOccupation(emp.occupation || "");
+        setPlaceOfWork(emp.placeOfWork || defaultPlaceOfWork || "");
+        setOrdinaryHours(emp.ordinaryHours || "");
+        setOrdinaryDays(emp.ordinaryDays || "");
+        setOvertimeRate(emp.overtimeRate != null ? String(emp.overtimeRate) : "");
+        setPayFrequency(emp.payFrequency || "");
+        setLeaveEntitlement(emp.leaveEntitlement || "");
+        setNoticePeriod(emp.noticePeriod || "");
+        setPreviousService(emp.previousService || "");
         setPsiraNumber(emp.psiraNumber || "");
         setPsiraExpiryDate(toDateStr(emp.psiraExpiryDate));
         setSecurityServiceType(emp.securityServiceType || "");
+        setNextOfKin1Name(emp.nextOfKin1Name || "");
+        setNextOfKin1Phone(emp.nextOfKin1Phone || "");
+        setNextOfKin2Name(emp.nextOfKin2Name || "");
+        setNextOfKin2Phone(emp.nextOfKin2Phone || "");
+        setNextOfKin3Name(emp.nextOfKin3Name || "");
+        setNextOfKin3Phone(emp.nextOfKin3Phone || "");
+        setResidedOutsideSA(emp.residedOutsideSA ?? "");
+        setMilitaryPoliceService(emp.militaryPoliceService ?? "");
+        setCriminalInvestigation(emp.criminalInvestigation ?? "");
+        setMentallyUnstable(emp.mentallyUnstable ?? "");
         setTrainingCompleted(emp.trainingCompleted ?? "");
-
-        if (canManagePrivate) {
-          const privRes = await authFetch(`/employees/${employeeId}/hr-private`, token);
-          if (privRes.ok) {
-            const priv = await privRes.json();
-            if (cancelled) return;
-            setIdNumber(priv.idNumber || "");
-            setEmail(priv.email || "");
-            setDateOfBirth(toDateStr(priv.dateOfBirth));
-            setMaritalStatus(priv.maritalStatus || "");
-            setPhysicalAddress(priv.physicalAddress || "");
-            setPostalAddress(priv.postalAddress || "");
-            setPostalCode(priv.postalCode || "");
-            setOccupation(priv.occupation || "");
-            setPlaceOfWork(priv.placeOfWork || defaultPlaceOfWork || "");
-            setOrdinaryHours(priv.ordinaryHours || "");
-            setOrdinaryDays(priv.ordinaryDays || "");
-            setLeaveEntitlement(priv.leaveEntitlement || "");
-            setNoticePeriod(priv.noticePeriod || "");
-            setPreviousService(priv.previousService || "");
-            setNextOfKin1Name(priv.nextOfKin1Name || "");
-            setNextOfKin1Phone(priv.nextOfKin1Phone || "");
-            setNextOfKin2Name(priv.nextOfKin2Name || "");
-            setNextOfKin2Phone(priv.nextOfKin2Phone || "");
-            setNextOfKin3Name(priv.nextOfKin3Name || "");
-            setNextOfKin3Phone(priv.nextOfKin3Phone || "");
-            setResidedOutsideSA(priv.residedOutsideSA ?? "");
-            setMilitaryPoliceService(priv.militaryPoliceService ?? "");
-            setCriminalInvestigation(priv.criminalInvestigation ?? "");
-            setMentallyUnstable(priv.mentallyUnstable ?? "");
-            setLoadedPrivate(true);
-          }
-        }
-
-        if (canManageCompensation) {
-          const compRes = await authFetch(`/employees/${employeeId}/compensation`, token);
-          if (compRes.ok) {
-            const comp = await compRes.json();
-            if (cancelled) return;
-            setMonthlySalary(comp.monthlySalary != null ? String(comp.monthlySalary) : "");
-            setTaxNumber(comp.taxNumber || "");
-            setBankName(comp.bankName || "");
-            setBankAccountNumber(comp.bankAccountNumber || "");
-            setBankBranchCode(comp.bankBranchCode || "");
-            setOvertimeRate(comp.overtimeRate != null ? String(comp.overtimeRate) : "");
-            setPayFrequency(comp.payFrequency || "");
-            setLoadedCompensation(true);
-          }
-        }
-      } catch {
-        if (!cancelled) setError("Failed to load team member");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [employeeId, token, canManagePrivate, canManageCompensation, defaultPlaceOfWork]);
+      })
+      .catch(() => setError("Failed to load team member"))
+      .finally(() => setLoading(false));
+  }, [employeeId, token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1559,7 +1427,7 @@ function EditModal({
       setError("Every team member needs a group. Choose one on the Basic details tab.");
       return;
     }
-    if (employeeType === "office" && canManageCompensation && (!monthlySalary || parseFloat(monthlySalary) <= 0)) {
+    if (employeeType === "office" && (!monthlySalary || parseFloat(monthlySalary) <= 0)) {
       setActiveTab("basic");
       setError("Monthly salary is required for office staff. Enter it on the Basic details tab.");
       return;
@@ -1570,15 +1438,47 @@ function EditModal({
         employeeNumber: employeeNumber.trim() || undefined,
         firstName,
         lastName,
+        idNumber: idNumber || undefined,
         phone: phone.trim() === "" ? "" : phone.trim() || undefined,
+        email: email || undefined,
+        hourlyRate: employeeType === "office" ? null : undefined,
+        monthlySalary: employeeType === "office" && monthlySalary ? parseFloat(monthlySalary) : employeeType === "security" ? null : undefined,
         gradeId: employeeType === "security" ? gradeId : null,
         groupId,
         employeeType,
+        dateOfBirth: dateOfBirth || undefined,
         gender: gender || undefined,
+        maritalStatus: maritalStatus || undefined,
+        physicalAddress: physicalAddress || undefined,
+        postalAddress: postalAddress || undefined,
+        postalCode: postalCode || undefined,
+        taxNumber: taxNumber || undefined,
+        bankName: bankName || undefined,
+        bankAccountNumber: bankAccountNumber || undefined,
+        bankBranchCode: bankBranchCode || undefined,
         commencementDate: commencementDate || undefined,
+        occupation: occupation || undefined,
+        placeOfWork: placeOfWork || undefined,
+        ordinaryHours: ordinaryHours || undefined,
+        ordinaryDays: ordinaryDays || undefined,
+        overtimeRate: overtimeRate ? parseFloat(overtimeRate) : undefined,
+        payFrequency: payFrequency || undefined,
+        leaveEntitlement: leaveEntitlement || undefined,
+        noticePeriod: noticePeriod || undefined,
+        previousService: previousService || undefined,
         psiraNumber: psiraNumber || undefined,
         psiraExpiryDate: psiraExpiryDate || undefined,
         securityServiceType: securityServiceType || undefined,
+        nextOfKin1Name: nextOfKin1Name || undefined,
+        nextOfKin1Phone: nextOfKin1Phone || undefined,
+        nextOfKin2Name: nextOfKin2Name || undefined,
+        nextOfKin2Phone: nextOfKin2Phone || undefined,
+        nextOfKin3Name: nextOfKin3Name || undefined,
+        nextOfKin3Phone: nextOfKin3Phone || undefined,
+        residedOutsideSA: residedOutsideSA === "" ? undefined : residedOutsideSA,
+        militaryPoliceService: militaryPoliceService === "" ? undefined : militaryPoliceService,
+        criminalInvestigation: criminalInvestigation === "" ? undefined : criminalInvestigation,
+        mentallyUnstable: mentallyUnstable === "" ? undefined : mentallyUnstable,
         trainingCompleted: trainingCompleted === "" ? undefined : trainingCompleted,
       };
       const res = await authFetch(`/employees/${employeeId}`, token, {
@@ -1589,64 +1489,6 @@ function EditModal({
         const data = await res.json();
         const msg = data?.message?.psiraNumber?.[0] ?? data?.message?.gradeId?.[0] ?? data?.message?.groupId?.[0] ?? data?.message?.monthlySalary?.[0] ?? data?.message?.employeeNumber?.[0] ?? data?.message ?? "Failed to update";
         throw new Error(typeof msg === "string" ? msg : "Failed to update");
-      }
-      if (canManagePrivate && loadedPrivate) {
-        const privRes = await authFetch(`/employees/${employeeId}/hr-private`, token, {
-          method: "PATCH",
-          body: JSON.stringify({
-            idNumber: idNumber || undefined,
-            email: email || undefined,
-            dateOfBirth: dateOfBirth || undefined,
-            maritalStatus: maritalStatus || undefined,
-            physicalAddress: physicalAddress || undefined,
-            postalAddress: postalAddress || undefined,
-            postalCode: postalCode || undefined,
-            occupation: occupation || undefined,
-            placeOfWork: placeOfWork || undefined,
-            ordinaryHours: ordinaryHours || undefined,
-            ordinaryDays: ordinaryDays || undefined,
-            leaveEntitlement: leaveEntitlement || undefined,
-            noticePeriod: noticePeriod || undefined,
-            previousService: previousService || undefined,
-            nextOfKin1Name: nextOfKin1Name || undefined,
-            nextOfKin1Phone: nextOfKin1Phone || undefined,
-            nextOfKin2Name: nextOfKin2Name || undefined,
-            nextOfKin2Phone: nextOfKin2Phone || undefined,
-            nextOfKin3Name: nextOfKin3Name || undefined,
-            nextOfKin3Phone: nextOfKin3Phone || undefined,
-            residedOutsideSA: residedOutsideSA === "" ? undefined : residedOutsideSA,
-            militaryPoliceService: militaryPoliceService === "" ? undefined : militaryPoliceService,
-            criminalInvestigation: criminalInvestigation === "" ? undefined : criminalInvestigation,
-            mentallyUnstable: mentallyUnstable === "" ? undefined : mentallyUnstable,
-          }),
-        });
-        if (!privRes.ok) {
-          const data = await privRes.json().catch(() => ({}));
-          throw new Error(
-            typeof data?.message === "string" ? data.message : "Failed to update employment details"
-          );
-        }
-      }
-      if (canManageCompensation && loadedCompensation) {
-        const compRes = await authFetch(`/employees/${employeeId}/compensation`, token, {
-          method: "PATCH",
-          body: JSON.stringify({
-            hourlyRate: employeeType === "office" ? null : undefined,
-            monthlySalary: employeeType === "office" && monthlySalary ? parseFloat(monthlySalary) : employeeType === "security" ? null : undefined,
-            overtimeRate: overtimeRate ? parseFloat(overtimeRate) : undefined,
-            payFrequency: payFrequency || undefined,
-            taxNumber: taxNumber || undefined,
-            bankName: bankName || undefined,
-            bankAccountNumber: bankAccountNumber || undefined,
-            bankBranchCode: bankBranchCode || undefined,
-          }),
-        });
-        if (!compRes.ok) {
-          const data = await compRes.json().catch(() => ({}));
-          throw new Error(
-            typeof data?.message === "string" ? data.message : "Failed to update compensation details"
-          );
-        }
       }
       onSuccess();
     } catch (err) {
@@ -1714,13 +1556,7 @@ function EditModal({
             </section>
 
             <div className="flex gap-1 border-b-2 border-neutral-200 overflow-x-auto">
-              {(["basic", "labour", "psira", "bank"] as const)
-            .filter((tab) => {
-              if (tab === "labour") return canManagePrivate;
-              if (tab === "bank") return canManageCompensation;
-              return true;
-            })
-            .map((tab) => (
+              {(["basic", "labour", "psira", "bank"] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"

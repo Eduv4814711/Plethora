@@ -1,7 +1,6 @@
 import { prisma } from "../lib/prisma.js";
 import { inferPostShiftType } from "../lib/site-post-api.js";
 import { getCompanyTimezone, getShiftTimes, dateKeyInTimeZone } from "../lib/timezone.js";
-import { getLeaveDateKeysByEmployee } from "./leave-availability.service.js";
 import { meetsSiteShiftGenderRule, normalizeEmployeeGenderForRoster } from "./rostering.service.js";
 import { auditRosterGeneration } from "../lib/roster-audit.js";
 import {
@@ -325,7 +324,7 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
 
   const guardIds = rosterableGuards.map((g) => g.id);
 
-  const [blockingExistingShifts, sameSiteShiftsInPeriod, leaveDateKeysByEmployee] = await Promise.all([
+  const [blockingExistingShifts, sameSiteShiftsInPeriod] = await Promise.all([
     prisma.shift.findMany({
       where: {
         companyId,
@@ -345,7 +344,6 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
         endTime: { gt: startDate },
       },
     }),
-    getLeaveDateKeysByEmployee(guardIds, startDate, endDate),
   ]);
   const existingShifts = blockingExistingShifts;
   const guardNameById = new Map(
@@ -492,7 +490,6 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
         prevDateKey,
         maxConsecutiveSameShift,
         assignedEmployeeIdsForDate: assignedForDate,
-        leaveDateKeysByEmployee,
       })
     );
 
@@ -584,7 +581,6 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
           dayIndex,
           maxConsecutiveSameShift,
           assignedEmployeeIdsForDate: assignedEmployeeIdsByDateKey.get(slot.dateKey),
-          leaveDateKeysByEmployee,
         });
         if (reasons.length === 0) return null;
         const name = guardNameById.get(guard.id) ?? guard.id;

@@ -1,11 +1,9 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { readFile } from "fs/promises";
 import { join } from "path";
-import { authProtect } from "../middleware/auth-protect.js";
-import { requireSystemOwner } from "../middleware/rbac.js";
+import { authMiddleware } from "../middleware/auth.js";
+import { requireAdmin } from "../middleware/rbac.js";
 import { requireRole } from "../middleware/rbac.js";
-import { requirePermission, requireAnyPermission } from "../middleware/permissions.js";
-import { PERMISSIONS } from "../lib/permissions.js";
 import { createAuditLog } from "../lib/audit.js";
 import {
   parseAndValidateCompanies,
@@ -15,8 +13,6 @@ import {
   executeSelfImport,
   checkFileSize,
   exportEmployeesToCsv,
-  exportEmployeesOperationalToCsv,
-  exportEmployeesConfidentialToCsv,
   exportSitesToCsv,
   exportEmployeeGroupsToCsv,
   type ValidatedCompany,
@@ -51,39 +47,12 @@ async function collectMultipartFiles(
 
 export async function migrationsRoutes(app: FastifyInstance) {
   const protect = [
-    ...authProtect,
+    authMiddleware,
     requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"], { module: "/settings" }),
   ];
-  const adminProtect = [...authProtect, requireSystemOwner()];
+  const adminProtect = [authMiddleware, requireAdmin()];
 
-  app.get("/export/employees-operational", {
-    preHandler: [...protect, requirePermission(PERMISSIONS.EMPLOYEES_READ_OPERATIONAL)],
-  }, async (request, reply) => {
-    const companyId = request.user!.companyId;
-    const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
-    const csv = await exportEmployeesOperationalToCsv(companyId, company?.name ?? "Company");
-    return reply
-      .header("Content-Type", "text/csv")
-      .header("Content-Disposition", 'attachment; filename="employees-operational-export.csv"')
-      .send(csv);
-  });
-
-  app.get("/export/employees-confidential", {
-    preHandler: [
-      ...protect,
-      requireAnyPermission([PERMISSIONS.EMPLOYEES_READ_PRIVATE, PERMISSIONS.COMPENSATION_READ]),
-    ],
-  }, async (request, reply) => {
-    const companyId = request.user!.companyId;
-    const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
-    const csv = await exportEmployeesConfidentialToCsv(companyId, company?.name ?? "Company");
-    return reply
-      .header("Content-Type", "text/csv")
-      .header("Content-Disposition", 'attachment; filename="employees-confidential-export.csv"')
-      .send(csv);
-  });
-
-  // GET /migrations/templates/:type
+  // GET /migrations/templates/:type - Download CSV template (same module gate as other migration routes)
   app.get("/templates/:type", { preHandler: protect }, async (request, reply) => {
     const { type } = request.params as { type: string };
     const filename =
@@ -116,17 +85,15 @@ export async function migrationsRoutes(app: FastifyInstance) {
     }
   });
 
-  // Legacy confidential export alias
-  app.get("/export/employees", {
-    preHandler: [
-      ...protect,
-      requireAnyPermission([PERMISSIONS.EMPLOYEES_READ_PRIVATE, PERMISSIONS.COMPENSATION_READ]),
-    ],
-  }, async (request, reply) => {
+  // GET /migrations/export/employees - Download employees as CSV
+  app.get("/export/employees", { preHandler: protect }, async (request, reply) => {
     const companyId = request.user!.companyId;
-    const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { name: true },
+    });
     const companyName = company?.name ?? "Company";
-    const csv = await exportEmployeesConfidentialToCsv(companyId, companyName);
+    const csv = await exportEmployeesToCsv(companyId, companyName);
     return reply
       .header("Content-Type", "text/csv")
       .header("Content-Disposition", 'attachment; filename="employees-export.csv"')

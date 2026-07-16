@@ -26,7 +26,7 @@ import {
   type RosterShiftCode,
   type RosterSiteConfig,
 } from "@/lib/roster-api";
-import { patternDayIndexForDate, shiftCodeForStaggeredPattern } from "@/lib/roster-pattern-utils";
+import { patternDayIndexForDate } from "@/lib/roster-pattern-utils";
 import {
   buildShiftSheetRowsFromRosterGrid,
   downloadPdfBlob,
@@ -360,11 +360,6 @@ export const ManualRosteringWorkspace = forwardRef<
 
   const handlePublishRoster = useCallback(async () => {
     if (!token || !grid || pendingChangesRef.current.size > 0 || hardIssueCount > 0) return;
-    const reason = window.prompt("Why should this roster be published? This reason will be recorded for the approver and audit trail.");
-    if (!reason?.trim() || reason.trim().length < 5) {
-      setError("Enter a reason of at least 5 characters before requesting publication.");
-      return;
-    }
     setIsPublishing(true);
     setError(null);
     try {
@@ -373,13 +368,9 @@ export const ManualRosteringWorkspace = forwardRef<
         startDate: periodStart,
         endDate: periodEnd,
         replaceExisting: true,
-        reason: reason.trim(),
       });
       setPublishSummary(result);
-      if (result.approval) {
-        setStatusMsg(result.message);
-        setTimeout(() => setStatusMsg(null), 5000);
-      } else if (result.success) {
+      if (result.success) {
         setStatusMsg(result.message);
         setTimeout(() => setStatusMsg(null), 4000);
       } else {
@@ -565,22 +556,17 @@ export const ManualRosteringWorkspace = forwardRef<
   const applyPatternToAll = useCallback(
     (cycleCodes: RosterShiftCode[]) => {
       if (!grid || cycleCodes.length === 0) return;
+      const cycleLength = cycleCodes.length;
       const anchorDate = periodStart;
       const guardIds = new Set(grid.rows.map((row) => row.guardId));
 
       setGrid((current) => {
         if (!current) return current;
-        const updatedRows = current.rows.map((row, guardIndex) => {
+        const updatedRows = current.rows.map((row) => {
           const cells = row.cells.map((cell) => {
             if (!cell.dateKey) return cell;
-            const shiftCode = shiftCodeForStaggeredPattern(
-              anchorDate,
-              cell.dateKey,
-              cycleCodes,
-              guardIndex,
-              current.rows.length
-            );
-            return { ...cell, shiftCode };
+            const idx = patternDayIndexForDate(anchorDate, cell.dateKey, cycleLength);
+            return { ...cell, shiftCode: cycleCodes[idx]! };
           });
           return { ...row, cells, totals: recalcRowTotals(cells) };
         });
@@ -600,17 +586,12 @@ export const ManualRosteringWorkspace = forwardRef<
 
       setPendingChanges((prev) => {
         const next = new Map(prev);
-        for (const [guardIndex, row] of grid.rows.entries()) {
+        for (const row of grid.rows) {
           if (!guardIds.has(row.guardId)) continue;
           for (const cell of row.cells) {
             if (!cell.dateKey) continue;
-            const shiftCode = shiftCodeForStaggeredPattern(
-              anchorDate,
-              cell.dateKey,
-              cycleCodes,
-              guardIndex,
-              grid.rows.length
-            );
+            const idx = patternDayIndexForDate(anchorDate, cell.dateKey, cycleLength);
+            const shiftCode = cycleCodes[idx]!;
             const cellKey = `${row.guardId}:${cell.dateKey}`;
             const original = baselineCellsRef.current.get(cellKey) ?? "blank";
             if (shiftCode === original) next.delete(cellKey);
@@ -629,7 +610,7 @@ export const ManualRosteringWorkspace = forwardRef<
 
       setPublishSummary(null);
       setError(null);
-      setStatusMsg("Staggered pattern applied to all guards — save roster to keep changes.");
+      setStatusMsg("Pattern applied to all guard rows — save roster to keep changes.");
       setTimeout(() => setStatusMsg(null), 4000);
     },
     [grid, periodStart]
@@ -753,9 +734,9 @@ export const ManualRosteringWorkspace = forwardRef<
               : "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200"
           }`}
         >
-          <p className="font-semibold">{publishSummary.approval ? "Publication approval requested" : publishSummary.success ? "Roster published" : "Publish blocked"}</p>
+          <p className="font-semibold">{publishSummary.success ? "Roster published" : "Publish blocked"}</p>
           <p className="mt-1">{publishSummary.message}</p>
-          {publishSummary.success && publishSummary.publishedCount !== undefined && (
+          {publishSummary.success && (
             <>
               <p className="mt-1 text-xs opacity-80">
                 Published {publishSummary.publishedCount} shifts, replaced {publishSummary.replacedCount}, skipped{" "}

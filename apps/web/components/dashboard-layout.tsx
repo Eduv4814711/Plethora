@@ -6,7 +6,6 @@ import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
 import { SearchDropdown } from "@/components/search-dropdown";
-import { NotificationBell } from "@/components/notification-bell";
 import { CompanySetupModal } from "@/components/company-setup-modal";
 import {
   NAV_ITEMS,
@@ -36,11 +35,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!user || !pathname) return;
-    if (user.adminClass === "ROOT_ADMIN") {
-      router.replace("/platform");
-      return;
-    }
-    if (!canAccessRoute(pathname, user.role, user.moduleAccess, user.isSystemOwner, user.permissions)) {
+    if (!canAccessRoute(pathname, user.role, user.moduleAccess)) {
       router.replace(getDefaultRouteForUser(user));
     }
   }, [pathname, user, router]);
@@ -131,21 +126,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const allNavItems = NAV_ITEMS.filter((item) =>
-    canAccessRoute(item.href, user.role, user.moduleAccess, user.isSystemOwner, user.permissions)
-  );
+  const allNavItems = NAV_ITEMS.filter((item) => canAccessRoute(item.href, user.role, user.moduleAccess));
 
   const mainNavItems = allNavItems.filter((item) => MAIN_NAV_HREFS.includes(item.href));
   const moreNavItems = allNavItems.filter((item) => MORE_NAV_HREFS.includes(item.href));
-  const canAccessSettings = canAccessRoute(
-    "/settings",
-    user.role,
-    user.moduleAccess,
-    user.isSystemOwner,
-    user.permissions
-  );
+  const canAccessSettings = canAccessRoute("/settings", user.role, user.moduleAccess);
 
-  const hasAccess = canAccessRoute(pathname, user.role, user.moduleAccess, user.isSystemOwner, user.permissions);
+  const hasAccess = canAccessRoute(pathname, user.role, user.moduleAccess);
   const isDashboardHome = pathname === "/";
   const isWhatsAppPage = pathname === "/whatsapp" || pathname.startsWith("/whatsapp/");
   const isAcademyPage = pathname === "/academy" || (pathname != null && pathname.startsWith("/academy/"));
@@ -300,7 +287,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="flex items-center gap-0.5 sm:gap-2 shrink-0">
-          <NotificationBell />
           <div ref={searchRef} className="relative flex items-center">
             {(user.role === "admin" || normalizeUserModuleAccess(user.moduleAccess)) && (
             <>
@@ -354,15 +340,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               type="button"
               onClick={() => setProfileOpen((o) => !o)}
               className="flex min-h-11 items-center gap-2 rounded-security py-1.5 pl-1.5 pr-2 text-white/85 hover:text-white hover:bg-security-navy-800 transition-colors touch-manipulation sm:pr-3"
-              title={user.name ?? "Profile"}
-              aria-label={user.name ? `Profile, ${user.name}` : "Profile"}
+              title="Profile"
+              aria-label="Profile"
             >
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-security-navy-400 text-sm font-semibold text-white sm:h-8 sm:w-8">
                 {user.name?.charAt(0)?.toUpperCase() ?? "U"}
               </div>
-              <span className="hidden max-w-[9rem] text-sm font-medium leading-tight sm:inline md:max-w-[12rem] lg:max-w-[16rem] xl:max-w-none xl:whitespace-nowrap">
-                {user.name}
-              </span>
+              <span className="hidden max-w-[100px] truncate text-sm font-medium sm:inline md:max-w-[140px]">{user.name}</span>
               <svg className="hidden h-4 w-4 shrink-0 opacity-70 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
@@ -403,7 +387,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             "lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.25rem)] lg:pb-4 xl:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.5rem)] xl:pb-5 [@media(max-height:860px)]:lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+0.75rem)] [@media(max-height:860px)]:lg:pb-3",
           "overscroll-y-contain",
           isDashboardHome
-            ? "overflow-y-auto"
+            ? "overflow-y-auto lg:overflow-hidden"
             : isWhatsAppPage
               ? "overflow-hidden"
               : isAcademyPage
@@ -413,7 +397,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       >
         {hasAccess ? (
           isAcademyPage || isDashboardHome ? (
-            <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">{children}</div>
+            <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col lg:h-full">{children}</div>
           ) : (
             children
           )

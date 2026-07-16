@@ -494,8 +494,6 @@ export function explainGuardIneligibilityForSlot(params: {
   dayIndex: number;
   maxConsecutiveSameShift?: { day: number; night: number };
   assignedEmployeeIdsForDate?: Set<string>;
-  /** yyyy-MM-dd keys when the guard is on approved leave (not available for work). */
-  leaveDateKeysByEmployee?: Map<string, Set<string>>;
 }): string[] {
   const {
     guard,
@@ -511,13 +509,9 @@ export function explainGuardIneligibilityForSlot(params: {
     dayIndex,
     maxConsecutiveSameShift,
     assignedEmployeeIdsForDate,
-    leaveDateKeysByEmployee,
   } = params;
   const reasons: string[] = [];
 
-  if (leaveDateKeysByEmployee?.get(guard.id)?.has(slot.dateKey)) {
-    reasons.push("on leave (not available for work)");
-  }
   if (assignedEmployeeIdsForDate?.has(guard.id)) {
     reasons.push("already assigned a shift on this date");
   }
@@ -609,8 +603,6 @@ export function isGuardEligibleForSlot(params: {
   maxConsecutiveSameShift?: { day: number; night: number };
   /** Guards already assigned any shift on this calendar day (one shift per guard per day). */
   assignedEmployeeIdsForDate?: Set<string>;
-  /** yyyy-MM-dd keys when the guard is on approved leave (not available for work). */
-  leaveDateKeysByEmployee?: Map<string, Set<string>>;
 }): boolean {
   const {
     guard,
@@ -627,10 +619,8 @@ export function isGuardEligibleForSlot(params: {
     prevDateKey,
     maxConsecutiveSameShift,
     assignedEmployeeIdsForDate,
-    leaveDateKeysByEmployee,
   } = params;
 
-  if (leaveDateKeysByEmployee?.get(guard.id)?.has(slot.dateKey)) return false;
   if (assignedEmployeeIdsForDate?.has(guard.id)) return false;
 
   if ((guard.employeeType ?? "security") !== "security") return false;

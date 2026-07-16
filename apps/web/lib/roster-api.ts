@@ -93,15 +93,13 @@ export type RosterPatternSummary = {
 };
 
 export type PublishRosterResponse = {
-  success?: boolean;
-  blocked?: boolean;
+  success: boolean;
+  blocked: boolean;
   message: string;
-  publishedCount?: number;
-  skippedCount?: number;
-  replacedCount?: number;
-  warnings?: RosterWarning[];
-  approval?: { id: string; status: string };
-  publication?: { id: string; version: number };
+  publishedCount: number;
+  skippedCount: number;
+  replacedCount: number;
+  warnings: RosterWarning[];
 };
 
 export type SiteTimesheetAttendance =
@@ -136,11 +134,7 @@ export type SiteTimesheetRow = {
   hoursWorked: number | null;
   overtimeHours: number | null;
   attendanceStatus: SiteTimesheetAttendance;
-  approvalStatus: "pending" | "partially_reviewed" | "reviewed" | "approved";
-  dutyOnObNumber: string | null;
-  dutyOffObNumber: string | null;
-  /** @deprecated Use dutyOnObNumber */
-  occurrenceBookNumber: string | null;
+  approvalStatus: "pending" | "reviewed" | "approved";
   comments: string | null;
   discrepancyCodes: string[];
 };
@@ -166,158 +160,6 @@ export type SiteTimesheet = {
     totalHours: number;
     overtimeHours: number;
     discrepancies: number;
-  };
-};
-
-export type GuardPickerOption = {
-  id: string;
-  firstName: string;
-  lastName: string;
-  employeeNumber?: string | null;
-  psiraNumber?: string | null;
-};
-
-function isSelectableSecurityGuard(
-  e: GuardPickerOption & { employeeType?: string; status?: string; jobRole?: string | null }
-) {
-  return (
-    (e.employeeType ?? "security") === "security" &&
-    e.status !== "offboarded" &&
-    !(e.jobRole ?? "").startsWith("roster_placeholder:")
-  );
-}
-
-/** Paginates through security guards — the list API caps at 100 per page. */
-export async function fetchSecurityGuardOptions(token: string): Promise<GuardPickerOption[]> {
-  const limit = 100;
-  let offset = 0;
-  const all: GuardPickerOption[] = [];
-  for (;;) {
-    const res = await authFetch(`/employees?limit=${limit}&offset=${offset}&employeeType=security`, token);
-    const json = await res.json();
-    const batch = (json.data ?? []).filter(isSelectableSecurityGuard);
-    all.push(...batch);
-    const total = Number(json.total) || 0;
-    offset += limit;
-    if (offset >= total || batch.length === 0) break;
-  }
-  return all;
-}
-
-type EmployeeListRow = GuardPickerOption & { status?: string };
-
-function toGuardPickerOption(e: EmployeeListRow): GuardPickerOption {
-  return {
-    id: e.id,
-    firstName: e.firstName,
-    lastName: e.lastName,
-    employeeNumber: e.employeeNumber ?? null,
-    psiraNumber: e.psiraNumber ?? null,
-  };
-}
-
-/** Paginates through employees for pickers — the list API caps at 100 per page. */
-export async function fetchEmployeePickerOptions(
-  token: string,
-  options?: { statuses?: string[] }
-): Promise<GuardPickerOption[]> {
-  const statusFilter = options?.statuses ? new Set(options.statuses) : null;
-  const limit = 100;
-  let offset = 0;
-  const all: GuardPickerOption[] = [];
-  for (;;) {
-    const res = await authFetch(`/employees?limit=${limit}&offset=${offset}`, token);
-    if (!res.ok) break;
-    const json = await res.json();
-    const rows: EmployeeListRow[] = json.data ?? [];
-    const batch = rows
-      .filter((e) => !statusFilter || (e.status && statusFilter.has(e.status)))
-      .map(toGuardPickerOption);
-    all.push(...batch);
-    const total = Number(json.total) || 0;
-    offset += limit;
-    if (offset >= total || rows.length === 0) break;
-  }
-  return all.sort((a, b) =>
-    `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`, undefined, {
-      sensitivity: "base",
-    })
-  );
-}
-
-function guardOptionFromTimesheetName(
-  id: string | null,
-  name: string | null,
-  employeeNumber?: string | null,
-  psiraNumber?: string | null
-): GuardPickerOption | null {
-  if (!id || !name?.trim()) return null;
-  const parts = name.trim().split(/\s+/);
-  return {
-    id,
-    firstName: parts[0] ?? name,
-    lastName: parts.slice(1).join(" ") || "",
-    employeeNumber: employeeNumber ?? null,
-    psiraNumber: psiraNumber ?? null,
-  };
-}
-
-/** Ensures scheduled/actual guards on timesheet rows always appear in pickers. */
-export function mergeTimesheetGuardOptions(
-  guards: GuardPickerOption[],
-  rows: SiteTimesheetRow[]
-): GuardPickerOption[] {
-  const byId = new Map(guards.map((g) => [g.id, g]));
-  for (const row of rows) {
-    const plannedUsesSharedNumbers = !row.actualGuardId || row.actualGuardId === row.plannedGuardId;
-    for (const opt of [
-      guardOptionFromTimesheetName(
-        row.plannedGuardId,
-        row.plannedGuardName,
-        plannedUsesSharedNumbers ? row.employeeNumber : null,
-        plannedUsesSharedNumbers ? row.psiraNumber : null
-      ),
-      guardOptionFromTimesheetName(row.actualGuardId, row.actualGuardName, row.employeeNumber, row.psiraNumber),
-    ]) {
-      if (opt && !byId.has(opt.id)) byId.set(opt.id, opt);
-    }
-  }
-  return Array.from(byId.values()).sort((a, b) =>
-    `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`, undefined, {
-      sensitivity: "base",
-    })
-  );
-}
-
-export type SiteTimesheetCaptureOverviewSite = {
-  siteId: string;
-  siteName: string;
-  status: "caught_up" | "needs_capture" | "no_shifts";
-  dueDays: number;
-  pendingRows: number;
-  pendingDayRows: number;
-  pendingNightRows: number;
-  reviewedRows: number;
-  lastCapturedDate: string | null;
-  timesheetStatus: "draft" | "approved" | "locked" | "none";
-};
-
-export type AttendanceShiftTypeFilter = "day" | "night" | "all";
-
-export type SiteTimesheetCaptureOverview = {
-  periodStart: string;
-  periodEnd: string;
-  captureThrough: string | null;
-  asOfDate: string;
-  shiftType?: AttendanceShiftTypeFilter;
-  sites: SiteTimesheetCaptureOverviewSite[];
-  summary: {
-    totalSites: number;
-    needsCapture: number;
-    caughtUp: number;
-    noShifts: number;
-    pendingDayRows: number;
-    pendingNightRows: number;
   };
 };
 
@@ -476,24 +318,13 @@ export async function applyManualOverridesBulk(
 
 export async function publishRoster(
   token: string,
-  body: { siteId: string; startDate: string; endDate: string; replaceExisting?: boolean; reason: string }
+  body: { siteId: string; startDate: string; endDate: string; replaceExisting?: boolean }
 ) {
   const res = await authFetch("/rosters/publish", token, {
     method: "POST",
     body: JSON.stringify(body),
   });
   return parseJson<PublishRosterResponse>(res);
-}
-
-export async function fetchSiteTimesheetCaptureOverview(
-  token: string,
-  startDate: string,
-  endDate: string,
-  shiftType: AttendanceShiftTypeFilter = "all"
-) {
-  const q = new URLSearchParams({ startDate, endDate, shiftType });
-  const res = await authFetch(`/rosters/site-timesheets/capture-overview?${q}`, token);
-  return parseJson<SiteTimesheetCaptureOverview>(res);
 }
 
 export async function fetchSiteTimesheet(token: string, siteId: string, startDate: string, endDate: string) {
@@ -513,24 +344,7 @@ export async function resyncSiteTimesheet(token: string, siteId: string, startDa
 export async function updateSiteTimesheetRow(
   token: string,
   rowId: string,
-  body: Partial<
-    Pick<
-      SiteTimesheetRow,
-      | "actualGuardId"
-      | "actualShiftCode"
-      | "actualShiftType"
-      | "clockIn"
-      | "clockOut"
-      | "hoursWorked"
-      | "overtimeHours"
-      | "attendanceStatus"
-      | "approvalStatus"
-      | "dutyOnObNumber"
-      | "dutyOffObNumber"
-      | "occurrenceBookNumber"
-      | "comments"
-    >
-  >
+  body: Partial<Pick<SiteTimesheetRow, "actualGuardId" | "actualShiftCode" | "actualShiftType" | "clockIn" | "clockOut" | "hoursWorked" | "overtimeHours" | "attendanceStatus" | "approvalStatus" | "comments">>
 ) {
   const res = await authFetch(`/rosters/site-timesheets/rows/${rowId}`, token, {
     method: "PUT",
@@ -548,10 +362,6 @@ export async function addSiteTimesheetRow(
     actualShiftCode: string;
     actualShiftType: string;
     attendanceStatus: SiteTimesheetAttendance;
-    dutyOnObNumber: string;
-    dutyOffObNumber?: string | null;
-    /** @deprecated Use dutyOnObNumber */
-    occurrenceBookNumber?: string;
     comments?: string | null;
     hoursWorked?: number | null;
     overtimeHours?: number | null;
@@ -564,23 +374,12 @@ export async function addSiteTimesheetRow(
   return parseJson<{ row: SiteTimesheetRow }>(res);
 }
 
-export async function approveSiteTimesheet(
-  token: string,
-  timesheetId: string,
-  options: { reason: string; notes?: string; shiftType?: AttendanceShiftTypeFilter }
-) {
+export async function approveSiteTimesheet(token: string, timesheetId: string, notes?: string) {
   const res = await authFetch(`/rosters/site-timesheets/${timesheetId}/approve`, token, {
     method: "POST",
-    body: JSON.stringify({
-      notes: options?.notes,
-      reason: options.reason,
-      shiftType: options?.shiftType ?? "all",
-    }),
+    body: JSON.stringify({ notes }),
   });
-  return parseJson<{
-    message: string;
-    approval: { id: string; status: string };
-  }>(res);
+  return parseJson<{ success: boolean }>(res);
 }
 
 export async function unlockSiteTimesheet(token: string, timesheetId: string, reason?: string) {
@@ -591,14 +390,8 @@ export async function unlockSiteTimesheet(token: string, timesheetId: string, re
   return parseJson<{ success: boolean }>(res);
 }
 
-export function siteTimesheetCsvUrl(
-  siteId: string,
-  startDate: string,
-  endDate: string,
-  shiftType: AttendanceShiftTypeFilter = "all"
-) {
+export function siteTimesheetCsvUrl(siteId: string, startDate: string, endDate: string) {
   const q = new URLSearchParams({ siteId, startDate, endDate });
-  if (shiftType !== "all") q.set("shiftType", shiftType);
   return `/rosters/site-timesheets/export.csv?${q}`;
 }
 
@@ -639,4 +432,4 @@ export const SHIFT_CODE_COLORS: Record<RosterShiftCode, string> = {
   blank: "bg-white text-neutral-400 dark:bg-neutral-950 dark:text-neutral-600",
 };
 
-export const CYCLE_LENGTH_PRESETS = [3, 6, 7, 9, 12, 14];
+export const CYCLE_LENGTH_PRESETS = [3, 6, 9, 12];

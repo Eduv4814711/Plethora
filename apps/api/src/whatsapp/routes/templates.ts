@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { authProtect } from "../../middleware/auth-protect.js";
+import { authMiddleware } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
 import { config } from "../../lib/config.js";
 
@@ -12,7 +12,7 @@ const GRAPH_URL = "https://graph.facebook.com";
  */
 export async function templatesRoutes(app: FastifyInstance) {
   const protect = [
-    ...authProtect,
+    authMiddleware,
     requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
       module: "/whatsapp",
     }),

@@ -78,13 +78,8 @@ export interface AuthUser {
   role: string;
   roleLabel?: string | null;
   companyId: string;
+  /** Non-empty list = admin-assigned modules only; omitted/null = use role defaults */
   moduleAccess?: string[] | null;
-  accessVersion?: number;
-  adminClass?: "STANDARD" | "SYSTEM_ADMIN" | "ROOT_ADMIN";
-  isSystemOwner?: boolean;
-  permissions?: string[];
-  mfaRequired?: boolean;
-  mfaEnabled?: boolean;
 }
 
 export interface LoginResponse {
@@ -93,13 +88,6 @@ export interface LoginResponse {
   /** @deprecated Refresh token is stored in an HttpOnly cookie; not returned to clients. */
   refreshToken?: string;
   expiresIn: number;
-}
-
-export class LoginError extends Error {
-  constructor(message: string, public code?: string) {
-    super(message);
-    this.name = "LoginError";
-  }
 }
 
 const AUTH_FETCH_INIT: RequestInit = { credentials: "include" };
@@ -129,8 +117,7 @@ export interface SetupPasswordValidation {
 export async function login(
   email: string,
   password: string,
-  companyId?: string,
-  otp?: string
+  companyId?: string
 ): Promise<LoginResponse> {
   const url = `${API_BASE}/auth/login`;
   let res: Response;
@@ -139,7 +126,7 @@ export async function login(
       ...AUTH_FETCH_INIT,
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, companyId, otp }),
+      body: JSON.stringify({ email, password, companyId }),
     });
   } catch (fetchErr) {
     const msg = fetchErr instanceof Error ? fetchErr.message : "Network error";
@@ -156,7 +143,7 @@ export async function login(
       err?.error ||
       (res.status === 401 ? "Invalid email or password" : "Login failed");
     const statusHint = res.status === 404 ? " (API route not found – check API is on port 3001)" : res.status === 502 ? " (API unreachable)" : "";
-    throw new LoginError(message + statusHint, err?.code);
+    throw new Error(message + statusHint);
   }
   try {
     const data = await res.json();
@@ -464,37 +451,8 @@ export async function uploadLogo(token: string, file: File): Promise<{ url: stri
 /** Callback for refreshing token on 401. Set by AuthProvider. */
 let tokenRefreshCallback: (() => Promise<string | null>) | null = null;
 
-/** Called when API reports ACCESS_STALE (permissions/modules changed). Forces re-login. */
-let accessStaleCallback: (() => void) | null = null;
-
 export function registerTokenRefreshCallback(cb: () => Promise<string | null>) {
   tokenRefreshCallback = cb;
-}
-
-export function registerAccessStaleCallback(cb: (() => void) | null) {
-  accessStaleCallback = cb;
-}
-
-export class AccessStaleError extends Error {
-  readonly code = "ACCESS_STALE";
-  constructor(message = "Your access has changed. Please sign in again.") {
-    super(message);
-    this.name = "AccessStaleError";
-  }
-}
-
-/** Parse a failed API response into a user-facing Error (handles ACCESS_STALE). */
-export async function apiErrorFromResponse(res: Response, fallback = "Request failed"): Promise<Error> {
-  const body = (await res.json().catch(() => ({}))) as {
-    code?: string;
-    message?: string;
-    error?: string;
-  };
-  if (res.status === 401 && body.code === "ACCESS_STALE") {
-    accessStaleCallback?.();
-    return new AccessStaleError(body.message || undefined);
-  }
-  return new Error(body.message || body.error || fallback);
 }
 
 export async function authFetch(url: string, token: string, init?: RequestInit): Promise<Response> {
@@ -510,114 +468,17 @@ export async function authFetch(url: string, token: string, init?: RequestInit):
   };
 
   let res = await doFetch(token);
-  if (res.status === 401) {
-    const clone = res.clone();
-    const body = (await clone.json().catch(() => ({}))) as { code?: string; message?: string };
-    if (body.code === "ACCESS_STALE") {
-      accessStaleCallback?.();
-      return res;
-    }
-    if (tokenRefreshCallback) {
-      const newToken = await tokenRefreshCallback();
-      if (newToken) {
-        res = await doFetch(newToken);
-        if (res.status === 401) {
-          const retryBody = (await res.clone().json().catch(() => ({}))) as { code?: string };
-          if (retryBody.code === "ACCESS_STALE") {
-            accessStaleCallback?.();
-          }
-        }
-      }
+  if (res.status === 401 && tokenRefreshCallback) {
+    const newToken = await tokenRefreshCallback();
+    if (newToken) {
+      res = await doFetch(newToken);
     }
   }
   return res;
 }
 
-export interface PlatformCompany {
-  id: string;
-  name: string;
-  legalName?: string | null;
-  registrationNumber?: string | null;
-  createdAt: string;
-  systemAdminCount: number;
-  activeSystemAdminCount: number;
-  controlWarning?: string | null;
-}
-
-export interface PlatformSystemAdmin {
-  id: string;
-  name: string;
-  email: string;
-  roleLabel?: string | null;
-  disabledAt?: string | null;
-  disabledReason?: string | null;
-  lastLoginAt?: string | null;
-  permissions: Array<{
-    permission: string;
-    scopeType: "COMPANY" | "SITE";
-    scopeId?: string | null;
-    expiresAt?: string | null;
-    reason: string;
-  }>;
-}
-
-async function platformJson<T>(token: string, path: string, init?: RequestInit): Promise<T> {
-  const response = await authFetch(path, token, {
-    ...init,
-    headers: { ...authJsonHeaders(), ...(init?.headers as Record<string, string> | undefined) },
-  });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({})) as Record<string, unknown>;
-    throw new Error(apiErrorMessage(body, `Request failed (${response.status})`));
-  }
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
-}
-
-export function getPlatformCompanies(token: string) {
-  return platformJson<{ data: PlatformCompany[] }>(token, "/platform/companies");
-}
-
-export function getPlatformSystemAdmins(token: string, companyId: string) {
-  return platformJson<{ company: { id: string; name: string }; data: PlatformSystemAdmin[] }>(token, `/platform/companies/${companyId}/system-admins`);
-}
-
-export function invitePlatformSystemAdmin(token: string, companyId: string, input: { name: string; email: string; reason: string; password: string; grants?: Array<{ permission: string; scopeType: "COMPANY" }> }) {
-  return platformJson<{ id: string; name: string; email: string; setupLink?: string }>(token, `/platform/companies/${companyId}/system-admins`, { method: "POST", body: JSON.stringify(input) });
-}
-
-export function recoverPlatformSystemAdmin(token: string, userId: string, input: { action: "ENABLE" | "DISABLE" | "REISSUE_SETUP_LINK"; reason: string; password: string }) {
-  return platformJson<{ success: boolean; setupLink?: string }>(token, `/platform/system-admins/${userId}/recover`, { method: "POST", body: JSON.stringify(input) });
-}
-
-export function updatePlatformSystemAdminAccess(token: string, userId: string, input: { grants: Array<{ permission: string; scopeType: "COMPANY" }>; reason: string; password: string }) {
-  return platformJson<{ success: boolean; message: string }>(token, `/platform/system-admins/${userId}/access`, { method: "PATCH", body: JSON.stringify(input) });
-}
-
-export function getPlatformRootAdmins(token: string) {
-  return platformJson<{ data: Array<{ id: string; name: string; email: string; disabledAt?: string | null; lastLoginAt?: string | null; createdAt: string; company: { id: string; name: string } }> }>(token, "/platform/root-admins");
-}
-
-export function promotePlatformRootAdmin(token: string, input: { userId?: string; companyId?: string; name?: string; email?: string; reason: string; password: string }) {
-  return platformJson<{ success: boolean; id: string; setupLink?: string }>(token, "/platform/root-admins", { method: "POST", body: JSON.stringify(input) });
-}
-
-export function removePlatformRootAdmin(token: string, userId: string, input: { reason: string; password: string }) {
-  return platformJson<void>(token, `/platform/root-admins/${userId}`, { method: "DELETE", body: JSON.stringify(input) });
-}
-
-export function getPlatformAuditEvents(token: string) {
-  return platformJson<{ data: Array<{ id: string; action: string; result: string; riskLevel: string; reason?: string | null; timestamp: string; actor?: { name: string; email: string } | null; targetCompany?: { name: string } | null; targetUser?: { name: string; email: string } | null }> }>(token, "/platform/audit-events?pageSize=50");
-}
-
 // User management (admin only)
-export type UserRole =
-  | "admin"
-  | "operations_manager"
-  | "hr_payroll"
-  | "supervisor"
-  | "controller"
-  | "client";
+export type UserRole = "admin" | "operations_manager" | "hr_payroll" | "supervisor" | "controller";
 
 export interface UserListItem {
   id: string;
@@ -628,8 +489,6 @@ export interface UserListItem {
   companyId: string;
   createdAt: string;
   moduleAccess?: unknown;
-  isSystemOwner?: boolean;
-  adminClass?: "STANDARD" | "SYSTEM_ADMIN" | "ROOT_ADMIN";
   setupLink?: string;
 }
 
@@ -705,58 +564,6 @@ export async function updateUser(
     const err = await res.json().catch(() => ({}));
     const msg = err?.message;
     throw new Error(typeof msg === "string" ? msg : "Failed to update user");
-  }
-  return res.json();
-}
-
-export interface PermissionGrant {
-  id: string;
-  permission: string;
-  scopeType: "COMPANY" | "SITE";
-  scopeId: string | null;
-  validFrom: string;
-  expiresAt: string | null;
-  reason: string;
-  requestedById: string | null;
-  approvedById: string | null;
-  approvalRequestId: string | null;
-  emergencyAccess: boolean;
-  status: "ACTIVE" | "EXPIRED" | "REVOKED";
-  lastUsedAt: string | null;
-}
-
-export interface EffectiveAccess {
-  id: string;
-  name: string;
-  email: string;
-  roleLabel: string | null;
-  isSystemOwner: boolean;
-  accessVersion: number;
-  lastLoginAt: string | null;
-  mfaRequired: boolean;
-  mfaEnabled: boolean;
-  permissions: PermissionGrant[];
-  effectivePermissions: string[];
-}
-
-export async function getUserAccess(token: string, id: string): Promise<EffectiveAccess> {
-  const res = await authFetch(`/users/${id}/access`, token);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to load effective access");
-  }
-  return res.json();
-}
-
-export async function requestUserAccessChange(token: string, id: string, data: {
-  grants: Array<{ permission: string; scopeType?: "COMPANY" | "SITE"; scopeId?: string | null; expiresAt?: string | null; emergencyAccess?: boolean }>;
-  reason: string;
-  approverId?: string;
-}): Promise<{ message: string; approval: { id: string } }> {
-  const res = await authFetch(`/users/${id}/access-requests`, token, { method: "POST", body: JSON.stringify(data) });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || err.error || "Failed to submit access change");
   }
   return res.json();
 }
@@ -1104,8 +911,8 @@ export async function migrationAdminBulkCreate(
 }
 
 // Task Manager
-export type TaskStatus = "todo" | "in_progress" | "blocked" | "done" | "cancelled";
-export type TaskPriority = "low" | "medium" | "high" | "urgent" | "critical";
+export type TaskStatus = "todo" | "in_progress" | "done";
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
 
 export interface TaskProject {
   id: string;
@@ -1128,9 +935,6 @@ export interface Task {
   assigneeType?: string | null;
   assigneeId?: string | null;
   assigneeDisplayName?: string | null;
-  completionPercentage?: number | null;
-  siteId?: string | null;
-  site?: { id: string; name: string } | null;
   recurrenceRule?: Record<string, unknown> | null;
   project?: { id: string; name: string; color?: string | null } | null;
   createdBy?: { id: string; name: string; email: string };
@@ -1241,20 +1045,12 @@ export async function listTaskAssignees(
 
 export async function listTasks(
   token: string,
-  params?: {
-    projectId?: string;
-    status?: TaskStatus;
-    assigneeId?: string;
-    filter?: "overdue" | "due_today" | "my" | "critical";
-    limit?: number;
-    offset?: number;
-  }
+  params?: { projectId?: string; status?: TaskStatus; assigneeId?: string; limit?: number; offset?: number }
 ): Promise<{ data: Task[]; total: number; limit: number; offset: number }> {
   const q = new URLSearchParams();
   if (params?.projectId) q.set("projectId", params.projectId);
   if (params?.status) q.set("status", params.status);
   if (params?.assigneeId) q.set("assigneeId", params.assigneeId);
-  if (params?.filter) q.set("filter", params.filter);
   if (params?.limit) q.set("limit", String(params.limit));
   if (params?.offset) q.set("offset", String(params.offset));
   const res = await authFetch(`/tasks?${q.toString()}`, token);
@@ -1313,8 +1109,6 @@ export async function updateTask(
     dueDate: string | null;
     assigneeType: "employee" | "user" | null;
     assigneeId: string | null;
-    siteId: string | null;
-    completionPercentage: number;
     recurrenceRule: Record<string, unknown> | null;
   }>
 ): Promise<Task> {

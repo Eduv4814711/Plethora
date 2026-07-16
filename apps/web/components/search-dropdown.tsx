@@ -28,12 +28,8 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const { token, user } = useAuth();
-  const showEmployees = user
-    ? canAccessRoute("/employees", user.role, user.moduleAccess, user.isSystemOwner, user.permissions)
-    : false;
-  const showSites = user
-    ? canAccessRoute("/sites", user.role, user.moduleAccess, user.isSystemOwner, user.permissions)
-    : false;
+  const showEmployees = user ? canAccessRoute("/employees", user.role, user.moduleAccess) : false;
+  const showSites = user ? canAccessRoute("/sites", user.role, user.moduleAccess) : false;
   const router = useRouter();
   const debouncedQuery = useDebounce(query, 300);
 

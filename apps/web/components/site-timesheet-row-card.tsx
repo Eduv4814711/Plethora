@@ -1,17 +1,7 @@
 "use client";
 
 import { GuardSearchPicker } from "@/components/guard-search-picker";
-import { ShiftTimeSelect } from "@/components/shift-time-select";
-import { defaultShiftTime } from "@/lib/shift-times";
-import type { SiteTimesheetRow } from "@/lib/roster-api";
-import {
-  formatApprovalStatus,
-  formatAttendanceStatus,
-  isRowFullyReviewed,
-  isRowPendingReview,
-  resolveDutyOffFromRow,
-  resolveDutyOnFromRow,
-} from "@/lib/site-timesheet-utils";
+import type { SiteTimesheetAttendance, SiteTimesheetRow } from "@/lib/roster-api";
 
 type GuardOption = {
   id: string;
@@ -20,6 +10,20 @@ type GuardOption = {
   employeeNumber?: string | null;
   psiraNumber?: string | null;
 };
+
+const ATTENDANCE_OPTIONS: { value: SiteTimesheetAttendance; label: string }[] = [
+  { value: "pending", label: "Pending" },
+  { value: "present", label: "Present" },
+  { value: "absent", label: "Absent" },
+  { value: "late", label: "Late" },
+  { value: "left_early", label: "Left early" },
+  { value: "reliever", label: "Reliever" },
+  { value: "shift_swapped", label: "Shift swapped" },
+  { value: "leave", label: "Leave" },
+  { value: "sick_leave", label: "Sick leave" },
+  { value: "training", label: "Training" },
+  { value: "off", label: "Off" },
+];
 
 function label(value: string | null | undefined) {
   return value ? value.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase()) : "Not set";
@@ -30,13 +34,6 @@ type SiteTimesheetRowCardProps = {
   guards: GuardOption[];
   locked: boolean;
   saving: boolean;
-  dutyOnObNumber: string;
-  dutyOffObNumber: string;
-  onDutyOnObNumberChange: (value: string) => void;
-  onDutyOffObNumberChange: (value: string) => void;
-  onDutyOnObNumberSave?: (value?: string) => void;
-  onDutyOffObNumberSave?: (value?: string) => void;
-  canEditLockedOb?: boolean;
   rowShiftType: (row: SiteTimesheetRow) => "day" | "night" | null;
   displayShiftTime: (
     iso: string | null | undefined,
@@ -55,13 +52,6 @@ export function SiteTimesheetRowCard({
   guards,
   locked,
   saving,
-  dutyOnObNumber,
-  dutyOffObNumber,
-  onDutyOnObNumberChange,
-  onDutyOffObNumberChange,
-  onDutyOnObNumberSave,
-  onDutyOffObNumberSave,
-  canEditLockedOb = false,
   rowShiftType,
   displayShiftTime,
   combineDateTime,
@@ -71,24 +61,16 @@ export function SiteTimesheetRowCard({
   onApprove,
 }: SiteTimesheetRowCardProps) {
   const shiftType = rowShiftType(row);
-  const pendingReview = isRowPendingReview(row.approvalStatus);
-  const partiallyReviewed = row.approvalStatus === "partially_reviewed";
-  const reviewed = isRowFullyReviewed(row.approvalStatus);
-  const savedDutyOn = resolveDutyOnFromRow(row);
-  const savedDutyOff = resolveDutyOffFromRow(row);
-  const dutyOnLocked = Boolean(savedDutyOn) && !canEditLockedOb;
-  const dutyOffLocked = Boolean(savedDutyOff) && !canEditLockedOb;
-  const dutyOffEnabled = Boolean(savedDutyOn) || Boolean(dutyOnObNumber.trim());
+  const needsReview = row.approvalStatus === "pending";
+  const reviewed = row.approvalStatus === "reviewed" || row.approvalStatus === "approved";
 
   return (
     <article
       className={`rounded-xl border p-4 space-y-3 ${
-        pendingReview
+        needsReview
           ? row.discrepancyCodes.length
             ? "border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20"
-            : partiallyReviewed
-              ? "border-amber-200 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/15"
-              : "border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-950"
+            : "border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-950"
           : "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900 dark:bg-emerald-950/15"
       }`}
     >
@@ -99,11 +81,7 @@ export function SiteTimesheetRowCard({
         </div>
         {reviewed ? (
           <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
-            {locked ? "Approved" : formatApprovalStatus(row.approvalStatus)}
-          </span>
-        ) : partiallyReviewed ? (
-          <span className="shrink-0 rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
-            Partial
+            {locked ? "Approved" : "Reviewed"}
           </span>
         ) : (
           <span className="shrink-0 rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
@@ -126,7 +104,6 @@ export function SiteTimesheetRowCard({
             guards={guards}
             value={row.actualGuardId}
             defaultGuardId={row.plannedGuardId}
-            defaultGuardLabel={row.plannedGuardName}
             disabled={locked || saving}
             onChange={(guardId) => onUpdate(row, { actualGuardId: guardId })}
             clearLabel="Nobody worked"
@@ -141,24 +118,12 @@ export function SiteTimesheetRowCard({
           <select
             disabled={locked}
             value={row.actualShiftType ?? ""}
-            onChange={(e) => {
-              const nextType = e.target.value;
-              const shiftType = nextType === "night" ? "night" : nextType === "day" ? "day" : null;
-              const patch: Partial<SiteTimesheetRow> = {
-                actualShiftType: nextType || null,
-                actualShiftCode: nextType === "night" ? "N" : nextType === "day" ? "D" : null,
-              };
-              if (shiftType) {
-                const startTime = defaultShiftTime(shiftType, "start");
-                const clockIn = combineDateTime(row.workDate, startTime);
-                const endTime = defaultShiftTime(shiftType, "end");
-                const clockOut = combineClockOut(row.workDate, endTime, clockIn);
-                patch.clockIn = clockIn;
-                patch.clockOut = clockOut;
-                patch.hoursWorked = hoursBetween(clockIn, clockOut);
-              }
-              onUpdate(row, patch);
-            }}
+            onChange={(e) =>
+              onUpdate(row, {
+                actualShiftType: e.target.value || null,
+                actualShiftCode: e.target.value === "night" ? "N" : e.target.value === "day" ? "D" : null,
+              })
+            }
             className="input-modern mt-1 w-full"
           >
             <option value="">Not worked</option>
@@ -168,42 +133,54 @@ export function SiteTimesheetRowCard({
         </div>
         <div>
           <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Status</label>
-          <p
-            className="mt-1 text-sm font-medium text-neutral-800 dark:text-neutral-200"
-            title="Set automatically when you approve this shift"
+          <select
+            disabled={locked}
+            value={row.attendanceStatus}
+            onChange={(e) => onUpdate(row, { attendanceStatus: e.target.value as SiteTimesheetAttendance })}
+            className="input-modern mt-1 w-full"
           >
-            {formatAttendanceStatus(row.attendanceStatus)}
-          </p>
+            {ATTENDANCE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
       <div>
         <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Start / end time</label>
         <div className="mt-1 flex items-center gap-2">
-          <ShiftTimeSelect
-            value={displayShiftTime(row.clockIn, shiftType, "start")}
+          <input
+            type="time"
             disabled={locked || saving}
-            onChange={(time) => {
-              const clockIn = combineDateTime(row.workDate, time);
+            key={`${row.id}-m-in-${row.clockIn ?? "default"}`}
+            defaultValue={displayShiftTime(row.clockIn, shiftType, "start")}
+            onBlur={(e) => {
+              const displayed = displayShiftTime(row.clockIn, shiftType, "start");
+              if (e.target.value === displayed && row.clockIn) return;
+              const clockIn = combineDateTime(row.workDate, e.target.value);
               if (clockIn === (row.clockIn ?? null)) return;
               onUpdate(row, { clockIn, hoursWorked: hoursBetween(clockIn, row.clockOut) });
             }}
             className="input-modern flex-1"
-            title="Start time"
           />
           <span className="text-neutral-400">to</span>
-          <ShiftTimeSelect
-            value={displayShiftTime(row.clockOut, shiftType, "end")}
+          <input
+            type="time"
             disabled={locked || saving}
-            onChange={(time) => {
+            key={`${row.id}-m-out-${row.clockOut ?? "default"}`}
+            defaultValue={displayShiftTime(row.clockOut, shiftType, "end")}
+            onBlur={(e) => {
+              const displayed = displayShiftTime(row.clockOut, shiftType, "end");
+              if (e.target.value === displayed && row.clockOut) return;
               const clockIn =
                 row.clockIn ?? combineDateTime(row.workDate, displayShiftTime(null, shiftType, "start"));
-              const clockOut = combineClockOut(row.workDate, time, clockIn);
+              const clockOut = combineClockOut(row.workDate, e.target.value, clockIn);
               if (clockOut === (row.clockOut ?? null)) return;
               onUpdate(row, { clockOut, hoursWorked: hoursBetween(clockIn, clockOut) });
             }}
             className="input-modern flex-1"
-            title="End time"
           />
         </div>
       </div>
@@ -232,78 +209,12 @@ export function SiteTimesheetRowCard({
         />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Duty ON OB</label>
-          {locked || row.approvalStatus === "approved" || dutyOnLocked ? (
-            <div className="mt-1">
-              <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
-                {savedDutyOn || "—"}
-              </p>
-              {dutyOnLocked && !locked && row.approvalStatus !== "approved" && (
-                <p className="mt-0.5 text-[11px] text-neutral-500">
-                  Locked — only an administrator can change this.
-                </p>
-              )}
-            </div>
-          ) : (
-            <input
-              value={dutyOnObNumber}
-              onChange={(e) => onDutyOnObNumberChange(e.target.value)}
-              onBlur={() => onDutyOnObNumberSave?.()}
-              onKeyDown={(e) => {
-                if (e.key !== "Enter") return;
-                e.preventDefault();
-                const value = e.currentTarget.value;
-                onDutyOnObNumberChange(value);
-                onDutyOnObNumberSave?.(value);
-              }}
-              disabled={saving}
-              className="input-modern mt-1 w-full"
-              placeholder="Duty ON OB"
-              title="Duty ON OB — press Enter to save as partial approval"
-              aria-label={`Duty ON OB for ${row.workDate}`}
-            />
-          )}
-        </div>
-        <div>
-          <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Duty OFF OB</label>
-          {locked || row.approvalStatus === "approved" || dutyOffLocked ? (
-            <div className="mt-1">
-              <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
-                {savedDutyOff || "—"}
-              </p>
-              {dutyOffLocked && !locked && row.approvalStatus !== "approved" && (
-                <p className="mt-0.5 text-[11px] text-neutral-500">
-                  Locked — only an administrator can change this.
-                </p>
-              )}
-            </div>
-          ) : (
-            <input
-              value={dutyOffObNumber}
-              onChange={(e) => onDutyOffObNumberChange(e.target.value)}
-              onBlur={() => onDutyOffObNumberSave?.()}
-              disabled={saving || !dutyOffEnabled}
-              className="input-modern mt-1 w-full disabled:opacity-50"
-              placeholder={dutyOffEnabled ? "Duty OFF OB" : "Enter Duty ON first"}
-              title="Duty OFF OB — required before approve"
-              aria-label={`Duty OFF OB for ${row.workDate}`}
-            />
-          )}
-        </div>
-      </div>
-
-      {!locked && pendingReview && (
+      {!locked && row.approvalStatus === "pending" && (
         <button
           type="button"
           disabled={saving}
-          onMouseDown={(e) => {
-            e.preventDefault();
-          }}
           onClick={() => onApprove(row)}
           className="btn-primary w-full disabled:opacity-50"
-          title="Enter Duty ON and Duty OFF OB numbers, then approve."
         >
           {saving ? "Saving…" : "Approve this day"}
         </button>

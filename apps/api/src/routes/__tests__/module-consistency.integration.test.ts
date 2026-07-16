@@ -120,7 +120,6 @@ describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
         actualShiftCode: "D",
         actualShiftType: "day",
         attendanceStatus: "present",
-        dutyOnObNumber: "OB-CROSS-TENANT-TEST",
       },
     });
     expect(res.statusCode).toBe(409);

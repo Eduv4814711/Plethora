@@ -4,24 +4,6 @@ import type { UserRole } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { config } from "../lib/config.js";
 import { hashPassword } from "../services/auth.service.js";
-import { grantSystemOwner, setUserPermissions } from "../services/user-access.service.js";
-import {
-  permissionsForPreset,
-  type PresetKey,
-} from "../lib/permissions.js";
-
-export const DEFAULT_TEST_MODULE_ACCESS = [
-  "/",
-  "/employees",
-  "/sites",
-  "/rostering",
-  "/attendance",
-  "/payroll",
-  "/settings",
-  "/reports",
-  "/tasks",
-  "/whatsapp",
-] as const;
 
 export type TenantCompanyFixture = {
   companyId: string;
@@ -46,13 +28,11 @@ export type TenantFixture = {
   teardown: () => Promise<void>;
 };
 
-export function signAccessToken(user: {
+function signAccessToken(user: {
   id: string;
   email: string;
   companyId: string;
   role: UserRole;
-  accessVersion?: number;
-  moduleAccess?: string[] | null;
 }): string {
   return jwt.sign(
     {
@@ -60,8 +40,6 @@ export function signAccessToken(user: {
       email: user.email,
       companyId: user.companyId,
       role: user.role,
-      accessVersion: user.accessVersion ?? 1,
-      ...(user.moduleAccess?.length ? { moduleAccess: user.moduleAccess } : {}),
     },
     config.jwt.accessSecret,
     { expiresIn: "1h" }
@@ -82,16 +60,7 @@ async function provisionCompany(label: "A" | "B", runId: string): Promise<Tenant
       email,
       passwordHash: await hashPassword("tenant-test-password-32chars!!"),
       role: "admin",
-      isSystemOwner: true,
-      accessVersion: 1,
-      moduleAccess: [...DEFAULT_TEST_MODULE_ACCESS],
     },
-  });
-
-  await grantSystemOwner(user.id);
-  const accessRecord = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: { accessVersion: true },
   });
 
   const group = await prisma.employeeGroup.create({
@@ -195,8 +164,6 @@ async function provisionCompany(label: "A" | "B", runId: string): Promise<Tenant
     email: user.email,
     companyId: company.id,
     role: user.role,
-    accessVersion: accessRecord?.accessVersion ?? 1,
-    moduleAccess: [...DEFAULT_TEST_MODULE_ACCESS],
   });
 
   return {
@@ -214,71 +181,6 @@ async function provisionCompany(label: "A" | "B", runId: string): Promise<Tenant
     taskId: task.id,
     whatsAppMessageId: whatsAppMessage.id,
   };
-}
-
-/** Provision a system-owner test user with a valid access token for integration tests. */
-export async function provisionTestAdminUser(
-  companyId: string,
-  email: string,
-  name: string
-): Promise<{ userId: string; accessToken: string }> {
-  const modules = [...DEFAULT_TEST_MODULE_ACCESS];
-  const user = await prisma.user.create({
-    data: {
-      companyId,
-      name,
-      email,
-      passwordHash: await hashPassword("integration-test-password-32chars!!"),
-      role: "admin",
-      isSystemOwner: true,
-      moduleAccess: modules,
-    },
-  });
-  await grantSystemOwner(user.id);
-  const accessRecord = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: { accessVersion: true },
-  });
-  const accessToken = signAccessToken({
-    id: user.id,
-    email: user.email,
-    companyId,
-    role: user.role,
-    accessVersion: accessRecord?.accessVersion ?? 1,
-    moduleAccess: modules,
-  });
-  return { userId: user.id, accessToken };
-}
-
-/** Provision a user with a specific permission preset (non-system-owner). */
-export async function provisionTestUserWithPreset(
-  companyId: string,
-  email: string,
-  name: string,
-  presetKey: PresetKey,
-  role: UserRole = "admin"
-): Promise<{ userId: string; accessToken: string; accessVersion: number }> {
-  const user = await prisma.user.create({
-    data: {
-      companyId,
-      name,
-      email,
-      passwordHash: await hashPassword("integration-test-password-32chars!!"),
-      role,
-      isSystemOwner: false,
-      moduleAccess: [...DEFAULT_TEST_MODULE_ACCESS],
-    },
-  });
-  const record = await setUserPermissions(user.id, permissionsForPreset(presetKey));
-  const accessToken = signAccessToken({
-    id: user.id,
-    email: user.email,
-    companyId,
-    role: user.role,
-    accessVersion: record.accessVersion,
-    moduleAccess: [...DEFAULT_TEST_MODULE_ACCESS],
-  });
-  return { userId: user.id, accessToken, accessVersion: record.accessVersion };
 }
 
 /** Returns true when DATABASE_URL is set and PostgreSQL accepts connections. */

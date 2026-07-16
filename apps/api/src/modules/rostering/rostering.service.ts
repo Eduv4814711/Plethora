@@ -2,8 +2,7 @@ import type { Prisma, ShiftStatus } from "@prisma/client";
 import { canTransitionShift } from "../../lib/state-machines.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { auditManualShiftEdit, auditRosterReset } from "../../lib/roster-audit.js";
-import { getCompanyTimezone, getShiftTimes, parseDateOnly, parseDateOnlyEnd, dateKeyInTimeZone } from "../../lib/timezone.js";
-import { getLeaveDateKeysByEmployee } from "../../services/leave-availability.service.js";
+import { getCompanyTimezone, getShiftTimes, parseDateOnly, parseDateOnlyEnd } from "../../lib/timezone.js";
 import {
   validateShiftAssignment,
   RosteringValidationError,
@@ -594,18 +593,10 @@ export const rosteringModuleService = {
       companyId,
       Array.from(busyEmployeeIds)
     );
-    const timeZone = await getCompanyTimezone(companyId);
-    const shiftDateKey = dateKeyInTimeZone(shift.startTime, timeZone);
-    const leaveByEmployee = await getLeaveDateKeysByEmployee(
-      candidates.map((e) => e.id),
-      shift.startTime,
-      shift.startTime
-    );
     const site = shift.site;
     const postShiftType = shift.shiftType;
     const data = candidates
       .filter((e) => meetsSiteShiftGenderRule(e.gender, site, postShiftType))
-      .filter((e) => !leaveByEmployee.get(e.id)?.has(shiftDateKey))
       .map(({ id, firstName, lastName }) => ({ id, firstName, lastName }));
     return { data };
   },

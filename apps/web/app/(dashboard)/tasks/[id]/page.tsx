@@ -8,7 +8,6 @@ import {
   getTask,
   updateTask,
   listTaskProjects,
-  authFetch,
   deleteTask,
   completeTask,
   reopenTask,
@@ -32,9 +31,7 @@ import { useConfirmDialog } from "@/components/ui";
 const STATUS_LABELS: Record<TaskStatus, string> = {
   todo: "To Do",
   in_progress: "In Progress",
-  blocked: "Blocked",
   done: "Done",
-  cancelled: "Cancelled",
 };
 
 const PRIORITY_LABELS: Record<TaskPriority, string> = {
@@ -42,7 +39,6 @@ const PRIORITY_LABELS: Record<TaskPriority, string> = {
   medium: "Medium",
   high: "High",
   urgent: "Urgent",
-  critical: "Critical",
 };
 
 export default function TaskDetailPage() {
@@ -72,9 +68,6 @@ export default function TaskDetailPage() {
     interval: number;
     endDate: string;
   }>({ frequency: "", interval: 1, endDate: "" });
-  const [editSiteId, setEditSiteId] = useState("");
-  const [editCompletion, setEditCompletion] = useState(0);
-  const [sites, setSites] = useState<{ id: string; name: string }[]>([]);
   const [commentBody, setCommentBody] = useState("");
   const [remindAt, setRemindAt] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -98,10 +91,6 @@ export default function TaskDetailPage() {
     listTaskProjects(token)
       .then((res) => setProjects(res.data ?? []))
       .catch(() => setProjects([]));
-    authFetch("/sites?limit=200", token)
-      .then((r) => r.json())
-      .then((d) => setSites((d.data ?? []).map((s: { id: string; name: string }) => ({ id: s.id, name: s.name }))))
-      .catch(() => setSites([]));
   }, [token]);
 
   useEffect(() => {
@@ -122,8 +111,6 @@ export default function TaskDetailPage() {
         interval: rec?.interval ?? 1,
         endDate: rec?.endDate ? rec.endDate.slice(0, 10) : "",
       });
-      setEditSiteId(task.siteId ?? "");
-      setEditCompletion(task.completionPercentage ?? 0);
     }
   }, [task]);
 
@@ -149,8 +136,6 @@ export default function TaskDetailPage() {
         dueDate: editDueDate ? new Date(editDueDate).toISOString() : null,
         assigneeType: editAssignee.type,
         assigneeId: editAssignee.id,
-        siteId: editSiteId || null,
-        completionPercentage: editCompletion,
         recurrenceRule,
       });
       setTask(updated);
@@ -358,9 +343,7 @@ export default function TaskDetailPage() {
               >
                 <option value="todo">To Do</option>
                 <option value="in_progress">In Progress</option>
-                <option value="blocked">Blocked</option>
                 <option value="done">Done</option>
-                <option value="cancelled">Cancelled</option>
               </select>
               <select
                 value={editPriority}
@@ -371,7 +354,6 @@ export default function TaskDetailPage() {
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
                 <option value="urgent">Urgent</option>
-                <option value="critical">Critical</option>
               </select>
               <input
                 type="datetime-local"
@@ -382,28 +364,6 @@ export default function TaskDetailPage() {
               <div className="w-48">
                 <AssigneePicker value={editAssignee} onChange={setEditAssignee} />
               </div>
-              <select
-                value={editSiteId}
-                onChange={(e) => setEditSiteId(e.target.value)}
-                className="input-compact w-auto min-w-[10rem]"
-                aria-label="Site"
-              >
-                <option value="">No site</option>
-                {sites.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-              <label className="flex items-center gap-2 text-sm">
-                <span>Progress</span>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={editCompletion}
-                  onChange={(e) => setEditCompletion(Number(e.target.value))}
-                />
-                <span className="tabular-nums w-8">{editCompletion}%</span>
-              </label>
             </div>
             <div className="flex flex-wrap gap-4 items-center">
               <span className="text-sm font-medium">Recurrence:</span>

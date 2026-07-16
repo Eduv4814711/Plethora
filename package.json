@@ -9,8 +9,7 @@
     "dev": "npm run dev:web",
     "dev:api": "npm run dev --workspace=api",
     "clean:web": "node -e \"try{require('fs').rmSync('apps/web/.next',{recursive:true,force:true})}catch(e){}\"",
-    "check:web-port": "node apps/web/scripts/check-port.mjs",
-    "dev:web": "npm run check:web-port && npm run clean:web && npm run dev --workspace=web",
+    "dev:web": "npm run clean:web && npm run dev --workspace=web",
     "dev:all": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
     "build": "npm run build --workspaces",
     "build:web": "npm run build --workspace=web",
@@ -20,11 +19,7 @@
     "db:migrate:deploy": "npm run db:migrate:deploy --workspace=api",
     "db:push": "npm run db:push --workspace=api",
     "db:add-module-access": "npm run db:add-module-access --workspace=api",
-    "db:seed": "npm run db:seed --workspace=api",
-    "test": "npm run test --workspace=api",
-    "test:web": "npm run test --workspace=web",
-    "railway:preflight": "node scripts/railway-preflight.mjs",
-    "deploy:check": "npm run railway:preflight && npm run build && npm run test:web"
+    "db:seed": "npm run db:seed --workspace=api"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { format, parseISO } from "date-fns";
@@ -10,29 +9,10 @@ import { fetchCurrentPayPeriod, fetchPayPeriods, type PayPeriodOption } from "@/
 import { PayPeriodSelect } from "@/components/pay-period-select";
 import { OperationalWorkflowSteps } from "@/components/operational-workflow-steps";
 import { SiteTimesheetsSection } from "./SiteTimesheetsSection";
-import { AttendanceCaptureDashboard } from "@/components/attendance-capture-dashboard";
-import type { AttendanceShiftTypeFilter } from "@/lib/roster-api";
-import { clsx } from "clsx";
 
 interface SiteOption {
   id: string;
   name: string;
-}
-
-const SHIFT_TYPE_OPTIONS: Array<{ value: AttendanceShiftTypeFilter; label: string }> = [
-  { value: "day", label: "Day Shift" },
-  { value: "night", label: "Night Shift" },
-  { value: "all", label: "All shifts" },
-];
-
-/** Soft default: night tab after 18:00 local, otherwise day. */
-function defaultShiftTypeByLocalTime(): AttendanceShiftTypeFilter {
-  return new Date().getHours() >= 18 ? "night" : "day";
-}
-
-function parseShiftTypeParam(value: string | null): AttendanceShiftTypeFilter {
-  if (value === "night" || value === "all" || value === "day") return value;
-  return defaultShiftTypeByLocalTime();
 }
 
 function emptyDateRange() {
@@ -51,62 +31,21 @@ const WORKFLOW_STEPS = [
 export default function AttendancePage() {
   const { token } = useAuth();
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
 
   const [sites, setSites] = useState<SiteOption[]>([]);
   const [siteId, setSiteId] = useState<string>("");
-  const [shiftType, setShiftType] = useState<AttendanceShiftTypeFilter>(() =>
-    parseShiftTypeParam(null)
-  );
   const [loading, setLoading] = useState(true);
-  const shiftTypeSyncedRef = useRef(false);
 
   const [dateRange, setDateRange] = useState(emptyDateRange);
   const [periodKey, setPeriodKey] = useState("");
   const [periodLabel, setPeriodLabel] = useState("");
   const [payPeriodOptions, setPayPeriodOptions] = useState<PayPeriodOption[]>([]);
-  const timesheetSectionRef = useRef<HTMLDivElement>(null);
-  const pendingTimesheetScrollRef = useRef(false);
-
-  const handleCaptureSiteSelect = (nextSiteId: string) => {
-    pendingTimesheetScrollRef.current = true;
-    setSiteId(nextSiteId);
-    if (nextSiteId === siteId) {
-      pendingTimesheetScrollRef.current = false;
-      requestAnimationFrame(() => {
-        timesheetSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    }
-  };
-
-  useEffect(() => {
-    if (!siteId || !pendingTimesheetScrollRef.current) return;
-    pendingTimesheetScrollRef.current = false;
-    requestAnimationFrame(() => {
-      timesheetSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }, [siteId]);
 
   useEffect(() => {
     const deepLinkedSite = searchParams.get("siteId");
     if (deepLinkedSite) setSiteId(deepLinkedSite);
-    setShiftType(parseShiftTypeParam(searchParams.get("shiftType")));
-    shiftTypeSyncedRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  /** Keep shiftType (and site) in the URL so deep links and refresh preserve the filter. */
-  useEffect(() => {
-    if (!shiftTypeSyncedRef.current) return;
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("shiftType", shiftType);
-    if (siteId) params.set("siteId", siteId);
-    else params.delete("siteId");
-    const next = params.toString();
-    if (next === searchParams.toString()) return;
-    router.replace(`${pathname}?${next}`, { scroll: false });
-  }, [shiftType, siteId, pathname, router, searchParams]);
 
   useEffect(() => {
     if (!token) return;
@@ -144,17 +83,7 @@ export default function AttendancePage() {
   useEffect(() => {
     if (!token) return;
     authFetch("/sites?limit=100", token)
-      .then(async (r) => {
-        if (!r.ok) {
-          const body = await r.json().catch(() => ({}));
-          throw new Error(
-            (body as { message?: string; error?: string }).message ||
-              (body as { error?: string }).error ||
-              "Unable to load sites"
-          );
-        }
-        return r.json();
-      })
+      .then((r) => r.json())
       .then((d) => setSites(d.data || []))
       .catch(console.error);
   }, [token]);
@@ -193,16 +122,11 @@ export default function AttendancePage() {
 
   return (
     <div className="animate-fade-in">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="page-title">Attendance</h1>
-          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-            Confirm who actually worked at each site, then approve the timesheet so payroll pays the right hours.
-          </p>
-        </div>
-        <Link href="/attendance/exceptions" className="btn-secondary text-sm py-2 shrink-0 self-start">
-          Review exceptions
-        </Link>
+      <div className="mb-6">
+        <h1 className="page-title">Attendance</h1>
+        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+          Confirm who actually worked at each site, then approve the timesheet so payroll pays the right hours.
+        </p>
       </div>
 
       <div className="card-wireframe mb-6 overflow-hidden p-4 sm:p-5">
@@ -216,9 +140,9 @@ export default function AttendancePage() {
         <div className="border-b border-neutral-200 bg-neutral-50/70 px-4 py-4 dark:border-neutral-700 dark:bg-neutral-900/40 sm:px-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h3 className="section-title">Step 1 — Choose period, shift, and site</h3>
+              <h3 className="section-title">Step 1 — Choose period and site</h3>
               <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-                Select the pay period and shift type, then the site you are recording attendance for.
+                Select the pay period, then the site you are recording attendance for.
               </p>
             </div>
             {periodLabel && (
@@ -281,67 +205,16 @@ export default function AttendancePage() {
               Each site has its own timesheet for this period.
             </p>
           </section>
-
-          <section className="lg:col-span-2 rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-950/60">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-              Shift type
-            </p>
-            <div
-              className="mt-2 inline-flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:rounded-lg sm:border sm:border-neutral-200 sm:bg-neutral-50 sm:p-1 dark:sm:border-neutral-700 dark:sm:bg-neutral-900/50"
-              role="tablist"
-              aria-label="Attendance shift type"
-            >
-              {SHIFT_TYPE_OPTIONS.map((option) => {
-                const selected = shiftType === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    onClick={() => setShiftType(option.value)}
-                    className={clsx(
-                      "rounded-lg px-4 py-2.5 text-sm font-medium transition-colors sm:rounded-md",
-                      selected
-                        ? "bg-security-navy-800 text-white shadow-sm dark:bg-security-navy-600"
-                        : "border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-300 dark:hover:bg-neutral-900 sm:border-0"
-                    )}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
-              Needs-attention alerts and the timesheet list only include the selected shift. Choose All shifts to see
-              day and night together.
-            </p>
-          </section>
-
-          {token && (
-            <AttendanceCaptureDashboard
-              token={token}
-              periodStart={format(dateRange.start, "yyyy-MM-dd")}
-              periodEnd={format(dateRange.end, "yyyy-MM-dd")}
-              shiftType={shiftType}
-              selectedSiteId={siteId || undefined}
-              onSelectSite={handleCaptureSiteSelect}
-            />
-          )}
         </div>
       </div>
 
       {siteId && token ? (
-        <div ref={timesheetSectionRef} id="attendance-site-timesheet" className="scroll-mt-6">
-          <SiteTimesheetsSection
-            token={token}
-            siteId={siteId}
-            siteName={sites.find((s) => s.id === siteId)?.name}
-            periodStart={format(dateRange.start, "yyyy-MM-dd")}
-            periodEnd={format(dateRange.end, "yyyy-MM-dd")}
-            shiftType={shiftType}
-          />
-        </div>
+        <SiteTimesheetsSection
+          token={token}
+          siteId={siteId}
+          periodStart={format(dateRange.start, "yyyy-MM-dd")}
+          periodEnd={format(dateRange.end, "yyyy-MM-dd")}
+        />
       ) : (
         <div className="card-wireframe p-8 text-center">
           <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">

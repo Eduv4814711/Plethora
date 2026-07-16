@@ -21,7 +21,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="overflow-x-clip" data-scroll-behavior="smooth">
+    <html lang="en" className="overflow-x-clip">
       <body className="antialiased min-h-screen min-w-0 touch-manipulation">
         <AuthProvider>
           <SettingsProvider>

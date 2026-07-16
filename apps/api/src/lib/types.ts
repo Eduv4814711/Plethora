@@ -1,5 +1,4 @@
-import type { AdminClass, UserRole } from "@prisma/client";
-import type { UserAccessRecord } from "../services/user-access.service.js";
+import type { UserRole } from "@prisma/client";
 
 export interface JWTPayload {
   sub: string;
@@ -8,11 +7,6 @@ export interface JWTPayload {
   role: UserRole;
   /** Non-empty list of dashboard module paths when admin assigned custom access; omitted/null = role defaults */
   moduleAccess?: unknown;
-  /** Must match DB accessVersion or token is rejected */
-  accessVersion?: number;
-  adminClass?: AdminClass;
-  /** System owner bypasses module gates even without accessMiddleware */
-  isSystemOwner?: boolean;
   iat?: number;
   exp?: number;
 }
@@ -20,6 +14,5 @@ export interface JWTPayload {
 declare module "fastify" {
   interface FastifyRequest {
     user?: JWTPayload;
-    access?: UserAccessRecord;
   }
 }

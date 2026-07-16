@@ -3,11 +3,6 @@ import type { Prisma, SiteRosterShiftCode } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { shiftCodeToType, countsTowardCoverage } from "./lib/pattern-parser.js";
 import { getCompanyTimezone, getShiftTimes } from "../../lib/timezone.js";
-import {
-  formatLeaveDateKey,
-  leaveTypeToRosterShiftCode,
-  normalizeLeaveDate,
-} from "../../services/leave-availability.service.js";
 
 const ROSTERABLE_STATUSES = ["active", "training", "hired", "reliever"] as const;
 const WORKING_SHIFT_CODES = new Set<SiteRosterShiftCode>(["D", "N"]);
@@ -424,7 +419,7 @@ export async function getLiveRoster(
     calendarDays.push(dateKey(d));
   }
 
-  const [generated, overrides, activePattern, leaveRecords] = await Promise.all([
+  const [generated, overrides, activePattern] = await Promise.all([
     prisma.siteRosterGeneratedShift.findMany({
       where: { siteId, companyId, rosterDate: { gte: start, lte: end } },
     }),
@@ -435,19 +430,7 @@ export async function getLiveRoster(
       where: { siteId, companyId, status: "active" },
       orderBy: { effectiveFrom: "desc" },
     }),
-    prisma.leaveRecord.findMany({
-      where: {
-        employeeId: { in: guards.map((g) => g.id) },
-        date: { gte: start, lte: end },
-      },
-      select: { employeeId: true, date: true, type: true },
-    }),
   ]);
-
-  const overrideKeys = new Set<string>();
-  for (const o of overrides) {
-    overrideKeys.add(`${o.guardId}:${dateKey(o.rosterDate)}`);
-  }
 
   const cellLookup = new Map<string, SiteRosterShiftCode>();
   for (const g of generated) {
@@ -455,15 +438,6 @@ export async function getLiveRoster(
   }
   for (const o of overrides) {
     cellLookup.set(`${o.guardId}:${dateKey(o.rosterDate)}`, o.overrideShiftCode);
-  }
-
-  // Approved leave marks guards unavailable (L/SL) unless a manual override exists.
-  for (const leave of leaveRecords) {
-    const dayKey = formatLeaveDateKey(normalizeLeaveDate(leave.date));
-    const cellKey = `${leave.employeeId}:${dayKey}`;
-    if (!overrideKeys.has(cellKey)) {
-      cellLookup.set(cellKey, leaveTypeToRosterShiftCode(leave.type));
-    }
   }
 
   // Optionally pre-fill empty cells from an active repeating pattern

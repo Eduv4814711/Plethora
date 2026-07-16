@@ -11,15 +11,16 @@ Services:
 - `api` — Fastify app in `apps/api`
 - `web` — Next.js app in `apps/web`
 - `postgres` — Railway managed PostgreSQL
+- `redis` — optional Railway Redis if a feature needs `REDIS_URL`
 
 Public domains:
 
 - Web: `https://plethora.quickbophasecurity.co.za`
 - API: Railway-generated URL first, later `https://api.quickbophasecurity.co.za`
 
-The browser calls the same-origin `/api` path. Next.js proxies those requests to
-`NEXT_PUBLIC_API_URL` and the optional `NEXT_PUBLIC_API_PATH_PREFIX`, keeping
-refresh and CSRF cookies attached to the web origin.
+The frontend calls the backend through `NEXT_PUBLIC_API_URL` and optional
+`NEXT_PUBLIC_API_PATH_PREFIX`. The Railway production default is an external API
+origin, not same-origin `/api`.
 
 ## Why Services Use Repo Root
 
@@ -42,6 +43,7 @@ strategy is redesigned around separate lockfiles.
 2. Add a new service from the GitHub repository for `api`.
 3. Add another service from the same repository for `web`.
 4. Add Railway PostgreSQL.
+5. Add Railway Redis only if a feature needs it.
 
 ## API Service
 
@@ -50,7 +52,7 @@ Settings:
 - Root directory: repo root, blank or `/`
 - Config-as-code path: `apps/api/railway.toml`
 - Build command: `npm run build --workspace=api`
-- Start command: `cd apps/api && npm start`
+- Start command: `cd apps/api && npm run start:with-migrate`
 - Healthcheck path: `/health`
 
 Variables:
@@ -60,27 +62,24 @@ NODE_ENV=production
 HOST=0.0.0.0
 PORT=3001
 DATABASE_URL=${{Postgres.DATABASE_URL}}
+REDIS_URL=${{Redis.REDIS_URL}}
 JWT_SECRET=<long random secret>
 JWT_REFRESH_SECRET=<different long random secret>
+JWT_EXPIRES_IN=7d
 FRONTEND_URL=https://plethora.quickbophasecurity.co.za
 CORS_ORIGIN=https://plethora.quickbophasecurity.co.za
+API_URL=https://plethora-api-production.up.railway.app
 TRUST_PROXY=true
-UPLOADS_DIR=/data/uploads
+UPLOADS_DIR=/tmp/uploads
 WHATSAPP_PHONE_NUMBER_ID=
 WHATSAPP_ACCESS_TOKEN=
 WHATSAPP_VERIFY_TOKEN=
-WHATSAPP_APP_SECRET=
 WHATSAPP_API_VERSION=v20.0
-WHATSAPP_WABA_ID=
-WHATSAPP_TEMPLATES=
 ENCRYPTION_KEY=<required app format>
 CLOCK_IN_WINDOW_MINUTES=15
-CRON_SECRET=<different long random secret>
-PUPPETEER_EXECUTABLE_PATH=
 ```
 
-Attach a Railway Volume to the API service at `/data` before deploying uploads.
-The Puppeteer and additional WhatsApp variables are optional.
+If Redis is not provisioned, omit `REDIS_URL`.
 
 `PORT` may be left unset because Railway injects it. The API code reads
 `process.env.PORT` through validated env, defaults to `3001`, and binds to
@@ -102,13 +101,23 @@ npm run db:migrate:deploy --workspace=api
 The API production start path is:
 
 ```bash
-npm start --workspace=api
+npm run start:with-migrate --workspace=api
 ```
 
 That runs:
 
 ```bash
 prisma migrate deploy && node dist/index.js
+```
+
+## Redis
+
+Redis is optional. Add Railway Redis only when an app feature needs it.
+
+If used, set:
+
+```bash
+REDIS_URL=${{Redis.REDIS_URL}}
 ```
 
 ## Web Service
@@ -221,54 +230,6 @@ Railway will rebuild only the service affected by its watch patterns:
 - API watches `apps/api/**`, `package.json`, `package-lock.json`.
 - Web watches `apps/web/**`, `package.json`, `package-lock.json`.
 
-## RBAC + permissions cutover (one-time)
-
-After shipping the user-permissions RBAC release, cut over production in this
-order. Do not skip steps or reverse them.
-
-1. **Ship the release unit** — commit/push the RBAC + debug overhaul as one
-   deployable set. Do **not** commit local artefacts such as
-   `apps/api/permission-migration-report.csv` (gitignored; review offline only).
-2. **Schema migrate** — API start already runs `prisma migrate deploy` via
-   `npm start`. Confirm the `user_permissions` / `accessVersion`
-   migration applied in Railway logs.
-3. **Permission backfill (once)** — against the production database only:
-
-   ```bash
-   # From a machine with production DATABASE_URL (e.g. Railway shell / one-off)
-   cd apps/api && npm run db:migrate-permissions
-   ```
-
-   Review the generated CSV report offline. Confirm system owner rows and
-   `moduleAccess` backfill look correct before proceeding.
-4. **Deploy** — deploy **api** first, then **web** (Railway services).
-5. **Force re-login** — tell all users to sign out and sign in. Existing JWTs
-   lack the new `accessVersion` / permission claims and will hit `ACCESS_STALE`
-   until refreshed.
-6. **Repair demoted system owners (if needed)** — older builds could clear
-   `isSystemOwner` when saving a user’s profile/permissions. If the root admin
-   gets “Insufficient permissions for this action” after an account update,
-   restore ownership for an **explicit** company + user (bumps `accessVersion`;
-   **owners must re-login**). Never auto-pick the earliest admin:
-
-   ```bash
-   cd apps/api
-   npx tsx scripts/repair-system-owner-access.ts --company-id <COMPANY_ID> --user-id <USER_ID> --dry-run
-   npx tsx scripts/repair-system-owner-access.ts --company-id <COMPANY_ID> --user-id <USER_ID>
-   # or: --company-id <COMPANY_ID> --email <EMAIL>
-   ```
-7. **Post-deploy smoke**
-   - System owner: dashboard, sites, attendance capture overview, employees list
-   - Operational admin: reports OK; `/reports/financial` returns 403; no
-     salary/ID on team cards
-   - Finance/owner: payroll calculate → different user approve → different user
-     mark paid
-   - Confidential document download via signed `/documents/download?...` (not
-     raw `/uploads/documents/...`)
-
-Public static files under `/uploads/` are limited to **logos** only. Document
-and other non-logo assets are not world-readable.
-
 ## Troubleshooting
 
 Build fails on dependency install:
@@ -286,7 +247,7 @@ API deploy fails during migration:
 
 API starts but Railway says it cannot respond:
 
-- Confirm the service uses `cd apps/api && npm start`.
+- Confirm the service uses `cd apps/api && npm run start:with-migrate`.
 - Confirm logs show the API listening on `0.0.0.0` and Railway's `PORT`.
 - Confirm `/health` returns `{"status":"ok","service":"plethora-api"}`.
 
@@ -309,10 +270,9 @@ CORS errors:
 
 Uploads:
 
-- Mount a Railway Volume at `/data` and set `UPLOADS_DIR=/data/uploads`.
-- Do not use `/tmp/uploads` in production because it is erased on redeploy.
-- Public static serving is limited to `/uploads/logos/`. Document and other
-  non-logo files must be fetched via authenticated signed download routes.
+- The example uses `UPLOADS_DIR=/tmp/uploads`, which is ephemeral.
+- Add a Railway Volume and point `UPLOADS_DIR` at the mounted path if upload
+  persistence is required.
 
 PDF generation:
 
@@ -357,3 +317,4 @@ curl -sS -X POST "https://api.example.com/internal/cron/auto-roster" \
 Expect `200` with `{ "ok": true, "companiesProcessed": N, "result": ... }`.
 
 See [docs/ROSTER_ENGINE.md](./docs/ROSTER_ENGINE.md) for payroll calendar and coverage-threshold behaviour.
+

@@ -7,13 +7,10 @@ import {
   hashPasswordSetupToken,
   issueTokensForUser,
   logoutUser,
-  MfaRequiredError,
 } from "../services/auth.service.js";
 import { authMiddleware } from "../middleware/auth.js";
-import { loadUserAccess } from "../services/user-access.service.js";
-import { permissionsForPreset, PRESET_KEYS } from "../lib/permissions.js";
-import { findUniqueUserForMe } from "../lib/user-module-column.js";
 import { prisma } from "../lib/prisma.js";
+import { findUniqueUserForMe } from "../lib/user-module-column.js";
 import { validatePassword, PASSWORD_MIN_LENGTH } from "../lib/password-policy.js";
 import { badRequest } from "../lib/api-response.js";
 import {
@@ -24,8 +21,6 @@ import {
   toPublicAuthResponse,
 } from "../lib/auth-cookies.js";
 import { env } from "../lib/env.js";
-import { decryptMfaSecret, encryptMfaSecret, generateMfaSecret, mfaOtpAuthUri, verifyTotp } from "../services/mfa.service.js";
-import { auditContextFromRequest, createAuditLog } from "../lib/audit.js";
 
 const AUTH_RATE = { max: 10, timeWindow: "15 minutes" as const };
 
@@ -57,7 +52,6 @@ const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
   companyId: z.string().optional(),
-  otp: z.string().regex(/^\d{6}$/).optional(),
 });
 
 const onboardSchema = z.object({
@@ -123,26 +117,14 @@ export async function authRoutes(app: FastifyInstance) {
             email: adminInput.email.toLowerCase(),
             passwordHash,
             role: "admin",
-            adminClass: "SYSTEM_ADMIN",
-            isSystemOwner: true,
-            mfaRequired: false,
           },
-          select: { id: true, name: true, email: true, role: true, companyId: true, adminClass: true },
+          select: { id: true, name: true, email: true, role: true, companyId: true },
         });
 
         return { company, adminUser };
       });
 
-      const { setUserPermissions } = await import("../services/user-access.service.js");
-      await setUserPermissions(adminUser.id, permissionsForPreset(PRESET_KEYS.OPERATIONAL_ADMIN), {
-        auditUserId: adminUser.id,
-        reason: "Initial company administrator bootstrap",
-      });
-      const refreshedAdmin = await prisma.user.findUniqueOrThrow({
-        where: { id: adminUser.id },
-        select: { id: true, name: true, email: true, role: true, companyId: true, adminClass: true, accessVersion: true },
-      });
-      const result = await issueTokensForUser(refreshedAdmin, refreshMeta(request));
+      const result = await issueTokensForUser(adminUser, refreshMeta(request));
       return sendAuthSuccess(reply, result, 201);
     } catch (err: unknown) {
       const prismaErr = err as { code?: string };
@@ -189,9 +171,6 @@ export async function authRoutes(app: FastifyInstance) {
 
       return sendAuthSuccess(reply, result);
     } catch (err) {
-      if (err instanceof MfaRequiredError) {
-        return reply.code(401).send({ error: "Multi-factor authentication required", code: err.code, message: err.message });
-      }
       request.log.error(err);
       return reply.code(500).send({
         error: "Login failed",
@@ -326,52 +305,7 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "User not found" });
     }
 
-    const access = await loadUserAccess(request.user.sub);
-    if (!access || access.disabledAt) return reply.code(401).send({ error: "Unauthorized" });
-    if (access.accessVersion !== (request.user.accessVersion ?? 1)) {
-      return reply.code(401).send({ error: "Unauthorized", code: "ACCESS_STALE", message: "Your access has changed. Please sign in again." });
-    }
-    const permissions = access.isSystemOwner ? permissionsForPreset(PRESET_KEYS.SYSTEM_OWNER) : [...access.permissions];
-
-    return reply.send({
-      ...user,
-      accessVersion: access?.accessVersion ?? 1,
-      adminClass: access.adminClass,
-      isSystemOwner: access?.isSystemOwner ?? false,
-      permissions,
-    });
-  });
-
-  app.get("/mfa/status", { preHandler: [authMiddleware] }, async (request, reply) => {
-    const user = await prisma.user.findUnique({
-      where: { id: request.user!.sub },
-      select: { mfaRequired: true, mfaEnabled: true, mfaEnrolledAt: true },
-    });
-    if (!user) return reply.code(404).send({ error: "User not found" });
     return reply.send(user);
-  });
-
-  app.post("/mfa/setup", { preHandler: [authMiddleware], config: { rateLimit: AUTH_RATE } }, async (request, reply) => {
-    const user = await prisma.user.findUnique({
-      where: { id: request.user!.sub },
-      select: { id: true, email: true, companyId: true, company: { select: { name: true } } },
-    });
-    if (!user) return reply.code(404).send({ error: "User not found" });
-    const secret = generateMfaSecret();
-    await prisma.user.update({ where: { id: user.id }, data: { mfaSecretEncrypted: encryptMfaSecret(secret), mfaEnabled: false, mfaEnrolledAt: null } });
-    await createAuditLog({ ...auditContextFromRequest(request), userId: user.id, companyId: user.companyId, action: "mfa.enrollment.started", entityType: "user", entityId: user.id, result: "pending", riskLevel: "HIGH" });
-    return reply.send({ secret, otpAuthUri: mfaOtpAuthUri({ secret, email: user.email, companyName: user.company.name }) });
-  });
-
-  app.post("/mfa/verify", { preHandler: [authMiddleware], config: { rateLimit: AUTH_RATE } }, async (request, reply) => {
-    const parsed = z.object({ code: z.string().regex(/^\d{6}$/) }).safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: "Enter a valid 6-digit code" });
-    const user = await prisma.user.findUnique({ where: { id: request.user!.sub }, select: { id: true, companyId: true, mfaSecretEncrypted: true } });
-    if (!user?.mfaSecretEncrypted) return reply.code(409).send({ error: "Start MFA setup first" });
-    if (!verifyTotp(decryptMfaSecret(user.mfaSecretEncrypted), parsed.data.code)) return reply.code(400).send({ error: "The verification code is invalid or expired" });
-    await prisma.user.update({ where: { id: user.id }, data: { mfaEnabled: true, mfaRequired: true, mfaEnrolledAt: new Date(), accessVersion: { increment: 1 } } });
-    await createAuditLog({ ...auditContextFromRequest(request), userId: user.id, companyId: user.companyId, action: "mfa.enabled", entityType: "user", entityId: user.id, riskLevel: "HIGH" });
-    return reply.send({ success: true, message: "Multi-factor authentication is enabled. Sign in again to continue." });
   });
 
   app.post("/logout", { preHandler: [authMiddleware] }, async (request, reply) => {

@@ -24,17 +24,16 @@ function guardLabel(guard: GuardPickerOption) {
 function matchesSearch(guard: GuardPickerOption, query: string) {
   const term = query.trim().toLowerCase();
   if (!term) return true;
-  const fields = [
+  const haystack = [
     guard.firstName,
     guard.lastName,
     guard.employeeNumber,
     guard.psiraNumber,
-    guardName(guard),
-    `${guard.firstName ?? ""}${guard.lastName ?? ""}`,
   ]
     .filter(Boolean)
-    .map((s) => s!.toLowerCase());
-  return fields.some((field) => field.includes(term));
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(term);
 }
 
 type GuardSearchPickerProps = {
@@ -46,14 +45,8 @@ type GuardSearchPickerProps = {
   className?: string;
   /** Shown when value is empty — e.g. the scheduled guard on a timesheet row. */
   defaultGuardId?: string | null;
-  /** Display fallback when defaultGuardId is set but not present in guards. */
-  defaultGuardLabel?: string | null;
   allowClear?: boolean;
   clearLabel?: string;
-  /** When false, the selected name can wrap instead of truncating (better for wide tables). */
-  truncateLabel?: boolean;
-  /** Tighter layout for dense tables — removes min-width on the container. */
-  compact?: boolean;
 };
 
 export function GuardSearchPicker({
@@ -64,11 +57,8 @@ export function GuardSearchPicker({
   placeholder = "Search employee…",
   className = "input-compact",
   defaultGuardId = null,
-  defaultGuardLabel = null,
   allowClear = true,
   clearLabel = "Nobody worked",
-  truncateLabel = true,
-  compact = false,
 }: GuardSearchPickerProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -77,7 +67,7 @@ export function GuardSearchPicker({
 
   const effectiveId = value || defaultGuardId || "";
   const selected = guards.find((g) => g.id === effectiveId) ?? null;
-  const hasDisplayValue = !!selected || (!value && !!defaultGuardId && !!defaultGuardLabel);
+  const isDefaultOnly = !value && !!defaultGuardId && effectiveId === defaultGuardId;
 
   const filtered = useMemo(
     () => guards.filter((g) => matchesSearch(g, search)),
@@ -103,14 +93,10 @@ export function GuardSearchPicker({
     setSearch("");
   }, [open]);
 
-  const displayText = selected
-    ? guardLabel(selected)
-    : !value && defaultGuardId && defaultGuardLabel
-      ? defaultGuardLabel
-      : placeholder;
+  const displayText = selected ? guardLabel(selected) : placeholder;
 
   return (
-    <div ref={containerRef} className={compact ? "relative min-w-0" : "relative min-w-44"}>
+    <div ref={containerRef} className="relative min-w-44">
       <button
         type="button"
         disabled={disabled}
@@ -119,10 +105,7 @@ export function GuardSearchPicker({
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span
-          className={`min-w-0 ${truncateLabel ? "truncate" : "whitespace-normal break-words leading-snug"} ${!hasDisplayValue ? "text-neutral-500" : ""}`}
-          title={truncateLabel ? displayText : undefined}
-        >
+        <span className={`min-w-0 truncate ${!selected ? "text-neutral-500" : ""}`}>
           {displayText}
         </span>
         <svg
@@ -135,7 +118,7 @@ export function GuardSearchPicker({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      {!value && defaultGuardId && (selected || defaultGuardLabel) && (
+      {isDefaultOnly && selected && (
         <p className="mt-0.5 text-[10px] text-neutral-500">Scheduled guard — change if someone else worked</p>
       )}
 

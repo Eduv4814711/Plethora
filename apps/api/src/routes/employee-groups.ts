@@ -1,9 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { authProtect } from "../middleware/auth-protect.js";
+import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
-import { requirePermission } from "../middleware/permissions.js";
-import { PERMISSIONS } from "../lib/permissions.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 
@@ -16,18 +14,12 @@ const createEmployeeGroupSchema = z.object({
 const updateEmployeeGroupSchema = createEmployeeGroupSchema.partial();
 
 export async function employeeGroupsRoutes(app: FastifyInstance) {
-  const readProtect = [
-    ...authProtect,
+  const protect = [
+    authMiddleware,
     requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"], { module: "/employees" }),
-    requirePermission(PERMISSIONS.EMPLOYEES_READ_OPERATIONAL),
-  ];
-  const manageProtect = [
-    ...authProtect,
-    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"], { module: "/employees" }),
-    requirePermission(PERMISSIONS.EMPLOYEES_MANAGE_OPERATIONAL),
   ];
 
-  app.get("/", { preHandler: readProtect }, async (request, reply) => {
+  app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     const groups = await prisma.employeeGroup.findMany({
       where: { companyId: user.companyId },
@@ -36,7 +28,7 @@ export async function employeeGroupsRoutes(app: FastifyInstance) {
     return reply.send({ data: groups });
   });
 
-  app.post("/", { preHandler: manageProtect }, async (request, reply) => {
+  app.post("/", { preHandler: protect }, async (request, reply) => {
     const parsed = createEmployeeGroupSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -66,7 +58,7 @@ export async function employeeGroupsRoutes(app: FastifyInstance) {
     return reply.code(201).send(group);
   });
 
-  app.put("/:id", { preHandler: manageProtect }, async (request, reply) => {
+  app.put("/:id", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const parsed = updateEmployeeGroupSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -101,7 +93,7 @@ export async function employeeGroupsRoutes(app: FastifyInstance) {
     return reply.send(group);
   });
 
-  app.delete("/:id", { preHandler: manageProtect }, async (request, reply) => {
+  app.delete("/:id", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const companyId = request.user!.companyId;
 

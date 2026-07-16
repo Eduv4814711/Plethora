@@ -1,10 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "crypto";
-import { authProtect } from "../middleware/auth-protect.js";
-import { requirePermission } from "../middleware/permissions.js";
-import { PERMISSIONS } from "../lib/permissions.js";
+import { authMiddleware } from "../middleware/auth.js";
+import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { readStreamToBuffer, storage } from "../lib/storage.js";
+
+const TASK_ROLES = ["admin", "operations_manager", "hr_payroll", "supervisor"] as const;
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = [
@@ -22,7 +23,7 @@ const ALLOWED_TYPES = [
 ];
 
 export async function taskAttachmentsRoutes(app: FastifyInstance) {
-  const protect = [...authProtect, requirePermission(PERMISSIONS.TASKS_MANAGE)];
+  const protect = [authMiddleware, requireRole([...TASK_ROLES], { module: "/tasks" })];
 
   app.post("/tasks/:taskId/attachments", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

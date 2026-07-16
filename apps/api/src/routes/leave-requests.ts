@@ -1,8 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { authProtect } from "../middleware/auth-protect.js";
+import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
-import { requirePermission } from "../middleware/permissions.js";
-import { PERMISSIONS } from "../lib/permissions.js";
 import { prisma } from "../lib/prisma.js";
 import {
   approveLeaveRequest,
@@ -12,16 +10,14 @@ import {
 import { createAuditLog } from "../lib/audit.js";
 
 export async function leaveRequestsRoutes(app: FastifyInstance) {
-  const moduleProtect = [
-    ...authProtect,
+  const protect = [
+    authMiddleware,
     requireRole(["admin", "operations_manager", "hr_payroll"], {
       anyOfModules: ["/employees", "/payroll"],
     }),
   ];
-  const readProtect = [...moduleProtect, requirePermission(PERMISSIONS.LEAVE_READ)];
-  const manageProtect = [...moduleProtect, requirePermission(PERMISSIONS.LEAVE_MANAGE)];
 
-  app.get("/", { preHandler: readProtect }, async (request, reply) => {
+  app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as Record<string, string | undefined>;
     const status = q.status;
@@ -51,7 +47,7 @@ export async function leaveRequestsRoutes(app: FastifyInstance) {
     return reply.send({ data: records });
   });
 
-  app.post("/:id/approve", { preHandler: manageProtect }, async (request, reply) => {
+  app.post("/:id/approve", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
 
@@ -92,7 +88,7 @@ export async function leaveRequestsRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
-  app.post("/:id/reject", { preHandler: manageProtect }, async (request, reply) => {
+  app.post("/:id/reject", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
 

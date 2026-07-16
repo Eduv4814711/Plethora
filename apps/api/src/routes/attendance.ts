@@ -1,9 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { authProtect } from "../middleware/auth-protect.js";
+import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
-import { requirePermission } from "../middleware/permissions.js";
-import { PERMISSIONS } from "../lib/permissions.js";
 import { prisma } from "../lib/prisma.js";
 import {
   validateClockIn,
@@ -12,7 +10,6 @@ import {
 } from "../services/attendance.service.js";
 import { AttendanceValidationError } from "../services/attendance.service.js";
 import { createAuditLog } from "../lib/audit.js";
-import { triggerPostClockExceptionSync } from "../modules/attendance-exceptions/post-clock-sync.js";
 const optionalCoords = z
   .object({
     latitude: z.number().min(-90).max(90).optional(),
@@ -40,11 +37,9 @@ const manualAttendanceSchema = z.object({
 
 export async function attendanceRoutes(app: FastifyInstance) {
   const protect = [
-    ...authProtect,
+    authMiddleware,
     requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], { module: "/attendance" }),
-    requirePermission(PERMISSIONS.ATTENDANCE_READ),
   ];
-  const captureProtect = [...protect, requirePermission(PERMISSIONS.ATTENDANCE_CAPTURE)];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
@@ -150,7 +145,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
     clockOut: z.string().datetime().optional(),
   });
 
-  app.post("/missed/:shiftId/record", { preHandler: captureProtect }, async (request, reply) => {
+  app.post("/missed/:shiftId/record", { preHandler: protect }, async (request, reply) => {
     const { shiftId } = request.params as { shiftId: string };
     const parsed = recordMissedShiftSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -247,7 +242,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
     return reply.code(201).send(attendance);
   });
 
-  app.post("/clock-in", { preHandler: captureProtect }, async (request, reply) => {
+  app.post("/clock-in", { preHandler: protect }, async (request, reply) => {
     const parsed = clockInSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -303,8 +298,6 @@ export async function attendanceRoutes(app: FastifyInstance) {
         metadata: { shiftId: parsed.data.shiftId },
       });
 
-      triggerPostClockExceptionSync(request.user!.companyId, shiftWithSite?.siteId);
-
       return reply.code(201).send(attendance);
     } catch (err) {
       if (err instanceof AttendanceValidationError) {
@@ -317,7 +310,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post("/clock-out", { preHandler: captureProtect }, async (request, reply) => {
+  app.post("/clock-out", { preHandler: protect }, async (request, reply) => {
     const schema = z
       .object({ attendanceId: z.string().min(1) })
       .and(optionalCoords);
@@ -416,12 +409,10 @@ export async function attendanceRoutes(app: FastifyInstance) {
       metadata: { shiftId: attendance.shiftId, hoursWorked, overtimeHours },
     });
 
-    triggerPostClockExceptionSync(user.companyId, attendance.shift.siteId);
-
     return reply.send(updated);
   });
 
-  app.post("/clock-out-by-shift", { preHandler: captureProtect }, async (request, reply) => {
+  app.post("/clock-out-by-shift", { preHandler: protect }, async (request, reply) => {
     const schema = z.object({ shiftId: z.string().min(1) }).and(optionalCoords);
     const parsed = schema.safeParse(request.body);
     if (!parsed.success) {
@@ -520,7 +511,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
-  app.post("/manual", { preHandler: [...protect, requirePermission(PERMISSIONS.ATTENDANCE_MANAGE)] }, async (request, reply) => {
+  app.post("/manual", { preHandler: protect }, async (request, reply) => {
     const parsed = manualAttendanceSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -637,9 +628,8 @@ export async function attendanceRoutes(app: FastifyInstance) {
   });
 
   const updateAttendanceProtect = [
-    ...authProtect,
+    authMiddleware,
     requireRole(["admin", "hr_payroll"], { module: "/attendance" }),
-    requirePermission(PERMISSIONS.ATTENDANCE_MANAGE),
   ];
 
   app.put("/:id", { preHandler: updateAttendanceProtect }, async (request, reply) => {

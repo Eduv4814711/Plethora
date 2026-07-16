@@ -24,8 +24,6 @@ export const siteDetailInclude = {
     where: { isActive: true },
     include: { employee: { select: employeeSelect } },
   },
-  supervisor: { select: { id: true, name: true, email: true } },
-  client: { select: { id: true, name: true, email: true, phone: true } },
 } satisfies Prisma.SiteInclude;
 
 type SitePostRow = Prisma.SitePostGetPayload<{

@@ -22,10 +22,6 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/tasks", label: "Tasks", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
   { href: "/whatsapp", label: "WhatsApp", roles: ["admin", "operations_manager", "hr_payroll", "supervisor", "controller"] },
   { href: "/reports", label: "Reports", roles: ["admin", "operations_manager", "hr_payroll"] },
-  { href: "/approvals", label: "Approvals", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
-  { href: "/incidents", label: "Incidents", roles: ["admin", "operations_manager", "supervisor", "controller"] },
-  { href: "/documents", label: "Documents", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
-  { href: "/client-portal", label: "Client Portal", roles: ["admin", "client"] },
   {
     href: "/academy",
     label: "Academy",
@@ -39,16 +35,7 @@ export const NAV_ITEMS: NavItem[] = [
 export const MAIN_NAV_HREFS = ["/", "/employees", "/sites", "/rostering", "/attendance", "/payroll", "/tasks"];
 
 /** Nav items shown in the "More" dropdown (remaining items). */
-export const MORE_NAV_HREFS = [
-  "/whatsapp",
-  "/reports",
-  "/approvals",
-  "/incidents",
-  "/documents",
-  "/client-portal",
-  "/academy",
-  "/audit",
-];
+export const MORE_NAV_HREFS = ["/whatsapp", "/reports", "/academy", "/audit"];
 
 /** Modules an admin can assign to a user (same as primary nav; Audit only effective for admin accounts). */
 export const MODULE_ASSIGN_OPTIONS: { href: string; label: string }[] = NAV_ITEMS.map(({ href, label }) => ({
@@ -68,25 +55,16 @@ export function normalizeUserModuleAccess(raw: unknown): string[] | null {
 
 /** Suggested module paths for a role (admin UI pre-fill). Not applied at runtime without saving. */
 export function defaultModulesForRole(role: string): string[] {
-  if (role === "client") return ["/client-portal"];
   const userRole = role as UserRole;
   return NAV_ITEMS.filter(
     (n) => n.roles.includes(userRole) && (n.href !== "/audit" || userRole === "admin")
   ).map((n) => n.href);
 }
 
-/** Full tenant administrator: may use all modules and admin-only APIs. */
-export function isFullAdmin(user: { role: string; moduleAccess?: unknown; isSystemOwner?: boolean; permissions?: string[] | null }): boolean {
-  if (user.isSystemOwner) return true;
-  // Rolling-deploy compatibility: the previous API did not return
-  // `permissions`. Preserve its historical unscoped-admin behaviour only when
-  // the field is absent. A new response with permissions: [] remains
-  // default-deny as intended.
-  if (user.role === "admin" && user.permissions === undefined && user.moduleAccess == null) return true;
-  return !!user.permissions?.includes("permissions.manage_operational") && !!user.permissions?.includes("users.manage");
+/** Full tenant administrator: may use all modules and admin-only APIs. Scoped admins have role admin + explicit module list. */
+export function isFullAdmin(user: { role: string; moduleAccess?: unknown }): boolean {
+  return user.role === "admin" && !normalizeUserModuleAccess(user.moduleAccess);
 }
-
-export { can } from "./capabilities";
 
 function navItemForPath(pathname: string): NavItem | undefined {
   return NAV_ITEMS.find((n) => {
@@ -95,38 +73,10 @@ function navItemForPath(pathname: string): NavItem | undefined {
   });
 }
 
-const ROUTE_PERMISSIONS: Record<string, string[]> = {
-  "/": ["dashboard.read"],
-  "/employees": ["employees.read_operational"],
-  "/sites": ["sites.read"],
-  "/rostering": ["rosters.read", "timesheets.read"],
-  "/attendance": ["attendance.read"],
-  "/payroll": ["payroll.status.read", "payroll.run.read"],
-  "/tasks": ["tasks.read"],
-  "/reports": ["reports.read_operational", "reports.read_financial"],
-  "/approvals": ["approvals.read"],
-  "/incidents": ["incidents.read"],
-  "/documents": ["documents.read_operational", "documents.read_hr", "documents.read_payroll", "documents.read_medical"],
-  "/academy": ["academy.read"],
-  "/audit": ["audit.read", "data_quality.read"],
-  "/settings": ["settings.manage_operational", "settings.manage_statutory", "users.manage"],
-};
-
 /**
  * First route to open for a user. Non-admins without assigned modules → access-pending page.
  */
-export function getDefaultRouteForUser(user: {
-  role: string;
-  moduleAccess?: unknown;
-  isSystemOwner?: boolean;
-  permissions?: string[] | null;
-}): string {
-  if (user.isSystemOwner) return "/";
-  if (user.role === "admin" && user.permissions === undefined && user.moduleAccess == null) return "/";
-  if (user.permissions) {
-    const first = NAV_ITEMS.find((item) => canAccessRoute(item.href, user.role, user.moduleAccess, false, user.permissions));
-    if (first) return first.href;
-  }
+export function getDefaultRouteForUser(user: { role: string; moduleAccess?: unknown }): string {
   const custom = normalizeUserModuleAccess(user.moduleAccess);
   if (custom) {
     for (const nav of NAV_ITEMS) {
@@ -134,40 +84,28 @@ export function getDefaultRouteForUser(user: {
       if (nav.href === "/audit" && user.role !== "admin") continue;
       return nav.href;
     }
-    return custom[0] ?? ACCESS_PENDING_HREF;
+    return custom[0] ?? (user.role === "admin" ? "/" : ACCESS_PENDING_HREF);
   }
+  if (user.role === "admin") return "/";
   return ACCESS_PENDING_HREF;
 }
 
 /**
- * Route access: system owner / full admin → all nav modules; anyone else → explicit module list only.
+ * Route access: full admin → all nav modules; anyone else → explicit module list only.
  */
-export function canAccessRoute(
-  pathname: string,
-  role: string,
-  moduleAccess?: unknown,
-  isSystemOwner?: boolean,
-  permissions?: string[] | null
-): boolean {
+export function canAccessRoute(pathname: string, role: string, moduleAccess?: unknown): boolean {
   const userRole = role as UserRole;
 
   if (pathname === ACCESS_PENDING_HREF || pathname.startsWith(`${ACCESS_PENDING_HREF}/`)) {
-    if (isSystemOwner) return false;
-    return !permissions || permissions.length === 0;
+    if (userRole === "admin") return false;
+    return normalizeUserModuleAccess(moduleAccess) == null;
   }
 
   const item = navItemForPath(pathname);
   if (!item) return false;
 
-  if (isSystemOwner) return true;
-
-  // Support only genuinely legacy session payloads during a staggered web/API
-  // Railway rollout. Explicit permission lists always win.
-  if (role === "admin" && permissions === undefined && moduleAccess == null) return true;
-
-  if (permissions) {
-    const required = ROUTE_PERMISSIONS[item.href];
-    return !!required?.some((permission) => permissions.includes(permission));
+  if (userRole === "admin" && !normalizeUserModuleAccess(moduleAccess)) {
+    return true;
   }
 
   const custom = normalizeUserModuleAccess(moduleAccess);
@@ -182,12 +120,9 @@ export function canAccessRoute(
 }
 
 /** Site create/edit/delete: must have `/sites` in assigned modules; full admin unrestricted. */
-export function canManageSitesModule(user: {
-  role: string;
-  moduleAccess?: unknown;
-  isSystemOwner?: boolean;
-  permissions?: string[] | null;
-}): boolean {
-  if (user.isSystemOwner) return true;
-  return user.permissions?.includes("sites.manage") ?? false;
+export function canManageSitesModule(user: { role: string; moduleAccess?: unknown }): boolean {
+  if (!canAccessRoute("/sites", user.role, user.moduleAccess)) return false;
+  const custom = normalizeUserModuleAccess(user.moduleAccess);
+  if (custom) return custom.includes("/sites");
+  return user.role === "admin";
 }

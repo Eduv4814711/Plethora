@@ -62,7 +62,6 @@ export const publishRosterSchema = z.object({
   startDate: z.string().min(1),
   endDate: z.string().min(1),
   replaceExisting: z.boolean().optional(),
-  reason: z.string().min(5).max(2000),
 });
 
 export const manualOverrideSchema = z.object({
@@ -91,13 +90,6 @@ export const siteTimesheetQuerySchema = z.object({
   siteId: z.string().min(1),
   startDate: z.string().min(1),
   endDate: z.string().min(1),
-  shiftType: z.enum(["day", "night", "all"]).optional().default("all"),
-});
-
-export const siteTimesheetCaptureOverviewQuerySchema = z.object({
-  startDate: z.string().min(1),
-  endDate: z.string().min(1),
-  shiftType: z.enum(["day", "night", "all"]).default("all"),
 });
 
 export const siteTimesheetRowUpdateSchema = z.object({
@@ -121,11 +113,7 @@ export const siteTimesheetRowUpdateSchema = z.object({
     "training",
     "off",
   ]).optional(),
-  approvalStatus: z.enum(["pending", "partially_reviewed", "reviewed", "approved"]).optional(),
-  dutyOnObNumber: z.string().max(80).nullable().optional(),
-  dutyOffObNumber: z.string().max(80).nullable().optional(),
-  /** @deprecated Use dutyOnObNumber */
-  occurrenceBookNumber: z.string().max(80).nullable().optional(),
+  approvalStatus: z.enum(["pending", "reviewed", "approved"]).optional(),
   comments: z.string().nullable().optional(),
 });
 
@@ -147,23 +135,13 @@ export const siteTimesheetRowCreateSchema = z.object({
     "training",
     "off",
   ]),
-  dutyOnObNumber: z.string().trim().min(1, "Duty ON OB number is required").max(80).optional(),
-  dutyOffObNumber: z.string().trim().max(80).nullable().optional(),
-  /** @deprecated Use dutyOnObNumber */
-  occurrenceBookNumber: z.string().trim().min(1).max(80).optional(),
   comments: z.string().nullable().optional(),
   hoursWorked: z.number().nullable().optional(),
   overtimeHours: z.number().nullable().optional(),
-}).refine((data) => Boolean(data.dutyOnObNumber?.trim() || data.occurrenceBookNumber?.trim()), {
-  message: "Duty ON OB number is required",
-  path: ["dutyOnObNumber"],
 });
 
 export const approveSiteTimesheetSchema = z.object({
   notes: z.string().optional(),
-  reason: z.string().min(5).max(2000),
-  /** When day|night, only those rows are approved; sheet locks only when no pending rows remain. */
-  shiftType: z.enum(["day", "night", "all"]).optional().default("all"),
 });
 
 export const unlockSiteTimesheetSchema = z.object({

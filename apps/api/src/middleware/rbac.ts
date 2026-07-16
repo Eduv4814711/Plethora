@@ -1,44 +1,36 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import type { UserRole } from "@prisma/client";
 import type { JWTPayload } from "../lib/types.js";
-import type { UserAccessRecord } from "../services/user-access.service.js";
-import { hasPermission } from "../services/user-access.service.js";
-import { PERMISSIONS } from "../lib/permissions.js";
-import {
-  normalizeModuleAccess,
-  resolveEffectiveModuleAccess,
-} from "../lib/module-access.js";
 
-export { normalizeModuleAccess } from "../lib/module-access.js";
+/** Normalize DB/JWT value: non-empty string[] → list; else null (full admin only; others must be assigned modules). */
+export function normalizeModuleAccess(raw: unknown): string[] | null {
+  if (raw == null) return null;
+  if (!Array.isArray(raw)) return null;
+  const out = raw.filter((x): x is string => typeof x === "string" && x.startsWith("/"));
+  return out.length > 0 ? out : null;
+}
 
 function matchesModule(granted: string[], modulePath: string): boolean {
   return granted.some((m) => modulePath === m || modulePath.startsWith(`${m}/`));
 }
 
-function effectiveModules(user: JWTPayload): string[] | null {
-  return resolveEffectiveModuleAccess({
-    role: user.role,
-    moduleAccess: user.moduleAccess,
-    isSystemOwner: user.isSystemOwner === true,
-  });
-}
-
 function userMatchesModule(user: JWTPayload, modulePath: string): boolean {
-  const list = effectiveModules(user);
+  const list = normalizeModuleAccess(user.moduleAccess);
   if (!list) return false;
   return matchesModule(list, modulePath);
 }
 
 function userMatchesAnyModule(user: JWTPayload, modulePaths: string[]): boolean {
-  const list = effectiveModules(user);
+  const list = normalizeModuleAccess(user.moduleAccess);
   if (!list) return false;
   return modulePaths.some((p) => matchesModule(list, p));
 }
 
-/** Authoritative ownership comes from DB-backed accessMiddleware, not the JWT claim alone. */
 /**
- * Module-path gate for navigation-assigned access.
- * System owners bypass. Everyone else needs matching moduleAccess (explicit or role defaults).
+ * RBAC: only **full** admins (`role === admin` and no `moduleAccess` list) bypass checks.
+ * All other users must have a non-empty `moduleAccess` matching route module options.
+ * Scoped admins (`admin` + list) use the same module checks as other roles.
+ * `roles === ['admin']` routes: full admin only.
  */
 export function requireRole(
   roles: UserRole[],
@@ -51,13 +43,22 @@ export function requireRole(
     }
 
     const u = request.user;
-    const access = request.access;
+    const custom = normalizeModuleAccess(u.moduleAccess);
 
-    if (access?.isSystemOwner) return;
+    if (u.role === "admin" && !custom) {
+      return;
+    }
 
     const adminOnlyRoute = roles.length === 1 && roles[0] === "admin";
     if (adminOnlyRoute) {
-      if (!hasPermission(access, PERMISSIONS.USERS_MANAGE) && !access?.isSystemOwner) {
+      if (u.role !== "admin") {
+        reply.code(403).send({
+          error: "Forbidden",
+          message: "Insufficient permissions for this action",
+        });
+        return;
+      }
+      if (custom) {
         reply.code(403).send({
           error: "Forbidden",
           message: "Insufficient permissions for this action",
@@ -67,7 +68,6 @@ export function requireRole(
       return;
     }
 
-    const custom = effectiveModules(u);
     if (custom) {
       if (opts?.anyOfModules?.length) {
         if (userMatchesAnyModule(u, opts.anyOfModules)) {
@@ -103,15 +103,23 @@ export function requireRole(
   };
 }
 
-/** System-owner only (not ordinary administrators). */
-export function requireSystemOwner() {
+export function requireAdmin() {
   return async function (request: FastifyRequest, reply: FastifyReply): Promise<void> {
     if (!request.user) {
       reply.code(401).send({ error: "Unauthorized", message: "Authentication required" });
       return;
     }
 
-    if (!request.access?.isSystemOwner) {
+    if (request.user.role !== "admin") {
+      reply.code(403).send({
+        error: "Forbidden",
+        message: "Insufficient permissions for this action",
+      });
+      return;
+    }
+
+    const custom = normalizeModuleAccess(request.user.moduleAccess);
+    if (custom) {
       reply.code(403).send({
         error: "Forbidden",
         message: "Insufficient permissions for this action",
@@ -119,22 +127,4 @@ export function requireSystemOwner() {
       return;
     }
   };
-}
-
-/** @deprecated Use requireSystemOwner — this gate has always meant system owner, not role=admin. */
-export const requireAdmin = requireSystemOwner;
-
-/** Tax / statutory company fields */
-export function canViewSensitiveCompanyFields(access?: UserAccessRecord): boolean {
-  return hasPermission(access, PERMISSIONS.SETTINGS_MANAGE_STATUTORY);
-}
-
-export function isSystemOwnerAccess(access?: UserAccessRecord): boolean {
-  return access?.isSystemOwner === true;
-}
-
-/** @deprecated Use canViewSensitiveCompanyFields(access) */
-export function canViewSensitiveCompanyFieldsFromJwt(user: JWTPayload): boolean {
-  if (user.isSystemOwner) return true;
-  return userMatchesAnyModule(user, ["/settings", "/payroll"]);
 }

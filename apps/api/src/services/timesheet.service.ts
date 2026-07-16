@@ -102,14 +102,46 @@ export async function aggregateTimesheets(
   // Per-site aggregation: a site contributes hours either through its approved/locked
   // site timesheet rows OR through raw shift attendance — never both. This avoids the
   // legacy all-or-nothing switch where one approved site disabled raw attendance for all.
-  // Approved or locked site timesheets are the sole payroll authority. Raw
-  // attendance feeds capture and exception workflows, never payroll directly.
+  const approvedTimesheets = await prisma.siteTimesheet.findMany({
+    where: {
+      companyId,
+      status: { in: ["approved", "locked"] },
+      periodStart: { lte: periodEnd },
+      periodEnd: { gte: periodStart },
+    },
+    select: { siteId: true },
+  });
+  const approvedSiteIds = [...new Set(approvedTimesheets.map((t) => t.siteId))];
+
+  const shiftsWithAttendance = await prisma.shift.findMany({
+    where: {
+      companyId,
+      status: { in: ["completed", "verified"] },
+      startTime: { lt: periodEnd },
+      endTime: { gt: periodStart },
+      ...(approvedSiteIds.length > 0 ? { siteId: { notIn: approvedSiteIds } } : {}),
+      attendances: {
+        some: {
+          clockIn: { not: null },
+          clockOut: { not: null },
+        },
+      },
+    },
+    include: {
+      employee: true,
+      attendances: {
+        where: {
+          clockIn: { not: null },
+          clockOut: { not: null },
+        },
+      },
+    },
+  });
 
   const leaveRecords = await prisma.leaveRecord.findMany({
     where: {
       employee: { companyId },
       date: { gte: periodStart, lte: periodEnd },
-      voidedAt: null,
     },
   });
 
@@ -145,6 +177,35 @@ export async function aggregateTimesheets(
     t.overtimeHours += bucket.overtimeHours;
     t.sundayHours += bucket.sundayHours;
     t.publicHolidayHours += bucket.publicHolidayHours;
+  }
+
+  for (const shift of shiftsWithAttendance) {
+    const empId = shift.employeeId;
+    if (!totals.has(empId)) {
+      totals.set(empId, {
+        basicHours: 0,
+        overtimeHours: 0,
+        sundayHours: 0,
+        publicHolidayHours: 0,
+      });
+    }
+    const t = totals.get(empId)!;
+
+    for (const att of shift.attendances) {
+      const hoursWorked = att.hoursWorked != null ? Number(att.hoursWorked) : 0;
+      const overtimeHours = att.overtimeHours != null ? Number(att.overtimeHours) : 0;
+      const bucket = classifyShiftHours({
+        shiftStartTime: shift.startTime,
+        hoursWorked,
+        overtimeHours,
+        timeZone,
+        holidayDates,
+      });
+      t.basicHours += bucket.basicHours;
+      t.overtimeHours += bucket.overtimeHours;
+      t.sundayHours += bucket.sundayHours;
+      t.publicHolidayHours += bucket.publicHolidayHours;
+    }
   }
 
   const result: TimesheetAggregate[] = [];

@@ -2,10 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { basename } from "node:path";
-import { authProtect } from "../middleware/auth-protect.js";
-import { canViewSensitiveCompanyFields, requireSystemOwner } from "../middleware/rbac.js";
-import { requirePermission } from "../middleware/permissions.js";
-import { PERMISSIONS } from "../lib/permissions.js";
+import { authMiddleware } from "../middleware/auth.js";
+import { requireAdmin } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 import { runAutoRosterForCompany } from "../services/auto-roster.service.js";
@@ -113,7 +111,7 @@ async function cleanupKnownCompanyLogoFiles(
 }
 
 export async function settingsRoutes(app: FastifyInstance) {
-  app.get("/", { preHandler: authProtect }, async (request, reply) => {
+  app.get("/", { preHandler: [authMiddleware] }, async (request, reply) => {
     const companyId = request.user!.companyId;
 
     const company = await prisma.company.findUnique({
@@ -144,28 +142,10 @@ export async function settingsRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Company not found" });
     }
 
-    // Branding + calendar settings are needed app-wide; statutory refs stay restricted.
-    if (!canViewSensitiveCompanyFields(request.access)) {
-      return reply.send({
-        id: company.id,
-        name: company.name,
-        legalName: company.legalName,
-        address: company.address,
-        phone: company.phone,
-        email: company.email,
-        logoUrl: company.logoUrl,
-        website: company.website,
-        fax: company.fax,
-        settings: company.settings,
-      });
-    }
-
     return reply.send(company);
   });
 
-  app.put("/", {
-    preHandler: [...authProtect, requirePermission(PERMISSIONS.SETTINGS_MANAGE_OPERATIONAL)],
-  }, async (request, reply) => {
+  app.put("/", { preHandler: [authMiddleware, requireAdmin()] }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const parsed = updateSettingsSchema.safeParse(request.body);
 
@@ -177,17 +157,6 @@ export async function settingsRoutes(app: FastifyInstance) {
     }
 
     const data = parsed.data;
-    const statutoryKeys = ["taxNumber", "uifReference", "payeReference", "sdlReference"] as const;
-    const touchingStatutory =
-      data.businessDetails != null &&
-      statutoryKeys.some((k) => data.businessDetails?.[k] !== undefined);
-    if (touchingStatutory && !canViewSensitiveCompanyFields(request.access)) {
-      return reply.code(403).send({
-        error: "Forbidden",
-        message: "Insufficient permissions to update statutory company fields",
-      });
-    }
-
     const updateData: Record<string, unknown> = {};
 
     if (data.name !== undefined) updateData.name = data.name;
@@ -270,7 +239,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     return reply.send(company);
   });
 
-  app.post("/factory-reset", { preHandler: [...authProtect, requireSystemOwner()] }, async (request, reply) => {
+  app.post("/factory-reset", { preHandler: [authMiddleware, requireAdmin()] }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
 

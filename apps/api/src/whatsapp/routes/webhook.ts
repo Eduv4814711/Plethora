@@ -1,7 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { config } from "../../lib/config.js";
 import { prisma } from "../../lib/prisma.js";
-import { verifyWhatsAppWebhookSignature } from "../../lib/whatsapp-signature.js";
 import {
   processAndSend,
   processLocationAndSend,
@@ -60,23 +59,6 @@ interface WhatsAppWebhookBody {
 
 const WEBHOOK_ROUTE_CONFIG = { config: { rateLimit: false } } as const;
 
-type WebhookRequest = FastifyRequest & { rawBody?: string };
-
-function verifyWebhookPostSignature(request: WebhookRequest, reply: FastifyReply): boolean {
-  const appSecret = config.whatsapp.appSecret;
-  if (!appSecret) return true;
-
-  const signature = request.headers["x-hub-signature-256"];
-  const header = Array.isArray(signature) ? signature[0] : signature;
-  const rawBody = request.rawBody ?? JSON.stringify(request.body ?? {});
-  if (!verifyWhatsAppWebhookSignature(rawBody, header, appSecret)) {
-    request.log.warn("Rejected WhatsApp webhook with invalid signature");
-    reply.code(403).send("Forbidden");
-    return false;
-  }
-  return true;
-}
-
 function isWebhookForConfiguredNumber(metadata?: { phone_number_id?: string }): boolean {
   const configuredId = config.whatsapp.phoneNumberId;
   if (!configuredId || !metadata?.phone_number_id) return true;
@@ -108,20 +90,6 @@ async function storeInboundMessage(
 }
 
 export async function webhookRoutes(app: FastifyInstance) {
-  app.addContentTypeParser(
-    "application/json",
-    { parseAs: "string" },
-    (request, body, done) => {
-      try {
-        const raw = typeof body === "string" ? body : body.toString("utf8");
-        (request as WebhookRequest).rawBody = raw;
-        done(null, JSON.parse(raw));
-      } catch (err) {
-        done(err as Error, undefined);
-      }
-    }
-  );
-
   app.get(
     "/webhook",
     WEBHOOK_ROUTE_CONFIG,
@@ -140,11 +108,8 @@ export async function webhookRoutes(app: FastifyInstance) {
   app.post(
     "/webhook",
     WEBHOOK_ROUTE_CONFIG,
-    async (request: WebhookRequest, reply: FastifyReply) => {
-      if (!verifyWebhookPostSignature(request, reply)) return;
-
-      const payload = request.body as WhatsAppWebhookBody | undefined;
-      if (payload?.object !== "whatsapp_business_account") {
+    async (request: FastifyRequest<{ Body: WhatsAppWebhookBody }>, reply: FastifyReply) => {
+      if (request.body?.object !== "whatsapp_business_account") {
         return reply.code(404).send();
       }
 
@@ -153,7 +118,7 @@ export async function webhookRoutes(app: FastifyInstance) {
         return reply.code(200).send();
       }
 
-      const body = payload;
+      const body = request.body as WhatsAppWebhookBody;
       const entries = body.entry ?? [];
 
       for (const entry of entries) {

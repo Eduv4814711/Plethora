@@ -697,60 +697,6 @@ function formatDecimal(val: unknown): string {
   return String(val);
 }
 
-export async function exportEmployeesOperationalToCsv(companyId: string, companyName: string): Promise<string> {
-  const employees = await prisma.employee.findMany({
-    where: { companyId },
-    select: {
-      employeeNumber: true,
-      firstName: true,
-      lastName: true,
-      phone: true,
-      employeeType: true,
-      status: true,
-      jobRole: true,
-      psiraNumber: true,
-      securityServiceType: true,
-      group: { select: { name: true } },
-      grade: { select: { name: true } },
-    },
-    orderBy: { employeeNumber: "asc" },
-    take: MAX_EMPLOYEES,
-  });
-
-  const headers = [
-    "Company Name",
-    "Employee Number",
-    "First Name",
-    "Last Name",
-    "Phone",
-    "Employee Type",
-    "Status",
-    "Job Role",
-    "Group",
-    "Grade",
-    "PSIRA Number",
-    "Security Service Type",
-  ];
-
-  const rows = employees.map((e) => [
-    csvEscape(companyName),
-    csvEscape(e.employeeNumber),
-    csvEscape(e.firstName),
-    csvEscape(e.lastName),
-    csvEscape(e.phone),
-    csvEscape(e.employeeType),
-    csvEscape(e.status),
-    csvEscape(e.jobRole),
-    csvEscape(e.group?.name),
-    csvEscape(e.grade?.name),
-    csvEscape(e.psiraNumber),
-    csvEscape(e.securityServiceType),
-  ]);
-
-  return [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
-}
-
-/** @deprecated use exportEmployeesOperationalToCsv or exportEmployeesConfidentialToCsv */
 export async function exportEmployeesToCsv(companyId: string, companyName: string): Promise<string> {
   const employees = await prisma.employee.findMany({
     where: { companyId },
@@ -799,68 +745,6 @@ export async function exportEmployeesToCsv(companyId: string, companyName: strin
     csvEscape(formatDecimal(e.monthlySalary)),
     csvEscape(e.psiraNumber),
     csvEscape(e.securityServiceType),
-  ]);
-
-  return [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
-}
-
-export async function exportEmployeesConfidentialToCsv(companyId: string, companyName: string): Promise<string> {
-  const employees = await prisma.employee.findMany({
-    where: { companyId },
-    select: {
-      employeeNumber: true,
-      firstName: true,
-      lastName: true,
-      idNumber: true,
-      dateOfBirth: true,
-      gender: true,
-      email: true,
-      taxNumber: true,
-      bankName: true,
-      bankAccountNumber: true,
-      bankBranchCode: true,
-      hourlyRate: true,
-      monthlySalary: true,
-      overtimeRate: true,
-    },
-    orderBy: { employeeNumber: "asc" },
-    take: MAX_EMPLOYEES,
-  });
-
-  const headers = [
-    "Company Name",
-    "Employee Number",
-    "First Name",
-    "Last Name",
-    "ID Number",
-    "Date of Birth",
-    "Gender",
-    "Email",
-    "Tax Number",
-    "Bank Name",
-    "Bank Account Number",
-    "Bank Branch Code",
-    "Hourly Rate",
-    "Monthly Salary",
-    "Overtime Rate",
-  ];
-
-  const rows = employees.map((e) => [
-    csvEscape(companyName),
-    csvEscape(e.employeeNumber),
-    csvEscape(e.firstName),
-    csvEscape(e.lastName),
-    csvEscape(e.idNumber),
-    csvEscape(formatDate(e.dateOfBirth)),
-    csvEscape(e.gender),
-    csvEscape(e.email),
-    csvEscape(e.taxNumber),
-    csvEscape(e.bankName),
-    csvEscape(e.bankAccountNumber),
-    csvEscape(e.bankBranchCode),
-    csvEscape(formatDecimal(e.hourlyRate)),
-    csvEscape(formatDecimal(e.monthlySalary)),
-    csvEscape(formatDecimal(e.overtimeRate)),
   ]);
 
   return [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");

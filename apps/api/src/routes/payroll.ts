@@ -1,11 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { authProtect } from "../middleware/auth-protect.js";
+import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
-import { requirePermission, requireAnyPermission } from "../middleware/permissions.js";
-import { PERMISSIONS } from "../lib/permissions.js";
-import { hasPermission } from "../services/user-access.service.js";
-import { employeeCompensationSelect } from "../lib/employee-dto.js";
 import { prisma } from "../lib/prisma.js";
 import {
   calculatePayroll,
@@ -20,7 +16,6 @@ import { buildIrp5DataForTaxYear, irp5ToCsv } from "../services/irp5.service.js"
 import { fetchPayslipData, buildPayslipTemplateData } from "../services/payslip-data.service.js";
 import { generatePayslipPDFFromTemplate } from "../services/payslip-pdf.service.js";
 import { createAuditLog } from "../lib/audit.js";
-import { assertPayrollNotBlocked } from "../modules/attendance-exceptions/exceptions.service.js";
 import {
   auditPayrollApproval,
   auditPayrollCalculation,
@@ -39,42 +34,16 @@ const revertToDraftSchema = z.object({
 });
 
 export async function payrollRoutes(app: FastifyInstance) {
-  const moduleProtect = [
-    ...authProtect,
+  const protect = [
+    authMiddleware,
     requireRole(["admin", "operations_manager", "hr_payroll"], { module: "/payroll" }),
   ];
-  const statusReadProtect = [
-    ...moduleProtect,
-    requireAnyPermission([PERMISSIONS.PAYROLL_STATUS_READ, PERMISSIONS.PAYROLL_RUN_READ]),
-  ];
-  const runReadProtect = [...moduleProtect, requirePermission(PERMISSIONS.PAYROLL_RUN_READ)];
-  const calculateProtect = [...moduleProtect, requirePermission(PERMISSIONS.PAYROLL_CALCULATE)];
-  const approveProtect = [...moduleProtect, requirePermission(PERMISSIONS.PAYROLL_APPROVE)];
-  const revertProtect = [...moduleProtect, requirePermission(PERMISSIONS.PAYROLL_REVERT)];
-  const markPaidProtect = [...moduleProtect, requirePermission(PERMISSIONS.PAYROLL_MARK_PAID)];
-  const exportProtect = [...moduleProtect, requirePermission(PERMISSIONS.PAYROLL_EXPORT)];
-  const payslipProtect = [...moduleProtect, requirePermission(PERMISSIONS.PAYSLIP_READ)];
 
-  app.get("/runs", { preHandler: statusReadProtect }, async (request, reply) => {
+  app.get("/runs", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as Record<string, string | undefined>;
     const limit = Math.min(Number(q.limit) || 20, 100);
     const offset = Number(q.offset) || 0;
-
-    const canSeeFull = hasPermission(request.access, PERMISSIONS.PAYROLL_RUN_READ);
-    const runSelect = canSeeFull
-      ? undefined
-      : {
-          id: true,
-          companyId: true,
-          periodStart: true,
-          periodEnd: true,
-          status: true,
-          lockedAt: true,
-          calculatedAt: true,
-          createdAt: true,
-          updatedAt: true,
-        };
 
     const [runs, total] = await Promise.all([
       prisma.payrollRun.findMany({
@@ -82,7 +51,6 @@ export async function payrollRoutes(app: FastifyInstance) {
         orderBy: { periodStart: "desc" },
         take: limit,
         skip: offset,
-        ...(runSelect ? { select: runSelect } : {}),
       }),
       prisma.payrollRun.count({ where: { companyId: user.companyId } }),
     ]);
@@ -90,7 +58,7 @@ export async function payrollRoutes(app: FastifyInstance) {
     return reply.send({ data: runs, total, limit, offset });
   });
 
-  app.post("/runs", { preHandler: calculateProtect }, async (request, reply) => {
+  app.post("/runs", { preHandler: protect }, async (request, reply) => {
     const parsed = createPayrollRunSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -130,7 +98,7 @@ export async function payrollRoutes(app: FastifyInstance) {
     return reply.code(201).send(run);
   });
 
-  app.get("/runs/:id", { preHandler: statusReadProtect }, async (request, reply) => {
+  app.get("/runs/:id", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
 
@@ -142,21 +110,10 @@ export async function payrollRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Payroll run not found" });
     }
 
-    if (!hasPermission(request.access, PERMISSIONS.PAYROLL_RUN_READ)) {
-      return reply.send({
-        id: run.id,
-        periodStart: run.periodStart,
-        periodEnd: run.periodEnd,
-        status: run.status,
-        lockedAt: run.lockedAt,
-        calculatedAt: run.calculatedAt,
-      });
-    }
-
     return reply.send(run);
   });
 
-  app.get("/runs/:id/items", { preHandler: runReadProtect }, async (request, reply) => {
+  app.get("/runs/:id/items", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
 
@@ -189,29 +146,9 @@ export async function payrollRoutes(app: FastifyInstance) {
     return reply.send({ data: items });
   });
 
-  app.post("/runs/:id/calculate", { preHandler: calculateProtect }, async (request, reply) => {
+  app.post("/runs/:id/calculate", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const companyId = request.user!.companyId;
-
-    const runBefore = await prisma.payrollRun.findFirst({
-      where: { id, companyId },
-    });
-    if (!runBefore) {
-      return reply.code(404).send({ error: "Payroll run not found" });
-    }
-
-    const readiness = await assertPayrollNotBlocked(
-      companyId,
-      runBefore.periodStart,
-      runBefore.periodEnd
-    );
-    if (readiness.blocked) {
-      return reply.code(400).send({
-        error: "Payroll blocked",
-        message: readiness.message,
-        payrollReadiness: readiness,
-      });
-    }
 
     let calcResult;
     try {
@@ -235,11 +172,6 @@ export async function payrollRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Payroll run not found" });
     }
 
-    await prisma.payrollRun.updateMany({
-      where: { id, companyId },
-      data: { calculatedById: request.user!.sub },
-    });
-
     await auditPayrollCalculation({
       userId: request.user!.sub,
       companyId,
@@ -250,7 +182,7 @@ export async function payrollRoutes(app: FastifyInstance) {
     return reply.send(run);
   });
 
-  app.post("/runs/:id/approve", { preHandler: approveProtect }, async (request, reply) => {
+  app.post("/runs/:id/approve", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
 
@@ -262,30 +194,10 @@ export async function payrollRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Payroll run not found" });
     }
 
-    if (run.calculatedById === user.sub) {
-      return reply.code(400).send({
-        error: "Separation of duties",
-        message: "The user who calculated payroll cannot approve it",
-      });
-    }
-
     if (!canTransitionPayrollStatus(run.status, "approved")) {
       return reply.code(400).send({
         error: "Invalid transition",
         message: `Cannot approve payroll in status ${run.status}. Must be calculated first.`,
-      });
-    }
-
-    const readiness = await assertPayrollNotBlocked(
-      user.companyId,
-      run.periodStart,
-      run.periodEnd
-    );
-    if (readiness.blocked) {
-      return reply.code(400).send({
-        error: "Payroll blocked",
-        message: readiness.message,
-        payrollReadiness: readiness,
       });
     }
 
@@ -301,7 +213,7 @@ export async function payrollRoutes(app: FastifyInstance) {
     const lockTime = new Date();
     const updatedCount = await prisma.payrollRun.updateMany({
       where: { id, companyId: user.companyId },
-      data: { status: "approved", lockedAt: lockTime, approvedById: user.sub, approvedAt: lockTime },
+      data: { status: "approved", lockedAt: lockTime },
     });
     if (updatedCount.count === 0) {
       return reply.code(404).send({ error: "Payroll run not found" });
@@ -339,7 +251,7 @@ export async function payrollRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
-  app.post("/runs/:id/revert-to-draft", { preHandler: revertProtect }, async (request, reply) => {
+  app.post("/runs/:id/revert-to-draft", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
 
@@ -399,7 +311,7 @@ export async function payrollRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
-  app.get("/runs/:id/validation", { preHandler: runReadProtect }, async (request, reply) => {
+  app.get("/runs/:id/validation", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
 
@@ -415,7 +327,7 @@ export async function payrollRoutes(app: FastifyInstance) {
     return reply.send({ payrollRunId: id, status: run.status, ...validation });
   });
 
-  app.get("/runs/:id/calculation-snapshot", { preHandler: runReadProtect }, async (request, reply) => {
+  app.get("/runs/:id/calculation-snapshot", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
 
@@ -448,7 +360,7 @@ export async function payrollRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post("/runs/:id/mark-paid", { preHandler: markPaidProtect }, async (request, reply) => {
+  app.post("/runs/:id/mark-paid", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
 
@@ -467,17 +379,9 @@ export async function payrollRoutes(app: FastifyInstance) {
       });
     }
 
-    if (run.approvedById && run.approvedById === user.sub) {
-      return reply.code(400).send({
-        error: "Separation of duties",
-        message: "The user who approved payroll cannot mark it as paid",
-      });
-    }
-
-    const paidAt = new Date();
     const updatedCount = await prisma.payrollRun.updateMany({
       where: { id, companyId: user.companyId },
-      data: { status: "paid", markedPaidById: user.sub, markedPaidAt: paidAt },
+      data: { status: "paid" },
     });
     if (updatedCount.count === 0) {
       return reply.code(404).send({ error: "Payroll run not found" });
@@ -500,7 +404,7 @@ export async function payrollRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
-  app.get("/runs/:id/items/:itemId/payslip", { preHandler: payslipProtect }, async (request, reply) => {
+  app.get("/runs/:id/items/:itemId/payslip", { preHandler: protect }, async (request, reply) => {
     const { id, itemId } = request.params as { id: string; itemId: string };
     const user = request.user!;
 
@@ -511,10 +415,7 @@ export async function payrollRoutes(app: FastifyInstance) {
 
     const item = await prisma.payrollItem.findFirst({
       where: { id: itemId, payrollRunId: id },
-      include: {
-        employee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true, ...employeeCompensationSelect } },
-        payslip: true,
-      },
+      include: { employee: true, payslip: true },
     });
     if (!item) return reply.code(404).send({ error: "Payroll item not found" });
 
@@ -530,7 +431,7 @@ export async function payrollRoutes(app: FastifyInstance) {
     });
   });
 
-  app.get("/runs/:id/items/:itemId/payslip/pdf", { preHandler: payslipProtect }, async (request, reply) => {
+  app.get("/runs/:id/items/:itemId/payslip/pdf", { preHandler: protect }, async (request, reply) => {
     const { id, itemId } = request.params as { id: string; itemId: string };
     const user = request.user!;
 
@@ -550,7 +451,7 @@ export async function payrollRoutes(app: FastifyInstance) {
       .send(pdfBuffer);
   });
 
-  app.get("/runs/:id/export/pdf", { preHandler: exportProtect }, async (request, reply) => {
+  app.get("/runs/:id/export/pdf", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
 
@@ -588,7 +489,7 @@ export async function payrollRoutes(app: FastifyInstance) {
       .send(outBuffer);
   });
 
-  app.get("/runs/:id/export/excel", { preHandler: exportProtect }, async (request, reply) => {
+  app.get("/runs/:id/export/excel", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
 
@@ -630,7 +531,7 @@ export async function payrollRoutes(app: FastifyInstance) {
       .send(csv);
   });
 
-  app.get("/runs/:id/export/fnb", { preHandler: exportProtect }, async (request, reply) => {
+  app.get("/runs/:id/export/fnb", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
     const q = request.query as { groupId?: string };
@@ -716,7 +617,7 @@ export async function payrollRoutes(app: FastifyInstance) {
       .send(csv);
   });
 
-  app.get("/emp201-export", { preHandler: exportProtect }, async (request, reply) => {
+  app.get("/emp201-export", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as { period?: string };
     const period = q.period ?? format(new Date(), "yyyy-MM");
@@ -743,7 +644,7 @@ export async function payrollRoutes(app: FastifyInstance) {
       .send(csv);
   });
 
-  app.get("/irp5-export", { preHandler: exportProtect }, async (request, reply) => {
+  app.get("/irp5-export", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as { taxYear?: string };
     const taxYear = parseInt(q.taxYear ?? String(new Date().getFullYear()), 10);
@@ -773,10 +674,7 @@ export async function payrollRoutes(app: FastifyInstance) {
       .send(csv);
   });
 
-  const compensationReadProtect = [...moduleProtect, requirePermission(PERMISSIONS.COMPENSATION_READ)];
-  const compensationManageProtect = [...moduleProtect, requirePermission(PERMISSIONS.COMPENSATION_MANAGE)];
-
-  app.get("/employees/:employeeId/deductions", { preHandler: compensationReadProtect }, async (request, reply) => {
+  app.get("/employees/:employeeId/deductions", { preHandler: protect }, async (request, reply) => {
     const { employeeId } = request.params as { employeeId: string };
     const user = request.user!;
 
@@ -793,7 +691,7 @@ export async function payrollRoutes(app: FastifyInstance) {
     return reply.send({ data: deductions });
   });
 
-  app.post("/employees/:employeeId/deductions", { preHandler: compensationManageProtect }, async (request, reply) => {
+  app.post("/employees/:employeeId/deductions", { preHandler: protect }, async (request, reply) => {
     const { employeeId } = request.params as { employeeId: string };
     const body = request.body as { name: string; type: "fixed" | "percentage"; amount: number; rate?: number; deductionRuleId?: string; appliesFrom?: string; appliesTo?: string };
 

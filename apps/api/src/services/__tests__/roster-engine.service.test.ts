@@ -8,7 +8,6 @@ vi.mock("../../lib/prisma.js", () => ({
     sitePost: { findMany: vi.fn() },
     siteAssignment: { findMany: vi.fn() },
     company: { findUnique: vi.fn() },
-    leaveRecord: { findMany: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
@@ -113,10 +112,8 @@ describe("generateRosterPlan", () => {
     vi.mocked(prisma.site.findFirst).mockReset();
     vi.mocked(prisma.shift.findMany).mockReset();
     vi.mocked(prisma.shift.count).mockReset();
-    vi.mocked(prisma.leaveRecord.findMany).mockReset();
     vi.mocked(prisma.shift.findMany).mockResolvedValue([]);
     vi.mocked(prisma.shift.count).mockResolvedValue(0);
-    vi.mocked(prisma.leaveRecord.findMany).mockResolvedValue([]);
   });
 
   it("returns empty plan with warning when no site guards", async () => {

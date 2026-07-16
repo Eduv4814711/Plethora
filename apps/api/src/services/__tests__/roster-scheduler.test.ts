@@ -19,7 +19,6 @@ import {
   computeStaggerOffsets,
   getConsecutiveWorkDaysBefore,
   getPatternShiftAtOffset,
-  explainGuardIneligibilityForSlot,
   isGuardEligibleForSlot,
   pickBestGuardForDemandSlot,
   scoreGuardFairness,
@@ -544,65 +543,6 @@ describe("roster-scheduler", () => {
         prevDateKey: null,
       })
     ).toBe(true);
-  });
-
-  it("isGuardEligibleForSlot rejects guards on approved leave", () => {
-    const slot = {
-      siteId: "site-1",
-      postId: "p1",
-      date: new Date("2026-07-20T00:00:00.000Z"),
-      dateKey: "2026-07-20",
-      shiftType: "day" as const,
-      requiredGender: null,
-      difficultyScore: 0,
-    };
-    const guard: GuardCandidate = {
-      id: "g1",
-      gender: "M",
-      status: "active",
-      employeeType: "security",
-    };
-    const shiftStart = new Date("2026-07-20T04:00:00.000Z");
-    const shiftEnd = new Date("2026-07-20T16:00:00.000Z");
-    const calendarDays = buildCalendarDays(
-      new Date("2026-07-20T00:00:00.000Z"),
-      new Date("2026-07-20T23:59:59.999Z")
-    );
-    const leaveDateKeysByEmployee = new Map([["g1", new Set(["2026-07-20"])]]);
-
-    expect(
-      isGuardEligibleForSlot({
-        guard,
-        slot,
-        siteGenderRules: { rosterDayShiftGender: null, rosterNightShiftGender: null },
-        postShiftType: "day",
-        siteAssignedGuardIds: new Set(["g1"]),
-        existingShifts: [],
-        runtime: emptyRuntime(),
-        shiftStart,
-        shiftEnd,
-        calendarDays,
-        dayIndex: 0,
-        prevDateKey: null,
-        leaveDateKeysByEmployee,
-      })
-    ).toBe(false);
-
-    const reasons = explainGuardIneligibilityForSlot({
-      guard,
-      slot,
-      siteGenderRules: { rosterDayShiftGender: null, rosterNightShiftGender: null },
-      postShiftType: "day",
-      siteAssignedGuardIds: new Set(["g1"]),
-      existingShifts: [],
-      runtime: emptyRuntime(),
-      shiftStart,
-      shiftEnd,
-      calendarDays,
-      dayIndex: 0,
-      leaveDateKeysByEmployee,
-    });
-    expect(reasons).toContain("on leave (not available for work)");
   });
 
   it("violatesAdjacentShiftRestRules blocks night-then-day but allows day-then-night", () => {

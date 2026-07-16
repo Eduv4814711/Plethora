@@ -1,9 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { authProtect } from "../middleware/auth-protect.js";
+import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
-import { requirePermission } from "../middleware/permissions.js";
-import { PERMISSIONS } from "../lib/permissions.js";
 import { prisma } from "../lib/prisma.js";
 import { aggregateTimesheets } from "../services/timesheet.service.js";
 import { createAuditLog } from "../lib/audit.js";
@@ -19,9 +17,8 @@ const updateTimesheetSchema = z.object({
 
 export async function timesheetsRoutes(app: FastifyInstance) {
   const protect = [
-    ...authProtect,
+    authMiddleware,
     requireRole(["admin", "operations_manager", "hr_payroll"], { module: "/payroll" }),
-    requirePermission(PERMISSIONS.PAYROLL_RUN_READ),
   ];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {

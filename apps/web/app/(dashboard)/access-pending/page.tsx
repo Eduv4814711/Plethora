@@ -11,7 +11,7 @@ export default function AccessPendingPage() {
 
   useEffect(() => {
     if (loading || !user) return;
-    if (user.isSystemOwner || user.role === "admin" || normalizeUserModuleAccess(user.moduleAccess)) {
+    if (user.role === "admin" || normalizeUserModuleAccess(user.moduleAccess)) {
       router.replace(getDefaultRouteForUser(user));
     }
   }, [loading, user, router]);
@@ -24,7 +24,7 @@ export default function AccessPendingPage() {
     );
   }
 
-  if (user.isSystemOwner || user.role === "admin" || normalizeUserModuleAccess(user.moduleAccess)) {
+  if (user.role === "admin" || normalizeUserModuleAccess(user.moduleAccess)) {
     return null;
   }
 

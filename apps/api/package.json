@@ -11,8 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build": "prisma generate && tsc && node scripts/copy-templates.mjs",
-    "start": "node scripts/recover-audit-foundation-migration.mjs && prisma migrate deploy && node dist/index.js",
-    "start:with-migrate": "npm start",
+    "start": "prisma migrate deploy && node dist/index.js",
+    "start:with-migrate": "prisma migrate resolve --rolled-back 20260627120000_roster_module_v2 || true && prisma migrate deploy && node dist/index.js",
     "start:server": "node dist/index.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
@@ -22,17 +22,10 @@
     "db:check-email-unique": "tsx prisma/check-duplicate-emails.ts",
     "db:add-module-access": "prisma db execute --file prisma/sql/add_user_module_access_column.sql --schema prisma/schema.prisma",
     "db:push": "prisma db push",
-    "db:check": "node scripts/check-database.mjs",
     "db:seed": "tsx prisma/seed.ts",
-    "db:migrate-permissions": "tsx scripts/migrate-user-permissions.ts",
-    "db:dry-run-admin-migration": "tsx scripts/dry-run-admin-migration.ts",
-    "db:repair-system-owner": "tsx scripts/repair-system-owner-access.ts",
     "db:studio": "prisma studio",
     "import:employees": "tsx scripts/import-employees-csv.ts",
-    "db:create-site-groups": "tsx scripts/create-site-employee-groups.ts",
-    "db:cleanup-attendance-duplicates": "node scripts/cleanup-attendance-duplicates.mjs",
-    "db:audit": "node scripts/data-audit/run-all.mjs",
-    "db:scan-quality": "tsx scripts/data-quality/scan.ts"
+    "db:create-site-groups": "tsx scripts/create-site-employee-groups.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

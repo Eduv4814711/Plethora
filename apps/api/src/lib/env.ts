@@ -60,7 +60,6 @@ const rawEnvSchema = z.object({
   WHATSAPP_PHONE_NUMBER_ID: z.preprocess(emptyToUndefined, z.string().optional()),
   WHATSAPP_ACCESS_TOKEN: z.preprocess(emptyToUndefined, z.string().optional()),
   WHATSAPP_VERIFY_TOKEN: z.preprocess(emptyToUndefined, z.string().optional()),
-  WHATSAPP_APP_SECRET: z.preprocess(emptyToUndefined, z.string().optional()),
   WHATSAPP_API_VERSION: z.preprocess(emptyToUndefined, z.string().optional()),
   CLOCK_IN_WINDOW_MINUTES: z.preprocess(
     (value) => {
@@ -93,7 +92,6 @@ export type Env = {
     phoneNumberId: string;
     accessToken: string;
     verifyToken: string;
-    appSecret: string;
     apiVersion: string;
   };
   clockInWindowMinutes: number;
@@ -123,7 +121,6 @@ function pickRawEnv(source: NodeJS.ProcessEnv): Record<string, unknown> {
     WHATSAPP_PHONE_NUMBER_ID: source.WHATSAPP_PHONE_NUMBER_ID,
     WHATSAPP_ACCESS_TOKEN: source.WHATSAPP_ACCESS_TOKEN,
     WHATSAPP_VERIFY_TOKEN: source.WHATSAPP_VERIFY_TOKEN,
-    WHATSAPP_APP_SECRET: source.WHATSAPP_APP_SECRET,
     WHATSAPP_API_VERSION: source.WHATSAPP_API_VERSION,
     CLOCK_IN_WINDOW_MINUTES: source.CLOCK_IN_WINDOW_MINUTES,
     ENCRYPTION_KEY: source.ENCRYPTION_KEY,
@@ -214,7 +211,6 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const phoneNumberId = raw.WHATSAPP_PHONE_NUMBER_ID ?? "";
   const accessToken = raw.WHATSAPP_ACCESS_TOKEN ?? "";
   const verifyToken = raw.WHATSAPP_VERIFY_TOKEN ?? "";
-  const appSecret = raw.WHATSAPP_APP_SECRET ?? "";
 
   return {
     nodeEnv: raw.NODE_ENV,
@@ -232,7 +228,6 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
       phoneNumberId,
       accessToken,
       verifyToken,
-      appSecret,
       apiVersion: raw.WHATSAPP_API_VERSION ?? "v21.0",
     },
     clockInWindowMinutes: raw.CLOCK_IN_WINDOW_MINUTES ?? 15,

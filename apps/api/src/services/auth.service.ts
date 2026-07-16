@@ -2,13 +2,9 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { createHash, randomBytes } from "crypto";
 import { config } from "../lib/config.js";
-import type { AdminClass, UserRole } from "@prisma/client";
-import { resolveEffectiveModuleAccess } from "../lib/module-access.js";
+import type { UserRole } from "@prisma/client";
+import { normalizeModuleAccess } from "../middleware/rbac.js";
 import { findFirstUserAuthScalars, findManyUserAuthScalars, findUniqueUserAuthScalars } from "../lib/user-module-column.js";
-import { loadUserAccess } from "./user-access.service.js";
-import { ALL_PERMISSIONS } from "../lib/permissions.js";
-import { prisma } from "../lib/prisma.js";
-import { decryptMfaSecret, verifyTotp } from "./mfa.service.js";
 import {
   isRefreshTokenActive,
   persistRefreshToken,
@@ -21,7 +17,6 @@ export interface LoginInput {
   email: string;
   password: string;
   companyId?: string;
-  otp?: string;
 }
 
 export interface AuthUserPublic {
@@ -32,19 +27,6 @@ export interface AuthUserPublic {
   roleLabel?: string | null;
   companyId: string;
   moduleAccess: string[] | null;
-  accessVersion: number;
-  adminClass: AdminClass;
-  isSystemOwner: boolean;
-  permissions: string[];
-  mfaRequired: boolean;
-  mfaEnabled: boolean;
-}
-
-export class MfaRequiredError extends Error {
-  constructor(public code: "MFA_REQUIRED" | "MFA_INVALID") {
-    super(code === "MFA_REQUIRED" ? "Enter the 6-digit code from your authenticator app" : "The verification code is invalid or expired");
-    this.name = "MfaRequiredError";
-  }
 }
 
 export interface AuthResult {
@@ -71,65 +53,14 @@ function buildPayload(user: {
   companyId: string;
   role: UserRole;
   moduleAccess?: unknown;
-  accessVersion?: number;
-  isSystemOwner?: boolean;
-  adminClass?: AdminClass;
 }) {
-  const adminClass = user.adminClass ?? "STANDARD";
-  const isSystemOwner = user.isSystemOwner === true;
-  const moduleAccess = resolveEffectiveModuleAccess({
-    role: user.role,
-    moduleAccess: user.moduleAccess,
-    isSystemOwner,
-  });
+  const moduleAccess = normalizeModuleAccess(user.moduleAccess);
   return {
     sub: user.id,
     email: user.email,
     companyId: user.companyId,
     role: user.role,
-    accessVersion: user.accessVersion ?? 1,
-    adminClass,
-    isSystemOwner,
     ...(moduleAccess ? { moduleAccess } : {}),
-  };
-}
-
-async function buildPublicUser(user: {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  roleLabel?: string | null;
-  companyId: string;
-  moduleAccess?: unknown;
-  accessVersion?: number;
-  isSystemOwner?: boolean;
-  adminClass?: AdminClass;
-  mfaRequired?: boolean;
-  mfaEnabled?: boolean;
-}): Promise<AuthUserPublic> {
-  const access = await loadUserAccess(user.id);
-  const isSystemOwner = user.isSystemOwner ?? access?.isSystemOwner ?? false;
-  const moduleAccess = resolveEffectiveModuleAccess({
-    role: user.role,
-    moduleAccess: user.moduleAccess,
-    isSystemOwner,
-  });
-  const permissions = isSystemOwner ? [...ALL_PERMISSIONS] : access ? [...access.permissions] : [];
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    roleLabel: user.roleLabel ?? null,
-    companyId: user.companyId,
-    moduleAccess,
-    accessVersion: user.accessVersion ?? access?.accessVersion ?? 1,
-    adminClass: user.adminClass ?? access?.adminClass ?? "STANDARD",
-    isSystemOwner,
-    permissions,
-    mfaRequired: user.mfaRequired ?? false,
-    mfaEnabled: user.mfaEnabled ?? false,
   };
 }
 
@@ -139,14 +70,10 @@ function issueJwtPair(user: {
   companyId: string;
   role: UserRole;
   moduleAccess?: unknown;
-  accessVersion?: number;
-  isSystemOwner?: boolean;
-  adminClass?: AdminClass;
   name: string;
   roleLabel?: string | null;
-  mfaRequired?: boolean;
-  mfaEnabled?: boolean;
-}): Promise<AuthResult> {
+}): AuthResult {
+  const moduleAccess = normalizeModuleAccess(user.moduleAccess);
   const payload = buildPayload(user);
 
   const accessToken = jwt.sign(payload, config.jwt.accessSecret, {
@@ -162,12 +89,20 @@ function issueJwtPair(user: {
   const decoded = jwt.decode(accessToken) as { exp?: number };
   const expiresIn = decoded?.exp ? decoded.exp - Math.floor(Date.now() / 1000) : 900;
 
-  return buildPublicUser(user).then((publicUser) => ({
-    user: publicUser,
+  return {
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      roleLabel: user.roleLabel ?? null,
+      companyId: user.companyId,
+      moduleAccess,
+    },
     accessToken,
     refreshToken,
     expiresIn,
-  }));
+  };
 }
 
 export async function login(
@@ -201,18 +136,9 @@ export async function login(
     }
   }
   if (!matchedUser) return null;
-  if (matchedUser.disabledAt) return null;
 
-  if (config.security.mfaEnforcementEnabled && matchedUser.mfaEnabled) {
-    if (!input.otp) throw new MfaRequiredError("MFA_REQUIRED");
-    if (!matchedUser.mfaSecretEncrypted || !verifyTotp(decryptMfaSecret(matchedUser.mfaSecretEncrypted), input.otp)) {
-      throw new MfaRequiredError("MFA_INVALID");
-    }
-  }
-
-  const result = await issueJwtPair(matchedUser);
+  const result = issueJwtPair(matchedUser);
   await persistRefreshToken(matchedUser.id, result.refreshToken, meta);
-  await prisma.user.update({ where: { id: matchedUser.id }, data: { lastLoginAt: new Date() } });
   return result;
 }
 
@@ -224,11 +150,6 @@ export interface UserForTokens {
   roleLabel?: string | null;
   companyId: string;
   moduleAccess?: unknown;
-  accessVersion?: number;
-  isSystemOwner?: boolean;
-  adminClass?: AdminClass;
-  mfaRequired?: boolean;
-  mfaEnabled?: boolean;
 }
 
 export function generatePasswordSetupToken(): string {
@@ -243,7 +164,7 @@ export async function issueTokensForUser(
   user: UserForTokens,
   meta?: RefreshTokenMeta
 ): Promise<AuthResult> {
-  const result = await issueJwtPair(user);
+  const result = issueJwtPair(user);
   await persistRefreshToken(user.id, result.refreshToken, meta);
   return result;
 }
@@ -270,7 +191,7 @@ export async function refreshAccessToken(
     const user = await findUniqueUserAuthScalars({ id: decoded.sub });
     if (!user) return null;
 
-    const result = await issueJwtPair(user);
+    const result = issueJwtPair(user);
     const rotated = await rotateRefreshToken(
       refreshToken,
       result.refreshToken,

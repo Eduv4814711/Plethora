@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { RosterGridRow, RosterShiftCode } from "@/lib/roster-api";
-import { CYCLE_LENGTH_PRESETS, MANUAL_SHIFT_CODE_OPTIONS, SHIFT_CODE_COLORS, SHIFT_CODE_OPTIONS } from "@/lib/roster-api";
+import { CYCLE_LENGTH_PRESETS, SHIFT_CODE_OPTIONS } from "@/lib/roster-api";
 import {
   expandPatternToCycle,
+  formatPatternPreview,
   parsePatternNotation,
   PATTERN_PRESETS,
 } from "@/lib/roster-pattern-utils";
@@ -50,19 +51,12 @@ export function GuardPatternBuilder({
   const [selectedGuardId, setSelectedGuardId] = useState(siteGuards[0]?.id ?? "");
   const [sequence, setSequence] = useState<RosterShiftCode[]>(["D", "D", "D", "O", "O", "O"]);
   const [notation, setNotation] = useState("D,D,D,O,O,O");
-  const [cycleCodes, setCycleCodes] = useState<RosterShiftCode[]>(() =>
-    expandPatternToCycle(["D", "D", "D", "O", "O", "O"], cycleLengthDays)
-  );
   const [addGuardId, setAddGuardId] = useState("");
   const [showCustom, setShowCustom] = useState(false);
 
-  useEffect(() => {
-    setCycleCodes(expandPatternToCycle(sequence, cycleLengthDays));
-  }, [sequence, cycleLengthDays]);
-
-  const cycleShiftOptions = useMemo(
-    () => (compact ? MANUAL_SHIFT_CODE_OPTIONS : SHIFT_CODE_OPTIONS).filter((o) => o.code !== "blank"),
-    [compact]
+  const preview = useMemo(
+    () => formatPatternPreview(sequence, cycleLengthDays),
+    [sequence, cycleLengthDays]
   );
 
   const applyPreset = (codes: RosterShiftCode[]) => {
@@ -70,10 +64,6 @@ export function GuardPatternBuilder({
     setNotation(codes.map((c) => (c === "blank" ? "—" : c)).join(","));
     onCycleLengthChange?.(codes.length);
     setShowCustom(false);
-  };
-
-  const updateCycleDay = (dayIndex: number, code: RosterShiftCode) => {
-    setCycleCodes((prev) => prev.map((c, i) => (i === dayIndex ? code : c)));
   };
 
   const appendCode = (code: RosterShiftCode) => {
@@ -93,13 +83,13 @@ export function GuardPatternBuilder({
   };
 
   const handleApply = () => {
-    if (!selectedGuardId || cycleCodes.length === 0) return;
-    onApply(selectedGuardId, cycleCodes);
+    if (!selectedGuardId || sequence.length === 0) return;
+    onApply(selectedGuardId, expandPatternToCycle(sequence, cycleLengthDays));
   };
 
   const handleApplyAll = () => {
-    if (!onApplyAll || cycleCodes.length === 0) return;
-    onApplyAll(cycleCodes);
+    if (!onApplyAll || sequence.length === 0) return;
+    onApplyAll(expandPatternToCycle(sequence, cycleLengthDays));
   };
 
   if (siteGuards.length === 0 && guardsNotOnSite.length === 0) {
@@ -294,54 +284,18 @@ export function GuardPatternBuilder({
       </div>
       )}
 
-      <div className="rounded-lg bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-700 px-2.5 py-2.5">
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="text-[10px] font-semibold text-neutral-600 uppercase tracking-wide dark:text-neutral-400">
-            Edit cycle
-          </p>
-          <p className="text-[10px] text-neutral-400 shrink-0">{cycleLengthDays} days</p>
-        </div>
-        <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5 leading-snug">
-          Tap a day to pick Day, Night, Off, or other shift.
-        </p>
-        <div className={`mt-2.5 grid gap-1.5 ${compact ? "grid-cols-4" : "grid-cols-7"}`}>
-          {cycleCodes.map((code, dayIndex) => {
-            const color = SHIFT_CODE_COLORS[code] ?? SHIFT_CODE_COLORS.blank;
-            const label = cycleShiftOptions.find((o) => o.code === code)?.label ?? code;
-            return (
-              <label key={dayIndex} className="flex min-w-0 flex-col items-stretch gap-0.5">
-                <span className="text-center text-[9px] font-medium leading-none text-neutral-400">
-                  {dayIndex + 1}
-                </span>
-                <select
-                  value={code}
-                  onChange={(e) => updateCycleDay(dayIndex, e.target.value as RosterShiftCode)}
-                  className={`h-9 w-full min-w-0 cursor-pointer rounded-md border-0 text-center text-xs font-bold shadow-sm ${color}`}
-                  title={`Day ${dayIndex + 1}: ${label}`}
-                  aria-label={`Day ${dayIndex + 1}, ${label}`}
-                >
-                  {cycleShiftOptions.map((o) => (
-                    <option key={o.code} value={o.code}>
-                      {o.code}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            );
-          })}
-        </div>
-        <p className="mt-2 text-[10px] leading-relaxed text-neutral-400">
-          <span className="font-medium text-amber-800 dark:text-amber-200">D</span> Day ·{" "}
-          <span className="font-medium text-indigo-800 dark:text-indigo-200">N</span> Night ·{" "}
-          <span className="font-medium text-neutral-600 dark:text-neutral-300">O</span> Off — repeats every{" "}
-          {cycleLengthDays} days
+      <div className="rounded-lg bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-700 px-2.5 py-2">
+        <p className="text-[10px] font-medium text-neutral-500 uppercase tracking-wide">Preview (cycle)</p>
+        <p className="text-xs font-mono text-neutral-800 dark:text-neutral-200 mt-1 break-all">{preview}</p>
+        <p className="text-[11px] text-neutral-400 mt-1">
+          Repeats every {cycleLengthDays} day{cycleLengthDays !== 1 ? "s" : ""} in the pattern cycle
         </p>
       </div>
 
       <button
         type="button"
         onClick={handleApply}
-        disabled={!selectedGuardId || cycleCodes.length === 0}
+        disabled={!selectedGuardId || sequence.length === 0}
         className={`w-full font-semibold rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50 ${
           compact ? "px-3 py-2 text-xs" : "sm:w-auto px-5 py-2.5 text-sm"
         }`}
@@ -352,7 +306,7 @@ export function GuardPatternBuilder({
         <button
           type="button"
           onClick={handleApplyAll}
-          disabled={cycleCodes.length === 0 || siteGuards.length === 0}
+          disabled={sequence.length === 0 || siteGuards.length === 0}
           className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-200 dark:hover:bg-neutral-800"
         >
           Apply pattern to all guards

@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { authMiddleware } from "../../middleware/auth.js";
-import { accessMiddleware, requirePermission } from "../../middleware/permissions.js";
-import { PERMISSIONS } from "../../lib/permissions.js";
+import { requireRole } from "../../middleware/rbac.js";
 import {
   applyAutomationRun,
   dismissAutomationRun,
@@ -31,11 +30,18 @@ function sendServiceError(
 }
 
 export async function rosteringRoutes(app: FastifyInstance) {
-  const readProtect = [authMiddleware, accessMiddleware, requirePermission(PERMISSIONS.ROSTERS_READ)];
-  const protect = [authMiddleware, accessMiddleware, requirePermission(PERMISSIONS.ROSTERS_MANAGE)];
-  const verifyProtect = [authMiddleware, accessMiddleware, requirePermission(PERMISSIONS.TIMESHEETS_APPROVE)];
+  const protect = [
+    authMiddleware,
+    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
+      module: "/rostering",
+    }),
+  ];
+  const verifyProtect = [
+    authMiddleware,
+    requireRole(["admin", "hr_payroll"], { anyOfModules: ["/rostering", "/payroll"] }),
+  ];
 
-  app.get("/", { preHandler: readProtect }, async (request, reply) => {
+  app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as Record<string, string | undefined>;
     const result = await rosteringModuleService.listShifts(user.companyId, q);
@@ -144,7 +150,7 @@ export async function rosteringRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get("/roster/automation", { preHandler: readProtect }, async (request, reply) => {
+  app.get("/roster/automation", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as { status?: string };
     const runs = await listAutomationRuns(user.companyId, q.status as never);
@@ -169,7 +175,7 @@ export async function rosteringRoutes(app: FastifyInstance) {
     return reply.send(result);
   });
 
-  app.get("/:id/available-relievers", { preHandler: readProtect }, async (request, reply) => {
+  app.get("/:id/available-relievers", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const result = await rosteringModuleService.listAvailableRelievers(
       request.user!.companyId,
@@ -181,7 +187,7 @@ export async function rosteringRoutes(app: FastifyInstance) {
     return reply.send(result);
   });
 
-  app.get("/:id", { preHandler: readProtect }, async (request, reply) => {
+  app.get("/:id", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const result = await rosteringModuleService.getShift(request.user!.companyId, id);
     if ("status" in result && result.status === 404) {

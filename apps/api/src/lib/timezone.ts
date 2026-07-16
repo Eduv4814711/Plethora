@@ -80,13 +80,3 @@ export function getShiftTimes(
     shiftEnd: localTimeInZone(date, 18, 0, timeZone),
   };
 }
-
-/**
- * Infer day vs night from shift start time using company timezone.
- * Canonical boundary: night starts at 18:00, day at 06:00 (matches getShiftTimes).
- */
-export function inferShiftTypeFromStartTime(startTime: Date, timeZone: string): "day" | "night" {
-  const z = toZonedTime(startTime, timeZone);
-  const minutes = z.getHours() * 60 + z.getMinutes();
-  return minutes >= 18 * 60 || minutes < 6 * 60 ? "night" : "day";
-}

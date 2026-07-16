@@ -17,7 +17,7 @@ type SettingsState = {
 const SettingsContext = createContext<SettingsState | null>(null);
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +25,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const settingsHydratedRef = useRef(false);
 
   const fetchSettings = async () => {
-    if (!token || user?.adminClass === "ROOT_ADMIN") {
+    if (!token) {
       settingsHydratedRef.current = false;
       setSettings(null);
       setLoading(false);
@@ -47,14 +47,14 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    if (token && user?.adminClass !== "ROOT_ADMIN") {
+    if (token) {
       fetchSettings();
     } else {
       settingsHydratedRef.current = false;
       setSettings(null);
       setLoading(false);
     }
-  }, [token, user?.adminClass]);
+  }, [token]);
 
   const update = async (
     data: Parameters<typeof updateSettings>[1]

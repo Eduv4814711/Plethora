@@ -1,8 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
-import { accessMiddleware, requireAnyPermission } from "../middleware/permissions.js";
-import { PERMISSIONS } from "../lib/permissions.js";
+import { requireRole } from "../middleware/rbac.js";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
@@ -27,7 +26,7 @@ async function ensureGroupBelongsToCompany(groupId: string, companyId: string) {
 }
 
 export async function groupDeductionRulesRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, accessMiddleware, requireAnyPermission([PERMISSIONS.COMPENSATION_MANAGE, PERMISSIONS.PAY_GRADES_MANAGE_RATES])];
+  const protect = [authMiddleware, requireRole(["admin", "hr_payroll"], { module: "/payroll" })];
 
   app.get<{ Params: { groupId: string } }>(
     "/groups/:groupId/deduction-rules",

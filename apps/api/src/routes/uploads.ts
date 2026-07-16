@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "crypto";
-import { authProtect } from "../middleware/auth-protect.js";
-import { requireSystemOwner } from "../middleware/rbac.js";
+import { authMiddleware } from "../middleware/auth.js";
+import { requireAdmin } from "../middleware/rbac.js";
 import { readStreamToBuffer, storage } from "../lib/storage.js";
 import { extensionForMime, matchesMagicBytes } from "../lib/upload-validation.js";
 
@@ -11,7 +11,7 @@ const MAX_BYTES = 5 * 1024 * 1024;
 export async function uploadsRoutes(app: FastifyInstance) {
   app.post(
     "/logo",
-    { preHandler: [...authProtect, requireSystemOwner()] },
+    { preHandler: [authMiddleware, requireAdmin()] },
     async (request, reply) => {
       const data = await request.file();
 

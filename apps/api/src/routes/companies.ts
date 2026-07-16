@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { authProtect } from "../middleware/auth-protect.js";
-import { requireSystemOwner, canViewSensitiveCompanyFields } from "../middleware/rbac.js";
+import { authMiddleware } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 
@@ -9,28 +8,10 @@ const updateCompanySchema = z.object({
   name: z.string().min(1),
 });
 
-const SENSITIVE_COMPANY_KEYS = [
-  "taxNumber",
-  "uifReference",
-  "payeReference",
-  "sdlReference",
-  "sdlLiableFrom",
-  "monthlyPayrollTotals",
-] as const;
-
-function redactCompany(company: Record<string, unknown>, canViewSensitive: boolean) {
-  if (canViewSensitive) return company;
-  const out = { ...company };
-  for (const key of SENSITIVE_COMPANY_KEYS) {
-    delete out[key];
-  }
-  return out;
-}
-
 export async function companiesRoutes(app: FastifyInstance) {
-  const protect = [...authProtect];
-  const adminProtect = [...authProtect, requireSystemOwner()];
+  const protect = [authMiddleware];
 
+  // Only return the caller's company (tenant isolation; no platform admin)
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     const company = await prisma.company.findUnique({
@@ -39,13 +20,10 @@ export async function companiesRoutes(app: FastifyInstance) {
     if (!company) {
       return reply.code(404).send({ error: "Company not found" });
     }
-    const safe = redactCompany(
-      company as unknown as Record<string, unknown>,
-      canViewSensitiveCompanyFields(request.access)
-    );
-    return reply.send({ data: [safe], total: 1, limit: 1, offset: 0 });
+    return reply.send({ data: [company], total: 1, limit: 1, offset: 0 });
   });
 
+  // Only allow access to the caller's company
   app.get("/:id", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
@@ -58,14 +36,10 @@ export async function companiesRoutes(app: FastifyInstance) {
     if (!company) {
       return reply.code(404).send({ error: "Company not found" });
     }
-    return reply.send(
-      redactCompany(
-        company as unknown as Record<string, unknown>,
-        canViewSensitiveCompanyFields(request.access)
-      )
-    );
+    return reply.send(company);
   });
 
+  // Company creation is only via public POST /auth/onboard
   app.post("/", { preHandler: protect }, async (_request, reply) => {
     return reply.code(403).send({
       error: "Forbidden",
@@ -73,7 +47,8 @@ export async function companiesRoutes(app: FastifyInstance) {
     });
   });
 
-  app.put("/:id", { preHandler: adminProtect }, async (request, reply) => {
+  // Only allow updating the caller's company
+  app.put("/:id", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
     if (id !== user.companyId) {

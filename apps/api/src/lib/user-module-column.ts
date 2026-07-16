@@ -31,16 +31,6 @@ const authScalarsBase = {
   role: true,
   roleLabel: true,
   companyId: true,
-  accessVersion: true,
-  adminClass: true,
-  disabledAt: true,
-  disabledReason: true,
-  isSystemOwner: true,
-  mfaRequired: true,
-  mfaEnabled: true,
-  mfaSecretEncrypted: true,
-  mfaEnrolledAt: true,
-  lastLoginAt: true,
 } as const;
 
 const authScalarsLegacyBase = {
@@ -76,7 +66,7 @@ export async function findFirstUserAuthScalars(
     }
     try {
       const row = await prisma.user.findFirst({ where, select: authScalarsBase });
-      return row ? { ...row, moduleAccess: null, accessVersion: 1, isSystemOwner: false } : null;
+      return row ? { ...row, moduleAccess: null } : null;
     } catch (fallbackErr) {
       if (!isMissingRoleLabelColumnError(fallbackErr) && !isMissingPasswordSetupColumnError(fallbackErr)) {
         throw fallbackErr;
@@ -91,16 +81,6 @@ export async function findFirstUserAuthScalars(
             passwordSetupTokenConsumedAt: null,
             roleLabel: null,
             moduleAccess: null,
-            accessVersion: 1,
-            adminClass: "STANDARD",
-            disabledAt: null,
-            disabledReason: null,
-            isSystemOwner: false,
-            mfaRequired: false,
-            mfaEnabled: false,
-            mfaSecretEncrypted: null,
-            mfaEnrolledAt: null,
-            lastLoginAt: null,
           }
         : null;
     }
@@ -123,20 +103,7 @@ export async function findManyUserAuthScalars(
     }
     try {
       const rows = await prisma.user.findMany({ where, orderBy, select: authScalarsBase });
-      return rows.map((row) => ({
-        ...row,
-        moduleAccess: null,
-        accessVersion: 1,
-        adminClass: "STANDARD",
-        disabledAt: null,
-        disabledReason: null,
-        isSystemOwner: false,
-        mfaRequired: false,
-        mfaEnabled: false,
-        mfaSecretEncrypted: null,
-        mfaEnrolledAt: null,
-        lastLoginAt: null,
-      }));
+      return rows.map((row) => ({ ...row, moduleAccess: null }));
     } catch (fallbackErr) {
       if (!isMissingRoleLabelColumnError(fallbackErr) && !isMissingPasswordSetupColumnError(fallbackErr)) {
         throw fallbackErr;
@@ -150,16 +117,6 @@ export async function findManyUserAuthScalars(
         passwordSetupTokenConsumedAt: null,
         roleLabel: null,
         moduleAccess: null,
-        accessVersion: 1,
-        adminClass: "STANDARD",
-        disabledAt: null,
-        disabledReason: null,
-        isSystemOwner: false,
-        mfaRequired: false,
-        mfaEnabled: false,
-        mfaSecretEncrypted: null,
-        mfaEnrolledAt: null,
-        lastLoginAt: null,
       }));
     }
   }
@@ -180,7 +137,7 @@ export async function findUniqueUserAuthScalars(
     }
     try {
       const row = await prisma.user.findUnique({ where, select: authScalarsBase });
-      return row ? { ...row, moduleAccess: null, accessVersion: 1, isSystemOwner: false } : null;
+      return row ? { ...row, moduleAccess: null } : null;
     } catch (fallbackErr) {
       if (!isMissingRoleLabelColumnError(fallbackErr) && !isMissingPasswordSetupColumnError(fallbackErr)) {
         throw fallbackErr;
@@ -195,33 +152,26 @@ export async function findUniqueUserAuthScalars(
             passwordSetupTokenConsumedAt: null,
             roleLabel: null,
             moduleAccess: null,
-            accessVersion: 1,
-            adminClass: "STANDARD",
-            disabledAt: null,
-            disabledReason: null,
-            isSystemOwner: false,
-            mfaRequired: false,
-            mfaEnabled: false,
-            mfaSecretEncrypted: null,
-            mfaEnrolledAt: null,
-            lastLoginAt: null,
           }
         : null;
     }
   }
 }
 
-/** Public branding fields returned on /auth/me for every authenticated user. */
 const ME_COMPANY_SELECT = {
   id: true,
   name: true,
   legalName: true,
+  registrationNumber: true,
+  taxNumber: true,
   address: true,
   phone: true,
   email: true,
   logoUrl: true,
   website: true,
   fax: true,
+  psiraRegistration: true,
+  uifReference: true,
   settings: true,
 } as const;
 
@@ -237,9 +187,6 @@ export async function findUniqueUserListRow(id: string, companyId: string) {
         roleLabel: true,
         companyId: true,
         moduleAccess: true,
-        adminClass: true,
-        disabledAt: true,
-        isSystemOwner: true,
         createdAt: true,
       },
     });
@@ -262,7 +209,7 @@ export async function findUniqueUserListRow(id: string, companyId: string) {
         createdAt: true,
       },
     });
-    return row ? { ...row, roleLabel: null, moduleAccess: null, isSystemOwner: false } : null;
+    return row ? { ...row, roleLabel: null, moduleAccess: null } : null;
   }
 }
 
@@ -288,9 +235,6 @@ export async function findManyUsersForCompany(
         roleLabel: true,
         companyId: true,
         moduleAccess: true,
-        adminClass: true,
-        disabledAt: true,
-        isSystemOwner: true,
         createdAt: true,
       },
     });
@@ -313,7 +257,7 @@ export async function findManyUsersForCompany(
         createdAt: true,
       },
     });
-    return rows.map((r) => ({ ...r, roleLabel: null, moduleAccess: null, isSystemOwner: false }));
+    return rows.map((r) => ({ ...r, roleLabel: null, moduleAccess: null }));
   }
 }
 
@@ -329,8 +273,6 @@ export async function findUniqueUserForMe(sub: string) {
         roleLabel: true,
         companyId: true,
         moduleAccess: true,
-        adminClass: true,
-        disabledAt: true,
         company: { select: ME_COMPANY_SELECT },
       },
     });

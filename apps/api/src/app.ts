@@ -52,19 +52,7 @@ import { taskAttachmentsRoutes } from "./routes/task-attachments.js";
 import { taskRemindersRoutes } from "./routes/task-reminders.js";
 import { academyRoutes } from "./routes/academy/index.js";
 import { internalCronRoutes } from "./routes/internal-cron.js";
-import { workQueueRoutes } from "./routes/work-queue.js";
-import { dataQualityRoutes } from "./routes/data-quality.js";
-import { accessReviewsRoutes } from "./routes/access-reviews.js";
-import { alertsRoutes } from "./modules/alerts/alerts.routes.js";
-import { attendanceExceptionsRoutes } from "./modules/attendance-exceptions/exceptions.routes.js";
-import { documentsRoutes } from "./modules/documents/documents.routes.js";
-import { incidentsRoutes } from "./modules/incidents/incidents.routes.js";
-import { approvalsRoutes } from "./modules/approvals/approvals.routes.js";
-import { notificationsRoutes } from "./modules/notifications/notifications.routes.js";
-import { clientsRoutes, clientPortalRoutes } from "./modules/clients/clients.routes.js";
-import { reportsExtendedRoutes } from "./modules/reports-extended/reports-extended.routes.js";
 import { corsOriginFromEnv, env } from "./lib/env.js";
-import { adminChangesRoutes } from "./routes/admin-changes.js";
 
 function isValidationError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
@@ -77,8 +65,6 @@ export async function buildApp(): Promise<FastifyInstance> {
     await mkdir(join(uploadsRoot, "logos"), { recursive: true });
     await mkdir(join(uploadsRoot, "tasks"), { recursive: true });
     await mkdir(join(uploadsRoot, "academy"), { recursive: true });
-    await mkdir(join(uploadsRoot, "documents"), { recursive: true });
-    await mkdir(join(uploadsRoot, "incidents"), { recursive: true });
   }
 
   const app = Fastify({
@@ -117,9 +103,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(rateLimit, {
-    // Normal dashboard use fans out across several read APIs. Authentication
-    // endpoints retain their stricter per-route limit in auth.ts.
-    max: 600,
+    max: 100,
     timeWindow: "1 minute",
   });
 
@@ -127,12 +111,10 @@ export async function buildApp(): Promise<FastifyInstance> {
     limits: { fileSize: 10 * 1024 * 1024 },
   });
 
-  // Only logos are world-readable. Documents/tasks/incidents/etc. must use
-  // authenticated signed download routes — never bare /uploads/<non-logo>/...
   if (isLocalStorage()) {
     await app.register(fastifyStatic, {
-      root: join(uploadsRoot, "logos"),
-      prefix: "/uploads/logos/",
+      root: uploadsRoot,
+      prefix: "/uploads/",
     });
   }
 
@@ -182,7 +164,6 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(registerWhatsApp);
   await app.register(authRoutes, { prefix: "/auth" });
-  await app.register(adminChangesRoutes, { prefix: "/admin-changes" });
   await app.register(usersRoutes, { prefix: "/users" });
   await app.register(companiesRoutes, { prefix: "/companies" });
   await app.register(employeesRoutes, { prefix: "/employees" });
@@ -205,9 +186,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(leaveRecordsRoutes, { prefix: "/payroll/leave-records" });
   await app.register(leaveRequestsRoutes, { prefix: "/payroll/leave-requests" });
   await app.register(dashboardRoutes, { prefix: "/dashboard" });
-  await app.register(workQueueRoutes, { prefix: "/work-queue" });
-  await app.register(dataQualityRoutes, { prefix: "/data-quality" });
-  await app.register(accessReviewsRoutes, { prefix: "/access-reviews" });
   await app.register(auditRoutes, { prefix: "/audit" });
   await app.register(settingsRoutes, { prefix: "/settings" });
   await app.register(payPeriodsRoutes, { prefix: "/pay-periods" });
@@ -215,20 +193,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(searchRoutes, { prefix: "/search" });
   await app.register(migrationsRoutes, { prefix: "/migrations" });
   await app.register(reportsRoutes, { prefix: "/reports" });
-  await app.register(reportsExtendedRoutes, { prefix: "/reports/extended" });
   await app.register(taskProjectsRoutes, { prefix: "/task-projects" });
   await app.register(tasksRoutes, { prefix: "/tasks" });
   await app.register(taskCommentsRoutes, { prefix: "/task-comments" });
   await app.register(taskAttachmentsRoutes, { prefix: "/task-attachments" });
   await app.register(taskRemindersRoutes, { prefix: "/task-reminders" });
-  await app.register(alertsRoutes, { prefix: "/alerts" });
-  await app.register(attendanceExceptionsRoutes, { prefix: "/attendance-exceptions" });
-  await app.register(documentsRoutes, { prefix: "/documents" });
-  await app.register(incidentsRoutes, { prefix: "/incidents" });
-  await app.register(approvalsRoutes, { prefix: "/approvals" });
-  await app.register(notificationsRoutes, { prefix: "/notifications" });
-  await app.register(clientsRoutes, { prefix: "/clients" });
-  await app.register(clientPortalRoutes, { prefix: "/client-portal" });
   await app.register(academyRoutes, { prefix: "/academy" });
   await app.register(internalCronRoutes, { prefix: "/internal" });
 

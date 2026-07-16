@@ -1,9 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { authProtect } from "../middleware/auth-protect.js";
+import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
-import { requirePermission } from "../middleware/permissions.js";
-import { PERMISSIONS } from "../lib/permissions.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 
@@ -15,10 +13,9 @@ const updatePayRuleSchema = z.object({
 });
 
 export async function payRulesRoutes(app: FastifyInstance) {
-  const readProtect = [...authProtect, requireRole(["admin", "hr_payroll"], { module: "/payroll" }), requirePermission(PERMISSIONS.PAY_GRADES_READ_RATES)];
-  const manageProtect = [...authProtect, requireRole(["admin", "hr_payroll"], { module: "/payroll" }), requirePermission(PERMISSIONS.PAY_GRADES_MANAGE_RATES)];
+  const protect = [authMiddleware, requireRole(["admin", "hr_payroll"], { module: "/payroll" })];
 
-  app.get("/", { preHandler: readProtect }, async (request, reply) => {
+  app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     const rules = await prisma.payRule.findMany({
       where: { companyId: user.companyId },
@@ -27,7 +24,7 @@ export async function payRulesRoutes(app: FastifyInstance) {
     return reply.send({ data: rules });
   });
 
-  app.put("/", { preHandler: manageProtect }, async (request, reply) => {
+  app.put("/", { preHandler: protect }, async (request, reply) => {
     const parsed = updatePayRuleSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({

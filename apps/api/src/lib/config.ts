@@ -1,11 +1,6 @@
 import { env } from "./env.js";
 
 export const config = {
-  security: {
-    // MFA is intentionally dormant for the current rollout phase. Keeping the
-    // implementation behind this switch makes later reactivation explicit.
-    mfaEnforcementEnabled: false,
-  },
   jwt: {
     accessSecret: env.jwtSecret,
     refreshSecret: env.jwtRefreshSecret,
@@ -28,7 +23,6 @@ export const config = {
     phoneNumberId: env.whatsapp.phoneNumberId,
     accessToken: env.whatsapp.accessToken,
     verifyToken: env.whatsapp.verifyToken,
-    appSecret: env.whatsapp.appSecret,
     apiVersion: env.whatsapp.apiVersion,
   },
 } as const;

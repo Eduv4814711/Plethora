@@ -1,13 +1,11 @@
 import type { FastifyInstance } from "fastify";
-import { authProtect } from "../middleware/auth-protect.js";
+import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
-import { PERMISSIONS } from "../lib/permissions.js";
-import { hasPermission } from "../services/user-access.service.js";
 import { prisma } from "../lib/prisma.js";
 
 export async function searchRoutes(app: FastifyInstance) {
   const protect = [
-    ...authProtect,
+    authMiddleware,
     requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
       anyOfModules: ["/employees", "/sites", "/tasks"],
     }),
@@ -22,18 +20,17 @@ export async function searchRoutes(app: FastifyInstance) {
       return reply.send({ employees: [], sites: [] });
     }
 
-    const canSearchId = hasPermission(request.access, PERMISSIONS.EMPLOYEES_READ_PRIVATE);
-    const employeeOr = [
-      { firstName: { contains: query, mode: "insensitive" as const } },
-      { lastName: { contains: query, mode: "insensitive" as const } },
-      { employeeNumber: { contains: query, mode: "insensitive" as const } },
-      { psiraNumber: { contains: query, mode: "insensitive" as const } },
-      ...(canSearchId ? [{ idNumber: { contains: query, mode: "insensitive" as const } }] : []),
-    ];
-
     const [employees, sites] = await Promise.all([
       prisma.employee.findMany({
-        where: { companyId: user.companyId, OR: employeeOr },
+        where: {
+          companyId: user.companyId,
+          OR: [
+            { firstName: { contains: query, mode: "insensitive" } },
+            { lastName: { contains: query, mode: "insensitive" } },
+            { employeeNumber: { contains: query, mode: "insensitive" } },
+            { idNumber: { contains: query, mode: "insensitive" } },
+          ],
+        },
         select: {
           id: true,
           employeeNumber: true,
@@ -52,7 +49,11 @@ export async function searchRoutes(app: FastifyInstance) {
             { location: { contains: query, mode: "insensitive" } },
           ],
         },
-        select: { id: true, name: true, location: true },
+        select: {
+          id: true,
+          name: true,
+          location: true,
+        },
         take: 5,
         orderBy: { name: "asc" },
       }),

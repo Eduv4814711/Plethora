@@ -9,7 +9,6 @@ import {
   logoutSession,
   refreshSession,
   registerTokenRefreshCallback,
-  registerAccessStaleCallback,
 } from "./api";
 
 type AuthState = {
@@ -20,7 +19,7 @@ type AuthState = {
 };
 
 const AuthContext = createContext<AuthState & {
-  login: (email: string, password: string, otp?: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   loginWithResponse: (data: LoginResponse) => void;
   logout: () => void;
   setError: (err: string | null) => void;
@@ -52,8 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** Single-flight: concurrent refresh (proactive timer + 401 retry) must share one request. */
-  const refreshPromiseRef = useRef<Promise<string | null> | null>(null);
+  const refreshInFlightRef = useRef(0);
 
   const applySession = (data: LoginResponse) => {
     setUser(data.user);
@@ -62,28 +60,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const doRefresh = async (
     legacyRefreshToken?: string,
-    _source = "unknown"
+    source = "unknown"
   ): Promise<string | null> => {
-    if (refreshPromiseRef.current) {
-      return refreshPromiseRef.current;
+    refreshInFlightRef.current += 1;
+    try {
+      const data = await refreshSession(legacyRefreshToken);
+      applySession(data);
+      return data.accessToken;
+    } catch (err) {
+      setUser(null);
+      setToken(null);
+      return null;
+    } finally {
+      refreshInFlightRef.current -= 1;
     }
-
-    const promise = (async (): Promise<string | null> => {
-      try {
-        const data = await refreshSession(legacyRefreshToken);
-        applySession(data);
-        return data.accessToken;
-      } catch {
-        setUser(null);
-        setToken(null);
-        return null;
-      } finally {
-        refreshPromiseRef.current = null;
-      }
-    })();
-
-    refreshPromiseRef.current = promise;
-    return promise;
   };
 
   const doRefreshRef = useRef(doRefresh);
@@ -101,19 +91,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     registerTokenRefreshCallback(() => doRefreshRef.current(undefined, "authFetch-401"));
-    registerAccessStaleCallback(() => {
-      if (refreshTimerRef.current) {
-        clearTimeout(refreshTimerRef.current);
-        refreshTimerRef.current = null;
-      }
-      setUser(null);
-      setToken(null);
-      clearLegacyAuthStorage();
-      setError("Your access has changed. Please sign in again.");
-    });
     return () => {
       registerTokenRefreshCallback(() => Promise.resolve(null));
-      registerAccessStaleCallback(null);
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     };
   }, []);
@@ -128,9 +107,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = async (email: string, password: string, otp?: string) => {
+  const login = async (email: string, password: string) => {
     setError(null);
-    const data = await apiLogin(email, password, undefined, otp);
+    const data = await apiLogin(email, password);
     applySession(data);
     scheduleProactiveRefresh();
   };

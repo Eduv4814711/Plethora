@@ -28,8 +28,8 @@ const nextConfig = {
   ...(useTracingRoot ? { outputFileTracingRoot: monorepoRoot } : {}),
   async rewrites() {
     const apiUrl = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL);
-    // Browser requests remain same-origin under /api. Next proxies them to the
-    // configured Railway API, keeping refresh and CSRF cookies on the web origin.
+    // Keep /api as a local/backward-compatible proxy. Railway production browser
+    // calls use NEXT_PUBLIC_API_URL directly via apps/web/lib/api.ts.
     // Normalize the prefix to a single leading slash and no trailing slash so
     // "api", "/api", and "/api/" all become "/api". Guards against broken URLs
     // like `${host}api/...` (missing slash) or `${host}/api//...` (double slash).

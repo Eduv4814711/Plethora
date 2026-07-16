@@ -5,13 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch, getWhatsAppContacts, sendWhatsAppMessage } from "@/lib/api";
-import {
-  acknowledgeAlert,
-  resolveAlert,
-  dismissAlert,
-  type AlertCounts,
-  type OperationalAlert,
-} from "@/lib/msr-api";
 import { canAccessRoute } from "@/lib/permissions";
 import { format } from "date-fns";
 import {
@@ -40,29 +33,13 @@ interface TopTask {
   priority: string;
 }
 
-interface WorkQueueItem {
-  id: string;
-  kind: string;
-  priority: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
-  title: string;
-  description: string;
-  count: number;
-  actionLabel: string;
-  actionHref: string;
-}
-
 interface DashboardData {
   guardsOnDuty: number;
   guardsOnDutyByDay?: { name: string; value: number }[];
   activeSitesCount: number;
   activeSitesDelta?: number;
   payrollStatus: Record<string, number>;
-  alerts: { type: string; message: string; count?: number; priority?: string; id?: string }[];
-  alertCounts?: AlertCounts;
-  operationalAlerts?: OperationalAlert[];
-  payrollReadiness?: { status: string; openExceptions: number } | null;
-  pendingApprovalsInbox?: number;
-  openCriticalIncidents?: number;
+  alerts: { type: string; message: string; count?: number }[];
   taskStats?: { overdue: number; dueToday: number };
   topPriorityTasks?: TopTask[];
   shiftsOverTime?: { name: string; value: number }[];
@@ -99,36 +76,6 @@ const DATE_RANGES = [
   { value: "month", label: "Month" },
 ] as const;
 
-const PRIORITY_TABS = [
-  { value: "CRITICAL", label: "Critical" },
-  { value: "MEDIUM", label: "Medium" },
-  { value: "LOW", label: "Low" },
-  { value: "all", label: "All" },
-] as const;
-
-type PriorityTab = (typeof PRIORITY_TABS)[number]["value"];
-
-function alertViewHref(alert: OperationalAlert): string | null {
-  switch (alert.sourceModule) {
-    case "ATTENDANCE":
-      return "/attendance/exceptions";
-    case "TASKS":
-      return alert.sourceId ? `/tasks/${alert.sourceId}` : "/tasks";
-    case "INCIDENTS":
-      return alert.sourceId ? `/incidents/${alert.sourceId}` : "/incidents";
-    case "SITES":
-      return alert.siteId ? `/sites/${alert.siteId}` : "/sites";
-    case "DOCUMENTS":
-      return "/documents";
-    case "APPROVALS":
-      return "/approvals";
-    case "PAYROLL":
-      return "/payroll";
-    default:
-      return null;
-  }
-}
-
 export default function DashboardPage() {
   const { token, user } = useAuth();
   const router = useRouter();
@@ -139,15 +86,11 @@ export default function DashboardPage() {
   const [dateRange, setDateRange] = useState<string>("month");
   const [siteFilterOpen, setSiteFilterOpen] = useState(false);
   const [whatsappContacts, setWhatsappContacts] = useState<{ id: string; firstName: string; lastName: string; phone: string | null; whatsappUrl: string | null }[]>([]);
-  const [priorityTab, setPriorityTab] = useState<PriorityTab>("all");
-  const [alertActionId, setAlertActionId] = useState<string | null>(null);
-  const [alertsSectionOpen, setAlertsSectionOpen] = useState(false);
-  const [workQueue, setWorkQueue] = useState<WorkQueueItem[]>([]);
 
-  const canSites = user ? canAccessRoute("/sites", user.role, user.moduleAccess, user.isSystemOwner, user.permissions) : false;
-  const canWhatsApp = user ? canAccessRoute("/whatsapp", user.role, user.moduleAccess, user.isSystemOwner, user.permissions) : false;
-  const canPayroll = user ? canAccessRoute("/payroll", user.role, user.moduleAccess, user.isSystemOwner, user.permissions) : false;
-  const canRostering = user ? canAccessRoute("/rostering", user.role, user.moduleAccess, user.isSystemOwner, user.permissions) : false;
+  const canSites = user ? canAccessRoute("/sites", user.role, user.moduleAccess) : false;
+  const canWhatsApp = user ? canAccessRoute("/whatsapp", user.role, user.moduleAccess) : false;
+  const canPayroll = user ? canAccessRoute("/payroll", user.role, user.moduleAccess) : false;
+  const canRostering = user ? canAccessRoute("/rostering", user.role, user.moduleAccess) : false;
 
   const fetchDashboard = useCallback(() => {
     if (!token) return;
@@ -155,22 +98,9 @@ export default function DashboardPage() {
     if (dateRange) params.set("dateRange", dateRange);
     if (selectedSiteIds.length) params.set("siteIds", selectedSiteIds.join(","));
     authFetch(`/dashboard?${params.toString()}`, token)
-      .then(async (r) => {
-        if (!r.ok) {
-          const body = await r.json().catch(() => ({}));
-          throw new Error(
-            (body as { message?: string; error?: string }).message ||
-              (body as { error?: string }).error ||
-              "Unable to load dashboard"
-          );
-        }
-        return r.json();
-      })
+      .then((r) => r.json())
       .then(setData)
-      .catch((err) => {
-        console.error(err);
-        setData(null);
-      })
+      .catch(console.error)
       .finally(() => setLoading(false));
   }, [token, dateRange, selectedSiteIds]);
 
@@ -178,20 +108,6 @@ export default function DashboardPage() {
     if (!token) return;
     setLoading(true);
     fetchDashboard();
-  }, [token, fetchDashboard]);
-
-  useEffect(() => {
-    if (!token) return;
-    authFetch("/work-queue", token)
-      .then((response) => response.ok ? response.json() : Promise.reject(new Error("Unable to load work queue")))
-      .then((body) => setWorkQueue(body.data ?? []))
-      .catch(() => setWorkQueue([]));
-  }, [token, data?.pendingApprovalsInbox, data?.payrollReadiness?.openExceptions]);
-
-  useEffect(() => {
-    if (!token) return;
-    const interval = setInterval(fetchDashboard, 60_000);
-    return () => clearInterval(interval);
   }, [token, fetchDashboard]);
 
   useEffect(() => {
@@ -238,7 +154,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto flex min-h-0 w-full max-w-[1600px] animate-pulse flex-col">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-[1600px] animate-pulse flex-col overflow-hidden">
         <div className="flex shrink-0 flex-col gap-3 border-b border-neutral-200/80 pb-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
             <div className="h-3 w-32 rounded-full bg-security-navy-200/80" />
@@ -270,35 +186,6 @@ export default function DashboardPage() {
   const alertTally = (data?.alerts ?? []).reduce((sum, a) => sum + (typeof a.count === "number" ? a.count : 1), 0);
   const pendingPayrollCount = (data?.payrollStatus?.draft ?? 0) + (data?.payrollStatus?.calculated ?? 0);
   const alertsList = data?.alerts ?? [];
-  const alertCounts = data?.alertCounts;
-  const operationalAlerts = data?.operationalAlerts ?? [];
-  const filteredOperationalAlerts =
-    priorityTab === "all"
-      ? operationalAlerts
-      : operationalAlerts.filter((a) => a.priority === priorityTab);
-
-  const handleAlertAction = async (id: string, action: "acknowledge" | "resolve" | "dismiss") => {
-    if (!token) return;
-    setAlertActionId(id);
-    try {
-      if (action === "acknowledge") await acknowledgeAlert(token, id);
-      else if (action === "resolve") await resolveAlert(token, id);
-      else await dismissAlert(token, id);
-      fetchDashboard();
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setAlertActionId(null);
-    }
-  };
-
-  const payrollReadinessLabel = (() => {
-    const s = data?.payrollReadiness?.status;
-    if (!s) return null;
-    if (s === "READY" || s === "APPROVED_MANUALLY") return { text: "Payroll ready", variant: "success" as const };
-    if (s === "BLOCKED_BY_EXCEPTIONS") return { text: "Payroll blocked", variant: "error" as const };
-    return { text: "Attendance review needed", variant: "warning" as const };
-  })();
 
   const DashboardCard = ({ title, children, className = "", action }: { title: string; children: React.ReactNode; className?: string; action?: React.ReactNode }) => (
     <article className={`card-dashboard flex h-full min-h-0 flex-col overflow-hidden p-3 lg:p-3.5 ${className}`}>
@@ -323,7 +210,7 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="animate-fade-in mx-auto flex min-h-0 w-full min-w-0 max-w-[1600px] flex-col pb-6">
+    <div className="animate-fade-in mx-auto flex h-full min-h-0 w-full min-w-0 max-w-[1600px] flex-col overflow-hidden max-lg:overflow-y-auto max-lg:pb-6">
       <header className="flex shrink-0 flex-col gap-3 border-b border-neutral-200/80 pb-3 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:pb-2.5">
         <div className="min-w-0 shrink-0 lg:flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-security-navy-700 lg:text-xs">
@@ -404,210 +291,40 @@ export default function DashboardPage() {
       <section className="grid shrink-0 grid-cols-2 gap-2 py-2 sm:grid-cols-3 lg:grid-cols-5 lg:gap-2.5 lg:py-2.5" aria-label="Key metrics">
         <KpiTile label="Total employees" value={employeesTotal} hint="All statuses" />
         <KpiTile label="Guards on duty" value={data?.guardsOnDuty ?? 0} hint="Right now" />
-        <KpiTile label="Active sites" value={data?.activeSitesCount ?? 0} hint="Operational" />
+        <KpiTile label="Active sites" value={data?.activeSitesCount ?? 0} />
         <KpiTile label="Pending payroll" value={pendingPayrollCount} hint="Runs not yet paid" accent={pendingPayrollCount > 0 ? "alert" : "default"} />
         <KpiTile label="Needs attention" value={alertTally + taskUrgentCount} hint="Alerts + urgent tasks" accent={alertTally + taskUrgentCount > 0 ? "alert" : "default"} />
       </section>
 
-      {payrollReadinessLabel && (
-        <div className="mb-2 shrink-0">
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-              payrollReadinessLabel.variant === "success"
-                ? "bg-emerald-100 text-emerald-800"
-                : payrollReadinessLabel.variant === "error"
-                  ? "bg-red-100 text-red-800"
-                  : "bg-amber-100 text-amber-800"
-            }`}
-          >
-            {payrollReadinessLabel.text}
-            {typeof data?.payrollReadiness?.openExceptions === "number" && data.payrollReadiness.openExceptions > 0
-              ? ` · ${data.payrollReadiness.openExceptions} open exception${data.payrollReadiness.openExceptions === 1 ? "" : "s"}`
-              : ""}
-          </span>
-        </div>
-      )}
-
-      <section className="mb-3 shrink-0" aria-labelledby="work-queue-heading">
-        <div className="mb-2 flex items-end justify-between gap-3">
-          <div>
-            <h2 id="work-queue-heading" className="text-sm font-bold text-neutral-900">Your next actions</h2>
-            <p className="text-xs text-neutral-600">Prioritized work based on your approved access.</p>
-          </div>
-          {workQueue.length > 4 && <span className="text-xs font-medium text-neutral-500">Showing 4 of {workQueue.length}</span>}
-        </div>
-        {workQueue.length > 0 ? (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            {workQueue.slice(0, 4).map((item) => (
-              <article key={item.id} className={`rounded-security-lg border bg-white p-3 shadow-sm ${item.priority === "CRITICAL" ? "border-red-300" : item.priority === "HIGH" ? "border-amber-300" : "border-neutral-200"}`}>
-                <div className="flex items-start justify-between gap-2">
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${item.priority === "CRITICAL" ? "bg-red-100 text-red-800" : item.priority === "HIGH" ? "bg-amber-100 text-amber-800" : "bg-neutral-100 text-neutral-700"}`}>{item.priority}</span>
-                  <span className="text-lg font-bold tabular-nums text-neutral-900">{item.count}</span>
-                </div>
-                <h3 className="mt-2 text-sm font-semibold text-neutral-900">{item.title}</h3>
-                <p className="mt-1 line-clamp-2 text-xs leading-5 text-neutral-600">{item.description}</p>
-                <Link href={item.actionHref} className="mt-3 inline-flex text-xs font-semibold text-security-navy-800 hover:underline">{item.actionLabel} →</Link>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-security-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">You are caught up. New approvals, exceptions and assigned tasks will appear here.</div>
-        )}
-      </section>
-
-      <section className="mb-2 grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-3" aria-label="Action items">
-        {(data?.pendingApprovalsInbox ?? 0) > 0 && (
-          <Link
-            href="/approvals"
-            className="flex items-center justify-between rounded-security-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm hover:bg-amber-100"
-          >
-            <span className="font-medium text-neutral-900">Pending approvals</span>
-            <span className="font-bold tabular-nums text-amber-800">{data?.pendingApprovalsInbox}</span>
-          </Link>
-        )}
-        {(data?.openCriticalIncidents ?? 0) > 0 && (
-          <Link
-            href="/incidents?severity=CRITICAL"
-            className="flex items-center justify-between rounded-security-lg border border-red-200 bg-red-50 px-3 py-2 text-sm hover:bg-red-100"
-          >
-            <span className="font-medium text-neutral-900">Critical incidents</span>
-            <span className="font-bold tabular-nums text-red-800">{data?.openCriticalIncidents}</span>
-          </Link>
-        )}
-        {(data?.topPriorityTasks?.length ?? 0) > 0 && (
-          <div className="rounded-security-lg border border-neutral-200 bg-white px-3 py-2 text-sm">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-600">Tasks needing attention</p>
-            <ul className="space-y-1">
-              {data!.topPriorityTasks!.slice(0, 3).map((t) => (
-                <li key={t.id}>
-                  <Link href={`/tasks/${t.id}`} className="truncate font-medium text-security-navy-800 hover:underline">
-                    {t.title}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </section>
-
-      {(operationalAlerts.length > 0 || alertCounts) && (
-        <section className="mb-2 shrink-0 rounded-security-lg border border-neutral-200 bg-white px-3 py-3 shadow-sm" aria-label="Operational alerts">
-          <button
-            type="button"
-            onClick={() => setAlertsSectionOpen((open) => !open)}
-            className="flex w-full items-center justify-between gap-2 text-left"
-            aria-expanded={alertsSectionOpen}
-            aria-controls="dashboard-operational-alerts"
-          >
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-800">Operational alerts</h2>
-              {!alertsSectionOpen && (
-                <span className="text-xs text-neutral-600">
-                  {alertCounts?.allOpen ?? operationalAlerts.length} open
+      {alertsList.length > 0 && (
+        <section
+          className="mb-2 shrink-0 rounded-security-lg border border-security-amber-200 bg-security-amber-50/70 px-3 py-2"
+          aria-label="Items needing attention"
+        >
+          <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-800 lg:text-sm">
+            {alertsList.slice(0, 4).map((alert, i) => (
+              <li key={`${alert.type}-${i}`} className="flex min-w-0 items-center gap-1.5">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-security-amber-500" aria-hidden />
+                <span className="truncate">
+                  {alert.message}
+                  {typeof alert.count === "number" ? ` (${alert.count})` : ""}
                 </span>
-              )}
-            </div>
-            <svg
-              className={`h-4 w-4 shrink-0 text-neutral-600 transition-transform ${alertsSectionOpen ? "rotate-180" : ""}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          {alertsSectionOpen && (
-            <div id="dashboard-operational-alerts" className="mt-2">
-              <div className="mb-2 flex flex-wrap gap-1" role="group" aria-label="Alert priority">
-                {PRIORITY_TABS.map((tab) => {
-                  const count =
-                    tab.value === "all"
-                      ? alertCounts?.allOpen ?? operationalAlerts.length
-                      : alertCounts?.[tab.value.toLowerCase() as keyof AlertCounts] ?? 0;
-                  return (
-                    <button
-                      key={tab.value}
-                      type="button"
-                      onClick={() => setPriorityTab(tab.value)}
-                      className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
-                        priorityTab === tab.value
-                          ? "bg-security-navy-700 text-white"
-                          : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
-                      }`}
-                    >
-                      {tab.label} ({count})
-                    </button>
-                  );
-                })}
-              </div>
-              <ul className="max-h-72 space-y-2 overflow-y-auto overscroll-y-contain pr-1">
-                {filteredOperationalAlerts.map((alert) => {
-                  const viewHref = alertViewHref(alert);
-                  const isCritical = alert.priority === "CRITICAL";
-                  return (
-                    <li
-                      key={alert.id}
-                      className={`flex flex-col gap-2 rounded-security border px-3 py-2 sm:flex-row sm:items-center sm:justify-between ${
-                        isCritical ? "border-red-200 bg-red-50/60" : "border-neutral-100 bg-neutral-50/80"
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-neutral-900">{alert.title}</p>
-                        <p className="truncate text-xs text-neutral-600">{alert.message}</p>
-                      </div>
-                      <div className="flex shrink-0 flex-wrap gap-1.5">
-                        {viewHref && (
-                          <Link href={viewHref} className="btn-secondary px-2 py-1 text-xs">
-                            View
-                          </Link>
-                        )}
-                        {alert.status === "OPEN" && (
-                          <button
-                            type="button"
-                            className="btn-secondary px-2 py-1 text-xs"
-                            disabled={alertActionId === alert.id}
-                            onClick={() => handleAlertAction(alert.id, "acknowledge")}
-                          >
-                            Acknowledge
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className="btn-primary px-2 py-1 text-xs"
-                          disabled={alertActionId === alert.id}
-                          onClick={() => handleAlertAction(alert.id, "resolve")}
-                        >
-                          Resolve
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-secondary px-2 py-1 text-xs"
-                          disabled={alertActionId === alert.id}
-                          onClick={() => handleAlertAction(alert.id, "dismiss")}
-                        >
-                          Dismiss
-                        </button>
-                      </div>
-                    </li>
-                  );
-                })}
-                {filteredOperationalAlerts.length === 0 && (
-                  <li className="py-2 text-sm text-neutral-600">No alerts at this priority level.</li>
-                )}
-              </ul>
-            </div>
-          )}
+              </li>
+            ))}
+            {alertsList.length > 4 && (
+              <li className="text-neutral-600">+{alertsList.length - 4} more</li>
+            )}
+          </ul>
         </section>
       )}
 
       <section
-        className="grid min-h-[28rem] shrink-0 grid-cols-1 gap-2.5 max-lg:auto-rows-auto md:grid-cols-2 md:gap-3 lg:min-h-[32rem] xl:grid-cols-4 xl:grid-rows-2 xl:gap-3"
+        className="grid min-h-0 flex-1 grid-cols-1 gap-2.5 overflow-hidden max-lg:auto-rows-auto md:grid-cols-2 md:gap-3 xl:grid-cols-4 xl:grid-rows-2 xl:gap-3"
         aria-label="Dashboard widgets"
       >
         <DashboardCard title="Guards on duty">
           <ChartWrap>
-          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={80}>
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={guardsByDay} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis dataKey="name" tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
@@ -653,7 +370,7 @@ export default function DashboardPage() {
         <DashboardCard title="Active guards rostered">
           <div className="flex flex-1 flex-col">
           <ChartWrap>
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={80}>
+              <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={shiftsOverTimeData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
@@ -702,7 +419,7 @@ export default function DashboardPage() {
         <DashboardCard title="Team by status">
           <div className="flex min-h-0 flex-1 flex-col gap-1.5">
             <ChartWrap>
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={80}>
+              <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={(() => {
@@ -752,7 +469,7 @@ export default function DashboardPage() {
 
         <DashboardCard title="Shifts over time">
           <ChartWrap>
-          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={80}>
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={shiftsOverTimeData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }} barSize={28}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis dataKey="name" tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />

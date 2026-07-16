@@ -1,10 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { authProtect } from "../middleware/auth-protect.js";
+import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
-import { requirePermission } from "../middleware/permissions.js";
-import { PERMISSIONS } from "../lib/permissions.js";
-import { employeeGradeOperationalSelect } from "../lib/employee-dto.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 
@@ -18,39 +15,10 @@ const createPayGradeSchema = z.object({
 const updatePayGradeSchema = createPayGradeSchema.partial();
 
 export async function payGradesRoutes(app: FastifyInstance) {
-  const readRatesProtect = [
-    ...authProtect,
-    requireRole(["admin", "hr_payroll"], { anyOfModules: ["/payroll", "/employees"] }),
-    requirePermission(PERMISSIONS.PAY_GRADES_READ_RATES),
-  ];
-  const readNamesProtect = [
-    ...authProtect,
-    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
-      anyOfModules: ["/payroll", "/employees", "/rostering"],
-    }),
-    requirePermission(PERMISSIONS.PAY_GRADES_READ_NAMES),
-  ];
-  const manageProtect = [
-    ...authProtect,
-    requireRole(["admin", "hr_payroll"], { module: "/payroll" }),
-    requirePermission(PERMISSIONS.PAY_GRADES_MANAGE_RATES),
-  ];
+  const readProtect = [authMiddleware, requireRole(["admin", "hr_payroll"], { anyOfModules: ["/payroll", "/employees"] })];
+  const protect = [authMiddleware, requireRole(["admin", "hr_payroll"], { module: "/payroll" })];
 
-  app.get("/options", { preHandler: readNamesProtect }, async (request, reply) => {
-    const user = request.user!;
-    const q = request.query as { groupId?: string };
-    const where: { companyId: string; groupId?: null | { equals: string } } = { companyId: user.companyId };
-    if (q.groupId) where.groupId = { equals: q.groupId };
-    else where.groupId = null;
-    const grades = await prisma.payGrade.findMany({
-      where,
-      select: employeeGradeOperationalSelect,
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    });
-    return reply.send({ data: grades });
-  });
-
-  app.get("/", { preHandler: readRatesProtect }, async (request, reply) => {
+  app.get("/", { preHandler: readProtect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as { groupId?: string };
 
@@ -70,7 +38,7 @@ export async function payGradesRoutes(app: FastifyInstance) {
     return reply.send({ data: grades });
   });
 
-  app.post("/", { preHandler: manageProtect }, async (request, reply) => {
+  app.post("/", { preHandler: protect }, async (request, reply) => {
     const parsed = createPayGradeSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -110,7 +78,7 @@ export async function payGradesRoutes(app: FastifyInstance) {
     return reply.code(201).send(grade);
   });
 
-  app.put("/:id", { preHandler: manageProtect }, async (request, reply) => {
+  app.put("/:id", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const parsed = updatePayGradeSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -148,7 +116,7 @@ export async function payGradesRoutes(app: FastifyInstance) {
     return reply.send(grade);
   });
 
-  app.delete("/:id", { preHandler: manageProtect }, async (request, reply) => {
+  app.delete("/:id", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const companyId = request.user!.companyId;
 
