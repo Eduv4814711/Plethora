@@ -19,4 +19,21 @@ describe("system owner access", () => {
   it("sends the System Owner to the dashboard", () => {
     expect(getDefaultRouteForUser({ role: "admin", isSystemOwner: true, permissions: [] })).toBe("/");
   });
+
+  it("keeps legacy unscoped admin sessions usable during rolling deployments", () => {
+    const legacyAdmin = { role: "admin", moduleAccess: null };
+
+    expect(isFullAdmin(legacyAdmin)).toBe(true);
+    expect(canAccessRoute("/", legacyAdmin.role, legacyAdmin.moduleAccess)).toBe(true);
+    expect(canAccessRoute("/settings", legacyAdmin.role, legacyAdmin.moduleAccess)).toBe(true);
+    expect(getDefaultRouteForUser(legacyAdmin)).toBe("/");
+  });
+
+  it("keeps explicit empty permissions default-deny for new admin sessions", () => {
+    const scopedAdmin = { role: "admin", moduleAccess: null, permissions: [] as string[] };
+
+    expect(isFullAdmin(scopedAdmin)).toBe(false);
+    expect(canAccessRoute("/", scopedAdmin.role, scopedAdmin.moduleAccess, false, scopedAdmin.permissions)).toBe(false);
+    expect(getDefaultRouteForUser(scopedAdmin)).toBe("/access-pending");
+  });
 });

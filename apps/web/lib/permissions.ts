@@ -78,6 +78,11 @@ export function defaultModulesForRole(role: string): string[] {
 /** Full tenant administrator: may use all modules and admin-only APIs. */
 export function isFullAdmin(user: { role: string; moduleAccess?: unknown; isSystemOwner?: boolean; permissions?: string[] | null }): boolean {
   if (user.isSystemOwner) return true;
+  // Rolling-deploy compatibility: the previous API did not return
+  // `permissions`. Preserve its historical unscoped-admin behaviour only when
+  // the field is absent. A new response with permissions: [] remains
+  // default-deny as intended.
+  if (user.role === "admin" && user.permissions === undefined && user.moduleAccess == null) return true;
   return !!user.permissions?.includes("permissions.manage_operational") && !!user.permissions?.includes("users.manage");
 }
 
@@ -117,6 +122,7 @@ export function getDefaultRouteForUser(user: {
   permissions?: string[] | null;
 }): string {
   if (user.isSystemOwner) return "/";
+  if (user.role === "admin" && user.permissions === undefined && user.moduleAccess == null) return "/";
   if (user.permissions) {
     const first = NAV_ITEMS.find((item) => canAccessRoute(item.href, user.role, user.moduleAccess, false, user.permissions));
     if (first) return first.href;
@@ -154,6 +160,10 @@ export function canAccessRoute(
   if (!item) return false;
 
   if (isSystemOwner) return true;
+
+  // Support only genuinely legacy session payloads during a staggered web/API
+  // Railway rollout. Explicit permission lists always win.
+  if (role === "admin" && permissions === undefined && moduleAccess == null) return true;
 
   if (permissions) {
     const required = ROUTE_PERMISSIONS[item.href];
