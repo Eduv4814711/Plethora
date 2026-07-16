@@ -179,12 +179,100 @@ CREATE INDEX "RosterPublication_siteId_periodStart_periodEnd_idx" ON "RosterPubl
 ALTER TABLE "RosterPublication" ADD CONSTRAINT "RosterPublication_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "RosterPublication" ADD CONSTRAINT "RosterPublication_siteId_fkey" FOREIGN KEY ("siteId") REFERENCES "Site"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
+-- Preserve pre-existing broken lineage and surface it for guided review. The
+-- constraints are NOT VALID so they protect all new writes without silently
+-- rewriting historical operational records. They can be validated after the
+-- corresponding data-quality issues have been resolved by an authorised user.
+INSERT INTO "DataQualityIssue" (
+  "id", "companyId", "ruleKey", "entityType", "entityId", "groupKey",
+  "title", "description", "severity", "affectedRecords", "proposedResolution"
+)
+SELECT
+  'dq_ts_shift_' || md5(r."id" || ':' || r."sourceShiftId"),
+  r."companyId",
+  'orphan_timesheet_shift',
+  'SiteTimesheetRow',
+  r."id",
+  r."id" || ':shift:' || r."sourceShiftId",
+  'Timesheet row has a missing source shift',
+  'The referenced shift no longer exists. Review and relink the row or confirm that it should remain unlinked.',
+  'HIGH',
+  jsonb_build_object('recordIds', jsonb_build_array(r."id"), 'missingShiftId', r."sourceShiftId"),
+  jsonb_build_object('action', 'review-and-relink-or-confirm-unlinked')
+FROM "SiteTimesheetRow" r
+LEFT JOIN "Shift" s ON s."id" = r."sourceShiftId"
+WHERE r."sourceShiftId" IS NOT NULL AND s."id" IS NULL
+ON CONFLICT ("companyId", "ruleKey", "groupKey") DO NOTHING;
+
+INSERT INTO "DataQualityIssue" (
+  "id", "companyId", "ruleKey", "entityType", "entityId", "groupKey",
+  "title", "description", "severity", "affectedRecords", "proposedResolution"
+)
+SELECT
+  'dq_ts_att_' || md5(r."id" || ':' || r."sourceAttendanceId"),
+  r."companyId",
+  'orphan_timesheet_attendance',
+  'SiteTimesheetRow',
+  r."id",
+  r."id" || ':attendance:' || r."sourceAttendanceId",
+  'Timesheet row has a missing source attendance record',
+  'The referenced attendance record no longer exists. Review and relink the row or confirm that it should remain unlinked.',
+  'HIGH',
+  jsonb_build_object('recordIds', jsonb_build_array(r."id"), 'missingAttendanceId', r."sourceAttendanceId"),
+  jsonb_build_object('action', 'review-and-relink-or-confirm-unlinked')
+FROM "SiteTimesheetRow" r
+LEFT JOIN "Attendance" a ON a."id" = r."sourceAttendanceId"
+WHERE r."sourceAttendanceId" IS NOT NULL AND a."id" IS NULL
+ON CONFLICT ("companyId", "ruleKey", "groupKey") DO NOTHING;
+
+INSERT INTO "DataQualityIssue" (
+  "id", "companyId", "ruleKey", "entityType", "entityId", "groupKey",
+  "title", "description", "severity", "affectedRecords", "proposedResolution"
+)
+SELECT
+  'dq_ex_shift_' || md5(e."id" || ':' || e."shiftId"),
+  e."companyId",
+  'orphan_exception_shift',
+  'AttendanceException',
+  e."id",
+  e."id" || ':shift:' || e."shiftId",
+  'Attendance exception has a missing shift',
+  'The exception references a shift that no longer exists. Review and relink it or confirm that it should remain unlinked.',
+  'HIGH',
+  jsonb_build_object('recordIds', jsonb_build_array(e."id"), 'missingShiftId', e."shiftId"),
+  jsonb_build_object('action', 'review-and-relink-or-confirm-unlinked')
+FROM "AttendanceException" e
+LEFT JOIN "Shift" s ON s."id" = e."shiftId"
+WHERE e."shiftId" IS NOT NULL AND s."id" IS NULL
+ON CONFLICT ("companyId", "ruleKey", "groupKey") DO NOTHING;
+
+INSERT INTO "DataQualityIssue" (
+  "id", "companyId", "ruleKey", "entityType", "entityId", "groupKey",
+  "title", "description", "severity", "affectedRecords", "proposedResolution"
+)
+SELECT
+  'dq_ex_att_' || md5(e."id" || ':' || e."attendanceId"),
+  e."companyId",
+  'orphan_exception_attendance',
+  'AttendanceException',
+  e."id",
+  e."id" || ':attendance:' || e."attendanceId",
+  'Attendance exception has a missing attendance record',
+  'The exception references an attendance record that no longer exists. Review and relink it or confirm that it should remain unlinked.',
+  'HIGH',
+  jsonb_build_object('recordIds', jsonb_build_array(e."id"), 'missingAttendanceId', e."attendanceId"),
+  jsonb_build_object('action', 'review-and-relink-or-confirm-unlinked')
+FROM "AttendanceException" e
+LEFT JOIN "Attendance" a ON a."id" = e."attendanceId"
+WHERE e."attendanceId" IS NOT NULL AND a."id" IS NULL
+ON CONFLICT ("companyId", "ruleKey", "groupKey") DO NOTHING;
+
 ALTER TABLE "SiteTimesheetRow"
-  ADD CONSTRAINT "SiteTimesheetRow_sourceShiftId_fkey" FOREIGN KEY ("sourceShiftId") REFERENCES "Shift"("id") ON DELETE SET NULL ON UPDATE CASCADE,
-  ADD CONSTRAINT "SiteTimesheetRow_sourceAttendanceId_fkey" FOREIGN KEY ("sourceAttendanceId") REFERENCES "Attendance"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  ADD CONSTRAINT "SiteTimesheetRow_sourceShiftId_fkey" FOREIGN KEY ("sourceShiftId") REFERENCES "Shift"("id") ON DELETE SET NULL ON UPDATE CASCADE NOT VALID,
+  ADD CONSTRAINT "SiteTimesheetRow_sourceAttendanceId_fkey" FOREIGN KEY ("sourceAttendanceId") REFERENCES "Attendance"("id") ON DELETE SET NULL ON UPDATE CASCADE NOT VALID;
 CREATE INDEX "SiteTimesheetRow_sourceShiftId_idx" ON "SiteTimesheetRow"("sourceShiftId");
 CREATE INDEX "SiteTimesheetRow_sourceAttendanceId_idx" ON "SiteTimesheetRow"("sourceAttendanceId");
 
 ALTER TABLE "AttendanceException"
-  ADD CONSTRAINT "AttendanceException_attendanceId_fkey" FOREIGN KEY ("attendanceId") REFERENCES "Attendance"("id") ON DELETE SET NULL ON UPDATE CASCADE,
-  ADD CONSTRAINT "AttendanceException_shiftId_fkey" FOREIGN KEY ("shiftId") REFERENCES "Shift"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  ADD CONSTRAINT "AttendanceException_attendanceId_fkey" FOREIGN KEY ("attendanceId") REFERENCES "Attendance"("id") ON DELETE SET NULL ON UPDATE CASCADE NOT VALID,
+  ADD CONSTRAINT "AttendanceException_shiftId_fkey" FOREIGN KEY ("shiftId") REFERENCES "Shift"("id") ON DELETE SET NULL ON UPDATE CASCADE NOT VALID;

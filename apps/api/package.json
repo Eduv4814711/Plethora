@@ -11,7 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build": "prisma generate && tsc && node scripts/copy-templates.mjs",
-    "start": "prisma migrate deploy && node dist/index.js",
+    "start": "node scripts/recover-audit-foundation-migration.mjs && prisma migrate deploy && node dist/index.js",
     "start:with-migrate": "npm start",
     "start:server": "node dist/index.js",
     "db:generate": "prisma generate",
