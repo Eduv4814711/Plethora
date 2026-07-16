@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authProtect } from "../middleware/auth-protect.js";
 import { requireRole } from "../middleware/rbac.js";
+import { requirePermission } from "../middleware/permissions.js";
+import { PERMISSIONS } from "../lib/permissions.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 import { upsertAlert } from "../modules/alerts/alerts.service.js";
@@ -135,7 +137,8 @@ const taskDetailInclude = {
 } as const;
 
 export async function tasksRoutes(app: FastifyInstance) {
-  const protect = [...authProtect, requireRole([...TASK_ROLES], { module: "/tasks" })];
+  const protect = [...authProtect, requireRole([...TASK_ROLES], { module: "/tasks" }), requirePermission(PERMISSIONS.TASKS_READ)];
+  const manageProtect = [...protect, requirePermission(PERMISSIONS.TASKS_MANAGE)];
 
   app.get("/assignees", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
@@ -233,7 +236,7 @@ export async function tasksRoutes(app: FastifyInstance) {
     return reply.send({ data: tasksWithAssignee, total, limit, offset });
   });
 
-  app.post("/", { preHandler: protect }, async (request, reply) => {
+  app.post("/", { preHandler: manageProtect }, async (request, reply) => {
     const parsed = createTaskSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -374,7 +377,7 @@ export async function tasksRoutes(app: FastifyInstance) {
     return reply.send({ ...task, assigneeDisplayName });
   });
 
-  app.patch("/:id", { preHandler: protect }, async (request, reply) => {
+  app.patch("/:id", { preHandler: manageProtect }, async (request, reply) => {
     const parsed = updateTaskSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -521,7 +524,7 @@ export async function tasksRoutes(app: FastifyInstance) {
     return reply.send({ ...task, assigneeDisplayName });
   });
 
-  app.delete("/:id", { preHandler: protect }, async (request, reply) => {
+  app.delete("/:id", { preHandler: manageProtect }, async (request, reply) => {
     const user = request.user!;
     const userId = request.user!.sub!;
     const { id } = request.params as { id: string };
@@ -553,7 +556,7 @@ export async function tasksRoutes(app: FastifyInstance) {
     return reply.code(204).send();
   });
 
-  app.post("/:id/complete", { preHandler: protect }, async (request, reply) => {
+  app.post("/:id/complete", { preHandler: manageProtect }, async (request, reply) => {
     const user = request.user!;
     const userId = request.user!.sub!;
     const { id } = request.params as { id: string };
@@ -637,7 +640,7 @@ export async function tasksRoutes(app: FastifyInstance) {
     return reply.send({ ...task, assigneeDisplayName });
   });
 
-  app.post("/:id/reopen", { preHandler: protect }, async (request, reply) => {
+  app.post("/:id/reopen", { preHandler: manageProtect }, async (request, reply) => {
     const user = request.user!;
     const userId = request.user!.sub!;
     const { id } = request.params as { id: string };

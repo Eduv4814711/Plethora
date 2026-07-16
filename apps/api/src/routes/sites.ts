@@ -3,6 +3,8 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { authProtect } from "../middleware/auth-protect.js";
 import { requireRole } from "../middleware/rbac.js";
+import { requirePermission } from "../middleware/permissions.js";
+import { PERMISSIONS } from "../lib/permissions.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 import { runAutoRosterForSite } from "../services/auto-roster.service.js";
@@ -181,10 +183,12 @@ export async function sitesRoutes(app: FastifyInstance) {
     requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
       anyOfModules: ["/sites", "/rostering"],
     }),
+    requirePermission(PERMISSIONS.SITES_READ),
   ];
   const manageSites = [
     ...authProtect,
     requireRole(["admin", "operations_manager", "supervisor"], { module: "/sites" }),
+    requirePermission(PERMISSIONS.SITES_MANAGE),
   ];
 
   app.get("/", { preHandler: readProtect }, async (request, reply) => {
@@ -584,7 +588,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post("/:siteId/posts", { preHandler: protect }, async (request, reply) => {
+  app.post("/:siteId/posts", { preHandler: manageSites }, async (request, reply) => {
     const { siteId } = request.params as { siteId: string };
     const parsed = createPostSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -635,7 +639,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     });
   });
 
-  app.put("/:siteId/posts/:postId", { preHandler: protect }, async (request, reply) => {
+  app.put("/:siteId/posts/:postId", { preHandler: manageSites }, async (request, reply) => {
     const { siteId, postId } = request.params as { siteId: string; postId: string };
     const parsed = updatePostSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -718,7 +722,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     });
   });
 
-  app.delete("/:siteId/posts/:postId", { preHandler: protect }, async (request, reply) => {
+  app.delete("/:siteId/posts/:postId", { preHandler: manageSites }, async (request, reply) => {
     const { siteId, postId } = request.params as { siteId: string; postId: string };
     const user = request.user!;
 
@@ -764,7 +768,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     return reply.code(204).send();
   });
 
-  app.post("/:siteId/posts/:postId/guards", { preHandler: protect }, async (request, reply) => {
+  app.post("/:siteId/posts/:postId/guards", { preHandler: manageSites }, async (request, reply) => {
     const { siteId, postId } = request.params as { siteId: string; postId: string };
     const parsed = assignGuardSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -872,7 +876,7 @@ export async function sitesRoutes(app: FastifyInstance) {
     });
   });
 
-  app.delete("/:siteId/posts/:postId/guards/:employeeId", { preHandler: protect }, async (request, reply) => {
+  app.delete("/:siteId/posts/:postId/guards/:employeeId", { preHandler: manageSites }, async (request, reply) => {
     const { siteId, postId, employeeId } = request.params as {
       siteId: string;
       postId: string;

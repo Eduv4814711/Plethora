@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authMiddleware } from "../../middleware/auth.js";
 import { normalizeModuleAccess, requireRole } from "../../middleware/rbac.js";
+import { accessMiddleware, requireAnyPermission, requirePermission } from "../../middleware/permissions.js";
+import { PERMISSIONS } from "../../lib/permissions.js";
 import type { JWTPayload } from "../../lib/types.js";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
@@ -77,6 +79,8 @@ export async function resolveClientPortalAccess(
 export async function clientsRoutes(app: FastifyInstance) {
   const adminProtect = [
     authMiddleware,
+    accessMiddleware,
+    requirePermission(PERMISSIONS.SITES_MANAGE),
     requireRole([...ADMIN_ROLES], { anyOfModules: ["/", "/settings", "/sites"] }),
   ];
 
@@ -196,6 +200,8 @@ export async function clientsRoutes(app: FastifyInstance) {
 export async function clientPortalRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
+    accessMiddleware,
+    requireAnyPermission([PERMISSIONS.DOCUMENTS_READ_OPERATIONAL, PERMISSIONS.INCIDENTS_READ]),
     async (request: { user?: { role: string } }, reply: { code: (n: number) => { send: (b: unknown) => unknown } }) => {
       if (!request.user) {
         return reply.code(401).send({ error: "Unauthorized", message: "Authentication required" });

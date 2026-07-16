@@ -22,9 +22,12 @@
     "db:add-module-access": "npm run db:add-module-access --workspace=api",
     "db:seed": "npm run db:seed --workspace=api",
     "test": "npm run test --workspace=api",
-    "test:web": "npm run test --workspace=web"
+    "test:web": "npm run test --workspace=web",
+    "railway:preflight": "node scripts/railway-preflight.mjs",
+    "deploy:check": "npm run railway:preflight && npm run build && npm run test:web"
   },
   "devDependencies": {
+    "@rolldown/binding-win32-x64-msvc": "^1.0.0-rc.16",
     "concurrently": "^9.2.1",
     "typescript": "^5.3.3"
   },

@@ -1,0 +1,19 @@
+# Local runtimes, databases, caches and generated output must never enter the
+# Railway build context.
+.git/
+.agents/
+.backups/
+.cursor/
+.node/
+.pgdata/
+.pnpm-store/
+node_modules/
+pgsql/
+pgsql18/
+tools-postgresql*.zip
+*.log
+apps/api/.env
+apps/web/.env.local
+apps/api/dist/
+apps/web/.next/
+coverage/

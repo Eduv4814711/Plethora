@@ -11,16 +11,15 @@ Services:
 - `api` — Fastify app in `apps/api`
 - `web` — Next.js app in `apps/web`
 - `postgres` — Railway managed PostgreSQL
-- `redis` — optional Railway Redis if a feature needs `REDIS_URL`
 
 Public domains:
 
 - Web: `https://plethora.quickbophasecurity.co.za`
 - API: Railway-generated URL first, later `https://api.quickbophasecurity.co.za`
 
-The frontend calls the backend through `NEXT_PUBLIC_API_URL` and optional
-`NEXT_PUBLIC_API_PATH_PREFIX`. The Railway production default is an external API
-origin, not same-origin `/api`.
+The browser calls the same-origin `/api` path. Next.js proxies those requests to
+`NEXT_PUBLIC_API_URL` and the optional `NEXT_PUBLIC_API_PATH_PREFIX`, keeping
+refresh and CSRF cookies attached to the web origin.
 
 ## Why Services Use Repo Root
 
@@ -43,7 +42,6 @@ strategy is redesigned around separate lockfiles.
 2. Add a new service from the GitHub repository for `api`.
 3. Add another service from the same repository for `web`.
 4. Add Railway PostgreSQL.
-5. Add Railway Redis only if a feature needs it.
 
 ## API Service
 
@@ -52,7 +50,7 @@ Settings:
 - Root directory: repo root, blank or `/`
 - Config-as-code path: `apps/api/railway.toml`
 - Build command: `npm run build --workspace=api`
-- Start command: `cd apps/api && npm run start:with-migrate`
+- Start command: `cd apps/api && npm start`
 - Healthcheck path: `/health`
 
 Variables:
@@ -62,25 +60,27 @@ NODE_ENV=production
 HOST=0.0.0.0
 PORT=3001
 DATABASE_URL=${{Postgres.DATABASE_URL}}
-REDIS_URL=${{Redis.REDIS_URL}}
 JWT_SECRET=<long random secret>
 JWT_REFRESH_SECRET=<different long random secret>
-JWT_EXPIRES_IN=7d
 FRONTEND_URL=https://plethora.quickbophasecurity.co.za
 CORS_ORIGIN=https://plethora.quickbophasecurity.co.za
-API_URL=https://plethora-api-production.up.railway.app
 TRUST_PROXY=true
-UPLOADS_DIR=/tmp/uploads
+UPLOADS_DIR=/data/uploads
 WHATSAPP_PHONE_NUMBER_ID=
 WHATSAPP_ACCESS_TOKEN=
 WHATSAPP_VERIFY_TOKEN=
 WHATSAPP_APP_SECRET=
 WHATSAPP_API_VERSION=v20.0
+WHATSAPP_WABA_ID=
+WHATSAPP_TEMPLATES=
 ENCRYPTION_KEY=<required app format>
 CLOCK_IN_WINDOW_MINUTES=15
+CRON_SECRET=<different long random secret>
+PUPPETEER_EXECUTABLE_PATH=
 ```
 
-If Redis is not provisioned, omit `REDIS_URL`.
+Attach a Railway Volume to the API service at `/data` before deploying uploads.
+The Puppeteer and additional WhatsApp variables are optional.
 
 `PORT` may be left unset because Railway injects it. The API code reads
 `process.env.PORT` through validated env, defaults to `3001`, and binds to
@@ -102,23 +102,13 @@ npm run db:migrate:deploy --workspace=api
 The API production start path is:
 
 ```bash
-npm run start:with-migrate --workspace=api
+npm start --workspace=api
 ```
 
 That runs:
 
 ```bash
 prisma migrate deploy && node dist/index.js
-```
-
-## Redis
-
-Redis is optional. Add Railway Redis only when an app feature needs it.
-
-If used, set:
-
-```bash
-REDIS_URL=${{Redis.REDIS_URL}}
 ```
 
 ## Web Service
@@ -240,7 +230,7 @@ order. Do not skip steps or reverse them.
    deployable set. Do **not** commit local artefacts such as
    `apps/api/permission-migration-report.csv` (gitignored; review offline only).
 2. **Schema migrate** — API start already runs `prisma migrate deploy` via
-   `start:with-migrate`. Confirm the `user_permissions` / `accessVersion`
+   `npm start`. Confirm the `user_permissions` / `accessVersion`
    migration applied in Railway logs.
 3. **Permission backfill (once)** — against the production database only:
 
@@ -296,7 +286,7 @@ API deploy fails during migration:
 
 API starts but Railway says it cannot respond:
 
-- Confirm the service uses `cd apps/api && npm run start:with-migrate`.
+- Confirm the service uses `cd apps/api && npm start`.
 - Confirm logs show the API listening on `0.0.0.0` and Railway's `PORT`.
 - Confirm `/health` returns `{"status":"ok","service":"plethora-api"}`.
 
@@ -319,9 +309,8 @@ CORS errors:
 
 Uploads:
 
-- The example uses `UPLOADS_DIR=/tmp/uploads`, which is ephemeral.
-- Add a Railway Volume and point `UPLOADS_DIR` at the mounted path if upload
-  persistence is required.
+- Mount a Railway Volume at `/data` and set `UPLOADS_DIR=/data/uploads`.
+- Do not use `/tmp/uploads` in production because it is erased on redeploy.
 - Public static serving is limited to `/uploads/logos/`. Document and other
   non-logo files must be fetched via authenticated signed download routes.
 
@@ -368,4 +357,3 @@ curl -sS -X POST "https://api.example.com/internal/cron/auto-roster" \
 Expect `200` with `{ "ok": true, "companiesProcessed": N, "result": ... }`.
 
 See [docs/ROSTER_ENGINE.md](./docs/ROSTER_ENGINE.md) for payroll calendar and coverage-threshold behaviour.
-

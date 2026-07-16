@@ -3,6 +3,7 @@ import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { createNotification } from "../notifications/notifications.service.js";
 import { upsertAlert } from "../alerts/alerts.service.js";
+import { applyApprovedPermissionGrants } from "../../services/user-access.service.js";
 
 export function canSelfApprove(requestedById: string, approverId: string): boolean {
   return requestedById === approverId;
@@ -16,6 +17,9 @@ export async function createApprovalRequest(params: {
   requestedById: string;
   approverId?: string | null;
   comment?: string;
+  reason?: string;
+  payload?: Record<string, unknown>;
+  riskLevel?: string;
 }) {
   const approval = await prisma.approvalRequest.create({
     data: {
@@ -26,6 +30,9 @@ export async function createApprovalRequest(params: {
       requestedById: params.requestedById,
       approverId: params.approverId ?? null,
       comment: params.comment,
+      reason: params.reason,
+      payload: params.payload as object | undefined,
+      riskLevel: params.riskLevel ?? "MEDIUM",
       status: "PENDING",
     },
   });
@@ -40,6 +47,7 @@ export async function createApprovalRequest(params: {
       approvalType: params.approvalType,
       entityType: params.entityType,
       entityId: params.entityId,
+      reason: params.reason,
     },
   });
 
@@ -136,6 +144,118 @@ export async function reviewApproval(params: {
     },
   });
 
+  try {
+  if (status === "APPROVED" && approval.approvalType === "ACCESS_CHANGE") {
+    const payload = (approval.payload ?? {}) as Record<string, unknown>;
+    const targetUserId = typeof payload.targetUserId === "string" ? payload.targetUserId : approval.entityId;
+    if (payload.action === "recertify") {
+      await createAuditLog({ userId: params.reviewerId, companyId: params.companyId, action: "access_review.certified", entityType: "User", entityId: targetUserId, reason: approval.reason ?? params.comment, approvalRequestId: approval.id, riskLevel: "HIGH", metadata: { requestedById: approval.requestedById } });
+    } else {
+      const grants = Array.isArray(payload.grants) ? payload.grants : [];
+      await applyApprovedPermissionGrants({
+      userId: targetUserId,
+      grants: grants.map((raw) => {
+        const grant = raw as Record<string, unknown>;
+        return {
+          permission: String(grant.permission ?? ""),
+          scopeType: grant.scopeType === "SITE" ? "SITE" as const : "COMPANY" as const,
+          scopeId: typeof grant.scopeId === "string" ? grant.scopeId : null,
+          expiresAt: typeof grant.expiresAt === "string" ? new Date(grant.expiresAt) : null,
+          emergencyAccess: grant.emergencyAccess === true,
+        };
+      }).filter((grant) => grant.permission.length > 0),
+      requestedById: approval.requestedById,
+      approvedById: params.reviewerId,
+      approvalRequestId: approval.id,
+      reason: approval.reason ?? params.comment ?? "Approved access change",
+      });
+    }
+    await prisma.approvalRequest.update({
+      where: { id: approval.id },
+      data: { executedAt: new Date() },
+    });
+  }
+
+  if (status === "APPROVED" && approval.approvalType === "DATA_QUALITY_RESOLUTION") {
+    const issue = await prisma.dataQualityIssue.findFirst({
+      where: { id: approval.entityId, companyId: params.companyId },
+    });
+    if (issue) {
+      const payload = (approval.payload ?? {}) as Record<string, unknown>;
+      const proposed = (payload.proposedResolution ?? {}) as Record<string, unknown>;
+      if (issue.ruleKey === "duplicate_leave_day") {
+        const canonicalRecordId = typeof proposed.canonicalRecordId === "string" ? proposed.canonicalRecordId : null;
+        const affected = (issue.affectedRecords ?? {}) as Record<string, unknown>;
+        const recordIds = Array.isArray(affected.recordIds) ? affected.recordIds.filter((id): id is string => typeof id === "string") : [];
+        if (!canonicalRecordId || !recordIds.includes(canonicalRecordId)) {
+          throw new Error("A valid canonical leave record is required to resolve this issue");
+        }
+        await prisma.$transaction(async (tx) => {
+          await tx.leaveRecord.update({
+            where: { id: canonicalRecordId },
+            data: { duplicateGroupKey: null, reviewedAt: new Date(), reviewedById: params.reviewerId, reviewReason: approval.reason },
+          });
+          await tx.leaveRecord.updateMany({
+            where: { id: { in: recordIds.filter((id) => id !== canonicalRecordId) } },
+            data: { voidedAt: new Date(), voidedById: params.reviewerId, voidReason: approval.reason, reviewedAt: new Date(), reviewedById: params.reviewerId, reviewReason: approval.reason },
+          });
+          await tx.dataQualityIssue.update({
+            where: { id: issue.id },
+            data: { status: "RESOLVED", reviewedAt: new Date(), reviewedById: params.reviewerId, reviewReason: approval.reason },
+          });
+        });
+      } else {
+        // Operational corrections are made in their source workflow. Independent
+        // approval confirms that the reviewer has verified that correction.
+        await prisma.dataQualityIssue.update({
+          where: { id: issue.id },
+          data: { status: "RESOLVED", reviewedAt: new Date(), reviewedById: params.reviewerId, reviewReason: approval.reason },
+        });
+      }
+      await prisma.approvalRequest.update({ where: { id: approval.id }, data: { executedAt: new Date() } });
+    }
+  }
+
+  if (status === "APPROVED" && approval.approvalType === "ROSTER_PUBLICATION") {
+    const payload = (approval.payload ?? {}) as Record<string, unknown>;
+    const publicationId = typeof payload.publicationId === "string" ? payload.publicationId : approval.entityId;
+    const publication = await prisma.rosterPublication.findFirst({ where: { id: publicationId, companyId: params.companyId } });
+    if (!publication) throw new Error("Roster publication request no longer exists");
+    const input = payload.publishInput as { siteId: string; startDate: string; endDate: string; replaceExisting?: boolean };
+    const { publishRoster } = await import("../rosters/rosters.service.js");
+    const result = await publishRoster(params.companyId, input);
+    if (!result) throw new Error("Site not found while publishing approved roster");
+    await prisma.rosterPublication.update({ where: { id: publication.id }, data: { status: "PUBLISHED", approvedById: params.reviewerId, publishedAt: new Date() } });
+    await prisma.rosterPublication.updateMany({ where: { companyId: params.companyId, siteId: publication.siteId, periodStart: publication.periodStart, periodEnd: publication.periodEnd, id: { not: publication.id }, status: "PUBLISHED" }, data: { status: "SUPERSEDED" } });
+    await prisma.approvalRequest.update({ where: { id: approval.id }, data: { executedAt: new Date() } });
+  }
+
+  if (status === "APPROVED" && approval.approvalType === "SITE_TIMESHEET") {
+    const payload = (approval.payload ?? {}) as Record<string, unknown>;
+    const { approveSiteTimesheet } = await import("../rosters/site-timesheets.service.js");
+    const result = await approveSiteTimesheet(params.companyId, approval.entityId, params.reviewerId, {
+      notes: typeof payload.notes === "string" ? payload.notes : undefined,
+      shiftType: payload.shiftType === "day" || payload.shiftType === "night" ? payload.shiftType : "all",
+    });
+    if (!result || "error" in result) throw new Error(!result ? "Timesheet not found" : result.error);
+    await prisma.approvalRequest.update({ where: { id: approval.id }, data: { executedAt: new Date() } });
+  }
+  } catch (error) {
+    // An approval is not complete unless its protected action succeeds. Restore
+    // the request so another reviewer can retry after the underlying issue is fixed.
+    await prisma.approvalRequest.update({
+      where: { id: approval.id },
+      data: {
+        status: "PENDING",
+        approverId: approval.approverId,
+        reviewedAt: approval.reviewedAt,
+        comment: approval.comment,
+        executedAt: null,
+      },
+    });
+    throw error;
+  }
+
   await createAuditLog({
     userId: params.reviewerId,
     companyId: params.companyId,
@@ -147,6 +267,9 @@ export async function reviewApproval(params: {
       comment: params.comment,
       entityType: approval.entityType,
       entityId: approval.entityId,
+      approvalRequestId: approval.id,
+      reason: params.comment ?? approval.reason ?? undefined,
+      riskLevel: approval.riskLevel === "CRITICAL" ? "CRITICAL" : "HIGH",
     },
   });
 

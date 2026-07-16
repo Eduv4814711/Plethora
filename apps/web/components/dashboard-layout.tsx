@@ -36,7 +36,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!user || !pathname) return;
-    if (!canAccessRoute(pathname, user.role, user.moduleAccess, user.isSystemOwner)) {
+    if (user.adminClass === "ROOT_ADMIN") {
+      router.replace("/platform");
+      return;
+    }
+    if (!canAccessRoute(pathname, user.role, user.moduleAccess, user.isSystemOwner, user.permissions)) {
       router.replace(getDefaultRouteForUser(user));
     }
   }, [pathname, user, router]);
@@ -128,7 +132,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   }
 
   const allNavItems = NAV_ITEMS.filter((item) =>
-    canAccessRoute(item.href, user.role, user.moduleAccess, user.isSystemOwner)
+    canAccessRoute(item.href, user.role, user.moduleAccess, user.isSystemOwner, user.permissions)
   );
 
   const mainNavItems = allNavItems.filter((item) => MAIN_NAV_HREFS.includes(item.href));
@@ -137,10 +141,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     "/settings",
     user.role,
     user.moduleAccess,
-    user.isSystemOwner
+    user.isSystemOwner,
+    user.permissions
   );
 
-  const hasAccess = canAccessRoute(pathname, user.role, user.moduleAccess, user.isSystemOwner);
+  const hasAccess = canAccessRoute(pathname, user.role, user.moduleAccess, user.isSystemOwner, user.permissions);
   const isDashboardHome = pathname === "/";
   const isWhatsAppPage = pathname === "/whatsapp" || pathname.startsWith("/whatsapp/");
   const isAcademyPage = pathname === "/academy" || (pathname != null && pathname.startsWith("/academy/"));

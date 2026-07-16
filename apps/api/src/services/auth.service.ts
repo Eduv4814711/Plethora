@@ -2,11 +2,13 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { createHash, randomBytes } from "crypto";
 import { config } from "../lib/config.js";
-import type { UserRole } from "@prisma/client";
+import type { AdminClass, UserRole } from "@prisma/client";
 import { resolveEffectiveModuleAccess } from "../lib/module-access.js";
 import { findFirstUserAuthScalars, findManyUserAuthScalars, findUniqueUserAuthScalars } from "../lib/user-module-column.js";
 import { loadUserAccess } from "./user-access.service.js";
 import { ALL_PERMISSIONS } from "../lib/permissions.js";
+import { prisma } from "../lib/prisma.js";
+import { decryptMfaSecret, verifyTotp } from "./mfa.service.js";
 import {
   isRefreshTokenActive,
   persistRefreshToken,
@@ -19,6 +21,7 @@ export interface LoginInput {
   email: string;
   password: string;
   companyId?: string;
+  otp?: string;
 }
 
 export interface AuthUserPublic {
@@ -30,8 +33,18 @@ export interface AuthUserPublic {
   companyId: string;
   moduleAccess: string[] | null;
   accessVersion: number;
+  adminClass: AdminClass;
   isSystemOwner: boolean;
   permissions: string[];
+  mfaRequired: boolean;
+  mfaEnabled: boolean;
+}
+
+export class MfaRequiredError extends Error {
+  constructor(public code: "MFA_REQUIRED" | "MFA_INVALID") {
+    super(code === "MFA_REQUIRED" ? "Enter the 6-digit code from your authenticator app" : "The verification code is invalid or expired");
+    this.name = "MfaRequiredError";
+  }
 }
 
 export interface AuthResult {
@@ -60,7 +73,9 @@ function buildPayload(user: {
   moduleAccess?: unknown;
   accessVersion?: number;
   isSystemOwner?: boolean;
+  adminClass?: AdminClass;
 }) {
+  const adminClass = user.adminClass ?? "STANDARD";
   const isSystemOwner = user.isSystemOwner === true;
   const moduleAccess = resolveEffectiveModuleAccess({
     role: user.role,
@@ -73,6 +88,7 @@ function buildPayload(user: {
     companyId: user.companyId,
     role: user.role,
     accessVersion: user.accessVersion ?? 1,
+    adminClass,
     isSystemOwner,
     ...(moduleAccess ? { moduleAccess } : {}),
   };
@@ -88,6 +104,9 @@ async function buildPublicUser(user: {
   moduleAccess?: unknown;
   accessVersion?: number;
   isSystemOwner?: boolean;
+  adminClass?: AdminClass;
+  mfaRequired?: boolean;
+  mfaEnabled?: boolean;
 }): Promise<AuthUserPublic> {
   const access = await loadUserAccess(user.id);
   const isSystemOwner = user.isSystemOwner ?? access?.isSystemOwner ?? false;
@@ -96,11 +115,7 @@ async function buildPublicUser(user: {
     moduleAccess: user.moduleAccess,
     isSystemOwner,
   });
-  const permissions = isSystemOwner
-    ? [...ALL_PERMISSIONS]
-    : access
-      ? [...access.permissions]
-      : [];
+  const permissions = isSystemOwner ? [...ALL_PERMISSIONS] : access ? [...access.permissions] : [];
   return {
     id: user.id,
     name: user.name,
@@ -110,8 +125,11 @@ async function buildPublicUser(user: {
     companyId: user.companyId,
     moduleAccess,
     accessVersion: user.accessVersion ?? access?.accessVersion ?? 1,
+    adminClass: user.adminClass ?? access?.adminClass ?? "STANDARD",
     isSystemOwner,
     permissions,
+    mfaRequired: user.mfaRequired ?? false,
+    mfaEnabled: user.mfaEnabled ?? false,
   };
 }
 
@@ -123,8 +141,11 @@ function issueJwtPair(user: {
   moduleAccess?: unknown;
   accessVersion?: number;
   isSystemOwner?: boolean;
+  adminClass?: AdminClass;
   name: string;
   roleLabel?: string | null;
+  mfaRequired?: boolean;
+  mfaEnabled?: boolean;
 }): Promise<AuthResult> {
   const payload = buildPayload(user);
 
@@ -180,9 +201,18 @@ export async function login(
     }
   }
   if (!matchedUser) return null;
+  if (matchedUser.disabledAt) return null;
+
+  if (config.security.mfaEnforcementEnabled && matchedUser.mfaEnabled) {
+    if (!input.otp) throw new MfaRequiredError("MFA_REQUIRED");
+    if (!matchedUser.mfaSecretEncrypted || !verifyTotp(decryptMfaSecret(matchedUser.mfaSecretEncrypted), input.otp)) {
+      throw new MfaRequiredError("MFA_INVALID");
+    }
+  }
 
   const result = await issueJwtPair(matchedUser);
   await persistRefreshToken(matchedUser.id, result.refreshToken, meta);
+  await prisma.user.update({ where: { id: matchedUser.id }, data: { lastLoginAt: new Date() } });
   return result;
 }
 
@@ -196,6 +226,9 @@ export interface UserForTokens {
   moduleAccess?: unknown;
   accessVersion?: number;
   isSystemOwner?: boolean;
+  adminClass?: AdminClass;
+  mfaRequired?: boolean;
+  mfaEnabled?: boolean;
 }
 
 export function generatePasswordSetupToken(): string {

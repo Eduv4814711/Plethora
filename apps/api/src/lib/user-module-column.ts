@@ -32,7 +32,15 @@ const authScalarsBase = {
   roleLabel: true,
   companyId: true,
   accessVersion: true,
+  adminClass: true,
+  disabledAt: true,
+  disabledReason: true,
   isSystemOwner: true,
+  mfaRequired: true,
+  mfaEnabled: true,
+  mfaSecretEncrypted: true,
+  mfaEnrolledAt: true,
+  lastLoginAt: true,
 } as const;
 
 const authScalarsLegacyBase = {
@@ -84,7 +92,15 @@ export async function findFirstUserAuthScalars(
             roleLabel: null,
             moduleAccess: null,
             accessVersion: 1,
+            adminClass: "STANDARD",
+            disabledAt: null,
+            disabledReason: null,
             isSystemOwner: false,
+            mfaRequired: false,
+            mfaEnabled: false,
+            mfaSecretEncrypted: null,
+            mfaEnrolledAt: null,
+            lastLoginAt: null,
           }
         : null;
     }
@@ -111,7 +127,15 @@ export async function findManyUserAuthScalars(
         ...row,
         moduleAccess: null,
         accessVersion: 1,
+        adminClass: "STANDARD",
+        disabledAt: null,
+        disabledReason: null,
         isSystemOwner: false,
+        mfaRequired: false,
+        mfaEnabled: false,
+        mfaSecretEncrypted: null,
+        mfaEnrolledAt: null,
+        lastLoginAt: null,
       }));
     } catch (fallbackErr) {
       if (!isMissingRoleLabelColumnError(fallbackErr) && !isMissingPasswordSetupColumnError(fallbackErr)) {
@@ -127,7 +151,15 @@ export async function findManyUserAuthScalars(
         roleLabel: null,
         moduleAccess: null,
         accessVersion: 1,
+        adminClass: "STANDARD",
+        disabledAt: null,
+        disabledReason: null,
         isSystemOwner: false,
+        mfaRequired: false,
+        mfaEnabled: false,
+        mfaSecretEncrypted: null,
+        mfaEnrolledAt: null,
+        lastLoginAt: null,
       }));
     }
   }
@@ -164,7 +196,15 @@ export async function findUniqueUserAuthScalars(
             roleLabel: null,
             moduleAccess: null,
             accessVersion: 1,
+            adminClass: "STANDARD",
+            disabledAt: null,
+            disabledReason: null,
             isSystemOwner: false,
+            mfaRequired: false,
+            mfaEnabled: false,
+            mfaSecretEncrypted: null,
+            mfaEnrolledAt: null,
+            lastLoginAt: null,
           }
         : null;
     }
@@ -197,6 +237,8 @@ export async function findUniqueUserListRow(id: string, companyId: string) {
         roleLabel: true,
         companyId: true,
         moduleAccess: true,
+        adminClass: true,
+        disabledAt: true,
         isSystemOwner: true,
         createdAt: true,
       },
@@ -246,6 +288,8 @@ export async function findManyUsersForCompany(
         roleLabel: true,
         companyId: true,
         moduleAccess: true,
+        adminClass: true,
+        disabledAt: true,
         isSystemOwner: true,
         createdAt: true,
       },
@@ -285,6 +329,8 @@ export async function findUniqueUserForMe(sub: string) {
         roleLabel: true,
         companyId: true,
         moduleAccess: true,
+        adminClass: true,
+        disabledAt: true,
         company: { select: ME_COMPANY_SELECT },
       },
     });

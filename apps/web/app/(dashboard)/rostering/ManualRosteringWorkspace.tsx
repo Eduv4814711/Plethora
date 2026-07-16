@@ -360,6 +360,11 @@ export const ManualRosteringWorkspace = forwardRef<
 
   const handlePublishRoster = useCallback(async () => {
     if (!token || !grid || pendingChangesRef.current.size > 0 || hardIssueCount > 0) return;
+    const reason = window.prompt("Why should this roster be published? This reason will be recorded for the approver and audit trail.");
+    if (!reason?.trim() || reason.trim().length < 5) {
+      setError("Enter a reason of at least 5 characters before requesting publication.");
+      return;
+    }
     setIsPublishing(true);
     setError(null);
     try {
@@ -368,9 +373,13 @@ export const ManualRosteringWorkspace = forwardRef<
         startDate: periodStart,
         endDate: periodEnd,
         replaceExisting: true,
+        reason: reason.trim(),
       });
       setPublishSummary(result);
-      if (result.success) {
+      if (result.approval) {
+        setStatusMsg(result.message);
+        setTimeout(() => setStatusMsg(null), 5000);
+      } else if (result.success) {
         setStatusMsg(result.message);
         setTimeout(() => setStatusMsg(null), 4000);
       } else {
@@ -744,9 +753,9 @@ export const ManualRosteringWorkspace = forwardRef<
               : "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200"
           }`}
         >
-          <p className="font-semibold">{publishSummary.success ? "Roster published" : "Publish blocked"}</p>
+          <p className="font-semibold">{publishSummary.approval ? "Publication approval requested" : publishSummary.success ? "Roster published" : "Publish blocked"}</p>
           <p className="mt-1">{publishSummary.message}</p>
-          {publishSummary.success && (
+          {publishSummary.success && publishSummary.publishedCount !== undefined && (
             <>
               <p className="mt-1 text-xs opacity-80">
                 Published {publishSummary.publishedCount} shifts, replaced {publishSummary.replacedCount}, skipped{" "}

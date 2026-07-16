@@ -11,6 +11,7 @@ import {
   permissionsForPreset,
   type PresetKey,
   PERMISSION_PRESETS,
+  ALL_PERMISSIONS,
 } from "../lib/permissions.js";
 import {
   setUserPermissions,
@@ -37,6 +38,7 @@ import { generatePasswordSetupToken, hashPassword, hashPasswordSetupToken } from
 import { validatePassword, PASSWORD_MIN_LENGTH } from "../lib/password-policy.js";
 import { badRequest } from "../lib/api-response.js";
 import { env } from "../lib/env.js";
+import { createApprovalRequest } from "../modules/approvals/approvals.service.js";
 
 const MODULE_ACCESS_MIGRATION_MESSAGE =
   "The database is missing the User.moduleAccess column. From the project root run: npm run db:push. If that fails on duplicate User emails (email unique), run: npm run db:add-module-access — it only adds the moduleAccess column. Later, fix duplicate emails (npm run db:check-email-unique in apps/api) then db:push to align the rest of the schema. DATABASE_URL must be set in apps/api/.env.";
@@ -91,6 +93,20 @@ const updateUserSchema = z.object({
   moduleAccess: moduleAccessSchema,
   permissions: z.array(z.string()).optional(),
   presetKey: z.string().optional(),
+});
+
+const permissionGrantSchema = z.object({
+  permission: z.string().refine((value) => (ALL_PERMISSIONS as string[]).includes(value), "Unknown permission"),
+  scopeType: z.enum(["COMPANY", "SITE"]).default("COMPANY"),
+  scopeId: z.string().min(1).nullable().optional(),
+  expiresAt: z.string().datetime().nullable().optional(),
+  emergencyAccess: z.boolean().optional().default(false),
+});
+
+const accessRequestSchema = z.object({
+  grants: z.array(permissionGrantSchema).max(200),
+  reason: z.string().min(5).max(2000),
+  approverId: z.string().min(1).optional(),
 });
 
 function validatePermissionGrant(
@@ -336,6 +352,89 @@ export async function usersRoutes(app: FastifyInstance) {
     return reply.send({ data });
   });
 
+  app.get("/:id/access", { preHandler: protect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const companyId = request.user!.companyId;
+    const target = await prisma.user.findFirst({
+      where: { id, companyId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        roleLabel: true,
+        isSystemOwner: true,
+        adminClass: true,
+        accessVersion: true,
+        lastLoginAt: true,
+        mfaRequired: true,
+        mfaEnabled: true,
+        permissions: {
+          orderBy: [{ permission: "asc" }, { scopeKey: "asc" }],
+          select: {
+            id: true,
+            permission: true,
+            scopeType: true,
+            scopeId: true,
+            validFrom: true,
+            expiresAt: true,
+            reason: true,
+            requestedById: true,
+            approvedById: true,
+            approvalRequestId: true,
+            emergencyAccess: true,
+            status: true,
+            lastUsedAt: true,
+          },
+        },
+      },
+    });
+    if (!target) return reply.code(404).send({ error: "User not found" });
+    return reply.send({ ...target, effectivePermissions: target.isSystemOwner ? ALL_PERMISSIONS : target.permissions.filter((p) => p.status === "ACTIVE" && (!p.expiresAt || p.expiresAt > new Date())).map((p) => p.permission) });
+  });
+
+  app.post("/:id/access-requests", { preHandler: protect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = accessRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
+    }
+    const actor = request.user!;
+    const target = await prisma.user.findFirst({
+      where: { id, companyId: actor.companyId },
+      select: { id: true, adminClass: true, isSystemOwner: true },
+    });
+    if (!target) return reply.code(404).send({ error: "User not found" });
+    if (target.isSystemOwner) return reply.code(409).send({ error: "System owner access cannot be changed here" });
+    if (parsed.data.approverId === actor.sub) {
+      return reply.code(400).send({ error: "Requester and approver must be different people" });
+    }
+    const requested = parsed.data.grants.map((grant) => grant.permission);
+    const grantError = validatePermissionGrant(request.access, requested);
+    if (grantError) return reply.code(403).send({ error: "Forbidden", message: grantError });
+
+    const siteIds = [...new Set(parsed.data.grants.filter((g) => g.scopeType === "SITE").map((g) => g.scopeId).filter((value): value is string => !!value))];
+    if (siteIds.length > 0) {
+      const siteCount = await prisma.site.count({ where: { companyId: actor.companyId, id: { in: siteIds } } });
+      if (siteCount !== siteIds.length) return reply.code(400).send({ error: "One or more site scopes are invalid" });
+    }
+
+    const approval = await createApprovalRequest({
+      companyId: actor.companyId,
+      approvalType: "ACCESS_CHANGE",
+      entityType: "user",
+      entityId: id,
+      requestedById: actor.sub,
+      approverId: parsed.data.approverId,
+      reason: parsed.data.reason,
+      riskLevel: "HIGH",
+      payload: {
+        targetUserId: id,
+        grants: parsed.data.grants,
+      },
+    });
+    return reply.code(202).send({ approval, message: "Access change submitted for independent approval" });
+  });
+
   app.get("/:id", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
@@ -356,6 +455,17 @@ export async function usersRoutes(app: FastifyInstance) {
       return reply.code(400).send({
         error: "Validation error",
         message: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    if (
+      parsed.data.permissions !== undefined ||
+      parsed.data.presetKey !== undefined ||
+      parsed.data.moduleAccess !== undefined
+    ) {
+      return reply.code(409).send({
+        error: "Independent approval required",
+        message: "Submit access changes through POST /users/:id/access-requests. Module access is now derived from approved permissions.",
       });
     }
 
@@ -405,39 +515,6 @@ export async function usersRoutes(app: FastifyInstance) {
       if (!check.valid) return badRequest(reply, check.message ?? "Password does not meet policy");
       updateData.passwordHash = await hashPassword(parsed.data.password);
     }
-    if (parsed.data.moduleAccess !== undefined) {
-      // System owners stay unrestricted even if the client sends a partial list —
-      // clear/null keeps them unlimited; otherwise store what was requested for non-owners.
-      if (existing.isSystemOwner) {
-        updateData.moduleAccess = Prisma.JsonNull;
-      } else {
-        updateData.moduleAccess =
-          parsed.data.moduleAccess === null || parsed.data.moduleAccess.length === 0
-            ? Prisma.JsonNull
-            : parsed.data.moduleAccess;
-      }
-    }
-
-    let permissionUpdate: string[] | undefined;
-    if (!existing.isSystemOwner) {
-      if (parsed.data.presetKey) {
-        const preset = PERMISSION_PRESETS[parsed.data.presetKey as PresetKey];
-        if (!preset) {
-          return reply.code(400).send({ error: "Validation error", message: "Unknown permission preset" });
-        }
-        permissionUpdate = preset.permissions;
-      } else if (parsed.data.permissions) {
-        permissionUpdate = parsed.data.permissions;
-      }
-    }
-
-    if (permissionUpdate) {
-      const grantError = validatePermissionGrant(request.access, permissionUpdate);
-      if (grantError) {
-        return reply.code(403).send({ error: "Forbidden", message: grantError });
-      }
-    }
-
     let updated;
     try {
       updated = await prisma.user.update({
@@ -487,27 +564,6 @@ export async function usersRoutes(app: FastifyInstance) {
       updated = { ...updated, roleLabel: null, moduleAccess: null, isSystemOwner: existing.isSystemOwner };
     }
 
-    if (permissionUpdate) {
-      const sensitiveGranted = permissionUpdate.filter(isSensitivePermission);
-      await setUserPermissions(id, permissionUpdate);
-      if (sensitiveGranted.length > 0) {
-        await createAuditLog({
-          userId: request.user!.sub,
-          companyId,
-          action: "permission.sensitive.grant",
-          entityType: "user",
-          entityId: id,
-          metadata: { permissions: sensitiveGranted },
-        });
-      }
-    } else if (!existing.isSystemOwner && parsed.data.role) {
-      const presetKey = defaultPresetForRole(parsed.data.role, false);
-      await setUserPermissions(id, permissionsForPreset(presetKey));
-    } else if (parsed.data.moduleAccess !== undefined) {
-      // Module-only changes must invalidate JWTs that embed moduleAccess
-      await incrementAccessVersion(id);
-    }
-
     await createAuditLog({
       userId: request.user!.sub,
       companyId,
@@ -537,7 +593,7 @@ export async function usersRoutes(app: FastifyInstance) {
       if (e instanceof SystemOwnerForbiddenError) {
         return reply.code(403).send({
           error: "Forbidden",
-          message: e.message,
+          message: (e as Error).message,
         });
       }
       throw e;
@@ -566,13 +622,13 @@ export async function usersRoutes(app: FastifyInstance) {
       if (e instanceof SystemOwnerForbiddenError) {
         return reply.code(403).send({
           error: "Forbidden",
-          message: e.message,
+          message: (e as Error).message,
         });
       }
       if (e instanceof LastSystemOwnerError) {
         return reply.code(409).send({
           error: "Last system owner",
-          message: e.message,
+          message: (e as Error).message,
         });
       }
       throw e;

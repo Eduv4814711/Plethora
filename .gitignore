@@ -1,4 +1,11 @@
 node_modules
+.node/
+.pgdata/
+.pnpm-store/
+pgsql/
+pgsql18/
+tools-postgresql*.zip
+.backups/
 dist
 .next
 *.log

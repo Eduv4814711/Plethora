@@ -20,7 +20,7 @@ type AuthState = {
 };
 
 const AuthContext = createContext<AuthState & {
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, otp?: string) => Promise<void>;
   loginWithResponse: (data: LoginResponse) => void;
   logout: () => void;
   setError: (err: string | null) => void;
@@ -128,9 +128,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, otp?: string) => {
     setError(null);
-    const data = await apiLogin(email, password);
+    const data = await apiLogin(email, password, undefined, otp);
     applySession(data);
     scheduleProactiveRefresh();
   };

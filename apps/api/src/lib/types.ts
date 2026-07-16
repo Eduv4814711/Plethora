@@ -1,4 +1,4 @@
-import type { UserRole } from "@prisma/client";
+import type { AdminClass, UserRole } from "@prisma/client";
 import type { UserAccessRecord } from "../services/user-access.service.js";
 
 export interface JWTPayload {
@@ -10,6 +10,7 @@ export interface JWTPayload {
   moduleAccess?: unknown;
   /** Must match DB accessVersion or token is rejected */
   accessVersion?: number;
+  adminClass?: AdminClass;
   /** System owner bypasses module gates even without accessMiddleware */
   isSystemOwner?: boolean;
   iat?: number;

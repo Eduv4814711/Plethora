@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireRole } from "../middleware/rbac.js";
+import { accessMiddleware, requireAnyPermission } from "../middleware/permissions.js";
+import { PERMISSIONS } from "../lib/permissions.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 
@@ -23,7 +24,7 @@ async function ensureGroupBelongsToCompany(groupId: string, companyId: string) {
 }
 
 export async function groupEarningsRulesRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin", "hr_payroll"], { module: "/payroll" })];
+  const protect = [authMiddleware, accessMiddleware, requireAnyPermission([PERMISSIONS.COMPENSATION_MANAGE, PERMISSIONS.PAY_GRADES_MANAGE_RATES])];
 
   app.get<{ Params: { groupId: string } }>(
     "/groups/:groupId/earnings-rules",
