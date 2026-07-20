@@ -21,8 +21,20 @@ describe("employee sensitive fields", () => {
     moduleAccess: ["/rostering"],
   };
 
-  it("allows full admin", () => {
-    expect(canViewEmployeeSensitiveFields(fullAdmin)).toBe(true);
+  const payrollUser: JWTPayload = {
+    sub: "u3",
+    email: "hr@test.com",
+    companyId: "c1",
+    role: "hr_payroll",
+    moduleAccess: ["/employees", "/payroll"],
+  };
+
+  it("does not allow a broad admin to view private employee data", () => {
+    expect(canViewEmployeeSensitiveFields(fullAdmin)).toBe(false);
+  });
+
+  it("allows HR/payroll only when assigned a relevant module", () => {
+    expect(canViewEmployeeSensitiveFields(payrollUser)).toBe(true);
   });
 
   it("strips sensitive fields for roster-only supervisor", () => {

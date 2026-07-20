@@ -262,8 +262,8 @@ export default function ReportsPage() {
                     cx="50%"
                     cy="50%"
                     outerRadius={90}
-                    label={({ name, percent }: { name: string; percent?: number }) =>
-                      `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                    label={({ name, percent }: { name?: string; percent?: number }) =>
+                      `${name ?? ""} ${((percent ?? 0) * 100).toFixed(0)}%`}
                   >
                     {data.payrollByStatus.map((_, i) => (
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
@@ -293,8 +293,8 @@ export default function ReportsPage() {
                     cx="50%"
                     cy="50%"
                     outerRadius={90}
-                    label={({ name, percent }: { name: string; percent?: number }) =>
-                      `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                    label={({ name, percent }: { name?: string; percent?: number }) =>
+                      `${name ?? ""} ${((percent ?? 0) * 100).toFixed(0)}%`}
                   >
                     {data.employeesByStatus.map((_, i) => (
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />

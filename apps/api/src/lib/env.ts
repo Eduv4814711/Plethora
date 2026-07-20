@@ -9,6 +9,8 @@ export const FORBIDDEN_JWT_SECRETS = new Set([
   "dev-refresh-secret",
   "change-this-in-production",
   "change-this-refresh-in-production",
+  "change_me_to_a_long_secure_secret",
+  "change_me_to_a_different_long_secure_secret",
 ]);
 
 const DEV_JWT_ACCESS = "dev-secret-change-in-production";
@@ -174,6 +176,38 @@ function assertProductionEnv(raw: RawEnv): void {
     );
   }
 
+  for (const origin of cors) {
+    try {
+      const parsedOrigin = new URL(origin);
+      if (origin === "*" || parsedOrigin.protocol !== "https:" || parsedOrigin.origin !== origin) {
+        errors.push(
+          `CORS_ORIGIN entry "${origin}" must be an exact HTTPS origin without a path or trailing slash.`
+        );
+      }
+    } catch {
+      errors.push(`CORS_ORIGIN entry "${origin}" is not a valid URL origin.`);
+    }
+  }
+
+  if (raw.FRONTEND_URL) {
+    try {
+      const frontend = new URL(raw.FRONTEND_URL);
+      if (frontend.protocol !== "https:" || frontend.origin !== raw.FRONTEND_URL) {
+        errors.push("FRONTEND_URL must be an exact HTTPS origin without a path or trailing slash.");
+      }
+    } catch {
+      errors.push("FRONTEND_URL must be a valid HTTPS origin.");
+    }
+  }
+
+  const placeholderPattern = /(change[_-]?me|placeholder|replace[_-]?me|example)/i;
+  if (raw.CRON_SECRET && placeholderPattern.test(raw.CRON_SECRET)) {
+    errors.push("CRON_SECRET must not use an example placeholder value.");
+  }
+  if (raw.ENCRYPTION_KEY && placeholderPattern.test(raw.ENCRYPTION_KEY)) {
+    errors.push("ENCRYPTION_KEY must not use an example placeholder value.");
+  }
+
   if (errors.length > 0) {
     throw new Error(
       `Invalid production environment configuration:\n${errors.map((e) => `- ${e}`).join("\n")}`
@@ -226,7 +260,7 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     frontendUrl: raw.FRONTEND_URL,
     port: raw.PORT ?? 3001,
     host: raw.HOST ?? "0.0.0.0",
-    trustProxy: raw.TRUST_PROXY ?? false,
+    trustProxy: raw.TRUST_PROXY ?? isProduction,
     whatsapp: {
       enabled: !!(phoneNumberId && accessToken && verifyToken),
       phoneNumberId,

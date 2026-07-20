@@ -11,16 +11,15 @@ Services:
 - `api` — Fastify app in `apps/api`
 - `web` — Next.js app in `apps/web`
 - `postgres` — Railway managed PostgreSQL
-- `redis` — optional Railway Redis if a feature needs `REDIS_URL`
 
 Public domains:
 
 - Web: `https://plethora.quickbophasecurity.co.za`
 - API: Railway-generated URL first, later `https://api.quickbophasecurity.co.za`
 
-The frontend calls the backend through `NEXT_PUBLIC_API_URL` and optional
-`NEXT_PUBLIC_API_PATH_PREFIX`. The Railway production default is an external API
-origin, not same-origin `/api`.
+Browser requests use the web service's same-origin `/api` proxy. At build time,
+`NEXT_PUBLIC_API_URL` and optional `NEXT_PUBLIC_API_PATH_PREFIX` configure that
+proxy's upstream API origin, which keeps auth cookies on the web origin.
 
 ## Why Services Use Repo Root
 
@@ -31,7 +30,7 @@ workspaces correctly.
 Use this setup for both Railway services:
 
 - Root directory: repo root, leave Railway Root Directory blank or set `/`
-- Builder: Nixpacks
+- Builder: Railpack
 - Config-as-code path: service-specific `railway.toml`
 
 Do not set the service root to `apps/api` or `apps/web` unless the install
@@ -43,7 +42,6 @@ strategy is redesigned around separate lockfiles.
 2. Add a new service from the GitHub repository for `api`.
 3. Add another service from the same repository for `web`.
 4. Add Railway PostgreSQL.
-5. Add Railway Redis only if a feature needs it.
 
 ## API Service
 
@@ -51,8 +49,10 @@ Settings:
 
 - Root directory: repo root, blank or `/`
 - Config-as-code path: `apps/api/railway.toml`
+- Builder: Railpack
 - Build command: `npm run build --workspace=api`
-- Start command: `cd apps/api && npm run start:with-migrate`
+- Pre-deploy command: `cd apps/api && npm run db:migrate:deploy`
+- Start command: `cd apps/api && npm run start:server`
 - Healthcheck path: `/health`
 
 Variables:
@@ -60,29 +60,23 @@ Variables:
 ```bash
 NODE_ENV=production
 HOST=0.0.0.0
-PORT=3001
 DATABASE_URL=${{Postgres.DATABASE_URL}}
-REDIS_URL=${{Redis.REDIS_URL}}
 JWT_SECRET=<long random secret>
 JWT_REFRESH_SECRET=<different long random secret>
-JWT_EXPIRES_IN=7d
 FRONTEND_URL=https://plethora.quickbophasecurity.co.za
 CORS_ORIGIN=https://plethora.quickbophasecurity.co.za
-API_URL=https://plethora-api-production.up.railway.app
 TRUST_PROXY=true
-UPLOADS_DIR=/tmp/uploads
 WHATSAPP_PHONE_NUMBER_ID=
 WHATSAPP_ACCESS_TOKEN=
 WHATSAPP_VERIFY_TOKEN=
 WHATSAPP_APP_SECRET=
-WHATSAPP_API_VERSION=v20.0
+WHATSAPP_API_VERSION=v21.0
 ENCRYPTION_KEY=<required app format>
 CLOCK_IN_WINDOW_MINUTES=15
+CRON_SECRET=<long random secret>
 ```
 
-If Redis is not provisioned, omit `REDIS_URL`.
-
-`PORT` may be left unset because Railway injects it. The API code reads
+Do not define `PORT`; Railway injects it. The API code reads
 `process.env.PORT` through validated env, defaults to `3001`, and binds to
 `0.0.0.0`.
 
@@ -99,27 +93,15 @@ Prisma uses `DATABASE_URL`. Production migration command:
 npm run db:migrate:deploy --workspace=api
 ```
 
-The API production start path is:
+Railway runs that command in the pre-deploy phase. If it fails, the new
+deployment does not start. The runtime start path is:
 
 ```bash
-npm run start:with-migrate --workspace=api
+npm run start:server --workspace=api
 ```
 
-That runs:
-
-```bash
-prisma migrate deploy && node dist/index.js
-```
-
-## Redis
-
-Redis is optional. Add Railway Redis only when an app feature needs it.
-
-If used, set:
-
-```bash
-REDIS_URL=${{Redis.REDIS_URL}}
-```
+This separation avoids running migrations concurrently when the API is scaled
+to more than one replica.
 
 ## Web Service
 
@@ -127,8 +109,9 @@ Settings:
 
 - Root directory: repo root, blank or `/`
 - Config-as-code path: `apps/web/railway.toml`
+- Builder: Railpack
 - Build command: `npm run build --workspace=web`
-- Start command: `cd apps/web && npm run start`
+- Start command: `cd apps/web && npm exec next start -- --hostname 0.0.0.0 --port $PORT`
 - Healthcheck path: `/`
 
 Variables for the Railway-generated API URL:
@@ -228,8 +211,8 @@ git push
 
 Railway will rebuild only the service affected by its watch patterns:
 
-- API watches `apps/api/**`, `package.json`, `package-lock.json`.
-- Web watches `apps/web/**`, `package.json`, `package-lock.json`.
+- API watches `apps/api/**`, root package metadata, and Node version files.
+- Web watches `apps/web/**`, root package metadata, and Node version files.
 
 ## Troubleshooting
 
@@ -237,7 +220,7 @@ Build fails on dependency install:
 
 - Confirm Root Directory is repo root.
 - Confirm `package-lock.json` is present at repo root.
-- Do not add a second `npm ci` in Railway build commands; Nixpacks handles install.
+- Do not add a second `npm ci` in Railway build commands; Railpack handles install.
 
 API deploy fails during migration:
 
@@ -248,7 +231,7 @@ API deploy fails during migration:
 
 API starts but Railway says it cannot respond:
 
-- Confirm the service uses `cd apps/api && npm run start:with-migrate`.
+- Confirm pre-deploy uses `npm run db:migrate:deploy` and start uses `npm run start:server`.
 - Confirm logs show the API listening on `0.0.0.0` and Railway's `PORT`.
 - Confirm `/health` returns `{"status":"ok","service":"plethora-api"}`.
 
@@ -271,9 +254,11 @@ CORS errors:
 
 Uploads:
 
-- The example uses `UPLOADS_DIR=/tmp/uploads`, which is ephemeral.
-- Add a Railway Volume and point `UPLOADS_DIR` at the mounted path if upload
-  persistence is required.
+- Attach a Railway Volume to the API service at `/data/uploads` before launch.
+- The API automatically uses Railway's `RAILWAY_VOLUME_MOUNT_PATH`. Set
+  `UPLOADS_DIR` only when intentionally overriding that mount.
+- A volume is tied to one service instance; use object storage before enabling
+  multiple API replicas.
 
 PDF generation:
 

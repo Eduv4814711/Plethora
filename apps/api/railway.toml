@@ -1,22 +1,25 @@
-# Railway API service — Nixpacks at monorepo root (see DEPLOYMENT_RAILWAY.md).
+# Railway API service — Railpack at monorepo root (see DEPLOYMENT_RAILWAY.md).
 # Settings → Root Directory: blank or "/"
 # Settings → Config-as-code path: apps/api/railway.toml
 
 [build]
-builder = "NIXPACKS"
-# Nixpacks already runs `npm ci` in the install phase; do not repeat it here — a
-# second `npm ci` conflicts with Railway's node_modules/.cache mount (EBUSY).
+builder = "RAILPACK"
+# Railpack installs the root npm workspace before running this command.
 buildCommand = "npm run build --workspace=api"
 watchPatterns = [
   "apps/api/**",
   "package.json",
   "package-lock.json",
+  ".nvmrc",
+  ".node-version",
 ]
 
 [deploy]
-# The start script applies committed Prisma migrations, then starts Fastify.
-startCommand = "cd apps/api && npm run start:with-migrate"
+# Migrations run in a separate pre-deploy container before Fastify starts.
+preDeployCommand = ["cd apps/api && npm run db:migrate:deploy"]
+startCommand = "cd apps/api && npm run start:server"
 healthcheckPath = "/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
+drainingSeconds = 30

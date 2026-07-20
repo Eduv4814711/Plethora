@@ -1151,7 +1151,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
         </div>
       )}
 
-      <div className="space-y-4 max-w-2xl">
+      <div className="space-y-4 w-full max-w-5xl">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
             {users.length} user{users.length !== 1 ? "s" : ""}
@@ -1381,15 +1381,15 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
           </form>
         )}
 
-        <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-x-auto">
+          <table className="w-full min-w-[56rem] text-sm">
             <thead>
               <tr className="bg-neutral-50 dark:bg-neutral-800/50 border-b border-neutral-200 dark:border-neutral-700">
-                <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Name</th>
-                <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Email</th>
-                <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Role</th>
-                <th className="text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Modules</th>
-                <th className="text-right py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300 w-32">Actions</th>
+                <th className="w-[22%] text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Name</th>
+                <th className="w-[34%] text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Email</th>
+                <th className="w-[18%] text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Role</th>
+                <th className="w-[14%] text-left py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Modules</th>
+                <th className="w-[12%] min-w-32 text-right py-3 px-4 font-medium text-neutral-700 dark:text-neutral-300">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1409,7 +1409,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                         </>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-neutral-600 dark:text-neutral-400">
+                    <td className="py-3 px-4 text-neutral-600 dark:text-neutral-400 break-all">
                       {editingUserId === u.id ? null : u.email}
                     </td>
                     <td className="py-3 px-4 text-neutral-700 dark:text-neutral-300">
@@ -1425,7 +1425,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                             return "None (pending)";
                           })()}
                     </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-3 px-4 text-right whitespace-nowrap">
                       {editingUserId === u.id ? (
                         <button
                           type="button"
@@ -1436,7 +1436,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                           Cancel
                         </button>
                       ) : (
-                        <div className="flex justify-end gap-2">
+                        <div className="flex justify-end gap-3">
                           {u.id !== currentUserId && (
                             <>
                               <button

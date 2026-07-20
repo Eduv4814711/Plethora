@@ -69,7 +69,7 @@ export async function approvalsRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Validation error",
-        message: parsed.error.errors[0]?.message ?? "Invalid body",
+        message: parsed.error.issues[0]?.message ?? "Invalid body",
       });
     }
     const approval = await createApprovalRequest({
@@ -87,7 +87,7 @@ export async function approvalsRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Validation error",
-        message: parsed.error.errors[0]?.message ?? "Invalid body",
+        message: parsed.error.issues[0]?.message ?? "Invalid body",
       });
     }
     const result = await reviewApproval({

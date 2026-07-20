@@ -8,7 +8,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model Company {
@@ -332,6 +331,13 @@ model Site {
   autoRosterMinCoveragePercent Int       @default(100)
   autoRosterLastRunAt          DateTime?
   autoRosterLastStatus         String?
+  /// Site-specific roster calendar and continuous-pattern automation state.
+  rosterPeriodCalendarId       String?
+  rosterContinuityState        RosterContinuityState @default(not_setup)
+  rosterMaintainedThrough      DateTime? @db.Date
+  rosterLastReconciledAt       DateTime?
+  rosterLastReconciliationStatus String?
+  rosterContinuityPauseReason  String?   @db.Text
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
@@ -357,6 +363,7 @@ model Site {
 
   @@index([companyId])
   @@index([companyId, siteStatus])
+  @@index([companyId, rosterContinuityState], map: "Site_rosterContinuityState_idx")
   @@index([supervisorId])
   @@index([clientId])
   @@index([contractEndDate])
@@ -484,6 +491,7 @@ model Shift {
   employee    Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   site        Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
   attendances Attendance[]
+  rosterGeneratedSource SiteRosterGeneratedShift? @relation("RosterPublishedShift")
 
   @@index([companyId])
   @@index([companyId, startTime])
@@ -1884,6 +1892,21 @@ enum SiteRosterPatternStatus {
   archived
 }
 
+enum RosterContinuityState {
+  not_setup
+  running
+  needs_attention
+  paused
+}
+
+enum SiteRosterGeneratedSource {
+  pattern
+  manual_override
+  leave
+  replacement
+  legacy
+}
+
 enum SiteRosterShiftCode {
   D
   N
@@ -1982,9 +2005,10 @@ model SiteRosterGeneratedShift {
   rosterDate      DateTime                 @db.Date
   shiftCode       SiteRosterShiftCode
   shiftType       SiteRosterShiftType
-  source          String                   @default("pattern")
+  source          SiteRosterGeneratedSource @default(pattern)
   rosterPatternId String?
   sitePostId      String?
+  publishedShiftId String?                 @unique
   createdAt       DateTime                 @default(now())
   updatedAt       DateTime                 @updatedAt
 
@@ -1992,6 +2016,7 @@ model SiteRosterGeneratedShift {
   site    Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
   guard   Employee @relation(fields: [guardId], references: [id], onDelete: Cascade)
   sitePost SitePost? @relation(fields: [sitePostId], references: [id], onDelete: SetNull)
+  publishedShift Shift? @relation("RosterPublishedShift", fields: [publishedShiftId], references: [id], onDelete: SetNull)
 
   @@unique([siteId, guardId, rosterDate])
   @@index([companyId, siteId, rosterDate])

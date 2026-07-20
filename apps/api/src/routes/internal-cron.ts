@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { env } from "../lib/env.js";
 import { runGlobalAutoRoster } from "../services/auto-roster.service.js";
+import { reconcileContinuousRosters } from "../modules/rosters/roster-continuity.service.js";
 import { prisma } from "../lib/prisma.js";
 import { detectAndPersistExceptions } from "../modules/attendance-exceptions/exceptions.service.js";
 import { syncContractExpiryAlerts, syncDocumentExpiryAlerts } from "../modules/documents/documents.service.js";
@@ -24,11 +25,14 @@ export async function internalCronRoutes(app: FastifyInstance) {
       });
     }
 
-    const result = await runGlobalAutoRoster();
+    const [legacy, continuous] = await Promise.all([
+      runGlobalAutoRoster(),
+      reconcileContinuousRosters(),
+    ]);
     return reply.send({
       ok: true,
-      companiesProcessed: result.companies.length,
-      result,
+      companiesProcessed: legacy.companies.length,
+      result: { legacy, continuous },
     });
   });
 

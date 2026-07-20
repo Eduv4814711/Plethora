@@ -10,16 +10,45 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, "..", ".env") });
 
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcrypt";
+import { z } from "zod";
 import { ensureSiteEmployeeGroups } from "../src/lib/site-employee-groups.js";
+import { validatePassword } from "../src/lib/password-policy.js";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({
+    connectionString: process.env.DATABASE_URL ?? "postgresql://localhost:5432/plethora",
+  }),
+});
 
-const ADMIN_EMAIL = "admin@quickbopha.com";
-const ADMIN_PASSWORD = "admin123";
 const COMPANY_NAME = "Quick Bopha Security";
 
+function seedAdminIdentity(): { email: string; password: string } {
+  const email = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase() ?? "";
+  const password = process.env.SEED_ADMIN_PASSWORD ?? "";
+
+  if (!email || !password) {
+    throw new Error(
+      "SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD are required for database seeding."
+    );
+  }
+
+  if (!z.string().email().safeParse(email).success) {
+    throw new Error("SEED_ADMIN_EMAIL must be a valid email address.");
+  }
+
+  const passwordCheck = validatePassword(password, { companyName: COMPANY_NAME });
+  if (!passwordCheck.valid) {
+    throw new Error(`SEED_ADMIN_PASSWORD is not safe: ${passwordCheck.message}`);
+  }
+
+  return { email, password };
+}
+
 async function main() {
+  const { email: adminEmail, password: adminPassword } = seedAdminIdentity();
+
   // Create company if it doesn't exist
   let company = await prisma.company.findFirst({
     where: { name: COMPANY_NAME },
@@ -45,25 +74,25 @@ async function main() {
   const existingUser = await prisma.user.findFirst({
     where: {
       companyId: company.id,
-      email: ADMIN_EMAIL,
+      email: adminEmail,
     },
   });
 
   if (!existingUser) {
-    const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 12);
+    const passwordHash = await bcrypt.hash(adminPassword, 12);
     await prisma.user.create({
       data: {
         companyId: company.id,
         name: "Admin",
-        email: ADMIN_EMAIL,
+        email: adminEmail,
         passwordHash,
         role: "admin",
       },
     });
-    console.log(`Created admin user: ${ADMIN_EMAIL}`);
-    console.log(`Login with: ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}`);
+    console.log(`Created admin user: ${adminEmail}`);
+    console.log("The seed password was read from SEED_ADMIN_PASSWORD and was not printed.");
   } else {
-    console.log(`Admin user already exists: ${ADMIN_EMAIL}`);
+    console.log(`Admin user already exists: ${adminEmail}`);
     console.log(`If you forgot the password, run: npx tsx prisma/reset-admin.ts`);
   }
 

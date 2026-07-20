@@ -8,6 +8,14 @@ coverage
 .turbo
 uploads
 *.ndjson
+*.zip
+*.dump
+.backups/
+.node/
+.pgdata/
+.pnpm-store/
+pgsql/
+pgsql18/
 apps/web/.debug-*
 .cursor/*
 !.cursor/skills/

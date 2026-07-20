@@ -103,7 +103,7 @@ export async function documentsRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Validation error",
-        message: parsed.error.errors[0]?.message ?? "Missing document details",
+        message: parsed.error.issues[0]?.message ?? "Missing document details",
       });
     }
 

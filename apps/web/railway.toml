@@ -1,23 +1,26 @@
-# Railway Web service — Nixpacks at monorepo root (see DEPLOYMENT_RAILWAY.md).
+# Railway Web service — Railpack at monorepo root (see DEPLOYMENT_RAILWAY.md).
 # Settings → Root Directory: blank or "/"
 # Settings → Config-as-code path: apps/web/railway.toml
 #
-# Set NEXT_PUBLIC_API_URL before the first build so browser calls target the API service.
+# Set NEXT_PUBLIC_API_URL before the first build so the /api proxy targets the API service.
 
 [build]
-builder = "NIXPACKS"
-# Nixpacks install phase already runs `npm ci`; repeating it causes EBUSY on .cache mounts.
+builder = "RAILPACK"
+# Railpack installs the root npm workspace before running this command.
 buildCommand = "npm run build --workspace=web"
 watchPatterns = [
   "apps/web/**",
   "package.json",
   "package-lock.json",
+  ".nvmrc",
+  ".node-version",
 ]
 
 [deploy]
-# Run from apps/web so Next finds `.next` and workspace-hoisted deps reliably on Railway.
-startCommand = "cd apps/web && npm run start"
+# Bind Next explicitly to Railway's injected port.
+startCommand = "cd apps/web && npm exec next start -- --hostname 0.0.0.0 --port $PORT"
 healthcheckPath = "/"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
+drainingSeconds = 30

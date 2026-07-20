@@ -21,6 +21,18 @@ function normalizeApiBaseUrl(raw) {
   return `${isLocal ? "http" : "https"}://${trimmed}`;
 }
 
+function assertRailwayApiUrl(raw) {
+  if (!process.env.RAILWAY_PROJECT_ID) return;
+  const normalized = normalizeApiBaseUrl(raw);
+  if (!raw?.trim() || /^https?:\/\/(localhost|127\.|\[::1\])/i.test(normalized)) {
+    throw new Error(
+      "NEXT_PUBLIC_API_URL must point to the deployed API service before building on Railway."
+    );
+  }
+}
+
+assertRailwayApiUrl(process.env.NEXT_PUBLIC_API_URL);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -28,8 +40,8 @@ const nextConfig = {
   ...(useTracingRoot ? { outputFileTracingRoot: monorepoRoot } : {}),
   async rewrites() {
     const apiUrl = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL);
-    // Keep /api as a local/backward-compatible proxy. Railway production browser
-    // calls use NEXT_PUBLIC_API_URL directly via apps/web/lib/api.ts.
+    // Browser calls use this same-origin /api proxy. Server-side calls use the
+    // configured upstream directly via apps/web/lib/api.ts.
     // Normalize the prefix to a single leading slash and no trailing slash so
     // "api", "/api", and "/api/" all become "/api". Guards against broken URLs
     // like `${host}api/...` (missing slash) or `${host}/api//...` (double slash).

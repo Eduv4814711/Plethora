@@ -1,10 +1,9 @@
-import type { Config } from "tailwindcss";
-
 /**
  * Plethora - Security Company Design System
  * Professional, trustworthy aesthetic for guard & workforce management
+ * @type {import("tailwindcss").Config}
  */
-const config: Config = {
+const config = {
   darkMode: "class",
   content: [
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -86,4 +85,4 @@ const config: Config = {
   plugins: [],
 };
 
-export default config;
+module.exports = config;

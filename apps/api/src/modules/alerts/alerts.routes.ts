@@ -35,7 +35,7 @@ export async function alertsRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Validation error",
-        message: parsed.error.errors[0]?.message ?? "Invalid query",
+        message: parsed.error.issues[0]?.message ?? "Invalid query",
       });
     }
     const result = await listAlerts(user.companyId, parsed.data);
@@ -69,7 +69,7 @@ export async function alertsRoutes(app: FastifyInstance) {
     if (!body.success) {
       return reply.code(400).send({
         error: "Validation error",
-        message: body.error.errors[0]?.message ?? "Invalid body",
+        message: body.error.issues[0]?.message ?? "Invalid body",
       });
     }
     const alert = await resolveAlert({

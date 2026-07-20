@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma.js";
+import { reconcileContinuityForEmployee } from "../modules/rosters/roster-continuity.service.js";
 
 export class LeaveRequestError extends Error {
   constructor(message: string) {
@@ -46,6 +47,8 @@ export async function approveLeaveRequest(
       },
     }),
   ]);
+
+  await reconcileContinuityForEmployee(req.employeeId, companyId, "leave_approved").catch(() => undefined);
 
   // Leave approved – notification removed (email module disabled)
 }

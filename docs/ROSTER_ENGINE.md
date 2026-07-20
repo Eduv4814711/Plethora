@@ -63,7 +63,41 @@ Preview surfaces `UNCOVERED_SLOT` warnings, `conflicts[]`, `skippedGuardDays` (g
 3. Optional: `PostAssignment` for preferred post scoring.
 4. Rostering: select site → pattern → generate plan → review coverage % and warnings → apply.
 
-## Continuous auto-roster (payroll calendar)
+## Continuous roster (current)
+
+The current continuity engine uses an approved `SiteRosterPattern` as the permanent baseline. It expands that pattern through the site-specific roster calendar and maintains the configured rolling horizon (two periods by default).
+
+Key behaviour:
+
+- Existing roster-grid history can be analysed with `GET /rosters/sites/:siteId/setup-suggestion`. Suggestions are never activated without manager confirmation.
+- `POST /rosters/sites/:siteId/activate-continuity` versions and activates the confirmed pattern, stores the site's roster calendar, disables legacy auto-roster for that site, and performs the first reconciliation.
+- Reconciliation preserves explicit overrides and operational shifts, writes only system-owned shifts linked through `SiteRosterGeneratedShift.publishedShiftId`, and never deletes unrelated manual shifts.
+- Approved leave and unavailable patterned guards create focused coverage alerts. They do not change the base rotation.
+- Coverage alerts expose explainable replacement suggestions. Confirmed replacements are one-day overrides and do not change future pattern cycles.
+- Pattern changes use effective-dated versions: the previous pattern is archived with `effectiveTo`, and the new pattern starts from the manager-selected date.
+
+Site states are `not_setup`, `running`, `needs_attention`, and `paused`. The daily cron reconciles `running` and `needs_attention` sites; leave, employee, site, override, and pattern changes also trigger immediate reconciliation.
+
+### Rostering user experience
+
+- `/rostering` is the operations dashboard for site status, coverage horizons, and interruptions.
+- `/rostering/sites/:siteId` is the non-technical Overview and Schedule workspace.
+- `/rostering/sites/:siteId/advanced` contains spreadsheet, pattern, PDF, and manual publication tools for administrators and operations managers.
+- Supervisors can apply one-day exceptions and confirm replacements; controllers have read-only access.
+- Continuous sites publish through reconciliation, so the normal workspace does not expose a competing manual Publish action.
+
+### Current continuity API
+
+- `GET /rosters/continuity-overview`
+- `GET /rosters/sites/:siteId/setup-suggestion`
+- `POST /rosters/sites/:siteId/activate-continuity`
+- `GET /rosters/sites/:siteId/continuity-status`
+- `POST /rosters/sites/:siteId/reconcile`
+- `POST /rosters/sites/:siteId/continuity-pause`
+- `GET /rosters/continuity/issues/:alertId/replacements`
+- `POST /rosters/continuity/issues/:alertId/replacements`
+
+## Legacy auto-roster (transition only)
 
 Automated rostering runs on a **daily schedule** and maintains shifts from **today** through the end of the configured payroll horizon (default **2 pay periods**). It reuses the same preview/apply engine as manual rostering.
 

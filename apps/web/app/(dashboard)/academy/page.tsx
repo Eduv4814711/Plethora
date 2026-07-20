@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AcademyActivityRow, type AcademyActivityItem } from "@/components/academy-activity";
@@ -8,6 +7,26 @@ import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
 import { academyApi } from "@/lib/api";
 import { clsx } from "clsx";
+
+function AcademyHeroIllustration() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-full w-full text-primary"
+      fill="none"
+      viewBox="0 0 176 128"
+    >
+      <path d="M22 92h88l20 10-20 10H22l12-10-12-10Z" fill="#DCE8F5" />
+      <path d="M30 76h88l18 9-18 9H30l11-9-11-9Z" fill="#F8FAFC" stroke="#94A3B8" strokeWidth="2" />
+      <path d="m40 47 43-18 43 18-43 18-43-18Z" fill="currentColor" />
+      <path d="M60 57v20c14 10 32 10 46 0V57" fill="#FB923C" stroke="#C2410C" strokeWidth="2" />
+      <path d="M126 48v24" stroke="#C2410C" strokeLinecap="round" strokeWidth="3" />
+      <circle cx="126" cy="77" r="5" fill="#FBBF24" />
+      <path d="M145 91V58m0 0c-10 5-14 14-10 23 8-3 12-11 10-23Zm0 10c9 4 13 11 10 19-7-2-11-8-10-19Z" fill="#4ADE80" stroke="#15803D" strokeWidth="2" />
+      <path d="M135 88h21l-3 24h-15l-3-24Z" fill="#D97706" />
+    </svg>
+  );
+}
 
 const quickLinks: {
   href: string;
@@ -255,14 +274,7 @@ export default function AcademyHubPage() {
               </div>
               <div className="relative flex justify-end sm:justify-end">
                 <div className="relative h-28 w-36 sm:h-32 sm:w-44">
-                  <Image
-                    src="/academy-hero-illustration.png"
-                    alt=""
-                    fill
-                    className="object-contain"
-                    priority
-                    sizes="(max-width: 640px) 160px, 176px"
-                  />
+                  <AcademyHeroIllustration />
                 </div>
               </div>
             </div>

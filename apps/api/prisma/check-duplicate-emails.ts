@@ -6,8 +6,13 @@
  * Or: npm run db:check-email-unique (from apps/api)
  */
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({
+    connectionString: process.env.DATABASE_URL ?? "postgresql://localhost:5432/plethora",
+  }),
+});
 
 async function main() {
   const duplicates = await prisma.$queryRaw<

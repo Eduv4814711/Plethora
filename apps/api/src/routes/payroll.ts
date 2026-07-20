@@ -24,6 +24,19 @@ import {
   auditPayrollRevertToDraft,
 } from "../lib/payroll-audit.js";
 import { format } from "date-fns";
+import { canAccessSensitiveData, omitFields } from "../lib/sensitive-data.js";
+
+function canHandlePayrollPrivateData(user: import("../lib/types.js").JWTPayload) {
+  return canAccessSensitiveData(user, "/payroll");
+}
+function sanitizePayrollRun<T extends Record<string, unknown>>(run: T, user: import("../lib/types.js").JWTPayload) {
+  return canHandlePayrollPrivateData(user) ? run : omitFields(run, ["calculationSnapshot"]);
+}
+function denyPayrollPrivateData(user: import("../lib/types.js").JWTPayload, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
+  if (canHandlePayrollPrivateData(user)) return false;
+  reply.code(403).send({ error: "Forbidden", message: "Sensitive payroll data is restricted to HR/payroll users" });
+  return true;
+}
 
 const createPayrollRunSchema = z.object({
   periodStart: z.string().datetime(),
@@ -56,7 +69,7 @@ export async function payrollRoutes(app: FastifyInstance) {
       prisma.payrollRun.count({ where: { companyId: user.companyId } }),
     ]);
 
-    return reply.send({ data: runs, total, limit, offset });
+    return reply.send({ data: runs.map((run) => sanitizePayrollRun(run, user)), total, limit, offset });
   });
 
   app.post("/runs", { preHandler: protect }, async (request, reply) => {
@@ -96,7 +109,7 @@ export async function payrollRoutes(app: FastifyInstance) {
       entityId: run.id,
     });
 
-    return reply.code(201).send(run);
+    return reply.code(201).send(sanitizePayrollRun(run, request.user!));
   });
 
   app.get("/runs/:id", { preHandler: protect }, async (request, reply) => {
@@ -111,12 +124,13 @@ export async function payrollRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Payroll run not found" });
     }
 
-    return reply.send(run);
+    return reply.send(sanitizePayrollRun(run, user));
   });
 
   app.get("/runs/:id/items", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
+    if (denyPayrollPrivateData(user, reply)) return;
 
     const run = await prisma.payrollRun.findFirst({
       where: { id, companyId: user.companyId },
@@ -200,7 +214,7 @@ export async function payrollRoutes(app: FastifyInstance) {
       snapshot: calcResult.snapshot,
     });
 
-    return reply.send(run);
+    return reply.send(sanitizePayrollRun(run, request.user!));
   });
 
   app.post("/runs/:id/approve", { preHandler: protect }, async (request, reply) => {
@@ -282,7 +296,7 @@ export async function payrollRoutes(app: FastifyInstance) {
       metadata: { lockedAt: lockedAtIso },
     });
 
-    return reply.send(updated);
+    return reply.send(sanitizePayrollRun(updated ?? {}, user));
   });
 
   app.post("/runs/:id/revert-to-draft", { preHandler: protect }, async (request, reply) => {
@@ -342,12 +356,13 @@ export async function payrollRoutes(app: FastifyInstance) {
       where: { id, companyId: user.companyId },
     });
 
-    return reply.send(updated);
+    return reply.send(sanitizePayrollRun(updated ?? {}, user));
   });
 
   app.get("/runs/:id/validation", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
+    if (denyPayrollPrivateData(user, reply)) return;
 
     const run = await prisma.payrollRun.findFirst({
       where: { id, companyId: user.companyId },
@@ -364,6 +379,7 @@ export async function payrollRoutes(app: FastifyInstance) {
   app.get("/runs/:id/calculation-snapshot", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
+    if (denyPayrollPrivateData(user, reply)) return;
 
     const run = await prisma.payrollRun.findFirst({
       where: { id, companyId: user.companyId },
@@ -435,12 +451,13 @@ export async function payrollRoutes(app: FastifyInstance) {
       entityId: id,
     });
 
-    return reply.send(updated);
+    return reply.send(sanitizePayrollRun(updated ?? {}, user));
   });
 
   app.get("/runs/:id/items/:itemId/payslip", { preHandler: protect }, async (request, reply) => {
     const { id, itemId } = request.params as { id: string; itemId: string };
     const user = request.user!;
+    if (denyPayrollPrivateData(user, reply)) return;
 
     const run = await prisma.payrollRun.findFirst({
       where: { id, companyId: user.companyId },
@@ -468,6 +485,7 @@ export async function payrollRoutes(app: FastifyInstance) {
   app.get("/runs/:id/items/:itemId/payslip/pdf", { preHandler: protect }, async (request, reply) => {
     const { id, itemId } = request.params as { id: string; itemId: string };
     const user = request.user!;
+    if (denyPayrollPrivateData(user, reply)) return;
 
     const payslipInput = await fetchPayslipData(id, itemId, user.companyId);
     if (!payslipInput) {
@@ -488,6 +506,7 @@ export async function payrollRoutes(app: FastifyInstance) {
   app.get("/runs/:id/export/pdf", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
+    if (denyPayrollPrivateData(user, reply)) return;
 
     const run = await prisma.payrollRun.findFirst({
       where: { id, companyId: user.companyId },
@@ -526,6 +545,7 @@ export async function payrollRoutes(app: FastifyInstance) {
   app.get("/runs/:id/export/excel", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
+    if (denyPayrollPrivateData(user, reply)) return;
 
     const run = await prisma.payrollRun.findFirst({
       where: { id, companyId: user.companyId },
@@ -568,6 +588,7 @@ export async function payrollRoutes(app: FastifyInstance) {
   app.get("/runs/:id/export/fnb", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
+    if (denyPayrollPrivateData(user, reply)) return;
     const q = request.query as { groupId?: string };
 
     const run = await prisma.payrollRun.findFirst({
@@ -653,6 +674,7 @@ export async function payrollRoutes(app: FastifyInstance) {
 
   app.get("/emp201-export", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
+    if (denyPayrollPrivateData(user, reply)) return;
     const q = request.query as { period?: string };
     const period = q.period ?? format(new Date(), "yyyy-MM");
     const [yearStr, monthStr] = period.split("-");
@@ -680,6 +702,7 @@ export async function payrollRoutes(app: FastifyInstance) {
 
   app.get("/irp5-export", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
+    if (denyPayrollPrivateData(user, reply)) return;
     const q = request.query as { taxYear?: string };
     const taxYear = parseInt(q.taxYear ?? String(new Date().getFullYear()), 10);
     if (!taxYear || taxYear < 2020 || taxYear > 2030) {
@@ -711,6 +734,7 @@ export async function payrollRoutes(app: FastifyInstance) {
   app.get("/employees/:employeeId/deductions", { preHandler: protect }, async (request, reply) => {
     const { employeeId } = request.params as { employeeId: string };
     const user = request.user!;
+    if (denyPayrollPrivateData(user, reply)) return;
 
     const employee = await prisma.employee.findFirst({
       where: { id: employeeId, companyId: user.companyId },
@@ -726,6 +750,7 @@ export async function payrollRoutes(app: FastifyInstance) {
   });
 
   app.post("/employees/:employeeId/deductions", { preHandler: protect }, async (request, reply) => {
+    if (denyPayrollPrivateData(request.user!, reply)) return;
     const { employeeId } = request.params as { employeeId: string };
     const body = request.body as { name: string; type: "fixed" | "percentage"; amount: number; rate?: number; deductionRuleId?: string; appliesFrom?: string; appliesTo?: string };
 

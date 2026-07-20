@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 
 function hostFromUrl(databaseUrl) {
   if (!databaseUrl?.trim()) return "(not set)";
@@ -11,7 +12,11 @@ function hostFromUrl(databaseUrl) {
 }
 
 const host = hostFromUrl(process.env.DATABASE_URL);
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({
+    connectionString: process.env.DATABASE_URL ?? "postgresql://localhost:5432/plethora",
+  }),
+});
 
 try {
   await prisma.$queryRaw`SELECT 1`;

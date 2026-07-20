@@ -4,6 +4,7 @@ import type { EmployeeStatus } from "@prisma/client";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
+import { reconcileContinuityForEmployee } from "../modules/rosters/roster-continuity.service.js";
 import { transitionEmployeeStatus } from "../services/employee.service.js";
 import { createAuditLog } from "../lib/audit.js";
 import {
@@ -12,8 +13,24 @@ import {
   employeePayrollSelect,
   sanitizeEmployeeForList,
   sanitizeEmployeeForDetail,
+  canEditEmployeeDetails,
   canViewEmployeeSensitiveFields,
 } from "../lib/employee-dto.js";
+import { EMPLOYEE_RESTRICTED_FIELDS, hasRestrictedFields } from "../lib/sensitive-data.js";
+
+function rejectEmployeeDetailEdits(request: { user?: import("../lib/types.js").JWTPayload }, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
+  if (request.user && canEditEmployeeDetails(request.user)) return false;
+  reply.code(403).send({ error: "Forbidden", message: "Only HR and Payroll can edit employee details" });
+  return true;
+}
+
+function rejectRestrictedEmployeeFields(request: { user?: import("../lib/types.js").JWTPayload; body: unknown }, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
+  if (canViewEmployeeSensitiveFields(request.user!) || !hasRestrictedFields(request.body, EMPLOYEE_RESTRICTED_FIELDS)) {
+    return false;
+  }
+  reply.code(403).send({ error: "Forbidden", message: "Sensitive employee data is restricted to HR/payroll users" });
+  return true;
+}
 
 const optionalString = z.string().optional();
 const optionalNumber = z.number().optional();
@@ -212,7 +229,9 @@ export async function employeesRoutes(app: FastifyInstance) {
               { firstName: { contains: searchQuery, mode: "insensitive" as const } },
               { lastName: { contains: searchQuery, mode: "insensitive" as const } },
               { employeeNumber: { contains: searchQuery, mode: "insensitive" as const } },
-              { idNumber: { contains: searchQuery, mode: "insensitive" as const } },
+              ...(canViewEmployeeSensitiveFields(user)
+                ? [{ idNumber: { contains: searchQuery, mode: "insensitive" as const } }]
+                : []),
             ],
           }
         : {}),
@@ -265,6 +284,8 @@ export async function employeesRoutes(app: FastifyInstance) {
   });
 
   app.post("/", { preHandler: protect }, async (request, reply) => {
+    if (rejectEmployeeDetailEdits(request, reply)) return;
+    if (rejectRestrictedEmployeeFields(request, reply)) return;
     const parsed = createEmployeeSchemaWithRefine.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -403,6 +424,8 @@ export async function employeesRoutes(app: FastifyInstance) {
   });
 
   app.put("/:id", { preHandler: protect }, async (request, reply) => {
+    if (rejectEmployeeDetailEdits(request, reply)) return;
+    if (rejectRestrictedEmployeeFields(request, reply)) return;
     const { id } = request.params as { id: string };
     const parsed = updateEmployeeSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -492,6 +515,10 @@ export async function employeesRoutes(app: FastifyInstance) {
       where: { id, companyId },
       data: updateData,
     });
+
+    if (parsed.data.status !== undefined || parsed.data.employeeType !== undefined) {
+      void reconcileContinuityForEmployee(id, companyId, "employee_status_changed").catch(() => undefined);
+    }
     if (updated.count === 0) {
       return reply.code(404).send({ error: "Employee not found" });
     }

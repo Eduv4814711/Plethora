@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { clsx } from "clsx";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
+import { canAccessSensitiveData } from "@/lib/permissions";
 import { PayPeriodSelect } from "@/components/pay-period-select";
 import {
   AlertBanner,
@@ -215,7 +216,8 @@ function workflowStepClass(highlight?: "amber" | "emerald") {
 }
 
 export default function PayrollPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canViewSensitivePayroll = user ? canAccessSensitiveData(user, "/payroll") : false;
   const [runs, setRuns] = useState<PayrollRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -342,7 +344,7 @@ export default function PayrollPage() {
             <Button type="button" variant={showForm ? "secondary" : "primary"} onClick={() => setShowForm(!showForm)}>
               {showForm ? "Cancel" : "New payroll run"}
             </Button>
-            <SarsExportsDropdown token={token!} />
+            {canViewSensitivePayroll && <SarsExportsDropdown token={token!} />}
             <Link href="/employees/leave" className="btn-secondary text-sm">
               Leave requests
             </Link>

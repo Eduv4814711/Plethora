@@ -5,6 +5,19 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { academyProtect } from "./constants.js";
+import { STUDENT_RESTRICTED_FIELDS, canAccessSensitiveData, hasRestrictedFields, omitFields } from "../../lib/sensitive-data.js";
+
+function canHandleStudentPrivateData(user: import("../../lib/types.js").JWTPayload) {
+  return canAccessSensitiveData(user, "/academy");
+}
+function sanitizeStudent<T extends Record<string, unknown>>(student: T, user: import("../../lib/types.js").JWTPayload) {
+  return canHandleStudentPrivateData(user) ? student : omitFields(student, STUDENT_RESTRICTED_FIELDS);
+}
+function rejectStudentPrivateData(request: { user?: import("../../lib/types.js").JWTPayload; body: unknown }, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
+  if (canHandleStudentPrivateData(request.user!) || !hasRestrictedFields(request.body, STUDENT_RESTRICTED_FIELDS)) return false;
+  reply.code(403).send({ error: "Forbidden", message: "Sensitive student data is restricted to HR/payroll users" });
+  return true;
+}
 
 function sanitizeDate(v: string | undefined): Date | undefined {
   if (!v) return undefined;
@@ -120,8 +133,10 @@ export async function academyStudentsRoutes(app: FastifyInstance) {
               { firstName: { contains: search, mode: "insensitive" as const } },
               { lastName: { contains: search, mode: "insensitive" as const } },
               { studentNumber: { contains: search, mode: "insensitive" as const } },
-              { idNumber: { contains: search, mode: "insensitive" as const } },
-              { email: { contains: search, mode: "insensitive" as const } },
+              ...(canHandleStudentPrivateData(request.user!) ? [
+                { idNumber: { contains: search, mode: "insensitive" as const } },
+                { email: { contains: search, mode: "insensitive" as const } },
+              ] : []),
             ],
           }
         : {}),
@@ -140,15 +155,16 @@ export async function academyStudentsRoutes(app: FastifyInstance) {
       prisma.student.count({ where }),
     ]);
 
-    const students = rows.map((s) => ({
+    const students = rows.map((s) => sanitizeStudent({
       ...s,
       adminFeeAmount: s.adminFeeAmount != null ? s.adminFeeAmount.toString() : null,
-    }));
+    }, request.user!));
 
     return { students, total, limit, offset };
   });
 
   app.post("/", { preHandler: academyProtect }, async (request, reply) => {
+    if (rejectStudentPrivateData(request, reply)) return;
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     const body = createStudentSchema.safeParse(request.body);
@@ -204,10 +220,10 @@ export async function academyStudentsRoutes(app: FastifyInstance) {
         metadata: { studentNumber: student.studentNumber },
       });
       return reply.code(201).send({
-        student: {
+        student: sanitizeStudent({
           ...student,
           adminFeeAmount: student.adminFeeAmount != null ? student.adminFeeAmount.toString() : null,
-        },
+        }, request.user!),
       });
     } catch (e: unknown) {
       const code = e && typeof e === "object" && "code" in e ? (e as { code: string }).code : "";
@@ -291,7 +307,7 @@ export async function academyStudentsRoutes(app: FastifyInstance) {
       ...student,
       adminFeeAmount: student.adminFeeAmount != null ? student.adminFeeAmount.toString() : null,
     };
-    return { student: s };
+    return { student: sanitizeStudent(s, request.user!) };
   });
 
   app.get("/:id", { preHandler: academyProtect }, async (request, reply) => {
@@ -308,14 +324,15 @@ export async function academyStudentsRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Not found", message: "Student not found" });
     }
     return {
-      student: {
+      student: sanitizeStudent({
         ...student,
         adminFeeAmount: student.adminFeeAmount != null ? student.adminFeeAmount.toString() : null,
-      },
+      }, request.user!),
     };
   });
 
   app.patch("/:id", { preHandler: academyProtect }, async (request, reply) => {
+    if (rejectStudentPrivateData(request, reply)) return;
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     const { id } = request.params as { id: string };
@@ -377,10 +394,10 @@ export async function academyStudentsRoutes(app: FastifyInstance) {
         metadata: body.data as Record<string, unknown>,
       });
       return {
-        student: {
+        student: sanitizeStudent({
           ...student,
           adminFeeAmount: student.adminFeeAmount != null ? student.adminFeeAmount.toString() : null,
-        },
+        }, request.user!),
       };
     } catch (e: unknown) {
       const code = e && typeof e === "object" && "code" in e ? (e as { code: string }).code : "";

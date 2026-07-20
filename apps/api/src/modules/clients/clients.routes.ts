@@ -105,7 +105,7 @@ export async function clientsRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Validation error",
-        message: parsed.error.errors[0]?.message ?? "Invalid body",
+        message: parsed.error.issues[0]?.message ?? "Invalid body",
       });
     }
     if (parsed.data.userId) {
@@ -152,7 +152,7 @@ export async function clientsRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Validation error",
-        message: parsed.error.errors[0]?.message ?? "Invalid body",
+        message: parsed.error.issues[0]?.message ?? "Invalid body",
       });
     }
     const existing = await prisma.client.findFirst({

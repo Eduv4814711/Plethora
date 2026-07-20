@@ -8,6 +8,7 @@ import { createAuditLog } from "../lib/audit.js";
 import { runAutoRosterForSite } from "../services/auto-roster.service.js";
 import { mapSiteForApi, siteDetailInclude } from "../lib/site-post-api.js";
 import { syncContractExpiryAlerts } from "../modules/documents/documents.service.js";
+import { reconcileRosterContinuityForSite } from "../modules/rosters/roster-continuity.service.js";
 
 const SERVICE_TYPES = [
   "guarding",
@@ -395,6 +396,15 @@ export async function sitesRoutes(app: FastifyInstance) {
         message: "At least one shift must require at least 1 guard.",
       });
     }
+    if (
+      autoRosterEnabled === true &&
+      ["running", "needs_attention"].includes(existing.rosterContinuityState)
+    ) {
+      return reply.code(409).send({
+        error: "Continuous rostering is already active",
+        message: "Manage the ongoing roster from the Rostering page instead of enabling the legacy auto-roster.",
+      });
+    }
     if (autoRosterEnabled !== undefined) rosterPatch.autoRosterEnabled = autoRosterEnabled;
     if (autoRosterMinCoveragePercent !== undefined) {
       rosterPatch.autoRosterMinCoveragePercent = autoRosterMinCoveragePercent;
@@ -492,6 +502,14 @@ export async function sitesRoutes(app: FastifyInstance) {
         userId: request.user!.sub,
       }).catch((err) => {
         request.log.error({ err }, "auto-roster after site update failed");
+      });
+    }
+    if (["running", "needs_attention"].includes(siteWithAssigned.rosterContinuityState)) {
+      void reconcileRosterContinuityForSite(companyId, id, {
+        userId: request.user!.sub,
+        trigger: "site_updated",
+      }).catch((err) => {
+        request.log.error({ err }, "continuous roster after site update failed");
       });
     }
 

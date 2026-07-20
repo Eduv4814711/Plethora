@@ -8,6 +8,7 @@ import {
   leaveTypeToRosterShiftCode,
   normalizeLeaveDate,
 } from "../../services/leave-availability.service.js";
+import { reconcileRosterContinuityForSite } from "./roster-continuity.service.js";
 
 const ROSTERABLE_STATUSES = ["active", "training", "hired", "reliever"] as const;
 const WORKING_SHIFT_CODES = new Set<SiteRosterShiftCode>(["D", "N"]);
@@ -628,9 +629,10 @@ export async function activatePattern(
   if (!pattern) return null;
 
   await prisma.$transaction(async (tx) => {
+    const nextEffectiveFrom = effectiveFrom ? dateOnly(effectiveFrom) : pattern.effectiveFrom;
     await tx.siteRosterPattern.updateMany({
       where: { siteId: pattern.siteId, companyId, status: "active", id: { not: patternId } },
-      data: { status: "archived" },
+      data: { status: "archived", effectiveTo: addCalendarDays(nextEffectiveFrom, -1) },
     });
     await tx.siteRosterPattern.update({
       where: { id: patternId },
@@ -645,7 +647,72 @@ export async function activatePattern(
     where: { id: patternId },
     include: { _count: { select: { cells: true } } },
   });
+  const site = await prisma.site.findFirst({
+    where: { id: pattern.siteId, companyId },
+    select: { rosterContinuityState: true },
+  });
+  if (site && ["running", "needs_attention"].includes(site.rosterContinuityState)) {
+    await reconcileRosterContinuityForSite(companyId, pattern.siteId, { trigger: "pattern_activated" });
+  }
   return updated ? mapPatternSummary(updated) : null;
+}
+
+async function applyOngoingPatternChanges(
+  companyId: string,
+  userId: string,
+  siteId: string,
+  changes: { guardId: string; rosterDate: string; overrideShiftCode: SiteRosterShiftCode }[]
+) {
+  if (changes.length === 0) return null;
+  return prisma.$transaction(async (tx) => {
+    const active = await tx.siteRosterPattern.findFirst({
+      where: { companyId, siteId, status: "active" },
+      include: { cells: true },
+      orderBy: { effectiveFrom: "desc" },
+    });
+    if (!active) throw new Error("ACTIVE_PATTERN_REQUIRED");
+    const effectiveFrom = changes
+      .map((change) => dateOnly(change.rosterDate))
+      .sort((a, b) => a.getTime() - b.getTime())[0]!;
+    const replacementByKey = new Map(
+      changes.map((change) => [
+        `${change.guardId}:${patternDayForDate(active.anchorDate, active.cycleLengthDays, dateOnly(change.rosterDate))}`,
+        change.overrideShiftCode,
+      ])
+    );
+
+    await tx.siteRosterPattern.update({
+      where: { id: active.id },
+      data: { status: "archived", effectiveTo: addCalendarDays(effectiveFrom, -1) },
+    });
+    return tx.siteRosterPattern.create({
+      data: {
+        companyId,
+        siteId,
+        name: `${active.name} from ${dateKey(effectiveFrom)}`,
+        anchorDate: active.anchorDate,
+        cycleLengthDays: active.cycleLengthDays,
+        effectiveFrom,
+        status: "active",
+        createdBy: userId,
+        cells: {
+          create: active.cells.map((cell) => {
+            const shiftCode =
+              replacementByKey.get(`${cell.guardId}:${cell.patternDayIndex}`) ?? cell.shiftCode;
+            return {
+              guardId: cell.guardId,
+              patternDayIndex: cell.patternDayIndex,
+              shiftCode,
+              shiftType: shiftCodeToType(shiftCode),
+              sitePostId: cell.sitePostId,
+              isLocked: cell.isLocked,
+              notes: cell.notes,
+            };
+          }),
+        },
+      },
+    });
+  });
 }
 
 export async function generateRosterFromPattern(
@@ -675,12 +742,25 @@ export async function generateRosterFromPattern(
       byGuardDay.set(`${c.guardId}:${c.patternDayIndex}`, c.shiftCode);
     }
 
+    const existingOverrides = await prisma.siteRosterManualOverride.findMany({
+      where: {
+        companyId,
+        siteId,
+        rosterDate: { gte: dateOnly(startDate), lte: dateOnly(endDate) },
+      },
+      select: { guardId: true, rosterDate: true },
+    });
+    const overrideKeys = new Set(
+      existingOverrides.map((row) => `${row.guardId}:${dateKey(row.rosterDate)}`)
+    );
+
     const start = dateOnly(startDate);
     const end = dateOnly(endDate);
     for (let d = start; d <= end; d = addCalendarDays(d, 1)) {
       const dayKey = dateKey(d);
       const pDay = patternDayForDate(activePattern.anchorDate, activePattern.cycleLengthDays, d);
       for (const row of grid.rows) {
+        if (overrideKeys.has(`${row.guardId}:${dayKey}`)) continue;
         const code = byGuardDay.get(`${row.guardId}:${pDay}`) ?? "blank";
         if (!countsTowardCoverage(shiftCodeToType(code)) && code === "blank") continue;
         await prisma.siteRosterGeneratedShift.upsert({
@@ -733,7 +813,22 @@ export async function applyManualOverride(
   const site = await prisma.site.findFirst({ where: { id: input.siteId, companyId } });
   if (!site) return null;
 
+  if (input.doesChangeBasePattern) {
+    await applyOngoingPatternChanges(companyId, userId, input.siteId, [input]);
+    await reconcileRosterContinuityForSite(companyId, input.siteId, {
+      userId,
+      trigger: "ongoing_pattern_changed",
+    });
+    return { success: true, changedBasePattern: true };
+  }
+
   await applyManualOverrideWrite(prisma, companyId, userId, input);
+  if (["running", "needs_attention"].includes(site.rosterContinuityState)) {
+    await reconcileRosterContinuityForSite(companyId, input.siteId, {
+      userId,
+      trigger: "manual_override",
+    });
+  }
   return { success: true };
 }
 
@@ -751,16 +846,6 @@ async function applyManualOverrideWrite(
   }
 ) {
   const rosterDate = dateOnly(input.rosterDate);
-
-  if (input.overrideShiftCode === "blank") {
-    await tx.siteRosterManualOverride.deleteMany({
-      where: { siteId: input.siteId, guardId: input.guardId, rosterDate },
-    });
-    await tx.siteRosterGeneratedShift.deleteMany({
-      where: { siteId: input.siteId, guardId: input.guardId, rosterDate },
-    });
-    return;
-  }
 
   const existing = await tx.siteRosterGeneratedShift.findUnique({
     where: {
@@ -842,6 +927,19 @@ export async function applyManualOverridesBulk(
   const site = await prisma.site.findFirst({ where: { id: input.siteId, companyId } });
   if (!site) return null;
 
+  const ongoingChanges = input.changes.filter((change) => change.doesChangeBasePattern);
+  const oneDayChanges = input.changes.filter((change) => !change.doesChangeBasePattern);
+  if (ongoingChanges.length > 0) {
+    await applyOngoingPatternChanges(companyId, userId, input.siteId, ongoingChanges);
+  }
+  if (oneDayChanges.length === 0) {
+    await reconcileRosterContinuityForSite(companyId, input.siteId, {
+      userId,
+      trigger: "ongoing_pattern_changed",
+    });
+    return { success: true, savedCount: input.changes.length, changedBasePattern: true };
+  }
+
   const changesByKey = new Map<
     string,
     {
@@ -853,7 +951,7 @@ export async function applyManualOverridesBulk(
     }
   >();
 
-  for (const change of input.changes) {
+  for (const change of oneDayChanges) {
     const rosterDate = dateOnly(change.rosterDate);
     changesByKey.set(`${change.guardId}:${dateKey(rosterDate)}`, {
       ...change,
@@ -883,13 +981,9 @@ export async function applyManualOverridesBulk(
   await prisma.$transaction(
     async (tx) => {
       await tx.siteRosterManualOverride.deleteMany({ where: { companyId, OR: keyWhere } });
-      await tx.siteRosterGeneratedShift.deleteMany({ where: { companyId, OR: keyWhere } });
-
-      const nonBlankChanges = changes.filter((change) => change.overrideShiftCode !== "blank");
-      if (nonBlankChanges.length === 0) return;
 
       await tx.siteRosterManualOverride.createMany({
-        data: nonBlankChanges.map((change) => {
+        data: changes.map((change) => {
           const key = `${change.guardId}:${dateKey(change.rosterDate)}`;
           return {
             companyId,
@@ -909,20 +1003,41 @@ export async function applyManualOverridesBulk(
         }),
       });
 
-      await tx.siteRosterGeneratedShift.createMany({
-        data: nonBlankChanges.map((change) => ({
-          companyId,
-          siteId: input.siteId,
-          guardId: change.guardId,
-          rosterDate: change.rosterDate,
-          shiftCode: change.overrideShiftCode,
-          shiftType: shiftCodeToType(change.overrideShiftCode),
-          source: "manual_override",
-        })),
-      });
+      for (const change of changes) {
+        await tx.siteRosterGeneratedShift.upsert({
+          where: {
+            siteId_guardId_rosterDate: {
+              siteId: input.siteId,
+              guardId: change.guardId,
+              rosterDate: change.rosterDate,
+            },
+          },
+          create: {
+            companyId,
+            siteId: input.siteId,
+            guardId: change.guardId,
+            rosterDate: change.rosterDate,
+            shiftCode: change.overrideShiftCode,
+            shiftType: shiftCodeToType(change.overrideShiftCode),
+            source: "manual_override",
+          },
+          update: {
+            shiftCode: change.overrideShiftCode,
+            shiftType: shiftCodeToType(change.overrideShiftCode),
+            source: "manual_override",
+          },
+        });
+      }
     },
     { maxWait: 10_000, timeout: 30_000 }
   );
+
+  if (["running", "needs_attention"].includes(site.rosterContinuityState)) {
+    await reconcileRosterContinuityForSite(companyId, input.siteId, {
+      userId,
+      trigger: "manual_overrides",
+    });
+  }
 
   return { success: true, savedCount: input.changes.length };
 }
@@ -936,6 +1051,35 @@ export async function publishRoster(
     replaceExisting?: boolean;
   }
 ) {
+  const continuitySite = await prisma.site.findFirst({
+    where: { id: input.siteId, companyId },
+    select: { rosterContinuityState: true },
+  });
+  if (
+    continuitySite &&
+    ["running", "needs_attention"].includes(continuitySite.rosterContinuityState)
+  ) {
+    const result = await reconcileRosterContinuityForSite(companyId, input.siteId, {
+      trigger: "manual_publish",
+    });
+    return {
+      success: result.issues.length === 0,
+      blocked: false,
+      message:
+        result.issues.length === 0
+          ? `Ongoing roster is maintained through ${result.maintainedThrough}.`
+          : `Roster updated with ${result.issues.length} issue${result.issues.length === 1 ? "" : "s"} needing attention.`,
+      publishedCount: result.published,
+      skippedCount: result.issues.length,
+      replacedCount: result.updated + result.removed,
+      warnings: result.issues.map((issue) => ({
+        code: issue.code,
+        severity: "advisory" as const,
+        message: issue.message,
+        dateKey: issue.dateKey,
+      })),
+    };
+  }
   const grid = await getLiveRoster(companyId, input.siteId, input.startDate, input.endDate);
   if (!grid) return null;
 

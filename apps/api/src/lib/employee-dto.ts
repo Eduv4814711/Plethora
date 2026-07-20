@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import type { JWTPayload } from "./types.js";
-import { normalizeModuleAccess } from "../middleware/rbac.js";
+import { EMPLOYEE_RESTRICTED_FIELDS, canAccessSensitiveData, omitFields } from "./sensitive-data.js";
 
 export const employeeListSelect = {
   id: true,
@@ -66,50 +66,28 @@ export const employeePayrollSelect = {
 
 export const employeePrivateAdminSelect = employeePayrollSelect;
 
-const SENSITIVE_KEYS = [
-  "idNumber",
-  "taxNumber",
-  "bankName",
-  "bankAccountNumber",
-  "bankBranchCode",
-] as const;
-
-type SensitiveKey = (typeof SENSITIVE_KEYS)[number];
-
 export function canViewEmployeeSensitiveFields(user: JWTPayload): boolean {
-  if (user.role === "admin" && !normalizeModuleAccess(user.moduleAccess)) {
-    return true;
-  }
-  if (user.role === "hr_payroll") return true;
-  const modules = normalizeModuleAccess(user.moduleAccess);
-  if (!modules) return false;
-  return modules.some(
-    (m) => m === "/employees" || m === "/payroll" || m.startsWith("/payroll/")
-  );
+  return canAccessSensitiveData(user, "/employees") || canAccessSensitiveData(user, "/payroll");
 }
 
-function stripSensitive<T extends Record<string, unknown>>(row: T): Omit<T, SensitiveKey> {
-  const out = { ...row };
-  for (const key of SENSITIVE_KEYS) {
-    if (key in out) delete out[key];
-  }
-  return out as Omit<T, SensitiveKey>;
+export function canEditEmployeeDetails(user: JWTPayload): boolean {
+  return canViewEmployeeSensitiveFields(user);
 }
 
 export function sanitizeEmployeeForList<T extends Record<string, unknown>>(
   row: T,
   user: JWTPayload
-): T | Omit<T, SensitiveKey> {
+): T | Omit<T, (typeof EMPLOYEE_RESTRICTED_FIELDS)[number]> {
   if (canViewEmployeeSensitiveFields(user)) return row;
-  return stripSensitive(row);
+  return omitFields(row, EMPLOYEE_RESTRICTED_FIELDS);
 }
 
 export function sanitizeEmployeeForDetail<T extends Record<string, unknown>>(
   row: T,
   user: JWTPayload
-): T | Omit<T, SensitiveKey> {
+): T | Omit<T, (typeof EMPLOYEE_RESTRICTED_FIELDS)[number]> {
   if (canViewEmployeeSensitiveFields(user)) return row;
-  return stripSensitive(row);
+  return omitFields(row, EMPLOYEE_RESTRICTED_FIELDS);
 }
 
 export function maskBankAccountLast4(account?: string | null): string | null {

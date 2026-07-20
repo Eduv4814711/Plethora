@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
-import { isFullAdmin } from "@/lib/permissions";
+import { canAccessSensitiveData, isFullAdmin } from "@/lib/permissions";
 import { DateInput } from "@/components/date-input";
 import { useConfirmDialog } from "@/components/ui";
 import { clsx } from "clsx";
@@ -102,6 +102,9 @@ const TEAM_UNASSIGNED_FOLDER_KEY = "__unassigned__";
 export default function EmployeesPage() {
   const { token, user } = useAuth();
   const canDeleteEmployees = user ? isFullAdmin(user) : false;
+  const canEditEmployeeDetails = user
+    ? canAccessSensitiveData(user, "/employees") || canAccessSensitiveData(user, "/payroll")
+    : false;
   const searchParams = useSearchParams();
   const searchQuery = searchParams.get("q") ?? "";
   const defaultCompanyName = (user as { company?: { name: string } } | null)?.company?.name ?? "";
@@ -256,8 +259,21 @@ export default function EmployeesPage() {
             {showManageGroups ? "Hide groups" : "Manage groups"}
           </button>
           <button
-            onClick={() => setShowForm(!showForm)}
-            className={`${showForm ? "btn-secondary" : "btn-primary"} h-11 shrink-0`}
+            onClick={() => {
+              if (!canEditEmployeeDetails) return;
+              setShowForm(!showForm);
+            }}
+            disabled={!canEditEmployeeDetails}
+            title={
+              canEditEmployeeDetails
+                ? undefined
+                : "Only HR and Payroll can add or edit employee details"
+            }
+            className={clsx(
+              showForm ? "btn-secondary" : "btn-primary",
+              "h-11 shrink-0",
+              !canEditEmployeeDetails && "cursor-not-allowed opacity-45 hover:shadow-none"
+            )}
           >
             {showForm ? "Cancel" : "Add team member"}
           </button>
@@ -311,7 +327,7 @@ export default function EmployeesPage() {
         </div>
       </div>
 
-      {showForm && (
+      {showForm && canEditEmployeeDetails && (
         <EmployeeForm
           token={token!}
           defaultPlaceOfWork={defaultCompanyName}
@@ -322,7 +338,7 @@ export default function EmployeesPage() {
         />
       )}
 
-      {editingId && (
+      {editingId && canEditEmployeeDetails && (
         <EditModal
           employeeId={editingId}
           token={token!}
@@ -431,7 +447,8 @@ export default function EmployeesPage() {
                             onToggleExpand={(id) =>
                               setExpandedId((prev) => (prev === id ? null : id))
                             }
-                            onEdit={setEditingId}
+                            canEditEmployeeDetails={canEditEmployeeDetails}
+                            onEdit={canEditEmployeeDetails ? setEditingId : undefined}
                             onChangeStatus={setStatusChangeId}
                           />
                         ))}
@@ -458,7 +475,22 @@ export default function EmployeesPage() {
               : "Add your first team member to start building rosters, tracking attendance, and preparing payroll."}
           </p>
           {statusFilter === "all" && searchQuery.trim().length < 2 && (
-            <button onClick={() => setShowForm(true)} className="btn-primary mt-6">
+            <button
+              onClick={() => {
+                if (!canEditEmployeeDetails) return;
+                setShowForm(true);
+              }}
+              disabled={!canEditEmployeeDetails}
+              title={
+                canEditEmployeeDetails
+                  ? undefined
+                  : "Only HR and Payroll can add or edit employee details"
+              }
+              className={clsx(
+                "btn-primary mt-6",
+                !canEditEmployeeDetails && "cursor-not-allowed opacity-45 hover:shadow-none"
+              )}
+            >
               Add team member
             </button>
           )}
@@ -478,13 +510,15 @@ function EmployeeTeamCard({
   emp,
   expandedId,
   onToggleExpand,
+  canEditEmployeeDetails,
   onEdit,
   onChangeStatus,
 }: {
   emp: Employee;
   expandedId: string | null;
   onToggleExpand: (id: string) => void;
-  onEdit: (id: string) => void;
+  canEditEmployeeDetails: boolean;
+  onEdit?: (id: string) => void;
   onChangeStatus: (id: string) => void;
 }) {
   return (
@@ -593,8 +627,21 @@ function EmployeeTeamCard({
       <div className="mt-4 flex justify-end gap-4" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
-          onClick={() => onEdit(emp.id)}
-          className="text-xs font-medium uppercase tracking-wider text-black hover:underline"
+          onClick={() => {
+            if (!canEditEmployeeDetails) return;
+            onEdit?.(emp.id);
+          }}
+          disabled={!canEditEmployeeDetails}
+          title={
+            canEditEmployeeDetails
+              ? undefined
+              : "Only HR and Payroll can edit employee details"
+          }
+          aria-disabled={!canEditEmployeeDetails}
+          className={clsx(
+            "text-xs font-medium uppercase tracking-wider text-black hover:underline",
+            !canEditEmployeeDetails && "cursor-not-allowed opacity-40 hover:no-underline"
+          )}
         >
           Edit
         </button>

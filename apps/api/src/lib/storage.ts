@@ -23,7 +23,18 @@ export interface StorageService {
 }
 
 export function normalizeStorageKey(key: string): string {
-  return key.replace(/^\/+/, "");
+  const normalized = key.trim().replace(/\\/g, "/").replace(/^\/+/, "");
+  const segments = normalized.split("/");
+  const isSafeSegment = (segment: string) =>
+    /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(segment) &&
+    segment !== "." &&
+    segment !== "..";
+
+  if (!normalized || segments.some((segment) => !isSafeSegment(segment))) {
+    throw new Error("INVALID_STORAGE_KEY");
+  }
+
+  return segments.join("/");
 }
 
 export function isLocalStorage(): boolean {
@@ -87,7 +98,10 @@ export const storage: StorageService = {
     if (path.startsWith("/uploads/")) path = path.slice("/uploads/".length);
     else if (path.startsWith("uploads/")) path = path.slice("uploads/".length);
 
-    const normalized = normalizeStorageKey(path);
-    return normalized || null;
+    try {
+      return normalizeStorageKey(path);
+    } catch {
+      return null;
+    }
   },
 };

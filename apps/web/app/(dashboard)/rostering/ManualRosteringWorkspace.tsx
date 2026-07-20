@@ -12,6 +12,7 @@ import {
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
+import { useConfirmDialog } from "@/components/ui";
 import {
   applyManualOverridesBulk,
   addPlaceholderGuardToSite,
@@ -110,6 +111,7 @@ export type PatternBuilderContext = {
 
 export type ManualRosteringWorkspaceHandle = {
   saveRoster: () => Promise<void>;
+  saveOngoingPattern: () => Promise<void>;
   discardChanges: () => Promise<void>;
   publishRoster: () => Promise<void>;
   applyGuardPattern: (guardId: string, cycleCodes: RosterShiftCode[]) => void;
@@ -135,14 +137,16 @@ export const ManualRosteringWorkspace = forwardRef<
     periodStart: string;
     periodEnd: string;
     periodLabel: string;
+    ongoingMode?: boolean;
     onDraftStateChange?: (state: RosterDraftState) => void;
     onPatternContextChange?: (context: PatternBuilderContext | null) => void;
   }
 >(function ManualRosteringWorkspace(
-  { siteId, periodStart, periodEnd, periodLabel, onDraftStateChange, onPatternContextChange },
+  { siteId, periodStart, periodEnd, periodLabel, ongoingMode = false, onDraftStateChange, onPatternContextChange },
   ref
 ) {
   const { token, user } = useAuth();
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [siteConfig, setSiteConfig] = useState<RosterSiteConfig | null>(null);
   const [grid, setGrid] = useState<RosterPeriodGrid | null>(null);
   const [loading, setLoading] = useState(false);
@@ -354,6 +358,33 @@ export const ManualRosteringWorkspace = forwardRef<
     await fetchGrid();
   }, [fetchGrid]);
 
+  const handleSaveOngoingPattern = useCallback(async () => {
+    const committedChanges = Array.from(pendingChangesRef.current.values());
+    if (!token || committedChanges.length === 0 || !siteConfigRef.current?.activePattern) return;
+    setIsSaving(true);
+    setError(null);
+    try {
+      await applyManualOverridesBulk(token, {
+        siteId,
+        changes: committedChanges.map((change) => ({
+          ...change,
+          doesChangeBasePattern: true,
+        })),
+      });
+      pendingChangesRef.current = new Map();
+      setPendingChanges(new Map());
+      setPublishSummary(null);
+      setStatusMsg("Ongoing schedule updated. Future roster periods will use the new pattern.");
+      setTimeout(() => setStatusMsg(null), 5000);
+      await loadConfig();
+      await fetchGrid();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to update the ongoing schedule");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [token, siteId, loadConfig, fetchGrid]);
+
   const hardIssueCount = grid?.warnings.filter((warning) => warning.severity === "hard").length ?? 0;
   const warningCount = grid?.warnings.length ?? 0;
   const canPublish = !!grid && pendingChanges.size === 0 && hardIssueCount === 0 && !isSaving && !isPublishing;
@@ -445,7 +476,12 @@ export const ManualRosteringWorkspace = forwardRef<
     if (!token || !siteConfig) return;
     if (
       pendingChangesRef.current.size > 0 &&
-      !window.confirm("Adding a guard reloads the roster. Discard unsaved changes and continue?")
+      !(await confirm({
+        title: "Discard unsaved changes?",
+        message: "Adding a guard reloads this roster period. Your unsaved cell changes will be discarded.",
+        confirmLabel: "Discard and add guard",
+        danger: true,
+      }))
     ) {
       return;
     }
@@ -469,7 +505,12 @@ export const ManualRosteringWorkspace = forwardRef<
     if (!token || !siteConfig) return;
     if (
       pendingChangesRef.current.size > 0 &&
-      !window.confirm("Adding a placeholder reloads the roster. Discard unsaved changes and continue?")
+      !(await confirm({
+        title: "Discard unsaved changes?",
+        message: "Adding a planning slot reloads this roster period. Your unsaved cell changes will be discarded.",
+        confirmLabel: "Discard and add slot",
+        danger: true,
+      }))
     ) {
       return;
     }
@@ -630,6 +671,7 @@ export const ManualRosteringWorkspace = forwardRef<
     ref,
     () => ({
       saveRoster: handleSaveRoster,
+      saveOngoingPattern: handleSaveOngoingPattern,
       discardChanges: handleDiscardChanges,
       publishRoster: handlePublishRoster,
       applyGuardPattern,
@@ -637,7 +679,7 @@ export const ManualRosteringWorkspace = forwardRef<
       addGuardToSite: handleAddGuardToSite,
       addPlaceholderGuard: handleAddPlaceholderGuard,
     }),
-    [handleSaveRoster, handleDiscardChanges, handlePublishRoster, applyGuardPattern, applyPatternToAll, handleAddGuardToSite, handleAddPlaceholderGuard]
+    [handleSaveRoster, handleSaveOngoingPattern, handleDiscardChanges, handlePublishRoster, applyGuardPattern, applyPatternToAll, handleAddGuardToSite, handleAddPlaceholderGuard]
   );
 
   useEffect(() => {
@@ -673,6 +715,25 @@ export const ManualRosteringWorkspace = forwardRef<
               <p className="text-xs text-neutral-500 dark:text-neutral-400 hidden sm:block">
                 Assign shifts in the grid, then save when ready
               </p>
+            )}
+            {pendingChanges.size > 0 && siteConfig.activePattern && !ongoingMode && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (await confirm({
+                    title: "Change the ongoing schedule?",
+                    message: "These edits will create a new repeating schedule from the first changed date. Historical roster periods will stay unchanged.",
+                    confirmLabel: "Change ongoing schedule",
+                    danger: false,
+                  })) {
+                    void handleSaveOngoingPattern();
+                  }
+                }}
+                disabled={isSaving}
+                className="btn-secondary text-xs px-3 py-1.5 disabled:opacity-50"
+              >
+                Change ongoing schedule
+              </button>
             )}
             <button
               type="button"
@@ -847,6 +908,7 @@ export const ManualRosteringWorkspace = forwardRef<
           rosterNightShiftGuardsRequired={siteConfig.rosterNightShiftGuardsRequired}
         />
       )}
+      {confirmDialog}
     </div>
   );
 });

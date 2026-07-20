@@ -35,7 +35,7 @@ export async function attendanceExceptionsRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Validation error",
-        message: parsed.error.errors[0]?.message ?? "Invalid query",
+        message: parsed.error.issues[0]?.message ?? "Invalid query",
       });
     }
     const result = await listExceptions(user.companyId, parsed.data);
@@ -65,7 +65,7 @@ export async function attendanceExceptionsRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Validation error",
-        message: parsed.error.errors[0]?.message ?? "Invalid body",
+        message: parsed.error.issues[0]?.message ?? "Invalid body",
       });
     }
     const result = await detectAndPersistExceptions({
@@ -88,7 +88,7 @@ export async function attendanceExceptionsRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Validation error",
-        message: parsed.error.errors[0]?.message ?? "Invalid body",
+        message: parsed.error.issues[0]?.message ?? "Invalid body",
       });
     }
     const updated = await reviewException({

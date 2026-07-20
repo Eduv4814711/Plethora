@@ -80,6 +80,13 @@ export function isFullAdmin(user: { role: string; moduleAccess?: unknown }): boo
   return user.role === "admin" && !normalizeUserModuleAccess(user.moduleAccess);
 }
 
+/** Sensitive person and payroll data is deliberately not part of broad admin access. */
+export function canAccessSensitiveData(user: { role: string; moduleAccess?: unknown }, module: string): boolean {
+  if (user.role !== "hr_payroll") return false;
+  const modules = normalizeUserModuleAccess(user.moduleAccess);
+  return Boolean(modules?.some((granted) => module === granted || module.startsWith(`${granted}/`)));
+}
+
 function navItemForPath(pathname: string): NavItem | undefined {
   return NAV_ITEMS.find((n) => {
     if (n.href === "/") return pathname === "/" || pathname === "";

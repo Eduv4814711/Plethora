@@ -113,7 +113,7 @@ export async function incidentsRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Validation error",
-        message: parsed.error.errors[0]?.message ?? "Invalid body",
+        message: parsed.error.issues[0]?.message ?? "Invalid body",
       });
     }
     if (Number.isNaN(parsed.data.incidentDateTime.getTime())) {
@@ -137,7 +137,7 @@ export async function incidentsRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Validation error",
-        message: parsed.error.errors[0]?.message ?? "Invalid body",
+        message: parsed.error.issues[0]?.message ?? "Invalid body",
       });
     }
     const result = await updateIncident({
@@ -224,7 +224,7 @@ export async function incidentsRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Validation error",
-        message: parsed.error.errors[0]?.message ?? "Invalid body",
+        message: parsed.error.issues[0]?.message ?? "Invalid body",
       });
     }
     const result = await reviewIncident({

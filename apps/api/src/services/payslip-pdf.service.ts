@@ -69,9 +69,10 @@ export async function generatePayslipPDFFromTemplate(
   try {
     const page = await browser.newPage();
     await page.setContent(fullHtml, {
-      waitUntil: "networkidle0",
+      waitUntil: "load",
       timeout: 10000,
     });
+    await page.waitForNetworkIdle({ idleTime: 500, timeout: 10000 });
 
     const pdfBuffer = await page.pdf({
       format: "A4",

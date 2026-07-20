@@ -4,6 +4,7 @@
  */
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 
 export const SEVERITY = {
   CRITICAL: "critical",
@@ -21,7 +22,9 @@ export function createPrisma() {
   if (!process.env.DATABASE_URL?.trim()) {
     throw new Error("DATABASE_URL is not set. Point it at the target Postgres database.");
   }
-  return new PrismaClient();
+  return new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  });
 }
 
 /**

@@ -63,6 +63,8 @@ interface Site {
   autoRosterMinCoveragePercent?: number;
   autoRosterLastRunAt?: string | null;
   autoRosterLastStatus?: string | null;
+  rosterContinuityState?: "not_setup" | "running" | "needs_attention" | "paused";
+  rosterMaintainedThrough?: string | null;
   latitude?: number | string | null;
   longitude?: number | string | null;
   geofenceRadiusMeters?: number | null;
@@ -1246,6 +1248,38 @@ function SiteAutoRosterSettings({
     site.autoRosterLastRunAt && site.autoRosterLastStatus
       ? `${site.autoRosterLastStatus.replace(/_/g, " ")} · ${new Date(site.autoRosterLastRunAt).toLocaleString()}`
       : null;
+
+  if (site.rosterContinuityState) {
+    const labels = {
+      not_setup: "Not set up",
+      running: "Running",
+      needs_attention: "Needs attention",
+      paused: "Paused",
+    } as const;
+    return (
+      <div className="space-y-4">
+        <div>
+          <h2 className="section-title text-neutral-900 dark:text-neutral-100 mb-1">Ongoing rostering</h2>
+          <p className="max-w-2xl text-sm text-neutral-500 dark:text-neutral-400">
+            Plethora can repeat the approved site schedule and keep the next two roster periods ready automatically.
+          </p>
+        </div>
+        <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm dark:border-neutral-700 dark:bg-neutral-900/50">
+          <p className="font-medium text-neutral-900 dark:text-neutral-100">
+            Status: {labels[site.rosterContinuityState]}
+          </p>
+          {site.rosterMaintainedThrough && (
+            <p className="mt-1 text-xs text-neutral-500">
+              Roster maintained through {new Date(site.rosterMaintainedThrough).toLocaleDateString()}.
+            </p>
+          )}
+        </div>
+        <Link href={`/rostering?siteId=${siteId}`} className="btn-primary inline-flex">
+          {site.rosterContinuityState === "not_setup" ? "Set up ongoing roster" : "Manage ongoing roster"}
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

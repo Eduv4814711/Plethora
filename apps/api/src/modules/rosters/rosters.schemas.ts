@@ -171,3 +171,21 @@ export const unlockSiteTimesheetSchema = z.object({
 export const addPlaceholderGuardSchema = z.object({
   type: z.enum(["unknown", "reliever"]),
 });
+
+export const activateContinuitySchema = z.object({
+  calendarId: z.string().min(1).optional(),
+  effectiveFrom: z.string().min(1).optional(),
+  name: z.string().trim().min(1).max(160).optional(),
+  anchorDate: z.string().min(1).optional(),
+  cycleLengthDays: z.number().int().min(2).max(14).optional(),
+  cells: z.array(patternCellSchema).min(1).optional(),
+});
+
+export const continuityPauseSchema = z.object({
+  paused: z.boolean(),
+  reason: z.string().trim().max(500).optional(),
+});
+
+export const confirmReplacementSchema = z.object({
+  employeeId: z.string().min(1),
+});

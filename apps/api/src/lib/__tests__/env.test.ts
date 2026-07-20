@@ -28,6 +28,7 @@ describe("parseEnv", () => {
     expect(env.clockInWindowMinutes).toBe(15);
     expect(env.whatsapp.apiVersion).toBe("v21.0");
     expect(env.whatsapp.enabled).toBe(false);
+    expect(env.trustProxy).toBe(false);
   });
 
   it("parses optional development overrides", () => {
@@ -79,6 +80,10 @@ describe("parseEnv", () => {
   });
 
   describe("production", () => {
+    it("enables trustProxy by default in production", () => {
+      expect(parseEnv(prodBase()).trustProxy).toBe(true);
+    });
+
     it("accepts a valid production configuration", () => {
       const env = parseEnv(prodBase());
       expect(env.isProduction).toBe(true);
@@ -168,6 +173,24 @@ describe("parseEnv", () => {
           })
         )
       ).toThrow(/CORS_ORIGIN is required in production/);
+    });
+
+    it.each(["*", "http://app.example.com", "https://app.example.com/path", "https://app.example.com/"])(
+      "rejects unsafe or non-origin CORS value %s",
+      (origin) => {
+        expect(() => parseEnv(prodBase({ CORS_ORIGIN: origin }))).toThrow(/CORS_ORIGIN/);
+      }
+    );
+
+    it("rejects placeholder operational secrets", () => {
+      expect(() =>
+        parseEnv(
+          prodBase({
+            CRON_SECRET: "change_me_to_a_long_random_secret",
+            ENCRYPTION_KEY: "change_me_to_required_format",
+          })
+        )
+      ).toThrow(/placeholder/);
     });
 
     it("aggregates multiple production errors in one message", () => {

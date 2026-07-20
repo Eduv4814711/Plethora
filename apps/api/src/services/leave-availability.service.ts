@@ -1,6 +1,7 @@
 import { addDays } from "date-fns";
 import type { SiteRosterShiftCode } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import { reconcileContinuityForEmployee } from "../modules/rosters/roster-continuity.service.js";
 
 const MAX_LEAVE_RANGE_DAYS = 366;
 
@@ -119,6 +120,8 @@ export async function createLeaveRecordsForRange(params: {
     )
   );
 
+  await reconcileContinuityForEmployee(params.employeeId, undefined, "leave_created").catch(() => undefined);
+
   return { records, days: dates.length };
 }
 
@@ -147,6 +150,8 @@ export async function deleteLeaveRecordsForRange(params: {
       date: { gte: start, lte: end },
     },
   });
+
+  await reconcileContinuityForEmployee(params.employeeId, params.companyId, "leave_deleted").catch(() => undefined);
 
   return result.count;
 }
@@ -199,6 +204,8 @@ export async function replaceLeaveRecordRange(params: {
       )
     );
   });
+
+  await reconcileContinuityForEmployee(params.employeeId, params.companyId, "leave_changed").catch(() => undefined);
 
   return { records, days: dates.length };
 }

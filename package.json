@@ -2,6 +2,7 @@
   "name": "plethora",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "npm@11.17.0",
   "workspaces": [
     "apps/*"
   ],
@@ -21,20 +22,35 @@
     "db:push": "npm run db:push --workspace=api",
     "db:add-module-access": "npm run db:add-module-access --workspace=api",
     "db:seed": "npm run db:seed --workspace=api",
+    "db:reset-admin": "npm run db:reset-admin --workspace=api",
     "test": "npm run test --workspace=api",
     "test:web": "npm run test --workspace=web"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1",
-    "typescript": "^5.3.3"
+    "concurrently": "^10.0.3",
+    "typescript": "^5.9.3"
   },
   "engines": {
-    "node": "24.x"
+    "node": "24.x",
+    "npm": "11.x"
   },
   "overrides": {
     "fast-uri": "3.1.2",
     "tar": "7.5.15",
-    "postcss": "8.5.10",
-    "dompurify": "3.4.5"
+    "postcss": "8.5.20",
+    "dompurify": "3.4.12",
+    "vite": "8.1.5"
+  },
+  "optionalDependencies": {
+    "@rolldown/binding-win32-x64-msvc": "1.0.0-rc.16"
+  },
+  "allowScripts": {
+    "@prisma/engines@7.8.0": true,
+    "bcrypt@6.0.0": true,
+    "core-js@3.49.0": true,
+    "esbuild@0.28.1": true,
+    "prisma@7.8.0": true,
+    "puppeteer@25.3.0": true,
+    "sharp@0.34.5": true
   }
 }

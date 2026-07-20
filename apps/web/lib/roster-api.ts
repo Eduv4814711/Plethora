@@ -102,6 +102,111 @@ export type PublishRosterResponse = {
   warnings: RosterWarning[];
 };
 
+export type RosterContinuityState = "not_setup" | "running" | "needs_attention" | "paused";
+
+export type RosterActionPermissions = {
+  canManageBaseline: boolean;
+  canManageExceptions: boolean;
+  canUseAdvancedEditor: boolean;
+};
+
+export type RosterContinuityIssue = {
+  id: string;
+  title: string;
+  message: string;
+  priority: "CRITICAL" | "MEDIUM" | "LOW";
+  metadata?: { dateKey?: string; shiftType?: "day" | "night"; [key: string]: unknown } | null;
+  createdAt: string;
+};
+
+export type RosterContinuityStatus = {
+  siteId: string;
+  siteName: string;
+  state: RosterContinuityState;
+  calendarId: string | null;
+  calendar: { id: string; name: string; startDay: number; endDay: number };
+  guardCount: number;
+  permissions: RosterActionPermissions;
+  maintainedThrough: string | null;
+  lastReconciledAt: string | null;
+  lastStatus: string | null;
+  pauseReason: string | null;
+  activePattern: {
+    id: string;
+    name: string;
+    cycleLengthDays: number;
+    effectiveFrom: string;
+  } | null;
+  issues: RosterContinuityIssue[];
+};
+
+export type RosterContinuityOverviewSite = {
+  siteId: string;
+  siteName: string;
+  state: RosterContinuityState;
+  maintainedThrough: string | null;
+  lastReconciledAt: string | null;
+  lastStatus: string | null;
+  guardCount: number;
+  issueCount: number;
+  criticalIssueCount: number;
+  activePatternName: string | null;
+  calendar: { id: string; name: string; startDay: number; endDay: number };
+  nextIssue: {
+    id: string;
+    title: string;
+    message: string;
+    priority: "CRITICAL" | "MEDIUM" | "LOW";
+    dateKey: string | null;
+    shiftType: "day" | "night" | null;
+  } | null;
+};
+
+export type RosterContinuityOverview = {
+  summary: {
+    total: number;
+    running: number;
+    needsAttention: number;
+    paused: number;
+    notSetup: number;
+  };
+  permissions: RosterActionPermissions;
+  sites: RosterContinuityOverviewSite[];
+};
+
+export type RosterSetupSuggestion = {
+  siteId: string;
+  siteName: string;
+  canActivate: boolean;
+  confidencePercent: number;
+  source: "roster_grid" | "published_shifts";
+  sourcePeriod?: { startDate: string; endDate: string };
+  message?: string;
+  calendars: { id: string; name: string; startDay: number; endDay: number }[];
+  recommendedCalendarId: string;
+  calendarConfidence?: "high" | "fallback";
+  recommendedEffectiveFrom: string;
+  assignedGuards: { id: string; name: string }[];
+  pattern: {
+    name: string;
+    anchorDate: string;
+    cycleLengthDays: number;
+    cells: {
+      guardId: string;
+      patternDayIndex: number;
+      shiftCode: RosterShiftCode;
+    }[];
+  } | null;
+  issues: string[];
+};
+
+export type RosterReplacementSuggestion = {
+  employeeId: string;
+  name: string;
+  score: number;
+  reasons: string[];
+};
+
 export type SiteTimesheetAttendance =
   | "pending"
   | "present"
@@ -328,6 +433,79 @@ async function parseJson<T>(res: Response): Promise<T> {
 export async function fetchSiteRosterConfig(token: string, siteId: string) {
   const res = await authFetch(`/rosters/sites/${siteId}/config`, token);
   return parseJson<RosterSiteConfig>(res);
+}
+
+export async function fetchContinuitySetupSuggestion(token: string, siteId: string) {
+  return parseJson<RosterSetupSuggestion>(
+    await authFetch(`/rosters/sites/${siteId}/setup-suggestion`, token)
+  );
+}
+
+export async function fetchRosterContinuityOverview(token: string) {
+  return parseJson<RosterContinuityOverview>(
+    await authFetch("/rosters/continuity-overview", token)
+  );
+}
+
+export async function fetchRosterContinuityStatus(token: string, siteId: string) {
+  return parseJson<RosterContinuityStatus>(
+    await authFetch(`/rosters/sites/${siteId}/continuity-status`, token)
+  );
+}
+
+export async function activateRosterContinuity(
+  token: string,
+  siteId: string,
+  input: { calendarId: string; effectiveFrom: string }
+) {
+  return parseJson<{ patternId: string; reconciliation: { maintainedThrough: string | null; issues: unknown[] } }>(
+    await authFetch(`/rosters/sites/${siteId}/activate-continuity`, token, {
+      method: "POST",
+      body: JSON.stringify(input),
+    })
+  );
+}
+
+export async function reconcileRosterContinuity(token: string, siteId: string) {
+  return parseJson<{ maintainedThrough: string | null; issues: unknown[] }>(
+    await authFetch(`/rosters/sites/${siteId}/reconcile`, token, { method: "POST" })
+  );
+}
+
+export async function pauseRosterContinuity(
+  token: string,
+  siteId: string,
+  paused: boolean,
+  reason?: string
+) {
+  return parseJson<{ ok: true; state: RosterContinuityState }>(
+    await authFetch(`/rosters/sites/${siteId}/continuity-pause`, token, {
+      method: "POST",
+      body: JSON.stringify({ paused, reason }),
+    })
+  );
+}
+
+export async function fetchReplacementSuggestions(token: string, alertId: string) {
+  return parseJson<{
+    alertId: string;
+    dateKey: string;
+    shiftType: "day" | "night";
+    suggestions: RosterReplacementSuggestion[];
+  }>(await authFetch(`/rosters/continuity/issues/${alertId}/replacements`, token));
+}
+
+export async function confirmRosterReplacement(
+  token: string,
+  alertId: string,
+  employeeId: string
+) {
+  return parseJson<{ replacement: RosterReplacementSuggestion }>(
+    await authFetch(`/rosters/continuity/issues/${alertId}/replacements`, token, {
+      method: "POST",
+      body: JSON.stringify({ employeeId }),
+    })
+  );
 }
 
 export async function fetchPatternGrid(

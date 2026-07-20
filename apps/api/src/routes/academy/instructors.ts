@@ -11,6 +11,7 @@ import {
   ACADEMY_MAX_FILE_BYTES,
 } from "./constants.js";
 import { readStreamToBuffer, storage } from "../../lib/storage.js";
+import { INSTRUCTOR_RESTRICTED_FIELDS, canAccessSensitiveData, hasRestrictedFields, omitFields } from "../../lib/sensitive-data.js";
 const STATUS_VALUES = ["active", "inactive", "suspended", "contract_ended"] as const;
 const SORT_VALUES = [
   "newest",
@@ -242,6 +243,21 @@ function canArchiveOrDeleteInstructors(user: { role?: string }): boolean {
   return user.role === "admin" || user.role === "operations_manager";
 }
 
+function canHandleInstructorPrivateData(user: import("../../lib/types.js").JWTPayload) {
+  return canAccessSensitiveData(user, "/academy");
+}
+function sanitizeInstructor<T extends Record<string, unknown>>(row: T, user: import("../../lib/types.js").JWTPayload) {
+  return canHandleInstructorPrivateData(user) ? row : omitFields(row, INSTRUCTOR_RESTRICTED_FIELDS);
+}
+function rejectInstructorPrivateData(request: { user?: import("../../lib/types.js").JWTPayload; body: unknown }, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
+  if (canHandleInstructorPrivateData(request.user!) || !hasRestrictedFields(request.body, INSTRUCTOR_RESTRICTED_FIELDS)) return false;
+  reply.code(403).send({ error: "Forbidden", message: "Sensitive instructor data is restricted to HR/payroll users" });
+  return true;
+}
+function sanitizeInstructorDocument<T extends Record<string, unknown>>(row: T, user: import("../../lib/types.js").JWTPayload) {
+  return canHandleInstructorPrivateData(user) ? row : omitFields(row, ["fileUrl", "notes"]);
+}
+
 async function ensureAssignedBranchExists(companyId: string, assignedBranchId?: string | null): Promise<boolean> {
   if (!assignedBranchId) return true;
   const branch = await prisma.academyBranch.findFirst({
@@ -373,9 +389,11 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
             OR: [
               { fullName: { contains: search, mode: "insensitive" } },
               { psiraInstructorNumber: { contains: search, mode: "insensitive" } },
-              { idNumber: { contains: search, mode: "insensitive" } },
-              { email: { contains: search, mode: "insensitive" } },
-              { phone: { contains: search, mode: "insensitive" } },
+              ...(canHandleInstructorPrivateData(request.user!) ? [
+                { idNumber: { contains: search, mode: "insensitive" as const } },
+                { email: { contains: search, mode: "insensitive" as const } },
+                { phone: { contains: search, mode: "insensitive" as const } },
+              ] : []),
             ],
           }
         : {}),
@@ -497,7 +515,7 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
       attentionNeeded: derived.filter((d) => d.complianceStatusComputed === "attention_needed").length,
     };
 
-    return { instructors: paged, total, limit, offset, summary };
+    return { instructors: paged.map((row) => sanitizeInstructor(row, request.user!)), total, limit, offset, summary };
   });
 
   app.post("/bulk", { preHandler: academyProtect }, async (request, reply) => {
@@ -626,13 +644,13 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
         verifiedBy: { select: { id: true, name: true, email: true } },
       },
     });
-    return { documents };
+    return { documents: documents.map((document) => sanitizeInstructorDocument(document, request.user!)) };
   });
 
   app.post("/:id/documents", { preHandler: academyProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
-    if (!canManageComplianceDocuments(request.user ?? {})) {
+    if (!canHandleInstructorPrivateData(request.user!)) {
       return reply.code(403).send({ error: "Forbidden", message: "No permission to upload instructor documents" });
     }
     const { id } = request.params as { id: string };
@@ -730,13 +748,13 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
       metadata: { instructorId: id, documentType, fileName: originalName },
     });
 
-    return reply.code(201).send({ document });
+    return reply.code(201).send({ document: sanitizeInstructorDocument(document, request.user!) });
   });
 
   app.patch("/:id/documents/:documentId", { preHandler: academyProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
-    if (!canManageComplianceDocuments(request.user ?? {})) {
+    if (!canHandleInstructorPrivateData(request.user!)) {
       return reply.code(403).send({ error: "Forbidden", message: "No permission to update instructor documents" });
     }
     const { id, documentId } = request.params as { id: string; documentId: string };
@@ -784,13 +802,13 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
       metadata: parsed.data as Record<string, unknown>,
     });
 
-    return { document: next };
+    return { document: sanitizeInstructorDocument(next, request.user!) };
   });
 
   app.delete("/:id/documents/:documentId", { preHandler: academyProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
-    if (!canManageComplianceDocuments(request.user ?? {})) {
+    if (!canHandleInstructorPrivateData(request.user!)) {
       return reply.code(403).send({ error: "Forbidden", message: "No permission to delete instructor documents" });
     }
     const { id, documentId } = request.params as { id: string; documentId: string };
@@ -858,19 +876,21 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
     );
 
     return {
-      instructor: {
+      instructor: sanitizeInstructor({
         ...instructor,
+        documents: instructor.documents.map((document) => sanitizeInstructorDocument(document, request.user!)),
         assignedCourseIds,
         assignedCourses,
         contractStatusComputed,
         contractDaysRemaining: daysUntil(instructor.contractEndDate),
         certificateStatus,
         complianceStatusComputed,
-      },
+      }, request.user!),
     };
   });
 
   app.post("/", { preHandler: academyProtect }, async (request, reply) => {
+    if (rejectInstructorPrivateData(request, reply)) return;
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     if (!canEditInstructorRecords(request.user ?? {})) {
@@ -931,10 +951,11 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
       entityId: instructor.id,
       metadata: { fullName: instructor.fullName, status: instructor.status },
     });
-    return reply.code(201).send({ instructor });
+    return reply.code(201).send({ instructor: sanitizeInstructor(instructor, request.user!) });
   });
 
   app.patch("/:id", { preHandler: academyProtect }, async (request, reply) => {
+    if (rejectInstructorPrivateData(request, reply)) return;
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     if (!canEditInstructorRecords(request.user ?? {})) {
@@ -1036,7 +1057,7 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
       entityId: id,
       metadata: d as Record<string, unknown>,
     });
-    return { instructor };
+    return { instructor: sanitizeInstructor(instructor, request.user!) };
   });
 
   app.post("/:id/archive", { preHandler: academyProtect }, async (request, reply) => {

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
@@ -16,8 +15,6 @@ interface Branch {
 }
 
 const BRANCH_ADD_FORM_ID = "academy-branch-add-form";
-const HINT_ILLUSTRATION = "/academy-branch-hint.png";
-
 type SortKey = "name" | "createdAt";
 type StatusFilter = "all" | "active";
 
@@ -63,6 +60,16 @@ function BuildingIcon() {
   );
 }
 
+function BranchHintIllustration() {
+  return (
+    <svg aria-hidden="true" className="h-20 w-20" fill="none" viewBox="0 0 80 80">
+      <path d="M13 66h39M19 66V30h27v36M27 39h4m7 0h4m-15 9h4m7 0h4M30 66V55h8v11" stroke="#CBD5E1" strokeLinecap="round" strokeWidth="4" />
+      <path d="M67 47c0 9-10 18-10 18S47 56 47 47a10 10 0 1 1 20 0Z" fill="#FFF7ED" stroke="#FB923C" strokeWidth="3" />
+      <circle cx="57" cy="47" r="3" fill="#FB923C" />
+    </svg>
+  );
+}
+
 function SortHeader({
   label,
   active,
@@ -100,7 +107,6 @@ export default function AcademyBranchesPage() {
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [hintImgOk, setHintImgOk] = useState(true);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const addCardRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -273,18 +279,9 @@ export default function AcademyBranchesPage() {
                     reports.
                   </p>
                 </div>
-                {hintImgOk && (
-                  <div className="relative hidden h-20 w-20 shrink-0 sm:block">
-                    <Image
-                      src={HINT_ILLUSTRATION}
-                      alt=""
-                      fill
-                      className="object-contain object-right"
-                      onError={() => setHintImgOk(false)}
-                      sizes="80px"
-                    />
-                  </div>
-                )}
+                <div className="hidden h-20 w-20 shrink-0 sm:block">
+                  <BranchHintIllustration />
+                </div>
               </div>
             </div>
           </div>

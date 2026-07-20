@@ -12,8 +12,13 @@
  * Requires DATABASE_URL in apps/api/.env or environment.
  */
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({
+    connectionString: process.env.DATABASE_URL ?? "postgresql://localhost:5432/plethora",
+  }),
+});
 const dryRun = !process.argv.includes("--apply");
 
 function attendanceScore(row) {

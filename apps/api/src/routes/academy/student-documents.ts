@@ -10,6 +10,11 @@ import {
   ACADEMY_MAX_FILE_BYTES,
 } from "./constants.js";
 import { readStreamToBuffer, storage } from "../../lib/storage.js";
+import { canAccessSensitiveData, omitFields } from "../../lib/sensitive-data.js";
+
+function canManageStudentDocuments(user: import("../../lib/types.js").JWTPayload) {
+  return canAccessSensitiveData(user, "/academy");
+}
 
 const documentTypeSchema = z.enum([
   "id_copy",
@@ -39,10 +44,17 @@ export async function academyStudentDocumentsRoutes(app: FastifyInstance) {
       orderBy: { createdAt: "desc" },
       include: { uploadedBy: { select: { id: true, name: true, email: true } } },
     });
-    return { documents };
+    return {
+      documents: canManageStudentDocuments(request.user!)
+        ? documents
+        : documents.map((document) => omitFields(document, ["storagePath"])),
+    };
   });
 
   app.post("/:studentId/documents", { preHandler: academyProtect }, async (request, reply) => {
+    if (!canManageStudentDocuments(request.user!)) {
+      return reply.code(403).send({ error: "Forbidden", message: "Only HR/payroll may manage person-linked documents" });
+    }
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     const { studentId } = request.params as { studentId: string };
@@ -137,6 +149,9 @@ export async function academyStudentDocumentsRoutes(app: FastifyInstance) {
   });
 
   app.delete("/:studentId/documents/:documentId", { preHandler: academyProtect }, async (request, reply) => {
+    if (!canManageStudentDocuments(request.user!)) {
+      return reply.code(403).send({ error: "Forbidden", message: "Only HR/payroll may manage person-linked documents" });
+    }
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     const { studentId, documentId } = request.params as { studentId: string; documentId: string };

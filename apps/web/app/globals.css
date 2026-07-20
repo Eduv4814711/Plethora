@@ -1,8 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@config "../tailwind.config.ts";
+@import "tailwindcss";
 
 /* Plethora – Orange Brand Design System */
 :root {
@@ -99,22 +97,22 @@ html {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium;
   }
   .badge-neutral {
-    @apply badge bg-neutral-100 text-black border border-neutral-200;
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-neutral-100 text-black border border-neutral-200;
   }
   .badge-success {
-    @apply badge bg-emerald-50 text-emerald-700 border border-emerald-200;
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200;
   }
   .badge-warning {
-    @apply badge bg-security-amber-100 text-security-amber-700 border border-security-amber-200;
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-security-amber-100 text-security-amber-700 border border-security-amber-200;
   }
   .badge-error {
-    @apply badge bg-red-50 text-red-700 border border-red-200;
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-red-50 text-red-700 border border-red-200;
   }
   .badge-on-duty {
-    @apply badge bg-emerald-50 text-emerald-700 border border-emerald-200;
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200;
   }
   .badge-off-duty {
-    @apply badge bg-neutral-100 text-black border border-neutral-200;
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-neutral-100 text-black border border-neutral-200;
   }
 
   /* Borders */
