@@ -78,3 +78,39 @@ describe("processAndSend", () => {
     expect(sendText).toHaveBeenCalled();
   });
 });
+
+describe("findEmployeeByPhone", () => {
+  beforeEach(() => {
+    findMany.mockReset();
+  });
+
+  it("returns the one active employee whose normalized phone matches", async () => {
+    const employee = { id: "emp-1", companyId: "co-1", firstName: "Test", lastName: "User", phone: "082 123 4567" };
+    findMany.mockResolvedValue([employee]);
+    const { findEmployeeByPhone } = await import("../services/handler.service.js");
+    await expect(findEmployeeByPhone("27821234567")).resolves.toEqual(employee);
+  });
+
+  it("fails closed when the normalized phone matches active employees in two tenants", async () => {
+    findMany.mockResolvedValue([
+      { id: "emp-1", companyId: "co-1", firstName: "First", lastName: "User", phone: "+27 82 123 4567" },
+      { id: "emp-2", companyId: "co-2", firstName: "Second", lastName: "User", phone: "0821234567" },
+    ]);
+    const { findEmployeeByPhone } = await import("../services/handler.service.js");
+    await expect(findEmployeeByPhone("27821234567")).resolves.toBeNull();
+  });
+});
+
+describe("readResponseBodyWithLimit", () => {
+  it("stops reading when a WhatsApp media response exceeds the hard byte limit", async () => {
+    const { readResponseBodyWithLimit } = await import("../services/handler.service.js");
+    const response = new Response(new Uint8Array([1, 2, 3, 4]));
+    await expect(readResponseBodyWithLimit(response, 3)).rejects.toThrow("FILE_TOO_LARGE");
+  });
+
+  it("returns the body when it is within the byte limit", async () => {
+    const { readResponseBodyWithLimit } = await import("../services/handler.service.js");
+    const response = new Response(new Uint8Array([1, 2, 3]));
+    await expect(readResponseBodyWithLimit(response, 3)).resolves.toEqual(Buffer.from([1, 2, 3]));
+  });
+});

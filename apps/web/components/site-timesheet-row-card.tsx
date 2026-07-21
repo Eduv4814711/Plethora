@@ -1,11 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { GuardSearchPicker } from "@/components/guard-search-picker";
 import { ShiftTimeSelect } from "@/components/shift-time-select";
 import { defaultShiftTime } from "@/lib/shift-times";
 import type { SiteTimesheetRow } from "@/lib/roster-api";
 import {
-  formatApprovalStatus,
   formatAttendanceStatus,
   isRowFullyReviewed,
   isRowPendingReview,
@@ -70,6 +70,9 @@ export function SiteTimesheetRowCard({
   onUpdate,
   onApprove,
 }: SiteTimesheetRowCardProps) {
+  const [showDifferentGuard, setShowDifferentGuard] = useState(
+    Boolean(row.actualGuardId && row.actualGuardId !== row.plannedGuardId)
+  );
   const shiftType = rowShiftType(row);
   const pendingReview = isRowPendingReview(row.approvalStatus);
   const partiallyReviewed = row.approvalStatus === "partially_reviewed";
@@ -99,15 +102,15 @@ export function SiteTimesheetRowCard({
         </div>
         {reviewed ? (
           <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
-            {locked ? "Approved" : formatApprovalStatus(row.approvalStatus)}
+            {locked ? "Approved" : "Confirmed"}
           </span>
         ) : partiallyReviewed ? (
           <span className="shrink-0 rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
-            Partial
+            Duty ON saved
           </span>
         ) : (
           <span className="shrink-0 rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
-            Needs review
+            Needs confirmation
           </span>
         )}
       </div>
@@ -121,20 +124,79 @@ export function SiteTimesheetRowCard({
           )}
         </div>
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-1">Who worked</p>
-          <GuardSearchPicker
-            guards={guards}
-            value={row.actualGuardId}
-            defaultGuardId={row.plannedGuardId}
-            defaultGuardLabel={row.plannedGuardName}
-            disabled={locked || saving}
-            onChange={(guardId) => onUpdate(row, { actualGuardId: guardId })}
-            clearLabel="Nobody worked"
-            className="input-modern w-full"
-          />
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Who worked?</p>
+          <div className="grid gap-2">
+            <button
+              type="button"
+              disabled={locked || saving || !row.plannedGuardId}
+              onClick={() => {
+                setShowDifferentGuard(false);
+                const plannedType = row.plannedShiftType === "night" || row.plannedShiftCode === "N" ? "night" : "day";
+                const clockIn = combineDateTime(row.workDate, defaultShiftTime(plannedType, "start"));
+                const clockOut = combineClockOut(row.workDate, defaultShiftTime(plannedType, "end"), clockIn);
+                onUpdate(row, {
+                  actualGuardId: row.plannedGuardId,
+                  actualShiftType: plannedType,
+                  actualShiftCode: plannedType === "night" ? "N" : "D",
+                  clockIn,
+                  clockOut,
+                  hoursWorked: hoursBetween(clockIn, clockOut),
+                });
+              }}
+              className="btn-secondary min-h-11 w-full text-left"
+            >
+              Worked as scheduled
+            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={locked || saving}
+                onClick={() => setShowDifferentGuard(true)}
+                className="btn-secondary min-h-11 text-sm"
+                aria-expanded={showDifferentGuard}
+              >
+                Different guard
+              </button>
+              <button
+                type="button"
+                disabled={locked || saving}
+                onClick={() => {
+                  setShowDifferentGuard(false);
+                  onUpdate(row, {
+                    actualGuardId: null,
+                    actualShiftType: null,
+                    actualShiftCode: null,
+                    clockIn: null,
+                    clockOut: null,
+                    hoursWorked: null,
+                  });
+                }}
+                className="btn-secondary min-h-11 text-sm"
+              >
+                Nobody worked
+              </button>
+            </div>
+            {showDifferentGuard && (
+              <GuardSearchPicker
+                guards={guards}
+                value={row.actualGuardId}
+                defaultGuardId={row.plannedGuardId}
+                defaultGuardLabel={row.plannedGuardName}
+                disabled={locked || saving}
+                onChange={(guardId) => onUpdate(row, { actualGuardId: guardId })}
+                clearLabel="Choose another guard"
+                className="input-modern w-full"
+              />
+            )}
+          </div>
         </div>
       </div>
 
+      <details className="rounded-lg border border-neutral-200 bg-white/70 p-3 dark:border-neutral-700 dark:bg-neutral-950/40">
+        <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium text-security-navy-700 dark:text-security-navy-300">
+          Adjust shift, times, or notes
+        </summary>
+        <div className="mt-3 space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Shift worked</label>
@@ -170,7 +232,7 @@ export function SiteTimesheetRowCard({
           <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Status</label>
           <p
             className="mt-1 text-sm font-medium text-neutral-800 dark:text-neutral-200"
-            title="Set automatically when you approve this shift"
+            title="Set automatically when you confirm this attendance entry"
           >
             {formatAttendanceStatus(row.attendanceStatus)}
           </p>
@@ -232,9 +294,12 @@ export function SiteTimesheetRowCard({
         />
       </div>
 
+        </div>
+      </details>
+
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Duty ON OB</label>
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">1 of 2 · Duty ON OB</label>
           {locked || row.approvalStatus === "approved" || dutyOnLocked ? (
             <div className="mt-1">
               <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
@@ -267,7 +332,7 @@ export function SiteTimesheetRowCard({
           )}
         </div>
         <div>
-          <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Duty OFF OB</label>
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">2 of 2 · Duty OFF OB</label>
           {locked || row.approvalStatus === "approved" || dutyOffLocked ? (
             <div className="mt-1">
               <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
@@ -287,7 +352,7 @@ export function SiteTimesheetRowCard({
               disabled={saving || !dutyOffEnabled}
               className="input-modern mt-1 w-full disabled:opacity-50"
               placeholder={dutyOffEnabled ? "Duty OFF OB" : "Enter Duty ON first"}
-              title="Duty OFF OB — required before approve"
+              title="Duty OFF OB — required before confirming attendance"
               aria-label={`Duty OFF OB for ${row.workDate}`}
             />
           )}
@@ -303,9 +368,9 @@ export function SiteTimesheetRowCard({
           }}
           onClick={() => onApprove(row)}
           className="btn-primary w-full disabled:opacity-50"
-          title="Enter Duty ON and Duty OFF OB numbers, then approve."
+          title="Enter Duty ON and Duty OFF OB numbers, then confirm attendance."
         >
-          {saving ? "Saving…" : "Approve this day"}
+          {saving ? "Saving…" : "Confirm attendance"}
         </button>
       )}
 
@@ -316,7 +381,7 @@ export function SiteTimesheetRowCard({
           onClick={() => onUpdate(row, { approvalStatus: "pending" })}
           className="btn-secondary w-full text-sm"
         >
-          Undo review
+          Reopen attendance entry
         </button>
       )}
     </article>

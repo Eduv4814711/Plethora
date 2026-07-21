@@ -259,6 +259,8 @@ describe("duty ON / duty OFF OB workflow (service)", () => {
       companyId: "co-1",
       siteId: "site-1",
       status: "draft",
+      periodStart: new Date("2026-07-01T00:00:00.000Z"),
+      periodEnd: new Date("2026-07-31T00:00:00.000Z"),
     } as never);
     vi.mocked(prisma.employee.findFirst).mockResolvedValue({ id: "g1" } as never);
 
@@ -275,12 +277,40 @@ describe("duty ON / duty OFF OB workflow (service)", () => {
     });
   });
 
+  it("rejects a reliever row outside the timesheet period", async () => {
+    vi.mocked(prisma.siteTimesheet.findFirst).mockResolvedValue({
+      id: "ts-1",
+      companyId: "co-1",
+      siteId: "site-1",
+      status: "draft",
+      periodStart: new Date("2026-07-01T00:00:00.000Z"),
+      periodEnd: new Date("2026-07-31T00:00:00.000Z"),
+    } as never);
+
+    const result = await addSiteTimesheetRow("co-1", "ts-1", {
+      workDate: "2026-08-01",
+      actualGuardId: "g1",
+      actualShiftCode: "R",
+      actualShiftType: "day",
+      attendanceStatus: "reliever",
+      dutyOnObNumber: "0232",
+    });
+
+    expect(result).toEqual({
+      error: "Row date must be between 2026-07-01 and 2026-07-31.",
+    });
+    expect(prisma.employee.findFirst).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it("adds reliever with Duty ON and starts partially_reviewed", async () => {
     vi.mocked(prisma.siteTimesheet.findFirst).mockResolvedValue({
       id: "ts-1",
       companyId: "co-1",
       siteId: "site-1",
       status: "draft",
+      periodStart: new Date("2026-07-01T00:00:00.000Z"),
+      periodEnd: new Date("2026-07-31T00:00:00.000Z"),
     } as never);
     vi.mocked(prisma.employee.findFirst).mockResolvedValue({ id: "g1" } as never);
     vi.mocked(prisma.$transaction).mockImplementation(async (fn) => {

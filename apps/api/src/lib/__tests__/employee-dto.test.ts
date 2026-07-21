@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canEditEmployeeDetails,
   canViewEmployeeSensitiveFields,
   sanitizeEmployeeForList,
 } from "../employee-dto.js";
@@ -33,8 +34,28 @@ describe("employee sensitive fields", () => {
     expect(canViewEmployeeSensitiveFields(fullAdmin)).toBe(false);
   });
 
-  it("allows HR/payroll only when assigned a relevant module", () => {
+  it("allows users assigned a relevant module to view employee details", () => {
     expect(canViewEmployeeSensitiveFields(payrollUser)).toBe(true);
+    expect(canViewEmployeeSensitiveFields({ ...supervisor, moduleAccess: ["/employees"] })).toBe(true);
+  });
+
+  it.each(["/employees", "/payroll"])(
+    "allows HR/payroll to edit with the relevant %s module",
+    (module) => {
+      expect(canEditEmployeeDetails({ ...payrollUser, moduleAccess: [module] })).toBe(true);
+    }
+  );
+
+  it("allows any role explicitly assigned a relevant module", () => {
+    expect(canEditEmployeeDetails(fullAdmin)).toBe(false);
+    expect(canEditEmployeeDetails({ ...fullAdmin, moduleAccess: ["/employees"] })).toBe(true);
+    expect(canEditEmployeeDetails({ ...supervisor, moduleAccess: ["/employees"] })).toBe(true);
+    expect(canEditEmployeeDetails({ ...supervisor, moduleAccess: ["/payroll"] })).toBe(true);
+  });
+
+  it("requires every user to have a relevant explicit module assignment", () => {
+    expect(canEditEmployeeDetails({ ...supervisor, moduleAccess: ["/attendance"] })).toBe(false);
+    expect(canEditEmployeeDetails({ ...payrollUser, moduleAccess: null })).toBe(false);
   });
 
   it("strips sensitive fields for roster-only supervisor", () => {

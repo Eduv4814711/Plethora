@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canViewSensitiveCompanyFields, normalizeModuleAccess } from "../rbac.js";
+import { canViewSensitiveCompanyFields, normalizeModuleAccess, normalizeModulePermissions } from "../rbac.js";
 import type { JWTPayload } from "../../lib/types.js";
 
 function user(partial: Partial<JWTPayload>): JWTPayload {
@@ -40,5 +40,16 @@ describe("canViewSensitiveCompanyFields", () => {
   it("normalizeModuleAccess treats empty arrays as null", () => {
     expect(normalizeModuleAccess([])).toBeNull();
     expect(normalizeModuleAccess(["/employees"])).toEqual(["/employees"]);
+  });
+
+  it("normalizes granular permissions and legacy arrays", () => {
+    expect(normalizeModulePermissions({ "/employees": "read", "/sites": "write" })).toEqual({ "/employees": "read", "/sites": "write" });
+    expect(normalizeModulePermissions(["/employees"])).toEqual({ "/employees": "write" });
+    expect(normalizeModuleAccess({ "/employees": "read" })).toEqual(["/employees"]);
+  });
+
+  it("requires write permission for sensitive company fields", () => {
+    expect(canViewSensitiveCompanyFields(user({ moduleAccess: { "/payroll": "read" } }))).toBe(false);
+    expect(canViewSensitiveCompanyFields(user({ moduleAccess: { "/payroll": "write" } }))).toBe(true);
   });
 });

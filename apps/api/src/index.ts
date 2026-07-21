@@ -27,7 +27,7 @@ try {
     );
   } else if (env.isProduction) {
     console.warn(
-      "[WhatsApp] Not configured — set WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_ACCESS_TOKEN, and WHATSAPP_VERIFY_TOKEN to enable inbound replies"
+      "[WhatsApp] Not configured — set WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_ACCESS_TOKEN, WHATSAPP_VERIFY_TOKEN, and WHATSAPP_APP_SECRET together to enable signed inbound replies"
     );
   }
 } catch (err) {

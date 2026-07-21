@@ -92,6 +92,28 @@ describe("parseEnv", () => {
       expect(env.corsOrigins).toEqual(["https://app.example.com"]);
     });
 
+    it("requires a complete signed WhatsApp configuration when enabled", () => {
+      expect(() =>
+        parseEnv(
+          prodBase({
+            WHATSAPP_PHONE_NUMBER_ID: "123",
+            WHATSAPP_ACCESS_TOKEN: "token",
+            WHATSAPP_VERIFY_TOKEN: "verify",
+          })
+        )
+      ).toThrow(/WhatsApp production configuration is incomplete/);
+
+      const env = parseEnv(
+        prodBase({
+          WHATSAPP_PHONE_NUMBER_ID: "123",
+          WHATSAPP_ACCESS_TOKEN: "token",
+          WHATSAPP_VERIFY_TOKEN: "verify",
+          WHATSAPP_APP_SECRET: "app-secret",
+        })
+      );
+      expect(env.whatsapp.enabled).toBe(true);
+    });
+
     it("fails when DATABASE_URL is missing", () => {
       expect(() =>
         parseEnv(

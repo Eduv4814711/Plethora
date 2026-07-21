@@ -1,6 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
+import type { UserRole } from "@prisma/client";
+import jwt from "jsonwebtoken";
 import { buildApp } from "../../app.js";
+import { config } from "../../lib/config.js";
 import { prisma } from "../../lib/prisma.js";
 import {
   authHeader,
@@ -14,10 +17,29 @@ const dbReady = await isIntegrationDatabaseAvailable();
 describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
   let app: FastifyInstance;
   let fixture: TenantFixture;
+  let employeeHrToken: string;
+  let payrollHrToken: string;
+
+  function tokenFor(role: UserRole, moduleAccess?: Record<string, "read" | "write">) {
+    const { tenantA } = fixture;
+    return jwt.sign(
+      {
+        sub: tenantA.userId,
+        email: tenantA.email,
+        companyId: tenantA.companyId,
+        role,
+        ...(moduleAccess ? { moduleAccess } : {}),
+      },
+      config.jwt.accessSecret,
+      { expiresIn: "1h" }
+    );
+  }
 
   beforeAll(async () => {
     app = await buildApp();
     fixture = await provisionTenantFixture();
+    employeeHrToken = tokenFor("hr_payroll", { "/employees": "write" });
+    payrollHrToken = tokenFor("hr_payroll", { "/payroll": "write" });
   }, 120_000);
 
   afterAll(async () => {
@@ -30,7 +52,7 @@ describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
     const res = await app.inject({
       method: "PUT",
       url: `/employees/${tenantA.employeeId}`,
-      headers: { ...authHeader(tenantA.accessToken), "content-type": "application/json" },
+      headers: { ...authHeader(employeeHrToken), "content-type": "application/json" },
       payload: { groupId: tenantB.employeeGroupId },
     });
     expect(res.statusCode).toBe(400);
@@ -45,7 +67,7 @@ describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
     const res = await app.inject({
       method: "POST",
       url: "/employees",
-      headers: { ...authHeader(tenantA.accessToken), "content-type": "application/json" },
+      headers: { ...authHeader(employeeHrToken), "content-type": "application/json" },
       payload: {
         employeeNumber: `XT-${fixture.runId}`,
         firstName: "Cross",
@@ -61,6 +83,81 @@ describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
     expect(res.json().message?.gradeId).toBeTruthy();
   });
 
+  it("allows an HR/payroll user with Payroll module access to edit an employee", async () => {
+    const { tenantA } = fixture;
+    const res = await app.inject({
+      method: "PUT",
+      url: `/employees/${tenantA.employeeId}`,
+      headers: { ...authHeader(payrollHrToken), "content-type": "application/json" },
+      payload: { firstName: "Payroll Edit" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().firstName).toBe("Payroll Edit");
+
+    await prisma.employee.update({
+      where: { id: tenantA.employeeId },
+      data: { firstName: "Test" },
+    });
+  });
+
+  it.each<UserRole>(["admin", "operations_manager", "supervisor", "controller", "client"])(
+    "allows employee detail edits for %s users assigned the Team module",
+    async (role) => {
+      const { tenantA } = fixture;
+      const token = tokenFor(role, { "/employees": "write" });
+      const update = await app.inject({
+        method: "PUT",
+        url: `/employees/${tenantA.employeeId}`,
+        headers: { ...authHeader(token), "content-type": "application/json" },
+        payload: { firstName: "Test" },
+      });
+      expect(update.statusCode).toBe(200);
+    }
+  );
+
+  it("allows a Team-assigned supervisor to create employees and change status", async () => {
+    const { tenantA } = fixture;
+    const token = tokenFor("supervisor", { "/employees": "write" });
+    const create = await app.inject({
+      method: "POST",
+      url: "/employees",
+      headers: { ...authHeader(token), "content-type": "application/json" },
+      payload: {
+        employeeNumber: `TEAM-${fixture.runId}`,
+        firstName: "Assigned",
+        lastName: "User",
+        employeeType: "office",
+        monthlySalary: 15000,
+        groupId: tenantA.employeeGroupId,
+      },
+    });
+    expect(create.statusCode).toBe(201);
+
+    const status = await app.inject({
+      method: "POST",
+      url: `/employees/${tenantA.employeeId}/status`,
+      headers: { ...authHeader(token), "content-type": "application/json" },
+      payload: { status: "suspended" },
+    });
+    expect(status.statusCode).toBe(200);
+
+    await prisma.employee.update({
+      where: { id: tenantA.employeeId },
+      data: { status: "active" },
+    });
+  });
+
+  it("denies a broad admin without an explicit private-data module assignment", async () => {
+    const { tenantA } = fixture;
+    const res = await app.inject({
+      method: "PUT",
+      url: `/employees/${tenantA.employeeId}`,
+      headers: { ...authHeader(tenantA.accessToken), "content-type": "application/json" },
+      payload: { firstName: "Not Allowed" },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
   it("returns the sanitized detail DTO (not the raw DB row) on status transition", async () => {
     const { tenantA } = fixture;
     await prisma.employee.update({
@@ -71,7 +168,7 @@ describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
     const res = await app.inject({
       method: "POST",
       url: `/employees/${tenantA.employeeId}/status`,
-      headers: { ...authHeader(tenantA.accessToken), "content-type": "application/json" },
+      headers: { ...authHeader(payrollHrToken), "content-type": "application/json" },
       payload: { status: "suspended" },
     });
     expect(res.statusCode).toBe(200);

@@ -2,6 +2,8 @@ import type { Site } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { config } from "../lib/config.js";
 import { siteHasGeofence, toGeoNumber, haversineMeters } from "../lib/geo.js";
+import { dateKeyInTimeZone, getCompanyTimezone } from "../lib/timezone.js";
+import { normalizeLeaveDate } from "./leave-availability.service.js";
 
 export class AttendanceValidationError extends Error {
   constructor(message: string) {
@@ -12,18 +14,53 @@ export class AttendanceValidationError extends Error {
 
 const CLOCK_IN_WINDOW_MS = config.attendance.clockInWindowMinutes * 60 * 1000;
 
+export async function findApprovedLeaveConflict(companyId: string, employeeId: string, leaveDate: Date) {
+  const [occurrence, application, legacyRecord] = await Promise.all([
+    prisma.leaveOccurrence.findFirst({
+      where: {
+        companyId,
+        employeeId,
+        leaveDate,
+        status: { in: ["APPROVED", "PAYROLL_PROCESSED"] },
+      },
+      select: { id: true, applicationId: true },
+    }),
+    prisma.leaveApplication.findFirst({
+      where: {
+        companyId,
+        employeeId,
+        startDate: { lte: leaveDate },
+        endDate: { gte: leaveDate },
+        status: { in: ["APPROVED", "CANCELLATION_REQUESTED", "PAYROLL_PROCESSED", "ADJUSTMENT_REQUIRED", "IMPORTED_APPROVED"] },
+      },
+      select: { id: true },
+    }),
+    prisma.leaveRecord.findFirst({
+      where: { employeeId, employee: { companyId }, date: leaveDate },
+      select: { id: true },
+    }),
+  ]);
+  return occurrence || application || legacyRecord ? { occurrence, application, legacyRecord } : null;
+}
+
 export async function validateClockIn(
   shiftId: string,
   companyId: string
-): Promise<{
-  shift: { id: string; startTime: Date; endTime: Date };
-}> {
+): Promise<{ shift: { id: string; startTime: Date; endTime: Date } }> {
   const shift = await prisma.shift.findFirst({
     where: { id: shiftId, companyId },
   });
 
   if (!shift) {
     throw new AttendanceValidationError("Shift not found");
+  }
+
+  const timeZone = await getCompanyTimezone(companyId);
+  const shiftDate = normalizeLeaveDate(dateKeyInTimeZone(shift.startTime, timeZone));
+  if (await findApprovedLeaveConflict(companyId, shift.employeeId, shiftDate)) {
+    throw new AttendanceValidationError(
+      "Employee is on approved leave. Cancel or adjust the leave before recording attendance."
+    );
   }
 
   if (shift.status !== "assigned" && shift.status !== "active" && shift.status !== "created") {

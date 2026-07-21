@@ -78,8 +78,8 @@ export interface AuthUser {
   role: string;
   roleLabel?: string | null;
   companyId: string;
-  /** Non-empty list = admin-assigned modules only; omitted/null = use role defaults */
-  moduleAccess?: string[] | null;
+  /** Explicit module permissions; legacy arrays are treated as write grants. */
+  moduleAccess?: ModulePermissions | string[] | null;
 }
 
 export interface LoginResponse {
@@ -497,6 +497,8 @@ export interface UserListItem {
   moduleAccess?: unknown;
   setupLink?: string;
 }
+export type ModulePermission = "read" | "write";
+export type ModulePermissions = Record<string, ModulePermission>;
 
 export async function listUsers(token: string): Promise<{ data: UserListItem[]; total: number }> {
   const res = await authFetch("/users", token);
@@ -542,7 +544,7 @@ export async function createUser(
     sendSetupLink?: boolean;
     role: UserRole;
     roleLabel?: string | null;
-    moduleAccess?: string[] | null;
+    moduleAccess?: ModulePermissions | string[] | null;
   }
 ): Promise<UserListItem> {
   const res = await authFetch("/users", token, {
@@ -560,7 +562,7 @@ export async function createUser(
 export async function updateUser(
   token: string,
   id: string,
-  data: Partial<{ name: string; email: string; password: string; role: UserRole; roleLabel: string | null; moduleAccess: string[] | null }>
+  data: Partial<{ name: string; email: string; password: string; role: UserRole; roleLabel: string | null; moduleAccess: ModulePermissions | string[] | null }>
 ): Promise<UserListItem> {
   const res = await authFetch(`/users/${id}`, token, {
     method: "PUT",
@@ -568,8 +570,7 @@ export async function updateUser(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    const msg = err?.message;
-    throw new Error(typeof msg === "string" ? msg : "Failed to update user");
+    throw new Error(apiErrorMessage(err, "Failed to update user"));
   }
   return res.json();
 }

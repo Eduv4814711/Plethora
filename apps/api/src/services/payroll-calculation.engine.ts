@@ -139,6 +139,10 @@ function timesheetSnapshot(agg: TimesheetAggregate | undefined): PayrollTimeshee
     publicHolidayHours: agg.publicHolidayHours,
     leaveDays: agg.leaveDays,
     leaveHours: agg.leaveHours,
+    unpaidLeaveHours: agg.unpaidLeaveHours ?? 0,
+    uifLeaveHours: agg.uifLeaveHours ?? 0,
+    iodLeaveHours: agg.iodLeaveHours ?? 0,
+    informationLeaveHours: agg.informationLeaveHours ?? 0,
   };
 }
 
@@ -177,8 +181,21 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
     const isFixedMonthly = monthlySalary > 0;
 
     if (isFixedMonthly) {
-      grossPay = monthlySalary;
+      const standardMonthlyHours = emp.employeeType === "office" ? 195 : 208;
+      const unpaidLeaveReduction = round2(
+        Math.min(monthlySalary, (agg?.unpaidLeaveHours ?? 0) * (monthlySalary / standardMonthlyHours))
+      );
+      const uifLeaveReduction = round2(
+        Math.min(monthlySalary - unpaidLeaveReduction, (agg?.uifLeaveHours ?? 0) * (monthlySalary / standardMonthlyHours))
+      );
+      grossPay = round2(monthlySalary - unpaidLeaveReduction - uifLeaveReduction);
       earningsLines.push({ name: "Basic Salary", amount: monthlySalary });
+      if (unpaidLeaveReduction > 0) {
+        earningsLines.push({ name: "Unpaid Leave Reduction", amount: -unpaidLeaveReduction });
+      }
+      if (uifLeaveReduction > 0) {
+        earningsLines.push({ name: "UIF-supported Leave Reduction", amount: -uifLeaveReduction });
+      }
     } else {
       if (hourlyRate === 0 && monthlySalary === 0) {
         const skipReason =

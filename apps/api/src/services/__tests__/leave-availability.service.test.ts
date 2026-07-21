@@ -6,6 +6,7 @@ vi.mock("../../lib/prisma.js", () => ({
       findFirst: vi.fn(),
       findMany: vi.fn(),
       create: vi.fn(),
+      createManyAndReturn: vi.fn(),
       deleteMany: vi.fn(),
     },
     employee: { findFirst: vi.fn() },
@@ -79,6 +80,11 @@ describe("leave-availability.service", () => {
       const { dates } = validateLeaveDateRange("2026-07-20");
       expect(dates).toHaveLength(1);
     });
+
+    it("rejects malformed and impossible dates", () => {
+      expect(() => validateLeaveDateRange("not-a-date")).toThrow(/YYYY-MM-DD/);
+      expect(() => validateLeaveDateRange("2026-02-30")).toThrow(/Invalid leave date/);
+    });
   });
 
   describe("leaveTypeToRosterShiftCode", () => {
@@ -145,7 +151,15 @@ describe("leave-availability.service", () => {
         { id: "lr-1", date: normalizeLeaveDate("2026-07-20") },
         { id: "lr-2", date: normalizeLeaveDate("2026-07-21") },
       ];
-      vi.mocked(prisma.$transaction).mockResolvedValue(created as never);
+      const createManyAndReturn = vi.fn().mockResolvedValue(created);
+      vi.mocked(prisma.$transaction).mockImplementation(async (fn) =>
+        fn({
+          leaveRecord: {
+            findMany: vi.fn().mockResolvedValue([]),
+            createManyAndReturn,
+          },
+        } as never)
+      );
 
       const result = await createLeaveRecordsForRange({
         employeeId: "emp-1",
@@ -158,6 +172,37 @@ describe("leave-availability.service", () => {
       expect(result.days).toBe(2);
       expect(result.records).toHaveLength(2);
       expect(prisma.$transaction).toHaveBeenCalledOnce();
+      expect(createManyAndReturn).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({ date: normalizeLeaveDate("2026-07-20") }),
+          expect.objectContaining({ date: normalizeLeaveDate("2026-07-21") }),
+        ],
+      });
+    });
+
+    it("rejects a range that overlaps existing leave", async () => {
+      const createManyAndReturn = vi.fn();
+      vi.mocked(prisma.$transaction).mockImplementation(async (fn) =>
+        fn({
+          leaveRecord: {
+            findMany: vi.fn().mockResolvedValue([
+              { date: normalizeLeaveDate("2026-07-21") },
+            ]),
+            createManyAndReturn,
+          },
+        } as never)
+      );
+
+      await expect(
+        createLeaveRecordsForRange({
+          employeeId: "emp-1",
+          startDate: "2026-07-20",
+          endDate: "2026-07-22",
+          type: "annual",
+          hours: 8,
+        })
+      ).rejects.toThrow(/already exists.*2026-07-21/);
+      expect(createManyAndReturn).not.toHaveBeenCalled();
     });
   });
 
@@ -208,10 +253,11 @@ describe("leave-availability.service", () => {
         const tx = {
           leaveRecord: {
             deleteMany: vi.fn().mockResolvedValue({ count: 2 }),
-            create: vi
-              .fn()
-              .mockResolvedValueOnce({ id: "lr-new-1" })
-              .mockResolvedValueOnce({ id: "lr-new-2" }),
+            findMany: vi.fn().mockResolvedValue([]),
+            createManyAndReturn: vi.fn().mockResolvedValue([
+              { id: "lr-new-1" },
+              { id: "lr-new-2" },
+            ]),
           },
         };
         return fn(tx as never);

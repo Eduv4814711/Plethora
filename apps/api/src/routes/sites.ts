@@ -180,7 +180,9 @@ export async function sitesRoutes(app: FastifyInstance) {
   const readProtect = [
     authMiddleware,
     requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
-      anyOfModules: ["/sites", "/rostering"],
+      // Attendance work queues and exception filters need site names, while
+      // create/update permissions remain restricted to the Sites module.
+      anyOfModules: ["/sites", "/rostering", "/attendance"],
     }),
   ];
   const manageSites = [

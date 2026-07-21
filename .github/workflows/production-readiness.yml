@@ -1,0 +1,100 @@
+name: Production readiness
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: plethora_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d plethora_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      CI: "true"
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/plethora_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/plethora_test
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Use pinned npm
+        run: npm install --global npm@11.17.0
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Apply every database migration
+        run: npm run db:migrate:deploy
+
+      - name: Test API, including PostgreSQL integration suites
+        run: npm run test --workspace=api
+        env:
+          NODE_ENV: test
+
+      - name: Test web app
+        run: npm run test --workspace=web
+        env:
+          NODE_ENV: test
+
+      - name: Build API
+        run: npm run build --workspace=api
+        env:
+          NODE_ENV: production
+
+      - name: Build web app
+        run: npm run build --workspace=web
+        env:
+          NODE_ENV: production
+
+      - name: Smoke-test production API startup
+        env:
+          NODE_ENV: production
+          JWT_SECRET: ci-production-access-secret-0000000000000001
+          JWT_REFRESH_SECRET: ci-production-refresh-secret-00000000000002
+          CORS_ORIGIN: https://ci.example.test
+          FRONTEND_URL: https://ci.example.test
+          UPLOADS_DIR: ${{ runner.temp }}/plethora-uploads
+          CRON_SECRET: ci-production-cron-secret-00000000000000001
+        run: |
+          npm run start --workspace=api > api-startup.log 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3001/health > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat api-startup.log
+          exit 1

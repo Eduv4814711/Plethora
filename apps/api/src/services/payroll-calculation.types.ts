@@ -1,7 +1,7 @@
 import type { PayPeriod } from "./tax.service.js";
 
 /** Version bumps when snapshot shape or formula semantics change intentionally. */
-export const PAYROLL_CALCULATION_VERSION = "1.1.0";
+export const PAYROLL_CALCULATION_VERSION = "1.2.0";
 
 export interface PayrollRuleSnapshot {
   overtimeMultiplier: number;
@@ -27,6 +27,10 @@ export interface PayrollTimesheetInputSnapshot {
   publicHolidayHours: number;
   leaveDays: number;
   leaveHours: number;
+  unpaidLeaveHours?: number;
+  uifLeaveHours?: number;
+  iodLeaveHours?: number;
+  informationLeaveHours?: number;
 }
 
 export interface PayrollEmployeeContextSnapshot {

@@ -11,6 +11,7 @@ import jwt from "jsonwebtoken";
 import { config } from "../../lib/config.js";
 import { hashPassword } from "../../services/auth.service.js";
 import { normalizeLeaveDate } from "../../services/leave-availability.service.js";
+import { ensureDefaultLeavePolicy } from "../../services/leave-management.service.js";
 
 const dbReady = await isIntegrationDatabaseAvailable();
 
@@ -56,6 +57,28 @@ describe.runIf(dbReady)("leave records API (integration)", () => {
       },
     });
     employeeId = employee.id;
+    const site = await prisma.site.create({
+      data: { companyId, name: `Leave Test Site ${runId}` },
+    });
+    await ensureDefaultLeavePolicy(companyId, user.id);
+    await prisma.leaveTypeDefinition.updateMany({
+      where: { companyId, code: "sick" },
+      data: { requiresDocument: true },
+    });
+    await prisma.leavePolicyVersion.updateMany({
+      where: { companyId },
+      data: {
+        reviewStatus: "ACTIVE",
+        confirmedBy: user.id,
+        confirmedAt: new Date(),
+        negativeBalanceAllowed: true,
+      },
+    });
+    const shifts = [];
+    for (let day = new Date("2026-08-01T06:00:00.000Z"); day <= new Date("2026-11-30T06:00:00.000Z"); day = new Date(day.getTime() + 86_400_000)) {
+      shifts.push({ companyId, employeeId, siteId: site.id, startTime: new Date(day), endTime: new Date(day.getTime() + 12 * 60 * 60 * 1000), shiftType: "day", status: "assigned" as const });
+    }
+    await prisma.shift.createMany({ data: shifts });
   });
 
   afterAll(async () => {
@@ -88,6 +111,51 @@ describe.runIf(dbReady)("leave records API (integration)", () => {
     });
     expect(stored).toHaveLength(3);
     expect(stored.every((r) => r.type === "annual")).toBe(true);
+  });
+
+  it("POST rejects a range that overlaps an existing leave day", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/payroll/leave-records",
+      headers: { ...authHeader(accessToken), "content-type": "application/json" },
+      payload: {
+        employeeId,
+        date: "2026-08-03",
+        endDate: "2026-08-05",
+        type: "sick",
+        hours: 8,
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({
+      error: "LEAVE_OVERLAP",
+      message: expect.stringContaining("overlaps existing active leave"),
+    });
+    const newlyStored = await prisma.leaveRecord.count({
+      where: {
+        employeeId,
+        date: { gte: normalizeLeaveDate("2026-08-04"), lte: normalizeLeaveDate("2026-08-05") },
+      },
+    });
+    expect(newlyStored).toBe(0);
+  });
+
+  it("POST returns a validation error for an impossible date", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/payroll/leave-records",
+      headers: { ...authHeader(accessToken), "content-type": "application/json" },
+      payload: {
+        employeeId,
+        date: "2026-02-30",
+        type: "annual",
+        hours: 8,
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: "Validation error" });
   });
 
   it("DELETE /range removes a single-day leave record (UTC date match)", async () => {
@@ -229,5 +297,110 @@ describe.runIf(dbReady)("leave records API (integration)", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json() as { data: { date: string }[] };
     expect(body.data.some((r) => r.date.startsWith("2026-11-15"))).toBe(true);
+  });
+
+  it("rolls back direct capture when the approval decision fails", async () => {
+    const leaveDate = "2026-11-20";
+    const res = await app.inject({
+      method: "POST",
+      url: "/payroll/leave-records",
+      headers: { ...authHeader(accessToken), "content-type": "application/json" },
+      payload: {
+        employeeId,
+        date: leaveDate,
+        type: "sick",
+        hours: 8,
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: "LEAVE_VALIDATION",
+      message: expect.stringContaining("verified supporting document"),
+    });
+    const date = normalizeLeaveDate(leaveDate);
+    expect(await prisma.leaveApplication.count({
+      where: { companyId, employeeId, startDate: date, endDate: date },
+    })).toBe(0);
+    expect(await prisma.leaveLedgerEntry.count({
+      where: { companyId, employeeId, effectiveDate: date },
+    })).toBe(0);
+    expect(await prisma.leaveRecord.count({
+      where: { employeeId, date, type: "sick" },
+    })).toBe(0);
+  });
+
+  it("rolls back legacy approval when the v2 decision fails", async () => {
+    const leaveDate = "2026-11-21";
+    const request = await prisma.leaveRequest.create({
+      data: {
+        employeeId,
+        date: normalizeLeaveDate(leaveDate),
+        type: "sick",
+        hours: 8,
+        reason: "Medical leave",
+      },
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/payroll/leave-requests/${request.id}/approve`,
+      headers: authHeader(accessToken),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: "Approval failed",
+      message: expect.stringContaining("verified supporting document"),
+    });
+    expect(await prisma.leaveRequest.findUnique({ where: { id: request.id } })).toMatchObject({
+      status: "pending",
+      reviewedBy: null,
+      reviewedAt: null,
+    });
+    expect(await prisma.leaveApplication.count({
+      where: { companyId, legacyLeaveRequestId: request.id },
+    })).toBe(0);
+    expect(await prisma.leaveLedgerEntry.count({
+      where: { companyId, employeeId, effectiveDate: normalizeLeaveDate(leaveDate) },
+    })).toBe(0);
+    expect(await prisma.leaveRecord.count({
+      where: { employeeId, date: normalizeLeaveDate(leaveDate), type: "sick" },
+    })).toBe(0);
+  });
+
+  it("commits legacy rejection and its linked v2 application together", async () => {
+    const leaveDate = "2026-11-22";
+    const request = await prisma.leaveRequest.create({
+      data: {
+        employeeId,
+        date: normalizeLeaveDate(leaveDate),
+        type: "unpaid",
+        hours: 8,
+        reason: "Personal leave",
+      },
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/payroll/leave-requests/${request.id}/reject`,
+      headers: authHeader(accessToken),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ id: request.id, status: "rejected" });
+    const application = await prisma.leaveApplication.findFirstOrThrow({
+      where: { companyId, legacyLeaveRequestId: request.id },
+    });
+    expect(application.status).toBe("REJECTED");
+    const ledger = await prisma.leaveLedgerEntry.findMany({
+      where: { applicationId: application.id },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(ledger.map((entry) => entry.entryType)).toEqual(["RESERVATION", "RESERVATION_RELEASE"]);
+    expect(ledger.reduce((sum, entry) => sum + entry.minutes, 0)).toBe(0);
+    expect(await prisma.leaveRecord.count({
+      where: { employeeId, date: normalizeLeaveDate(leaveDate) },
+    })).toBe(0);
   });
 });

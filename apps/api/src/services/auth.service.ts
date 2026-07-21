@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import { createHash, randomBytes } from "crypto";
 import { config } from "../lib/config.js";
 import type { UserRole } from "@prisma/client";
-import { normalizeModuleAccess } from "../middleware/rbac.js";
+import { normalizeModulePermissions } from "../middleware/rbac.js";
 import { findFirstUserAuthScalars, findManyUserAuthScalars, findUniqueUserAuthScalars } from "../lib/user-module-column.js";
 import {
   isRefreshTokenActive,
@@ -26,7 +26,7 @@ export interface AuthUserPublic {
   role: UserRole;
   roleLabel?: string | null;
   companyId: string;
-  moduleAccess: string[] | null;
+  moduleAccess: Record<string, "read" | "write"> | null;
 }
 
 export interface AuthResult {
@@ -54,7 +54,7 @@ function buildPayload(user: {
   role: UserRole;
   moduleAccess?: unknown;
 }) {
-  const moduleAccess = normalizeModuleAccess(user.moduleAccess);
+  const moduleAccess = normalizeModulePermissions(user.moduleAccess);
   return {
     sub: user.id,
     email: user.email,
@@ -73,7 +73,7 @@ function issueJwtPair(user: {
   name: string;
   roleLabel?: string | null;
 }): AuthResult {
-  const moduleAccess = normalizeModuleAccess(user.moduleAccess);
+  const moduleAccess = normalizeModulePermissions(user.moduleAccess);
   const payload = buildPayload(user);
 
   const accessToken = jwt.sign(payload, config.jwt.accessSecret, {

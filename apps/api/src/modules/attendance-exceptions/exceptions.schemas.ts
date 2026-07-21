@@ -1,4 +1,9 @@
 import { z } from "zod";
+import { isValidExceptionPeriodValue } from "./exception-period.js";
+
+const periodValueSchema = z
+  .string()
+  .refine(isValidExceptionPeriodValue, "Invalid period date");
 
 export const listExceptionsQuerySchema = z.object({
   status: z
@@ -8,10 +13,15 @@ export const listExceptionsQuerySchema = z.object({
   exceptionType: z.string().optional(),
   siteId: z.string().optional(),
   employeeId: z.string().optional(),
-  periodStart: z.string().optional(),
-  periodEnd: z.string().optional(),
+  periodStart: periodValueSchema.optional(),
+  periodEnd: periodValueSchema.optional(),
   limit: z.coerce.number().int().min(1).max(200).optional().default(50),
   offset: z.coerce.number().int().min(0).optional().default(0),
+});
+
+export const exceptionAnalyticsQuerySchema = z.object({
+  periodStart: periodValueSchema.optional(),
+  periodEnd: periodValueSchema.optional(),
 });
 
 export const reviewExceptionBodySchema = z.object({

@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma.js";
+import { randomUUID } from "node:crypto";
 import { config } from "../../lib/config.js";
 import {
   validateClockIn,
@@ -12,10 +13,19 @@ import { generatePayslipPDFFromTemplate } from "../../services/payslip-pdf.servi
 import { generateRosterPDF } from "../../services/roster-pdf.service.js";
 import { sendText, sendDocument, sendInteractiveList } from "./send.service.js";
 import { createAuditLog } from "../../lib/audit.js";
+import { storage } from "../../lib/storage.js";
+import { extensionForMime, matchesMagicBytes, sanitizeUploadFilename } from "../../lib/upload-validation.js";
 import { triggerPostClockExceptionSync } from "../../modules/attendance-exceptions/post-clock-sync.js";
 import { getCompanyTimezone } from "../../lib/timezone.js";
 import { addDays, format } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
+import {
+  cancelOrWithdrawLeave,
+  createLeaveApplication,
+  getLeaveBalances,
+  listLeaveApplications,
+  LeaveManagementError,
+} from "../../services/leave-management.service.js";
 
 type EmployeeWithCompany = {
   id: string;
@@ -24,6 +34,30 @@ type EmployeeWithCompany = {
   lastName: string;
   phone: string | null;
 };
+
+const MAX_LEAVE_DOCUMENT_BYTES = 10 * 1024 * 1024;
+const WHATSAPP_MEDIA_TIMEOUT_MS = 30_000;
+
+export async function readResponseBodyWithLimit(response: Response, maxBytes: number): Promise<Buffer> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("EMPTY_MEDIA_BODY");
+  const chunks: Buffer[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = Buffer.from(value);
+      total += chunk.length;
+      if (total > maxBytes) throw new Error("FILE_TOO_LARGE");
+      chunks.push(chunk);
+    }
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    throw error;
+  }
+  return Buffer.concat(chunks, total);
+}
 
 /**
  * Normalize phone for matching. WhatsApp sends IDs like "27821234567" (no +).
@@ -53,12 +87,10 @@ export async function findEmployeeByPhone(waId: string): Promise<EmployeeWithCom
     select: { id: true, companyId: true, firstName: true, lastName: true, phone: true },
   });
 
-  for (const emp of employees) {
-    if (normalizeStoredPhone(emp.phone) === normalized) {
-      return emp;
-    }
-  }
-  return null;
+  const matches = employees.filter((employee) => normalizeStoredPhone(employee.phone) === normalized);
+  // A WhatsApp sender has no tenant identifier. Never guess when the same
+  // normalized phone is active on multiple employee rows or companies.
+  return matches.length === 1 ? matches[0]! : null;
 }
 
 const HELP_TEXT = `*Plethora - Commands*
@@ -66,8 +98,13 @@ const HELP_TEXT = `*Plethora - Commands*
 • *clock out* / *out* - Clock out (same for geofenced sites)
 • *payslip* - Request your latest payslip
 • *roster* / *schedule* / *shifts* / *my shifts* - Upcoming shifts (PDF, mobile-friendly)
-• *leave YYYY-MM-DD type* - Apply for leave (e.g. leave 2025-03-15 annual)
-  Types: annual, sick, family, maternity, parental, unpaid
+• *leave YYYY-MM-DD YYYY-MM-DD type* - Apply for a date range
+  Add *4h* (or another duration) for partial leave
+  Types: annual, sick, family, parental, adoption, commissioning, maternity, study, special, iod, unpaid
+• *leave balance* - Check your current balances
+• *leave status* / *leave history* - Check applications
+• *leave withdraw APPLICATION_ID* - Withdraw or request cancellation
+• Send evidence with caption *leave APPLICATION_ID*
 • *help* - Show this menu`;
 
 const INTERACTIVE_ID_TO_CMD: Record<string, string> = {
@@ -157,11 +194,20 @@ export async function processIncomingMessage(
     return handleRoster(employee, from);
   }
 
+  if (cmd === "leave status" || cmd === "leave history") {
+    return handleLeaveHistory(employee);
+  }
+  if (cmd === "leave balance" || cmd === "balance") {
+    return handleLeaveBalance(employee);
+  }
+  if (cmd.startsWith("leave withdraw ")) {
+    return handleLeaveWithdrawal(employee, cmd.slice("leave withdraw ".length).trim());
+  }
   if (cmd.startsWith("leave ") || cmd === "apply leave") {
     if (cmd === "apply leave") {
       return {
         reply:
-          "Format: leave YYYY-MM-DD type\nExample: leave 2025-03-15 annual\nTypes: annual, sick, family, maternity, parental, unpaid",
+          "Format: leave YYYY-MM-DD [end-date] type [reason]\nExample: leave 2026-08-01 2026-08-03 annual Family trip\nUse 'leave balance', 'leave status', or 'leave withdraw ID'.",
       };
     }
     return handleLeave(employee, cmd);
@@ -611,6 +657,11 @@ const LEAVE_TYPE_ALIASES: Record<string, string> = {
   family_responsibility: "family_responsibility",
   maternity: "maternity",
   parental: "parental",
+  adoption: "adoption",
+  commissioning: "commissioning_parental",
+  study: "study",
+  special: "special",
+  iod: "injury_on_duty",
   unpaid: "unpaid",
 };
 
@@ -618,15 +669,18 @@ async function handleLeave(
   employee: EmployeeWithCompany,
   cmd: string
 ): Promise<{ reply: string }> {
-  const match = cmd.match(/leave\s+(\d{4}-\d{2}-\d{2})\s+(\w+)(?:\s+(.+))?/i);
+  const match = cmd.match(/leave\s+(\d{4}-\d{2}-\d{2})(?:\s+(\d{4}-\d{2}-\d{2}))?\s+(\w+)(?:\s+(.+))?/i);
   if (!match) {
     return {
       reply:
-        "Format: leave YYYY-MM-DD type\nExample: leave 2025-03-15 annual\nTypes: annual, sick, family, maternity, parental, unpaid",
+        "Format: leave YYYY-MM-DD [end-date] type [reason]\nExample: leave 2026-08-01 2026-08-03 annual Family trip",
     };
   }
 
-  const [, dateStr, typeInput, reason] = match;
+  const [, dateStr, endDateStr, typeInput, trailing] = match;
+  const partial = trailing?.match(/^(\d+(?:\.\d+)?)h(?:\s+(.+))?$/i);
+  const requestedMinutesPerDay = partial ? Math.round(Number(partial[1]) * 60) : undefined;
+  const reason = partial ? partial[2] : trailing;
   const date = new Date(dateStr);
   date.setHours(0, 0, 0, 0);
 
@@ -634,39 +688,79 @@ async function handleLeave(
     return { reply: "Invalid date. Use YYYY-MM-DD format." };
   }
 
-  if (date < new Date()) {
-    return { reply: "Cannot apply for leave in the past." };
-  }
-
   const type = LEAVE_TYPE_ALIASES[typeInput.toLowerCase()];
   if (!type) {
-    return { reply: "Leave type must be: annual, sick, family, maternity, parental, or unpaid." };
+    return { reply: "Unknown leave type. Use annual, sick, family, parental, adoption, commissioning, study, special, iod, or unpaid." };
   }
-
-  const record = await prisma.leaveRequest.create({
-    data: {
+  try {
+    const application = await createLeaveApplication({
+      companyId: employee.companyId,
       employeeId: employee.id,
-      date,
-      type,
-      hours: 8,
-      reason: reason?.trim() || null,
-      status: "pending",
-    },
-  });
+      leaveTypeCode: type,
+      startDate: dateStr,
+      endDate: endDateStr,
+      requestedMinutesPerDay,
+      reason: reason?.trim(),
+      retrospectiveReason: date < new Date() ? reason?.trim() : undefined,
+      source: "WHATSAPP",
+      idempotencyKey: `wa:${employee.id}:${dateStr}:${endDateStr ?? dateStr}:${type}`,
+    });
+    const leaveDate = endDateStr
+      ? `${format(date, "d MMM yyyy")} to ${format(new Date(`${endDateStr}T00:00:00Z`), "d MMM yyyy")}`
+      : format(date, "d MMM yyyy");
+    const leaveType = type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, " ");
+    return { reply: `Leave ${application.id} submitted for ${leaveDate} (${leaveType}). HR will review it.` };
+  } catch (error) {
+    return { reply: error instanceof LeaveManagementError ? error.message : "Could not submit leave. Contact HR." };
+  }
+}
 
-  await createAuditLog({
-    companyId: employee.companyId,
-    action: "leave_request.create",
-    entityType: "leave_request",
-    entityId: record.id,
-    metadata: { source: "whatsapp", from: employee.phone },
-  });
-
-  const leaveDate = format(date, "d MMM yyyy");
-  const leaveType = type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, " ");
+async function handleLeaveHistory(employee: EmployeeWithCompany): Promise<{ reply: string }> {
+  const result = await listLeaveApplications(employee.companyId, { employeeId: employee.id, limit: 5 });
+  if (!result.data.length) return { reply: "You have no leave applications." };
   return {
-    reply: `Leave request submitted for ${leaveDate} (${leaveType}). HR will review shortly.`,
+    reply: result.data.map((item) =>
+      `${item.id} — ${item.leaveType.name}: ${item.startDate.toISOString().slice(0, 10)} to ${item.endDate.toISOString().slice(0, 10)} (${item.status.toLowerCase().replace(/_/g, " ")})`
+    ).join("\n"),
   };
+}
+
+async function handleLeaveBalance(employee: EmployeeWithCompany): Promise<{ reply: string }> {
+  const balances = await getLeaveBalances(employee.companyId, employee.id);
+  if (!balances.length) return { reply: "No confirmed opening leave balances are available yet. Contact HR." };
+  return {
+    reply: balances.map((balance) =>
+      `${balance.leaveType?.name ?? "Leave"}: ${(balance.available / 60).toFixed(2)} hours available (${(balance.reserved / 60).toFixed(2)} reserved)`
+    ).join("\n"),
+  };
+}
+
+async function handleLeaveWithdrawal(employee: EmployeeWithCompany, applicationId: string): Promise<{ reply: string }> {
+  const application = await prisma.leaveApplication.findFirst({ where: { id: applicationId, companyId: employee.companyId, employeeId: employee.id } });
+  if (!application) return { reply: "Leave application not found." };
+  if (["DRAFT", "SUBMITTED", "PENDING_HR"].includes(application.status)) {
+    try {
+      await cancelOrWithdrawLeave({ companyId: employee.companyId, applicationId, reason: "Withdrawn by employee through verified WhatsApp" });
+      return { reply: `Leave application ${applicationId} was withdrawn.` };
+    } catch (error) {
+      return { reply: error instanceof Error ? error.message : "Could not withdraw leave." };
+    }
+  }
+  if (application.status === "CANCELLATION_REQUESTED") {
+    return { reply: `Cancellation for ${applicationId} is already awaiting HR review.` };
+  }
+  if (["APPROVED", "IMPORTED_APPROVED", "PAYROLL_PROCESSED"].includes(application.status)) {
+    await prisma.$transaction(async (tx) => {
+      const changed = await tx.leaveApplication.updateMany({
+        where: { id: application.id, companyId: employee.companyId, employeeId: employee.id, status: application.status, version: application.version },
+        data: { status: "CANCELLATION_REQUESTED", version: { increment: 1 } },
+      });
+      if (changed.count !== 1) throw new LeaveManagementError("Leave application changed while the cancellation was requested; try again");
+      await tx.leaveAuditEvent.create({ data: { companyId: employee.companyId, employeeId: employee.id, applicationId: application.id, eventType: "CANCELLATION_REQUESTED", reason: "Requested by employee through verified WhatsApp", previousValue: { status: application.status }, newValue: { status: "CANCELLATION_REQUESTED" } } });
+    });
+    return { reply: `Cancellation requested for ${applicationId}. HR must approve it.` };
+  }
+  return { reply: `Leave application ${applicationId} cannot be withdrawn from its current status.` };
 }
 
 function sanitizePdfFilenamePart(s: string): string {
@@ -793,6 +887,69 @@ export async function processLocationAndSend(
 ): Promise<void> {
   const result = await processIncomingLocation(from, latitude, longitude);
   await deliverProcessResult(from, result);
+}
+
+export async function processLeaveDocumentAndSend(
+  from: string,
+  mediaId: string,
+  declaredMimeType: string,
+  filename: string | undefined,
+  caption: string | undefined
+): Promise<void> {
+  const employee = await findEmployeeByPhone(from);
+  if (!employee) return deliverProcessResult(from, { reply: "Phone number not registered. Contact HR to update your details." });
+  const applicationId = caption?.trim().match(/^leave\s+([A-Za-z0-9_-]+)$/i)?.[1];
+  if (!applicationId) return deliverProcessResult(from, { reply: "To attach evidence, caption the image or PDF: leave APPLICATION_ID" });
+  const application = await prisma.leaveApplication.findFirst({ where: { id: applicationId, companyId: employee.companyId, employeeId: employee.id, status: { in: ["DRAFT", "SUBMITTED", "PENDING_HR", "APPROVED"] } } });
+  if (!application) return deliverProcessResult(from, { reply: "That active leave application was not found for your verified phone number." });
+  const allowed = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
+  if (!allowed.has(declaredMimeType)) return deliverProcessResult(from, { reply: "Leave evidence must be a PDF, JPEG, PNG, or WebP file." });
+  const auth = { Authorization: `Bearer ${config.whatsapp.accessToken}` };
+  let metadataResponse: Response;
+  try {
+    metadataResponse = await fetch(`https://graph.facebook.com/${config.whatsapp.apiVersion}/${encodeURIComponent(mediaId)}?phone_number_id=${encodeURIComponent(config.whatsapp.phoneNumberId)}`, { headers: auth, signal: AbortSignal.timeout(WHATSAPP_MEDIA_TIMEOUT_MS) });
+  } catch {
+    return deliverProcessResult(from, { reply: "WhatsApp could not retrieve that file. Please send it again." });
+  }
+  if (!metadataResponse.ok) return deliverProcessResult(from, { reply: "WhatsApp could not retrieve that file. Please send it again." });
+  const metadata = await metadataResponse.json() as { url?: string; mime_type?: string; file_size?: number };
+  if (!metadata.url || (metadata.file_size ?? 0) > MAX_LEAVE_DOCUMENT_BYTES) return deliverProcessResult(from, { reply: "The leave document is missing or exceeds the 10MB limit." });
+  let download: Response;
+  try {
+    download = await fetch(metadata.url, { headers: auth, signal: AbortSignal.timeout(WHATSAPP_MEDIA_TIMEOUT_MS) });
+  } catch {
+    return deliverProcessResult(from, { reply: "The WhatsApp file link expired. Please send the document again." });
+  }
+  if (!download.ok) return deliverProcessResult(from, { reply: "The WhatsApp file link expired. Please send the document again." });
+  const contentLength = Number(download.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_LEAVE_DOCUMENT_BYTES) {
+    return deliverProcessResult(from, { reply: "The leave document is missing or exceeds the 10MB limit." });
+  }
+  const mimeType = (metadata.mime_type ?? download.headers.get("content-type") ?? declaredMimeType).split(";", 1)[0]!.trim().toLowerCase();
+  let buffer: Buffer;
+  try {
+    buffer = await readResponseBodyWithLimit(download, MAX_LEAVE_DOCUMENT_BYTES);
+  } catch {
+    return deliverProcessResult(from, { reply: "The leave document failed file type or size validation." });
+  }
+  if (!allowed.has(mimeType) || !matchesMagicBytes(buffer, mimeType)) {
+    return deliverProcessResult(from, { reply: "The leave document failed file type or size validation." });
+  }
+  const safeName = sanitizeUploadFilename(filename ?? `whatsapp-evidence.${extensionForMime(mimeType)}`);
+  const key = `leave-private/${employee.companyId}/${application.id}/${randomUUID()}.${extensionForMime(mimeType)}`;
+  await storage.uploadFile({ key, body: buffer, contentType: mimeType });
+  try {
+    await prisma.$transaction(async (tx) => {
+      const document = await tx.leaveApplicationDocument.create({ data: { applicationId: application.id, documentType: "supporting_document", fileUrl: storage.getAssetUrl(key), fileName: safeName, mimeType, fileSize: buffer.length, uploadedByEmployeeId: employee.id } });
+      await tx.leaveAuditEvent.create({ data: { companyId: employee.companyId, employeeId: employee.id, applicationId: application.id, eventType: "DOCUMENT_UPLOADED_VIA_WHATSAPP", newValue: { documentId: document.id, fileName: safeName } } });
+    });
+  } catch (error) {
+    await storage.deleteFile(key).catch((cleanupError) => {
+      console.error("Failed to remove orphaned WhatsApp leave document", cleanupError);
+    });
+    throw error;
+  }
+  await deliverProcessResult(from, { reply: `Evidence received for leave ${application.id}. HR must verify it before approval.` });
 }
 
 export async function sendUnsupportedTypeReply(from: string): Promise<void> {

@@ -36,6 +36,7 @@ import { publicHolidaysRoutes } from "./routes/public-holidays.js";
 import { timesheetsRoutes } from "./routes/timesheets.js";
 import { leaveRecordsRoutes } from "./routes/leave-records.js";
 import { leaveRequestsRoutes } from "./routes/leave-requests.js";
+import { leaveManagementRoutes } from "./routes/leave-management.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { auditRoutes } from "./routes/audit.js";
 import { settingsRoutes } from "./routes/settings.js";
@@ -125,6 +126,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     await app.register(fastifyStatic, {
       root: uploadsRoot,
       prefix: "/uploads/",
+      allowedPath: (pathName) => !pathName.replace(/^[\\/]+/, "").startsWith("leave-private/"),
     });
   }
 
@@ -195,6 +197,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(timesheetsRoutes, { prefix: "/payroll/timesheets" });
   await app.register(leaveRecordsRoutes, { prefix: "/payroll/leave-records" });
   await app.register(leaveRequestsRoutes, { prefix: "/payroll/leave-requests" });
+  await app.register(leaveManagementRoutes, { prefix: "/leave" });
   await app.register(dashboardRoutes, { prefix: "/dashboard" });
   await app.register(auditRoutes, { prefix: "/audit" });
   await app.register(settingsRoutes, { prefix: "/settings" });

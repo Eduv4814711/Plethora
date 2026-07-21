@@ -8,6 +8,7 @@ export const prisma =
   new PrismaClient({
     adapter: new PrismaPg({
       connectionString:
+        (process.env.NODE_ENV === "test" ? process.env.TEST_DATABASE_URL : undefined) ??
         process.env.DATABASE_URL ?? "postgresql://localhost:5432/plethora",
     }),
     log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],

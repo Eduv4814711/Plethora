@@ -4,10 +4,25 @@ import type { JWTPayload } from "../lib/types.js";
 
 /** Normalize DB/JWT value: non-empty string[] → list; else null (full admin only; others must be assigned modules). */
 export function normalizeModuleAccess(raw: unknown): string[] | null {
+  const permissions = normalizeModulePermissions(raw);
+  return permissions ? Object.keys(permissions) : null;
+}
+
+export type ModulePermission = "read" | "write";
+export type ModulePermissions = Record<string, ModulePermission>;
+
+/** Normalize both the legacy path array and the granular permission map. */
+export function normalizeModulePermissions(raw: unknown): ModulePermissions | null {
   if (raw == null) return null;
-  if (!Array.isArray(raw)) return null;
-  const out = raw.filter((x): x is string => typeof x === "string" && x.startsWith("/"));
-  return out.length > 0 ? out : null;
+  const out: ModulePermissions = {};
+  if (Array.isArray(raw)) {
+    for (const path of raw) if (typeof path === "string" && path.startsWith("/")) out[path] = "write";
+  } else if (typeof raw === "object") {
+    for (const [path, permission] of Object.entries(raw as Record<string, unknown>)) {
+      if (path.startsWith("/") && (permission === "read" || permission === "write")) out[path] = permission;
+    }
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 function matchesModule(granted: string[], modulePath: string): boolean {
@@ -15,9 +30,19 @@ function matchesModule(granted: string[], modulePath: string): boolean {
 }
 
 function userMatchesModule(user: JWTPayload, modulePath: string): boolean {
-  const list = normalizeModuleAccess(user.moduleAccess);
-  if (!list) return false;
-  return matchesModule(list, modulePath);
+  return Boolean(findModulePermission(user, modulePath));
+}
+
+function findModulePermission(user: JWTPayload, modulePath: string): ModulePermission | null {
+  const permissions = normalizeModulePermissions(user.moduleAccess);
+  if (!permissions) return null;
+  // A nested grant is more specific than its parent. Without this ordering,
+  // object insertion order could make `/employees:read` override an explicit
+  // `/employees/leave:write` grant (or vice versa).
+  const match = Object.keys(permissions)
+    .filter((m) => modulePath === m || modulePath.startsWith(`${m}/`))
+    .sort((a, b) => b.length - a.length)[0];
+  return match ? permissions[match] : null;
 }
 
 function userMatchesAnyModule(user: JWTPayload, modulePaths: string[]): boolean {
@@ -69,8 +94,12 @@ export function requireRole(
     }
 
     if (custom) {
+      const requiresWrite = request.method !== "GET" && request.method !== "HEAD";
       if (opts?.anyOfModules?.length) {
-        if (userMatchesAnyModule(u, opts.anyOfModules)) {
+        if (opts.anyOfModules.some((p) => {
+          const permission = findModulePermission(u, p);
+          return permission === "write" || (!requiresWrite && permission === "read");
+        })) {
           return;
         }
         reply.code(403).send({
@@ -80,7 +109,8 @@ export function requireRole(
         return;
       }
       if (opts?.module) {
-        if (userMatchesModule(u, opts.module)) {
+        const permission = findModulePermission(u, opts.module);
+        if (permission === "write" || (!requiresWrite && permission === "read")) {
           return;
         }
         reply.code(403).send({
@@ -134,5 +164,5 @@ export function canViewSensitiveCompanyFields(user: JWTPayload): boolean {
   if (user.role === "admin" && !normalizeModuleAccess(user.moduleAccess)) {
     return true;
   }
-  return userMatchesAnyModule(user, ["/settings", "/payroll"]);
+  return ["/settings", "/payroll"].some((module) => findModulePermission(user, module) === "write");
 }

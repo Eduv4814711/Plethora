@@ -208,6 +208,18 @@ function assertProductionEnv(raw: RawEnv): void {
     errors.push("ENCRYPTION_KEY must not use an example placeholder value.");
   }
 
+  const whatsappValues = [
+    raw.WHATSAPP_PHONE_NUMBER_ID,
+    raw.WHATSAPP_ACCESS_TOKEN,
+    raw.WHATSAPP_VERIFY_TOKEN,
+    raw.WHATSAPP_APP_SECRET,
+  ];
+  if (whatsappValues.some(Boolean) && !whatsappValues.every(Boolean)) {
+    errors.push(
+      "WhatsApp production configuration is incomplete. Set WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_ACCESS_TOKEN, WHATSAPP_VERIFY_TOKEN, and WHATSAPP_APP_SECRET together, or leave all four unset."
+    );
+  }
+
   if (errors.length > 0) {
     throw new Error(
       `Invalid production environment configuration:\n${errors.map((e) => `- ${e}`).join("\n")}`
@@ -262,7 +274,12 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     host: raw.HOST ?? "0.0.0.0",
     trustProxy: raw.TRUST_PROXY ?? isProduction,
     whatsapp: {
-      enabled: !!(phoneNumberId && accessToken && verifyToken),
+      enabled: !!(
+        phoneNumberId &&
+        accessToken &&
+        verifyToken &&
+        (!isProduction || appSecret)
+      ),
       phoneNumberId,
       accessToken,
       verifyToken,

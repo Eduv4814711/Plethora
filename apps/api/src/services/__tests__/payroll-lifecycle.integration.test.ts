@@ -41,11 +41,18 @@ describe.runIf(dbReady)("payroll lifecycle smoke test (integration)", () => {
         email: `payroll-smoke-${runId}@plethora-test.local`,
         passwordHash: await hashPassword("payroll-smoke-password-32chars!!"),
         role: "admin",
+        moduleAccess: { "/payroll": "write" },
       },
     });
 
     accessToken = jwt.sign(
-      { sub: user.id, email: user.email, companyId, role: user.role },
+      {
+        sub: user.id,
+        email: user.email,
+        companyId,
+        role: user.role,
+        moduleAccess: user.moduleAccess,
+      },
       config.jwt.accessSecret,
       { expiresIn: "1h" }
     );

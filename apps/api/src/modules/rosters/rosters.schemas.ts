@@ -129,7 +129,7 @@ export const siteTimesheetRowUpdateSchema = z.object({
 });
 
 export const siteTimesheetRowCreateSchema = z.object({
-  workDate: z.string().min(1),
+  workDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Work date must use YYYY-MM-DD"),
   actualGuardId: z.string().min(1),
   actualShiftCode: z.string().min(1),
   actualShiftType: z.string().min(1),

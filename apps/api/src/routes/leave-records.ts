@@ -7,12 +7,17 @@ import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 import { readStreamToBuffer, storage } from "../lib/storage.js";
 import {
-  createLeaveRecordsForRange,
   deleteLeaveRecordsForRange,
   LeaveAvailabilityError,
   replaceLeaveRecordRange,
   validateLeaveDateRange,
 } from "../services/leave-availability.service.js";
+import {
+  createLeaveApplication,
+  decideLeaveApplication,
+  LeaveManagementError,
+} from "../services/leave-management.service.js";
+import { reconcileContinuityForEmployee } from "../modules/rosters/roster-continuity.service.js";
 
 const SA_LEAVE_TYPES = ["annual", "sick", "family_responsibility", "maternity", "parental", "unpaid"] as const;
 
@@ -34,7 +39,7 @@ const createLeaveRecordSchema = z.object({
   /** End date (inclusive). When set, one leave record is created per calendar day in the range. */
   endDate: z.string().optional(),
   type: z.enum(SA_LEAVE_TYPES),
-  hours: z.number().min(0).max(24).default(8),
+  hours: z.number().positive().max(24).default(8),
 });
 
 const leaveRangeSchema = z.object({
@@ -48,8 +53,40 @@ const updateLeaveRangeSchema = leaveRangeSchema.extend({
   newStartDate: z.string(),
   newEndDate: z.string().optional(),
   newType: z.enum(SA_LEAVE_TYPES),
-  hours: z.number().min(0).max(24).default(8),
+  hours: z.number().positive().max(24).default(8),
 });
+
+async function legacyMutationBlocker(companyId: string, employeeId: string, startDate: string, endDate: string) {
+  const range = validateLeaveDateRange(startDate, endDate);
+  const [application, lockedPayroll] = await Promise.all([
+    prisma.leaveApplication.findFirst({
+      where: {
+        companyId,
+        employeeId,
+        startDate: { lte: range.end },
+        endDate: { gte: range.start },
+      },
+      select: { id: true, status: true },
+    }),
+    prisma.payrollRun.findFirst({
+      where: {
+        companyId,
+        status: { in: ["approved", "paid"] },
+        periodStart: { lte: range.end },
+        periodEnd: { gte: range.start },
+        items: { some: { employeeId } },
+      },
+      select: { id: true, status: true },
+    }),
+  ]);
+  if (application) {
+    return `This legacy row is controlled by leave application ${application.id} (${application.status.toLowerCase()}); cancel or adjust the application instead.`;
+  }
+  if (lockedPayroll) {
+    return `Leave affecting ${lockedPayroll.status} payroll ${lockedPayroll.id} is immutable; create a reversing adjustment in an open run.`;
+  }
+  return null;
+}
 
 export async function leaveRecordsRoutes(app: FastifyInstance) {
   const protect = [
@@ -212,6 +249,35 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
       },
     });
 
+    const application = await prisma.leaveApplication.findFirst({
+      where: {
+        companyId,
+        employeeId,
+        leaveType: { code: "sick" },
+        startDate: range.start,
+        endDate: range.end,
+        status: { in: ["PENDING_HR", "APPROVED", "PAYROLL_PROCESSED"] },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (application && userId) {
+      await prisma.leaveApplicationDocument.create({
+        data: {
+          applicationId: application.id,
+          documentType: "medical_certificate",
+          fileUrl,
+          fileName: originalName,
+          mimeType: mimetype,
+          fileSize: fileBuffer.length,
+          uploadedById: userId,
+          reviewStatus: "VERIFIED",
+          verifiedById: userId,
+          verifiedAt: new Date(),
+          reviewNote: "Verified during HR direct capture",
+        },
+      });
+    }
+
     await createAuditLog({
       userId: userId!,
       companyId,
@@ -234,6 +300,12 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
     }
 
     const companyId = request.user!.companyId;
+    if (request.user!.role !== "admin" && request.user!.role !== "hr_payroll") {
+      return reply.code(403).send({
+        error: "Forbidden",
+        message: "Only HR/payroll or a company administrator may record approved leave",
+      });
+    }
     const employee = await prisma.employee.findFirst({
       where: { id: parsed.data.employeeId, companyId },
     });
@@ -242,33 +314,47 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
     }
 
     try {
-      const { records, days } = await createLeaveRecordsForRange({
-        employeeId: parsed.data.employeeId,
-        startDate: parsed.data.date,
-        endDate: parsed.data.endDate,
-        type: parsed.data.type,
-        hours: parsed.data.hours,
-      });
-
-      await createAuditLog({
-        userId: request.user!.sub,
-        companyId,
-        action: "leave_record.create",
-        entityType: "leave_record",
-        entityId: records[0]?.id ?? "",
-        metadata: {
+      const { application, records } = await prisma.$transaction(async (tx) => {
+        const application = await createLeaveApplication({
+          companyId,
           employeeId: parsed.data.employeeId,
-          days,
+          leaveTypeCode: parsed.data.type,
           startDate: parsed.data.date,
-          endDate: parsed.data.endDate ?? parsed.data.date,
-        },
-      });
+          endDate: parsed.data.endDate,
+          requestedMinutesPerDay: Math.round(parsed.data.hours * 60),
+          reason: "Approved leave recorded by HR",
+          retrospectiveReason: parsed.data.date < new Date().toISOString().slice(0, 10)
+            ? "Retrospective leave recorded through legacy-compatible HR form"
+            : undefined,
+          source: "ADMIN",
+          actorId: request.user!.sub,
+          legacyFullDayCapture: true,
+        }, { transaction: tx });
+        const approved = await decideLeaveApplication({
+          companyId,
+          applicationId: application.id,
+          actorId: request.user!.sub,
+          actorRole: request.user!.role,
+          decision: "approve",
+          reason: "Approved during direct HR capture",
+        }, { transaction: tx });
+        const legacyRecordIds = Array.isArray(approved?.legacyLeaveRecordIds)
+          ? approved.legacyLeaveRecordIds.filter((id): id is string => typeof id === "string")
+          : [];
+        const records = await tx.leaveRecord.findMany({ where: { id: { in: legacyRecordIds } } });
+        return { application, records };
+      }, { maxWait: 5_000, timeout: 30_000 });
+      await reconcileContinuityForEmployee(parsed.data.employeeId, companyId, "leave_approved").catch(() => undefined);
+      const days = records.length;
 
       if (records.length === 1) {
         return reply.code(201).send(records[0]);
       }
-      return reply.code(201).send({ data: records, days });
+      return reply.code(201).send({ data: records, days, applicationId: application.id });
     } catch (err) {
+      if (err instanceof LeaveManagementError) {
+        return reply.code(err.statusCode).send({ error: err.code, message: err.message });
+      }
       if (err instanceof LeaveAvailabilityError) {
         return reply.code(400).send({ error: "Validation error", message: err.message });
       }
@@ -286,8 +372,13 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
     }
 
     const companyId = request.user!.companyId;
+    if (request.user!.role !== "admin" && request.user!.role !== "hr_payroll") {
+      return reply.code(403).send({ error: "Forbidden", message: "Only HR/payroll or a company administrator may change leave" });
+    }
 
     try {
+      const blocked = await legacyMutationBlocker(companyId, parsed.data.employeeId, parsed.data.startDate, parsed.data.endDate);
+      if (blocked) return reply.code(409).send({ error: "Authoritative leave is immutable", message: blocked });
       const { records, days } = await replaceLeaveRecordRange({
         companyId,
         employeeId: parsed.data.employeeId,
@@ -341,8 +432,13 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
     }
 
     const companyId = request.user!.companyId;
+    if (request.user!.role !== "admin" && request.user!.role !== "hr_payroll") {
+      return reply.code(403).send({ error: "Forbidden", message: "Only HR/payroll or a company administrator may cancel leave" });
+    }
 
     try {
+      const blocked = await legacyMutationBlocker(companyId, parsed.data.employeeId, parsed.data.startDate, parsed.data.endDate);
+      if (blocked) return reply.code(409).send({ error: "Authoritative leave is immutable", message: blocked });
       const deleted = await deleteLeaveRecordsForRange({
         companyId,
         employeeId: parsed.data.employeeId,

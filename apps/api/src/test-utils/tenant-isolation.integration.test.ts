@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
+import jwt from "jsonwebtoken";
 import { buildApp } from "../app.js";
+import { config } from "../lib/config.js";
 import {
   authHeader,
   isIntegrationDatabaseAvailable,
@@ -13,10 +15,22 @@ const dbReady = await isIntegrationDatabaseAvailable();
 describe.runIf(dbReady)("tenant isolation (integration)", () => {
   let app: FastifyInstance;
   let fx: TenantFixture;
+  let employeeWriterToken: string;
 
   beforeAll(async () => {
     app = await buildApp();
     fx = await provisionTenantFixture();
+    employeeWriterToken = jwt.sign(
+      {
+        sub: fx.tenantA.userId,
+        email: fx.tenantA.email,
+        companyId: fx.tenantA.companyId,
+        role: "admin",
+        moduleAccess: { "/employees": "write" },
+      },
+      config.jwt.accessSecret,
+      { expiresIn: "1h" }
+    );
   }, 60_000);
 
   afterAll(async () => {
@@ -48,7 +62,9 @@ describe.runIf(dbReady)("tenant isolation (integration)", () => {
       const res = await app.inject({
         method: "PUT",
         url: `/employees/${fx.tenantB.employeeId}`,
-        headers: { ...authHeader(fx.tenantA.accessToken), "content-type": "application/json" },
+        // Pass the private-data permission gate so this assertion exercises
+        // tenant scoping rather than stopping at authorization.
+        headers: { ...authHeader(employeeWriterToken), "content-type": "application/json" },
         payload: { firstName: "CrossTenant" },
       });
       expect(res.statusCode).toBe(404);

@@ -1,15 +1,14 @@
 import type { JWTPayload } from "./types.js";
-import { normalizeModuleAccess } from "../middleware/rbac.js";
+import { normalizeModulePermissions } from "../middleware/rbac.js";
 
 /**
  * Private information is intentionally opt-in. A broad administrator account
- * is never a sensitive-data reader; only HR/payroll users with the relevant
- * assigned module may handle it.
+ * is not automatically a sensitive-data reader; any user explicitly assigned
+ * the relevant module may handle that module's data.
  */
 export function canAccessSensitiveData(user: JWTPayload, module: string): boolean {
-  if (user.role !== "hr_payroll") return false;
-  const modules = normalizeModuleAccess(user.moduleAccess);
-  return Boolean(modules?.some((granted) => module === granted || module.startsWith(`${granted}/`)));
+  const modules = normalizeModulePermissions(user.moduleAccess);
+  return Boolean(modules && Object.entries(modules).some(([granted, permission]) => permission === "write" && (module === granted || module.startsWith(`${granted}/`))));
 }
 
 export function isPrivacyLimitedAdmin(user: JWTPayload): boolean {

@@ -272,7 +272,7 @@ export async function reviewAttendanceException(
 export async function detectAttendanceExceptions(
   token: string,
   body?: { siteId?: string; lookbackHours?: number }
-): Promise<{ created: number; updated: number }> {
+): Promise<{ scanned: number; created: number }> {
   const res = await authFetch("/attendance-exceptions/detect", token, {
     method: "POST",
     body: JSON.stringify(body ?? {}),
@@ -280,10 +280,27 @@ export async function detectAttendanceExceptions(
   return parseJson(res, "Failed to detect exceptions");
 }
 
+export type AttendanceExceptionAnalytics = {
+  total: number;
+  openCount: number;
+  openCritical: number;
+  lateArrivals: number;
+  missedClockIns: number;
+  missedClockOuts: number;
+  earlyDepartures: number;
+  absences: number;
+  completionRate: number;
+  absenteePercentage: number;
+  byType: Array<{ type: string; count: number }>;
+  bySeverity: Array<{ severity: string; count: number }>;
+  bySite: Array<{ siteId: string | null; count: number }>;
+  byEmployee: Array<{ employeeId: string | null; count: number }>;
+};
+
 export async function getExceptionAnalytics(
   token: string,
   params?: { periodStart?: string; periodEnd?: string }
-): Promise<Record<string, unknown>> {
+): Promise<AttendanceExceptionAnalytics> {
   const q = new URLSearchParams();
   if (params?.periodStart) q.set("periodStart", params.periodStart);
   if (params?.periodEnd) q.set("periodEnd", params.periodEnd);

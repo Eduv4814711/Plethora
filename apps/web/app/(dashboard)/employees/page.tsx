@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
-import { canAccessSensitiveData, isFullAdmin } from "@/lib/permissions";
+import { canManageEmployeeDetails, isFullAdmin } from "@/lib/permissions";
 import { DateInput } from "@/components/date-input";
 import { useConfirmDialog } from "@/components/ui";
 import { clsx } from "clsx";
@@ -102,9 +102,7 @@ const TEAM_UNASSIGNED_FOLDER_KEY = "__unassigned__";
 export default function EmployeesPage() {
   const { token, user } = useAuth();
   const canDeleteEmployees = user ? isFullAdmin(user) : false;
-  const canEditEmployeeDetails = user
-    ? canAccessSensitiveData(user, "/employees") || canAccessSensitiveData(user, "/payroll")
-    : false;
+  const canEditEmployeeDetails = user ? canManageEmployeeDetails(user) : false;
   const searchParams = useSearchParams();
   const searchQuery = searchParams.get("q") ?? "";
   const defaultCompanyName = (user as { company?: { name: string } } | null)?.company?.name ?? "";
@@ -267,7 +265,7 @@ export default function EmployeesPage() {
             title={
               canEditEmployeeDetails
                 ? undefined
-                : "Only HR and Payroll can add or edit employee details"
+                : "Team or Payroll module access is required to add or edit employee details"
             }
             className={clsx(
               showForm ? "btn-secondary" : "btn-primary",
@@ -352,7 +350,7 @@ export default function EmployeesPage() {
         />
       )}
 
-      {statusChangeId && (
+      {statusChangeId && canEditEmployeeDetails && (
         <StatusModal
           employee={employees.find((e) => e.id === statusChangeId)!}
           token={token!}
@@ -449,7 +447,7 @@ export default function EmployeesPage() {
                             }
                             canEditEmployeeDetails={canEditEmployeeDetails}
                             onEdit={canEditEmployeeDetails ? setEditingId : undefined}
-                            onChangeStatus={setStatusChangeId}
+                            onChangeStatus={canEditEmployeeDetails ? setStatusChangeId : undefined}
                           />
                         ))}
                       </div>
@@ -484,7 +482,7 @@ export default function EmployeesPage() {
               title={
                 canEditEmployeeDetails
                   ? undefined
-                  : "Only HR and Payroll can add or edit employee details"
+                  : "Team or Payroll module access is required to add or edit employee details"
               }
               className={clsx(
                 "btn-primary mt-6",
@@ -519,7 +517,7 @@ function EmployeeTeamCard({
   onToggleExpand: (id: string) => void;
   canEditEmployeeDetails: boolean;
   onEdit?: (id: string) => void;
-  onChangeStatus: (id: string) => void;
+  onChangeStatus?: (id: string) => void;
 }) {
   return (
     <div
@@ -635,7 +633,7 @@ function EmployeeTeamCard({
           title={
             canEditEmployeeDetails
               ? undefined
-              : "Only HR and Payroll can edit employee details"
+              : "Team or Payroll module access is required to edit employee details"
           }
           aria-disabled={!canEditEmployeeDetails}
           className={clsx(
@@ -648,8 +646,21 @@ function EmployeeTeamCard({
         {emp.status !== "offboarded" && (
           <button
             type="button"
-            onClick={() => onChangeStatus(emp.id)}
-            className="text-xs font-medium uppercase tracking-wider text-black hover:underline"
+            onClick={() => {
+              if (!canEditEmployeeDetails) return;
+              onChangeStatus?.(emp.id);
+            }}
+            disabled={!canEditEmployeeDetails}
+            title={
+              canEditEmployeeDetails
+                ? undefined
+                : "Team or Payroll module access is required to change employee status"
+            }
+            aria-disabled={!canEditEmployeeDetails}
+            className={clsx(
+              "text-xs font-medium uppercase tracking-wider text-black hover:underline",
+              !canEditEmployeeDetails && "cursor-not-allowed opacity-40 hover:no-underline"
+            )}
           >
             Change status
           </button>

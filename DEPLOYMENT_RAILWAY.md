@@ -42,6 +42,9 @@ strategy is redesigned around separate lockfiles.
 2. Add a new service from the GitHub repository for `api`.
 3. Add another service from the same repository for `web`.
 4. Add Railway PostgreSQL.
+5. For both GitHub-backed services, enable **Wait for CI** in the service deployment settings. A production deployment must remain waiting until the repository's `Production readiness` GitHub Actions workflow succeeds; a failed workflow must skip the deployment.
+
+Do not enable production autodeploy without **Wait for CI**. The API pre-deploy migration changes the production database, so allowing Railway to start a deployment while the same commit is still being tested creates an avoidable race between validation and migration.
 
 ## API Service
 
@@ -103,6 +106,19 @@ npm run start:server --workspace=api
 This separation avoids running migrations concurrently when the API is scaled
 to more than one replica.
 
+### Required database release gate
+
+Before the first production deployment of a new migration:
+
+1. Enable Railway PostgreSQL backups or point-in-time recovery and verify that a current restore point is visible. Rehearse restoration to a separate service; an untested backup is not a rollback plan.
+2. Restore or copy representative production data into an isolated staging database and run `npm run db:migrate:deploy` there first.
+3. On that staging clone, confirm `btree_gist` is available and can be installed by the deployment database role. The leave migration installs it inside the same transaction as the schema changes so a permission failure rolls back the whole migration.
+4. Run `npm run db:migrate:status` against the intended target and save the output with the release record.
+5. Review the users matched by the `20260721130000_hr_payroll_role_titles` migration before deployment. It promotes only title-matched users who already have employee/payroll write access and writes each previous role to `AuditLog`, but the affected list still requires an HR/security owner sign-off.
+6. Record the migration start time and the verified restore point, then allow the CI-gated Railway deployment to proceed.
+
+If a migration fails, do not use `db:push` and do not blindly rerun it. Preserve the deployment log, inspect `_prisma_migrations` and the actual schema, and compare them with the migration SQL. These leave migrations are transaction-wrapped, so first verify that their DDL rolled back. Use `prisma migrate resolve --rolled-back <migration-name>` only after confirming rollback or completing deliberate cleanup; use `--applied` only after independently proving that every statement is present. Restore to the verified backup/PITR point when the schema cannot be reconciled safely.
+
 ## Web Service
 
 Settings:
@@ -153,8 +169,10 @@ CORS_ORIGIN=https://plethora.quickbophasecurity.co.za
 Multiple origins are comma-separated:
 
 ```bash
-CORS_ORIGIN=https://plethora.quickbophasecurity.co.za,http://localhost:3000
+CORS_ORIGIN=https://plethora.quickbophasecurity.co.za,https://admin.quickbophasecurity.co.za
 ```
+
+Production accepts exact HTTPS origins only. Add `http://localhost:3000` only to a non-production development environment.
 
 ## Health And Connectivity Tests
 
@@ -203,11 +221,13 @@ verify the custom domain in Railway.
 
 ## Deploy Updates
 
-Railway deploys from GitHub. Push to the connected branch:
+Railway deploys from GitHub. Before pushing to the connected production branch, confirm that **Wait for CI** is enabled for both services and that the company-specific leave cutover gates in `docs/leave-management-review.md` have been completed. Push the reviewed commit:
 
 ```bash
 git push
 ```
+
+Railway should show the deployment as `WAITING` while the `Production readiness` workflow runs. Continue only when that workflow succeeds. A failure must leave the deployment `SKIPPED`; fix the failure rather than manually deploying the same commit.
 
 Railway will rebuild only the service affected by its watch patterns:
 
@@ -226,6 +246,8 @@ API deploy fails during migration:
 
 - Check `DATABASE_URL` references the Railway PostgreSQL service.
 - Check the PostgreSQL service is running.
+- Confirm a current, tested backup or PITR restore point exists before taking corrective action.
+- Inspect `npm run db:migrate:status` and the failed row in `_prisma_migrations`; do not repeatedly rerun or mark a migration resolved without checking the actual schema.
 - Run `npm run db:migrate:deploy --workspace=api` only against the intended Railway database.
 - Do not use `db:push` in production.
 

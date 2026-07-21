@@ -59,11 +59,31 @@ export const MODULE_ASSIGN_OPTIONS: { href: string; label: string }[] = NAV_ITEM
 /** Shown when a non-admin has no modules assigned yet (login-only). Not a product module. */
 export const ACCESS_PENDING_HREF = "/access-pending";
 
-export function normalizeUserModuleAccess(raw: unknown): string[] | null {
+export type ModulePermission = "read" | "write";
+export type ModulePermissions = Record<string, ModulePermission>;
+
+export function normalizeUserModulePermissions(raw: unknown): ModulePermissions | null {
   if (raw == null) return null;
-  if (!Array.isArray(raw)) return null;
-  const out = raw.filter((x): x is string => typeof x === "string" && x.startsWith("/"));
-  return out.length > 0 ? out : null;
+  const out: ModulePermissions = {};
+  if (Array.isArray(raw)) raw.forEach((path) => { if (typeof path === "string" && path.startsWith("/")) out[path] = "write"; });
+  else if (typeof raw === "object") Object.entries(raw as Record<string, unknown>).forEach(([path, permission]) => {
+    if (path.startsWith("/") && (permission === "read" || permission === "write")) out[path] = permission;
+  });
+  return Object.keys(out).length ? out : null;
+}
+
+export function normalizeUserModuleAccess(raw: unknown): string[] | null {
+  const permissions = normalizeUserModulePermissions(raw);
+  return permissions ? Object.keys(permissions) : null;
+}
+
+function modulePermissionForPath(raw: unknown, module: string): ModulePermission | null {
+  const permissions = normalizeUserModulePermissions(raw);
+  if (!permissions) return null;
+  const match = Object.keys(permissions)
+    .filter((granted) => module === granted || module.startsWith(`${granted}/`))
+    .sort((a, b) => b.length - a.length)[0];
+  return match ? permissions[match] : null;
 }
 
 /** Suggested module paths for a role (admin UI pre-fill). Not applied at runtime without saving. */
@@ -80,11 +100,14 @@ export function isFullAdmin(user: { role: string; moduleAccess?: unknown }): boo
   return user.role === "admin" && !normalizeUserModuleAccess(user.moduleAccess);
 }
 
-/** Sensitive person and payroll data is deliberately not part of broad admin access. */
+/** Sensitive module data requires an explicit assignment; broad admin access is not enough. */
 export function canAccessSensitiveData(user: { role: string; moduleAccess?: unknown }, module: string): boolean {
-  if (user.role !== "hr_payroll") return false;
-  const modules = normalizeUserModuleAccess(user.moduleAccess);
-  return Boolean(modules?.some((granted) => module === granted || module.startsWith(`${granted}/`)));
+  return modulePermissionForPath(user.moduleAccess, module) === "write";
+}
+
+/** Employee records may be managed by users explicitly assigned either relevant module. */
+export function canManageEmployeeDetails(user: { role: string; moduleAccess?: unknown }): boolean {
+  return canAccessSensitiveData(user, "/employees") || canAccessSensitiveData(user, "/payroll");
 }
 
 function navItemForPath(pathname: string): NavItem | undefined {
@@ -144,6 +167,6 @@ export function canAccessRoute(pathname: string, role: string, moduleAccess?: un
 export function canManageSitesModule(user: { role: string; moduleAccess?: unknown }): boolean {
   if (!canAccessRoute("/sites", user.role, user.moduleAccess)) return false;
   const custom = normalizeUserModuleAccess(user.moduleAccess);
-  if (custom) return custom.includes("/sites");
+  if (custom) return modulePermissionForPath(user.moduleAccess, "/sites") === "write";
   return user.role === "admin";
 }

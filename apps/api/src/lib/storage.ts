@@ -22,6 +22,11 @@ export interface StorageService {
   resolveKeyFromUrl(url: string): string | null;
 }
 
+export interface UploadedFileRollbackOptions {
+  deleteFile?: (key: string) => Promise<void>;
+  onCleanupError?: (error: unknown) => void;
+}
+
 export function normalizeStorageKey(key: string): string {
   const normalized = key.trim().replace(/\\/g, "/").replace(/^\/+/, "");
   const segments = normalized.split("/");
@@ -56,6 +61,27 @@ export async function readStreamToBuffer(
     chunks.push(buf);
   }
   return Buffer.concat(chunks);
+}
+
+/**
+ * Persist metadata for a file that has already been uploaded. If persistence
+ * fails, remove the orphaned file and keep the original persistence error.
+ */
+export async function persistWithUploadedFileRollback<T>(
+  key: string,
+  persist: () => Promise<T>,
+  options: UploadedFileRollbackOptions = {}
+): Promise<T> {
+  try {
+    return await persist();
+  } catch (error) {
+    try {
+      await (options.deleteFile ?? ((candidate) => storage.deleteFile(candidate)))(key);
+    } catch (cleanupError) {
+      options.onCleanupError?.(cleanupError);
+    }
+    throw error;
+  }
 }
 
 export const storage: StorageService = {

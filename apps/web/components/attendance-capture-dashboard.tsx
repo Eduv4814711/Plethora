@@ -18,6 +18,7 @@ type AttendanceCaptureDashboardProps = {
   shiftType: AttendanceShiftTypeFilter;
   selectedSiteId?: string;
   onSelectSite: (siteId: string) => void;
+  siteQuery?: string;
 };
 
 function formatDisplayDate(isoDate: string) {
@@ -31,9 +32,9 @@ function shiftTypeLabel(shiftType: AttendanceShiftTypeFilter): string {
 }
 
 function SiteStatusBadge({ status }: { status: SiteTimesheetCaptureOverviewSite["status"] }) {
-  if (status === "needs_capture") return <Badge variant="warning">Needs capture</Badge>;
+  if (status === "needs_capture") return <Badge variant="warning">Needs attendance review</Badge>;
   if (status === "caught_up") return <Badge variant="success">Up to date</Badge>;
-  return <Badge variant="neutral">No roster</Badge>;
+  return <Badge variant="neutral">No scheduled shifts</Badge>;
 }
 
 export function AttendanceCaptureDashboard({
@@ -43,12 +44,14 @@ export function AttendanceCaptureDashboard({
   shiftType,
   selectedSiteId,
   onSelectSite,
+  siteQuery = "",
 }: AttendanceCaptureDashboardProps) {
   const [overview, setOverview] = useState<SiteTimesheetCaptureOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCaughtUp, setShowCaughtUp] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [showNoShifts, setShowNoShifts] = useState(false);
+  const [expanded, setExpanded] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,11 +72,20 @@ export function AttendanceCaptureDashboard({
     };
   }, [token, periodStart, periodEnd, shiftType]);
 
-  const needsCapture = useMemo(
-    () => overview?.sites.filter((s) => s.status === "needs_capture") ?? [],
-    [overview]
+  const normalizedQuery = siteQuery.trim().toLowerCase();
+  const visibleSites = useMemo(
+    () =>
+      overview?.sites.filter(
+        (site) => !normalizedQuery || site.siteName.toLowerCase().includes(normalizedQuery)
+      ) ?? [],
+    [normalizedQuery, overview]
   );
-  const caughtUp = useMemo(() => overview?.sites.filter((s) => s.status === "caught_up") ?? [], [overview]);
+  const needsCapture = useMemo(
+    () => visibleSites.filter((s) => s.status === "needs_capture"),
+    [visibleSites]
+  );
+  const caughtUp = useMemo(() => visibleSites.filter((s) => s.status === "caught_up"), [visibleSites]);
+  const noShifts = useMemo(() => visibleSites.filter((s) => s.status === "no_shifts"), [visibleSites]);
 
   if (loading) {
     return (
@@ -149,24 +161,24 @@ export function AttendanceCaptureDashboard({
           </svg>
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
-              Capture status
+              Attendance work queue
             </p>
             <h4 className="mt-1 text-base font-semibold text-neutral-900 dark:text-neutral-100">
-              Attendance should be captured through {captureLabel}
+              Attendance should be reviewed through {captureLabel}
             </h4>
             {expanded ? (
               <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
                 {shiftLabel
-                  ? `Sites with rostered ${shiftLabel} shifts still waiting for review are listed below. Open a site to capture who worked.`
-                  : "Sites with rostered shifts still waiting for review are listed below. Open a site to capture who worked."}
+                  ? `Sites with scheduled ${shiftLabel} shifts still waiting for review are listed below. Open a site to confirm who worked.`
+                  : "Sites with scheduled shifts still waiting for review are listed below. Open a site to confirm who worked."}
               </p>
             ) : (
               <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
                 {overview.summary.needsCapture > 0
                   ? `${needCapturePhrase}${pendingBreakdown ? ` · ${pendingBreakdown}` : ""} · ${overview.summary.caughtUp} up to date`
                   : overview.captureThrough
-                    ? `All rostered sites captured through ${captureLabel}`
-                    : "No roster activity in this period yet"}
+                    ? `All scheduled sites are reviewed through ${captureLabel}`
+                    : "No scheduled attendance in this period yet"}
               </p>
             )}
           </div>
@@ -194,7 +206,7 @@ export function AttendanceCaptureDashboard({
             <div className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-3 dark:border-amber-900/40 dark:bg-amber-950/20">
               <p className="text-2xl font-bold text-amber-900 dark:text-amber-100">{overview.summary.needsCapture}</p>
               <p className="text-xs font-medium text-amber-800/90 dark:text-amber-200/90">
-                {shiftLabel ? `Sites need ${shiftLabel} capture` : "Sites need capture"}
+                {shiftLabel ? `Sites need ${shiftLabel} review` : "Sites need review"}
               </p>
             </div>
             <div className="rounded-lg border border-amber-200/80 bg-amber-50/50 px-3 py-3 dark:border-amber-900/40 dark:bg-amber-950/10">
@@ -211,14 +223,14 @@ export function AttendanceCaptureDashboard({
             </div>
             <div className="rounded-lg border border-neutral-200 bg-white px-3 py-3 dark:border-neutral-700 dark:bg-neutral-950/60">
               <p className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">{overview.summary.noShifts}</p>
-              <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400">No roster in range</p>
+              <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400">No scheduled shifts</p>
             </div>
           </div>
 
           {needsCapture.length > 0 ? (
             <div className="overflow-hidden rounded-lg border border-amber-200/70 dark:border-amber-900/40">
               <div className="border-b border-amber-200/70 bg-amber-50/70 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
-                Needs attention
+                Needs attendance review
               </div>
               <ul className="divide-y divide-neutral-200 dark:divide-neutral-800">
                 {needsCapture.map((site) => (
@@ -247,16 +259,20 @@ export function AttendanceCaptureDashboard({
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         <SiteStatusBadge status={site.status} />
-                        <span className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">Open →</span>
+                        <span className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">Review site →</span>
                       </div>
                     </button>
                   </li>
                 ))}
               </ul>
             </div>
+          ) : normalizedQuery && visibleSites.length > 0 ? (
+            <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 dark:border-neutral-700 dark:bg-neutral-950/50 dark:text-neutral-300">
+              No sites needing attendance review match “{siteQuery.trim()}”.
+            </div>
           ) : overview.captureThrough ? (
             <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-100">
-              All rostered sites are captured through {captureLabel}.
+              All scheduled sites are reviewed through {captureLabel}.
             </div>
           ) : null}
 
@@ -265,7 +281,8 @@ export function AttendanceCaptureDashboard({
               <button
                 type="button"
                 onClick={() => setShowCaughtUp((v) => !v)}
-                className="text-sm font-medium text-neutral-700 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-neutral-100"
+                className="min-h-11 text-sm font-medium text-neutral-700 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-neutral-100"
+                aria-expanded={showCaughtUp}
               >
                 {showCaughtUp ? "Hide" : "Show"} {caughtUp.length} site{caughtUp.length === 1 ? "" : "s"} up to date
               </button>
@@ -292,6 +309,41 @@ export function AttendanceCaptureDashboard({
                   ))}
                 </ul>
               )}
+            </div>
+          )}
+
+          {noShifts.length > 0 && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowNoShifts((value) => !value)}
+                className="min-h-11 text-sm font-medium text-neutral-700 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-neutral-100"
+                aria-expanded={showNoShifts}
+              >
+                {showNoShifts ? "Hide" : "Show"} {noShifts.length} site{noShifts.length === 1 ? "" : "s"} with no scheduled shifts
+              </button>
+              {showNoShifts && (
+                <ul className="mt-2 overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700">
+                  {noShifts.map((site) => (
+                    <li key={site.siteId} className="border-b border-neutral-200 last:border-b-0 dark:border-neutral-800">
+                      <button
+                        type="button"
+                        onClick={() => onSelectSite(site.siteId)}
+                        className="flex min-h-11 w-full items-center justify-between gap-3 bg-white px-3 py-2.5 text-left hover:bg-neutral-50 dark:bg-neutral-950/40 dark:hover:bg-neutral-900/60"
+                      >
+                        <span className="truncate text-sm font-medium text-neutral-900 dark:text-neutral-100">{site.siteName}</span>
+                        <SiteStatusBadge status={site.status} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {visibleSites.length === 0 && normalizedQuery && (
+            <div className="rounded-lg border border-neutral-200 bg-white px-4 py-6 text-center text-sm text-neutral-600 dark:border-neutral-700 dark:bg-neutral-950/50 dark:text-neutral-300">
+              No sites match “{siteQuery.trim()}”. Try another site name.
             </div>
           )}
         </div>

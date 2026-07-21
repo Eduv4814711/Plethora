@@ -105,10 +105,11 @@ export function rowMatchesShiftTypeFilter(
   shiftType: AttendanceShiftTypeFilter
 ): boolean {
   if (shiftType === "all") return true;
-  const type = normalizeShiftType(
-    row.plannedShiftType ?? row.plannedShiftCode ?? row.actualShiftType ?? row.actualShiftCode
-  );
-  return type === shiftType;
+  const plannedType = normalizeShiftType(row.plannedShiftType ?? row.plannedShiftCode);
+  const actualType = normalizeShiftType(row.actualShiftType ?? row.actualShiftCode);
+  // A changed shift remains visible under both its scheduled and actual shift so
+  // filtering can never hide an attendance entry that still needs confirmation.
+  return plannedType === shiftType || actualType === shiftType;
 }
 
 const SHIFT_SORT_ORDER: Record<string, number> = { day: 0, night: 1 };

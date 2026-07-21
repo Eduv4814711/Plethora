@@ -26,6 +26,19 @@ function addCalendarDays(d: Date, days: number): Date {
   return next;
 }
 
+const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+export function isWorkDateWithinTimesheetPeriod(
+  workDate: string,
+  periodStart: Date | string,
+  periodEnd: Date | string
+): boolean {
+  if (!DATE_KEY_PATTERN.test(workDate)) return false;
+  const parsed = dateOnly(workDate);
+  if (Number.isNaN(parsed.getTime()) || dateKey(parsed) !== workDate) return false;
+  return workDate >= dateKey(periodStart) && workDate <= dateKey(periodEnd);
+}
+
 function dayOfWeek(date: Date): string {
   return format(date, "EEE");
 }
@@ -867,6 +880,35 @@ export async function updateSiteTimesheetRow(
   const resolvedDutyOff = nextDutyOff !== undefined ? nextDutyOff : existingDutyOff;
   const attendanceStatus = input.attendanceStatus ?? existing.attendanceStatus;
   const needsOb = rowNeedsObNumbers(attendanceStatus);
+  const effectiveGuardId = input.actualGuardId !== undefined
+    ? input.actualGuardId
+    : existing.actualGuardId ?? existing.plannedGuardId;
+  const recordsWork = !["leave", "sick_leave", "off", "absent", "pending"].includes(attendanceStatus);
+  const approvedLeave = approving && recordsWork && effectiveGuardId
+    ? await Promise.all([
+        prisma.leaveOccurrence.findFirst({
+          where: { companyId, employeeId: effectiveGuardId, leaveDate: dateOnly(existing.workDate), status: { in: ["APPROVED", "PAYROLL_PROCESSED"] } },
+          select: { id: true },
+        }),
+        prisma.leaveApplication.findFirst({
+          where: {
+            companyId,
+            employeeId: effectiveGuardId,
+            startDate: { lte: dateOnly(existing.workDate) },
+            endDate: { gte: dateOnly(existing.workDate) },
+            status: { in: ["APPROVED", "CANCELLATION_REQUESTED", "PAYROLL_PROCESSED", "ADJUSTMENT_REQUIRED", "IMPORTED_APPROVED"] },
+          },
+          select: { id: true },
+        }),
+        prisma.leaveRecord.findFirst({
+          where: { employeeId: effectiveGuardId, employee: { companyId }, date: dateOnly(existing.workDate) },
+          select: { id: true },
+        }),
+      ]).then(([occurrence, application, legacy]) => occurrence ?? application ?? legacy)
+    : null;
+  if (approvedLeave) {
+    return { error: "This employee is on approved leave. Cancel or adjust the leave before approving worked time." };
+  }
 
   if (approving && needsOb) {
     if (!resolvedDutyOn) {
@@ -967,6 +1009,11 @@ export async function addSiteTimesheetRow(
   if (sheet.status === "approved" || sheet.status === "locked") {
     return { error: "Timesheet is approved and locked. Unlock it before adding rows." };
   }
+  const periodStart = dateKey(sheet.periodStart);
+  const periodEnd = dateKey(sheet.periodEnd);
+  if (!isWorkDateWithinTimesheetPeriod(input.workDate, sheet.periodStart, sheet.periodEnd)) {
+    return { error: `Row date must be between ${periodStart} and ${periodEnd}.` };
+  }
   if (!(await guardBelongsToCompany(input.actualGuardId, companyId))) {
     return { error: "Guard not found." };
   }
@@ -978,13 +1025,14 @@ export async function addSiteTimesheetRow(
     };
   }
   const dutyOffObNumber = normalizeObNumber(input.dutyOffObNumber) ?? null;
+  const workDate = dateOnly(input.workDate);
   const row = await prisma.$transaction(async (tx) => {
     const created = await tx.siteTimesheetRow.create({
       data: {
         companyId,
         siteTimesheetId,
         siteId: sheet.siteId,
-        workDate: dateOnly(input.workDate),
+        workDate,
         actualGuardId: input.actualGuardId,
         actualShiftCode: input.actualShiftCode,
         actualShiftType: input.actualShiftType,
@@ -1051,6 +1099,9 @@ export async function approveSiteTimesheet(
           actualShiftType: true,
           actualShiftCode: true,
           attendanceStatus: true,
+          actualGuardId: true,
+          plannedGuardId: true,
+          workDate: true,
         },
       },
     },
@@ -1093,6 +1144,47 @@ export async function approveSiteTimesheet(
     return {
       error: `${missingOb.length} row(s) are missing Duty ON and/or Duty OFF OB numbers.`,
     };
+  }
+
+  const rowsNeedingLeaveCheck = targetRows.filter((row) =>
+    !["leave", "sick_leave", "off", "absent", "pending"].includes(row.attendanceStatus) &&
+    Boolean(row.actualGuardId ?? row.plannedGuardId)
+  );
+  if (rowsNeedingLeaveCheck.length > 0) {
+    const conflictConditions = rowsNeedingLeaveCheck.map((row) => ({
+      employeeId: row.actualGuardId ?? row.plannedGuardId!,
+      leaveDate: dateOnly(row.workDate),
+    }));
+    const [authoritativeConflicts, applicationConflicts, legacyConflicts] = await Promise.all([
+      prisma.leaveOccurrence.findMany({
+        where: { companyId, status: { in: ["APPROVED", "PAYROLL_PROCESSED"] }, OR: conflictConditions },
+        select: { employeeId: true, leaveDate: true },
+      }),
+      prisma.leaveApplication.findMany({
+        where: {
+          companyId,
+          status: { in: ["APPROVED", "CANCELLATION_REQUESTED", "PAYROLL_PROCESSED", "ADJUSTMENT_REQUIRED", "IMPORTED_APPROVED"] },
+          OR: conflictConditions.map((condition) => ({
+            employeeId: condition.employeeId,
+            startDate: { lte: condition.leaveDate },
+            endDate: { gte: condition.leaveDate },
+          })),
+        },
+        select: { employeeId: true, startDate: true, endDate: true },
+      }),
+      prisma.leaveRecord.findMany({
+        where: { employee: { companyId }, OR: conflictConditions.map((condition) => ({ employeeId: condition.employeeId, date: condition.leaveDate })) },
+        select: { employeeId: true, date: true },
+      }),
+    ]);
+    const conflictCount = conflictConditions.filter((condition) =>
+      authoritativeConflicts.some((row) => row.employeeId === condition.employeeId && row.leaveDate.getTime() === condition.leaveDate.getTime()) ||
+      applicationConflicts.some((row) => row.employeeId === condition.employeeId && row.startDate <= condition.leaveDate && row.endDate >= condition.leaveDate) ||
+      legacyConflicts.some((row) => row.employeeId === condition.employeeId && row.date.getTime() === condition.leaveDate.getTime())
+    ).length;
+    if (conflictCount > 0) {
+      return { error: `${conflictCount} row(s) record work during approved leave. Cancel or adjust the leave before approving the timesheet.` };
+    }
   }
 
   const targetIds = targetRows.map((r) => r.id);

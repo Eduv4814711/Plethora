@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { resolveAttendanceStatusOnApprove } from "../site-timesheet-utils";
+import {
+  formatApprovalStatus,
+  rowMatchesShiftTypeFilter,
+  rowNeedsObNumbers,
+  resolveAttendanceStatusOnApprove,
+} from "../site-timesheet-utils";
 
 describe("resolveAttendanceStatusOnApprove", () => {
   it("marks present when a guard worked a day/night shift", () => {
@@ -65,6 +70,9 @@ describe("resolveAttendanceStatusOnApprove", () => {
         actualGuardId: "g1",
         plannedShiftCode: "L",
         actualShiftCode: "L",
+        actualShiftType: null,
+        clockIn: null,
+        clockOut: null,
       })
     ).toBe("leave");
     expect(
@@ -73,6 +81,9 @@ describe("resolveAttendanceStatusOnApprove", () => {
         actualGuardId: "g1",
         plannedShiftCode: "SL",
         actualShiftCode: "SL",
+        actualShiftType: null,
+        clockIn: null,
+        clockOut: null,
       })
     ).toBe("sick_leave");
     expect(
@@ -81,6 +92,9 @@ describe("resolveAttendanceStatusOnApprove", () => {
         actualGuardId: "g1",
         plannedShiftCode: "TR",
         actualShiftCode: "TR",
+        actualShiftType: null,
+        clockIn: null,
+        clockOut: null,
       })
     ).toBe("training");
   });
@@ -93,7 +107,37 @@ describe("resolveAttendanceStatusOnApprove", () => {
         plannedShiftCode: "O",
         actualShiftCode: null,
         actualShiftType: null,
+        clockIn: null,
+        clockOut: null,
       })
     ).toBe("off");
+  });
+});
+
+describe("attendance review guidance", () => {
+  it("requires OB numbers only when a person worked", () => {
+    expect(rowNeedsObNumbers("present")).toBe(true);
+    expect(rowNeedsObNumbers("shift_swapped")).toBe(true);
+    expect(rowNeedsObNumbers("absent")).toBe(true);
+    expect(rowNeedsObNumbers("off")).toBe(false);
+    expect(rowNeedsObNumbers("leave")).toBe(false);
+    expect(rowNeedsObNumbers("sick_leave")).toBe(false);
+  });
+
+  it("keeps a changed shift visible under its planned and actual shift filters", () => {
+    const changedShift = {
+      plannedShiftType: "day",
+      plannedShiftCode: "D",
+      actualShiftType: "night",
+      actualShiftCode: "N",
+    };
+    expect(rowMatchesShiftTypeFilter(changedShift, "day")).toBe(true);
+    expect(rowMatchesShiftTypeFilter(changedShift, "night")).toBe(true);
+    expect(rowMatchesShiftTypeFilter(changedShift, "all")).toBe(true);
+  });
+
+  it("uses user-facing wording for partial confirmation", () => {
+    expect(formatApprovalStatus("partially_reviewed")).toBe("Partial");
+    expect(formatApprovalStatus("reviewed")).toBe("Reviewed");
   });
 });

@@ -7,10 +7,13 @@ import {
   validateClockIn,
   calculateHours,
   assertWithinSiteGeofence,
+  findApprovedLeaveConflict,
 } from "../services/attendance.service.js";
 import { AttendanceValidationError } from "../services/attendance.service.js";
 import { createAuditLog } from "../lib/audit.js";
 import { triggerPostClockExceptionSync } from "../modules/attendance-exceptions/post-clock-sync.js";
+import { dateKeyInTimeZone, getCompanyTimezone } from "../lib/timezone.js";
+import { normalizeLeaveDate } from "../services/leave-availability.service.js";
 const optionalCoords = z
   .object({
     latitude: z.number().min(-90).max(90).optional(),
@@ -184,6 +187,10 @@ export async function attendanceRoutes(app: FastifyInstance) {
         message: "This shift already has attendance recorded.",
       });
     }
+    const shiftDate = normalizeLeaveDate(dateKeyInTimeZone(shift.startTime, await getCompanyTimezone(companyId)));
+    if (await findApprovedLeaveConflict(companyId, shift.employeeId, shiftDate)) {
+      return reply.code(409).send({ error: "Approved leave conflict", message: "Cancel or adjust the approved leave before recording attendance." });
+    }
 
     const clockIn = parsed.data.clockIn
       ? new Date(parsed.data.clockIn)
@@ -206,29 +213,10 @@ export async function attendanceRoutes(app: FastifyInstance) {
       shift.endTime
     );
 
-    const attendance = await prisma.attendance.create({
-      data: {
-        shiftId,
-        clockIn,
-        clockOut,
-        hoursWorked,
-        overtimeHours,
-        status: "completed",
-        source: "manual",
-      },
-      include: {
-        shift: {
-          include: {
-            employee: { select: { id: true, firstName: true, lastName: true } },
-            site: true,
-          },
-        },
-      },
-    });
-
-    await prisma.shift.update({
-      where: { id: shiftId },
-      data: { status: "completed" },
+    const attendance = await prisma.$transaction(async (tx) => {
+      const created = await tx.attendance.create({ data: { shiftId, clockIn, clockOut, hoursWorked, overtimeHours, status: "completed", source: "manual" }, include: { shift: { include: { employee: { select: { id: true, firstName: true, lastName: true } }, site: true } } } });
+      await tx.shift.update({ where: { id: shiftId }, data: { status: "completed" } });
+      return created;
     });
 
     await createAuditLog({
@@ -267,27 +255,19 @@ export async function attendanceRoutes(app: FastifyInstance) {
         assertWithinSiteGeofence(site, lat, lng);
       }
 
-      const attendance = await prisma.attendance.create({
-        data: {
-          shiftId: parsed.data.shiftId,
-          clockIn: now,
-          status: "clocked_in",
-          clockInLat: lat !== undefined ? lat : undefined,
-          clockInLng: lng !== undefined ? lng : undefined,
-        },
-        include: {
-          shift: {
-            include: {
-              employee: { select: { id: true, firstName: true, lastName: true } },
-              site: true,
-            },
+      const attendance = await prisma.$transaction(async (tx) => {
+        const created = await tx.attendance.create({
+          data: {
+            shiftId: parsed.data.shiftId,
+            clockIn: now,
+            status: "clocked_in",
+            clockInLat: lat !== undefined ? lat : undefined,
+            clockInLng: lng !== undefined ? lng : undefined,
           },
-        },
-      });
-
-      await prisma.shift.update({
-        where: { id: parsed.data.shiftId },
-        data: { status: "active" },
+          include: { shift: { include: { employee: { select: { id: true, firstName: true, lastName: true } }, site: true } } },
+        });
+        await tx.shift.update({ where: { id: parsed.data.shiftId }, data: { status: "active" } });
+        return created;
       });
 
       await createAuditLog({
@@ -556,40 +536,17 @@ export async function attendanceRoutes(app: FastifyInstance) {
         message: "Invalid site or post. Select a valid site and post.",
       });
     }
+    const leaveDate = normalizeLeaveDate(dateKeyInTimeZone(clockIn, await getCompanyTimezone(companyId)));
+    if (await findApprovedLeaveConflict(companyId, employeeId, leaveDate)) {
+      return reply.code(409).send({ error: "Approved leave conflict", message: "Cancel or adjust the approved leave before creating manual attendance." });
+    }
 
     const { hoursWorked, overtimeHours } = calculateHours(clockIn, clockOut, clockIn, clockOut);
 
-    const shift = await prisma.shift.create({
-      data: {
-        companyId,
-        employeeId,
-        siteId: post.siteId,
-        shiftType: post.coverageRequirements[0]?.shiftTypeCode ?? "day",
-        legacyPostName: post.name,
-        startTime: clockIn,
-        endTime: clockOut,
-        status: "completed",
-      },
-    });
-
-    const attendance = await prisma.attendance.create({
-      data: {
-        shiftId: shift.id,
-        clockIn,
-        clockOut,
-        hoursWorked,
-        overtimeHours,
-        status: "completed",
-        source: "manual",
-      },
-      include: {
-        shift: {
-          include: {
-            employee: { select: { id: true, firstName: true, lastName: true } },
-            site: true,
-          },
-        },
-      },
+    const { shift, attendance } = await prisma.$transaction(async (tx) => {
+      const shift = await tx.shift.create({ data: { companyId, employeeId, siteId: post.siteId, shiftType: post.coverageRequirements[0]?.shiftTypeCode ?? "day", legacyPostName: post.name, startTime: clockIn, endTime: clockOut, status: "completed" } });
+      const attendance = await tx.attendance.create({ data: { shiftId: shift.id, clockIn, clockOut, hoursWorked, overtimeHours, status: "completed", source: "manual" }, include: { shift: { include: { employee: { select: { id: true, firstName: true, lastName: true } }, site: true } } } });
+      return { shift, attendance };
     });
 
     await createAuditLog({

@@ -3,9 +3,11 @@ import { authMiddleware } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
 import {
   detectExceptionsBodySchema,
+  exceptionAnalyticsQuerySchema,
   listExceptionsQuerySchema,
   reviewExceptionBodySchema,
 } from "./exceptions.schemas.js";
+import { parseExceptionPeriodBoundary } from "./exception-period.js";
 import {
   detectAndPersistExceptions,
   getExceptionAnalytics,
@@ -44,11 +46,18 @@ export async function attendanceExceptionsRoutes(app: FastifyInstance) {
 
   app.get("/analytics", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
-    const q = request.query as { periodStart?: string; periodEnd?: string };
+    const parsed = exceptionAnalyticsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.issues[0]?.message ?? "Invalid query",
+      });
+    }
+    const q = parsed.data;
     const analytics = await getExceptionAnalytics(
       user.companyId,
-      q.periodStart ? new Date(q.periodStart) : undefined,
-      q.periodEnd ? new Date(q.periodEnd) : undefined
+      q.periodStart ? parseExceptionPeriodBoundary(q.periodStart, "start") : undefined,
+      q.periodEnd ? parseExceptionPeriodBoundary(q.periodEnd, "end") : undefined
     );
     return reply.send(analytics);
   });

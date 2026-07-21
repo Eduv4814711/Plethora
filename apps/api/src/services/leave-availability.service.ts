@@ -6,12 +6,19 @@ import { reconcileContinuityForEmployee } from "../modules/rosters/roster-contin
 const MAX_LEAVE_RANGE_DAYS = 366;
 
 export function normalizeLeaveDate(input: string | Date): Date {
-  const key =
-    typeof input === "string"
-      ? input.slice(0, 10)
-      : input.toISOString().slice(0, 10);
+  if (input instanceof Date && !Number.isFinite(input.getTime())) {
+    throw new LeaveAvailabilityError("Invalid leave date");
+  }
+  const key = typeof input === "string" ? input.slice(0, 10) : input.toISOString().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) {
+    throw new LeaveAvailabilityError("Leave dates must use YYYY-MM-DD format");
+  }
   const [year, month, day] = key.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day));
+  const normalized = new Date(Date.UTC(year, month - 1, day));
+  if (normalized.toISOString().slice(0, 10) !== key) {
+    throw new LeaveAvailabilityError(`Invalid leave date: ${key}`);
+  }
+  return normalized;
 }
 
 export function formatLeaveDateKey(d: Date): string {
@@ -107,18 +114,33 @@ export async function createLeaveRecordsForRange(params: {
 }): Promise<{ records: Awaited<ReturnType<typeof prisma.leaveRecord.create>>[]; days: number }> {
   const { start, end, dates } = validateLeaveDateRange(params.startDate, params.endDate);
 
-  const records = await prisma.$transaction(
-    dates.map((date) =>
-      prisma.leaveRecord.create({
-        data: {
-          employeeId: params.employeeId,
-          date,
-          type: params.type,
-          hours: params.hours,
-        },
-      })
-    )
-  );
+  const records = await prisma.$transaction(async (tx) => {
+    const existing = await tx.leaveRecord.findMany({
+      where: {
+        employeeId: params.employeeId,
+        date: { gte: start, lte: end },
+      },
+      select: { date: true },
+      orderBy: { date: "asc" },
+    });
+    if (existing.length > 0) {
+      const dates = existing.map((record) => formatLeaveDateKey(record.date));
+      const preview = dates.slice(0, 3).join(", ");
+      const suffix = dates.length > 3 ? ` and ${dates.length - 3} more` : "";
+      throw new LeaveAvailabilityError(
+        `Leave already exists for this employee on ${preview}${suffix}`
+      );
+    }
+
+    return tx.leaveRecord.createManyAndReturn({
+      data: dates.map((date) => ({
+        employeeId: params.employeeId,
+        date,
+        type: params.type,
+        hours: params.hours,
+      })),
+    });
+  });
 
   await reconcileContinuityForEmployee(params.employeeId, undefined, "leave_created").catch(() => undefined);
 
@@ -140,8 +162,7 @@ export async function deleteLeaveRecordsForRange(params: {
     throw new LeaveAvailabilityError("Employee not found");
   }
 
-  const start = normalizeLeaveDate(params.startDate);
-  const end = normalizeLeaveDate(params.endDate);
+  const { start, end } = validateLeaveDateRange(params.startDate, params.endDate);
 
   const result = await prisma.leaveRecord.deleteMany({
     where: {
@@ -175,9 +196,14 @@ export async function replaceLeaveRecordRange(params: {
     throw new LeaveAvailabilityError("Employee not found");
   }
 
-  const { dates } = validateLeaveDateRange(params.newStartDate, params.newEndDate);
-  const oldStart = normalizeLeaveDate(params.startDate);
-  const oldEnd = normalizeLeaveDate(params.endDate);
+  const { start: newStart, end: newEnd, dates } = validateLeaveDateRange(
+    params.newStartDate,
+    params.newEndDate
+  );
+  const { start: oldStart, end: oldEnd } = validateLeaveDateRange(
+    params.startDate,
+    params.endDate
+  );
 
   const records = await prisma.$transaction(async (tx) => {
     const deleted = await tx.leaveRecord.deleteMany({
@@ -191,18 +217,29 @@ export async function replaceLeaveRecordRange(params: {
       throw new LeaveAvailabilityError("Leave record not found");
     }
 
-    return Promise.all(
-      dates.map((date) =>
-        tx.leaveRecord.create({
-          data: {
-            employeeId: params.employeeId,
-            date,
-            type: params.newType,
-            hours: params.hours,
-          },
-        })
-      )
-    );
+    const conflicts = await tx.leaveRecord.findMany({
+      where: {
+        employeeId: params.employeeId,
+        date: { gte: newStart, lte: newEnd },
+      },
+      select: { date: true },
+      orderBy: { date: "asc" },
+    });
+    if (conflicts.length > 0) {
+      const conflictDate = formatLeaveDateKey(conflicts[0]!.date);
+      throw new LeaveAvailabilityError(
+        `Leave already exists for this employee on ${conflictDate}`
+      );
+    }
+
+    return tx.leaveRecord.createManyAndReturn({
+      data: dates.map((date) => ({
+        employeeId: params.employeeId,
+        date,
+        type: params.newType,
+        hours: params.hours,
+      })),
+    });
   });
 
   await reconcileContinuityForEmployee(params.employeeId, params.companyId, "leave_changed").catch(() => undefined);

@@ -484,12 +484,22 @@ export async function reconcileRosterContinuityForSite(
           ...site.assignedGuards.map((assignment) => assignment.employeeId),
         ]),
       ];
-      const [overrides, leaves, generatedRows, shifts] = await Promise.all([
+      const [overrides, leaves, leaveApplications, generatedRows, shifts] = await Promise.all([
         tx.siteRosterManualOverride.findMany({
           where: { companyId, siteId, rosterDate: { gte: start, lte: end } },
         }),
         tx.leaveRecord.findMany({
           where: { employeeId: { in: guardIds }, date: { gte: start, lte: end } },
+        }),
+        tx.leaveApplication.findMany({
+          where: {
+            companyId,
+            employeeId: { in: guardIds },
+            startDate: { lte: end },
+            endDate: { gte: start },
+            status: { in: ["APPROVED", "CANCELLATION_REQUESTED", "PAYROLL_PROCESSED", "ADJUSTMENT_REQUIRED", "IMPORTED_APPROVED"] },
+          },
+          select: { employeeId: true, startDate: true, endDate: true, leaveType: { select: { code: true } } },
         }),
         tx.siteRosterGeneratedShift.findMany({
           where: { companyId, siteId, rosterDate: { gte: start, lte: end } },
@@ -507,7 +517,16 @@ export async function reconcileRosterContinuityForSite(
 
       const assignmentByGuard = new Map(site.assignedGuards.map((assignment) => [assignment.employeeId, assignment]));
       const overrideByKey = new Map(overrides.map((row) => [`${row.guardId}:${dateKey(row.rosterDate)}`, row]));
-      const leaveByKey = new Map(leaves.map((row) => [`${row.employeeId}:${dateKey(row.date)}`, row]));
+      const leaveByKey = new Map<string, { type: string }>(
+        leaves.map((row) => [`${row.employeeId}:${dateKey(row.date)}`, { type: row.type }])
+      );
+      for (const application of leaveApplications) {
+        const applicationStart = application.startDate > start ? dateOnly(application.startDate) : start;
+        const applicationEnd = application.endDate < end ? dateOnly(application.endDate) : end;
+        for (let day = applicationStart; day <= applicationEnd; day = addDays(day, 1)) {
+          leaveByKey.set(`${application.employeeId}:${dateKey(day)}`, { type: application.leaveType.code });
+        }
+      }
       const generatedByKey = new Map(generatedRows.map((row) => [`${row.guardId}:${dateKey(row.rosterDate)}`, row]));
       const cellsByGuardDay = new Map(
         pattern.cells.map((cell) => [`${cell.guardId}:${cell.patternDayIndex}`, cell])
@@ -662,7 +681,18 @@ export async function reconcileRosterContinuityForSite(
         }
 
         if (!isWorking) {
-          if (linkedShift && ["created", "assigned"].includes(linkedShift.status) && linkedShift.startTime > freezeBoundary) {
+          if (item.source === "leave" && linkedShift) {
+            // Keep the original duty as the coverage requirement. The approved
+            // leave occurrence marks the guard unavailable; vacancy detection
+            // and reliever assignment can now reference the unchanged shift.
+            issues.push({
+              code: "LEAVE_COVERAGE_REQUIRED",
+              guardId: item.guardId,
+              dateKey: dateKey(item.date),
+              shiftType: linkedShift.shiftType === "night" ? "night" : "day",
+              message: `Approved leave requires cover for the preserved shift on ${dateKey(item.date)}.`,
+            });
+          } else if (linkedShift && ["created", "assigned"].includes(linkedShift.status) && linkedShift.startTime > freezeBoundary) {
             await tx.shift.delete({ where: { id: linkedShift.id } });
             removed += 1;
           } else if (linkedShift && !["created", "assigned"].includes(linkedShift.status)) {
@@ -1328,9 +1358,19 @@ export async function getReplacementSuggestions(
       (assignment.employee.employeeType ?? "security") === "security"
   );
   const employeeIds = candidateAssignments.map((assignment) => assignment.employeeId);
-  const [leaves, shifts, attendance] = await Promise.all([
+  const [leaves, leaveApplications, shifts, attendance] = await Promise.all([
     prisma.leaveRecord.findMany({
       where: { employeeId: { in: employeeIds }, date: workDate },
+      select: { employeeId: true },
+    }),
+    prisma.leaveApplication.findMany({
+      where: {
+        companyId,
+        employeeId: { in: employeeIds },
+        startDate: { lte: workDate },
+        endDate: { gte: workDate },
+        status: { in: ["APPROVED", "CANCELLATION_REQUESTED", "PAYROLL_PROCESSED", "ADJUSTMENT_REQUIRED", "IMPORTED_APPROVED"] },
+      },
       select: { employeeId: true },
     }),
     prisma.shift.findMany({
@@ -1349,7 +1389,7 @@ export async function getReplacementSuggestions(
       select: { clockIn: true, shift: { select: { employeeId: true } } },
     }),
   ]);
-  const leaveIds = new Set(leaves.map((row) => row.employeeId));
+  const leaveIds = new Set([...leaves, ...leaveApplications].map((row) => row.employeeId));
   const timeZone = await getCompanyTimezone(companyId);
   const { shiftStart, shiftEnd } = getShiftTimes(workDate, metadata.shiftType, timeZone);
 

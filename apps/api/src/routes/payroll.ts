@@ -25,6 +25,7 @@ import {
 } from "../lib/payroll-audit.js";
 import { format } from "date-fns";
 import { canAccessSensitiveData, omitFields } from "../lib/sensitive-data.js";
+import { getLeaveReadiness, postLeaveToPayroll } from "../services/leave-management.service.js";
 
 function canHandlePayrollPrivateData(user: import("../lib/types.js").JWTPayload) {
   return canAccessSensitiveData(user, "/payroll");
@@ -184,6 +185,14 @@ export async function payrollRoutes(app: FastifyInstance) {
         payrollReadiness: readiness,
       });
     }
+    const leaveReadiness = await getLeaveReadiness(companyId, runBefore.periodStart, runBefore.periodEnd);
+    if (leaveReadiness.blocked) {
+      return reply.code(400).send({
+        error: "Payroll blocked by leave",
+        message: leaveReadiness.message,
+        leaveReadiness,
+      });
+    }
 
     let calcResult;
     try {
@@ -248,6 +257,14 @@ export async function payrollRoutes(app: FastifyInstance) {
         payrollReadiness: readiness,
       });
     }
+    const leaveReadiness = await getLeaveReadiness(user.companyId, run.periodStart, run.periodEnd);
+    if (leaveReadiness.blocked) {
+      return reply.code(400).send({
+        error: "Approval blocked by leave",
+        message: leaveReadiness.message,
+        leaveReadiness,
+      });
+    }
 
     const validation = await validatePayrollFinalisation(id, user.companyId);
     if (!validation.canApprove) {
@@ -259,9 +276,15 @@ export async function payrollRoutes(app: FastifyInstance) {
     }
 
     const lockTime = new Date();
-    const updatedCount = await prisma.payrollRun.updateMany({
-      where: { id, companyId: user.companyId },
-      data: { status: "approved", lockedAt: lockTime },
+    const updatedCount = await prisma.$transaction(async (tx) => {
+      const changed = await tx.payrollRun.updateMany({
+        where: { id, companyId: user.companyId, status: "calculated" },
+        data: { status: "approved", lockedAt: lockTime },
+      });
+      if (changed.count > 0) {
+        await postLeaveToPayroll(user.companyId, id, run.periodStart, run.periodEnd, tx);
+      }
+      return changed;
     });
     if (updatedCount.count === 0) {
       return reply.code(404).send({ error: "Payroll run not found" });

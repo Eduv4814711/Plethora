@@ -12,6 +12,14 @@ export interface TimesheetAggregate {
   leaveDays: number;
   /** Actual paid leave hours from LeaveRecord entries in the period. */
   leaveHours: number;
+  /** Authorised unpaid leave hours. */
+  unpaidLeaveHours?: number;
+  /** UIF-supported leave, retained separately from ordinary unpaid leave. */
+  uifLeaveHours?: number;
+  /** Injury-on-duty hours, retained for compensation reconciliation. */
+  iodLeaveHours?: number;
+  /** Information-only leave that must not alter pay automatically. */
+  informationLeaveHours?: number;
 }
 
 /** Maximum leave hours accepted per single leave record (guards against bad data). */
@@ -138,14 +146,66 @@ export async function aggregateTimesheets(
     },
   });
 
-  const leaveRecords = await prisma.leaveRecord.findMany({
-    where: {
-      employee: { companyId },
-      date: { gte: periodStart, lte: periodEnd },
-    },
-  });
+  const [leaveOccurrences, legacyLeaveRecords] = await Promise.all([
+    prisma.leaveOccurrence.findMany({
+      where: {
+        companyId,
+        status: { in: ["APPROVED", "PAYROLL_PROCESSED"] },
+        leaveDate: { gte: periodStart, lte: periodEnd },
+      },
+      select: { employeeId: true, leaveDate: true, paidMinutes: true, unpaidMinutes: true, requestedMinutes: true, payrollTreatment: true },
+    }),
+    prisma.leaveRecord.findMany({
+      where: {
+        employee: { companyId },
+        date: { gte: periodStart, lte: periodEnd },
+      },
+    }),
+  ]);
 
-  const employeeLeaveHours = sumLeaveHoursFromRecords(leaveRecords);
+  const authoritativeKeys = new Set(
+    leaveOccurrences.map((row) => `${row.employeeId}:${row.leaveDate.toISOString().slice(0, 10)}`)
+  );
+  const legacyWithoutAuthoritativeOccurrence = legacyLeaveRecords.filter(
+    (row) => !authoritativeKeys.has(`${row.employeeId}:${row.date.toISOString().slice(0, 10)}`)
+  );
+  // Keep legacy payroll semantics available during the staged per-company
+  // migration. Once an authoritative occurrence exists for a day it wins;
+  // otherwise every legacy treatment is still classified rather than silently
+  // dropping unpaid/UIF/IOD deductions before that tenant is imported.
+  const legacyUifTypes = new Set(["maternity", "parental", "adoption", "commissioning_parental"]);
+  const employeeLeaveHours = sumLeaveHoursFromRecords(
+    legacyWithoutAuthoritativeOccurrence.filter(
+      (row) => row.type !== "unpaid" && row.type !== "injury_on_duty" && !legacyUifTypes.has(row.type)
+    )
+  );
+  const employeeUnpaidLeaveHours = sumLeaveHoursFromRecords(
+    legacyWithoutAuthoritativeOccurrence.filter((row) => row.type === "unpaid")
+  );
+  const employeeUifLeaveHours = sumLeaveHoursFromRecords(
+    legacyWithoutAuthoritativeOccurrence.filter((row) => legacyUifTypes.has(row.type))
+  );
+  const employeeIodLeaveHours = sumLeaveHoursFromRecords(
+    legacyWithoutAuthoritativeOccurrence.filter((row) => row.type === "injury_on_duty")
+  );
+  const employeeInformationLeaveHours = new Map<string, number>();
+  for (const occurrence of leaveOccurrences) {
+    employeeLeaveHours.set(
+      occurrence.employeeId,
+      (employeeLeaveHours.get(occurrence.employeeId) ?? 0) + occurrence.paidMinutes / 60
+    );
+    const target = occurrence.payrollTreatment === "UIF_NO_EMPLOYER_PAY"
+      ? employeeUifLeaveHours
+      : occurrence.payrollTreatment === "IOD_COMPENSATION"
+        ? employeeIodLeaveHours
+        : occurrence.payrollTreatment === "INFORMATION_ONLY"
+          ? employeeInformationLeaveHours
+          : employeeUnpaidLeaveHours;
+    const minutes = occurrence.payrollTreatment === "IOD_COMPENSATION" || occurrence.payrollTreatment === "INFORMATION_ONLY"
+      ? occurrence.requestedMinutes
+      : occurrence.unpaidMinutes;
+    target.set(occurrence.employeeId, (target.get(occurrence.employeeId) ?? 0) + minutes / 60);
+  }
 
   const totals = new Map<
     string,
@@ -221,6 +281,10 @@ export async function aggregateTimesheets(
       sundayHours: Math.round(t.sundayHours * 100) / 100,
       publicHolidayHours: Math.round(t.publicHolidayHours * 100) / 100,
       leaveHours,
+      unpaidLeaveHours: Math.round((employeeUnpaidLeaveHours.get(employeeId) ?? 0) * 100) / 100,
+      uifLeaveHours: Math.round((employeeUifLeaveHours.get(employeeId) ?? 0) * 100) / 100,
+      iodLeaveHours: Math.round((employeeIodLeaveHours.get(employeeId) ?? 0) * 100) / 100,
+      informationLeaveHours: Math.round((employeeInformationLeaveHours.get(employeeId) ?? 0) * 100) / 100,
       leaveDays: Math.round((leaveHours / 8) * 100) / 100,
     });
   }
@@ -228,6 +292,7 @@ export async function aggregateTimesheets(
   // Include approved leave for employees with no attendance shifts in the period.
   for (const [employeeId, leaveHoursRaw] of employeeLeaveHours) {
     if (seen.has(employeeId) || leaveHoursRaw <= 0) continue;
+    seen.add(employeeId);
     const leaveHours = Math.round(leaveHoursRaw * 100) / 100;
     result.push({
       employeeId,
@@ -236,7 +301,41 @@ export async function aggregateTimesheets(
       sundayHours: 0,
       publicHolidayHours: 0,
       leaveHours,
+      unpaidLeaveHours: Math.round((employeeUnpaidLeaveHours.get(employeeId) ?? 0) * 100) / 100,
+      uifLeaveHours: Math.round((employeeUifLeaveHours.get(employeeId) ?? 0) * 100) / 100,
+      iodLeaveHours: Math.round((employeeIodLeaveHours.get(employeeId) ?? 0) * 100) / 100,
+      informationLeaveHours: Math.round((employeeInformationLeaveHours.get(employeeId) ?? 0) * 100) / 100,
       leaveDays: Math.round((leaveHours / 8) * 100) / 100,
+    });
+  }
+
+  // Include authorised unpaid leave for fixed-salary employees with no worked or paid-leave hours.
+  for (const [employeeId, unpaidLeaveHoursRaw] of employeeUnpaidLeaveHours) {
+    if (seen.has(employeeId) || unpaidLeaveHoursRaw <= 0) continue;
+    result.push({
+      employeeId,
+      basicHours: 0,
+      overtimeHours: 0,
+      sundayHours: 0,
+      publicHolidayHours: 0,
+      leaveHours: 0,
+      unpaidLeaveHours: Math.round(unpaidLeaveHoursRaw * 100) / 100,
+      uifLeaveHours: Math.round((employeeUifLeaveHours.get(employeeId) ?? 0) * 100) / 100,
+      iodLeaveHours: Math.round((employeeIodLeaveHours.get(employeeId) ?? 0) * 100) / 100,
+      informationLeaveHours: Math.round((employeeInformationLeaveHours.get(employeeId) ?? 0) * 100) / 100,
+      leaveDays: 0,
+    });
+  }
+
+  // Include UIF/IOD/information-only cases even when there are no paid or worked hours.
+  for (const employeeId of new Set([...employeeUifLeaveHours.keys(), ...employeeIodLeaveHours.keys(), ...employeeInformationLeaveHours.keys()])) {
+    if (seen.has(employeeId) || employeeUnpaidLeaveHours.has(employeeId)) continue;
+    result.push({
+      employeeId, basicHours: 0, overtimeHours: 0, sundayHours: 0, publicHolidayHours: 0,
+      leaveHours: 0, unpaidLeaveHours: 0, leaveDays: 0,
+      uifLeaveHours: Math.round((employeeUifLeaveHours.get(employeeId) ?? 0) * 100) / 100,
+      iodLeaveHours: Math.round((employeeIodLeaveHours.get(employeeId) ?? 0) * 100) / 100,
+      informationLeaveHours: Math.round((employeeInformationLeaveHours.get(employeeId) ?? 0) * 100) / 100,
     });
   }
 

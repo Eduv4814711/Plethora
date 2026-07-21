@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireRole, normalizeModuleAccess } from "../middleware/rbac.js";
+import { requireRole, normalizeModulePermissions } from "../middleware/rbac.js";
 import { prisma } from "../lib/prisma.js";
 import {
   findManyUsersForCompany,
@@ -21,9 +21,9 @@ const MODULE_ACCESS_MIGRATION_MESSAGE =
   "The database is missing the User.moduleAccess column. From the project root run: npm run db:push. If that fails on duplicate User emails (email unique), run: npm run db:add-module-access — it only adds the moduleAccess column. Later, fix duplicate emails (npm run db:check-email-unique in apps/api) then db:push to align the rest of the schema. DATABASE_URL must be set in apps/api/.env.";
 
 const moduleAccessSchema = z
-  .union([z.array(z.string()), z.null()])
+  .union([z.array(z.string()), z.record(z.string(), z.enum(["read", "write"])), z.null()])
   .optional()
-  .transform((v) => (v === undefined ? undefined : normalizeModuleAccess(v)));
+  .transform((v) => (v === undefined ? undefined : normalizeModulePermissions(v)));
 
 const roleLabelSchema = z.union([z.string().max(120), z.null()]).optional();
 
@@ -126,7 +126,7 @@ export async function usersRoutes(app: FastifyInstance) {
       roleLabel: normalizeRoleLabel(parsed.data.roleLabel),
     };
     const createData =
-      parsed.data.moduleAccess != null && parsed.data.moduleAccess.length > 0
+      parsed.data.moduleAccess != null && Object.keys(parsed.data.moduleAccess).length > 0
         ? { ...baseCreate, moduleAccess: parsed.data.moduleAccess }
         : baseCreate;
 
@@ -302,7 +302,7 @@ export async function usersRoutes(app: FastifyInstance) {
     }
     if (parsed.data.moduleAccess !== undefined) {
       updateData.moduleAccess =
-        parsed.data.moduleAccess === null || parsed.data.moduleAccess.length === 0
+        parsed.data.moduleAccess === null || Object.keys(parsed.data.moduleAccess).length === 0
           ? Prisma.JsonNull
           : parsed.data.moduleAccess;
     }
@@ -328,13 +328,21 @@ export async function usersRoutes(app: FastifyInstance) {
       const missingRoleLabel = isMissingRoleLabelColumnError(e);
       const missingPasswordSetup = isMissingPasswordSetupColumnError(e);
       if (!missingModuleAccess && !missingRoleLabel && !missingPasswordSetup) throw e;
-      if (missingModuleAccess && Object.prototype.hasOwnProperty.call(updateData, "moduleAccess")) {
+      const softData = { ...updateData };
+      // Older deployments may not have the optional access columns yet. Do not
+      // let that prevent unrelated account changes (especially password
+      // changes) from being saved. A module-only update still needs the
+      // migration so we do not report success without applying the request.
+      const hasNonModuleUpdate = Object.keys(softData).some((key) => key !== "moduleAccess" && key !== "roleLabel");
+      if (missingModuleAccess && !hasNonModuleUpdate) {
         return reply.code(503).send({
           error: "Module access not available",
           message: MODULE_ACCESS_MIGRATION_MESSAGE,
         });
       }
-      const softData = { ...updateData };
+      if (missingModuleAccess) {
+        delete (softData as { moduleAccess?: Prisma.InputJsonValue | typeof Prisma.JsonNull }).moduleAccess;
+      }
       delete (softData as { roleLabel?: string | null }).roleLabel;
       delete (softData as { passwordSetupRequired?: boolean }).passwordSetupRequired;
       delete (softData as { passwordSetupTokenHash?: string | null }).passwordSetupTokenHash;

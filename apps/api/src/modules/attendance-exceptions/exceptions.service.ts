@@ -11,6 +11,7 @@ import {
   exceptionTypeLabel,
   type DetectedException,
 } from "./exception-detection.js";
+import { parseExceptionPeriodBoundary } from "./exception-period.js";
 
 async function persistException(params: {
   companyId: string;
@@ -197,8 +198,12 @@ export async function listExceptions(
     ...(query.periodStart || query.periodEnd
       ? {
           detectedAt: {
-            ...(query.periodStart ? { gte: new Date(query.periodStart) } : {}),
-            ...(query.periodEnd ? { lte: new Date(query.periodEnd) } : {}),
+            ...(query.periodStart
+              ? { gte: parseExceptionPeriodBoundary(query.periodStart, "start") }
+              : {}),
+            ...(query.periodEnd
+              ? { lte: parseExceptionPeriodBoundary(query.periodEnd, "end") }
+              : {}),
           },
         }
       : {}),
@@ -219,7 +224,22 @@ export async function listExceptions(
     prisma.attendanceException.count({ where }),
   ]);
 
-  return { items, total };
+  const shiftIds = [...new Set(items.flatMap((item) => (item.shiftId ? [item.shiftId] : [])))];
+  const shifts = shiftIds.length
+    ? await prisma.shift.findMany({
+        where: { companyId, id: { in: shiftIds } },
+        select: { id: true, startTime: true, endTime: true },
+      })
+    : [];
+  const shiftsById = new Map(shifts.map((shift) => [shift.id, shift]));
+
+  return {
+    items: items.map((item) => ({
+      ...item,
+      shift: item.shiftId ? shiftsById.get(item.shiftId) : undefined,
+    })),
+    total,
+  };
 }
 
 export async function reviewException(params: {
@@ -304,7 +324,7 @@ export async function getExceptionAnalytics(
       : {}),
   };
 
-  const [byType, bySeverity, bySite, byEmployee, openCritical, total] =
+  const [byType, bySeverity, bySite, byEmployee, openCritical, openCount, total] =
     await Promise.all([
       prisma.attendanceException.groupBy({
         by: ["exceptionType"],
@@ -330,6 +350,12 @@ export async function getExceptionAnalytics(
         where: {
           companyId,
           severity: "CRITICAL",
+          status: { in: ["OPEN", "UNDER_REVIEW"] },
+        },
+      }),
+      prisma.attendanceException.count({
+        where: {
+          ...where,
           status: { in: ["OPEN", "UNDER_REVIEW"] },
         },
       }),
@@ -370,6 +396,7 @@ export async function getExceptionAnalytics(
 
   return {
     total,
+    openCount,
     openCritical,
     lateArrivals: late,
     missedClockIns: missedIn,

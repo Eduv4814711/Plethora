@@ -185,11 +185,17 @@ async function provisionCompany(label: "A" | "B", runId: string): Promise<Tenant
 
 /** Returns true when DATABASE_URL is set and PostgreSQL accepts connections. */
 export async function isIntegrationDatabaseAvailable(): Promise<boolean> {
-  if (!process.env.DATABASE_URL?.trim()) return false;
+  if (process.env.CI && !process.env.TEST_DATABASE_URL?.trim()) {
+    throw new Error("Payroll-critical integration tests require TEST_DATABASE_URL in CI; they may not be silently skipped.");
+  }
+  if (!process.env.TEST_DATABASE_URL?.trim() && !process.env.DATABASE_URL?.trim()) return false;
   try {
     await prisma.$queryRaw`SELECT 1`;
     return true;
-  } catch {
+  } catch (error) {
+    if (process.env.CI) {
+      throw new Error("Payroll-critical integration tests could not connect to the configured test database.", { cause: error });
+    }
     return false;
   }
 }

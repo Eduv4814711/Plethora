@@ -9,6 +9,7 @@ vi.mock("../../lib/prisma.js", () => ({
     site: { findMany: vi.fn() },
     publicHoliday: { findMany: vi.fn() },
     leaveRecord: { findMany: vi.fn() },
+    leaveOccurrence: { findMany: vi.fn() },
   },
 }));
 
@@ -75,12 +76,14 @@ describe("aggregateTimesheets per-site behaviour", () => {
     vi.mocked(prisma.siteTimesheet.findMany).mockReset();
     vi.mocked(prisma.shift.findMany).mockReset();
     vi.mocked(prisma.leaveRecord.findMany).mockReset();
+    vi.mocked(prisma.leaveOccurrence.findMany).mockReset();
 
     vi.mocked(prisma.company.findUnique).mockResolvedValue({
       settings: { timezone: "Africa/Johannesburg" },
     } as never);
     vi.mocked(prisma.publicHoliday.findMany).mockResolvedValue([] as never);
     vi.mocked(prisma.leaveRecord.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.leaveOccurrence.findMany).mockResolvedValue([] as never);
   });
 
   it("counts approved rows for one site AND raw shifts for an unapproved site", async () => {
@@ -176,5 +179,22 @@ describe("aggregateTimesheets per-site behaviour", () => {
         }),
       })
     );
+  });
+
+  it("preserves legacy unpaid, UIF and IOD treatment until authoritative leave is imported", async () => {
+    vi.mocked(prisma.siteTimesheetRow.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.siteTimesheet.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.shift.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.leaveRecord.findMany).mockResolvedValue([
+      { employeeId: "G1", date: new Date("2026-05-05T00:00:00.000Z"), type: "unpaid", hours: 8 },
+      { employeeId: "G2", date: new Date("2026-05-06T00:00:00.000Z"), type: "maternity", hours: 8 },
+      { employeeId: "G3", date: new Date("2026-05-07T00:00:00.000Z"), type: "injury_on_duty", hours: 8 },
+    ] as never);
+
+    const result = await aggregateTimesheets(companyId, periodStart, periodEnd);
+
+    expect(result.find((row) => row.employeeId === "G1")?.unpaidLeaveHours).toBe(8);
+    expect(result.find((row) => row.employeeId === "G2")?.uifLeaveHours).toBe(8);
+    expect(result.find((row) => row.employeeId === "G3")?.iodLeaveHours).toBe(8);
   });
 });

@@ -12,6 +12,7 @@ import {
   MODULE_ASSIGN_OPTIONS,
   normalizeUserModuleAccess,
   defaultModulesForRole,
+  normalizeUserModulePermissions,
   isFullAdmin,
 } from "@/lib/permissions";
 import { DateInput } from "@/components/date-input";
@@ -19,6 +20,7 @@ import { useConfirmDialog } from "@/components/ui";
 import { TeamMemberUserPicker } from "@/components/team-member-user-picker";
 import { ClientsSettingsSection } from "@/components/clients-settings-section";
 import { clsx } from "clsx";
+import { parseStaffRoleInput } from "@/lib/staff-role";
 
 type Tab = "profile" | "business" | "settings" | "users" | "clients" | "migrate" | "factory_reset";
 
@@ -30,42 +32,6 @@ const ROLE_LABELS: Record<UserRole, string> = {
   controller: "Controller",
   client: "Client",
 };
-
-/** Shown when "Assign Role" is selected (add/edit user). */
-const STAFF_ROLES: UserRole[] = ["operations_manager", "hr_payroll", "supervisor", "controller"];
-
-/** Map free-text to a staff UserRole. Returns null if unrecognized. */
-function parseStaffRoleInput(raw: string): UserRole | null {
-  const t = raw.trim().toLowerCase();
-  if (!t) return null;
-
-  const asKey = t.replace(/\s+/g, "_").replace(/&/g, "and").replace(/[^a-z0-9_]/g, "");
-  const squish = t.replace(/[\s&.,-]+/g, "");
-
-  for (const r of STAFF_ROLES) {
-    if (r === t || r === asKey) return r;
-    const label = ROLE_LABELS[r].toLowerCase();
-    const labelKey = label.replace(/\s+/g, "_").replace(/&/g, "and").replace(/[^a-z0-9_]/g, "");
-    if (label === t || labelKey === asKey) return r;
-  }
-
-  const aliases: Record<string, UserRole> = {
-    om: "operations_manager",
-    operationsmanager: "operations_manager",
-    opsmanager: "operations_manager",
-    hr: "hr_payroll",
-    hrandpayroll: "hr_payroll",
-    hrpayroll: "hr_payroll",
-    payroll: "hr_payroll",
-    pay: "hr_payroll",
-    sup: "supervisor",
-    ctrl: "controller",
-  };
-  if (aliases[squish]) return aliases[squish];
-  if (aliases[asKey.replace(/_/g, "")]) return aliases[asKey.replace(/_/g, "")];
-
-  return null;
-}
 
 export default function SettingsPage() {
   const { user, token, logout } = useAuth();
@@ -128,7 +94,6 @@ export default function SettingsPage() {
           .filter((t) => !t.adminOnly || isFullAdminUser)
           .map((tab) => {
             const tabProps = {
-              key: tab.id,
               className: clsx(
                 "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors",
                 activeTab === tab.id
@@ -137,11 +102,12 @@ export default function SettingsPage() {
               ),
             };
             return tab.href ? (
-              <Link href={tab.href} {...tabProps}>
+              <Link key={tab.id} href={tab.href} {...tabProps}>
                 {tab.label}
               </Link>
             ) : (
               <button
+                key={tab.id}
                 {...tabProps}
                 onClick={() => setActiveTab(tab.id)}
               >
@@ -855,10 +821,10 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
   const [addAdminFullAccess, setAddAdminFullAccess] = useState(true);
   /** Non-admin: assign modules vs no app access (pending page). */
   const [addGrantAppModules, setAddGrantAppModules] = useState(true);
-  const [addCustomModules, setAddCustomModules] = useState<string[]>(() => defaultModulesForRole("supervisor"));
+  const [addCustomModules, setAddCustomModules] = useState<Record<string, "read" | "write">>(() => Object.fromEntries(defaultModulesForRole("supervisor").map((m) => [m, "write"])));
   const [editAdminFullAccess, setEditAdminFullAccess] = useState(true);
   const [editGrantAppModules, setEditGrantAppModules] = useState(true);
-  const [editCustomModules, setEditCustomModules] = useState<string[]>([]);
+  const [editCustomModules, setEditCustomModules] = useState<Record<string, "read" | "write">>({});
   const [editAccountKind, setEditAccountKind] = useState<"admin" | "assign">("assign");
   const [editStaffRoleInput, setEditStaffRoleInput] = useState(ROLE_LABELS.supervisor);
   const [editStaffRoleFieldError, setEditStaffRoleFieldError] = useState<string | null>(null);
@@ -866,8 +832,8 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
   const assignableModules = (role: UserRole) =>
     MODULE_ASSIGN_OPTIONS.filter((m) => m.href !== "/audit" || role === "admin");
 
-  const toggleCustomModule = (href: string, setList: React.Dispatch<React.SetStateAction<string[]>>) => {
-    setList((prev) => (prev.includes(href) ? prev.filter((x) => x !== href) : [...prev, href]));
+  const setModulePermission = (href: string, permission: "hidden" | "read" | "write", setList: React.Dispatch<React.SetStateAction<Record<string, "read" | "write">>>) => {
+    setList((prev) => { const next = { ...prev }; if (permission === "hidden") delete next[href]; else next[href] = permission; return next; });
   };
 
   const resetAddFormState = () => {
@@ -879,7 +845,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
     setAddAccountKind("assign");
     setAddAdminFullAccess(true);
     setAddGrantAppModules(true);
-    setAddCustomModules(defaultModulesForRole("supervisor"));
+    setAddCustomModules(Object.fromEntries(defaultModulesForRole("supervisor").map((m) => [m, "write"])));
   };
 
   const fetchUsers = useCallback(async () => {
@@ -904,7 +870,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
       return;
     }
     setAddGrantAppModules(true);
-    setAddCustomModules(defaultModulesForRole(addForm.role));
+    setAddCustomModules(Object.fromEntries(defaultModulesForRole(addForm.role).map((m) => [m, "write"])));
   }, [addForm.role]);
 
   const handleAddUser = async (e: React.FormEvent) => {
@@ -923,20 +889,17 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
       roleLabelForPayload = typedRole;
       const parsedRole = parseStaffRoleInput(typedRole);
       resolvedRole = parsedRole ?? "supervisor";
-      if (resolvedRole !== addForm.role) {
-        modulesForPayload = defaultModulesForRole(resolvedRole);
-      }
     } else {
       resolvedRole = "admin";
       roleLabelForPayload = null;
     }
 
     if (resolvedRole === "admin") {
-      if (!addAdminFullAccess && modulesForPayload.length === 0) {
+      if (!addAdminFullAccess && Object.keys(modulesForPayload).length === 0) {
         setError("Select at least one module for a scoped administrator, or choose Full access.");
         return;
       }
-    } else if (addGrantAppModules && modulesForPayload.length === 0) {
+    } else if (addGrantAppModules && Object.keys(modulesForPayload).length === 0) {
       setError("Select at least one module, or choose No app access.");
       return;
     }
@@ -991,20 +954,17 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
       editRoleLabelForPayload = typedRole;
       const parsedRole = parseStaffRoleInput(typedRole);
       resolvedEditRole = parsedRole ?? "supervisor";
-      if (resolvedEditRole !== editForm.role) {
-        editModulesPayload = defaultModulesForRole(resolvedEditRole);
-      }
     } else {
       resolvedEditRole = "admin";
       editRoleLabelForPayload = null;
     }
 
     if (resolvedEditRole === "admin") {
-      if (!editAdminFullAccess && editModulesPayload.length === 0) {
+      if (!editAdminFullAccess && Object.keys(editModulesPayload).length === 0) {
         setError("Select at least one module for a scoped administrator, or choose Full access.");
         return;
       }
-    } else if (editGrantAppModules && editModulesPayload.length === 0) {
+    } else if (editGrantAppModules && Object.keys(editModulesPayload).length === 0) {
       setError("Select at least one module, or choose No app access.");
       return;
     }
@@ -1018,7 +978,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
         password: string;
         role: UserRole;
         roleLabel: string | null;
-        moduleAccess: string[] | null;
+        moduleAccess: Record<string, "read" | "write"> | null;
       }> = {
         name: editForm.name,
         email: editForm.email,
@@ -1074,13 +1034,13 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
       password: "",
       role: u.role,
     });
-    const norm = normalizeUserModuleAccess(u.moduleAccess);
+    const permissions = normalizeUserModulePermissions(u.moduleAccess);
     if (u.role === "admin") {
-      setEditAdminFullAccess(!norm);
-      setEditCustomModules(norm ?? defaultModulesForRole("admin"));
+      setEditAdminFullAccess(!permissions);
+      setEditCustomModules(permissions ?? Object.fromEntries(defaultModulesForRole("admin").map((m) => [m, "write"])));
     } else {
-      setEditGrantAppModules(!!norm);
-      setEditCustomModules(norm ?? defaultModulesForRole(u.role));
+      setEditGrantAppModules(!!permissions);
+      setEditCustomModules(permissions ?? Object.fromEntries(defaultModulesForRole(u.role).map((m) => [m, "write"])));
     }
   };
 
@@ -1266,7 +1226,10 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                       type="text"
                       value={addStaffRoleInput}
                       onChange={(e) => {
-                        setAddStaffRoleInput(e.target.value);
+                        const value = e.target.value;
+                        setAddStaffRoleInput(value);
+                        const role = parseStaffRoleInput(value.trim()) ?? "supervisor";
+                        setAddForm((current) => current.role === role ? current : { ...current, role });
                         setAddStaffRoleFieldError(null);
                       }}
                       onBlur={() => {
@@ -1310,7 +1273,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                         checked={!addAdminFullAccess}
                         onChange={() => {
                           setAddAdminFullAccess(false);
-                          setAddCustomModules(defaultModulesForRole("admin"));
+                          setAddCustomModules(Object.fromEntries(defaultModulesForRole("admin").map((m) => [m, "write"])));
                         }}
                         className="border-neutral-300"
                       />
@@ -1321,12 +1284,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                       {assignableModules("admin").map((m) => (
                         <label key={m.href} className="flex items-center gap-2 text-sm cursor-pointer text-neutral-700 dark:text-neutral-300">
-                          <input
-                            type="checkbox"
-                            checked={addCustomModules.includes(m.href)}
-                            onChange={() => toggleCustomModule(m.href, setAddCustomModules)}
-                            className="border-neutral-300 rounded"
-                          />
+                          <select value={addCustomModules[m.href] ?? "hidden"} onChange={(e) => setModulePermission(m.href, e.target.value as "hidden" | "read" | "write", setAddCustomModules)} className="input-modern py-1"><option value="hidden">Hidden</option><option value="read">Read only</option><option value="write">Read & write</option></select>
                           {m.label}
                         </label>
                       ))}
@@ -1361,12 +1319,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                       {assignableModules(addForm.role).map((m) => (
                         <label key={m.href} className="flex items-center gap-2 text-sm cursor-pointer text-neutral-700 dark:text-neutral-300">
-                          <input
-                            type="checkbox"
-                            checked={addCustomModules.includes(m.href)}
-                            onChange={() => toggleCustomModule(m.href, setAddCustomModules)}
-                            className="border-neutral-300 rounded"
-                          />
+                          <select value={addCustomModules[m.href] ?? "hidden"} onChange={(e) => setModulePermission(m.href, e.target.value as "hidden" | "read" | "write", setAddCustomModules)} className="input-modern py-1"><option value="hidden">Hidden</option><option value="read">Read only</option><option value="write">Read & write</option></select>
                           {m.label}
                         </label>
                       ))}
@@ -1497,6 +1450,8 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                                 onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))}
                                 className="input-modern"
                                 placeholder="Leave blank to keep current"
+                                minLength={12}
+                                title="New password must be at least 12 characters"
                               />
                             </div>
                             <div>
@@ -1511,13 +1466,13 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                                   if (k === "admin") {
                                     setEditForm((f) => ({ ...f, role: "admin" }));
                                     setEditAdminFullAccess(true);
-                                    setEditCustomModules(defaultModulesForRole("admin"));
+                                    setEditCustomModules(Object.fromEntries(defaultModulesForRole("admin").map((m) => [m, "write"])));
                                   } else {
                                     setEditForm((f) => ({ ...f, role: "supervisor" }));
                                     setEditStaffRoleInput(ROLE_LABELS.supervisor);
                                     setEditStaffRoleFieldError(null);
                                     setEditGrantAppModules(true);
-                                    setEditCustomModules(defaultModulesForRole("supervisor"));
+                                    setEditCustomModules(Object.fromEntries(defaultModulesForRole("supervisor").map((m) => [m, "write"])));
                                   }
                                 }}
                                 className="input-modern"
@@ -1534,7 +1489,10 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                                     type="text"
                                     value={editStaffRoleInput}
                                     onChange={(e) => {
-                                      setEditStaffRoleInput(e.target.value);
+                                      const value = e.target.value;
+                                      setEditStaffRoleInput(value);
+                                      const role = parseStaffRoleInput(value.trim()) ?? "supervisor";
+                                      setEditForm((current) => current.role === role ? current : { ...current, role });
                                       setEditStaffRoleFieldError(null);
                                     }}
                                     onBlur={() => {
@@ -1577,7 +1535,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                                       checked={!editAdminFullAccess}
                                       onChange={() => {
                                         setEditAdminFullAccess(false);
-                                        setEditCustomModules(defaultModulesForRole("admin"));
+                                        setEditCustomModules(Object.fromEntries(defaultModulesForRole("admin").map((m) => [m, "write"])));
                                       }}
                                       className="border-neutral-300"
                                     />
@@ -1591,12 +1549,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                                         key={m.href}
                                         className="flex items-center gap-2 text-sm cursor-pointer text-neutral-700 dark:text-neutral-300"
                                       >
-                                        <input
-                                          type="checkbox"
-                                          checked={editCustomModules.includes(m.href)}
-                                          onChange={() => toggleCustomModule(m.href, setEditCustomModules)}
-                                          className="border-neutral-300 rounded"
-                                        />
+                                        <select value={editCustomModules[m.href] ?? "hidden"} onChange={(e) => setModulePermission(m.href, e.target.value as "hidden" | "read" | "write", setEditCustomModules)} className="input-modern py-1"><option value="hidden">Hidden</option><option value="read">Read only</option><option value="write">Read & write</option></select>
                                         {m.label}
                                       </label>
                                     ))}
@@ -1634,12 +1587,7 @@ function UsersSection({ token, currentUserId }: { token: string; currentUserId?:
                                         key={m.href}
                                         className="flex items-center gap-2 text-sm cursor-pointer text-neutral-700 dark:text-neutral-300"
                                       >
-                                        <input
-                                          type="checkbox"
-                                          checked={editCustomModules.includes(m.href)}
-                                          onChange={() => toggleCustomModule(m.href, setEditCustomModules)}
-                                          className="border-neutral-300 rounded"
-                                        />
+                                        <select value={editCustomModules[m.href] ?? "hidden"} onChange={(e) => setModulePermission(m.href, e.target.value as "hidden" | "read" | "write", setEditCustomModules)} className="input-modern py-1"><option value="hidden">Hidden</option><option value="read">Read only</option><option value="write">Read & write</option></select>
                                         {m.label}
                                       </label>
                                     ))}

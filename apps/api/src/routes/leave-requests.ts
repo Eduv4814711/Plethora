@@ -52,7 +52,7 @@ export async function leaveRequestsRoutes(app: FastifyInstance) {
     const user = request.user!;
 
     try {
-      await approveLeaveRequest(id, user.companyId, user.sub);
+      await approveLeaveRequest(id, user.companyId, user.sub, user.role);
     } catch (err) {
       if (err instanceof LeaveRequestError) {
         return reply.code(400).send({
@@ -93,7 +93,7 @@ export async function leaveRequestsRoutes(app: FastifyInstance) {
     const user = request.user!;
 
     try {
-      await rejectLeaveRequest(id, user.companyId, user.sub);
+      await rejectLeaveRequest(id, user.companyId, user.sub, user.role);
     } catch (err) {
       if (err instanceof LeaveRequestError) {
         return reply.code(400).send({

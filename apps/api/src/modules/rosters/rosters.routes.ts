@@ -55,11 +55,12 @@ import {
   unlockSiteTimesheet,
   updateSiteTimesheetRow,
 } from "./site-timesheets.service.js";
+import { SITE_TIMESHEET_MODULES } from "./site-timesheet-access.js";
 
 const protect = [
   authMiddleware,
   requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
-    module: "/rostering",
+    anyOfModules: [...SITE_TIMESHEET_MODULES],
   }),
 ];
 

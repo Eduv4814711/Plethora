@@ -17,9 +17,16 @@ describe("sensitive data policy", () => {
     expect(canAccessSensitiveData(admin, "/employees")).toBe(false);
   });
 
-  it("requires HR/payroll and the relevant assigned module", () => {
+  it("requires the relevant assigned module", () => {
     expect(canAccessSensitiveData(hr, "/employees")).toBe(true);
     expect(canAccessSensitiveData(hr, "/academy")).toBe(false);
+  });
+
+  it("uses module assignment rather than designation", () => {
+    expect(canAccessSensitiveData({ ...admin, moduleAccess: ["/employees"] }, "/employees")).toBe(true);
+    expect(
+      canAccessSensitiveData({ ...admin, role: "supervisor", moduleAccess: ["/employees"] }, "/employees")
+    ).toBe(true);
   });
 
   it("detects protected write fields and redacts them", () => {

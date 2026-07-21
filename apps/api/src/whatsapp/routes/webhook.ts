@@ -5,6 +5,7 @@ import { verifyWhatsAppWebhookSignature } from "../../lib/whatsapp-signature.js"
 import {
   processAndSend,
   processLocationAndSend,
+  processLeaveDocumentAndSend,
   findEmployeeByPhone,
   sendUnsupportedTypeReply,
 } from "../services/handler.service.js";
@@ -22,6 +23,8 @@ interface WhatsAppIncomingMessage {
   type: string;
   text?: { body: string };
   location?: { latitude: number; longitude: number };
+  image?: { id: string; mime_type?: string; caption?: string };
+  document?: { id: string; mime_type?: string; caption?: string; filename?: string };
   interactive?: {
     type: string;
     button_reply?: { id: string; title: string };
@@ -64,7 +67,14 @@ type WebhookRequest = FastifyRequest & { rawBody?: string };
 
 function verifyWebhookPostSignature(request: WebhookRequest, reply: FastifyReply): boolean {
   const appSecret = config.whatsapp.appSecret;
-  if (!appSecret) return true;
+  if (!appSecret) {
+    if (config.isProduction && config.whatsapp.enabled) {
+      request.log.error("WhatsApp is enabled without an app secret; refusing unsigned webhook");
+      reply.code(503).send("Webhook signature verification is unavailable");
+      return false;
+    }
+    return true;
+  }
 
   const signature = request.headers["x-hub-signature-256"];
   const header = Array.isArray(signature) ? signature[0] : signature;
@@ -215,6 +225,16 @@ export async function webhookRoutes(app: FastifyInstance) {
                 );
               } catch (err) {
                 request.log.error(err, "WhatsApp location processing failed");
+              }
+              continue;
+            } else if ((msg.type === "image" && msg.image?.id) || (msg.type === "document" && msg.document?.id)) {
+              const media = msg.type === "image" ? msg.image! : msg.document!;
+              const caption = media.caption;
+              await storeInboundMessage(msg.from, msg, msg.type, caption ?? `[${msg.type}]`, request.log);
+              try {
+                await processLeaveDocumentAndSend(msg.from, media.id, media.mime_type ?? (msg.type === "image" ? "image/jpeg" : "application/pdf"), msg.type === "document" ? msg.document?.filename : undefined, caption);
+              } catch (err) {
+                request.log.error(err, "WhatsApp leave document processing failed");
               }
               continue;
             }

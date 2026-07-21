@@ -87,6 +87,16 @@ model Company {
   academyPolicyDocuments  AcademyPolicyDocument[]
   academyRenewalAlerts    AcademyRenewalAlert[]
   leaveSickNotes          LeaveSickNote[]
+  leaveTypes              LeaveTypeDefinition[]
+  leavePolicies           LeavePolicy[]
+  leavePolicyVersions     LeavePolicyVersion[]
+  leaveApplications       LeaveApplication[]
+  leaveOccurrences        LeaveOccurrence[]
+  leaveLedgerEntries      LeaveLedgerEntry[]
+  leaveAdjustments        LeaveAdjustment[]
+  leavePayrollPostings    LeavePayrollPosting[]
+  leaveAuditEvents        LeaveAuditEvent[]
+  employmentTerms         EmploymentTerm[]
 
   // Management System Review — operational modules
   operationalAlerts       OperationalAlert[]
@@ -111,7 +121,7 @@ model User {
   passwordSetupTokenConsumedAt DateTime?
   role                         UserRole
   roleLabel                    String?
-  /// When null, module access follows `role` defaults. When a non-empty JSON array of paths (e.g. ["/employees","/payroll"]), only those modules apply; Admin with null = full access, Admin with a list = scoped like other users.
+  /// Null grants full access only to admins. Otherwise stores a path-to-permission map (e.g. {"/employees":"read","/payroll":"write"}); legacy path arrays are normalized as write access.
   moduleAccess                 Json?
   createdAt                    DateTime  @default(now())
   updatedAt                    DateTime  @updatedAt
@@ -143,6 +153,14 @@ model User {
   approvalsToReview                ApprovalRequest[]         @relation("ApprovalApprover")
   notificationsReceived            AppNotification[]
   clientProfile                    Client?
+  leaveApplicationsCreated         LeaveApplication[]       @relation("LeaveApplicationCreatedBy")
+  leaveApplicationsReviewed        LeaveApplication[]       @relation("LeaveApplicationReviewedBy")
+  leaveApprovalSteps                LeaveApprovalStep[]      @relation("LeaveApprovalActor")
+  leaveDocumentsUploaded            LeaveApplicationDocument[] @relation("LeaveDocumentUploadedBy")
+  leaveDocumentsVerified            LeaveApplicationDocument[] @relation("LeaveDocumentVerifiedBy")
+  leaveAdjustmentsRequested         LeaveAdjustment[]        @relation("LeaveAdjustmentRequestedBy")
+  leaveAdjustmentsApproved          LeaveAdjustment[]        @relation("LeaveAdjustmentApprovedBy")
+  leaveAuditEvents                  LeaveAuditEvent[]
 
   @@index([companyId])
 }
@@ -261,6 +279,14 @@ model Employee {
   attendanceExceptions        AttendanceException[]
   managedDocuments            ManagedDocument[]
   operationalAlerts           OperationalAlert[]
+  employmentTerms             EmploymentTerm[]
+  leavePolicyAssignments      EmployeeLeavePolicyAssignment[]
+  leaveApplicationsV2         LeaveApplication[]
+  leaveOccurrencesV2          LeaveOccurrence[]
+  leaveLedgerEntries          LeaveLedgerEntry[]
+  leaveAdjustmentsV2          LeaveAdjustment[]
+  leaveDocumentsUploadedV2    LeaveApplicationDocument[] @relation("LeaveDocumentUploadedByEmployee")
+  leaveAuditEventsV2          LeaveAuditEvent[]
 
   @@unique([companyId, employeeNumber])
   @@index([companyId])
@@ -492,6 +518,7 @@ model Shift {
   site        Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
   attendances Attendance[]
   rosterGeneratedSource SiteRosterGeneratedShift? @relation("RosterPublishedShift")
+  leaveOccurrences LeaveOccurrence[]
 
   @@index([companyId])
   @@index([companyId, startTime])
@@ -549,6 +576,7 @@ model PayrollRun {
   company    Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   items      PayrollItem[]
   timesheets Timesheet[]
+  leavePayrollPostings LeavePayrollPosting[]
 
   @@index([companyId])
   @@index([companyId, periodStart, periodEnd])
@@ -1890,6 +1918,439 @@ enum SiteRosterPatternStatus {
   draft
   active
   archived
+}
+
+// =============================================================================
+// Leave Management v2 — authoritative, effective-dated and payroll-safe
+// =============================================================================
+
+enum LeavePolicyReviewStatus {
+  DRAFT
+  PENDING_HR_LEGAL_CONFIRMATION
+  ACTIVE
+  RETIRED
+}
+
+enum LeaveDurationMode {
+  CALENDAR_CONSECUTIVE
+  SCHEDULED_WORK
+  SHIFT_COUNT
+  HOURS
+}
+
+enum LeavePayrollTreatment {
+  PAID_EMPLOYER
+  UNPAID_DEDUCTION
+  UIF_NO_EMPLOYER_PAY
+  IOD_COMPENSATION
+  INFORMATION_ONLY
+  SPLIT
+}
+
+enum LeaveApplicationStatus {
+  DRAFT
+  SUBMITTED
+  PENDING_HR
+  APPROVED
+  REJECTED
+  WITHDRAWN
+  CANCELLATION_REQUESTED
+  CANCELLED
+  EXPIRED
+  PAYROLL_PROCESSED
+  ADJUSTMENT_REQUIRED
+  IMPORTED_APPROVED
+}
+
+enum LeaveApplicationSource {
+  ADMIN
+  WHATSAPP
+  LEGACY_IMPORT
+  SYSTEM
+}
+
+enum LeaveOccurrenceStatus {
+  RESERVED
+  APPROVED
+  CANCELLED
+  PAYROLL_PROCESSED
+}
+
+enum LeaveLedgerEntryType {
+  ACCRUAL
+  OPENING_BALANCE
+  RESERVATION
+  RESERVATION_RELEASE
+  TAKEN
+  REVERSAL
+  ADJUSTMENT
+  CARRY_OVER
+  EXPIRY
+  PAYOUT
+}
+
+enum LeaveApprovalDecision {
+  PENDING
+  APPROVED
+  REJECTED
+  QUERY
+  CANCELLED
+}
+
+enum LeaveDocumentReviewStatus {
+  PENDING_REVIEW
+  VERIFIED
+  REJECTED
+  ARCHIVED
+}
+
+enum LeaveAdjustmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  POSTED
+}
+
+model EmploymentTerm {
+  id                    String   @id @default(cuid())
+  companyId             String
+  employeeId            String
+  effectiveFrom         DateTime @db.Date
+  effectiveTo           DateTime? @db.Date
+  contractType          String
+  normalMinutesPerShift Int
+  normalDaysPerWeek     Decimal? @db.Decimal(4, 2)
+  workingPattern        Json?
+  source                String   @default("HR")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, effectiveFrom])
+  @@index([companyId, effectiveFrom, effectiveTo])
+}
+
+model LeaveTypeDefinition {
+  id                       String                @id @default(cuid())
+  companyId                String
+  code                     String
+  name                     String
+  description              String?
+  isPaid                   Boolean
+  payrollTreatment         LeavePayrollTreatment
+  durationMode             LeaveDurationMode
+  requiresBalance          Boolean               @default(true)
+  allowPartialDay          Boolean               @default(false)
+  requiresDocument         Boolean               @default(false)
+  isActive                 Boolean               @default(true)
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  policyVersions LeavePolicyVersion[]
+  applications  LeaveApplication[]
+  ledgerEntries LeaveLedgerEntry[]
+  adjustments   LeaveAdjustment[]
+
+  @@unique([companyId, code])
+  @@index([companyId, isActive])
+}
+
+model LeavePolicy {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  category    String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company                         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  versions    LeavePolicyVersion[]
+  assignments EmployeeLeavePolicyAssignment[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
+model LeavePolicyVersion {
+  id                         String                  @id @default(cuid())
+  companyId                  String
+  policyId                   String
+  leaveTypeId                String
+  version                    Int
+  effectiveFrom              DateTime                @db.Date
+  effectiveTo                DateTime?               @db.Date
+  reviewStatus               LeavePolicyReviewStatus @default(PENDING_HR_LEGAL_CONFIRMATION)
+  sourceAuthority            String
+  legalReference             String?
+  entitlementMinutes         Int?
+  accrualMethod              String
+  accrualRateMinutes         Decimal?                @db.Decimal(12, 6)
+  cycleMonths                Int                     @default(12)
+  carryOverLimitMinutes      Int?
+  expiryMonths               Int?
+  noticeDays                 Int?
+  maxConsecutiveDays         Int?
+  negativeBalanceAllowed     Boolean                 @default(false)
+  autoConvertToUnpaid        Boolean                 @default(false)
+  approvalFlow               Json
+  documentRules              Json?
+  calculationRules           Json?
+  createdBy                  String?
+  confirmedBy                String?
+  confirmedAt                DateTime?
+  createdAt                  DateTime                @default(now())
+
+  company   Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  policy    LeavePolicy         @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  leaveType LeaveTypeDefinition @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  applications LeaveApplication[]
+
+  @@unique([policyId, leaveTypeId, version])
+  @@index([companyId, effectiveFrom, effectiveTo, reviewStatus])
+}
+
+model EmployeeLeavePolicyAssignment {
+  id            String   @id @default(cuid())
+  employeeId    String
+  policyId      String
+  effectiveFrom DateTime @db.Date
+  effectiveTo   DateTime? @db.Date
+  createdAt     DateTime @default(now())
+
+  employee Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  policy   LeavePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, policyId, effectiveFrom])
+  @@index([employeeId, effectiveFrom, effectiveTo])
+}
+
+model LeaveApplication {
+  id                   String                 @id @default(cuid())
+  companyId            String
+  employeeId           String
+  leaveTypeId          String
+  policyVersionId      String?
+  startDate            DateTime               @db.Date
+  endDate              DateTime               @db.Date
+  requestedMinutes     Int
+  calculatedMinutes    Int                    @default(0)
+  paidMinutes          Int                    @default(0)
+  unpaidMinutes        Int                    @default(0)
+  status               LeaveApplicationStatus @default(DRAFT)
+  source               LeaveApplicationSource @default(ADMIN)
+  reason               String?
+  decisionReason       String?
+  retrospectiveReason  String?
+  idempotencyKey       String?
+  version              Int                    @default(1)
+  submittedAt          DateTime?
+  decidedAt            DateTime?
+  createdById          String?
+  reviewedById         String?
+  legacyLeaveRequestId String?
+  legacyLeaveRecordIds Json?
+  metadata             Json?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  company       Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee      Employee                 @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  leaveType     LeaveTypeDefinition      @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  policyVersion LeavePolicyVersion?      @relation(fields: [policyVersionId], references: [id], onDelete: SetNull)
+  createdBy     User?                    @relation("LeaveApplicationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  reviewedBy    User?                    @relation("LeaveApplicationReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  occurrences   LeaveOccurrence[]
+  ledgerEntries LeaveLedgerEntry[]
+  approvalSteps LeaveApprovalStep[]
+  documents     LeaveApplicationDocument[]
+  adjustments   LeaveAdjustment[]
+  payrollPostings LeavePayrollPosting[]
+  auditEvents   LeaveAuditEvent[]
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, status, startDate, endDate])
+  @@index([employeeId, startDate, endDate])
+  @@index([leaveTypeId, status])
+}
+
+model LeaveOccurrence {
+  id                 String                @id @default(cuid())
+  companyId          String
+  applicationId      String
+  employeeId         String
+  leaveDate          DateTime              @db.Date
+  shiftId            String?
+  siteId             String?
+  scheduledMinutes   Int
+  requestedMinutes   Int
+  paidMinutes        Int                   @default(0)
+  unpaidMinutes      Int                   @default(0)
+  payrollTreatment   LeavePayrollTreatment
+  status             LeaveOccurrenceStatus
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  application  LeaveApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  employee     Employee         @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  shift        Shift?           @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  payrollPostings LeavePayrollPosting[]
+
+  // The migration also adds a partial unique index on (applicationId, leaveDate)
+  // for unrostered rows where shiftId is NULL; Prisma cannot model that index.
+  @@unique([applicationId, leaveDate, shiftId])
+  @@index([companyId, leaveDate, status])
+  @@index([employeeId, leaveDate, status])
+  @@index([shiftId])
+}
+
+model LeaveLedgerEntry {
+  id            String               @id @default(cuid())
+  companyId     String
+  employeeId    String
+  leaveTypeId   String
+  applicationId String?
+  entryType     LeaveLedgerEntryType
+  effectiveDate DateTime             @db.Date
+  minutes       Int
+  reason        String
+  createdById   String?
+  reversalOfId  String?              @unique
+  idempotencyKey String?
+  metadata      Json?
+  createdAt     DateTime             @default(now())
+
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee    Employee            @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  leaveType   LeaveTypeDefinition @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  application LeaveApplication?   @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  reversalOf  LeaveLedgerEntry?   @relation("LeaveLedgerReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversedBy  LeaveLedgerEntry?   @relation("LeaveLedgerReversal")
+
+  @@index([companyId, employeeId, leaveTypeId, effectiveDate])
+  @@index([applicationId])
+  @@unique([companyId, idempotencyKey])
+}
+
+model LeaveApprovalStep {
+  id            String                @id @default(cuid())
+  applicationId String
+  stepOrder     Int
+  role          String
+  decision      LeaveApprovalDecision @default(PENDING)
+  actorId       String?
+  comment       String?
+  decidedAt     DateTime?
+  createdAt     DateTime              @default(now())
+
+  application LeaveApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  actor       User?            @relation("LeaveApprovalActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@unique([applicationId, stepOrder])
+  @@index([role, decision])
+}
+
+model LeaveApplicationDocument {
+  id            String                    @id @default(cuid())
+  applicationId String
+  documentType  String
+  fileUrl       String
+  fileName      String
+  mimeType      String
+  fileSize      Int
+  reviewStatus  LeaveDocumentReviewStatus @default(PENDING_REVIEW)
+  uploadedById  String?
+  uploadedByEmployeeId String?
+  verifiedById  String?
+  verifiedAt    DateTime?
+  reviewNote    String?
+  createdAt     DateTime                  @default(now())
+
+  application LeaveApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  uploadedBy  User?            @relation("LeaveDocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedByEmployee Employee? @relation("LeaveDocumentUploadedByEmployee", fields: [uploadedByEmployeeId], references: [id], onDelete: SetNull)
+  verifiedBy  User?            @relation("LeaveDocumentVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  @@index([applicationId, reviewStatus])
+  @@index([uploadedByEmployeeId])
+}
+
+model LeaveAdjustment {
+  id                String                @id @default(cuid())
+  companyId         String
+  employeeId        String
+  leaveTypeId       String
+  applicationId     String?
+  minutes           Int
+  reason            String
+  status            LeaveAdjustmentStatus @default(PENDING)
+  requestedById     String
+  approvedById      String?
+  approvedAt        DateTime?
+  payrollImpact     Json?
+  supportingFileUrl String?
+  createdAt         DateTime              @default(now())
+
+  company     Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee    Employee             @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  leaveType   LeaveTypeDefinition  @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  application LeaveApplication?    @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  requestedBy User                 @relation("LeaveAdjustmentRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  approvedBy  User?                @relation("LeaveAdjustmentApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status, createdAt])
+  @@index([employeeId, leaveTypeId])
+}
+
+model LeavePayrollPosting {
+  id            String   @id @default(cuid())
+  companyId     String
+  applicationId String
+  occurrenceId  String
+  payrollRunId  String
+  paidMinutes   Int      @default(0)
+  unpaidMinutes Int      @default(0)
+  amount        Decimal? @db.Decimal(12, 2)
+  isReversal    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  application LeaveApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  occurrence  LeaveOccurrence  @relation(fields: [occurrenceId], references: [id], onDelete: Restrict)
+  payrollRun  PayrollRun       @relation(fields: [payrollRunId], references: [id], onDelete: Restrict)
+
+  @@unique([occurrenceId, isReversal])
+  @@index([companyId, payrollRunId])
+  @@index([applicationId])
+}
+
+model LeaveAuditEvent {
+  id              String   @id @default(cuid())
+  companyId       String
+  employeeId      String?
+  applicationId   String?
+  userId          String?
+  eventType       String
+  reason          String?
+  previousValue   Json?
+  newValue        Json?
+  payrollRunId    String?
+  rosterPeriod    Json?
+  metadata        Json?
+  occurredAt      DateTime @default(now())
+
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee    Employee?         @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  application LeaveApplication? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  user        User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, occurredAt])
+  @@index([applicationId, occurredAt])
+  @@index([employeeId, occurredAt])
 }
 
 enum RosterContinuityState {

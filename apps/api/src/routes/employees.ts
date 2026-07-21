@@ -20,7 +20,7 @@ import { EMPLOYEE_RESTRICTED_FIELDS, hasRestrictedFields } from "../lib/sensitiv
 
 function rejectEmployeeDetailEdits(request: { user?: import("../lib/types.js").JWTPayload }, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
   if (request.user && canEditEmployeeDetails(request.user)) return false;
-  reply.code(403).send({ error: "Forbidden", message: "Only HR and Payroll can edit employee details" });
+  reply.code(403).send({ error: "Forbidden", message: "Team or Payroll module access is required to edit employee details" });
   return true;
 }
 
@@ -28,7 +28,7 @@ function rejectRestrictedEmployeeFields(request: { user?: import("../lib/types.j
   if (canViewEmployeeSensitiveFields(request.user!) || !hasRestrictedFields(request.body, EMPLOYEE_RESTRICTED_FIELDS)) {
     return false;
   }
-  reply.code(403).send({ error: "Forbidden", message: "Sensitive employee data is restricted to HR/payroll users" });
+  reply.code(403).send({ error: "Forbidden", message: "Team or Payroll module access is required for sensitive employee data" });
   return true;
 }
 
@@ -179,6 +179,10 @@ const updateEmployeeSchema = createEmployeeSchema.partial().extend({
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
   status: z.enum(["applicant", "hired", "training", "active", "reliever", "suspended", "offboarded"]).optional(),
+  // Create defaults must not leak into partial updates. Without this override,
+  // an omitted employeeType is parsed as "security" and an existing office
+  // employee incorrectly fails PSIRA/pay-grade validation.
+  employeeType: z.enum(["office", "security"]).optional(),
   hourlyRate: z.number().positive().optional().nullable(),
   monthlySalary: z.number().positive().optional().nullable(),
   gradeId: z.string().optional().nullable(),
@@ -199,12 +203,16 @@ const statusTransitionSchema = z.object({
 export async function employeesRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"], { module: "/employees" }),
+    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"], {
+      anyOfModules: ["/employees", "/payroll"],
+    }),
   ];
   const readProtect = [
     authMiddleware,
     requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
-      anyOfModules: ["/employees", "/rostering"],
+      // Attendance controllers need the sanitized employee list for the
+      // "different guard" and reliever pickers in site timesheets.
+      anyOfModules: ["/employees", "/payroll", "/rostering", "/attendance"],
     }),
   ];
 
@@ -589,6 +597,7 @@ export async function employeesRoutes(app: FastifyInstance) {
   });
 
   app.post("/:id/status", { preHandler: protect }, async (request, reply) => {
+    if (rejectEmployeeDetailEdits(request, reply)) return;
     const { id } = request.params as { id: string };
     const parsed = statusTransitionSchema.safeParse(request.body);
     if (!parsed.success) {

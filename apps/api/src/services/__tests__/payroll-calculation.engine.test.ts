@@ -259,7 +259,7 @@ describe("computePayrollLines", () => {
         includeRelieversWithAttendance: true,
       },
     });
-    expect(snapshot.version).toBe("1.1.0");
+    expect(snapshot.version).toBe("1.2.0");
     expect(snapshot.totals.grossPay).toBe(5000);
     expect(snapshot.inputs.defaultMultipliers).toEqual({
       overtime: DEFAULT_OT_MULTIPLIER,
@@ -382,6 +382,46 @@ describe("computePayrollLines", () => {
     );
     expect(lines[0]!.basePay).toBe(2400);
     expect(lines[0]!.hoursWorked).toBe(48);
+  });
+
+  it("does not pay an hourly employee for authorised unpaid leave", () => {
+    const emp = baseEmployee({
+      hourlyRate: 100,
+      grade: { id: "g1", name: "Hourly", hourlyRate: 100, companyId: "co-1" } as PayGrade,
+    });
+    const { lines } = computePayrollLines(ctx({
+      employees: [emp],
+      aggregates: new Map([["emp-1", agg({ unpaidLeaveHours: 12 })]]),
+      deductionsByEmployee: new Map([["emp-1", { total: 0, lines: [] }]]),
+    }));
+    expect(lines).toHaveLength(0);
+  });
+
+  it("reduces fixed monthly salary once for authorised unpaid leave", () => {
+    const emp = baseEmployee({
+      employeeType: "office",
+      monthlySalary: 19_500 as unknown as Employee["monthlySalary"],
+      hourlyRate: null,
+    });
+    const { lines } = computePayrollLines(ctx({
+      employees: [emp],
+      aggregates: new Map([["emp-1", agg({ unpaidLeaveHours: 8 })]]),
+      deductionsByEmployee: new Map([["emp-1", { total: 0, lines: [] }]]),
+    }));
+    expect(lines[0]!.grossPay).toBe(18_700);
+    expect(lines[0]!.earningsLines).toContainEqual({ name: "Unpaid Leave Reduction", amount: -800 });
+  });
+
+  it("keeps UIF-supported leave distinct from ordinary unpaid leave", () => {
+    const emp = baseEmployee({ employeeType: "office", monthlySalary: 19_500 as unknown as Employee["monthlySalary"], hourlyRate: null });
+    const { lines } = computePayrollLines(ctx({
+      employees: [emp],
+      aggregates: new Map([["emp-1", agg({ uifLeaveHours: 8 })]]),
+      deductionsByEmployee: new Map([["emp-1", { total: 0, lines: [] }]]),
+    }));
+    expect(lines[0]!.grossPay).toBe(18_700);
+    expect(lines[0]!.earningsLines).toContainEqual({ name: "UIF-supported Leave Reduction", amount: -800 });
+    expect(lines[0]!.earningsLines).not.toContainEqual({ name: "Unpaid Leave Reduction", amount: -800 });
   });
 
   it("computes net pay as gross minus deductions, PAYE, and UIF", () => {

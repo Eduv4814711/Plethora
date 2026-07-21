@@ -1,6 +1,7 @@
 import { env } from "./env.js";
 
 export const config = {
+  isProduction: env.isProduction,
   jwt: {
     accessSecret: env.jwtSecret,
     refreshSecret: env.jwtRefreshSecret,
