@@ -79,6 +79,19 @@ CLOCK_IN_WINDOW_MINUTES=15
 CRON_SECRET=<long random secret>
 ```
 
+WhatsApp is optional, but its production configuration is all-or-nothing:
+
+- To enable it, set `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`,
+  `WHATSAPP_VERIFY_TOKEN`, and `WHATSAPP_APP_SECRET`. Obtain the app secret from
+  **Meta App Dashboard > App settings > Basic**; it is not the access token or
+  the verify token.
+- To disable it, remove all four variables from the Railway API service.
+  `WHATSAPP_API_VERSION` may remain set.
+
+Older deployments that were configured with only the first three WhatsApp
+variables must add `WHATSAPP_APP_SECRET` (or remove all four variables) before
+deploying a release that verifies webhook signatures.
+
 Do not define `PORT`; Railway injects it. The API code reads
 `process.env.PORT` through validated env, defaults to `3001`, and binds to
 `0.0.0.0`.
@@ -262,6 +275,18 @@ JWT or environment validation fails:
 - `JWT_SECRET` and `JWT_REFRESH_SECRET` must be different, non-placeholder values.
 - In production they must be at least 32 characters.
 - `DATABASE_URL` and `CORS_ORIGIN` are required.
+
+WhatsApp environment validation fails:
+
+- The startup error lists the missing variable names without exposing values.
+- To enable WhatsApp, set all four required credentials listed in the variables
+  section above. `WHATSAPP_APP_SECRET` comes from Meta App settings, not from the
+  webhook verify token.
+- To disable WhatsApp, remove all four credential variables and redeploy.
+  `WHATSAPP_API_VERSION` may remain set.
+- If the pre-deploy log says all migrations were successfully applied, do not
+  roll them back or use `db:push`; correcting the environment and redeploying is
+  sufficient.
 
 Web build succeeds but calls the wrong API:
 

@@ -30,9 +30,15 @@ On the Railway API service, add these variables:
 | `WHATSAPP_PHONE_NUMBER_ID` | Your WhatsApp Business phone number ID from Meta | `123456789012345` |
 | `WHATSAPP_ACCESS_TOKEN` | **Permanent** access token (see Step 4) | `EAAxxxx...` |
 | `WHATSAPP_VERIFY_TOKEN` | Secret string you choose (used by Meta to verify webhook) | `plethora_whatsapp_verify_abc123` |
+| `WHATSAPP_APP_SECRET` | Meta app secret used to verify signed webhook requests | Store as a Railway secret |
 | `WHATSAPP_API_VERSION` | Meta API version (optional, default `v21.0`) | `v21.0` |
 
-**Important:** Use the same `WHATSAPP_VERIFY_TOKEN` value when configuring the webhook in Meta (Step 3).
+**Important:** Set the first four variables together. A partial production
+configuration intentionally stops the API from starting. Use the same
+`WHATSAPP_VERIFY_TOKEN` value when configuring the webhook in Meta (Step 3).
+Obtain `WHATSAPP_APP_SECRET` from **Meta App Dashboard > App settings > Basic**;
+it is different from both the access token and verify token. Never paste any of
+these secret values into deployment logs or support messages.
 
 ---
 
@@ -84,13 +90,14 @@ When a team member has not messaged your business in the last 24 hours, you must
 
 ## Database: Message History
 
-The WhatsApp module stores conversation history in the `WhatsAppMessage` table. Run migrations after deploying:
+The WhatsApp module stores conversation history in the `WhatsAppMessage` table.
+Apply committed migrations through the deployment command:
 
 ```bash
-npx prisma migrate deploy
-# or
-npx prisma db push
+npm run db:migrate:deploy --workspace=api
 ```
+
+Do not use `prisma db push` against production.
 
 ---
 
@@ -111,3 +118,4 @@ npx prisma db push
 - **403 Forbidden on verify**: The `hub.verify_token` from Meta must match `WHATSAPP_VERIFY_TOKEN` exactly.
 - **Messages not received**: Confirm you’re subscribed to the **messages** webhook field.
 - **Token expired**: Use a permanent token from a System User, not the temporary one from the API Setup page.
+- **API reports an incomplete WhatsApp production configuration**: Add every variable named as missing in the startup error. To temporarily disable WhatsApp, remove `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_VERIFY_TOKEN`, and `WHATSAPP_APP_SECRET` from the Railway API service, then redeploy. `WHATSAPP_API_VERSION` can remain.

@@ -208,15 +208,20 @@ function assertProductionEnv(raw: RawEnv): void {
     errors.push("ENCRYPTION_KEY must not use an example placeholder value.");
   }
 
-  const whatsappValues = [
-    raw.WHATSAPP_PHONE_NUMBER_ID,
-    raw.WHATSAPP_ACCESS_TOKEN,
-    raw.WHATSAPP_VERIFY_TOKEN,
-    raw.WHATSAPP_APP_SECRET,
-  ];
-  if (whatsappValues.some(Boolean) && !whatsappValues.every(Boolean)) {
+  const whatsappConfig = [
+    { name: "WHATSAPP_PHONE_NUMBER_ID", value: raw.WHATSAPP_PHONE_NUMBER_ID },
+    { name: "WHATSAPP_ACCESS_TOKEN", value: raw.WHATSAPP_ACCESS_TOKEN },
+    { name: "WHATSAPP_VERIFY_TOKEN", value: raw.WHATSAPP_VERIFY_TOKEN },
+    { name: "WHATSAPP_APP_SECRET", value: raw.WHATSAPP_APP_SECRET },
+  ] as const;
+  const configuredWhatsAppValues = whatsappConfig.filter(({ value }) => Boolean(value));
+  if (configuredWhatsAppValues.length > 0 && configuredWhatsAppValues.length < whatsappConfig.length) {
+    const missing = whatsappConfig
+      .filter(({ value }) => !value)
+      .map(({ name }) => name)
+      .join(", ");
     errors.push(
-      "WhatsApp production configuration is incomplete. Set WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_ACCESS_TOKEN, WHATSAPP_VERIFY_TOKEN, and WHATSAPP_APP_SECRET together, or leave all four unset."
+      `WhatsApp production configuration is incomplete. Missing: ${missing}. Set WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_ACCESS_TOKEN, WHATSAPP_VERIFY_TOKEN, and WHATSAPP_APP_SECRET together, or leave all four unset.`
     );
   }
 

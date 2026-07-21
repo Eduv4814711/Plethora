@@ -90,6 +90,7 @@ describe("parseEnv", () => {
       expect(env.databaseUrl).toContain("postgresql://");
       expect(env.jwtSecret).toBe(VALID_JWT_A);
       expect(env.corsOrigins).toEqual(["https://app.example.com"]);
+      expect(env.whatsapp.enabled).toBe(false);
     });
 
     it("requires a complete signed WhatsApp configuration when enabled", () => {
@@ -101,7 +102,9 @@ describe("parseEnv", () => {
             WHATSAPP_VERIFY_TOKEN: "verify",
           })
         )
-      ).toThrow(/WhatsApp production configuration is incomplete/);
+      ).toThrow(
+        /WhatsApp production configuration is incomplete\. Missing: WHATSAPP_APP_SECRET\./
+      );
 
       const env = parseEnv(
         prodBase({
