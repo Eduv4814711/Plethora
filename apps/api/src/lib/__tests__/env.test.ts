@@ -39,9 +39,11 @@ describe("parseEnv", () => {
       CORS_ORIGIN: "http://localhost:3000, http://localhost:3001",
       FRONTEND_URL: "http://localhost:3000",
       CLOCK_IN_WINDOW_MINUTES: "30",
+      WHATSAPP_ENABLED: "true",
       WHATSAPP_PHONE_NUMBER_ID: "123",
       WHATSAPP_ACCESS_TOKEN: "token",
       WHATSAPP_VERIFY_TOKEN: "verify",
+      WHATSAPP_APP_SECRET: "app-secret",
       WHATSAPP_API_VERSION: "v22.0",
       ENCRYPTION_KEY: "sixteen-char-key!!",
     });
@@ -93,19 +95,19 @@ describe("parseEnv", () => {
       expect(env.whatsapp.enabled).toBe(false);
     });
 
-    it("requires a complete signed WhatsApp configuration when enabled", () => {
-      expect(() =>
-        parseEnv(
-          prodBase({
-            WHATSAPP_PHONE_NUMBER_ID: "123",
-            WHATSAPP_ACCESS_TOKEN: "token",
-            WHATSAPP_VERIFY_TOKEN: "verify",
-          })
-        )
-      ).toThrow(
-        /WhatsApp production configuration is incomplete\. Missing: WHATSAPP_APP_SECRET\./
+    it("ignores stale partial credentials while WhatsApp is disabled", () => {
+      const env = parseEnv(
+        prodBase({
+          WHATSAPP_ENABLED: "false",
+          WHATSAPP_PHONE_NUMBER_ID: "123",
+          WHATSAPP_ACCESS_TOKEN: "token",
+          WHATSAPP_VERIFY_TOKEN: "verify",
+        })
       );
+      expect(env.whatsapp.enabled).toBe(false);
+    });
 
+    it("keeps WhatsApp disabled by default even when credentials exist", () => {
       const env = parseEnv(
         prodBase({
           WHATSAPP_PHONE_NUMBER_ID: "123",
@@ -114,7 +116,39 @@ describe("parseEnv", () => {
           WHATSAPP_APP_SECRET: "app-secret",
         })
       );
+      expect(env.whatsapp.enabled).toBe(false);
+    });
+
+    it("requires a complete signed WhatsApp configuration when explicitly enabled", () => {
+      expect(() =>
+        parseEnv(
+          prodBase({
+            WHATSAPP_ENABLED: "true",
+            WHATSAPP_PHONE_NUMBER_ID: "123",
+            WHATSAPP_ACCESS_TOKEN: "token",
+            WHATSAPP_VERIFY_TOKEN: "verify",
+          })
+        )
+      ).toThrow(
+        /WHATSAPP_ENABLED=true requires a complete signed WhatsApp configuration\. Missing: WHATSAPP_APP_SECRET\./
+      );
+
+      const env = parseEnv(
+        prodBase({
+          WHATSAPP_ENABLED: "true",
+          WHATSAPP_PHONE_NUMBER_ID: "123",
+          WHATSAPP_ACCESS_TOKEN: "token",
+          WHATSAPP_VERIFY_TOKEN: "verify",
+          WHATSAPP_APP_SECRET: "app-secret",
+        })
+      );
       expect(env.whatsapp.enabled).toBe(true);
+    });
+
+    it("rejects invalid WHATSAPP_ENABLED values", () => {
+      expect(() => parseEnv(prodBase({ WHATSAPP_ENABLED: "ture" }))).toThrow(
+        /WHATSAPP_ENABLED/
+      );
     });
 
     it("fails when DATABASE_URL is missing", () => {

@@ -61,6 +61,60 @@ describe("WhatsApp webhook", () => {
     expect(res.body).toBe("challenge123");
   });
 
+  it("does not verify subscriptions while WhatsApp is disabled", async () => {
+    const { config } = await import("../../lib/config.js");
+    config.whatsapp.enabled = false;
+    try {
+      const res = await app.inject({
+        method: "GET",
+        url: "/webhook?hub.mode=subscribe&hub.verify_token=test-verify-token&hub.challenge=challenge123",
+      });
+      expect(res.statusCode).toBe(403);
+    } finally {
+      config.whatsapp.enabled = true;
+    }
+  });
+
+  it("acknowledges but does not process webhooks while WhatsApp is disabled", async () => {
+    const { config } = await import("../../lib/config.js");
+    config.whatsapp.enabled = false;
+    config.whatsapp.appSecret = "stale-app-secret";
+    processAndSend.mockClear();
+    try {
+      const res = await app.inject({
+        method: "POST",
+        url: "/webhook",
+        payload: {
+          object: "whatsapp_business_account",
+          entry: [
+            {
+              changes: [
+                {
+                  value: {
+                    messages: [
+                      {
+                        from: "27821234567",
+                        id: "wamid.disabled",
+                        timestamp: "1710000000",
+                        type: "text",
+                        text: { body: "help" },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(processAndSend).not.toHaveBeenCalled();
+    } finally {
+      config.whatsapp.enabled = true;
+      config.whatsapp.appSecret = "";
+    }
+  });
+
   it("processes inbound text messages before returning 200", async () => {
     processAndSend.mockClear();
 

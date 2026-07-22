@@ -27,18 +27,20 @@ On the Railway API service, add these variables:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
+| `WHATSAPP_ENABLED` | Explicit integration switch; defaults to disabled | `false` |
 | `WHATSAPP_PHONE_NUMBER_ID` | Your WhatsApp Business phone number ID from Meta | `123456789012345` |
 | `WHATSAPP_ACCESS_TOKEN` | **Permanent** access token (see Step 4) | `EAAxxxx...` |
 | `WHATSAPP_VERIFY_TOKEN` | Secret string you choose (used by Meta to verify webhook) | `plethora_whatsapp_verify_abc123` |
 | `WHATSAPP_APP_SECRET` | Meta app secret used to verify signed webhook requests | Store as a Railway secret |
 | `WHATSAPP_API_VERSION` | Meta API version (optional, default `v21.0`) | `v21.0` |
 
-**Important:** Set the first four variables together. A partial production
-configuration intentionally stops the API from starting. Use the same
-`WHATSAPP_VERIFY_TOKEN` value when configuring the webhook in Meta (Step 3).
-Obtain `WHATSAPP_APP_SECRET` from **Meta App Dashboard > App settings > Basic**;
-it is different from both the access token and verify token. Never paste any of
-these secret values into deployment logs or support messages.
+**Important:** Keep `WHATSAPP_ENABLED=false` while the integration is not in
+use. Credentials already stored in Railway are ignored while disabled. To
+enable it, set `WHATSAPP_ENABLED=true` and provide all four credential
+variables. Use the same `WHATSAPP_VERIFY_TOKEN` value when configuring the
+webhook in Meta (Step 3). Obtain `WHATSAPP_APP_SECRET` from **Meta App Dashboard
+> App settings > Basic**; it is different from both the access token and verify
+token. Never paste any secret values into deployment logs or support messages.
 
 ---
 
@@ -70,7 +72,7 @@ The temporary token from Meta expires in 24 hours. For production, create a **pe
 
 ## Step 5: Verify Configuration
 
-1. Redeploy your API so it picks up the new env vars.
+1. Set `WHATSAPP_ENABLED=true` and redeploy your API so it picks up the new env vars.
 2. In Meta, the webhook should verify successfully.
 3. Send a test message to your WhatsApp Business number (e.g. `help`).
 4. You should receive a reply from the bot.
@@ -118,4 +120,4 @@ Do not use `prisma db push` against production.
 - **403 Forbidden on verify**: The `hub.verify_token` from Meta must match `WHATSAPP_VERIFY_TOKEN` exactly.
 - **Messages not received**: Confirm you’re subscribed to the **messages** webhook field.
 - **Token expired**: Use a permanent token from a System User, not the temporary one from the API Setup page.
-- **API reports an incomplete WhatsApp production configuration**: Add every variable named as missing in the startup error. To temporarily disable WhatsApp, remove `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_VERIFY_TOKEN`, and `WHATSAPP_APP_SECRET` from the Railway API service, then redeploy. `WHATSAPP_API_VERSION` can remain.
+- **API reports an incomplete WhatsApp configuration**: Either add every variable named as missing, or set `WHATSAPP_ENABLED=false` and redeploy. Credentials are ignored while disabled and may be removed after the deployment is stable.

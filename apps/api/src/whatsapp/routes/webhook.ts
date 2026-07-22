@@ -140,7 +140,11 @@ export async function webhookRoutes(app: FastifyInstance) {
       const token = request.query["hub.verify_token"];
       const challenge = request.query["hub.challenge"];
 
-      if (mode === "subscribe" && token === config.whatsapp.verifyToken) {
+      if (
+        config.whatsapp.enabled &&
+        mode === "subscribe" &&
+        token === config.whatsapp.verifyToken
+      ) {
         return reply.send(challenge);
       }
       return reply.code(403).send("Forbidden");
@@ -151,16 +155,16 @@ export async function webhookRoutes(app: FastifyInstance) {
     "/webhook",
     WEBHOOK_ROUTE_CONFIG,
     async (request: WebhookRequest, reply: FastifyReply) => {
+      if (!config.whatsapp.enabled) {
+        request.log.info("Ignoring WhatsApp webhook because the integration is disabled");
+        return reply.code(200).send();
+      }
+
       if (!verifyWebhookPostSignature(request, reply)) return;
 
       const payload = request.body as WhatsAppWebhookBody | undefined;
       if (payload?.object !== "whatsapp_business_account") {
         return reply.code(404).send();
-      }
-
-      if (!config.whatsapp.enabled) {
-        request.log.warn("WhatsApp webhook received but WhatsApp is not configured");
-        return reply.code(200).send();
       }
 
       const body = payload;

@@ -69,6 +69,7 @@ JWT_REFRESH_SECRET=<different long random secret>
 FRONTEND_URL=https://plethora.quickbophasecurity.co.za
 CORS_ORIGIN=https://plethora.quickbophasecurity.co.za
 TRUST_PROXY=true
+WHATSAPP_ENABLED=false
 WHATSAPP_PHONE_NUMBER_ID=
 WHATSAPP_ACCESS_TOKEN=
 WHATSAPP_VERIFY_TOKEN=
@@ -79,18 +80,21 @@ CLOCK_IN_WINDOW_MINUTES=15
 CRON_SECRET=<long random secret>
 ```
 
-WhatsApp is optional, but its production configuration is all-or-nothing:
+WhatsApp is optional and disabled by default:
 
-- To enable it, set `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`,
+- To keep it disabled, set `WHATSAPP_ENABLED=false` (or leave it unset). Stale
+  WhatsApp credentials are ignored, the public webhook does not process
+  messages, and outbound Meta calls remain blocked. Removing unused secrets is
+  still recommended after the deployment is stable.
+- To enable it later, set `WHATSAPP_ENABLED=true` and set
+  `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`,
   `WHATSAPP_VERIFY_TOKEN`, and `WHATSAPP_APP_SECRET`. Obtain the app secret from
   **Meta App Dashboard > App settings > Basic**; it is not the access token or
   the verify token.
-- To disable it, remove all four variables from the Railway API service.
-  `WHATSAPP_API_VERSION` may remain set.
 
-Older deployments that were configured with only the first three WhatsApp
-variables must add `WHATSAPP_APP_SECRET` (or remove all four variables) before
-deploying a release that verifies webhook signatures.
+Existing deployments without `WHATSAPP_ENABLED=true` will remain disabled even
+if credentials are present. This is intentional; enabling signed webhooks must
+be an explicit deployment decision.
 
 Do not define `PORT`; Railway injects it. The API code reads
 `process.env.PORT` through validated env, defaults to `3001`, and binds to
@@ -276,14 +280,14 @@ JWT or environment validation fails:
 - In production they must be at least 32 characters.
 - `DATABASE_URL` and `CORS_ORIGIN` are required.
 
-WhatsApp environment validation fails:
+WhatsApp is disabled or environment validation fails:
 
-- The startup error lists the missing variable names without exposing values.
-- To enable WhatsApp, set all four required credentials listed in the variables
-  section above. `WHATSAPP_APP_SECRET` comes from Meta App settings, not from the
-  webhook verify token.
-- To disable WhatsApp, remove all four credential variables and redeploy.
-  `WHATSAPP_API_VERSION` may remain set.
+- Set `WHATSAPP_ENABLED=false` and redeploy to run the API without WhatsApp.
+  Existing credential variables can remain temporarily and are ignored.
+- To enable WhatsApp, set `WHATSAPP_ENABLED=true` plus all four required
+  credentials listed above. The startup error lists any missing variable names
+  without exposing their values. `WHATSAPP_APP_SECRET` comes from Meta App
+  settings, not from the webhook verify token.
 - If the pre-deploy log says all migrations were successfully applied, do not
   roll them back or use `db:push`; correcting the environment and redeploying is
   sufficient.

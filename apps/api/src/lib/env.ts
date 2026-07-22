@@ -39,6 +39,18 @@ function parseBooleanFlag(value: unknown): boolean | undefined {
   return undefined;
 }
 
+/** Parse an optional boolean while preserving invalid input for Zod to reject. */
+function parseStrictBooleanFlag(value: unknown): unknown {
+  const trimmed = emptyToUndefined(value);
+  if (trimmed === undefined) return undefined;
+  if (typeof trimmed === "string") {
+    const lower = trimmed.trim().toLowerCase();
+    if (lower === "true") return true;
+    if (lower === "false") return false;
+  }
+  return trimmed;
+}
+
 const nodeEnvSchema = z.enum(["development", "production", "test"]).default("development");
 
 const rawEnvSchema = z.object({
@@ -59,6 +71,7 @@ const rawEnvSchema = z.object({
   ),
   HOST: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   TRUST_PROXY: z.preprocess(parseBooleanFlag, z.boolean().optional()),
+  WHATSAPP_ENABLED: z.preprocess(parseStrictBooleanFlag, z.boolean().optional()),
   WHATSAPP_PHONE_NUMBER_ID: z.preprocess(emptyToUndefined, z.string().optional()),
   WHATSAPP_ACCESS_TOKEN: z.preprocess(emptyToUndefined, z.string().optional()),
   WHATSAPP_VERIFY_TOKEN: z.preprocess(emptyToUndefined, z.string().optional()),
@@ -122,6 +135,7 @@ function pickRawEnv(source: NodeJS.ProcessEnv): Record<string, unknown> {
     PORT: source.PORT,
     HOST: source.HOST,
     TRUST_PROXY: source.TRUST_PROXY,
+    WHATSAPP_ENABLED: source.WHATSAPP_ENABLED,
     WHATSAPP_PHONE_NUMBER_ID: source.WHATSAPP_PHONE_NUMBER_ID,
     WHATSAPP_ACCESS_TOKEN: source.WHATSAPP_ACCESS_TOKEN,
     WHATSAPP_VERIFY_TOKEN: source.WHATSAPP_VERIFY_TOKEN,
@@ -131,6 +145,22 @@ function pickRawEnv(source: NodeJS.ProcessEnv): Record<string, unknown> {
     ENCRYPTION_KEY: source.ENCRYPTION_KEY,
     CRON_SECRET: source.CRON_SECRET,
   };
+}
+
+const WHATSAPP_CREDENTIAL_NAMES = [
+  "WHATSAPP_PHONE_NUMBER_ID",
+  "WHATSAPP_ACCESS_TOKEN",
+  "WHATSAPP_VERIFY_TOKEN",
+  "WHATSAPP_APP_SECRET",
+] as const;
+
+function getWhatsAppConfigurationError(raw: RawEnv): string | undefined {
+  if (raw.WHATSAPP_ENABLED !== true) return undefined;
+
+  const missing = WHATSAPP_CREDENTIAL_NAMES.filter((name) => !raw[name]);
+  if (missing.length === 0) return undefined;
+
+  return `WHATSAPP_ENABLED=true requires a complete signed WhatsApp configuration. Missing: ${missing.join(", ")}.`;
 }
 
 function assertProductionEnv(raw: RawEnv): void {
@@ -208,22 +238,8 @@ function assertProductionEnv(raw: RawEnv): void {
     errors.push("ENCRYPTION_KEY must not use an example placeholder value.");
   }
 
-  const whatsappConfig = [
-    { name: "WHATSAPP_PHONE_NUMBER_ID", value: raw.WHATSAPP_PHONE_NUMBER_ID },
-    { name: "WHATSAPP_ACCESS_TOKEN", value: raw.WHATSAPP_ACCESS_TOKEN },
-    { name: "WHATSAPP_VERIFY_TOKEN", value: raw.WHATSAPP_VERIFY_TOKEN },
-    { name: "WHATSAPP_APP_SECRET", value: raw.WHATSAPP_APP_SECRET },
-  ] as const;
-  const configuredWhatsAppValues = whatsappConfig.filter(({ value }) => Boolean(value));
-  if (configuredWhatsAppValues.length > 0 && configuredWhatsAppValues.length < whatsappConfig.length) {
-    const missing = whatsappConfig
-      .filter(({ value }) => !value)
-      .map(({ name }) => name)
-      .join(", ");
-    errors.push(
-      `WhatsApp production configuration is incomplete. Missing: ${missing}. Set WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_ACCESS_TOKEN, WHATSAPP_VERIFY_TOKEN, and WHATSAPP_APP_SECRET together, or leave all four unset.`
-    );
-  }
+  const whatsappError = getWhatsAppConfigurationError(raw);
+  if (whatsappError) errors.push(whatsappError);
 
   if (errors.length > 0) {
     throw new Error(
@@ -257,6 +273,11 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
 
   if (isProduction) {
     assertProductionEnv(raw);
+  } else {
+    const whatsappError = getWhatsAppConfigurationError(raw);
+    if (whatsappError) {
+      throw new Error(`Invalid environment configuration:\n- ${whatsappError}`);
+    }
   }
 
   const { jwtSecret, jwtRefreshSecret } = resolveJwtSecrets(raw, isProduction);
@@ -280,10 +301,11 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     trustProxy: raw.TRUST_PROXY ?? isProduction,
     whatsapp: {
       enabled: !!(
+        raw.WHATSAPP_ENABLED === true &&
         phoneNumberId &&
         accessToken &&
         verifyToken &&
-        (!isProduction || appSecret)
+        appSecret
       ),
       phoneNumberId,
       accessToken,
