@@ -83,6 +83,11 @@ export async function aggregateTimesheets(
   periodEnd: Date
 ): Promise<TimesheetAggregate[]> {
   const timeZone = await getCompanyTimezone(companyId);
+  const periodEndExclusive = new Date(Date.UTC(
+    periodEnd.getUTCFullYear(),
+    periodEnd.getUTCMonth(),
+    periodEnd.getUTCDate() + 1
+  ));
 
   const holidayDates = new Set<string>();
   const holidays = await prisma.publicHoliday.findMany({
@@ -125,7 +130,7 @@ export async function aggregateTimesheets(
     where: {
       companyId,
       status: { in: ["completed", "verified"] },
-      startTime: { lt: periodEnd },
+      startTime: { lt: periodEndExclusive },
       endTime: { gt: periodStart },
       ...(approvedSiteIds.length > 0 ? { siteId: { notIn: approvedSiteIds } } : {}),
       attendances: {
@@ -169,24 +174,31 @@ export async function aggregateTimesheets(
   const legacyWithoutAuthoritativeOccurrence = legacyLeaveRecords.filter(
     (row) => !authoritativeKeys.has(`${row.employeeId}:${row.date.toISOString().slice(0, 10)}`)
   );
+  // Exact duplicate legacy rows are a known migration anomaly. Payroll
+  // readiness blocks them for HR resolution; aggregation also de-duplicates
+  // them defensively so a direct calculation can never pay the same day twice.
+  const uniqueLegacyRecords = [...new Map(legacyWithoutAuthoritativeOccurrence.map((row) => [
+    `${row.employeeId}:${row.date.toISOString().slice(0, 10)}:${row.type}:${Number(row.hours)}`,
+    row,
+  ])).values()];
   // Keep legacy payroll semantics available during the staged per-company
   // migration. Once an authoritative occurrence exists for a day it wins;
   // otherwise every legacy treatment is still classified rather than silently
   // dropping unpaid/UIF/IOD deductions before that tenant is imported.
   const legacyUifTypes = new Set(["maternity", "parental", "adoption", "commissioning_parental"]);
   const employeeLeaveHours = sumLeaveHoursFromRecords(
-    legacyWithoutAuthoritativeOccurrence.filter(
+    uniqueLegacyRecords.filter(
       (row) => row.type !== "unpaid" && row.type !== "injury_on_duty" && !legacyUifTypes.has(row.type)
     )
   );
   const employeeUnpaidLeaveHours = sumLeaveHoursFromRecords(
-    legacyWithoutAuthoritativeOccurrence.filter((row) => row.type === "unpaid")
+    uniqueLegacyRecords.filter((row) => row.type === "unpaid")
   );
   const employeeUifLeaveHours = sumLeaveHoursFromRecords(
-    legacyWithoutAuthoritativeOccurrence.filter((row) => legacyUifTypes.has(row.type))
+    uniqueLegacyRecords.filter((row) => legacyUifTypes.has(row.type))
   );
   const employeeIodLeaveHours = sumLeaveHoursFromRecords(
-    legacyWithoutAuthoritativeOccurrence.filter((row) => row.type === "injury_on_duty")
+    uniqueLegacyRecords.filter((row) => row.type === "injury_on_duty")
   );
   const employeeInformationLeaveHours = new Map<string, number>();
   for (const occurrence of leaveOccurrences) {
@@ -207,6 +219,11 @@ export async function aggregateTimesheets(
     target.set(occurrence.employeeId, (target.get(occurrence.employeeId) ?? 0) + minutes / 60);
   }
 
+  const knownLeaveDayKeys = new Set([
+    ...authoritativeKeys,
+    ...legacyLeaveRecords.map((row) => `${row.employeeId}:${row.date.toISOString().slice(0, 10)}`),
+  ]);
+
   const totals = new Map<
     string,
     { basicHours: number; overtimeHours: number; sundayHours: number; publicHolidayHours: number }
@@ -215,6 +232,18 @@ export async function aggregateTimesheets(
   for (const row of approvedSiteRows) {
     const empId = row.actualGuardId;
     if (!empId) continue;
+    if (row.attendanceStatus === "leave" || row.attendanceStatus === "sick_leave") {
+      const dayKey = `${empId}:${row.workDate.toISOString().slice(0, 10)}`;
+      if (!knownLeaveDayKeys.has(dayKey)) {
+        const fallbackHours = row.hoursWorked != null ? Number(row.hoursWorked) : 8;
+        if (Number.isFinite(fallbackHours) && fallbackHours > 0 && fallbackHours <= MAX_LEAVE_HOURS_PER_RECORD) {
+          employeeLeaveHours.set(empId, (employeeLeaveHours.get(empId) ?? 0) + fallbackHours);
+        }
+      }
+      // Leave is paid or deducted from the leave source of truth. It is never
+      // also ordinary worked time from the site-timesheet row.
+      continue;
+    }
     if (!totals.has(empId)) {
       totals.set(empId, {
         basicHours: 0,
@@ -224,7 +253,7 @@ export async function aggregateTimesheets(
       });
     }
     const t = totals.get(empId)!;
-    const hoursWorked = row.hoursWorked != null ? Number(row.hoursWorked) : row.attendanceStatus === "leave" || row.attendanceStatus === "sick_leave" || row.attendanceStatus === "training" ? 8 : 0;
+    const hoursWorked = row.hoursWorked != null ? Number(row.hoursWorked) : row.attendanceStatus === "training" ? 8 : 0;
     const overtimeHours = row.overtimeHours != null ? Number(row.overtimeHours) : 0;
     const bucket = classifyShiftHours({
       shiftStartTime: row.clockIn ?? row.workDate,

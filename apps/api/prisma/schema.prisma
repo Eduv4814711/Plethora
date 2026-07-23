@@ -2187,6 +2187,9 @@ model LeaveOccurrence {
   siteId             String?
   scheduledMinutes   Int
   requestedMinutes   Int
+  /// Minutes consumed from the employee's leave balance. This can be zero for
+  /// non-balance leave and annual leave that falls on a rostered public holiday.
+  balanceMinutes     Int                   @default(0)
   paidMinutes        Int                   @default(0)
   unpaidMinutes      Int                   @default(0)
   payrollTreatment   LeavePayrollTreatment

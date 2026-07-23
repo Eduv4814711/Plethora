@@ -4,7 +4,6 @@ import type {
   LeaveApplicationStatus,
   LeavePayrollTreatment,
   Prisma,
-  UserRole,
 } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { dateKeyInTimeZone, getCompanyTimezone } from "../lib/timezone.js";
@@ -17,6 +16,10 @@ import {
 import { reconcileContinuityForEmployee } from "../modules/rosters/roster-continuity.service.js";
 import { createNotification } from "../modules/notifications/notifications.service.js";
 import { sendText } from "../whatsapp/services/send.service.js";
+import {
+  leaveOccurrenceBalanceMinutes,
+  leavePolicyConfigurationIssues,
+} from "./leave-policy.service.js";
 
 const ACTIVE_APPLICATION_STATUSES: LeaveApplicationStatus[] = [
   "SUBMITTED",
@@ -67,6 +70,7 @@ type PreviewOccurrence = {
   siteId: string | null;
   scheduledMinutes: number;
   requestedMinutes: number;
+  balanceMinutes: number;
   paidMinutes: number;
   unpaidMinutes: number;
   payrollTreatment: LeavePayrollTreatment;
@@ -281,7 +285,7 @@ export async function previewLeave(params: {
 
   for (const date of dates) {
     const key = formatLeaveDateKey(date);
-    if (leaveType.code === "annual" && holidayKeys.has(key)) continue;
+    const annualPublicHoliday = leaveType.code === "annual" && holidayKeys.has(key);
     const dayShifts = (shiftsByDate.get(key) ?? []).sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
     const payableSegments = dayShifts.length > 0
       ? dayShifts.map((shift) => ({
@@ -304,6 +308,15 @@ export async function previewLeave(params: {
         siteId: segment.siteId,
         scheduledMinutes: segment.scheduledMinutes,
         requestedMinutes,
+        // Public holidays inside annual leave remain paid/roster-relevant but
+        // must not reduce the annual leave balance. Leave types such as unpaid,
+        // parental and IOD never maintain a leave balance.
+        balanceMinutes: leaveOccurrenceBalanceMinutes({
+          requiresBalance: leaveType.requiresBalance,
+          leaveTypeCode: leaveType.code,
+          isPublicHoliday: annualPublicHoliday,
+          requestedMinutes,
+        }),
         paidMinutes: leaveType.payrollTreatment === "PAID_EMPLOYER" ? requestedMinutes : 0,
         unpaidMinutes: unpaid ? requestedMinutes : 0,
         payrollTreatment: leaveType.payrollTreatment,
@@ -326,7 +339,9 @@ export async function previewLeave(params: {
   const policyVersionWhere: Prisma.LeavePolicyVersionWhereInput = {
     companyId: params.companyId,
     leaveTypeId: leaveType.id,
-    ...(assignment ? { policyId: assignment.policyId } : {}),
+    ...(assignment
+      ? { policyId: assignment.policyId }
+      : { policy: { category: "STATUTORY_BASELINE" } }),
     effectiveFrom: { lte: start },
     OR: [{ effectiveTo: null }, { effectiveTo: { gte: end } }],
   };
@@ -354,8 +369,13 @@ export async function previewLeave(params: {
   // existed before that application's reservation. Otherwise approval counts
   // the same request once in the ledger and again in projectedMinutes.
   const currentMinutes = (balance._sum.minutes ?? 0) - (currentApplicationBalance._sum.minutes ?? 0);
-  if (policyVersion?.reviewStatus !== "ACTIVE") {
-    warnings.push("The applicable policy version is awaiting HR/legal confirmation; entitlement-based rejection and automatic conversion are disabled.");
+  const policyConfigurationIssues = policyVersion
+    ? leavePolicyConfigurationIssues({ ...policyVersion, leaveType })
+    : ["No policy version covers the full leave period."];
+  const policyConfirmed = policyVersion?.reviewStatus === "ACTIVE" && policyConfigurationIssues.length === 0;
+  if (!policyConfirmed) {
+    warnings.push("The applicable policy version is not active with an executable balance formula; approval is blocked until HR completes policy configuration.");
+    warnings.push(...policyConfigurationIssues);
   } else if (policyVersion.maxConsecutiveDays != null && differenceInCalendarDays(end, start) + 1 > policyVersion.maxConsecutiveDays) {
     warnings.push(`The request exceeds the confirmed maximum of ${policyVersion.maxConsecutiveDays} consecutive calendar days.`);
   }
@@ -374,7 +394,7 @@ export async function previewLeave(params: {
     warnings,
     conflicts,
     policyVersionId: policyVersion?.id ?? null,
-    policyConfirmed: policyVersion?.reviewStatus === "ACTIVE",
+    policyConfirmed,
     documentRequired: leaveType.requiresDocument,
     negativeBalanceAllowed: policyVersion?.negativeBalanceAllowed ?? false,
     maxConsecutiveDays: policyVersion?.maxConsecutiveDays ?? null,
@@ -386,13 +406,13 @@ export async function previewLeave(params: {
     staffingImpact: {
       shiftsAffected: occurrences.filter((item) => item.shiftId).length,
       siteIds: [...new Set(occurrences.map((item) => item.siteId).filter((id): id is string => Boolean(id)))],
-      unrosteredCalendarDays: dates.length - new Set(occurrences.filter((item) => item.shiftId).map((item) => formatLeaveDateKey(item.leaveDate))).size,
+      unrosteredCalendarDays: dates.length - new Set(occurrences.map((item) => formatLeaveDateKey(item.leaveDate))).size,
     },
   };
 }
 
 function previewReservationMinutes(occurrences: PreviewOccurrence[]): number {
-  return occurrences.reduce((sum, item) => sum + item.requestedMinutes, 0);
+  return occurrences.reduce((sum, item) => sum + item.balanceMinutes, 0);
 }
 
 async function addLeaveAudit(
@@ -443,6 +463,7 @@ export async function createLeaveApplication(params: {
   if (preview.calculatedMinutes === 0) {
     throw new LeaveManagementError("No working days or rostered shifts fall inside this request; add an effective employment pattern before submitting leave");
   }
+  const reservationMinutes = previewReservationMinutes(preview.occurrences);
   const nowKey = dateKeyInTimeZone(new Date(), await getCompanyTimezone(params.companyId));
   if (preview.startDate < nowKey && !params.retrospectiveReason?.trim()) {
     throw new LeaveManagementError("A reason is required for retrospective leave");
@@ -481,6 +502,7 @@ export async function createLeaveApplication(params: {
               siteId: occurrence.siteId,
               scheduledMinutes: occurrence.scheduledMinutes,
               requestedMinutes: occurrence.requestedMinutes,
+              balanceMinutes: occurrence.balanceMinutes,
               paidMinutes: occurrence.paidMinutes,
               unpaidMinutes: occurrence.unpaidMinutes,
               payrollTreatment: occurrence.payrollTreatment,
@@ -492,7 +514,7 @@ export async function createLeaveApplication(params: {
           },
         },
       });
-      if (status === "PENDING_HR" && preview.calculatedMinutes > 0) {
+      if (status === "PENDING_HR" && reservationMinutes > 0) {
         await tx.leaveLedgerEntry.create({
           data: {
             companyId: params.companyId,
@@ -501,7 +523,7 @@ export async function createLeaveApplication(params: {
             applicationId: application.id,
             entryType: "RESERVATION",
             effectiveDate: normalizeLeaveDate(preview.startDate),
-            minutes: -preview.calculatedMinutes,
+            minutes: -reservationMinutes,
             reason: "Leave submitted and balance reserved",
             createdById: params.actorId,
           },
@@ -567,6 +589,7 @@ export async function submitLeaveApplication(params: {
   });
   if (preview.conflicts.length) throw new LeaveManagementError("This request overlaps existing active leave", 409, "LEAVE_OVERLAP");
   if (preview.calculatedMinutes <= 0) throw new LeaveManagementError("No payable or rostered duration is available for this application");
+  const reservationMinutes = previewReservationMinutes(preview.occurrences);
   await prisma.$transaction(async (tx) => {
     const changed = await tx.leaveApplication.updateMany({
       where: { id: application.id, status: "DRAFT", version: application.version },
@@ -574,30 +597,24 @@ export async function submitLeaveApplication(params: {
     });
     if (changed.count !== 1) throw new LeaveManagementError("Leave application changed during submission; refresh and try again", 409, "VERSION_CONFLICT");
     await tx.leaveOccurrence.deleteMany({ where: { applicationId: application.id } });
-    await tx.leaveOccurrence.createMany({ data: preview.occurrences.map((occurrence) => ({ companyId: params.companyId, applicationId: application.id, employeeId: application.employeeId, leaveDate: occurrence.leaveDate, shiftId: occurrence.shiftId, siteId: occurrence.siteId, scheduledMinutes: occurrence.scheduledMinutes, requestedMinutes: occurrence.requestedMinutes, paidMinutes: occurrence.paidMinutes, unpaidMinutes: occurrence.unpaidMinutes, payrollTreatment: occurrence.payrollTreatment, status: "RESERVED" })) });
-    await tx.leaveLedgerEntry.create({ data: { companyId: params.companyId, employeeId: application.employeeId, leaveTypeId: application.leaveTypeId, applicationId: application.id, entryType: "RESERVATION", effectiveDate: application.startDate, minutes: -preview.calculatedMinutes, reason: "Draft submitted and balance reserved", createdById: params.actorId } });
+    await tx.leaveOccurrence.createMany({ data: preview.occurrences.map((occurrence) => ({ companyId: params.companyId, applicationId: application.id, employeeId: application.employeeId, leaveDate: occurrence.leaveDate, shiftId: occurrence.shiftId, siteId: occurrence.siteId, scheduledMinutes: occurrence.scheduledMinutes, requestedMinutes: occurrence.requestedMinutes, balanceMinutes: occurrence.balanceMinutes, paidMinutes: occurrence.paidMinutes, unpaidMinutes: occurrence.unpaidMinutes, payrollTreatment: occurrence.payrollTreatment, status: "RESERVED" })) });
+    if (reservationMinutes > 0) {
+      await tx.leaveLedgerEntry.create({ data: { companyId: params.companyId, employeeId: application.employeeId, leaveTypeId: application.leaveTypeId, applicationId: application.id, entryType: "RESERVATION", effectiveDate: application.startDate, minutes: -reservationMinutes, reason: "Draft submitted and balance reserved", createdById: params.actorId } });
+    }
     await addLeaveAudit(tx, { companyId: params.companyId, employeeId: application.employeeId, applicationId: application.id, userId: params.actorId, eventType: "APPLICATION_SUBMITTED", previousValue: { status: "DRAFT" }, newValue: { status: "PENDING_HR", calculatedMinutes: preview.calculatedMinutes } });
   });
   return getLeaveApplication(params.companyId, application.id);
-}
-
-function canManageLeave(role: UserRole): boolean {
-  return role === "admin" || role === "hr_payroll";
 }
 
 export async function decideLeaveApplication(params: {
   companyId: string;
   applicationId: string;
   actorId: string;
-  actorRole: UserRole;
   decision: "approve" | "reject";
   reason?: string;
   expectedVersion?: number;
 }, context: LeaveOperationContext = {}) {
   const db = context.transaction ?? prisma;
-  if (!canManageLeave(params.actorRole)) {
-    throw new LeaveManagementError("Only HR/payroll or a company administrator may decide leave", 403, "FORBIDDEN");
-  }
   if (params.decision === "reject" && !params.reason?.trim()) {
     throw new LeaveManagementError("A rejection reason is required");
   }
@@ -642,6 +659,7 @@ export async function decideLeaveApplication(params: {
   if (preview?.policyConfirmed && preview.maxConsecutiveDays != null && preview.calendarDays > preview.maxConsecutiveDays) {
     throw new LeaveManagementError(`The confirmed policy permits at most ${preview.maxConsecutiveDays} consecutive calendar days`);
   }
+  const balanceTakenMinutes = preview ? previewReservationMinutes(preview.occurrences) : 0;
 
   const persist = async (tx: Prisma.TransactionClient) => {
     const previous = { status: existing.status };
@@ -672,6 +690,7 @@ export async function decideLeaveApplication(params: {
         siteId: occurrence.siteId,
         scheduledMinutes: occurrence.scheduledMinutes,
         requestedMinutes: occurrence.requestedMinutes,
+        balanceMinutes: occurrence.balanceMinutes,
         paidMinutes: occurrence.paidMinutes,
         unpaidMinutes: occurrence.unpaidMinutes,
         payrollTreatment: occurrence.payrollTreatment,
@@ -695,11 +714,26 @@ export async function decideLeaveApplication(params: {
     for (const entry of reservations) {
       await tx.leaveLedgerEntry.create({ data: { companyId: params.companyId, employeeId: existing.employeeId, leaveTypeId: existing.leaveTypeId, applicationId: existing.id, entryType: "RESERVATION_RELEASE", effectiveDate: existing.startDate, minutes: -entry.minutes, reason: "Reservation converted to approved leave", createdById: params.actorId, reversalOfId: entry.id } });
     }
-    if (preview!.calculatedMinutes > 0) {
-      await tx.leaveLedgerEntry.create({ data: { companyId: params.companyId, employeeId: existing.employeeId, leaveTypeId: existing.leaveTypeId, applicationId: existing.id, entryType: "TAKEN", effectiveDate: existing.startDate, minutes: -preview!.calculatedMinutes, reason: "Approved leave taken", createdById: params.actorId } });
+    if (balanceTakenMinutes > 0) {
+      await tx.leaveLedgerEntry.create({ data: { companyId: params.companyId, employeeId: existing.employeeId, leaveTypeId: existing.leaveTypeId, applicationId: existing.id, entryType: "TAKEN", effectiveDate: existing.startDate, minutes: -balanceTakenMinutes, reason: "Approved leave taken", createdById: params.actorId } });
+    }
+    const legacyDayTotals = new Map<string, { date: Date; minutes: number }>();
+    for (const occurrence of preview!.occurrences) {
+      if (occurrence.requestedMinutes <= 0) continue;
+      const key = formatLeaveDateKey(occurrence.leaveDate);
+      const current = legacyDayTotals.get(key);
+      legacyDayTotals.set(key, {
+        date: occurrence.leaveDate,
+        minutes: (current?.minutes ?? 0) + occurrence.requestedMinutes,
+      });
     }
     const legacyRecords = await tx.leaveRecord.createManyAndReturn({
-      data: preview!.occurrences.filter((o) => o.requestedMinutes > 0).map((occurrence) => ({ employeeId: existing.employeeId, date: occurrence.leaveDate, type: existing.leaveType.code, hours: occurrence.requestedMinutes / 60 })),
+      data: [...legacyDayTotals.values()].map((day) => ({
+        employeeId: existing.employeeId,
+        date: day.date,
+        type: existing.leaveType.code,
+        hours: day.minutes / 60,
+      })),
     });
     await tx.leaveApplication.update({ where: { id: existing.id }, data: { legacyLeaveRecordIds: legacyRecords.map((record) => record.id) } });
     await tx.leaveApprovalStep.updateMany({ where: { applicationId: existing.id, decision: "PENDING" }, data: { decision: "APPROVED", actorId: params.actorId, comment: params.reason, decidedAt: new Date() } });
@@ -723,7 +757,6 @@ export async function cancelOrWithdrawLeave(params: {
   applicationId: string;
   actorId?: string;
   reason: string;
-  actorRole?: UserRole;
   expectedVersion?: number;
 }) {
   if (!params.reason.trim()) throw new LeaveManagementError("A cancellation or withdrawal reason is required");
@@ -740,11 +773,8 @@ export async function cancelOrWithdrawLeave(params: {
   if (!pending && !approvedOrCancellationRequested) {
     throw new LeaveManagementError(`Leave cannot be cancelled from ${application.status.toLowerCase()}`);
   }
-  if (!pending && (!params.actorRole || !canManageLeave(params.actorRole))) {
-    throw new LeaveManagementError("Approved leave cancellation requires HR/payroll", 403, "FORBIDDEN");
-  }
   if (!pending && !params.actorId) {
-    throw new LeaveManagementError("An authenticated HR/payroll actor is required", 403, "FORBIDDEN");
+    throw new LeaveManagementError("An authenticated leave manager is required", 403, "FORBIDDEN");
   }
   const unfinalizedPayrollPostings = application.payrollPostings.filter((posting) => posting.payrollRun.status !== "paid");
   if (unfinalizedPayrollPostings.length > 0) {
@@ -1057,6 +1087,9 @@ export async function resolveLeaveAdjustment(params: {
 
 export async function accrueConfirmedLeave(params: { companyId: string; actorId: string; asOf: string }) {
   const asOf = normalizeLeaveDate(params.asOf);
+  if (asOf > normalizeLeaveDate(new Date())) {
+    throw new LeaveManagementError("Leave accruals cannot be posted for a future date");
+  }
   const versions = await prisma.leavePolicyVersion.findMany({
     where: {
       companyId: params.companyId,
@@ -1068,26 +1101,44 @@ export async function accrueConfirmedLeave(params: { companyId: string; actorId:
     include: { leaveType: true, policy: true },
   });
   const [employees, assignments, terms] = await Promise.all([
-    prisma.employee.findMany({ where: { companyId: params.companyId, status: { not: "offboarded" } }, select: { id: true } }),
+    prisma.employee.findMany({ where: { companyId: params.companyId, status: { not: "offboarded" } }, select: { id: true, commencementDate: true } }),
     prisma.employeeLeavePolicyAssignment.findMany({ where: { employee: { companyId: params.companyId }, effectiveFrom: { lte: asOf }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: asOf } }] } }),
-    prisma.employmentTerm.findMany({ where: { companyId: params.companyId, effectiveFrom: { lte: asOf }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: asOf } }] }, select: { employeeId: true } }),
+    prisma.employmentTerm.findMany({ where: { companyId: params.companyId }, select: { employeeId: true, effectiveFrom: true, effectiveTo: true } }),
   ]);
   const assignmentByEmployee = new Map(assignments.map((assignment) => [assignment.employeeId, assignment.policyId]));
-  const employeesWithTerms = new Set(terms.map((term) => term.employeeId));
+  const employeesWithAnyTerm = new Set(terms.map((term) => term.employeeId));
+  const activeTermByEmployee = new Map(terms
+    .filter((term) => term.effectiveFrom <= asOf && (!term.effectiveTo || term.effectiveTo >= asOf))
+    .map((term) => [term.employeeId, term]));
+  const earliestTermByEmployee = new Map<string, Date>();
+  for (const term of terms) {
+    const current = earliestTermByEmployee.get(term.employeeId);
+    if (!current || term.effectiveFrom < current) earliestTermByEmployee.set(term.employeeId, term.effectiveFrom);
+  }
   const posted: Array<{ employeeId: string; leaveTypeCode: string; minutes: number; key: string }> = [];
-  const skipped: Array<{ policyVersionId: string; reason: string }> = [];
+  const skipped: Array<{ policyVersionId: string; reason: string; employeeId?: string }> = [];
 
   for (const version of versions) {
+    const applicableEmployees = employees.filter((employee) => {
+      const assignedPolicyId = assignmentByEmployee.get(employee.id);
+      return assignedPolicyId
+        ? assignedPolicyId === version.policyId
+        : version.policy.category === "STATUTORY_BASELINE";
+    });
+    if (applicableEmployees.length === 0) continue;
+    const configurationIssues = leavePolicyConfigurationIssues(version);
+    if (configurationIssues.length > 0) {
+      skipped.push({ policyVersionId: version.id, reason: configurationIssues.join(" ") });
+      continue;
+    }
     const method = version.accrualMethod.toUpperCase();
     let minutes = 0;
-    let periodKey = formatLeaveDateKey(asOf).slice(0, 7);
     if (["MONTHLY_FIXED", "MONTHLY"].includes(method) && version.accrualRateMinutes != null) {
       minutes = Math.round(Number(version.accrualRateMinutes));
     } else if (method === "EVEN_MONTHLY" && version.entitlementMinutes && version.cycleMonths > 0) {
       minutes = Math.round(version.entitlementMinutes / version.cycleMonths);
     } else if (method === "ANNUAL_GRANT" && version.entitlementMinutes) {
       minutes = version.entitlementMinutes;
-      periodKey = formatLeaveDateKey(asOf).slice(0, 4);
     } else {
       skipped.push({ policyVersionId: version.id, reason: `Accrual method ${version.accrualMethod} has no confirmed executable rate` });
       continue;
@@ -1096,19 +1147,48 @@ export async function accrueConfirmedLeave(params: { companyId: string; actorId:
       skipped.push({ policyVersionId: version.id, reason: "Calculated accrual was not positive" });
       continue;
     }
-    for (const employee of employees) {
-      if (!employeesWithTerms.has(employee.id)) continue;
-      const assignedPolicyId = assignmentByEmployee.get(employee.id);
-      const applies = assignedPolicyId ? assignedPolicyId === version.policyId : version.policy.category === "STATUTORY_BASELINE";
-      if (!applies) continue;
-      const key = `accrual:${version.id}:${employee.id}:${periodKey}`;
-      const existed = await prisma.leaveLedgerEntry.findUnique({ where: { companyId_idempotencyKey: { companyId: params.companyId, idempotencyKey: key } }, select: { id: true } });
+    for (const employee of applicableEmployees) {
+      // Effective terms take precedence. Older tenants may not have migrated
+      // terms yet, so a valid commencement date is the controlled fallback.
+      if (employeesWithAnyTerm.has(employee.id) && !activeTermByEmployee.has(employee.id)) continue;
+      const employmentStart = employee.commencementDate ?? earliestTermByEmployee.get(employee.id);
+      if (!employmentStart || normalizeLeaveDate(employmentStart) > asOf) {
+        skipped.push({ policyVersionId: version.id, employeeId: employee.id, reason: "No eligible commencement date or active employment term" });
+        continue;
+      }
+      let periodKey = formatLeaveDateKey(asOf).slice(0, 7);
+      let effectiveDate = asOf;
+      if (method === "ANNUAL_GRANT") {
+        const anchor = normalizeLeaveDate(employmentStart);
+        let completedMonths = (asOf.getUTCFullYear() - anchor.getUTCFullYear()) * 12 + asOf.getUTCMonth() - anchor.getUTCMonth();
+        if (asOf.getUTCDate() < anchor.getUTCDate()) completedMonths -= 1;
+        const cycleIndex = Math.max(0, Math.floor(completedMonths / version.cycleMonths));
+        effectiveDate = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth() + cycleIndex * version.cycleMonths, anchor.getUTCDate()));
+        periodKey = `cycle-${cycleIndex}-${formatLeaveDateKey(effectiveDate)}`;
+      }
+      // The period key deliberately excludes the policy version. A mid-period
+      // policy change must not grant the same leave type twice for one employee.
+      const key = `accrual:${version.leaveTypeId}:${employee.id}:${periodKey}`;
+      const existed = await prisma.leaveLedgerEntry.findFirst({
+        where: {
+          companyId: params.companyId,
+          employeeId: employee.id,
+          leaveTypeId: version.leaveTypeId,
+          entryType: "ACCRUAL",
+          OR: [
+            { idempotencyKey: key },
+            { metadata: { path: ["periodKey"], equals: periodKey } },
+          ],
+        },
+        select: { id: true },
+      });
+      if (existed) continue;
       await prisma.leaveLedgerEntry.upsert({
         where: { companyId_idempotencyKey: { companyId: params.companyId, idempotencyKey: key } },
-        create: { companyId: params.companyId, employeeId: employee.id, leaveTypeId: version.leaveTypeId, entryType: "ACCRUAL", effectiveDate: asOf, minutes, reason: `Confirmed ${version.accrualMethod} accrual`, createdById: params.actorId, idempotencyKey: key, metadata: { policyVersionId: version.id, periodKey } },
+        create: { companyId: params.companyId, employeeId: employee.id, leaveTypeId: version.leaveTypeId, entryType: "ACCRUAL", effectiveDate, minutes, reason: `Confirmed ${version.accrualMethod} accrual`, createdById: params.actorId, idempotencyKey: key, metadata: { policyVersionId: version.id, periodKey } },
         update: {},
       });
-      if (!existed) posted.push({ employeeId: employee.id, leaveTypeCode: version.leaveType.code, minutes, key });
+      posted.push({ employeeId: employee.id, leaveTypeCode: version.leaveType.code, minutes, key });
     }
   }
   await prisma.leaveAuditEvent.create({ data: { companyId: params.companyId, userId: params.actorId, eventType: "LEAVE_ACCRUAL_RUN", newValue: { asOf: params.asOf, posted: posted.length, skipped } } });
@@ -1116,21 +1196,54 @@ export async function accrueConfirmedLeave(params: { companyId: string; actorId:
 }
 
 export async function getLeaveReadiness(companyId: string, start: Date, end: Date) {
-  const unresolved = await prisma.leaveApplication.findMany({
-    where: { companyId, status: { in: ["SUBMITTED", "PENDING_HR", "CANCELLATION_REQUESTED", "ADJUSTMENT_REQUIRED"] }, startDate: { lte: end }, endDate: { gte: start } },
-    select: { id: true, status: true, employeeId: true, startDate: true, endDate: true },
-  });
-  const missingDocuments = await prisma.leaveApplication.count({
-    where: { companyId, status: "APPROVED", startDate: { lte: end }, endDate: { gte: start }, leaveType: { requiresDocument: true }, documents: { none: { reviewStatus: "VERIFIED" } } },
-  });
+  const [unresolved, missingDocuments, legacyRows, authoritativeOccurrences] = await Promise.all([
+    prisma.leaveApplication.findMany({
+      where: { companyId, status: { in: ["SUBMITTED", "PENDING_HR", "CANCELLATION_REQUESTED", "ADJUSTMENT_REQUIRED"] }, startDate: { lte: end }, endDate: { gte: start } },
+      select: { id: true, status: true, employeeId: true, startDate: true, endDate: true },
+    }),
+    prisma.leaveApplication.count({
+      where: { companyId, status: "APPROVED", startDate: { lte: end }, endDate: { gte: start }, leaveType: { requiresDocument: true }, documents: { none: { reviewStatus: "VERIFIED" } } },
+    }),
+    prisma.leaveRecord.findMany({
+      where: { employee: { companyId }, date: { gte: normalizeLeaveDate(start), lte: normalizeLeaveDate(end) } },
+      select: { id: true, employeeId: true, date: true, type: true, hours: true },
+      orderBy: [{ employeeId: "asc" }, { date: "asc" }, { id: "asc" }],
+    }),
+    prisma.leaveOccurrence.findMany({
+      where: {
+        companyId,
+        leaveDate: { gte: normalizeLeaveDate(start), lte: normalizeLeaveDate(end) },
+        status: { not: "CANCELLED" },
+      },
+      select: { employeeId: true, leaveDate: true },
+    }),
+  ]);
+  const authoritativeDayKeys = new Set(authoritativeOccurrences.map((occurrence) =>
+    `${occurrence.employeeId}:${formatLeaveDateKey(occurrence.leaveDate)}`
+  ));
+  const legacyRowsByEmployeeDay = new Map<string, typeof legacyRows>();
+  for (const row of legacyRows) {
+    const key = `${row.employeeId}:${formatLeaveDateKey(row.date)}`;
+    // Modern approvals retain legacy compatibility rows for older screens. A
+    // multi-shift leave day can legitimately produce several such rows; only
+    // standalone legacy days are migration anomalies that must block payroll.
+    if (authoritativeDayKeys.has(key)) continue;
+    legacyRowsByEmployeeDay.set(key, [...(legacyRowsByEmployeeDay.get(key) ?? []), row]);
+  }
+  const duplicateLegacyDays = [...legacyRowsByEmployeeDay.entries()]
+    .filter(([, rows]) => rows.length > 1)
+    .map(([key, rows]) => ({ key, recordIds: rows.map((row) => row.id), types: [...new Set(rows.map((row) => row.type))] }));
   return {
-    blocked: unresolved.length > 0 || missingDocuments > 0,
+    blocked: unresolved.length > 0 || missingDocuments > 0 || duplicateLegacyDays.length > 0,
     unresolved,
     missingDocuments,
+    duplicateLegacyDays,
     message: unresolved.length > 0
       ? `${unresolved.length} leave application(s) affecting this payroll period require a final decision or adjustment.`
       : missingDocuments > 0
         ? `${missingDocuments} approved leave application(s) are missing verified documents.`
+        : duplicateLegacyDays.length > 0
+          ? `${duplicateLegacyDays.length} employee leave day(s) have duplicate legacy records and must be reconciled before payroll.`
         : undefined,
   };
 }

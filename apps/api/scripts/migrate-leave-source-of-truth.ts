@@ -20,6 +20,7 @@ import {
   findInvalidLegacyRows,
   legacyImportIdempotencyKey,
 } from "../src/lib/leave-import-reconciliation.js";
+import { leaveOccurrenceBalanceMinutes } from "../src/services/leave-policy.service.js";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 config({ path: resolve(scriptDir, "..", ".env") });
@@ -170,8 +171,12 @@ async function main() {
   }
 
   await ensureDefaultLeavePolicy(companyId, actor!.id);
-  const leaveTypes = await prisma.leaveTypeDefinition.findMany({ where: { companyId } });
+  const [leaveTypes, publicHolidays] = await Promise.all([
+    prisma.leaveTypeDefinition.findMany({ where: { companyId } }),
+    prisma.publicHoliday.findMany({ where: { companyId }, select: { date: true } }),
+  ]);
   const typeByCode = new Map(leaveTypes.map((type) => [type.code, type]));
+  const publicHolidayKeys = new Set(publicHolidays.map((holiday) => dateKey(holiday.date)));
 
   const importOne = async (input: {
     request?: (typeof requests)[number];
@@ -184,6 +189,12 @@ async function main() {
     if (!leaveType) throw new Error(`No configured type for ${source.type}`);
     const minutes = Math.round(Number(source.hours) * 60);
     if (minutes <= 0) throw new Error(`Legacy row has non-positive hours: ${input.request?.id ?? input.record?.id}`);
+    const balanceMinutes = leaveOccurrenceBalanceMinutes({
+      requiresBalance: leaveType.requiresBalance,
+      leaveTypeCode: leaveType.code,
+      isPublicHoliday: publicHolidayKeys.has(dateKey(source.date)),
+      requestedMinutes: minutes,
+    });
     const status: LeaveApplicationStatus = input.record ? "IMPORTED_APPROVED" : legacyStatus(input.request!.status);
     const paidMinutes = leaveType.payrollTreatment === "PAID_EMPLOYER" ? minutes : 0;
     const unpaidMinutes = ["UNPAID_DEDUCTION", "UIF_NO_EMPLOYER_PAY"].includes(leaveType.payrollTreatment) ? minutes : 0;
@@ -211,15 +222,15 @@ async function main() {
           createdById: actor!.id,
           reviewedById: status === "PENDING_HR" ? null : actor!.id,
           occurrences: status === "REJECTED" ? undefined : {
-            create: [{ companyId, employeeId: source.employeeId, leaveDate: source.date, scheduledMinutes: minutes, requestedMinutes: minutes, paidMinutes, unpaidMinutes, payrollTreatment: leaveType.payrollTreatment, status: status === "PENDING_HR" ? "RESERVED" : "APPROVED" }],
+            create: [{ companyId, employeeId: source.employeeId, leaveDate: source.date, scheduledMinutes: minutes, requestedMinutes: minutes, balanceMinutes, paidMinutes, unpaidMinutes, payrollTreatment: leaveType.payrollTreatment, status: status === "PENDING_HR" ? "RESERVED" : "APPROVED" }],
           },
           approvalSteps: { create: [{ stepOrder: 1, role: "hr_payroll", decision: status === "PENDING_HR" ? "PENDING" : status === "REJECTED" ? "REJECTED" : "APPROVED", actorId: status === "PENDING_HR" ? null : actor!.id, decidedAt: status === "PENDING_HR" ? null : new Date() }] },
         },
       });
-      if (status === "PENDING_HR") {
-        await tx.leaveLedgerEntry.create({ data: { companyId, employeeId: source.employeeId, leaveTypeId: leaveType.id, applicationId: application.id, entryType: "RESERVATION", effectiveDate: source.date, minutes: -minutes, reason: "Imported pending request reservation", createdById: actor!.id } });
-      } else if (["APPROVED", "IMPORTED_APPROVED"].includes(status)) {
-        await tx.leaveLedgerEntry.create({ data: { companyId, employeeId: source.employeeId, leaveTypeId: leaveType.id, applicationId: application.id, entryType: "TAKEN", effectiveDate: source.date, minutes: -minutes, reason: "Imported approved leave", createdById: actor!.id } });
+      if (status === "PENDING_HR" && balanceMinutes > 0) {
+        await tx.leaveLedgerEntry.create({ data: { companyId, employeeId: source.employeeId, leaveTypeId: leaveType.id, applicationId: application.id, entryType: "RESERVATION", effectiveDate: source.date, minutes: -balanceMinutes, reason: "Imported pending request reservation", createdById: actor!.id } });
+      } else if (["APPROVED", "IMPORTED_APPROVED"].includes(status) && balanceMinutes > 0) {
+        await tx.leaveLedgerEntry.create({ data: { companyId, employeeId: source.employeeId, leaveTypeId: leaveType.id, applicationId: application.id, entryType: "TAKEN", effectiveDate: source.date, minutes: -balanceMinutes, reason: "Imported approved leave", createdById: actor!.id } });
       }
       await tx.leaveAuditEvent.create({ data: { companyId, employeeId: source.employeeId, applicationId: application.id, userId: actor!.id, eventType: "LEGACY_LEAVE_IMPORTED", newValue: { status, legacyLeaveRequestId: input.request?.id, legacyLeaveRecordId: input.record?.id } as Prisma.InputJsonValue } });
     });

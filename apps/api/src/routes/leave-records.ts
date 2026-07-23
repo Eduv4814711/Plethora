@@ -92,7 +92,7 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
     requireRole(["admin", "operations_manager", "hr_payroll"], {
-      anyOfModules: ["/employees", "/payroll"],
+      anyOfModules: ["/employees/leave", "/payroll"],
     }),
   ];
 
@@ -300,12 +300,6 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
     }
 
     const companyId = request.user!.companyId;
-    if (request.user!.role !== "admin" && request.user!.role !== "hr_payroll") {
-      return reply.code(403).send({
-        error: "Forbidden",
-        message: "Only HR/payroll or a company administrator may record approved leave",
-      });
-    }
     const employee = await prisma.employee.findFirst({
       where: { id: parsed.data.employeeId, companyId },
     });
@@ -334,7 +328,6 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
           companyId,
           applicationId: application.id,
           actorId: request.user!.sub,
-          actorRole: request.user!.role,
           decision: "approve",
           reason: "Approved during direct HR capture",
         }, { transaction: tx });
@@ -372,10 +365,6 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
     }
 
     const companyId = request.user!.companyId;
-    if (request.user!.role !== "admin" && request.user!.role !== "hr_payroll") {
-      return reply.code(403).send({ error: "Forbidden", message: "Only HR/payroll or a company administrator may change leave" });
-    }
-
     try {
       const blocked = await legacyMutationBlocker(companyId, parsed.data.employeeId, parsed.data.startDate, parsed.data.endDate);
       if (blocked) return reply.code(409).send({ error: "Authoritative leave is immutable", message: blocked });
@@ -432,10 +421,6 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
     }
 
     const companyId = request.user!.companyId;
-    if (request.user!.role !== "admin" && request.user!.role !== "hr_payroll") {
-      return reply.code(403).send({ error: "Forbidden", message: "Only HR/payroll or a company administrator may cancel leave" });
-    }
-
     try {
       const blocked = await legacyMutationBlocker(companyId, parsed.data.employeeId, parsed.data.startDate, parsed.data.endDate);
       if (blocked) return reply.code(409).send({ error: "Authoritative leave is immutable", message: blocked });

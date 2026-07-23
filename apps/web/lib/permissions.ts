@@ -110,6 +110,13 @@ export function canManageEmployeeDetails(user: { role: string; moduleAccess?: un
   return canAccessSensitiveData(user, "/employees") || canAccessSensitiveData(user, "/payroll");
 }
 
+/** Leave mutations follow the user's write access to Team > Leave or Payroll, regardless of role title. */
+export function canManageLeave(user: { role: string; moduleAccess?: unknown }): boolean {
+  return isFullAdmin(user)
+    || canAccessSensitiveData(user, "/employees/leave")
+    || canAccessSensitiveData(user, "/payroll");
+}
+
 function navItemForPath(pathname: string): NavItem | undefined {
   return NAV_ITEMS.find((n) => {
     if (n.href === "/") return pathname === "/" || pathname === "";

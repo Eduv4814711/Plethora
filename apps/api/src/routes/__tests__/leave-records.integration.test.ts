@@ -66,12 +66,23 @@ describe.runIf(dbReady)("leave records API (integration)", () => {
       data: { requiresDocument: true },
     });
     await prisma.leavePolicyVersion.updateMany({
-      where: { companyId },
+      where: { companyId, leaveType: { requiresBalance: true } },
       data: {
         reviewStatus: "ACTIVE",
         confirmedBy: user.id,
         confirmedAt: new Date(),
         negativeBalanceAllowed: true,
+        accrualMethod: "EVEN_MONTHLY",
+        entitlementMinutes: 120 * 60,
+      },
+    });
+    await prisma.leavePolicyVersion.updateMany({
+      where: { companyId, leaveType: { requiresBalance: false } },
+      data: {
+        reviewStatus: "ACTIVE",
+        confirmedBy: user.id,
+        confirmedAt: new Date(),
+        accrualMethod: "NONE",
       },
     });
     const shifts = [];
@@ -397,8 +408,7 @@ describe.runIf(dbReady)("leave records API (integration)", () => {
       where: { applicationId: application.id },
       orderBy: { createdAt: "asc" },
     });
-    expect(ledger.map((entry) => entry.entryType)).toEqual(["RESERVATION", "RESERVATION_RELEASE"]);
-    expect(ledger.reduce((sum, entry) => sum + entry.minutes, 0)).toBe(0);
+    expect(ledger).toEqual([]);
     expect(await prisma.leaveRecord.count({
       where: { employeeId, date: normalizeLeaveDate(leaveDate) },
     })).toBe(0);

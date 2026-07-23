@@ -20,6 +20,9 @@ Production cutover is intentionally **not automatic**. Each company still needs 
 - Supporting evidence is application-scoped, type/size/content validated, reviewable, auditable, and excluded from the public static-file route. Downloads require authenticated leave-management access, are marked private and non-cacheable, and never expose the storage path. WhatsApp evidence is matched to an application belonging to the verified phone.
 - Reports read applications, ledger balances, adjustments, expiries, and payroll postings rather than treating legacy requests as approved leave.
 - Hard-coded legal entitlement claims were removed from the employee UI. Seed versions are marked `PENDING_HR_LEGAL_CONFIRMATION`.
+- Leave occurrences distinguish payable/requested minutes from balance-consuming minutes, preventing unpaid, parental, IOD, and other non-balance leave from creating negative entitlement balances.
+- Site-timesheet leave rows are excluded from worked hours and are reconciled against authoritative/legacy leave, preventing the same absence from being paid twice.
+- Exact duplicate legacy leave rows block payroll readiness and are also de-duplicated defensively during calculation.
 
 ## New domain and interfaces
 
@@ -47,21 +50,22 @@ Database controls include an active-date overlap exclusion constraint, valid ran
 - Pending statutory/sector versions may be previewed for review, but an application cannot be approved unless one confirmed active policy version covers the complete leave period.
 - Once a version is confirmed, negative-balance and maximum-consecutive-day rules are enforced.
 - Opening balances require a reason and are posted as immutable `OPENING_BALANCE` ledger entries.
-- Accrual runs only execute an explicitly confirmed method/rate. Unsupported or incomplete formulas are reported as skipped rather than inferred.
-- Annual public holidays are excluded from annual-leave scheduled minutes. Rotating/security employees require rostered shifts or an effective executable working pattern; the service does not assume an eight-hour day.
+- Accrual runs only execute an explicitly confirmed method/rate, use the employee's employment-cycle anchor for annual grants, and are idempotent per employee, leave type, and period. Unsupported or incomplete formulas are reported as skipped rather than inferred.
+- Carry-over, expiry, notice enforcement, and automatic conversion to unpaid fail closed while they are not automated. HR must use an audited adjustment rather than relying on a stored but unenforced field.
+- Annual public holidays remain paid and roster-relevant but consume zero annual-leave balance minutes. Rotating/security employees require rostered shifts or an effective executable working pattern; the service does not assume an eight-hour day.
 
 ## Migration and rollout
 
 Run the reconciliation report first:
 
 ```text
-npm run db:migrate-leave-source --workspace apps/api -- --company-id <company-id>
+npm run db:migrate-leave-source --workspace=api -- --company-id <company-id>
 ```
 
 After resolving duplicate/overlap/missing-policy/payroll anomalies, confirming the target database, and approving opening balances:
 
 ```text
-npm run db:migrate-leave-source --workspace apps/api -- --company-id <company-id> --apply --expected-host <database-host> --expected-port <database-port> --expected-database <database-name>
+npm run db:migrate-leave-source --workspace=api -- --company-id <company-id> --apply --expected-host <database-host> --expected-port <database-port> --expected-database <database-name>
 ```
 
 The importer is idempotent, never changes or deletes legacy rows, matches only reliable approved request/record pairs, and imports unmatched rows with provenance. Apply mode fails closed when duplicate, overlap, missing-policy, or locked-payroll conflicts remain, and it never rewrites payroll history.

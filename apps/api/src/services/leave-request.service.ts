@@ -1,5 +1,4 @@
 import { prisma } from "../lib/prisma.js";
-import type { UserRole } from "@prisma/client";
 import { reconcileContinuityForEmployee } from "../modules/rosters/roster-continuity.service.js";
 import { createLeaveApplication, decideLeaveApplication, LeaveManagementError } from "./leave-management.service.js";
 
@@ -13,8 +12,7 @@ export class LeaveRequestError extends Error {
 export async function approveLeaveRequest(
   requestId: string,
   companyId: string,
-  userId: string,
-  userRole: UserRole
+  userId: string
 ): Promise<void> {
   let employeeId: string;
   try {
@@ -59,7 +57,6 @@ export async function approveLeaveRequest(
         companyId,
         applicationId: application.id,
         actorId: userId,
-        actorRole: userRole,
         decision: "approve",
       }, { transaction: tx });
       const changed = await tx.leaveRequest.updateMany({
@@ -83,8 +80,7 @@ export async function approveLeaveRequest(
 export async function rejectLeaveRequest(
   requestId: string,
   companyId: string,
-  userId: string,
-  userRole: UserRole
+  userId: string
 ): Promise<void> {
   let employeeId: string;
   try {
@@ -129,7 +125,6 @@ export async function rejectLeaveRequest(
         companyId,
         applicationId: application.id,
         actorId: userId,
-        actorRole: userRole,
         decision: "reject",
         reason: "Rejected through legacy-compatible endpoint",
       }, { transaction: tx });

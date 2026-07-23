@@ -29,6 +29,7 @@ import {
   resolveLeaveAdjustment,
   submitLeaveApplication,
 } from "../services/leave-management.service.js";
+import { leavePolicyConfigurationIssues } from "../services/leave-policy.service.js";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const applicationStatus = z.enum([
@@ -90,8 +91,8 @@ const policyVersionSchema = z.object({
   sourceAuthority: z.string().min(1).max(250), legalReference: z.string().max(1000).optional(),
   entitlementMinutes: z.number().int().positive().optional(), accrualMethod: z.string().min(1).max(100),
   accrualRateMinutes: z.number().positive().optional(), cycleMonths: z.number().int().min(0).max(120).default(12),
-  carryOverLimitMinutes: z.number().int().nonnegative().optional(), expiryMonths: z.number().int().positive().optional(),
-  noticeDays: z.number().int().nonnegative().optional(), maxConsecutiveDays: z.number().int().positive().optional(),
+  carryOverLimitMinutes: z.number().int().nonnegative().nullable().optional(), expiryMonths: z.number().int().positive().nullable().optional(),
+  noticeDays: z.number().int().nonnegative().nullable().optional(), maxConsecutiveDays: z.number().int().positive().optional(),
   negativeBalanceAllowed: z.boolean().default(false), autoConvertToUnpaid: z.boolean().default(false),
   approvalFlow: supportedApprovalFlowSchema.default([{ order: 1, role: "hr_payroll", required: true }]),
   documentRules: z.record(z.string(), z.unknown()).optional(), calculationRules: z.record(z.string(), z.unknown()).optional(),
@@ -119,24 +120,14 @@ function employeeIsVisible(employeeId: string, scope: string[] | undefined): boo
   return !scope || scope.includes(employeeId);
 }
 
-async function requireLeaveManagerRole(request: FastifyRequest, reply: FastifyReply) {
-  if (request.user && ["admin", "hr_payroll"].includes(request.user.role)) return;
-  return reply.code(403).send({
-    error: "Forbidden",
-    message: "Leave records and evidence are restricted to HR/payroll administrators",
-  });
-}
-
 export async function leaveManagementRoutes(app: FastifyInstance) {
   const readProtect = [
     authMiddleware,
-    requireRole(["admin", "hr_payroll"], { anyOfModules: ["/employees", "/payroll"] }),
-    requireLeaveManagerRole,
+    requireRole(["admin", "hr_payroll"], { anyOfModules: ["/employees/leave", "/payroll"] }),
   ];
   const manageProtect = [
     authMiddleware,
-    requireRole(["admin", "hr_payroll"], { anyOfModules: ["/employees", "/payroll"] }),
-    requireLeaveManagerRole,
+    requireRole(["admin", "hr_payroll"], { anyOfModules: ["/employees/leave", "/payroll"] }),
   ];
 
   app.get("/types", { preHandler: readProtect }, async (request, reply) => {
@@ -155,7 +146,19 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
       include: { versions: { include: { leaveType: true }, orderBy: [{ leaveType: { name: "asc" } }, { version: "desc" }] }, assignments: true },
       orderBy: { name: "asc" },
     });
-    return reply.send({ data });
+    return reply.send({
+      data: data.map((policy) => ({
+        ...policy,
+        versions: policy.versions.map((version) => {
+          const configurationIssues = leavePolicyConfigurationIssues(version);
+          return {
+            ...version,
+            configurationReady: configurationIssues.length === 0,
+            configurationIssues,
+          };
+        }),
+      })),
+    });
   });
 
   app.post("/policies/:policyId/versions", { preHandler: manageProtect }, async (request, reply) => {
@@ -178,11 +181,63 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
     return reply.code(201).send(created);
   });
 
+  app.put("/policies/versions/:id", { preHandler: manageProtect }, async (request, reply) => {
+    const parsed = policyVersionSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
+    const { id } = request.params as { id: string };
+    const existing = await prisma.leavePolicyVersion.findFirst({
+      where: { id, companyId: request.user!.companyId },
+      include: { leaveType: true },
+    });
+    if (!existing) return reply.code(404).send({ error: "Not found", message: "Policy version not found" });
+    if (existing.reviewStatus !== "PENDING_HR_LEGAL_CONFIRMATION") {
+      return reply.code(409).send({ error: "POLICY_STATUS_CONFLICT", message: "Only a pending policy version can be edited; create a new effective-dated version instead" });
+    }
+    if (parsed.data.leaveTypeCode !== existing.leaveType.code) {
+      return reply.code(409).send({ error: "POLICY_TYPE_CONFLICT", message: "A policy version's leave type cannot be changed" });
+    }
+    const effectiveFrom = normalizeDate(parsed.data.effectiveFrom);
+    const effectiveTo = parsed.data.effectiveTo ? normalizeDate(parsed.data.effectiveTo) : null;
+    if (effectiveTo && effectiveTo < effectiveFrom) return reply.code(400).send({ error: "Validation error", message: "effectiveTo must be on or after effectiveFrom" });
+    const laterVersion = await prisma.leavePolicyVersion.findFirst({
+      where: {
+        id: { not: existing.id },
+        policyId: existing.policyId,
+        leaveTypeId: existing.leaveTypeId,
+        effectiveFrom: { gte: effectiveFrom },
+      },
+      select: { id: true },
+    });
+    if (laterVersion) return reply.code(409).send({ error: "POLICY_DATE_CONFLICT", message: "This effective date conflicts with a later policy version" });
+    const { leaveTypeCode: _leaveTypeCode, ...data } = parsed.data;
+    const updated = await prisma.$transaction(async (tx) => {
+      const changed = await tx.leavePolicyVersion.updateMany({
+        where: { id: existing.id, reviewStatus: "PENDING_HR_LEGAL_CONFIRMATION" },
+        data: {
+          ...data,
+          approvalFlow: data.approvalFlow as Prisma.InputJsonValue,
+          documentRules: data.documentRules as Prisma.InputJsonValue | undefined,
+          calculationRules: data.calculationRules as Prisma.InputJsonValue | undefined,
+          effectiveFrom,
+          effectiveTo,
+        },
+      });
+      if (changed.count !== 1) throw new LeaveManagementError("Policy version changed during editing; refresh and try again", 409, "POLICY_STATUS_CONFLICT");
+      await tx.leaveAuditEvent.create({ data: { companyId: request.user!.companyId, userId: request.user!.sub, eventType: "POLICY_VERSION_UPDATED", newValue: { policyVersionId: existing.id, leaveTypeCode: existing.leaveType.code } } });
+      return tx.leavePolicyVersion.findUniqueOrThrow({ where: { id: existing.id } });
+    });
+    return reply.send(updated);
+  });
+
   app.post("/policies/versions/:id/confirm", { preHandler: manageProtect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const updated = await prisma.$transaction(async (tx) => {
-      const version = await tx.leavePolicyVersion.findFirst({ where: { id, companyId: request.user!.companyId } });
+      const version = await tx.leavePolicyVersion.findFirst({ where: { id, companyId: request.user!.companyId }, include: { leaveType: true } });
       if (!version) throw new LeaveManagementError("Policy version not found", 404, "NOT_FOUND");
+      const configurationIssues = leavePolicyConfigurationIssues(version);
+      if (configurationIssues.length > 0) {
+        throw new LeaveManagementError(configurationIssues.join(" "), 409, "POLICY_CONFIGURATION_INCOMPLETE");
+      }
       if (version.reviewStatus === "ACTIVE") return version;
       if (version.reviewStatus !== "PENDING_HR_LEGAL_CONFIRMATION") {
         throw new LeaveManagementError("Only a pending policy version can be confirmed", 409, "POLICY_STATUS_CONFLICT");
@@ -287,7 +342,7 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
     const parsed = decisionSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
     try {
-      return reply.send(await decideLeaveApplication({ companyId: request.user!.companyId, applicationId: (request.params as { id: string }).id, actorId: request.user!.sub, actorRole: request.user!.role, ...parsed.data }));
+      return reply.send(await decideLeaveApplication({ companyId: request.user!.companyId, applicationId: (request.params as { id: string }).id, actorId: request.user!.sub, ...parsed.data }));
     } catch (error) {
       return sendLeaveError(reply, error);
     }
@@ -297,7 +352,7 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
     const parsed = cancellationSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
     try {
-      return reply.send(await cancelOrWithdrawLeave({ companyId: request.user!.companyId, applicationId: (request.params as { id: string }).id, actorId: request.user!.sub, actorRole: request.user!.role, reason: parsed.data.reason, expectedVersion: parsed.data.expectedVersion }));
+      return reply.send(await cancelOrWithdrawLeave({ companyId: request.user!.companyId, applicationId: (request.params as { id: string }).id, actorId: request.user!.sub, reason: parsed.data.reason, expectedVersion: parsed.data.expectedVersion }));
     } catch (error) {
       return sendLeaveError(reply, error);
     }

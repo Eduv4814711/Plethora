@@ -8,6 +8,7 @@ import { authFetch } from "@/lib/api";
 import { fetchEmployeePickerOptions, type GuardPickerOption } from "@/lib/roster-api";
 import { DateInput } from "@/components/date-input";
 import { GuardSearchPicker } from "@/components/guard-search-picker";
+import { canManageLeave } from "@/lib/permissions";
 import {
   leaveOccurrenceCount,
   prepareLeaveAdjustmentResolution,
@@ -80,8 +81,49 @@ type LeaveAdjustment = {
   application?: Pick<LeaveApplication, "id" | "status" | "startDate" | "endDate" | "version"> | null;
   requestedBy?: { id: string; name: string };
 };
-type PolicyVersion = { id: string; version: number; reviewStatus: string; effectiveFrom: string; sourceAuthority: string; legalReference?: string; leaveType: LeaveType };
-type Policy = { id: string; name: string; description?: string; versions: PolicyVersion[] };
+type PolicyVersion = {
+  id: string;
+  version: number;
+  reviewStatus: string;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  sourceAuthority: string;
+  legalReference?: string | null;
+  entitlementMinutes?: number | null;
+  accrualMethod: string;
+  accrualRateMinutes?: number | string | null;
+  cycleMonths: number;
+  carryOverLimitMinutes?: number | null;
+  expiryMonths?: number | null;
+  maxConsecutiveDays?: number | null;
+  negativeBalanceAllowed: boolean;
+  configurationReady: boolean;
+  configurationIssues: string[];
+  leaveType: LeaveType & { requiresBalance: boolean };
+};
+type Policy = { id: string; name: string; category: string; description?: string; versions: PolicyVersion[]; assignments: unknown[] };
+type PolicyEditorSelection = { policyId: string; policyName: string; version: PolicyVersion };
+type PolicyConfigurationPayload = {
+  leaveTypeCode: string;
+  effectiveFrom: string;
+  sourceAuthority: string;
+  legalReference?: string;
+  entitlementMinutes?: number;
+  accrualMethod: string;
+  accrualRateMinutes?: number;
+  cycleMonths: number;
+  carryOverLimitMinutes: null;
+  expiryMonths: null;
+  noticeDays: null;
+  maxConsecutiveDays?: number;
+  negativeBalanceAllowed: boolean;
+  autoConvertToUnpaid: boolean;
+};
+type AccrualRunResult = {
+  asOf: string;
+  posted: Array<{ employeeId: string; leaveTypeCode: string; minutes: number }>;
+  skipped: Array<{ policyVersionId: string; employeeId?: string; reason: string }>;
+};
 type AuditEvent = { id: string; eventType: string; occurredAt: string; reason?: string; employee?: Pick<Employee, "firstName" | "lastName">; user?: { name: string } };
 type ReportBreakdown = Record<string, { applications: number; paidMinutes: number; unpaidMinutes: number }>;
 type LeaveReport = {
@@ -171,7 +213,7 @@ function statusClass(status: string): string {
 
 export default function LeaveManagementPage() {
   const { token, user } = useAuth();
-  const canManage = user?.role === "admin" || user?.role === "hr_payroll";
+  const canManage = user ? canManageLeave(user) : false;
   const [tab, setTab] = useState<Tab>("queue");
   const [employees, setEmployees] = useState<GuardPickerOption[]>([]);
   const [types, setTypes] = useState<LeaveType[]>([]);
@@ -197,6 +239,8 @@ export default function LeaveManagementPage() {
   const [adjustmentResolution, setAdjustmentResolution] = useState({ reason: "", payrollReference: "" });
   const [actionDialog, setActionDialog] = useState<{ kind: "reject" | "cancel"; application: LeaveApplication } | null>(null);
   const [actionReason, setActionReason] = useState("");
+  const [policyEditor, setPolicyEditor] = useState<PolicyEditorSelection | null>(null);
+  const [accrualRunResult, setAccrualRunResult] = useState<AccrualRunResult | null>(null);
 
   const request = useCallback(async (path: string, init?: RequestInit) => {
     if (!token) throw new Error("Not signed in");
@@ -214,13 +258,15 @@ export default function LeaveManagementPage() {
 
   const loadBase = useCallback(async () => {
     if (!token) return;
-    const [employeeRows, typeBody] = await Promise.all([
+    const [employeeRows, typeBody, policyBody] = await Promise.all([
       fetchEmployeePickerOptions(token, { statuses: ["active", "training", "hired", "reliever"] }),
       request("/leave/types"),
+      request("/leave/policies"),
       loadSummary(),
     ]);
     setEmployees(employeeRows);
     setTypes(typeBody.data ?? []);
+    setPolicies(policyBody.data ?? []);
   }, [token, request, loadSummary]);
 
   const loadTab = useCallback(async () => {
@@ -271,6 +317,30 @@ export default function LeaveManagementPage() {
     evidence: summaryApplications.filter((app) => app.leaveType.requiresDocument && !app.documents.some((doc) => doc.reviewStatus === "VERIFIED") && !["REJECTED", "CANCELLED", "WITHDRAWN"].includes(app.status)).length,
     attention: summaryApplications.filter((app) => ["ADJUSTMENT_REQUIRED", "CANCELLATION_REQUESTED"].includes(app.status)).length,
   }), [summaryApplications]);
+  const currentPolicyIssues = useMemo(() => {
+    const issues: string[] = [];
+    for (const policy of policies) {
+      if (policy.category !== "STATUTORY_BASELINE" && policy.assignments.length === 0) continue;
+      const byType = new Map<string, PolicyVersion>();
+      for (const version of policy.versions) {
+        const starts = version.effectiveFrom.slice(0, 10) <= today;
+        const hasNotEnded = !version.effectiveTo || version.effectiveTo.slice(0, 10) >= today;
+        if (!starts || !hasNotEnded) continue;
+        const current = byType.get(version.leaveType.code);
+        if (!current
+          || current.effectiveFrom < version.effectiveFrom
+          || (current.effectiveFrom === version.effectiveFrom && current.version < version.version)) {
+          byType.set(version.leaveType.code, version);
+        }
+      }
+      for (const type of types) {
+        const version = byType.get(type.code);
+        if (!version) issues.push(`${policy.id}:${type.code}:missing`);
+        else if (version.reviewStatus !== "ACTIVE" || !version.configurationReady) issues.push(version.id);
+      }
+    }
+    return issues;
+  }, [policies, types]);
 
   function resetPreview() { setPreview(null); }
 
@@ -493,6 +563,55 @@ export default function LeaveManagementPage() {
     }
   }
 
+  async function saveAndConfirmPolicy(selection: PolicyEditorSelection, payload: PolicyConfigurationPayload) {
+    const busyKey = `policy-config:${selection.version.id}`;
+    setBusy(busyKey);
+    setError(null);
+    try {
+      const configured = selection.version.reviewStatus === "PENDING_HR_LEGAL_CONFIRMATION"
+        ? await request(`/leave/policies/versions/${selection.version.id}`, {
+            method: "PUT",
+            body: JSON.stringify(payload),
+          })
+        : await request(`/leave/policies/${selection.policyId}/versions`, {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+      await request(`/leave/policies/versions/${configured.id}/confirm`, { method: "POST" });
+      setPolicyEditor(null);
+      setAccrualRunResult(null);
+      await loadTab();
+      const refreshed = await request("/leave/policies");
+      setPolicies(refreshed.data ?? []);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Policy configuration failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function runCurrentAccruals() {
+    if (currentPolicyIssues.length > 0) {
+      setError("Configure and confirm every current leave policy before posting accruals.");
+      return;
+    }
+    if (!window.confirm(`Post the ${format(parseISO(today), "MMMM yyyy")} accrual once for every eligible employee? Repeating the run is safe and will not post duplicates.`)) return;
+    setBusy("accrual-run");
+    setError(null);
+    setAccrualRunResult(null);
+    try {
+      const result = await request("/leave/accruals/run", {
+        method: "POST",
+        body: JSON.stringify({ asOf: today }),
+      });
+      setAccrualRunResult(result);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Accrual posting failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const visibleTabs = tabs.filter((item) => !item.manageOnly || canManage);
 
   return (
@@ -522,14 +641,16 @@ export default function LeaveManagementPage() {
         <SummaryCard icon="warning" label="Needs attention" value={summary.attention} hint="Cancellation or adjustment" tone="red" onClick={() => { setStatus("ADJUSTMENT_REQUIRED"); setTab("queue"); }} />
       </section>
 
-      <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
-        <span className="mt-0.5 rounded-full bg-amber-100 p-1.5"><Icon name="warning" className="h-4 w-4" /></span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold">Policy confirmation is still required</p>
-          <p className="mt-0.5 text-xs leading-5 text-amber-800">Entitlement impacts are shown as guidance until HR or legal confirms the statutory and sector policy versions.</p>
+      {currentPolicyIssues.length > 0 && (
+        <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+          <span className="mt-0.5 rounded-full bg-amber-100 p-1.5"><Icon name="warning" className="h-4 w-4" /></span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">{currentPolicyIssues.length} leave policy rule{currentPolicyIssues.length === 1 ? "" : "s"} need configuration or confirmation</p>
+            <p className="mt-0.5 text-xs leading-5 text-amber-800">Payroll approval remains protected until every balance-controlled policy has an executable entitlement and accrual formula.</p>
+          </div>
+          <button onClick={() => setTab("policies")} className="hidden shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold hover:bg-amber-100 sm:block">Review policies</button>
         </div>
-        <button onClick={() => setTab("policies")} className="hidden shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold hover:bg-amber-100 sm:block">Review policies</button>
-      </div>
+      )}
 
       <nav className="mb-6 overflow-x-auto rounded-xl border border-neutral-200 bg-white p-1.5 shadow-sm" aria-label="Leave sections">
         <div className="flex min-w-max gap-1">
@@ -723,7 +844,22 @@ export default function LeaveManagementPage() {
 
       {tab === "policies" && (
         <SectionShell title="Leave policies" description="Effective-dated rules preserve the policy used for every historical application.">
-          {loading ? <LoadingCards /> : policies.length ? <div className="space-y-4">{policies.map((policy) => <PolicyCard key={policy.id} policy={policy} canManage={canManage} busy={busy} onConfirm={confirmPolicy} />)}</div> : <EmptyState icon="policy" title="No policies configured" text="Default policy seeds are created when this section is loaded." />}
+          {canManage && (
+            <div className="mb-5 rounded-xl border border-neutral-200 bg-neutral-50 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-neutral-900">Monthly accrual posting</p>
+                  <p className="mt-1 max-w-3xl text-xs leading-5 text-neutral-600">Posts the current month once per eligible employee and leave type. Historical entitlement must be loaded as an HR-approved opening balance; repeated runs are idempotent.</p>
+                </div>
+                <button type="button" onClick={runCurrentAccruals} disabled={busy === "accrual-run" || currentPolicyIssues.length > 0} className="btn-secondary shrink-0">
+                  {busy === "accrual-run" ? "Posting..." : `Post ${format(parseISO(today), "MMM yyyy")} accrual`}
+                </button>
+              </div>
+              {currentPolicyIssues.length > 0 && <p className="mt-3 text-xs font-medium text-amber-700">Accrual posting is locked until all current policy formulas are executable and confirmed.</p>}
+              {accrualRunResult && <p className={`mt-3 rounded-lg border p-3 text-sm ${accrualRunResult.skipped.length ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>Posted {accrualRunResult.posted.length} new ledger entr{accrualRunResult.posted.length === 1 ? "y" : "ies"}. Skipped {accrualRunResult.skipped.length}; details are recorded in Audit history.</p>}
+            </div>
+          )}
+          {loading ? <LoadingCards /> : policies.length ? <div className="space-y-4">{policies.map((policy) => <PolicyCard key={policy.id} policy={policy} canManage={canManage} busy={busy} onConfirm={confirmPolicy} onConfigure={(version) => setPolicyEditor({ policyId: policy.id, policyName: policy.name, version })} />)}</div> : <EmptyState icon="policy" title="No policies configured" text="Default policy seeds are created when this section is loaded." />}
         </SectionShell>
       )}
 
@@ -764,6 +900,15 @@ export default function LeaveManagementPage() {
           onPayrollReferenceChange={(payrollReference) => setAdjustmentResolution((old) => ({ ...old, payrollReference }))}
           onClose={closeAdjustmentResolution}
           onSubmit={resolvePendingAdjustment}
+        />
+      )}
+
+      {policyEditor && (
+        <PolicyConfigurationDialog
+          selection={policyEditor}
+          busy={busy === `policy-config:${policyEditor.version.id}`}
+          onClose={() => setPolicyEditor(null)}
+          onSubmit={(payload) => saveAndConfirmPolicy(policyEditor, payload)}
         />
       )}
     </div>
@@ -884,8 +1029,102 @@ function PreviewMetric({ label, value, tone = "default" }: { label: string; valu
 
 function ImpactCheck({ ok, text }: { ok: boolean; text: string }) { return <div className={`flex items-center gap-2 ${ok ? "text-emerald-700" : "text-amber-700"}`}><span className={`rounded-full p-1 ${ok ? "bg-emerald-50" : "bg-amber-50"}`}><Icon name={ok ? "check" : "warning"} className="h-3.5 w-3.5"/></span><span>{text}</span></div>; }
 
-function PolicyCard({ policy, canManage, busy, onConfirm }: { policy: Policy; canManage: boolean; busy: string | null; onConfirm: (id: string) => void }) {
-  return <article className="rounded-xl border border-neutral-200 bg-white"><div className="border-b border-neutral-200 px-5 py-4"><h3 className="font-bold">{policy.name}</h3><p className="mt-1 text-sm text-neutral-500">{policy.description}</p></div><div className="divide-y divide-neutral-200">{policy.versions.map((version) => <div key={version.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><strong>{version.leaveType.name}</strong><Status value={version.reviewStatus} /></div><p className="mt-1 text-xs text-neutral-500">Version {version.version} - effective {dateLabel(version.effectiveFrom)} - {version.sourceAuthority}</p>{version.legalReference && <p className="mt-1 text-xs text-neutral-500">{version.legalReference}</p>}</div>{canManage && version.reviewStatus !== "ACTIVE" && <button disabled={busy === version.id} onClick={() => onConfirm(version.id)} className="btn-secondary shrink-0 px-3 py-2 text-sm">{busy === version.id ? "Confirming..." : "Confirm after review"}</button>}</div>)}</div></article>;
+function PolicyCard({ policy, canManage, busy, onConfirm, onConfigure }: { policy: Policy; canManage: boolean; busy: string | null; onConfirm: (id: string) => void; onConfigure: (version: PolicyVersion) => void }) {
+  return (
+    <article className="rounded-xl border border-neutral-200 bg-white">
+      <div className="border-b border-neutral-200 px-5 py-4"><h3 className="font-bold">{policy.name}</h3><p className="mt-1 text-sm text-neutral-500">{policy.description}</p></div>
+      <div className="divide-y divide-neutral-200">
+        {policy.versions.map((version) => {
+          const configuring = busy === `policy-config:${version.id}`;
+          return (
+            <div key={version.id} className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2"><strong>{version.leaveType.name}</strong><Status value={version.reviewStatus} />{!version.configurationReady && <Status value="CONFIGURATION_REQUIRED" />}</div>
+                <p className="mt-1 text-xs text-neutral-500">Version {version.version} · effective {dateLabel(version.effectiveFrom)}{version.effectiveTo ? ` to ${dateLabel(version.effectiveTo)}` : " onward"} · {version.sourceAuthority}</p>
+                <p className="mt-1 text-xs text-neutral-600">{friendly(version.accrualMethod)}{version.entitlementMinutes ? ` · ${hours(version.entitlementMinutes)} per ${version.cycleMonths}-month cycle` : ""}{version.accrualRateMinutes ? ` · ${hours(Number(version.accrualRateMinutes))} monthly` : ""}</p>
+                {version.legalReference && <p className="mt-1 text-xs text-neutral-500">{version.legalReference}</p>}
+                {version.configurationIssues.length > 0 && <ul className="mt-2 space-y-1 text-xs text-red-700">{version.configurationIssues.map((issue) => <li key={issue}>• {issue}</li>)}</ul>}
+              </div>
+              {canManage && (
+                <div className="flex shrink-0 gap-2">
+                  {!version.configurationReady ? <button disabled={configuring} onClick={() => onConfigure(version)} className="btn-secondary px-3 py-2 text-sm">{configuring ? "Saving..." : "Configure rules"}</button>
+                    : version.reviewStatus === "PENDING_HR_LEGAL_CONFIRMATION" ? <button disabled={busy === version.id} onClick={() => onConfirm(version.id)} className="btn-secondary px-3 py-2 text-sm">{busy === version.id ? "Confirming..." : "Confirm after review"}</button>
+                    : null}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </article>
+  );
+}
+
+function PolicyConfigurationDialog({ selection, busy, onClose, onSubmit }: { selection: PolicyEditorSelection; busy: boolean; onClose: () => void; onSubmit: (payload: PolicyConfigurationPayload) => void }) {
+  const { version } = selection;
+  const requiresBalance = version.leaveType.requiresBalance;
+  const supportedMethod = ["EVEN_MONTHLY", "MONTHLY_FIXED", "ANNUAL_GRANT"].includes(version.accrualMethod) ? version.accrualMethod : "EVEN_MONTHLY";
+  const [effectiveFrom, setEffectiveFrom] = useState(version.reviewStatus === "ACTIVE" ? today : version.effectiveFrom.slice(0, 10));
+  const [sourceAuthority, setSourceAuthority] = useState(version.sourceAuthority);
+  const [legalReference, setLegalReference] = useState(version.legalReference ?? "");
+  const [accrualMethod, setAccrualMethod] = useState(requiresBalance ? supportedMethod : "NONE");
+  const [entitlementHours, setEntitlementHours] = useState(version.entitlementMinutes ? String(version.entitlementMinutes / 60) : "");
+  const [monthlyHours, setMonthlyHours] = useState(version.accrualRateMinutes ? String(Number(version.accrualRateMinutes) / 60) : "");
+  const [cycleMonths, setCycleMonths] = useState(String(version.cycleMonths || 12));
+  const [maxConsecutiveDays, setMaxConsecutiveDays] = useState(version.maxConsecutiveDays != null ? String(version.maxConsecutiveDays) : "");
+  const [negativeBalanceAllowed, setNegativeBalanceAllowed] = useState(version.negativeBalanceAllowed);
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  function submit(event: React.FormEvent) {
+    event.preventDefault();
+    const cycle = Number(cycleMonths);
+    const entitlement = Number(entitlementHours);
+    const monthly = Number(monthlyHours);
+    if (!sourceAuthority.trim()) return setLocalError("Enter the policy authority or approved company policy name.");
+    if (requiresBalance && (!Number.isInteger(cycle) || cycle <= 0)) return setLocalError("Enter a positive whole-number cycle length.");
+    if (requiresBalance && accrualMethod === "MONTHLY_FIXED" && (!Number.isFinite(monthly) || monthly <= 0)) return setLocalError("Enter a positive monthly accrual in hours.");
+    if (requiresBalance && accrualMethod !== "MONTHLY_FIXED" && (!Number.isFinite(entitlement) || entitlement <= 0)) return setLocalError("Enter a positive entitlement in hours for the cycle.");
+    setLocalError(null);
+    onSubmit({
+      leaveTypeCode: version.leaveType.code,
+      effectiveFrom,
+      sourceAuthority: sourceAuthority.trim(),
+      legalReference: legalReference.trim() || undefined,
+      entitlementMinutes: requiresBalance && accrualMethod !== "MONTHLY_FIXED" ? Math.round(entitlement * 60) : undefined,
+      accrualMethod,
+      accrualRateMinutes: requiresBalance && accrualMethod === "MONTHLY_FIXED" ? Math.round(monthly * 60) : undefined,
+      cycleMonths: requiresBalance ? cycle : 0,
+      carryOverLimitMinutes: null,
+      expiryMonths: null,
+      noticeDays: null,
+      maxConsecutiveDays: maxConsecutiveDays ? Number(maxConsecutiveDays) : undefined,
+      negativeBalanceAllowed,
+      autoConvertToUnpaid: false,
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="policy-config-title">
+      <form onSubmit={submit} className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-neutral-200 bg-white shadow-2xl">
+        <div className="border-b border-neutral-200 p-5"><h2 id="policy-config-title" className="text-lg font-bold">Configure and confirm {version.leaveType.name}</h2><p className="mt-1 text-sm text-neutral-500">{selection.policyName}. Confirm only values approved by HR or labour counsel.</p></div>
+        <div className="space-y-5 p-5">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">This rule affects employee balances and payroll. Saving creates or updates an effective-dated version and confirms it in one audited action.</div>
+          <div className="grid gap-4 sm:grid-cols-2"><Field label="Effective from" required><DateInput value={effectiveFrom} onChange={setEffectiveFrom} className="input-modern mt-1 w-full" /></Field><Field label="Cycle length (months)" required={requiresBalance}><input disabled={!requiresBalance} required={requiresBalance} type="number" min="1" max="120" step="1" value={cycleMonths} onChange={(event) => setCycleMonths(event.target.value)} className="input-modern mt-1" /></Field></div>
+          <Field label="Authority or approved policy" required><input required maxLength={250} value={sourceAuthority} onChange={(event) => setSourceAuthority(event.target.value)} className="input-modern mt-1" /></Field>
+          <Field label="Legal or policy reference"><input maxLength={1000} value={legalReference} onChange={(event) => setLegalReference(event.target.value)} className="input-modern mt-1" /></Field>
+          {requiresBalance ? <>
+            <Field label="Accrual method" required><select value={accrualMethod} onChange={(event) => setAccrualMethod(event.target.value)} className="input-modern mt-1"><option value="EVEN_MONTHLY">Even monthly from cycle entitlement</option><option value="MONTHLY_FIXED">Fixed monthly hours</option><option value="ANNUAL_GRANT">Grant at employment-cycle anniversary</option></select></Field>
+            {accrualMethod === "MONTHLY_FIXED" ? <Field label="Monthly accrual hours" required><input required type="number" min="0.01" step="0.01" value={monthlyHours} onChange={(event) => setMonthlyHours(event.target.value)} className="input-modern mt-1" /></Field> : <Field label="Entitlement hours per cycle" required><input required type="number" min="0.01" step="0.01" value={entitlementHours} onChange={(event) => setEntitlementHours(event.target.value)} className="input-modern mt-1" /></Field>}
+            <Field label="Maximum consecutive days"><input type="number" min="1" step="1" value={maxConsecutiveDays} onChange={(event) => setMaxConsecutiveDays(event.target.value)} className="input-modern mt-1" /></Field>
+            <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs leading-5 text-neutral-600">Carry-over and balance expiry are not silently automated. When the approved policy requires either, HR must post the cycle-close change as an audited balance adjustment.</p>
+            <label className="flex items-start gap-3 rounded-lg border border-neutral-200 p-3"><input type="checkbox" checked={negativeBalanceAllowed} onChange={(event) => setNegativeBalanceAllowed(event.target.checked)} className="mt-1 h-4 w-4 accent-orange-600" /><span><span className="block text-sm font-semibold">Allow a negative balance</span><span className="text-xs text-neutral-500">Leave approvals are blocked when insufficient unless this is explicitly enabled.</span></span></label>
+          </> : <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">This leave type does not consume an entitlement balance. Its accrual method will be set to None.</p>}
+          {localError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{localError}</p>}
+        </div>
+        <div className="flex justify-end gap-2 border-t border-neutral-200 bg-neutral-50 p-4"><button type="button" onClick={onClose} disabled={busy} className="btn-ghost">Cancel</button><button type="submit" disabled={busy} className="btn-primary">{busy ? "Saving..." : "Save and confirm policy"}</button></div>
+      </form>
+    </div>
+  );
 }
 
 function ReportView({ report }: { report: LeaveReport }) {

@@ -11,10 +11,12 @@ import { AttendanceValidationError, validateClockIn } from "../attendance.servic
 import { revertPayrollToDraft } from "../payroll.service.js";
 import {
   cancelOrWithdrawLeave,
+  accrueConfirmedLeave,
   createLeaveApplication,
   createOpeningBalanceAdjustment,
   decideLeaveApplication,
   getLeaveApplication,
+  getLeaveReadiness,
   listLeaveApplications,
   postLeaveToPayroll,
   previewLeave,
@@ -96,7 +98,13 @@ describe.runIf(dbReady)("authoritative leave source of truth (PostgreSQL integra
   it("creates, approves, blocks attendance, posts payroll once, and requires an unpaid run to be reverted before cancellation", async () => {
     await prisma.leavePolicyVersion.updateMany({
       where: { companyId, leaveType: { code: "annual" }, reviewStatus: "PENDING_HR_LEGAL_CONFIRMATION" },
-      data: { reviewStatus: "ACTIVE", confirmedBy: actorId, confirmedAt: new Date() },
+      data: {
+        reviewStatus: "ACTIVE",
+        confirmedBy: actorId,
+        confirmedAt: new Date(),
+        accrualMethod: "EVEN_MONTHLY",
+        entitlementMinutes: 180 * 60,
+      },
     });
     const application = await createLeaveApplication({ companyId, employeeId, leaveTypeCode: "annual", startDate: "2026-12-01", reason: "Holiday", actorId, idempotencyKey: `integration:${suffix}` });
     const retry = await createLeaveApplication({ companyId, employeeId, leaveTypeCode: "annual", startDate: "2026-12-01", reason: "Holiday", actorId, idempotencyKey: `integration:${suffix}` });
@@ -105,27 +113,65 @@ describe.runIf(dbReady)("authoritative leave source of truth (PostgreSQL integra
     expect(approvalPreview.balanceImpact.currentMinutes).toBe(24 * 60);
     expect(approvalPreview.balanceImpact.projectedMinutes).toBe(12 * 60);
     expect(approvalPreview.policyConfirmed).toBe(true);
-    await decideLeaveApplication({ companyId, applicationId: application.id, actorId, actorRole: "hr_payroll", decision: "approve", expectedVersion: application.version });
+    await decideLeaveApplication({ companyId, applicationId: application.id, actorId, decision: "approve", expectedVersion: application.version });
     await expect(validateClockIn(shiftId, companyId)).rejects.toThrow(AttendanceValidationError);
 
     const payroll = await prisma.payrollRun.create({ data: { companyId, periodStart: new Date("2026-12-01"), periodEnd: new Date("2026-12-31"), status: "approved", lockedAt: new Date() } });
     expect((await postLeaveToPayroll(companyId, payroll.id, payroll.periodStart, payroll.periodEnd)).posted).toBe(1);
     expect((await postLeaveToPayroll(companyId, payroll.id, payroll.periodStart, payroll.periodEnd)).posted).toBe(0);
     expect(await prisma.leavePayrollPosting.count({ where: { applicationId: application.id, isReversal: false } })).toBe(1);
-    await expect(cancelOrWithdrawLeave({ companyId, applicationId: application.id, actorId, actorRole: "hr_payroll", reason: "Employee returned; correct the approved run" })).rejects.toThrow(/Revert the approved payroll run/);
+    await expect(cancelOrWithdrawLeave({ companyId, applicationId: application.id, actorId, reason: "Employee returned; correct the approved run" })).rejects.toThrow(/Revert the approved payroll run/);
     await revertPayrollToDraft(payroll.id, companyId, "Correct leave before payment");
-    const cancelled = await cancelOrWithdrawLeave({ companyId, applicationId: application.id, actorId, actorRole: "hr_payroll", reason: "Employee returned; reverse in next open run" });
+    const cancelled = await cancelOrWithdrawLeave({ companyId, applicationId: application.id, actorId, reason: "Employee returned; reverse in next open run" });
     expect(cancelled?.status).toBe("CANCELLED");
     expect(await prisma.leavePayrollPosting.count({ where: { applicationId: application.id } })).toBe(0);
     expect(await prisma.leaveAdjustment.count({ where: { applicationId: application.id } })).toBe(0);
   });
 
-  it("enforces controller read-only access and tenant isolation", async () => {
+  it("uses assigned module permissions instead of role names and preserves tenant isolation", async () => {
     const application = await prisma.leaveApplication.findFirstOrThrow({ where: { companyId } });
-    const forbidden = await app.inject({ method: "POST", url: `/leave/applications/${application.id}/decision`, headers: { ...authHeader(controllerToken), "content-type": "application/json" }, payload: { decision: "approve" } });
-    expect(forbidden.statusCode).toBe(403);
+    const permitted = await app.inject({ method: "POST", url: `/leave/applications/${application.id}/decision`, headers: { ...authHeader(controllerToken), "content-type": "application/json" }, payload: { decision: "approve" } });
+    expect(permitted.statusCode).not.toBe(403);
     const hidden = await app.inject({ method: "GET", url: `/leave/applications/${application.id}`, headers: authHeader(otherTenantToken) });
     expect(hidden.statusCode).toBe(404);
+  });
+
+  it("posts a monthly accrual once per employee and leave type period", async () => {
+    const first = await accrueConfirmedLeave({ companyId, actorId, asOf: "2026-07-15" });
+    const second = await accrueConfirmedLeave({ companyId, actorId, asOf: "2026-07-20" });
+    expect(first.posted).toEqual([
+      expect.objectContaining({ employeeId, leaveTypeCode: "annual", minutes: 15 * 60 }),
+    ]);
+    expect(second.posted).toEqual([]);
+    expect(await prisma.leaveLedgerEntry.count({
+      where: { companyId, employeeId, entryType: "ACCRUAL" },
+    })).toBe(1);
+  });
+
+  it("aggregates a modern multi-shift leave day into one compatibility row", async () => {
+    const originalShift = await prisma.shift.findUniqueOrThrow({ where: { id: shiftId }, select: { siteId: true } });
+    const shifts = await prisma.shift.createManyAndReturn({ data: [
+      { companyId, employeeId, siteId: originalShift.siteId, startTime: new Date("2026-12-05T06:00:00.000Z"), endTime: new Date("2026-12-05T10:00:00.000Z"), shiftType: "day", status: "assigned" },
+      { companyId, employeeId, siteId: originalShift.siteId, startTime: new Date("2026-12-05T16:00:00.000Z"), endTime: new Date("2026-12-05T20:00:00.000Z"), shiftType: "night", status: "assigned" },
+    ] });
+    const application = await createLeaveApplication({
+      companyId,
+      employeeId,
+      leaveTypeCode: "annual",
+      startDate: "2026-12-05",
+      reason: "Multi-shift readiness test",
+      actorId,
+      idempotencyKey: `multi-shift-readiness:${suffix}`,
+    });
+    await decideLeaveApplication({ companyId, applicationId: application.id, actorId, decision: "approve", expectedVersion: application.version });
+    const compatibilityRows = await prisma.leaveRecord.findMany({ where: { employeeId, date: new Date("2026-12-05") } });
+    expect(compatibilityRows).toHaveLength(1);
+    expect(Number(compatibilityRows[0]?.hours)).toBe(8);
+    const readiness = await getLeaveReadiness(companyId, new Date("2026-12-05"), new Date("2026-12-05"));
+    expect(readiness.duplicateLegacyDays).toEqual([]);
+    expect(readiness.blocked).toBe(false);
+    await cancelOrWithdrawLeave({ companyId, applicationId: application.id, actorId, reason: "Regression test cleanup" });
+    await prisma.shift.deleteMany({ where: { id: { in: shifts.map((shift) => shift.id) } } });
   });
 
   it("refuses to post tenant leave into another tenant's payroll run", async () => {
@@ -166,12 +212,12 @@ describe.runIf(dbReady)("authoritative leave source of truth (PostgreSQL integra
       actorId,
       idempotencyKey: `paid-correction:${suffix}`,
     });
-    await decideLeaveApplication({ companyId, applicationId: application.id, actorId, actorRole: "hr_payroll", decision: "approve", expectedVersion: application.version });
+    await decideLeaveApplication({ companyId, applicationId: application.id, actorId, decision: "approve", expectedVersion: application.version });
     const payroll = await prisma.payrollRun.create({ data: { companyId, periodStart: new Date("2026-12-01"), periodEnd: new Date("2026-12-31"), status: "approved", lockedAt: new Date() } });
     expect((await postLeaveToPayroll(companyId, payroll.id, payroll.periodStart, payroll.periodEnd)).posted).toBe(1);
     await prisma.payrollRun.update({ where: { id: payroll.id }, data: { status: "paid" } });
 
-    const awaitingCorrection = await cancelOrWithdrawLeave({ companyId, applicationId: application.id, actorId, actorRole: "hr_payroll", reason: "Employee worked; correct the paid payroll" });
+    const awaitingCorrection = await cancelOrWithdrawLeave({ companyId, applicationId: application.id, actorId, reason: "Employee worked; correct the paid payroll" });
     expect(awaitingCorrection?.status).toBe("ADJUSTMENT_REQUIRED");
     const adjustment = await prisma.leaveAdjustment.findFirstOrThrow({ where: { applicationId: application.id, status: "PENDING" } });
     await expect(resolveLeaveAdjustment({ companyId, adjustmentId: adjustment.id, actorId, decision: "confirm_external_correction", reason: "Payroll correction completed" })).rejects.toThrow(/reference is required/i);
@@ -207,8 +253,8 @@ describe.runIf(dbReady)("authoritative leave source of truth (PostgreSQL integra
       idempotencyKey: `legacy-full-day:${suffix}`,
     });
     expect(application.calculatedMinutes).toBe(12 * 60);
-    await expect(decideLeaveApplication({ companyId, applicationId: application.id, actorId, actorRole: "hr_payroll", decision: "approve" })).rejects.toThrow(/verified supporting document is required/i);
-    const withdrawn = await cancelOrWithdrawLeave({ companyId, applicationId: application.id, actorId, actorRole: "hr_payroll", reason: "Test cleanup" });
+    await expect(decideLeaveApplication({ companyId, applicationId: application.id, actorId, decision: "approve" })).rejects.toThrow(/verified supporting document is required/i);
+    const withdrawn = await cancelOrWithdrawLeave({ companyId, applicationId: application.id, actorId, reason: "Test cleanup" });
     expect(withdrawn?.status).toBe("WITHDRAWN");
   });
 

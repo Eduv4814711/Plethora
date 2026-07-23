@@ -13,7 +13,7 @@ export async function leaveRequestsRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
     requireRole(["admin", "operations_manager", "hr_payroll"], {
-      anyOfModules: ["/employees", "/payroll"],
+      anyOfModules: ["/employees/leave", "/payroll"],
     }),
   ];
 
@@ -52,7 +52,7 @@ export async function leaveRequestsRoutes(app: FastifyInstance) {
     const user = request.user!;
 
     try {
-      await approveLeaveRequest(id, user.companyId, user.sub, user.role);
+      await approveLeaveRequest(id, user.companyId, user.sub);
     } catch (err) {
       if (err instanceof LeaveRequestError) {
         return reply.code(400).send({
@@ -93,7 +93,7 @@ export async function leaveRequestsRoutes(app: FastifyInstance) {
     const user = request.user!;
 
     try {
-      await rejectLeaveRequest(id, user.companyId, user.sub, user.role);
+      await rejectLeaveRequest(id, user.companyId, user.sub);
     } catch (err) {
       if (err instanceof LeaveRequestError) {
         return reply.code(400).send({

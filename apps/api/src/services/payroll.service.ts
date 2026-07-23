@@ -38,6 +38,11 @@ export async function findSitesNeedingApproval(
   periodStart: Date,
   periodEnd: Date
 ): Promise<Array<{ id: string; name: string }>> {
+  const periodEndExclusive = new Date(Date.UTC(
+    periodEnd.getUTCFullYear(),
+    periodEnd.getUTCMonth(),
+    periodEnd.getUTCDate() + 1
+  ));
   // Only worked shifts can contribute payable hours (matches aggregateTimesheets),
   // so only they require an approved site timesheet. Planned-but-unworked shifts
   // (created/assigned/active) must not block payroll for the whole company.
@@ -45,7 +50,7 @@ export async function findSitesNeedingApproval(
     where: {
       companyId,
       status: { in: ["completed", "verified"] },
-      startTime: { lt: periodEnd },
+      startTime: { lt: periodEndExclusive },
       endTime: { gt: periodStart },
     },
     select: { siteId: true },

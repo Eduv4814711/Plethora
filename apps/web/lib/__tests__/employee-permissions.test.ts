@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AuthUser } from "../api";
-import { canManageEmployeeDetails } from "../permissions";
+import { canManageEmployeeDetails, canManageLeave } from "../permissions";
 
 describe("employee edit permissions", () => {
   it.each(["/employees", "/payroll"])(
@@ -51,5 +51,30 @@ describe("employee edit permissions", () => {
     };
 
     expect(user.moduleAccess).toEqual({ "/attendance": "read" });
+  });
+});
+
+describe("leave management permissions", () => {
+  it.each(["admin", "operations_manager", "hr_payroll", "supervisor", "controller", "client"])(
+    "allows %s with Team write access",
+    (role) => {
+      expect(canManageLeave({ role, moduleAccess: { "/employees": "write" } })).toBe(true);
+    }
+  );
+
+  it("supports a granular Team > Leave write override", () => {
+    expect(canManageLeave({
+      role: "controller",
+      moduleAccess: { "/employees": "read", "/employees/leave": "write" },
+    })).toBe(true);
+  });
+
+  it("keeps read-only and unrelated module assignments non-mutating", () => {
+    expect(canManageLeave({ role: "hr_payroll", moduleAccess: { "/employees": "read" } })).toBe(false);
+    expect(canManageLeave({ role: "hr_payroll", moduleAccess: { "/attendance": "write" } })).toBe(false);
+  });
+
+  it("preserves the full administrator bypass", () => {
+    expect(canManageLeave({ role: "admin", moduleAccess: null })).toBe(true);
   });
 });
