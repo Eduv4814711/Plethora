@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireAdmin } from "../middleware/rbac.js";
+import { requireCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 
@@ -10,14 +10,16 @@ const updateCompanySchema = z.object({
 });
 
 export async function companiesRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware];
-  const adminProtect = [authMiddleware, requireAdmin()];
+  const settingsViewProtect = [authMiddleware, requireCapability("/settings", "view")];
+  const settingsEditProtect = [authMiddleware, requireCapability("/settings", "edit")];
+  const publicCompanySelect = { id: true, name: true, createdAt: true, updatedAt: true } as const;
 
-  // Only return the caller's company (tenant isolation; no platform admin)
-  app.get("/", { preHandler: protect }, async (request, reply) => {
+  // Only return the caller's company (tenant isolation; no cross-company bypass)
+  app.get("/", { preHandler: settingsViewProtect }, async (request, reply) => {
     const user = request.user!;
     const company = await prisma.company.findUnique({
       where: { id: user.companyId },
+      select: publicCompanySelect,
     });
     if (!company) {
       return reply.code(404).send({ error: "Company not found" });
@@ -26,7 +28,7 @@ export async function companiesRoutes(app: FastifyInstance) {
   });
 
   // Only allow access to the caller's company
-  app.get("/:id", { preHandler: protect }, async (request, reply) => {
+  app.get("/:id", { preHandler: settingsViewProtect }, async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
     if (id !== user.companyId) {
@@ -34,6 +36,7 @@ export async function companiesRoutes(app: FastifyInstance) {
     }
     const company = await prisma.company.findUnique({
       where: { id },
+      select: publicCompanySelect,
     });
     if (!company) {
       return reply.code(404).send({ error: "Company not found" });
@@ -41,16 +44,8 @@ export async function companiesRoutes(app: FastifyInstance) {
     return reply.send(company);
   });
 
-  // Company creation is only via public POST /auth/onboard
-  app.post("/", { preHandler: protect }, async (_request, reply) => {
-    return reply.code(403).send({
-      error: "Forbidden",
-      message: "New companies are created via the sign-up page. Use the Register link on the login page.",
-    });
-  });
-
-  // Full admin only — company rename is a privileged settings action
-  app.put("/:id", { preHandler: adminProtect }, async (request, reply) => {
+  // Company rename is controlled by the explicit settings edit capability.
+  app.put("/:id", { preHandler: settingsEditProtect }, async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
     if (id !== user.companyId) {

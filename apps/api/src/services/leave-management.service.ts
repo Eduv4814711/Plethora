@@ -174,7 +174,7 @@ export async function ensureDefaultLeavePolicy(companyId: string, actorId?: stri
           entitlementMinutes: null,
           accrualMethod: definition.requiresBalance ? "POLICY_CONFIRMATION_REQUIRED" : "NONE",
           cycleMonths: definition.cycleMonths,
-          approvalFlow: [{ order: 1, role: "hr_payroll", required: true }],
+          approvalFlow: [{ order: 1, module: "/employees/leave", capability: "approve", required: true }],
           documentRules: { required: definition.requiresDocument },
           calculationRules: { legalReviewRequired: true },
           createdBy: actorId,
@@ -510,7 +510,7 @@ export async function createLeaveApplication(params: {
             })),
           },
           approvalSteps: {
-            create: [{ stepOrder: 1, role: "hr_payroll", decision: "PENDING" }],
+            create: [{ stepOrder: 1, requiredCapability: "/employees/leave:approve", decision: "PENDING" }],
           },
         },
       });
@@ -551,8 +551,23 @@ export async function createLeaveApplication(params: {
     throw error;
   }
   if (status === "PENDING_HR" && !context.transaction) {
-    const reviewers = await prisma.user.findMany({ where: { companyId: params.companyId, role: { in: ["hr_payroll", "admin"] } }, select: { id: true } });
-    await Promise.all(reviewers.map((reviewer) => createNotification({ companyId: params.companyId, userId: reviewer.id, title: "Leave awaiting HR decision", message: `Leave application ${result.id} is ready for review.`, dedupeKey: `leave-submitted:${result.id}:${reviewer.id}`, sourceModule: "leave", sourceId: result.id, linkUrl: "/employees/leave" }).catch(() => undefined)));
+    const [reviewers, company] = await Promise.all([
+      prisma.user.findMany({
+        where: {
+          companyId: params.companyId,
+          isActive: true,
+          capabilities: { path: ["/employees/leave"], array_contains: ["approve"] },
+        },
+        select: { id: true },
+      }),
+      prisma.company.findUnique({
+        where: { id: params.companyId },
+        select: { owner: { select: { id: true, isActive: true } } },
+      }),
+    ]);
+    const reviewerIds = new Set(reviewers.map((reviewer) => reviewer.id));
+    if (company?.owner?.isActive) reviewerIds.add(company.owner.id);
+    await Promise.all([...reviewerIds].map((reviewerId) => createNotification({ companyId: params.companyId, userId: reviewerId, title: "Leave awaiting HR decision", message: `Leave application ${result.id} is ready for review.`, dedupeKey: `leave-submitted:${result.id}:${reviewerId}`, sourceModule: "leave", sourceId: result.id, linkUrl: "/employees/leave" }).catch(() => undefined)));
   }
   return db.leaveApplication.findUniqueOrThrow({
     where: { id: result.id },

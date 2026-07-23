@@ -6,6 +6,8 @@ import {
   DEFAULT_OT_MULTIPLIER,
   DEFAULT_PUBLIC_HOLIDAY_MULTIPLIER,
   DEFAULT_SUNDAY_MULTIPLIER,
+  monthlySalaryForPayPeriod,
+  validateComputedPayrollLines,
   type PayrollCalculationContext,
   type PayrollDeductionResult,
 } from "../payroll-calculation.engine.js";
@@ -131,6 +133,33 @@ describe("computePayrollLines", () => {
     );
     expect(lines[0]!.grossPay).toBe(25000);
     expect(lines[0]!.hoursWorked).toBe(0);
+  });
+
+  it("prorates contractual monthly salary for weekly and biweekly runs", () => {
+    expect(monthlySalaryForPayPeriod(26_000, "weekly")).toBe(6_000);
+    expect(monthlySalaryForPayPeriod(26_000, "biweekly")).toBe(12_000);
+
+    const emp = baseEmployee({
+      employeeType: "office",
+      monthlySalary: 26_000,
+    });
+    const weekly = computePayrollLines(
+      ctx({
+        payPeriod: "weekly",
+        employees: [emp],
+        deductionsByEmployee: new Map([["emp-1", { total: 0, lines: [] }]]),
+      })
+    );
+    const biweekly = computePayrollLines(
+      ctx({
+        payPeriod: "biweekly",
+        employees: [emp],
+        deductionsByEmployee: new Map([["emp-1", { total: 0, lines: [] }]]),
+      })
+    );
+
+    expect(weekly.lines[0]!.grossPay).toBe(6_000);
+    expect(biweekly.lines[0]!.grossPay).toBe(12_000);
   });
 
   it("uses monthly salary without timesheet hours when employeeType is security", () => {
@@ -259,7 +288,7 @@ describe("computePayrollLines", () => {
         includeRelieversWithAttendance: true,
       },
     });
-    expect(snapshot.version).toBe("1.2.0");
+    expect(snapshot.version).toBe("1.3.0");
     expect(snapshot.totals.grossPay).toBe(5000);
     expect(snapshot.inputs.defaultMultipliers).toEqual({
       overtime: DEFAULT_OT_MULTIPLIER,
@@ -443,5 +472,33 @@ describe("computePayrollLines", () => {
     expect(line.grossPay).toBe(16000);
     expect(line.deductions).toBeGreaterThan(200);
     expect(line.netPay).toBe(Math.round((line.grossPay - line.deductions) * 100) / 100);
+  });
+
+  it("flags deductions that would create negative net pay", () => {
+    const issues = validateComputedPayrollLines([
+      {
+        employeeId: "emp-1",
+        hoursWorked: 40,
+        overtimeHours: 0,
+        basePay: 1_000,
+        overtimePay: 0,
+        sundayPay: 0,
+        publicHolidayPay: 0,
+        grossPay: 1_000,
+        deductions: 1_200,
+        netPay: -200,
+        earningsLines: [{ name: "Basic", amount: 1_000 }],
+        deductionLines: [{ name: "Invalid deduction", amount: 1_200 }],
+        tax: 0,
+        taxableEarnings: 1_000,
+        uifEmployee: 0,
+        uifEmployer: 0,
+        sdl: 0,
+      },
+    ]);
+
+    expect(issues.map((issue) => issue.field)).toEqual(
+      expect.arrayContaining(["deductions", "netPay"])
+    );
   });
 });

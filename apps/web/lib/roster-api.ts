@@ -700,7 +700,6 @@ export async function updateSiteTimesheetRow(
       | "hoursWorked"
       | "overtimeHours"
       | "attendanceStatus"
-      | "approvalStatus"
       | "dutyOnObNumber"
       | "dutyOffObNumber"
       | "occurrenceBookNumber"
@@ -711,6 +710,42 @@ export async function updateSiteTimesheetRow(
   const res = await authFetch(`/rosters/site-timesheets/rows/${rowId}`, token, {
     method: "PUT",
     body: JSON.stringify(body),
+  });
+  return parseJson<{ row: SiteTimesheetRow }>(res);
+}
+
+export async function confirmSiteTimesheetRow(
+  token: string,
+  rowId: string,
+  body: Partial<
+    Pick<
+      SiteTimesheetRow,
+      | "actualGuardId"
+      | "actualShiftCode"
+      | "actualShiftType"
+      | "clockIn"
+      | "clockOut"
+      | "hoursWorked"
+      | "overtimeHours"
+      | "attendanceStatus"
+      | "dutyOnObNumber"
+      | "dutyOffObNumber"
+      | "occurrenceBookNumber"
+      | "comments"
+    >
+  >
+) {
+  const res = await authFetch(`/rosters/site-timesheets/rows/${rowId}/confirm`, token, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return parseJson<{ row: SiteTimesheetRow }>(res);
+}
+
+export async function reopenSiteTimesheetRow(token: string, rowId: string) {
+  const res = await authFetch(`/rosters/site-timesheets/rows/${rowId}/reopen`, token, {
+    method: "POST",
+    body: JSON.stringify({}),
   });
   return parseJson<{ row: SiteTimesheetRow }>(res);
 }

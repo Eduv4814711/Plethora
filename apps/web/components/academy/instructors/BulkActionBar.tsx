@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { InstructorBranchOption, InstructorCourseOption, InstructorStatus } from "./types";
 
 export type BulkActionType =
@@ -16,6 +16,7 @@ export function BulkActionBar({
   selectedCount,
   branches,
   courses,
+  allowedActions,
   disabled,
   onClear,
   onApply,
@@ -23,6 +24,7 @@ export function BulkActionBar({
   selectedCount: number;
   branches: InstructorBranchOption[];
   courses: InstructorCourseOption[];
+  allowedActions: BulkActionType[];
   disabled?: boolean;
   onClear: () => void;
   onApply: (payload: {
@@ -36,11 +38,17 @@ export function BulkActionBar({
   const [branchId, setBranchId] = useState("");
   const [courseId, setCourseId] = useState("");
 
-  if (selectedCount === 0) return null;
+  useEffect(() => {
+    if (!allowedActions.includes(action)) {
+      setAction(allowedActions[0] ?? "export_selected");
+    }
+  }, [action, allowedActions]);
+
+  if (selectedCount === 0 || allowedActions.length === 0) return null;
 
   const needsBranch = action === "assign_branch";
   const needsCourse = action === "assign_course";
-  const actionDisabled = disabled || (needsBranch && !branchId) || (needsCourse && !courseId);
+  const actionDisabled = disabled || !allowedActions.includes(action) || (needsBranch && !branchId) || (needsCourse && !courseId);
 
   return (
     <div className="sticky bottom-3 z-40 rounded-2xl border border-slate-300 bg-white/95 p-3 shadow-lg backdrop-blur">
@@ -53,13 +61,13 @@ export function BulkActionBar({
           value={action}
           onChange={(e) => setAction(e.target.value as BulkActionType)}
         >
-          <option value="export_selected">Export selected</option>
-          <option value="assign_branch">Assign branch</option>
-          <option value="assign_course">Assign course</option>
-          <option value="archive_selected">Archive selected</option>
-          <option value="delete_selected">Delete selected</option>
-          <option value="send_reminder">Send reminder</option>
-          <option value="mark_documents_requested">Mark documents requested</option>
+          {allowedActions.includes("export_selected") && <option value="export_selected">Export selected</option>}
+          {allowedActions.includes("assign_branch") && <option value="assign_branch">Assign branch</option>}
+          {allowedActions.includes("assign_course") && <option value="assign_course">Assign course</option>}
+          {allowedActions.includes("archive_selected") && <option value="archive_selected">Archive selected</option>}
+          {allowedActions.includes("delete_selected") && <option value="delete_selected">Delete selected</option>}
+          {allowedActions.includes("send_reminder") && <option value="send_reminder">Send reminder</option>}
+          {allowedActions.includes("mark_documents_requested") && <option value="mark_documents_requested">Mark documents requested</option>}
         </select>
         {needsBranch && (
           <select

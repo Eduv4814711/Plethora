@@ -10,7 +10,6 @@ const schema = z.object({
   effectiveDate: z.string().optional().nullable(),
   nextReviewDate: z.string().optional().nullable(),
   approvedBy: z.string().optional().nullable(),
-  filePath: z.string().optional().nullable(),
 });
 const patchSchema = schema.partial();
 
@@ -18,6 +17,11 @@ function parseDate(v?: string | null): Date | undefined {
   if (!v) return undefined;
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
+function withoutFilePath<T extends { filePath: string | null }>(document: T): Omit<T, "filePath"> {
+  const { filePath: _filePath, ...metadata } = document;
+  return metadata;
 }
 
 export async function academyPoliciesRoutes(app: FastifyInstance) {
@@ -31,7 +35,7 @@ export async function academyPoliciesRoutes(app: FastifyInstance) {
       prisma.academyPolicyDocument.findMany({ where, orderBy: [{ policyType: "asc" }, { version: "desc" }], take: limit, skip: offset }),
       prisma.academyPolicyDocument.count({ where }),
     ]);
-    return { policies, total, limit, offset };
+    return { policies: policies.map(withoutFilePath), total, limit, offset };
   });
 
   app.get("/:id", { preHandler: academyProtect }, async (request, reply) => {
@@ -39,7 +43,7 @@ export async function academyPoliciesRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const policy = await prisma.academyPolicyDocument.findFirst({ where: { id, companyId } });
     if (!policy) return reply.code(404).send({ error: "Not found", message: "Policy not found" });
-    return { policy };
+    return { policy: withoutFilePath(policy) };
   });
 
   app.post("/", { preHandler: academyProtect }, async (request, reply) => {
@@ -56,11 +60,10 @@ export async function academyPoliciesRoutes(app: FastifyInstance) {
         effectiveDate: parseDate(d.effectiveDate),
         nextReviewDate: parseDate(d.nextReviewDate),
         approvedBy: d.approvedBy,
-        filePath: d.filePath,
       },
     });
     await createAuditLog({ userId, companyId, action: "academy.policy.create", entityType: "AcademyPolicyDocument", entityId: policy.id });
-    return reply.code(201).send({ policy });
+    return reply.code(201).send({ policy: withoutFilePath(policy) });
   });
 
   app.patch("/:id", { preHandler: academyProtect }, async (request, reply) => {
@@ -74,7 +77,7 @@ export async function academyPoliciesRoutes(app: FastifyInstance) {
     const d = parsed.data;
     const policy = await prisma.academyPolicyDocument.update({ where: { id }, data: { ...d, effectiveDate: d.effectiveDate === undefined ? undefined : parseDate(d.effectiveDate), nextReviewDate: d.nextReviewDate === undefined ? undefined : parseDate(d.nextReviewDate) } });
     await createAuditLog({ userId, companyId, action: "academy.policy.update", entityType: "AcademyPolicyDocument", entityId: id });
-    return { policy };
+    return { policy: withoutFilePath(policy) };
   });
 
   app.delete("/:id", { preHandler: academyProtect }, async (request, reply) => {

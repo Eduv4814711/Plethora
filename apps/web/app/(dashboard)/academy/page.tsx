@@ -6,6 +6,7 @@ import { AcademyActivityRow, type AcademyActivityItem } from "@/components/acade
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
 import { academyApi } from "@/lib/api";
+import { hasCapability } from "@/lib/permissions";
 import { clsx } from "clsx";
 
 function AcademyHeroIllustration() {
@@ -184,8 +185,9 @@ function QuickIcon({ kind }: { kind: "coin" | "file" | "map" | "user" | "book" |
 const quickIcons = ["coin", "file", "map", "user", "book", "link"] as const;
 
 export default function AcademyHubPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { settings } = useSettings();
+  const canCreate = Boolean(user && hasCapability(user, "/academy", "create"));
   const currency = settings?.settings?.currency ?? "ZAR";
   const moneyFmt = new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 });
 
@@ -262,15 +264,17 @@ export default function AcademyHubPage() {
                 <p className="mt-2 text-sm text-neutral-700">
                   Walk through details, admin fee, and enrolment in open course runs — best for front desk.
                 </p>
-                <Link
-                  href="/academy/intake"
-                  className="mt-4 inline-flex items-center gap-2 rounded-full bg-security-navy px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-105"
-                >
-                  Start new intake
-                  <span className="text-base leading-none" aria-hidden>
-                    →
-                  </span>
-                </Link>
+                {canCreate && (
+                  <Link
+                    href="/academy/intake"
+                    className="mt-4 inline-flex items-center gap-2 rounded-full bg-security-navy px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:brightness-105"
+                  >
+                    Start new intake
+                    <span className="text-base leading-none" aria-hidden>
+                      →
+                    </span>
+                  </Link>
+                )}
               </div>
               <div className="relative flex justify-end sm:justify-end">
                 <div className="relative h-28 w-36 sm:h-32 sm:w-44">
@@ -319,21 +323,23 @@ export default function AcademyHubPage() {
             </ul>
           </div>
 
-          <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Shortcuts</h3>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {shortcuts.map((s) => (
-                <Link
-                  key={s.href + s.label}
-                  href={s.href}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white/90 px-3.5 py-2 text-sm font-medium text-security-navy-800 shadow-sm transition hover:border-primary/40 hover:bg-neutral-100/50"
-                >
-                  <span className="text-security-navy-700">+</span>
-                  {s.label}
-                </Link>
-              ))}
+          {canCreate && (
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Shortcuts</h3>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {shortcuts.map((s) => (
+                  <Link
+                    key={s.href + s.label}
+                    href={s.href}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 bg-white/90 px-3.5 py-2 text-sm font-medium text-security-navy-800 shadow-sm transition hover:border-primary/40 hover:bg-neutral-100/50"
+                  >
+                    <span className="text-security-navy-700">+</span>
+                    {s.label}
+                  </Link>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div className="shrink-0 space-y-6 min-w-0 w-full max-w-sm lg:max-w-none lg:w-auto mx-auto lg:mx-0">

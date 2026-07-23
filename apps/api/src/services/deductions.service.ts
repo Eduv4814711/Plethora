@@ -6,6 +6,25 @@ export interface DeductionLine {
   amount: number;
 }
 
+export class InvalidDeductionConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidDeductionConfigurationError";
+  }
+}
+
+function assertFiniteDeductionValue(
+  value: number,
+  label: string,
+  options: { max?: number } = {}
+): void {
+  if (!Number.isFinite(value) || value < 0 || (options.max != null && value > options.max)) {
+    throw new InvalidDeductionConfigurationError(
+      `${label} must be a finite value between 0 and ${options.max ?? "the configured limit"}`
+    );
+  }
+}
+
 /**
  * Calculate total deductions for an employee given gross pay and period.
  * Includes: DeductionRules (or GroupDeductionRules when groupId provided) + EmployeeDeductions
@@ -101,8 +120,15 @@ export async function calculateDeductions(
     let amount = 0;
     if (rule.type === "fixed" && rule.amount != null) {
       amount = Number(rule.amount);
+      assertFiniteDeductionValue(amount, `Deduction rule "${rule.name}" amount`);
     } else if (rule.type === "percentage" && rule.rate != null) {
-      amount = grossPay * (Number(rule.rate) / 100);
+      const rate = Number(rule.rate);
+      assertFiniteDeductionValue(rate, `Deduction rule "${rule.name}" rate`, { max: 100 });
+      amount = grossPay * (rate / 100);
+    } else {
+      throw new InvalidDeductionConfigurationError(
+        `Deduction rule "${rule.name}" has no valid ${rule.type === "fixed" ? "amount" : "percentage rate"}`
+      );
     }
     if (amount > 0) {
       amount = Math.round(amount * 100) / 100;
@@ -124,8 +150,15 @@ export async function calculateDeductions(
     let amount = 0;
     if (ed.type === "fixed") {
       amount = Number(ed.amount);
+      assertFiniteDeductionValue(amount, `Employee deduction "${ed.name}" amount`);
     } else if (ed.type === "percentage" && ed.rate != null) {
-      amount = grossPay * (Number(ed.rate) / 100);
+      const rate = Number(ed.rate);
+      assertFiniteDeductionValue(rate, `Employee deduction "${ed.name}" rate`, { max: 100 });
+      amount = grossPay * (rate / 100);
+    } else {
+      throw new InvalidDeductionConfigurationError(
+        `Employee deduction "${ed.name}" has no valid ${ed.type === "fixed" ? "amount" : "percentage rate"}`
+      );
     }
     if (amount > 0) {
       amount = Math.round(amount * 100) / 100;

@@ -62,6 +62,9 @@ jobs:
         env:
           NODE_ENV: test
 
+      - name: Audit production data invariants
+        run: npm run db:audit --workspace=api
+
       - name: Test web app
         run: npm run test --workspace=web
         env:
@@ -91,7 +94,7 @@ jobs:
           api_pid=$!
           trap 'kill "$api_pid" 2>/dev/null || true' EXIT
           for attempt in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:3001/health > /dev/null; then
+            if curl --fail --silent http://127.0.0.1:3001/health/ready > /dev/null; then
               exit 0
             fi
             sleep 1

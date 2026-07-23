@@ -34,6 +34,7 @@ import {
   applyRosterPlan,
   buildEmployeePostAssignmentMap,
   generateRosterPlan,
+  RosterPlanValidationError,
   resolvePostForShiftSlot,
   type RosterPlan,
 } from "../roster-engine.service.js";
@@ -875,6 +876,9 @@ describe("applyRosterPlan", () => {
 
     vi.mocked(prisma.$transaction).mockImplementation(async (fn) => {
       const tx = {
+        leaveOccurrence: { findMany: vi.fn().mockResolvedValue([]) },
+        leaveApplication: { findMany: vi.fn().mockResolvedValue([]) },
+        leaveRecord: { findMany: vi.fn().mockResolvedValue([]) },
         shift: {
           deleteMany: vi.fn().mockResolvedValue({ count: 2 }),
           createMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -921,17 +925,50 @@ describe("applyRosterPlan", () => {
     ).rejects.toThrow("INVALID_POST");
   });
 
-  it("skips entries that fail validation", async () => {
+  it("rejects the full plan without replacing shifts when any entry fails validation", async () => {
     vi.mocked(prisma.siteAssignment.findMany).mockResolvedValue([] as never);
 
-    const result = await applyRosterPlan({
-      companyId,
-      userId: "user-1",
-      plan: basePlan,
-    });
+    await expect(
+      applyRosterPlan({
+        companyId,
+        userId: "user-1",
+        plan: basePlan,
+      })
+    ).rejects.toBeInstanceOf(RosterPlanValidationError);
 
-    expect(result.created).toBe(0);
-    expect(result.skipped).toBe(1);
-    expect(result.errors?.length).toBe(1);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rechecks approved leave inside the replacement transaction", async () => {
+    const deleteMany = vi.fn();
+    vi.mocked(prisma.$transaction).mockImplementation(async (fn) =>
+      fn({
+        leaveOccurrence: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              employeeId: "g1",
+              leaveDate: new Date("2026-05-01T00:00:00.000Z"),
+            },
+          ]),
+        },
+        leaveApplication: { findMany: vi.fn().mockResolvedValue([]) },
+        leaveRecord: { findMany: vi.fn().mockResolvedValue([]) },
+        shift: {
+          deleteMany,
+          createMany: vi.fn(),
+        },
+      })
+    );
+
+    await expect(
+      applyRosterPlan({
+        companyId,
+        userId: "user-1",
+        plan: basePlan,
+        options: { replaceExisting: true },
+      })
+    ).rejects.toBeInstanceOf(RosterPlanValidationError);
+
+    expect(deleteMany).not.toHaveBeenCalled();
   });
 });

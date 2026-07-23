@@ -1,11 +1,16 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "crypto";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requireCapability, requireCrudCapability } from "../middleware/authorization.js";
+import { hasCapability } from "../lib/capabilities.js";
+import { privateDownloadUrl, sendPrivateStoredFile } from "../lib/private-download.js";
 import { prisma } from "../lib/prisma.js";
 import { readStreamToBuffer, storage } from "../lib/storage.js";
-
-const TASK_ROLES = ["admin", "operations_manager", "hr_payroll", "supervisor"] as const;
+import {
+  extensionForMime,
+  matchesMagicBytes,
+  sanitizeUploadFilename,
+} from "../lib/upload-validation.js";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = [
@@ -23,7 +28,7 @@ const ALLOWED_TYPES = [
 ];
 
 export async function taskAttachmentsRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole([...TASK_ROLES], { module: "/tasks" })];
+  const protect = [authMiddleware, requireCrudCapability({ module: "/tasks" })];
 
   app.post("/tasks/:taskId/attachments", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
@@ -48,7 +53,7 @@ export async function taskAttachmentsRoutes(app: FastifyInstance) {
     }
 
     const mimetype = data.mimetype;
-    if (!ALLOWED_TYPES.includes(mimetype) && !mimetype.startsWith("image/")) {
+    if (!ALLOWED_TYPES.includes(mimetype)) {
       return reply.code(400).send({
         error: "Invalid file type",
         message: "Allowed: images, PDF, Word, Excel, text, CSV",
@@ -72,7 +77,14 @@ export async function taskAttachmentsRoutes(app: FastifyInstance) {
       });
     }
 
-    const ext = mimetype.split("/")[1]?.replace("jpeg", "jpg") || "bin";
+    if (!matchesMagicBytes(fileBuffer, mimetype)) {
+      return reply.code(400).send({
+        error: "Invalid file",
+        message: "File content does not match the declared type",
+      });
+    }
+
+    const ext = extensionForMime(mimetype);
     const filename = `${randomUUID()}.${ext}`;
     const key = `tasks/${user.companyId}/${taskId}/${filename}`;
 
@@ -95,7 +107,7 @@ export async function taskAttachmentsRoutes(app: FastifyInstance) {
     const attachment = await prisma.taskAttachment.create({
       data: {
         taskId,
-        filename: data.filename || filename,
+        filename: sanitizeUploadFilename(data.filename || filename, mimetype),
         mimeType: mimetype,
         size: fileBuffer.length,
         url,
@@ -103,8 +115,40 @@ export async function taskAttachmentsRoutes(app: FastifyInstance) {
       },
     });
 
-    return reply.code(201).send(attachment);
+    const { url: _url, ...metadata } = attachment;
+    return reply.code(201).send(
+      hasCapability(user, "/tasks", "export")
+        ? {
+            ...metadata,
+            downloadUrl: privateDownloadUrl(
+              `/task-attachments/attachments/${attachment.id}/download`
+            ),
+          }
+        : metadata
+    );
   });
+
+  app.get(
+    "/attachments/:id/download",
+    { preHandler: [authMiddleware, requireCapability("/tasks", "export")] },
+    async (request, reply) => {
+      const user = request.user!;
+      const { id } = request.params as { id: string };
+      const attachment = await prisma.taskAttachment.findFirst({
+        where: { id, task: { companyId: user.companyId } },
+        include: { task: { select: { id: true } } },
+      });
+      if (!attachment) {
+        return reply.code(404).send({ error: "Not found", message: "Attachment not found" });
+      }
+      return sendPrivateStoredFile(reply, {
+        storedReference: attachment.url,
+        allowedPrefixes: [`tasks/${user.companyId}/${attachment.task.id}`],
+        fileName: attachment.filename,
+        mimeType: attachment.mimeType,
+      });
+    }
+  );
 
   app.delete("/attachments/:id", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

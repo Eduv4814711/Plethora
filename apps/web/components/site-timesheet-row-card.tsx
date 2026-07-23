@@ -48,6 +48,7 @@ type SiteTimesheetRowCardProps = {
   hoursBetween: (clockIn: string | null, clockOut: string | null) => number | null;
   onUpdate: (row: SiteTimesheetRow, patch: Partial<SiteTimesheetRow>) => void;
   onApprove: (row: SiteTimesheetRow) => void;
+  onReopen: (row: SiteTimesheetRow) => void;
 };
 
 export function SiteTimesheetRowCard({
@@ -69,6 +70,7 @@ export function SiteTimesheetRowCard({
   hoursBetween,
   onUpdate,
   onApprove,
+  onReopen,
 }: SiteTimesheetRowCardProps) {
   const [showDifferentGuard, setShowDifferentGuard] = useState(
     Boolean(row.actualGuardId && row.actualGuardId !== row.plannedGuardId)
@@ -307,7 +309,7 @@ export function SiteTimesheetRowCard({
               </p>
               {dutyOnLocked && !locked && row.approvalStatus !== "approved" && (
                 <p className="mt-0.5 text-[11px] text-neutral-500">
-                  Locked — only an administrator can change this.
+                  Locked — attendance approval access is required to change this.
                 </p>
               )}
             </div>
@@ -340,7 +342,7 @@ export function SiteTimesheetRowCard({
               </p>
               {dutyOffLocked && !locked && row.approvalStatus !== "approved" && (
                 <p className="mt-0.5 text-[11px] text-neutral-500">
-                  Locked — only an administrator can change this.
+                  Locked — attendance approval access is required to change this.
                 </p>
               )}
             </div>
@@ -378,7 +380,7 @@ export function SiteTimesheetRowCard({
         <button
           type="button"
           disabled={saving}
-          onClick={() => onUpdate(row, { approvalStatus: "pending" })}
+          onClick={() => onReopen(row)}
           className="btn-secondary w-full text-sm"
         >
           Reopen attendance entry

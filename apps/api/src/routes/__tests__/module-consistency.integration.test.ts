@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
-import type { UserRole } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { buildApp } from "../../app.js";
 import { config } from "../../lib/config.js";
@@ -20,15 +19,22 @@ describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
   let employeeHrToken: string;
   let payrollHrToken: string;
 
-  function tokenFor(role: UserRole, moduleAccess?: Record<string, "read" | "write">) {
+  async function tokenFor(capabilities: Record<string, string[]>) {
     const { tenantA } = fixture;
+    const user = await prisma.user.create({
+      data: {
+        companyId: tenantA.companyId,
+        name: `Capability User ${Math.random()}`,
+        email: `capability-${Math.random()}@test.local`,
+        passwordHash: "not-used-in-route-tests",
+        capabilities,
+      },
+    });
     return jwt.sign(
       {
-        sub: tenantA.userId,
-        email: tenantA.email,
+        sub: user.id,
+        email: user.email,
         companyId: tenantA.companyId,
-        role,
-        ...(moduleAccess ? { moduleAccess } : {}),
       },
       config.jwt.accessSecret,
       { expiresIn: "1h" }
@@ -38,8 +44,8 @@ describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
   beforeAll(async () => {
     app = await buildApp();
     fixture = await provisionTenantFixture();
-    employeeHrToken = tokenFor("hr_payroll", { "/employees": "write" });
-    payrollHrToken = tokenFor("hr_payroll", { "/payroll": "write" });
+    employeeHrToken = await tokenFor({ "/employees": ["view", "create", "edit"] });
+    payrollHrToken = await tokenFor({ "/payroll": ["view", "create", "edit"] });
   }, 120_000);
 
   afterAll(async () => {
@@ -100,11 +106,11 @@ describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
     });
   });
 
-  it.each<UserRole>(["admin", "operations_manager", "supervisor", "controller", "client"])(
-    "allows employee detail edits for %s users assigned the Team module",
-    async (role) => {
+  it(
+    "allows employee detail edits for a user assigned Team edit access",
+    async () => {
       const { tenantA } = fixture;
-      const token = tokenFor(role, { "/employees": "write" });
+      const token = await tokenFor({ "/employees": ["edit"] });
       const update = await app.inject({
         method: "PUT",
         url: `/employees/${tenantA.employeeId}`,
@@ -115,9 +121,9 @@ describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
     }
   );
 
-  it("allows a Team-assigned supervisor to create employees and change status", async () => {
+  it("allows a user with Team create and edit capabilities to create employees and change status", async () => {
     const { tenantA } = fixture;
-    const token = tokenFor("supervisor", { "/employees": "write" });
+    const token = await tokenFor({ "/employees": ["create", "edit"] });
     const create = await app.inject({
       method: "POST",
       url: "/employees",
@@ -147,12 +153,13 @@ describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
     });
   });
 
-  it("denies a broad admin without an explicit private-data module assignment", async () => {
+  it("denies a user without explicit employee edit access", async () => {
     const { tenantA } = fixture;
+    const noAccessToken = await tokenFor({});
     const res = await app.inject({
       method: "PUT",
       url: `/employees/${tenantA.employeeId}`,
-      headers: { ...authHeader(tenantA.accessToken), "content-type": "application/json" },
+      headers: { ...authHeader(noAccessToken), "content-type": "application/json" },
       payload: { firstName: "Not Allowed" },
     });
     expect(res.statusCode).toBe(403);

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requireCrudCapability } from "../middleware/authorization.js";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
@@ -9,17 +9,31 @@ import { createAuditLog } from "../lib/audit.js";
 const createDeductionRuleSchema = z.object({
   name: z.string().min(1),
   type: z.enum(["fixed", "percentage"]),
-  amount: z.number().min(0).optional(),
-  rate: z.number().min(0).max(100).optional(),
+  amount: z.number().finite().positive().optional(),
+  rate: z.number().finite().positive().max(100).optional(),
   appliesTo: z.enum(["all", "security", "office"]).default("all"),
-  employeeIds: z.array(z.string()).optional(),
+  employeeIds: z.array(z.string().min(1)).max(10_000).optional(),
   isOptional: z.boolean().default(false),
 });
 
 const updateDeductionRuleSchema = createDeductionRuleSchema.partial();
 
+async function invalidEmployeeIds(
+  companyId: string,
+  employeeIds: string[] | undefined
+): Promise<string[]> {
+  const uniqueIds = [...new Set(employeeIds ?? [])];
+  if (uniqueIds.length === 0) return [];
+  const employees = await prisma.employee.findMany({
+    where: { companyId, id: { in: uniqueIds } },
+    select: { id: true },
+  });
+  const found = new Set(employees.map((employee) => employee.id));
+  return uniqueIds.filter((id) => !found.has(id));
+}
+
 export async function deductionRulesRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin", "hr_payroll"], { module: "/payroll" })];
+  const protect = [authMiddleware, requireCrudCapability({ module: "/payroll" })];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
@@ -40,13 +54,13 @@ export async function deductionRulesRoutes(app: FastifyInstance) {
     }
 
     const data = parsed.data;
-    if (data.type === "fixed" && (data.amount == null || data.amount < 0)) {
+    if (data.type === "fixed" && data.amount == null) {
       return reply.code(400).send({
         error: "Validation error",
         message: "amount required for fixed deductions",
       });
     }
-    if (data.type === "percentage" && (data.rate == null || data.rate < 0)) {
+    if (data.type === "percentage" && data.rate == null) {
       return reply.code(400).send({
         error: "Validation error",
         message: "rate required for percentage deductions",
@@ -54,6 +68,13 @@ export async function deductionRulesRoutes(app: FastifyInstance) {
     }
 
     const companyId = request.user!.companyId;
+    const foreignEmployeeIds = await invalidEmployeeIds(companyId, data.employeeIds);
+    if (foreignEmployeeIds.length > 0) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: { employeeIds: ["Every targeted employee must belong to this company"] },
+      });
+    }
     const rule = await prisma.deductionRule.create({
       data: {
         companyId,
@@ -97,11 +118,40 @@ export async function deductionRulesRoutes(app: FastifyInstance) {
     }
 
     const data = parsed.data;
+    const effectiveType = data.type ?? existing.type;
+    const effectiveAmount =
+      data.amount !== undefined ? data.amount : existing.amount != null ? Number(existing.amount) : null;
+    const effectiveRate =
+      data.rate !== undefined ? data.rate : existing.rate != null ? Number(existing.rate) : null;
+    if (effectiveType === "fixed" && (effectiveAmount == null || !Number.isFinite(effectiveAmount) || effectiveAmount <= 0)) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: { amount: ["A positive fixed deduction amount is required"] },
+      });
+    }
+    if (effectiveType === "percentage" && (effectiveRate == null || !Number.isFinite(effectiveRate) || effectiveRate <= 0 || effectiveRate > 100)) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: { rate: ["A percentage deduction rate between 0 and 100 is required"] },
+      });
+    }
+    const foreignEmployeeIds = await invalidEmployeeIds(companyId, data.employeeIds);
+    if (foreignEmployeeIds.length > 0) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: { employeeIds: ["Every targeted employee must belong to this company"] },
+      });
+    }
     const updateData: Record<string, unknown> = {};
     if (data.name !== undefined) updateData.name = data.name;
     if (data.type !== undefined) updateData.type = data.type;
-    if (data.amount !== undefined) updateData.amount = data.amount;
-    if (data.rate !== undefined) updateData.rate = data.rate;
+    if (effectiveType === "fixed") {
+      updateData.amount = effectiveAmount;
+      updateData.rate = null;
+    } else {
+      updateData.amount = null;
+      updateData.rate = effectiveRate;
+    }
     if (data.appliesTo !== undefined) updateData.appliesTo = data.appliesTo;
     if (data.employeeIds !== undefined) updateData.employeeIds = data.employeeIds;
     if (data.isOptional !== undefined) updateData.isOptional = data.isOptional;

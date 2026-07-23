@@ -40,8 +40,9 @@ describe.runIf(dbReady)("payroll lifecycle smoke test (integration)", () => {
         name: "Payroll Admin",
         email: `payroll-smoke-${runId}@plethora-test.local`,
         passwordHash: await hashPassword("payroll-smoke-password-32chars!!"),
-        role: "admin",
-        moduleAccess: { "/payroll": "write" },
+        capabilities: {
+        "/payroll": ["view", "view_sensitive", "create", "edit", "delete", "approve", "export"],
+        },
       },
     });
 
@@ -50,8 +51,6 @@ describe.runIf(dbReady)("payroll lifecycle smoke test (integration)", () => {
         sub: user.id,
         email: user.email,
         companyId,
-        role: user.role,
-        moduleAccess: user.moduleAccess,
       },
       config.jwt.accessSecret,
       { expiresIn: "1h" }

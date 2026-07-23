@@ -1,5 +1,7 @@
 "use client";
 
+import { hasCapability } from "@/lib/permissions";
+
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
@@ -46,7 +48,9 @@ function statusBadgeClass(status: string): string {
 export default function AcademyCertificatesPage() {
   const { token, user } = useAuth();
   const { confirm, confirmDialog } = useConfirmDialog();
-  const canManage = user?.role === "admin";
+  const canCreate = Boolean(user && hasCapability(user, "/academy", "create"));
+  const canApprove = Boolean(user && hasCapability(user, "/academy", "approve"));
+  const canDelete = Boolean(user && hasCapability(user, "/academy", "delete"));
   const [rows, setRows] = useState<Certificate[]>([]);
   const [students, setStudents] = useState<StudentOption[]>([]);
   const [courses, setCourses] = useState<CourseOption[]>([]);
@@ -87,7 +91,7 @@ export default function AcademyCertificatesPage() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !learnerId || !courseId || !issueDate || !canManage) return;
+    if (!token || !learnerId || !courseId || !issueDate || !canCreate) return;
     setSaving(true);
     try {
       await academyApi.createCertificate(token, { learnerId, courseId, issueDate });
@@ -101,7 +105,7 @@ export default function AcademyCertificatesPage() {
   };
 
   const reprint = async (id: string) => {
-    if (!token || !canManage) return;
+    if (!token || !canApprove) return;
     const confirmed = await confirm({
       title: "Mark certificate as reprinted?",
       message: "This records a certificate reprint event in the register.",
@@ -121,7 +125,7 @@ export default function AcademyCertificatesPage() {
   };
 
   const revoke = async (id: string) => {
-    if (!token || !canManage) return;
+    if (!token || !canApprove) return;
     const confirmed = await confirm({
       title: "Revoke certificate?",
       message: "This marks the certificate as revoked.",
@@ -140,7 +144,7 @@ export default function AcademyCertificatesPage() {
   };
 
   const remove = async (id: string) => {
-    if (!token || !canManage) return;
+    if (!token || !canDelete) return;
     const confirmed = await confirm({
       title: "Delete certificate permanently?",
       message: "This permanently removes the certificate record.",
@@ -166,9 +170,9 @@ export default function AcademyCertificatesPage() {
         <p className="mt-1 text-sm text-neutral-600">Issue and manage learner certificate lifecycle with verification codes.</p>
       </div>
 
-      {!canManage && (
+      {!canCreate && !canApprove && !canDelete && (
         <div className="rounded-lg border border-neutral-300 bg-neutral-100/50 px-3 py-2 text-sm">
-          Read-only: only admins can issue, reprint, revoke, or delete certificates.
+          Read-only: certificate changes have not been granted for your account.
         </div>
       )}
 
@@ -181,7 +185,7 @@ export default function AcademyCertificatesPage() {
             className="input-modern rounded-xl"
             value={learnerId}
             onChange={(e) => setLearnerId(e.target.value)}
-            disabled={!canManage || saving}
+            disabled={!canCreate || saving}
           >
             <option value="">Select learner</option>
             {students.map((s) => (
@@ -194,7 +198,7 @@ export default function AcademyCertificatesPage() {
             className="input-modern rounded-xl"
             value={courseId}
             onChange={(e) => setCourseId(e.target.value)}
-            disabled={!canManage || saving}
+            disabled={!canCreate || saving}
           >
             <option value="">Select course</option>
             {courses.map((c) => (
@@ -208,10 +212,10 @@ export default function AcademyCertificatesPage() {
             onChange={setIssueDate}
             className="input-modern"
             showToday
-            disabled={!canManage || saving}
+            disabled={!canCreate || saving}
             ariaLabel="Certificate issue date"
           />
-          <button className="btn-primary rounded-xl" disabled={!canManage || saving || !learnerId || !courseId || !issueDate}>
+          <button className="btn-primary rounded-xl" disabled={!canCreate || saving || !learnerId || !courseId || !issueDate}>
             Issue
           </button>
         </form>
@@ -240,9 +244,9 @@ export default function AcademyCertificatesPage() {
                   </td>
                   <td className="font-mono text-xs">{r.verificationCode}</td>
                   <td className="text-right space-x-1">
-                    <button className="btn-secondary px-2 py-1 text-xs" onClick={() => reprint(r.id)} disabled={!canManage || saving}>Reprint</button>
-                    <button className="btn-amber px-2 py-1 text-xs" onClick={() => revoke(r.id)} disabled={!canManage || saving}>Revoke</button>
-                    {canManage && <button className="btn-destructive px-2 py-1 text-xs" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}
+                    {canApprove && <button className="btn-secondary px-2 py-1 text-xs" onClick={() => reprint(r.id)} disabled={saving}>Reprint</button>}
+                    {canApprove && <button className="btn-amber px-2 py-1 text-xs" onClick={() => revoke(r.id)} disabled={saving}>Revoke</button>}
+                    {canDelete && <button className="btn-destructive px-2 py-1 text-xs" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}
                   </td>
                 </tr>
               ))}

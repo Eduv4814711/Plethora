@@ -10,7 +10,7 @@ import {
 } from "../services/auth.service.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { prisma } from "../lib/prisma.js";
-import { findUniqueUserForMe } from "../lib/user-module-column.js";
+import { findUniqueUserForMe } from "../lib/user-access.js";
 import { validatePassword, PASSWORD_MIN_LENGTH } from "../lib/password-policy.js";
 import { badRequest } from "../lib/api-response.js";
 import {
@@ -22,7 +22,7 @@ import {
 } from "../lib/auth-cookies.js";
 import { env } from "../lib/env.js";
 
-const AUTH_RATE = { max: 10, timeWindow: "15 minutes" as const };
+const AUTH_RATE = { max: 30, timeWindow: "15 minutes" as const };
 
 function refreshMeta(request: FastifyRequest) {
   const ua = request.headers["user-agent"];
@@ -116,12 +116,26 @@ export async function authRoutes(app: FastifyInstance) {
             name: adminInput.name,
             email: adminInput.email.toLowerCase(),
             passwordHash,
-            role: "admin",
+            accountType: "staff",
           },
-          select: { id: true, name: true, email: true, role: true, companyId: true },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            accountType: true,
+            jobTitle: true,
+            isActive: true,
+            capabilities: true,
+            companyId: true,
+          },
         });
 
-        return { company, adminUser };
+        await tx.company.update({
+          where: { id: company.id },
+          data: { ownerUserId: adminUser.id },
+        });
+
+        return { company, adminUser: { ...adminUser, isOwner: true } };
       });
 
       const result = await issueTokensForUser(adminUser, refreshMeta(request));
@@ -246,8 +260,14 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       const passwordHash = await hashPassword(parsed.data.password);
-      await prisma.user.update({
-        where: { id: found.id },
+      const consumed = await prisma.user.updateMany({
+        where: {
+          id: found.id,
+          passwordSetupRequired: true,
+          passwordSetupTokenHash: tokenHash,
+          passwordSetupTokenConsumedAt: null,
+          passwordSetupTokenExpiresAt: { gt: now },
+        },
         data: {
           passwordHash,
           passwordSetupRequired: false,
@@ -256,6 +276,9 @@ export async function authRoutes(app: FastifyInstance) {
           passwordSetupTokenConsumedAt: now,
         },
       });
+      if (consumed.count !== 1) {
+        return reply.code(400).send({ error: "Invalid or expired setup link" });
+      }
 
       return reply.send({ success: true });
     }

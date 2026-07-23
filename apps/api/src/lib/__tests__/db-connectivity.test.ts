@@ -7,7 +7,11 @@ vi.mock("../prisma.js", () => ({
 }));
 
 import { prisma } from "../prisma.js";
-import { databaseHostFromUrl, verifyDatabaseConnection } from "../db-connectivity.js";
+import {
+  databaseHostFromUrl,
+  verifyDatabaseConnection,
+  verifyDatabaseReadiness,
+} from "../db-connectivity.js";
 
 describe("db-connectivity", () => {
   beforeEach(() => {
@@ -33,5 +37,22 @@ describe("db-connectivity", () => {
 
     await expect(verifyDatabaseConnection()).rejects.toThrow(/Could not connect to PostgreSQL at db\.prisma\.io/);
     await expect(verifyDatabaseConnection()).rejects.toThrow(/npm run db:push --workspace=api/);
+  });
+
+  it("verifyDatabaseReadiness validates required columns and completed migrations", async () => {
+    vi.mocked(prisma.$queryRaw)
+      .mockResolvedValueOnce([{ "?column?": 1 }] as never)
+      .mockResolvedValueOnce([] as never)
+      .mockResolvedValueOnce([{ required_applied: true, unfinished: false }] as never);
+    await expect(verifyDatabaseReadiness()).resolves.toBeUndefined();
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(3);
+  });
+
+  it("verifyDatabaseReadiness rejects an incomplete release schema", async () => {
+    vi.mocked(prisma.$queryRaw)
+      .mockResolvedValueOnce([{ "?column?": 1 }] as never)
+      .mockResolvedValueOnce([] as never)
+      .mockResolvedValueOnce([{ required_applied: false, unfinished: false }] as never);
+    await expect(verifyDatabaseReadiness()).rejects.toThrow(/schema migrations are incomplete/);
   });
 });

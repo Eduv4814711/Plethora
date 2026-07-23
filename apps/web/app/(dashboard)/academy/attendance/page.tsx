@@ -1,5 +1,7 @@
 "use client";
 
+import { hasCapability } from "@/lib/permissions";
+
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
@@ -24,7 +26,8 @@ interface EnrolmentOption {
 export default function AcademyAttendancePage() {
   const { token, user } = useAuth();
   const { confirm, confirmDialog } = useConfirmDialog();
-  const canManage = user?.role === "admin";
+  const canCreate = Boolean(user && hasCapability(user, "/academy", "create"));
+  const canDelete = Boolean(user && hasCapability(user, "/academy", "delete"));
   const [rows, setRows] = useState<Session[]>([]);
   const [enrolments, setEnrolments] = useState<EnrolmentOption[]>([]);
   const [date, setDate] = useState("");
@@ -57,7 +60,7 @@ export default function AcademyAttendancePage() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !date || !canManage) return;
+    if (!token || !date || !canCreate) return;
     setSaving(true);
     try {
       await academyApi.createAttendanceSession(token, { sessionDate: date });
@@ -72,7 +75,7 @@ export default function AcademyAttendancePage() {
 
   const mark = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !markSessionId || !markEnrolmentId || !canManage) return;
+    if (!token || !markSessionId || !markEnrolmentId || !canCreate) return;
     setSaving(true);
     try {
       await academyApi.markAttendance(token, { sessionId: markSessionId, enrolmentId: markEnrolmentId, attendanceStatus: status });
@@ -85,7 +88,7 @@ export default function AcademyAttendancePage() {
   };
 
   const remove = async (id: string) => {
-    if (!token || !canManage) return;
+    if (!token || !canDelete) return;
     const confirmed = await confirm({
       title: "Delete attendance session?",
       message: "This deletes the session and its attendance records.",
@@ -130,9 +133,9 @@ export default function AcademyAttendancePage() {
         <p className="mt-1 text-sm text-neutral-600">Track session attendance and maintain compliance thresholds.</p>
       </div>
 
-      {!canManage && (
+      {!canCreate && !canDelete && (
         <div className="rounded-lg border border-neutral-300 bg-neutral-100/50 px-3 py-2 text-sm">
-          Read-only: only admins can create sessions, mark attendance, or delete sessions.
+          Read-only: attendance changes have not been granted for your account.
         </div>
       )}
 
@@ -154,11 +157,11 @@ export default function AcademyAttendancePage() {
                 onChange={setDate}
                 className="input-modern"
                 showToday
-                disabled={!canManage || saving}
+                disabled={!canCreate || saving}
                 ariaLabel="Session date"
               />
             </label>
-            <button className="btn-primary rounded-xl" disabled={!canManage || saving}>Create</button>
+            <button className="btn-primary rounded-xl" disabled={!canCreate || saving}>Create</button>
           </form>
         </div>
 
@@ -169,7 +172,7 @@ export default function AcademyAttendancePage() {
               className="input-modern rounded-xl"
               value={markSessionId}
               onChange={(e) => setMarkSessionId(e.target.value)}
-              disabled={!canManage || saving}
+              disabled={!canCreate || saving}
             >
               <option value="">Select session</option>
               {rows.map((s) => (
@@ -182,7 +185,7 @@ export default function AcademyAttendancePage() {
               className="input-modern rounded-xl"
               value={markEnrolmentId}
               onChange={(e) => setMarkEnrolmentId(e.target.value)}
-              disabled={!canManage || saving}
+              disabled={!canCreate || saving}
             >
               <option value="">Select enrolment</option>
               {enrolments.map((en) => (
@@ -194,7 +197,7 @@ export default function AcademyAttendancePage() {
             <select className="input-modern rounded-xl" value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="present">Present</option><option value="absent">Absent</option><option value="late">Late</option><option value="excused">Excused</option>
             </select>
-            <button className="btn-primary rounded-xl" disabled={!canManage || saving}>Mark</button>
+            <button className="btn-primary rounded-xl" disabled={!canCreate || saving}>Mark</button>
           </form>
         </div>
       </div>
@@ -209,7 +212,7 @@ export default function AcademyAttendancePage() {
                 <tr>
                   <td colSpan={3} className="py-8 text-center text-sm text-neutral-500">Loading sessions...</td>
                 </tr>
-              ) : rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{String(r.sessionDate).slice(0,10)}</td><td>{getRecordCount(r)}</td><td className="text-right">{canManage && <button className="btn-destructive px-2 py-1 text-xs" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}</td></tr>)}
+              ) : rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{String(r.sessionDate).slice(0,10)}</td><td>{getRecordCount(r)}</td><td className="text-right">{canDelete && <button className="btn-destructive px-2 py-1 text-xs" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}</td></tr>)}
               {!loading && rows.length === 0 && (
                 <tr>
                   <td colSpan={3} className="py-8 text-center text-sm text-neutral-500">No sessions yet.</td>

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { authFetch, getWhatsAppContacts, sendWhatsAppMessage } from "@/lib/api";
+import { authFetch, getWhatsAppContacts } from "@/lib/api";
 import {
   acknowledgeAlert,
   resolveAlert,
@@ -12,7 +12,7 @@ import {
   type AlertCounts,
   type OperationalAlert,
 } from "@/lib/msr-api";
-import { canAccessRoute } from "@/lib/permissions";
+import { canAccessRoute, hasCapability } from "@/lib/permissions";
 import { format } from "date-fns";
 import {
   BarChart,
@@ -132,10 +132,17 @@ export default function DashboardPage() {
   const [alertActionId, setAlertActionId] = useState<string | null>(null);
   const [alertsSectionOpen, setAlertsSectionOpen] = useState(true);
 
-  const canSites = user ? canAccessRoute("/sites", user.role, user.moduleAccess) : false;
-  const canWhatsApp = user ? canAccessRoute("/whatsapp", user.role, user.moduleAccess) : false;
-  const canPayroll = user ? canAccessRoute("/payroll", user.role, user.moduleAccess) : false;
-  const canRostering = user ? canAccessRoute("/rostering", user.role, user.moduleAccess) : false;
+  const canSites = user ? canAccessRoute("/sites", user) : false;
+  const canCreateSites = Boolean(user && hasCapability(user, "/sites", "create"));
+  const canWhatsApp = user ? canAccessRoute("/whatsapp", user) : false;
+  const canPayroll = user ? canAccessRoute("/payroll", user) : false;
+  const canRostering = user ? canAccessRoute("/rostering", user) : false;
+  const canEditAlerts = Boolean(
+    user &&
+      ["/attendance", "/sites", "/tasks", "/payroll"].some((path) =>
+        hasCapability(user, path, "edit")
+      )
+  );
 
   const fetchDashboard = useCallback(() => {
     if (!token) return;
@@ -200,11 +207,6 @@ export default function DashboardPage() {
     setSiteFilterOpen(false);
   };
 
-  const handleSendWhatsApp = async (employeeId: string, message: string) => {
-    if (!token) return { success: false, error: "Not authenticated" };
-    return sendWhatsAppMessage(token, employeeId, message);
-  };
-
   const siteFilterRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -258,7 +260,7 @@ export default function DashboardPage() {
       : operationalAlerts.filter((a) => a.priority === priorityTab);
 
   const handleAlertAction = async (id: string, action: "acknowledge" | "resolve" | "dismiss") => {
-    if (!token) return;
+    if (!token || !canEditAlerts) return;
     setAlertActionId(id);
     try {
       if (action === "acknowledge") await acknowledgeAlert(token, id);
@@ -515,7 +517,7 @@ export default function DashboardPage() {
                             View
                           </Link>
                         )}
-                        {alert.status === "OPEN" && (
+                        {canEditAlerts && alert.status === "OPEN" && (
                           <button
                             type="button"
                             className="btn-secondary px-2 py-1 text-xs"
@@ -525,22 +527,22 @@ export default function DashboardPage() {
                             Acknowledge
                           </button>
                         )}
-                        <button
+                        {canEditAlerts && <button
                           type="button"
                           className="btn-primary px-2 py-1 text-xs"
                           disabled={alertActionId === alert.id}
                           onClick={() => handleAlertAction(alert.id, "resolve")}
                         >
                           Resolve
-                        </button>
-                        <button
+                        </button>}
+                        {canEditAlerts && <button
                           type="button"
                           className="btn-secondary px-2 py-1 text-xs"
                           disabled={alertActionId === alert.id}
                           onClick={() => handleAlertAction(alert.id, "dismiss")}
                         >
                           Dismiss
-                        </button>
+                        </button>}
                       </div>
                     </li>
                   );
@@ -616,7 +618,7 @@ export default function DashboardPage() {
                 </p>
               )}
             </div>
-            {canSites && (
+            {canCreateSites && (
               <Link href="/sites" className="btn-primary inline-flex w-full items-center justify-center gap-1 py-2 text-xs lg:text-sm">
                 Add site
                 <span className="text-base leading-none" aria-hidden>+</span>

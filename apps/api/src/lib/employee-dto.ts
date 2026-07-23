@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
-import type { JWTPayload } from "./types.js";
+import type { AuthenticatedUser } from "./types.js";
 import { EMPLOYEE_RESTRICTED_FIELDS, canAccessSensitiveData, omitFields } from "./sensitive-data.js";
+import { hasCapability } from "./capabilities.js";
 
 export const employeeListSelect = {
   id: true,
@@ -66,17 +67,24 @@ export const employeePayrollSelect = {
 
 export const employeePrivateAdminSelect = employeePayrollSelect;
 
-export function canViewEmployeeSensitiveFields(user: JWTPayload): boolean {
+export function canViewEmployeeSensitiveFields(user: AuthenticatedUser): boolean {
   return canAccessSensitiveData(user, "/employees") || canAccessSensitiveData(user, "/payroll");
 }
 
-export function canEditEmployeeDetails(user: JWTPayload): boolean {
-  return canViewEmployeeSensitiveFields(user);
+export function canWriteEmployeeSensitiveFields(
+  user: AuthenticatedUser,
+  action: "create" | "edit"
+): boolean {
+  return hasCapability(user, "/employees", action) || hasCapability(user, "/payroll", action);
+}
+
+export function canEditEmployeeDetails(user: AuthenticatedUser): boolean {
+  return hasCapability(user, "/employees", "edit") || hasCapability(user, "/payroll", "edit");
 }
 
 export function sanitizeEmployeeForList<T extends Record<string, unknown>>(
   row: T,
-  user: JWTPayload
+  user: AuthenticatedUser
 ): T | Omit<T, (typeof EMPLOYEE_RESTRICTED_FIELDS)[number]> {
   if (canViewEmployeeSensitiveFields(user)) return row;
   return omitFields(row, EMPLOYEE_RESTRICTED_FIELDS);
@@ -84,7 +92,7 @@ export function sanitizeEmployeeForList<T extends Record<string, unknown>>(
 
 export function sanitizeEmployeeForDetail<T extends Record<string, unknown>>(
   row: T,
-  user: JWTPayload
+  user: AuthenticatedUser
 ): T | Omit<T, (typeof EMPLOYEE_RESTRICTED_FIELDS)[number]> {
   if (canViewEmployeeSensitiveFields(user)) return row;
   return omitFields(row, EMPLOYEE_RESTRICTED_FIELDS);

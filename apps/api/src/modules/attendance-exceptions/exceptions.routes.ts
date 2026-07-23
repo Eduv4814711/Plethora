@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { authMiddleware } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireCapability, requireCrudCapability } from "../../middleware/authorization.js";
 import {
   detectExceptionsBodySchema,
   exceptionAnalyticsQuerySchema,
@@ -17,18 +17,10 @@ import {
   reviewException,
 } from "./exceptions.service.js";
 
-const ROLES = [
-  "admin",
-  "operations_manager",
-  "hr_payroll",
-  "supervisor",
-  "controller",
-] as const;
-
 export async function attendanceExceptionsRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole([...ROLES], { module: "/attendance" }),
+    requireCrudCapability({ module: "/attendance" }),
   ];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
@@ -90,7 +82,10 @@ export async function attendanceExceptionsRoutes(app: FastifyInstance) {
     return reply.send(result);
   });
 
-  app.patch("/:id/review", { preHandler: protect }, async (request, reply) => {
+  app.patch(
+    "/:id/review",
+    { preHandler: [authMiddleware, requireCapability("/attendance", "approve")] },
+    async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
     const parsed = reviewExceptionBodySchema.safeParse(request.body);
@@ -111,5 +106,6 @@ export async function attendanceExceptionsRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Not found", message: "Exception not found" });
     }
     return reply.send(updated);
-  });
+    }
+  );
 }

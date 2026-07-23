@@ -16,6 +16,11 @@ vi.mock("../../alerts/alerts.service.js", () => ({
   upsertAlert: vi.fn().mockResolvedValue({ alert: {}, created: true }),
 }));
 
+vi.mock("../../../lib/timezone.js", () => ({
+  getCompanyTimezone: vi.fn().mockResolvedValue("Africa/Johannesburg"),
+  dateKeyInTimeZone: (date: Date) => date.toISOString().slice(0, 10),
+}));
+
 import { prisma } from "../../../lib/prisma.js";
 
 describe("attendance exception analytics contract", () => {
@@ -40,6 +45,9 @@ describe("attendance exception analytics contract", () => {
     vi.mocked(prisma.shift.count)
       .mockResolvedValueOnce(10)
       .mockResolvedValueOnce(8);
+    vi.mocked(prisma.shift.findMany).mockResolvedValue([
+      { id: "shift-period", startTime: new Date("2026-07-10T06:00:00.000Z") },
+    ] as never);
 
     const periodStart = new Date("2026-07-01T00:00:00.000Z");
     const periodEnd = new Date("2026-07-31T23:59:59.999Z");
@@ -56,8 +64,11 @@ describe("attendance exception analytics contract", () => {
     expect(vi.mocked(prisma.attendanceException.count).mock.calls[1]?.[0]).toEqual({
       where: {
         companyId: "company-1",
-        detectedAt: { gte: periodStart, lte: periodEnd },
-        status: { in: ["OPEN", "UNDER_REVIEW"] },
+        shiftId: { in: ["shift-period"] },
+        OR: [
+          { status: { in: ["OPEN", "UNDER_REVIEW"] } },
+          { severity: "CRITICAL", status: "APPROVED" },
+        ],
       },
     });
   });
@@ -76,7 +87,11 @@ describe("attendance exception analytics contract", () => {
     };
     vi.mocked(prisma.attendanceException.findMany).mockResolvedValue([exception] as never);
     vi.mocked(prisma.attendanceException.count).mockResolvedValue(1);
-    vi.mocked(prisma.shift.findMany).mockResolvedValue([shift] as never);
+    vi.mocked(prisma.shift.findMany)
+      .mockResolvedValueOnce([
+        { id: "shift-1", startTime: new Date("2026-07-31T18:00:00.000Z") },
+      ] as never)
+      .mockResolvedValueOnce([shift] as never);
 
     const result = await listExceptions("company-1", {
       periodStart: "2026-07-01",
@@ -87,12 +102,9 @@ describe("attendance exception analytics contract", () => {
 
     expect(vi.mocked(prisma.attendanceException.findMany).mock.calls[0]?.[0]?.where).toEqual({
       companyId: "company-1",
-      detectedAt: {
-        gte: new Date("2026-07-01T00:00:00.000Z"),
-        lte: new Date("2026-07-31T23:59:59.999Z"),
-      },
+      shiftId: { in: ["shift-1"] },
     });
-    expect(prisma.shift.findMany).toHaveBeenCalledWith({
+    expect(prisma.shift.findMany).toHaveBeenNthCalledWith(2, {
       where: { companyId: "company-1", id: { in: ["shift-1"] } },
       select: { id: true, startTime: true, endTime: true },
     });

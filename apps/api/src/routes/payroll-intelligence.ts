@@ -6,7 +6,7 @@
 
 import type { FastifyInstance } from "fastify";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
 import { getEmployeeCostBreakdownsForRun } from "../services/payroll-cost.service.js";
 import {
@@ -27,7 +27,7 @@ const CORE_EARNINGS = ["Basic", "Basic Salary", "Overtime", "Sunday", "Public Ho
 export async function payrollIntelligenceRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll"], { module: "/payroll" }),
+    requireCrudCapability({ module: "/payroll" }),
   ];
 
   app.get("/runs/:id/summary", { preHandler: protect }, async (request, reply) => {

@@ -1,4 +1,5 @@
-import type { Prisma, ShiftStatus } from "@prisma/client";
+import { Prisma, type ShiftStatus } from "@prisma/client";
+import { prisma } from "../../lib/prisma.js";
 import { canTransitionShift } from "../../lib/state-machines.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { auditManualShiftEdit, auditRosterReset } from "../../lib/roster-audit.js";
@@ -16,10 +17,13 @@ import {
   generateRosterPlan,
   applyRosterPlan,
   buildEmployeePostAssignmentMap,
+  findApprovedLeaveConflictsForPlan,
+  RosterPlanValidationError,
   resolvePostForShiftSlot,
   type PostWithAssignments,
   type RosterPlan,
 } from "../../services/roster-engine.service.js";
+import { violatesAdjacentShiftRestRules } from "../../services/roster-scheduler.js";
 import { rosteringRepository } from "./rostering.repository.js";
 import { resolveShiftSiteFieldsFromPost } from "../../lib/shift-site-fields.js";
 import { inferPostShiftType } from "../../lib/site-post-api.js";
@@ -48,6 +52,100 @@ export type BulkCreateResult = {
   skipped: number;
   errors?: string[];
 };
+
+type BulkShiftCreateInput = Omit<
+  Prisma.ShiftCreateManyInput,
+  "startTime" | "endTime"
+> & {
+  startTime: Date;
+  endTime: Date;
+};
+
+function validateBulkShiftSequence(
+  shifts: { startTime: Date; endTime: Date; shiftType: "day" | "night" }[],
+  timeZone: string
+): string[] {
+  const errors: string[] = [];
+  const planned: { startTime: Date; endTime: Date }[] = [];
+  const restByDate = new Map<string, "day" | "night">();
+  for (const shift of [...shifts].sort((a, b) => a.startTime.getTime() - b.startTime.getTime())) {
+    const dateKey = dateKeyInTimeZone(shift.startTime, timeZone);
+    if (
+      planned.some(
+        (existing) =>
+          shift.startTime < existing.endTime && shift.endTime > existing.startTime
+      )
+    ) {
+      errors.push(`${dateKey}: Overlaps another shift in this roster plan`);
+      continue;
+    }
+    if (
+      violatesAdjacentShiftRestRules(restByDate, {
+        dateKey,
+        shiftType: shift.shiftType,
+      })
+    ) {
+      errors.push(
+        `${dateKey}: Rest rule violation (cannot work day and night on the same date, or a day shift after a night shift)`
+      );
+      continue;
+    }
+    planned.push(shift);
+    restByDate.set(dateKey, shift.shiftType);
+  }
+  return errors;
+}
+
+async function replaceBulkShiftsAtomically(params: {
+  companyId: string;
+  deleteWhere: Prisma.ShiftWhereInput;
+  shifts: BulkShiftCreateInput[];
+  timeZone: string;
+}): Promise<BulkCreateResult | RosteringServiceError> {
+  let deleted = 0;
+  let created = 0;
+  try {
+    await prisma.$transaction(
+      async (tx) => {
+        const leaveConflicts = await findApprovedLeaveConflictsForPlan(
+          tx,
+          params.companyId,
+          params.shifts.map((shift) => ({
+            employeeId: shift.employeeId,
+            startTime: shift.startTime,
+          })),
+          params.timeZone
+        );
+        if (leaveConflicts.length > 0) {
+          throw new RosterPlanValidationError(leaveConflicts);
+        }
+        deleted = (await tx.shift.deleteMany({ where: params.deleteWhere })).count;
+        created =
+          params.shifts.length > 0
+            ? (await tx.shift.createMany({ data: params.shifts })).count
+            : 0;
+      },
+      {
+        maxWait: 10_000,
+        timeout: Math.min(120_000, 15_000 + params.shifts.length * 50),
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      }
+    );
+  } catch (error) {
+    if (error instanceof RosterPlanValidationError) {
+      return {
+        status: 409,
+        body: {
+          error: "Roster plan is no longer valid",
+          message: "No existing shifts were replaced.",
+          conflicts: error.errors,
+        },
+      };
+    }
+    throw error;
+  }
+  return { deleted, created, skipped: 0 };
+}
 
 const defaultFairnessSpread: RosterPlan["summary"]["fairnessSpread"] = {
   maxDayMinusMinDay: 0,
@@ -314,18 +412,22 @@ export const rosteringModuleService = {
       };
     }
     const timeZone = await getCompanyTimezone(companyId);
-    const sitePostIds = postsWithAssignments.map((p) => p.id);
     const postAssignmentByEmployee = buildEmployeePostAssignmentMap(postsWithAssignments);
     const roundRobin = { day: 0, night: 0 };
-    const deleted = await rosteringRepository.deleteShifts({
+    const deleteWhere: Prisma.ShiftWhereInput = {
       companyId,
       employeeId: params.employeeId,
       siteId: params.siteId,
       status: { in: ["created", "assigned"] },
       startTime: { lt: params.end },
       endTime: { gt: params.start },
+    };
+    const replaceableShiftIds = await prisma.shift.findMany({
+      where: deleteWhere,
+      select: { id: true },
     });
-    let created = 0;
+    const excludedShiftIds = replaceableShiftIds.map((shift) => shift.id);
+    const shiftsToCreate: BulkShiftCreateInput[] = [];
     const errors: string[] = [];
     for (const { date, shiftType } of dualDates) {
       const post = resolvePostForShiftSlot({
@@ -346,6 +448,7 @@ export const rosteringModuleService = {
           endTime: shiftEnd,
           allowRosterable: true,
           allowUnassigned: false,
+          excludeShiftIds: excludedShiftIds,
         });
       } catch (err) {
         if (err instanceof RosteringValidationError) {
@@ -354,7 +457,7 @@ export const rosteringModuleService = {
         }
         throw err;
       }
-      await rosteringRepository.createShift({
+      shiftsToCreate.push({
         companyId,
         employeeId: params.employeeId,
         siteId: post.siteId,
@@ -364,9 +467,36 @@ export const rosteringModuleService = {
         endTime: shiftEnd,
         status: "assigned",
       });
-      created++;
     }
-    if (created > 0) {
+    errors.push(
+      ...validateBulkShiftSequence(
+        shiftsToCreate.map((shift) => ({
+          startTime: shift.startTime,
+          endTime: shift.endTime,
+          shiftType:
+            (shift.shiftType ?? "day").toLowerCase() === "night" ? "night" : "day",
+        })),
+        timeZone
+      )
+    );
+    if (errors.length > 0) {
+      return {
+        status: 409,
+        body: {
+          error: "Roster plan is not valid",
+          message: "No existing shifts were replaced.",
+          conflicts: errors,
+        },
+      };
+    }
+    const replacement = await replaceBulkShiftsAtomically({
+      companyId,
+      deleteWhere,
+      shifts: shiftsToCreate,
+      timeZone,
+    });
+    if (isRosteringServiceError(replacement)) return replacement;
+    if (replacement.created > 0) {
       await createAuditLog({
         userId,
         companyId,
@@ -376,17 +506,12 @@ export const rosteringModuleService = {
         metadata: {
           employeeId: params.employeeId,
           siteId: params.siteId,
-          created,
+          created: replacement.created,
           pattern: params.pattern,
         },
       });
     }
-    return {
-      deleted: deleted.count,
-      created,
-      skipped: dualDates.length - created,
-      errors: errors.length > 0 ? errors : undefined,
-    };
+    return replacement;
   },
 
   async bulkCreateForPost(
@@ -410,7 +535,7 @@ export const rosteringModuleService = {
     const shiftType = (inferPostShiftType(post.coverageRequirements) ?? "day") as "day" | "night";
     const dates = computeDatesFromPattern(params.start, params.end, params.pattern, params.customDays);
     const timeZone = await getCompanyTimezone(companyId);
-    const deleted = await rosteringRepository.deleteShifts({
+    const deleteWhere: Prisma.ShiftWhereInput = {
       companyId,
       employeeId: params.employeeId,
       siteId: post.siteId,
@@ -418,8 +543,13 @@ export const rosteringModuleService = {
       status: { in: ["created", "assigned"] },
       startTime: { lt: params.end },
       endTime: { gt: params.start },
+    };
+    const replaceableShiftIds = await prisma.shift.findMany({
+      where: deleteWhere,
+      select: { id: true },
     });
-    let created = 0;
+    const excludedShiftIds = replaceableShiftIds.map((shift) => shift.id);
+    const shiftsToCreate: BulkShiftCreateInput[] = [];
     const errors: string[] = [];
     for (const date of dates) {
       const { shiftStart, shiftEnd } = getShiftTimes(date, shiftType, timeZone);
@@ -432,6 +562,7 @@ export const rosteringModuleService = {
           endTime: shiftEnd,
           allowRosterable: true,
           allowUnassigned: false,
+          excludeShiftIds: excludedShiftIds,
         });
       } catch (err) {
         if (err instanceof RosteringValidationError) {
@@ -440,7 +571,7 @@ export const rosteringModuleService = {
         }
         throw err;
       }
-      await rosteringRepository.createShift({
+      shiftsToCreate.push({
         companyId,
         employeeId: params.employeeId,
         siteId: post.siteId,
@@ -450,9 +581,36 @@ export const rosteringModuleService = {
         endTime: shiftEnd,
         status: "assigned",
       });
-      created++;
     }
-    if (created > 0) {
+    errors.push(
+      ...validateBulkShiftSequence(
+        shiftsToCreate.map((shift) => ({
+          startTime: shift.startTime,
+          endTime: shift.endTime,
+          shiftType:
+            (shift.shiftType ?? "day").toLowerCase() === "night" ? "night" : "day",
+        })),
+        timeZone
+      )
+    );
+    if (errors.length > 0) {
+      return {
+        status: 409,
+        body: {
+          error: "Roster plan is not valid",
+          message: "No existing shifts were replaced.",
+          conflicts: errors,
+        },
+      };
+    }
+    const replacement = await replaceBulkShiftsAtomically({
+      companyId,
+      deleteWhere,
+      shifts: shiftsToCreate,
+      timeZone,
+    });
+    if (isRosteringServiceError(replacement)) return replacement;
+    if (replacement.created > 0) {
       await createAuditLog({
         userId,
         companyId,
@@ -462,19 +620,14 @@ export const rosteringModuleService = {
         metadata: {
           employeeId: params.employeeId,
           postId: params.postId,
-          created,
+          created: replacement.created,
           pattern: params.pattern,
           startDate: params.startDate,
           endDate: params.endDate,
         },
       });
     }
-    return {
-      deleted: deleted.count,
-      created,
-      skipped: dates.length - created,
-      errors: errors.length > 0 ? errors : undefined,
-    };
+    return replacement;
   },
 
   async previewRoster(
@@ -569,6 +722,17 @@ export const rosteringModuleService = {
             body: {
               error: "Invalid plan",
               message: "Plan references a post that does not belong to this site.",
+            },
+          };
+        }
+        if (err instanceof RosterPlanValidationError) {
+          return {
+            status: 409,
+            body: {
+              error: "Roster plan is no longer valid",
+              message:
+                "The complete plan was rejected without changing the current roster. Review the conflicts and generate a fresh preview.",
+              conflicts: err.errors,
             },
           };
         }

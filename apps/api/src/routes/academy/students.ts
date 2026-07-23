@@ -5,15 +5,17 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { academyProtect } from "./constants.js";
+import { authMiddleware } from "../../middleware/auth.js";
+import { requireCapability } from "../../middleware/authorization.js";
 import { STUDENT_RESTRICTED_FIELDS, canAccessSensitiveData, hasRestrictedFields, omitFields } from "../../lib/sensitive-data.js";
 
-function canHandleStudentPrivateData(user: import("../../lib/types.js").JWTPayload) {
+function canHandleStudentPrivateData(user: import("../../lib/types.js").AuthenticatedUser) {
   return canAccessSensitiveData(user, "/academy");
 }
-function sanitizeStudent<T extends Record<string, unknown>>(student: T, user: import("../../lib/types.js").JWTPayload) {
+function sanitizeStudent<T extends Record<string, unknown>>(student: T, user: import("../../lib/types.js").AuthenticatedUser) {
   return canHandleStudentPrivateData(user) ? student : omitFields(student, STUDENT_RESTRICTED_FIELDS);
 }
-function rejectStudentPrivateData(request: { user?: import("../../lib/types.js").JWTPayload; body: unknown }, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
+function rejectStudentPrivateData(request: { user?: import("../../lib/types.js").AuthenticatedUser; body: unknown }, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
   if (canHandleStudentPrivateData(request.user!) || !hasRestrictedFields(request.body, STUDENT_RESTRICTED_FIELDS)) return false;
   reply.code(403).send({ error: "Forbidden", message: "Sensitive student data is restricted to HR/payroll users" });
   return true;
@@ -116,6 +118,7 @@ const recordAdminFeeSchema = z
   });
 
 export async function academyStudentsRoutes(app: FastifyInstance) {
+  const editProtect = [authMiddleware, requireCapability("/academy", "edit")];
   app.get("/", { preHandler: academyProtect }, async (request) => {
     const companyId = request.user!.companyId;
     const q = request.query as Record<string, string | undefined>;
@@ -234,7 +237,7 @@ export async function academyStudentsRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post("/:id/admin-fee", { preHandler: academyProtect }, async (request, reply) => {
+  app.post("/:id/admin-fee", { preHandler: editProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     const { id } = request.params as { id: string };

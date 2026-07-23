@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
+import { hasCapability } from "@/lib/permissions";
 import { useConfirmDialog } from "@/components/ui";
 
 interface Branch {
@@ -96,8 +97,10 @@ function SortHeader({
 }
 
 export default function AcademyBranchesPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { confirm, confirmDialog } = useConfirmDialog();
+  const canCreate = Boolean(user && hasCapability(user, "/academy", "create"));
+  const canDelete = Boolean(user && hasCapability(user, "/academy", "delete"));
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
@@ -178,7 +181,7 @@ export default function AcademyBranchesPage() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !name.trim()) return;
+    if (!token || !name.trim() || !canCreate) return;
     setError(null);
     try {
       await academyApi.createBranch(token, { name: name.trim() });
@@ -195,7 +198,7 @@ export default function AcademyBranchesPage() {
   };
 
   const remove = async (id: string) => {
-    if (!token) return;
+    if (!token || !canDelete) return;
     const confirmed = await confirm({
       title: "Delete branch?",
       message: "Only branches with no course runs can be deleted.",
@@ -231,17 +234,19 @@ export default function AcademyBranchesPage() {
             Manage your training venues and academy locations.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={focusAddForm}
-          className="btn-primary shrink-0 gap-1 rounded-xl shadow-sm"
-        >
-          <span className="text-lg leading-none">+</span>
-          Add branch
-        </button>
+        {canCreate && (
+          <button
+            type="button"
+            onClick={focusAddForm}
+            className="btn-primary shrink-0 gap-1 rounded-xl shadow-sm"
+          >
+            <span className="text-lg leading-none">+</span>
+            Add branch
+          </button>
+        )}
       </div>
 
-      <div
+      {canCreate && <div
         ref={addCardRef}
         className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm"
       >
@@ -296,7 +301,7 @@ export default function AcademyBranchesPage() {
             </button>
           </div>
         </form>
-      </div>
+      </div>}
 
       <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-neutral-200/80 p-4 sm:flex-row sm:items-center sm:justify-between md:p-5">
@@ -398,6 +403,7 @@ export default function AcademyBranchesPage() {
                     </td>
                     <td className="whitespace-nowrap text-neutral-700">{formatDateAdded(b.createdAt)}</td>
                     <td className="relative w-12 text-right">
+                      {canDelete && (
                       <div ref={openMenuId === b.id ? menuRef : null} className="inline-block text-left">
                         <button
                           type="button"
@@ -421,6 +427,7 @@ export default function AcademyBranchesPage() {
                           </ul>
                         )}
                       </div>
+                      )}
                     </td>
                   </tr>
                 ))}

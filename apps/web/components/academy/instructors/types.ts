@@ -30,7 +30,7 @@ export interface InstructorDocument {
   id: string;
   instructorId: string;
   documentType: string;
-  fileUrl: string;
+  downloadUrl?: string;
   fileName: string;
   issueDate: string | null;
   expiryDate: string | null;

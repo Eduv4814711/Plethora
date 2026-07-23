@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { resolvePrivateStorageKey } from "../private-download.js";
 import { normalizeStorageKey, persistWithUploadedFileRollback, storage } from "../storage.js";
 
 describe("normalizeStorageKey", () => {
@@ -33,6 +34,34 @@ describe("storage.resolveKeyFromUrl", () => {
   it("rejects external and path-traversal URLs", () => {
     expect(storage.resolveKeyFromUrl("https://example.com/file.pdf")).toBeNull();
     expect(storage.resolveKeyFromUrl("/uploads/../../secret")).toBeNull();
+  });
+});
+
+describe("resolvePrivateStorageKey", () => {
+  it("accepts only keys beneath an explicitly allowed tenant prefix", () => {
+    expect(
+      resolvePrivateStorageKey(
+        "/uploads/documents/company-1/file.pdf",
+        ["documents/company-1"]
+      )
+    ).toBe("documents/company-1/file.pdf");
+    expect(
+      resolvePrivateStorageKey(
+        "/uploads/documents/company-2/file.pdf",
+        ["documents/company-1"]
+      )
+    ).toBeNull();
+  });
+
+  it("rejects traversal and external references", () => {
+    expect(
+      resolvePrivateStorageKey("/uploads/documents/company-1/../../secret", [
+        "documents/company-1",
+      ])
+    ).toBeNull();
+    expect(
+      resolvePrivateStorageKey("https://example.com/private.pdf", ["documents/company-1"])
+    ).toBeNull();
   });
 });
 

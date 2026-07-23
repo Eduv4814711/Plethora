@@ -2,8 +2,9 @@ import type {
   Prisma,
   SiteRosterShiftCode,
   SiteRosterGeneratedSource,
-  UserRole,
 } from "@prisma/client";
+import { hasCapability } from "../../lib/capabilities.js";
+import type { AuthenticatedUser } from "../../lib/types.js";
 import { prisma } from "../../lib/prisma.js";
 import {
   getRosterPeriodCalendar,
@@ -43,11 +44,11 @@ export type RosterActionPermissions = {
   canUseAdvancedEditor: boolean;
 };
 
-export function rosterActionPermissions(role: UserRole): RosterActionPermissions {
-  const canManageBaseline = role === "admin" || role === "operations_manager";
+export function rosterActionPermissions(user: AuthenticatedUser): RosterActionPermissions {
+  const canManageBaseline = hasCapability(user, "/rostering", "edit");
   return {
     canManageBaseline,
-    canManageExceptions: canManageBaseline || role === "supervisor",
+    canManageExceptions: hasCapability(user, "/rostering", "approve"),
     canUseAdvancedEditor: canManageBaseline,
   };
 }
@@ -408,7 +409,9 @@ export async function reconcileRosterContinuityForSite(
 
   return prisma.$transaction(
     async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`roster-continuity:${siteId}`}))`;
+      await tx.$queryRaw`
+        SELECT pg_advisory_xact_lock(hashtext(${`roster-continuity:${siteId}`})) IS NULL AS acquired
+      `;
       const site = await tx.site.findFirst({
         where: { id: siteId, companyId },
         include: {
@@ -707,7 +710,7 @@ export async function reconcileRosterContinuityForSite(
               code: "CHANGE_FROZEN",
               guardId: item.guardId,
               dateKey: dateKey(item.date),
-              message: `A shift within the ${FREEZE_HOURS}-hour safety window needs manager review.`,
+              message: `A shift within the ${FREEZE_HOURS}-hour safety window needs authorized review.`,
             });
           }
           continue;
@@ -783,7 +786,7 @@ export async function reconcileRosterContinuityForSite(
             code: linked.startTime <= freezeBoundary ? "CHANGE_FROZEN" : "PROTECTED_SHIFT",
             guardId: stale.guardId,
             dateKey: dateKey(stale.rosterDate),
-            message: `An existing shift on ${dateKey(stale.rosterDate)} needs manager review before it can be changed.`,
+            message: `An existing shift on ${dateKey(stale.rosterDate)} needs authorized review before it can be changed.`,
           });
         }
       }
@@ -1124,7 +1127,7 @@ const CONTINUITY_STATE_RANK = {
   running: 3,
 } as const;
 
-export async function getContinuityOverview(companyId: string, role: UserRole) {
+export async function getContinuityOverview(companyId: string, user: AuthenticatedUser) {
   const [company, sites] = await Promise.all([
     prisma.company.findUnique({ where: { id: companyId }, select: { settings: true } }),
     prisma.site.findMany({
@@ -1216,12 +1219,12 @@ export async function getContinuityOverview(companyId: string, role: UserRole) {
       paused: rows.filter((site) => site.state === "paused").length,
       notSetup: rows.filter((site) => site.state === "not_setup").length,
     },
-    permissions: rosterActionPermissions(role),
+    permissions: rosterActionPermissions(user),
     sites: rows,
   };
 }
 
-export async function getContinuityStatus(companyId: string, siteId: string, role: UserRole) {
+export async function getContinuityStatus(companyId: string, siteId: string, user: AuthenticatedUser) {
   const site = await prisma.site.findFirst({
     where: { id: siteId, companyId },
     select: {
@@ -1277,7 +1280,7 @@ export async function getContinuityStatus(companyId: string, siteId: string, rol
       endDay: calendar.endDay,
     },
     guardCount: site._count.assignedGuards,
-    permissions: rosterActionPermissions(role),
+    permissions: rosterActionPermissions(user),
     maintainedThrough: site.rosterMaintainedThrough ? dateKey(site.rosterMaintainedThrough) : null,
     lastReconciledAt: site.rosterLastReconciledAt?.toISOString() ?? null,
     lastStatus: site.rosterLastReconciliationStatus,

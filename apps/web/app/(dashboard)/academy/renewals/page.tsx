@@ -1,5 +1,7 @@
 "use client";
 
+import { hasCapability } from "@/lib/permissions";
+
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
@@ -17,7 +19,8 @@ interface Alert {
 
 export default function AcademyRenewalsPage() {
   const { token, user } = useAuth();
-  const canManage = user?.role === "admin";
+  const canCreate = Boolean(user && hasCapability(user, "/academy", "create"));
+  const canDelete = Boolean(user && hasCapability(user, "/academy", "delete"));
   const [rows, setRows] = useState<Alert[]>([]);
   const [title, setTitle] = useState("");
   const [alertType, setAlertType] = useState("Accreditation expiry");
@@ -40,7 +43,7 @@ export default function AcademyRenewalsPage() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !title.trim() || !dueDate || !canManage) return;
+    if (!token || !title.trim() || !dueDate || !canCreate) return;
     setSaving(true);
     setError(null);
     try { await academyApi.createRenewal(token, { title: title.trim(), alertType, dueDate }); setTitle(""); setDueDate(""); load(); }
@@ -49,7 +52,7 @@ export default function AcademyRenewalsPage() {
   };
 
   const remove = async (id: string) => {
-    if (!token || !canManage) return;
+    if (!token || !canDelete) return;
     try { await academyApi.deleteRenewal(token, id); load(); }
     catch (e) { setError(e instanceof Error ? e.message : "Delete failed"); }
   };
@@ -72,7 +75,7 @@ export default function AcademyRenewalsPage() {
             <input id="renewal-type" className="input-modern rounded-xl" value={alertType} onChange={(e) => setAlertType(e.target.value)} />
           </label>
           <DateInput value={dueDate} onChange={setDueDate} className="input-modern" showToday ariaLabel="Alert due date" />
-          <Button type="submit" disabled={!canManage} loading={saving}>Add alert</Button>
+          <Button type="submit" disabled={!canCreate} loading={saving}>Add alert</Button>
         </form>
       </div>
 
@@ -88,7 +91,7 @@ export default function AcademyRenewalsPage() {
               ) : rows.length === 0 ? (
                 <TableEmptyRow colSpan={6} message="No renewal alerts have been created yet. Add expiry alerts to keep accreditation and documents current." />
               ) : (
-                rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{r.title}</td><td>{r.alertType}</td><td>{String(r.dueDate).slice(0,10)}</td><td><Badge variant={r.severity === "red" ? "error" : r.severity === "amber" ? "warning" : "success"}>{r.severity}</Badge></td><td>{r.status}</td><td className="text-right">{canManage && <Button variant="destructive" size="sm" onClick={() => remove(r.id)}>Delete</Button>}</td></tr>)
+                rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{r.title}</td><td>{r.alertType}</td><td>{String(r.dueDate).slice(0,10)}</td><td><Badge variant={r.severity === "red" ? "error" : r.severity === "amber" ? "warning" : "success"}>{r.severity}</Badge></td><td>{r.status}</td><td className="text-right">{canDelete && <Button variant="destructive" size="sm" onClick={() => remove(r.id)}>Delete</Button>}</td></tr>)
               )}
             </tbody>
           </table>

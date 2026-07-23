@@ -4,7 +4,10 @@ import { Prisma, type AcademyInstructorStatus } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
-import { normalizeModuleAccess } from "../../middleware/rbac.js";
+import { hasCapability } from "../../lib/capabilities.js";
+import { privateDownloadUrl, sendPrivateStoredFile } from "../../lib/private-download.js";
+import { authMiddleware } from "../../middleware/auth.js";
+import { requireCapability } from "../../middleware/authorization.js";
 import {
   academyProtect,
   ACADEMY_DOCUMENT_ALLOWED_TYPES,
@@ -12,6 +15,11 @@ import {
 } from "./constants.js";
 import { readStreamToBuffer, storage } from "../../lib/storage.js";
 import { INSTRUCTOR_RESTRICTED_FIELDS, canAccessSensitiveData, hasRestrictedFields, omitFields } from "../../lib/sensitive-data.js";
+import {
+  extensionForMime,
+  matchesMagicBytes,
+  sanitizeUploadFilename,
+} from "../../lib/upload-validation.js";
 const STATUS_VALUES = ["active", "inactive", "suspended", "contract_ended"] as const;
 const SORT_VALUES = [
   "newest",
@@ -222,40 +230,54 @@ function normalizeStringArray(v?: string[] | null): string[] | null {
   return out.length ? out : null;
 }
 
-function isFullAdmin(user: { role?: string; moduleAccess?: unknown }): boolean {
-  return user.role === "admin" && !normalizeModuleAccess(user.moduleAccess);
+type AcademyAccessSubject = { isOwner?: boolean; capabilities?: unknown; isActive?: boolean };
+
+function isOwner(user: AcademyAccessSubject): boolean {
+  return Boolean(user.isOwner);
 }
 
-function canEditInstructorRecords(user: { role?: string }): boolean {
-  return (
-    user.role === "admin" ||
-    user.role === "operations_manager" ||
-    user.role === "hr_payroll" ||
-    user.role === "controller"
-  );
+function canEditInstructorRecords(user: AcademyAccessSubject): boolean {
+  return hasCapability(user, "/academy", "edit");
 }
 
-function canManageComplianceDocuments(user: { role?: string }): boolean {
-  return user.role === "admin" || user.role === "operations_manager" || user.role === "hr_payroll";
+function canCreateInstructorRecords(user: AcademyAccessSubject): boolean {
+  return hasCapability(user, "/academy", "create");
 }
 
-function canArchiveOrDeleteInstructors(user: { role?: string }): boolean {
-  return user.role === "admin" || user.role === "operations_manager";
+function canManageComplianceDocuments(user: AcademyAccessSubject): boolean {
+  return hasCapability(user, "/academy", "approve");
 }
 
-function canHandleInstructorPrivateData(user: import("../../lib/types.js").JWTPayload) {
+function canArchiveOrDeleteInstructors(user: AcademyAccessSubject): boolean {
+  return hasCapability(user, "/academy", "delete");
+}
+
+function canHandleInstructorPrivateData(user: import("../../lib/types.js").AuthenticatedUser) {
   return canAccessSensitiveData(user, "/academy");
 }
-function sanitizeInstructor<T extends Record<string, unknown>>(row: T, user: import("../../lib/types.js").JWTPayload) {
+function sanitizeInstructor<T extends Record<string, unknown>>(row: T, user: import("../../lib/types.js").AuthenticatedUser) {
   return canHandleInstructorPrivateData(user) ? row : omitFields(row, INSTRUCTOR_RESTRICTED_FIELDS);
 }
-function rejectInstructorPrivateData(request: { user?: import("../../lib/types.js").JWTPayload; body: unknown }, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
+function rejectInstructorPrivateData(request: { user?: import("../../lib/types.js").AuthenticatedUser; body: unknown }, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
   if (canHandleInstructorPrivateData(request.user!) || !hasRestrictedFields(request.body, INSTRUCTOR_RESTRICTED_FIELDS)) return false;
   reply.code(403).send({ error: "Forbidden", message: "Sensitive instructor data is restricted to HR/payroll users" });
   return true;
 }
-function sanitizeInstructorDocument<T extends Record<string, unknown>>(row: T, user: import("../../lib/types.js").JWTPayload) {
-  return canHandleInstructorPrivateData(user) ? row : omitFields(row, ["fileUrl", "notes"]);
+function sanitizeInstructorDocument<
+  T extends Record<string, unknown> & { id: string; instructorId: string; fileUrl: string },
+>(row: T, user: import("../../lib/types.js").AuthenticatedUser) {
+  const { fileUrl: _fileUrl, ...metadata } = row;
+  const privateFieldsFiltered = canHandleInstructorPrivateData(user)
+    ? metadata
+    : omitFields(metadata, ["notes"]);
+  return hasCapability(user, "/academy", "export")
+    ? {
+        ...privateFieldsFiltered,
+        downloadUrl: privateDownloadUrl(
+          `/academy/instructors/${row.instructorId}/documents/${row.id}/download`
+        ),
+      }
+    : privateFieldsFiltered;
 }
 
 async function ensureAssignedBranchExists(companyId: string, assignedBranchId?: string | null): Promise<boolean> {
@@ -342,6 +364,10 @@ function complianceRiskWeight(v: string): number {
 }
 
 export async function academyInstructorsRoutes(app: FastifyInstance) {
+  const complianceProtect = [
+    authMiddleware,
+    requireCapability("/academy", "approve"),
+  ];
   app.get("/", { preHandler: academyProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const q = request.query as Record<string, string | undefined>;
@@ -518,18 +544,25 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
     return { instructors: paged.map((row) => sanitizeInstructor(row, request.user!)), total, limit, offset, summary };
   });
 
-  app.post("/bulk", { preHandler: academyProtect }, async (request, reply) => {
+  app.post("/bulk", { preHandler: authMiddleware }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
-    if (!canEditInstructorRecords(request.user ?? {})) {
-      return reply.code(403).send({ error: "Forbidden", message: "No permission to bulk update instructors" });
-    }
     const body = bulkActionSchema.safeParse(request.body);
     if (!body.success) {
       return reply.code(400).send({ error: "Validation error", details: body.error.flatten() });
     }
 
     const ids = [...new Set(body.data.ids)];
+    const action = body.data.action;
+    const permitted =
+      action === "archive" || action === "delete"
+        ? canArchiveOrDeleteInstructors(request.user ?? {})
+        : action === "mark_documents_requested"
+          ? canManageComplianceDocuments(request.user ?? {})
+          : canEditInstructorRecords(request.user ?? {});
+    if (!permitted) {
+      return reply.code(403).send({ error: "Forbidden", message: `No permission to ${action.replaceAll("_", " ")} instructors` });
+    }
     const existing = await prisma.academyInstructor.findMany({
       where: { companyId, id: { in: ids } },
       select: { id: true },
@@ -540,18 +573,12 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
 
     let count = 0;
     if (body.data.action === "archive") {
-      if (!canArchiveOrDeleteInstructors(request.user ?? {})) {
-        return reply.code(403).send({ error: "Forbidden", message: "No permission to archive instructors" });
-      }
       const result = await prisma.academyInstructor.updateMany({
         where: { companyId, id: { in: ids } },
         data: { archivedAt: new Date(), status: "inactive" },
       });
       count = result.count;
     } else if (body.data.action === "delete") {
-      if (!canArchiveOrDeleteInstructors(request.user ?? {})) {
-        return reply.code(403).send({ error: "Forbidden", message: "No permission to delete instructors" });
-      }
       const result = await prisma.academyInstructor.updateMany({
         where: { companyId, id: { in: ids } },
         data: { archivedAt: new Date(), status: "inactive" },
@@ -592,11 +619,6 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
       });
       count = result.count;
     } else if (body.data.action === "mark_documents_requested") {
-      if (!canManageComplianceDocuments(request.user ?? {})) {
-        return reply
-          .code(403)
-          .send({ error: "Forbidden", message: "No permission to manage compliance document requests" });
-      }
       const rows = await prisma.academyInstructor.findMany({
         where: { id: { in: ids }, companyId },
         select: { id: true, notes: true },
@@ -647,7 +669,29 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
     return { documents: documents.map((document) => sanitizeInstructorDocument(document, request.user!)) };
   });
 
-  app.post("/:id/documents", { preHandler: academyProtect }, async (request, reply) => {
+  app.get(
+    "/:id/documents/:documentId/download",
+    { preHandler: [authMiddleware, requireCapability("/academy", "export")] },
+    async (request, reply) => {
+      const companyId = request.user!.companyId;
+      const { id, documentId } = request.params as { id: string; documentId: string };
+      const document = await prisma.academyInstructorDocument.findFirst({
+        where: { id: documentId, instructorId: id, companyId, deletedAt: null },
+        select: { fileUrl: true, fileName: true },
+      });
+      if (!document) {
+        return reply.code(404).send({ error: "Not found", message: "Document not found" });
+      }
+      return sendPrivateStoredFile(reply, {
+        storedReference: document.fileUrl,
+        allowedPrefixes: [`academy/instructors/${companyId}/${id}`],
+        fileName: document.fileName,
+        mimeType: "application/octet-stream",
+      });
+    }
+  );
+
+  app.post("/:id/documents", { preHandler: complianceProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     if (!canHandleInstructorPrivateData(request.user!)) {
@@ -670,8 +714,7 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
     if (
       !ACADEMY_DOCUMENT_ALLOWED_TYPES.includes(
         mimetype as (typeof ACADEMY_DOCUMENT_ALLOWED_TYPES)[number]
-      ) &&
-      !mimetype.startsWith("image/")
+      )
     ) {
       return reply.code(400).send({
         error: "Invalid file type",
@@ -687,7 +730,7 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
     const verificationStatus =
       normalizeNullableString(q.verificationStatus ?? null) ?? "pending_review";
 
-    const ext = mimetype.split("/")[1]?.replace("jpeg", "jpg") || "bin";
+    const ext = extensionForMime(mimetype);
     const filename = `${randomUUID()}.${ext}`;
     const storageKey = `academy/instructors/${companyId}/${id}/${filename}`;
 
@@ -705,6 +748,13 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
       return reply.code(500).send({ error: "Upload failed", message: "Could not read the file" });
     }
 
+    if (!matchesMagicBytes(fileBuffer, mimetype)) {
+      return reply.code(400).send({
+        error: "Invalid file",
+        message: "File content does not match the declared type",
+      });
+    }
+
     try {
       await storage.uploadFile({
         key: storageKey,
@@ -719,7 +769,7 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
     const size = fileBuffer.length;
     const fileUrl = storage.getAssetUrl(storageKey);
 
-    const originalName = data.filename || filename;
+    const originalName = sanitizeUploadFilename(data.filename || filename, mimetype);
     const document = await prisma.academyInstructorDocument.create({
       data: {
         companyId,
@@ -751,7 +801,7 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
     return reply.code(201).send({ document: sanitizeInstructorDocument(document, request.user!) });
   });
 
-  app.patch("/:id/documents/:documentId", { preHandler: academyProtect }, async (request, reply) => {
+  app.patch("/:id/documents/:documentId", { preHandler: complianceProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     if (!canHandleInstructorPrivateData(request.user!)) {
@@ -805,7 +855,7 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
     return { document: sanitizeInstructorDocument(next, request.user!) };
   });
 
-  app.delete("/:id/documents/:documentId", { preHandler: academyProtect }, async (request, reply) => {
+  app.delete("/:id/documents/:documentId", { preHandler: complianceProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     if (!canHandleInstructorPrivateData(request.user!)) {
@@ -893,7 +943,7 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
     if (rejectInstructorPrivateData(request, reply)) return;
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
-    if (!canEditInstructorRecords(request.user ?? {})) {
+    if (!canCreateInstructorRecords(request.user ?? {})) {
       return reply.code(403).send({ error: "Forbidden", message: "No permission to create instructors" });
     }
     const parsed = createSchema.safeParse(request.body);
@@ -1060,7 +1110,7 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
     return { instructor: sanitizeInstructor(instructor, request.user!) };
   });
 
-  app.post("/:id/archive", { preHandler: academyProtect }, async (request, reply) => {
+  app.post("/:id/archive", { preHandler: authMiddleware }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     if (!canArchiveOrDeleteInstructors(request.user ?? {})) {
@@ -1089,7 +1139,7 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post("/:id/restore", { preHandler: academyProtect }, async (request, reply) => {
+  app.post("/:id/restore", { preHandler: authMiddleware }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     if (!canArchiveOrDeleteInstructors(request.user ?? {})) {
@@ -1134,10 +1184,10 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
     if (!exists) return reply.code(404).send({ error: "Not found", message: "Instructor not found" });
 
     if (permanent) {
-      if (!isFullAdmin(request.user ?? {})) {
+      if (!isOwner(request.user!)) {
         return reply.code(403).send({
           error: "Forbidden",
-          message: "Only super admins can permanently delete an instructor",
+          message: "Only the company owner can permanently delete an instructor",
         });
       }
       await prisma.$transaction([

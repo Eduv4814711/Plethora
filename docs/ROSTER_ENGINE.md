@@ -82,7 +82,7 @@ Site states are `not_setup`, `running`, `needs_attention`, and `paused`. The dai
 
 - `/rostering` is the operations dashboard for site status, coverage horizons, and interruptions.
 - `/rostering/sites/:siteId` is the non-technical Overview and Schedule workspace.
-- `/rostering/sites/:siteId/advanced` contains spreadsheet, pattern, PDF, and manual publication tools for administrators and operations managers.
+- `/rostering/sites/:siteId/advanced` contains spreadsheet, pattern, PDF, and manual publication tools, each gated by the corresponding roster edit, export, or approve capability.
 - Supervisors can apply one-day exceptions and confirm replacements; controllers have read-only access.
 - Continuous sites publish through reconciliation, so the normal workspace does not expose a competing manual Publish action.
 
@@ -139,7 +139,7 @@ Labels always use the **month/year of `periodEnd`**. Period key: `YYYY-MM` of th
 1. Daily cron → `POST /internal/cron/auto-roster` (Bearer `CRON_SECRET`).
 2. For each auto-enabled site: `generateRosterPlan` for the roster window.
 3. If `coveragePercent >= autoRosterMinCoveragePercent` → `applyRosterPlan` with `replaceExisting: true` (only `created`/`assigned` shifts in range).
-4. Otherwise → `RosterAutomationRun` with `status: pending_review` and full `planSnapshot` for manager review.
+4. Otherwise → `RosterAutomationRun` with `status: pending_review` and full `planSnapshot` for a user with roster approval access.
 
 Immediate triggers (v1): enabling auto-roster on a site, or changing payroll calendar settings.
 

@@ -45,7 +45,17 @@ export interface EmployeeGroup {
   sortOrder: number;
 }
 
-export function PayrollConfig({ token }: { token: string }) {
+export function PayrollConfig({
+  token,
+  canCreate,
+  canEdit,
+  canDelete,
+}: {
+  token: string;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+}) {
   const [groups, setGroups] = useState<EmployeeGroup[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [grades, setGrades] = useState<PayGrade[]>([]);
@@ -145,24 +155,36 @@ export function PayrollConfig({ token }: { token: string }) {
         )}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <PayGradesSection grades={grades} token={token} onRefresh={load} groupId={selectedGroupId} />
+        <PayGradesSection
+          grades={grades}
+          token={token}
+          onRefresh={load}
+          groupId={selectedGroupId}
+          canCreate={canCreate}
+          canDelete={canDelete}
+        />
         <PayRulesSection
           payRules={payRules}
           token={token}
           onRefresh={load}
           groupId={selectedGroupId}
+          canEdit={canEdit}
         />
         <EarningsRulesSection
           earnings={earnings}
           token={token}
           onRefresh={load}
           groupId={selectedGroupId}
+          canCreate={canCreate}
+          canDelete={canDelete}
         />
         <DeductionRulesSection
           deductions={deductions}
           token={token}
           onRefresh={load}
           groupId={selectedGroupId}
+          canCreate={canCreate}
+          canDelete={canDelete}
         />
       </div>
     </div>
@@ -174,11 +196,15 @@ function PayGradesSection({
   token,
   onRefresh,
   groupId,
+  canCreate,
+  canDelete,
 }: {
   grades: PayGrade[];
   token: string;
   onRefresh: () => void;
   groupId?: string | null;
+  canCreate: boolean;
+  canDelete: boolean;
 }) {
   const [name, setName] = useState("");
   const [hourlyRate, setHourlyRate] = useState("");
@@ -187,6 +213,7 @@ function PayGradesSection({
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canCreate) return;
     setSaving(true);
     try {
       const body: Record<string, unknown> = { name: name.trim(), hourlyRate: parseFloat(hourlyRate) };
@@ -208,6 +235,7 @@ function PayGradesSection({
   };
 
   const handleDelete = async (id: string) => {
+    if (!canDelete) return;
     const confirmed = await confirm({
       title: "Delete pay grade?",
       message: "This removes the pay grade if it is not currently in use.",
@@ -228,7 +256,7 @@ function PayGradesSection({
     <div className={CONFIG_SECTION_CLASS}>
       {confirmDialog}
       <h3 className="label-text mb-3">Pay grades</h3>
-      <form onSubmit={handleAdd} className="flex gap-2 mb-3">
+      {canCreate && <form onSubmit={handleAdd} className="flex gap-2 mb-3">
         <input
           type="text"
           value={name}
@@ -250,14 +278,14 @@ function PayGradesSection({
         <button type="submit" disabled={saving} className="btn-secondary text-xs py-1.5 px-2">
           {saving ? "…" : "Add"}
         </button>
-      </form>
+      </form>}
       <div className="space-y-1">
         {grades.map((g) => (
           <div key={g.id} className="flex items-center justify-between rounded px-2 py-1.5 text-sm hover:bg-neutral-50">
             <span className="text-black">{g.name}</span>
             <span className="flex items-center gap-2 font-mono text-neutral-600">
               R{Number(g.hourlyRate).toFixed(2)}/hr
-              <button type="button" onClick={() => handleDelete(g.id)} className="text-red-600 hover:text-red-700 text-xs" aria-label={`Delete ${g.name}`}>×</button>
+              {canDelete && <button type="button" onClick={() => handleDelete(g.id)} className="text-red-600 hover:text-red-700 text-xs" aria-label={`Delete ${g.name}`}>×</button>}
             </span>
           </div>
         ))}
@@ -272,11 +300,13 @@ function PayRulesSection({
   token,
   onRefresh,
   groupId,
+  canEdit,
 }: {
   payRules: PayRule[];
   token: string;
   onRefresh: () => void;
   groupId?: string | null;
+  canEdit: boolean;
 }) {
   const ruleLabels: Record<string, string> = {
     overtime: "Overtime multiplier",
@@ -290,6 +320,7 @@ function PayRulesSection({
   };
 
   const handleSave = async (ruleType: string, multiplier: number) => {
+    if (!canEdit) return;
     try {
       const url = groupId
         ? `/payroll/groups/${groupId}/pay-rules`
@@ -327,6 +358,7 @@ function PayRulesSection({
                   min="0"
                   max="10"
                   defaultValue={mult}
+                  disabled={!canEdit}
                   className="input-compact w-16"
                   onBlur={(e) => {
                     const v = parseFloat(e.target.value);
@@ -343,7 +375,7 @@ function PayRulesSection({
             No pay rules configured for this group.
           </p>
         )}
-        {groupId && ruleTypesToShow.length < 3 && (
+        {canEdit && groupId && ruleTypesToShow.length < 3 && (
           <AddPayRuleRow
             existingTypes={ruleTypesToShow}
             onRefresh={onRefresh}
@@ -466,11 +498,15 @@ function EarningsRulesSection({
   token,
   onRefresh,
   groupId,
+  canCreate,
+  canDelete,
 }: {
   earnings: EarningsRule[];
   token: string;
   onRefresh: () => void;
   groupId?: string | null;
+  canCreate: boolean;
+  canDelete: boolean;
 }) {
   const [name, setName] = useState("");
   const [type, setType] = useState<"fixed" | "percentage">("fixed");
@@ -486,6 +522,7 @@ function EarningsRulesSection({
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canCreate) return;
     setSaving(true);
     try {
       const body: Record<string, unknown> = {
@@ -513,6 +550,7 @@ function EarningsRulesSection({
   };
 
   const handleDelete = async (id: string) => {
+    if (!canDelete) return;
     const confirmed = await confirm({
       title: "Delete earnings rule?",
       message: "This removes the earnings rule if it is not currently in use.",
@@ -533,7 +571,7 @@ function EarningsRulesSection({
     <div className={CONFIG_SECTION_CLASS}>
       {confirmDialog}
       <h3 className="label-text mb-3">Earnings</h3>
-      <form onSubmit={handleAdd} className="flex flex-wrap gap-2 mb-3">
+      {canCreate && <form onSubmit={handleAdd} className="flex flex-wrap gap-2 mb-3">
         <input
           type="text"
           value={name}
@@ -557,14 +595,14 @@ function EarningsRulesSection({
           <option value="office">Off</option>
         </select>
         <button type="submit" disabled={saving} className="btn-secondary text-xs py-1.5 px-2">{saving ? "…" : "Add"}</button>
-      </form>
+      </form>}
       <div className="space-y-1">
         {earnings.map((e) => (
           <div key={e.id} className="flex items-center justify-between rounded px-2 py-1.5 text-sm hover:bg-neutral-50">
             <span className="text-black">{e.name}</span>
             <span className="flex items-center gap-2 font-mono text-neutral-600">
               {e.type === "fixed" ? `R${Number(e.amount || 0).toFixed(2)}` : `${Number(e.rate || 0)}%`}
-              <button type="button" onClick={() => handleDelete(e.id)} className="text-red-600 hover:text-red-700 text-xs" aria-label={`Delete ${e.name}`}>×</button>
+              {canDelete && <button type="button" onClick={() => handleDelete(e.id)} className="text-red-600 hover:text-red-700 text-xs" aria-label={`Delete ${e.name}`}>×</button>}
             </span>
           </div>
         ))}
@@ -579,11 +617,15 @@ function DeductionRulesSection({
   token,
   onRefresh,
   groupId,
+  canCreate,
+  canDelete,
 }: {
   deductions: DeductionRule[];
   token: string;
   onRefresh: () => void;
   groupId?: string | null;
+  canCreate: boolean;
+  canDelete: boolean;
 }) {
   const [name, setName] = useState("");
   const [type, setType] = useState<"fixed" | "percentage">("fixed");
@@ -599,6 +641,7 @@ function DeductionRulesSection({
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canCreate) return;
     setSaving(true);
     try {
       const body: Record<string, unknown> = {
@@ -626,6 +669,7 @@ function DeductionRulesSection({
   };
 
   const handleDelete = async (id: string) => {
+    if (!canDelete) return;
     const confirmed = await confirm({
       title: "Delete deduction rule?",
       message: "This removes the deduction rule if it is not currently in use.",
@@ -646,7 +690,7 @@ function DeductionRulesSection({
     <div className={CONFIG_SECTION_CLASS}>
       {confirmDialog}
       <h3 className="label-text mb-3">Deductions</h3>
-      <form onSubmit={handleAdd} className="flex flex-wrap gap-2 mb-3">
+      {canCreate && <form onSubmit={handleAdd} className="flex flex-wrap gap-2 mb-3">
         <input
           type="text"
           value={name}
@@ -670,14 +714,14 @@ function DeductionRulesSection({
           <option value="office">Off</option>
         </select>
         <button type="submit" disabled={saving} className="btn-secondary text-xs py-1.5 px-2">{saving ? "…" : "Add"}</button>
-      </form>
+      </form>}
       <div className="space-y-1">
         {deductions.map((d) => (
           <div key={d.id} className="flex items-center justify-between rounded px-2 py-1.5 text-sm hover:bg-neutral-50">
             <span className="text-black">{d.name}</span>
             <span className="flex items-center gap-2 font-mono text-neutral-600">
               {d.type === "fixed" ? `R${Number(d.amount || 0).toFixed(2)}` : `${Number(d.rate || 0)}%`}
-              <button type="button" onClick={() => handleDelete(d.id)} className="text-red-600 hover:text-red-700 text-xs" title="Delete" aria-label={`Delete ${d.name}`}>×</button>
+              {canDelete && <button type="button" onClick={() => handleDelete(d.id)} className="text-red-600 hover:text-red-700 text-xs" title="Delete" aria-label={`Delete ${d.name}`}>×</button>}
             </span>
           </div>
         ))}

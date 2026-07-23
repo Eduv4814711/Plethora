@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 
@@ -16,7 +16,7 @@ const updateEmployeeGroupSchema = createEmployeeGroupSchema.partial();
 export async function employeeGroupsRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"], { module: "/employees" }),
+    requireCrudCapability({ module: "/employees" }),
   ];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {

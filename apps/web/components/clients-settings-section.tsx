@@ -5,16 +5,19 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import {
   createClient,
+  listClientAccountCandidates,
   listClients,
   updateClient,
+  type ClientAccountCandidate,
   type ClientRecord,
 } from "@/lib/msr-api";
-import { listUsers, type UserListItem } from "@/lib/api";
 import { AlertBanner, PageHeader } from "@/components/ui";
+import { hasCapability } from "@/lib/permissions";
 
 export function ClientsSettingsSection({ token }: { token: string }) {
+  const { user } = useAuth();
   const [clients, setClients] = useState<ClientRecord[]>([]);
-  const [users, setUsers] = useState<UserListItem[]>([]);
+  const [users, setUsers] = useState<ClientAccountCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [name, setName] = useState("");
@@ -22,16 +25,18 @@ export function ClientsSettingsSection({ token }: { token: string }) {
   const [phone, setPhone] = useState("");
   const [userId, setUserId] = useState("");
   const [saving, setSaving] = useState(false);
+  const canCreateClients = Boolean(user && hasCapability(user, "/sites", "create"));
+  const canEditClients = Boolean(user && hasCapability(user, "/sites", "edit"));
 
   const refresh = useCallback(async () => {
     if (!token) return;
     try {
       const [c, u] = await Promise.all([
         listClients(token),
-        listUsers(token),
+        listClientAccountCandidates(token),
       ]);
       setClients(c);
-      setUsers(u.data.filter((x) => x.role === "client"));
+      setUsers(u);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load clients");
     }
@@ -88,7 +93,7 @@ export function ClientsSettingsSection({ token }: { token: string }) {
       />
       {error && <AlertBanner variant="error">{error}</AlertBanner>}
 
-      <form onSubmit={handleCreate} className="card-dashboard p-4 grid gap-3 sm:grid-cols-2">
+      {canCreateClients && <form onSubmit={handleCreate} className="card-dashboard p-4 grid gap-3 sm:grid-cols-2">
         <div>
           <label className="label-text block mb-1">Client name</label>
           <input className="input-modern w-full" value={name} onChange={(e) => setName(e.target.value)} required />
@@ -102,7 +107,7 @@ export function ClientsSettingsSection({ token }: { token: string }) {
           <input className="input-modern w-full" value={phone} onChange={(e) => setPhone(e.target.value)} />
         </div>
         <div>
-          <label className="label-text block mb-1">Portal user (client role)</label>
+          <label className="label-text block mb-1">Portal user (client account)</label>
           <select className="input-modern w-full" value={userId} onChange={(e) => setUserId(e.target.value)}>
             <option value="">None</option>
             {users.map((u) => (
@@ -115,7 +120,7 @@ export function ClientsSettingsSection({ token }: { token: string }) {
             {saving ? "Saving…" : "Add client"}
           </button>
         </div>
-      </form>
+      </form>}
 
       <ul className="space-y-2">
         {clients.map((c) => (
@@ -126,13 +131,15 @@ export function ClientsSettingsSection({ token }: { token: string }) {
                 {c.email || "No email"} · {c._count?.sites ?? 0} site(s)
               </p>
             </div>
-            <button
-              type="button"
-              className="btn-secondary text-sm py-1.5"
-              onClick={() => toggleActive(c)}
-            >
-              {c.isActive ? "Deactivate" : "Activate"}
-            </button>
+            {canEditClients && (
+              <button
+                type="button"
+                className="btn-secondary text-sm py-1.5"
+                onClick={() => toggleActive(c)}
+              >
+                {c.isActive ? "Deactivate" : "Activate"}
+              </button>
+            )}
           </li>
         ))}
         {clients.length === 0 && (

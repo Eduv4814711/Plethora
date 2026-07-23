@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { hasCapability } from "@/lib/permissions";
 import { listApprovals, reviewApproval, approvalEntityHref, type ApprovalRequest } from "@/lib/msr-api";
 import Link from "next/link";
 import { AlertBanner, Badge, EmptyState, PageHeader } from "@/components/ui";
@@ -29,7 +30,8 @@ function statusBadge(status: string) {
 }
 
 export default function ApprovalsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canApprove = Boolean(user && hasCapability(user, "/approvals", "approve"));
   const [items, setItems] = useState<ApprovalRequest[]>([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -40,7 +42,7 @@ export default function ApprovalsPage() {
   const [queryId, setQueryId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    if (!token) return;
+    if (!token || !canApprove) return;
     setError("");
     try {
       const result = await listApprovals(token, {
@@ -133,7 +135,7 @@ export default function ApprovalsPage() {
               {statusBadge(item.status)}
             </div>
 
-            {item.status === "PENDING" && (
+            {canApprove && item.status === "PENDING" && (
               <div className="mt-4 flex flex-wrap gap-2 border-t border-neutral-100 pt-3">
                 {approvalEntityHref(item) && (
                   <Link href={approvalEntityHref(item)!} className="btn-secondary text-sm py-1.5">

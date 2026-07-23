@@ -21,7 +21,6 @@
     "db:migrate:resolve-baseline-applied": "prisma migrate resolve --applied 20240101000000_baseline",
     "db:migrate:resolve-roster-v2-rolled-back": "prisma migrate resolve --rolled-back 20260627120000_roster_module_v2",
     "db:check-email-unique": "tsx prisma/check-duplicate-emails.ts",
-    "db:add-module-access": "prisma db execute --file prisma/sql/add_user_module_access_column.sql",
     "db:push": "prisma db push",
     "db:check": "node scripts/check-database.mjs",
     "db:seed": "tsx prisma/seed.ts",

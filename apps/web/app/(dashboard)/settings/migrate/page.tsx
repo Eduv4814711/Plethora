@@ -3,12 +3,11 @@
 import React, { useState, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
-import { isFullAdmin } from "@/lib/permissions";
+import { hasCapability } from "@/lib/permissions";
 import {
   downloadMigrationTemplate,
   migrationPreview,
   migrationImport,
-  migrationAdminBulkCreate,
   exportEmployees,
   exportSites,
   exportEmployeeGroups,
@@ -18,9 +17,13 @@ import {
 
 export default function MigratePage() {
   const { user, token } = useAuth();
-  const isFullAdminUser = user ? isFullAdmin(user) : false;
+  const canCreateTeam = Boolean(user && hasCapability(user, "/employees", "create"));
+  const canCreateSites = Boolean(user && hasCapability(user, "/sites", "create"));
+  const canExportTeam = Boolean(user && hasCapability(user, "/employees", "export"));
+  const canExportSites = Boolean(user && hasCapability(user, "/sites", "export"));
+  const canImportAny = canCreateTeam || canCreateSites;
+  const canExportAny = canExportTeam || canExportSites;
 
-  const [companiesFile, setCompaniesFile] = useState<File | null>(null);
   const [employeesFile, setEmployeesFile] = useState<File | null>(null);
   const [sitesFile, setSitesFile] = useState<File | null>(null);
   const [groupsFile, setGroupsFile] = useState<File | null>(null);
@@ -40,27 +43,20 @@ export default function MigratePage() {
   const [exportSitesLoading, setExportSitesLoading] = useState(false);
   const [exportGroupsLoading, setExportGroupsLoading] = useState(false);
 
-  const hasFiles = !!(
-    employeesFile ||
-    sitesFile ||
-    groupsFile ||
-    (isFullAdminUser && companiesFile)
-  );
+  const hasFiles = !!(employeesFile || sitesFile || groupsFile);
 
   const canImport =
     hasFiles &&
     preview &&
-    preview.companies.errors.length === 0 &&
     preview.employees.errors.length === 0 &&
     preview.sites.errors.length === 0 &&
     preview.groups.errors.length === 0 &&
     (preview.employees.validCount > 0 ||
       preview.sites.validCount > 0 ||
-      preview.groups.validCount > 0 ||
-      (isFullAdminUser && preview.companies.validCount > 0));
+      preview.groups.validCount > 0);
 
   const handleDownloadTemplate = useCallback(
-    async (type: "company" | "employees" | "sites" | "groups") => {
+    async (type: "employees" | "sites" | "groups") => {
       if (!token) return;
       setTemplateError(null);
       setExportError(null);
@@ -76,11 +72,7 @@ export default function MigratePage() {
   const handleValidate = useCallback(async () => {
     if (!token) return;
     if (!hasFiles) {
-      setPreviewError(
-        isFullAdminUser
-          ? "Upload companies.csv and/or team (employees.csv), sites.csv, or employee groups CSV"
-          : "Upload at least team (employees.csv), sites.csv, or employee groups CSV"
-      );
+      setPreviewError("Upload at least team (employees.csv), sites.csv, or employee groups CSV");
       return;
     }
 
@@ -89,7 +81,6 @@ export default function MigratePage() {
     setPreview(null);
     try {
       const res = await migrationPreview(token, {
-        companies: companiesFile ?? undefined,
         employees: employeesFile ?? undefined,
         sites: sitesFile ?? undefined,
         groups: groupsFile ?? undefined,
@@ -100,7 +91,7 @@ export default function MigratePage() {
     } finally {
       setPreviewLoading(false);
     }
-  }, [token, isFullAdminUser, companiesFile, employeesFile, sitesFile, groupsFile]);
+  }, [token, employeesFile, sitesFile, groupsFile]);
 
   const handleImport = useCallback(async () => {
     if (!token || !canImport) return;
@@ -109,28 +100,18 @@ export default function MigratePage() {
     setImportError(null);
     setImportResult(null);
     try {
-      if (isFullAdminUser && companiesFile) {
-        const res = await migrationAdminBulkCreate(token, {
-          companies: companiesFile,
-          employees: employeesFile ?? undefined,
-          sites: sitesFile ?? undefined,
-          groups: groupsFile ?? undefined,
-        });
-        setImportResult(res);
-      } else {
-        const res = await migrationImport(token, {
-          employees: employeesFile ?? undefined,
-          sites: sitesFile ?? undefined,
-          groups: groupsFile ?? undefined,
-        });
-        setImportResult(res);
-      }
+      const res = await migrationImport(token, {
+        employees: employeesFile ?? undefined,
+        sites: sitesFile ?? undefined,
+        groups: groupsFile ?? undefined,
+      });
+      setImportResult(res);
     } catch (err) {
       setImportError(err instanceof Error ? err.message : "Import failed");
     } finally {
       setImportLoading(false);
     }
-  }, [token, canImport, isFullAdminUser, companiesFile, employeesFile, sitesFile, groupsFile]);
+  }, [token, canImport, employeesFile, sitesFile, groupsFile]);
 
   const handleExportEmployees = useCallback(async () => {
     if (!token) return;
@@ -175,7 +156,6 @@ export default function MigratePage() {
   }, [token]);
 
   const totalErrors =
-    (preview?.companies.errors.length ?? 0) +
     (preview?.employees.errors.length ?? 0) +
     (preview?.sites.errors.length ?? 0) +
     (preview?.groups.errors.length ?? 0);
@@ -195,9 +175,8 @@ export default function MigratePage() {
         Bulk Import / Export
       </h1>
       <p className="text-neutral-600 dark:text-neutral-400 mb-6">
-        {isFullAdminUser
-          ? "Export team, sites, and employee groups to CSV, or upload CSV files to create multiple companies with team, sites, and groups. Download templates, validate, then import."
-          : "Export team, sites, and employee groups to CSV, or upload CSV files to import into your company. Download templates, validate, then import."}
+        Export team, sites, and employee groups to CSV, or upload CSV files to
+        import into your company. Download templates, validate, then import.
       </p>
 
       {(templateError || exportError) && (
@@ -207,7 +186,7 @@ export default function MigratePage() {
       )}
 
       <div className="space-y-6">
-        <section className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-600 p-6">
+        {canExportAny && <section className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-600 p-6">
           <h2 className="text-lg font-semibold text-neutral-800 dark:text-white mb-4">
             Export
           </h2>
@@ -215,115 +194,98 @@ export default function MigratePage() {
             Download your team members, sites, and employee groups as CSV files. Exported files match the import format for round-trip compatibility.
           </p>
           <div className="flex flex-wrap gap-3">
-            <button
+            {canExportTeam && <button
               type="button"
               onClick={handleExportEmployees}
               disabled={exportEmployeesLoading}
               className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {exportEmployeesLoading ? "Exporting..." : "Export team members (employees.csv)"}
-            </button>
-            <button
+            </button>}
+            {canExportSites && <button
               type="button"
               onClick={handleExportSites}
               disabled={exportSitesLoading}
               className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {exportSitesLoading ? "Exporting..." : "Export sites (sites.csv)"}
-            </button>
-            <button
+            </button>}
+            {canExportTeam && <button
               type="button"
               onClick={handleExportGroups}
               disabled={exportGroupsLoading}
               className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {exportGroupsLoading ? "Exporting..." : "Export employee groups (CSV)"}
-            </button>
+            </button>}
           </div>
-        </section>
+        </section>}
 
-        <section className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-600 p-6">
+        {canImportAny && <section className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-600 p-6">
           <h2 className="text-lg font-semibold text-neutral-800 dark:text-white mb-4">
             Step 1: Download templates
           </h2>
           <div className="flex flex-wrap gap-3">
-            {isFullAdminUser && (
-              <button
-                type="button"
-                onClick={() => handleDownloadTemplate("company")}
-                className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors"
-              >
-                Download companies.csv
-              </button>
-            )}
-            <button
+            {canCreateTeam && <button
               type="button"
               onClick={() => handleDownloadTemplate("employees")}
               className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors"
             >
               Download team template (employees.csv)
-            </button>
-            <button
+            </button>}
+            {canCreateSites && <button
               type="button"
               onClick={() => handleDownloadTemplate("sites")}
               className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors"
             >
               Download sites.csv
-            </button>
-            <button
+            </button>}
+            {canCreateTeam && <button
               type="button"
               onClick={() => handleDownloadTemplate("groups")}
               className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors"
             >
               Download employee groups template
-            </button>
+            </button>}
           </div>
           <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
             The team template includes an instruction row under the headers. Enter names in separate{" "}
             <span className="font-medium">First Name</span> and <span className="font-medium">Last Name</span> columns for
             clean imports.
           </p>
-        </section>
+        </section>}
 
-        <section className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-600 p-6">
+        {canImportAny && <section className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-600 p-6">
           <h2 className="text-lg font-semibold text-neutral-800 dark:text-white mb-4">
             Step 2: Upload your CSV files
           </h2>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {isFullAdminUser && (
-              <FileInput
-                label="Companies (required for admin)"
-                accept=".csv"
-                file={companiesFile}
-                onChange={setCompaniesFile}
-              />
-            )}
-            <FileInput
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {canCreateTeam && <FileInput
               label="Team"
               accept=".csv"
               file={employeesFile}
               onChange={setEmployeesFile}
-            />
-            <FileInput
+            />}
+            {canCreateSites && <FileInput
               label="Sites"
               accept=".csv"
               file={sitesFile}
               onChange={setSitesFile}
-            />
-            <FileInput
+            />}
+            {canCreateTeam && <FileInput
               label="Employee groups"
               accept=".csv"
               file={groupsFile}
               onChange={setGroupsFile}
-            />
+            />}
           </div>
           <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
             Max 5MB per file. Max 1000 team members, 200 sites, 500 employee groups per import. Groups CSV columns: Name
             (required), Description (optional), Sort Order (optional). Existing group names are skipped on import.
           </p>
-        </section>
+        </section>}
 
-        <section className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-600 p-6">
+        {canImportAny && <section className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-600 p-6">
           <h2 className="text-lg font-semibold text-neutral-800 dark:text-white mb-4">
             Step 3: Validate and import
           </h2>
@@ -362,14 +324,6 @@ export default function MigratePage() {
             <div className="space-y-4">
               <div className="flex flex-wrap gap-4 text-sm">
                 <span className="text-neutral-600 dark:text-neutral-400">
-                  Companies: {preview.companies.validCount} valid
-                  {preview.companies.errors.length > 0 && (
-                    <span className="text-red-600 dark:text-red-400 ml-1">
-                      ({preview.companies.errors.length} errors)
-                    </span>
-                  )}
-                </span>
-                <span className="text-neutral-600 dark:text-neutral-400">
                   Team: {preview.employees.validCount} valid
                   {preview.employees.errors.length > 0 && (
                     <span className="text-red-600 dark:text-red-400 ml-1">
@@ -407,7 +361,6 @@ export default function MigratePage() {
                     </thead>
                     <tbody>
                       {[
-                        ...preview.companies.errors.map((e) => ({ ...e, entity: "Company" })),
                         ...preview.employees.errors.map((e) => ({ ...e, entity: "Team member" })),
                         ...preview.sites.errors.map((e) => ({ ...e, entity: "Site" })),
                         ...preview.groups.errors.map((e) => ({ ...e, entity: "Employee group" })),
@@ -429,9 +382,6 @@ export default function MigratePage() {
             <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-sm border border-green-200 dark:border-green-800/50">
               <h3 className="font-medium text-security-navy-800 dark:text-security-navy-200 mb-2">Import complete</h3>
               <ul className="text-sm text-security-navy-700 dark:text-security-navy-300 space-y-1">
-                {importResult.companiesCreated > 0 && (
-                  <li>Companies created: {importResult.companiesCreated}</li>
-                )}
                 <li>Team members created: {importResult.employeesCreated}</li>
                 <li>Sites created: {importResult.sitesCreated}</li>
                 <li>
@@ -450,7 +400,12 @@ export default function MigratePage() {
               )}
             </div>
           )}
-        </section>
+        </section>}
+        {!canImportAny && !canExportAny && (
+          <div className="rounded-sm border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            Team or Sites create/export access is required for bulk migration tools.
+          </div>
+        )}
       </div>
     </div>
   );

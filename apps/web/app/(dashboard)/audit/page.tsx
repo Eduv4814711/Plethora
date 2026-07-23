@@ -50,7 +50,7 @@ export default function AuditPage() {
         <h1 className="text-2xl font-bold text-neutral-800 dark:text-white mb-6">
           Audit Logs
         </h1>
-        <p className="text-red-600">Access denied. Admin role required.</p>
+        <p className="text-red-600">Access denied. Audit viewing access is required.</p>
       </div>
     );
   }

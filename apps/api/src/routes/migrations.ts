@@ -2,11 +2,9 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { readFile } from "fs/promises";
 import { join } from "path";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireAdmin } from "../middleware/rbac.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requireCapability } from "../middleware/authorization.js";
 import { createAuditLog } from "../lib/audit.js";
 import {
-  parseAndValidateCompanies,
   parseAndValidateEmployees,
   parseAndValidateSites,
   parseAndValidateEmployeeGroups,
@@ -15,16 +13,40 @@ import {
   exportEmployeesToCsv,
   exportSitesToCsv,
   exportEmployeeGroupsToCsv,
-  type ValidatedCompany,
   type ValidatedEmployee,
   type ValidatedSite,
   type ValidatedEmployeeGroup,
 } from "../services/migration.service.js";
 import { prisma } from "../lib/prisma.js";
+import { hasCapability, type Capability } from "../lib/capabilities.js";
 
 const TEMPLATES_DIR = join(process.cwd(), "src", "templates");
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MIGRATION_FILE_SIZE = 10 * 1024 * 1024; // 10MB for multipart (3 files)
+
+const migrationModuleByType = {
+  employees: "/employees",
+  groups: "/employees",
+  sites: "/sites",
+} as const;
+
+function denyMissingMigrationCapabilities(
+  request: FastifyRequest,
+  reply: import("fastify").FastifyReply,
+  fileTypes: string[],
+  capability: Capability
+): boolean {
+  const denied = fileTypes.filter((type) => {
+    const modulePath = migrationModuleByType[type as keyof typeof migrationModuleByType];
+    return !modulePath || !hasCapability(request.user!, modulePath, capability);
+  });
+  if (denied.length === 0) return false;
+  reply.code(403).send({
+    error: "Forbidden",
+    message: `${capability} access is required for: ${denied.join(", ")}`,
+  });
+  return true;
+}
 
 /** Collect multipart files by field name. Uses request.files() for multiple files. */
 async function collectMultipartFiles(
@@ -46,19 +68,12 @@ async function collectMultipartFiles(
 }
 
 export async function migrationsRoutes(app: FastifyInstance) {
-  const protect = [
-    authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"], { module: "/settings" }),
-  ];
-  const adminProtect = [authMiddleware, requireAdmin()];
-
-  // GET /migrations/templates/:type - Download CSV template (same module gate as other migration routes)
-  app.get("/templates/:type", { preHandler: protect }, async (request, reply) => {
+  // Migration access follows the records being imported/exported; settings
+  // access alone must not grant bulk access to Team or Sites data.
+  app.get("/templates/:type", { preHandler: authMiddleware }, async (request, reply) => {
     const { type } = request.params as { type: string };
     const filename =
-      type === "company"
-        ? "company-import-template.csv"
-        : type === "employees"
+      type === "employees"
           ? "employees-import-template.csv"
           : type === "sites"
             ? "sites-import-template.csv"
@@ -69,8 +84,9 @@ export async function migrationsRoutes(app: FastifyInstance) {
     if (!filename) {
       return reply
         .code(400)
-        .send({ error: "Invalid template type", message: "Use: company, employees, sites, or groups" });
+        .send({ error: "Invalid template type", message: "Use: employees, sites, or groups" });
     }
+    if (denyMissingMigrationCapabilities(request, reply, [type], "create")) return;
 
     const filepath = join(TEMPLATES_DIR, filename);
     try {
@@ -86,7 +102,7 @@ export async function migrationsRoutes(app: FastifyInstance) {
   });
 
   // GET /migrations/export/employees - Download employees as CSV
-  app.get("/export/employees", { preHandler: protect }, async (request, reply) => {
+  app.get("/export/employees", { preHandler: [authMiddleware, requireCapability("/employees", "export")] }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const company = await prisma.company.findUnique({
       where: { id: companyId },
@@ -101,7 +117,7 @@ export async function migrationsRoutes(app: FastifyInstance) {
   });
 
   // GET /migrations/export/sites - Download sites as CSV
-  app.get("/export/sites", { preHandler: protect }, async (request, reply) => {
+  app.get("/export/sites", { preHandler: [authMiddleware, requireCapability("/sites", "export")] }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const company = await prisma.company.findUnique({
       where: { id: companyId },
@@ -116,7 +132,7 @@ export async function migrationsRoutes(app: FastifyInstance) {
   });
 
   // GET /migrations/export/groups - Employee groups as CSV (same columns as import template)
-  app.get("/export/groups", { preHandler: protect }, async (request, reply) => {
+  app.get("/export/groups", { preHandler: [authMiddleware, requireCapability("/employees", "export")] }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const csv = await exportEmployeeGroupsToCsv(companyId);
     return reply
@@ -126,40 +142,34 @@ export async function migrationsRoutes(app: FastifyInstance) {
   });
 
   // POST /migrations/preview - Validate upload, return preview + errors (no DB write)
-  app.post("/preview", { preHandler: protect }, async (request, reply) => {
-    const fieldNames = ["companies", "employees", "sites", "groups"];
+  app.post("/preview", { preHandler: authMiddleware }, async (request, reply) => {
+    const fieldNames = ["employees", "sites", "groups"];
     const filesCollected = await collectMultipartFiles(request, fieldNames);
+    if (
+      denyMissingMigrationCapabilities(
+        request,
+        reply,
+        Object.keys(filesCollected),
+        "create"
+      )
+    ) return;
 
-    let companies = { valid: [] as ValidatedCompany[], errors: [] as { row: number; field: string; value: string; message: string }[] };
     let employees = { valid: [] as ValidatedEmployee[], errors: [] as { row: number; field: string; value: string; message: string }[] };
     let sites = { valid: [] as ValidatedSite[], errors: [] as { row: number; field: string; value: string; message: string }[] };
     let groups = { valid: [] as ValidatedEmployeeGroup[], errors: [] as { row: number; field: string; value: string; message: string }[] };
-
-    const isAdmin = request.user!.role === "admin";
-
-    if (filesCollected.companies) {
-      if (!checkFileSize(filesCollected.companies, MAX_FILE_BYTES)) {
-        return reply.code(400).send({ error: "File too large", message: "companies.csv must be under 5MB" });
-      }
-      companies = parseAndValidateCompanies(filesCollected.companies);
-    }
 
     if (filesCollected.employees) {
       if (!checkFileSize(filesCollected.employees, MAX_FILE_BYTES)) {
         return reply.code(400).send({ error: "File too large", message: "employees.csv must be under 5MB" });
       }
-      employees = parseAndValidateEmployees(filesCollected.employees, {
-        requireCompanyName: isAdmin && !!filesCollected.companies,
-      });
+      employees = parseAndValidateEmployees(filesCollected.employees);
     }
 
     if (filesCollected.sites) {
       if (!checkFileSize(filesCollected.sites, MAX_FILE_BYTES)) {
         return reply.code(400).send({ error: "File too large", message: "sites.csv must be under 5MB" });
       }
-      sites = parseAndValidateSites(filesCollected.sites, {
-        requireCompanyName: isAdmin && !!filesCollected.companies,
-      });
+      sites = parseAndValidateSites(filesCollected.sites);
     }
 
     if (filesCollected.groups) {
@@ -170,7 +180,6 @@ export async function migrationsRoutes(app: FastifyInstance) {
     }
 
     return reply.send({
-      companies: { validCount: companies.valid.length, valid: companies.valid, errors: companies.errors },
       employees: { validCount: employees.valid.length, valid: employees.valid, errors: employees.errors },
       sites: { validCount: sites.valid.length, valid: sites.valid, errors: sites.errors },
       groups: { validCount: groups.valid.length, valid: groups.valid, errors: groups.errors },
@@ -178,7 +187,7 @@ export async function migrationsRoutes(app: FastifyInstance) {
   });
 
   // POST /migrations/import - Company self-migration (employees + sites + employee groups)
-  app.post("/import", { preHandler: protect }, async (request, reply) => {
+  app.post("/import", { preHandler: authMiddleware }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const filesCollected = await collectMultipartFiles(request, ["employees", "sites", "groups"]);
 
@@ -188,6 +197,14 @@ export async function migrationsRoutes(app: FastifyInstance) {
         message: "Upload at least employees.csv, sites.csv, or employee groups CSV",
       });
     }
+    if (
+      denyMissingMigrationCapabilities(
+        request,
+        reply,
+        Object.keys(filesCollected),
+        "create"
+      )
+    ) return;
 
     let employees = { valid: [] as ValidatedEmployee[], errors: [] as { row: number; field: string; value: string; message: string }[] };
     let sites = { valid: [] as ValidatedSite[], errors: [] as { row: number; field: string; value: string; message: string }[] };
@@ -197,14 +214,14 @@ export async function migrationsRoutes(app: FastifyInstance) {
       if (!checkFileSize(filesCollected.employees, MAX_FILE_BYTES)) {
         return reply.code(400).send({ error: "File too large", message: "employees.csv must be under 5MB" });
       }
-      employees = parseAndValidateEmployees(filesCollected.employees, { requireCompanyName: false });
+      employees = parseAndValidateEmployees(filesCollected.employees);
     }
 
     if (filesCollected.sites) {
       if (!checkFileSize(filesCollected.sites, MAX_FILE_BYTES)) {
         return reply.code(400).send({ error: "File too large", message: "sites.csv must be under 5MB" });
       }
-      sites = parseAndValidateSites(filesCollected.sites, { requireCompanyName: false });
+      sites = parseAndValidateSites(filesCollected.sites);
     }
 
     if (filesCollected.groups) {
@@ -241,13 +258,5 @@ export async function migrationsRoutes(app: FastifyInstance) {
     });
 
     return reply.send(result);
-  });
-
-  // POST /migrations/admin/bulk-create - Disabled: no platform admin; new companies via POST /auth/onboard only
-  app.post("/admin/bulk-create", { preHandler: adminProtect }, async (_request, reply) => {
-    return reply.code(403).send({
-      error: "Forbidden",
-      message: "Creating multiple companies is not available. New companies sign up via the Register page.",
-    });
   });
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
+import { hasCapability } from "@/lib/permissions";
 
 interface StudentRow {
   id: string;
@@ -28,7 +29,8 @@ function AdminFeeBadge({ status }: { status?: string }) {
 }
 
 export default function AcademyStudentsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canCreate = Boolean(user && hasCapability(user, "/academy", "create"));
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -62,7 +64,7 @@ export default function AcademyStudentsPage() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !firstName.trim() || !lastName.trim()) return;
+    if (!token || !firstName.trim() || !lastName.trim() || !canCreate) return;
     setError(null);
     try {
       const { student } = await academyApi.createStudent(token, {
@@ -88,16 +90,16 @@ export default function AcademyStudentsPage() {
           <h1 className="mt-1 text-2xl font-semibold">Students</h1>
           <p className="text-sm text-neutral-600">{total} total</p>
         </div>
-        <Link href="/academy/intake" className="btn-primary px-3 py-1.5 text-xs">
+        {canCreate && <Link href="/academy/intake" className="btn-primary px-3 py-1.5 text-xs">
           New intake
-        </Link>
+        </Link>}
       </div>
 
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
-      <form onSubmit={create} className="flex flex-wrap items-end gap-2 rounded-lg border border-neutral-300 p-4">
+      {canCreate && <form onSubmit={create} className="flex flex-wrap items-end gap-2 rounded-lg border border-neutral-300 p-4">
         <div>
           <label className="label-text mb-1 block">First name</label>
           <input
@@ -117,7 +119,7 @@ export default function AcademyStudentsPage() {
         <button type="submit" className="btn-primary px-3 py-1.5 text-xs" disabled={!firstName.trim() || !lastName.trim()}>
           Create student
         </button>
-      </form>
+      </form>}
 
       <div>
         <label className="label-text mb-1 block">Search (min 2 characters)</label>

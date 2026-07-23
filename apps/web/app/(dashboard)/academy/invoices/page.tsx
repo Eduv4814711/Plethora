@@ -1,5 +1,7 @@
 "use client";
 
+import { hasCapability } from "@/lib/permissions";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
@@ -48,7 +50,7 @@ function statusBadgeClass(status: string): string {
 
 export default function AcademyInvoicesPage() {
   const { token, user } = useAuth();
-  const canManage = user?.role === "admin";
+  const canCreate = Boolean(user && hasCapability(user, "/academy", "create"));
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [students, setStudents] = useState<StudentOpt[]>([]);
   const [enrolments, setEnrolments] = useState<EnrolOpt[]>([]);
@@ -107,7 +109,7 @@ export default function AcademyInvoicesPage() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !studentId || !unitAmount.trim() || !canManage) return;
+    if (!token || !studentId || !unitAmount.trim() || !canCreate) return;
     setError(null);
     setSaving(true);
     try {
@@ -137,9 +139,9 @@ export default function AcademyInvoicesPage() {
         <h1 className="mt-1 text-2xl font-semibold">Invoices</h1>
       </div>
 
-      {!canManage && (
+      {!canCreate && (
         <div className="rounded-lg border border-neutral-300 bg-neutral-100/50 px-3 py-2 text-sm">
-          Read-only: only admins can create invoices.
+          Read-only: invoice creation has not been granted for your account.
         </div>
       )}
 
@@ -154,7 +156,7 @@ export default function AcademyInvoicesPage() {
             className="input-compact w-full"
             value={studentId}
             onChange={(e) => setStudentId(e.target.value)}
-            disabled={!canManage || saving}
+            disabled={!canCreate || saving}
           >
             {students.map((s) => (
               <option key={s.id} value={s.id}>
@@ -169,7 +171,7 @@ export default function AcademyInvoicesPage() {
             className="input-compact w-full"
             value={enrolmentId}
             onChange={(e) => setEnrolmentId(e.target.value)}
-            disabled={!canManage || saving}
+            disabled={!canCreate || saving}
           >
             <option value="">— None —</option>
             {enrolments.map((en) => (
@@ -186,7 +188,7 @@ export default function AcademyInvoicesPage() {
             onChange={setInvoiceDate}
             className="input-compact"
             showToday
-            disabled={!canManage || saving}
+            disabled={!canCreate || saving}
             ariaLabel="Invoice date"
           />
         </div>
@@ -197,7 +199,7 @@ export default function AcademyInvoicesPage() {
             onChange={setDueDate}
             className="input-compact"
             showToday
-            disabled={!canManage || saving}
+            disabled={!canCreate || saving}
             ariaLabel="Invoice due date"
           />
         </div>
@@ -207,7 +209,7 @@ export default function AcademyInvoicesPage() {
             className="input-compact w-full"
             value={discount}
             onChange={(e) => setDiscount(e.target.value)}
-            disabled={!canManage || saving}
+            disabled={!canCreate || saving}
           />
         </div>
         <div className="sm:col-span-2">
@@ -216,7 +218,7 @@ export default function AcademyInvoicesPage() {
             className="input-compact w-full"
             value={lineDesc}
             onChange={(e) => setLineDesc(e.target.value)}
-            disabled={!canManage || saving}
+            disabled={!canCreate || saving}
           />
         </div>
         <div>
@@ -226,11 +228,11 @@ export default function AcademyInvoicesPage() {
             value={unitAmount}
             onChange={(e) => setUnitAmount(e.target.value)}
             placeholder="0.00"
-            disabled={!canManage || saving}
+            disabled={!canCreate || saving}
           />
         </div>
         <div className="flex items-end sm:col-span-2 lg:col-span-3">
-          <button type="submit" className="btn-primary px-3 py-1.5 text-xs" disabled={!canManage || !students.length || saving}>
+          <button type="submit" className="btn-primary px-3 py-1.5 text-xs" disabled={!canCreate || !students.length || saving}>
             Create draft invoice
           </button>
         </div>

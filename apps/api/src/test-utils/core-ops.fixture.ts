@@ -3,7 +3,6 @@
  * site timesheet rows (day approved, night pending), reliever, leave overlap edge case.
  */
 import { randomBytes } from "node:crypto";
-import type { UserRole } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma.js";
 import { config } from "../lib/config.js";
@@ -35,10 +34,9 @@ function signAccessToken(user: {
   id: string;
   email: string;
   companyId: string;
-  role: UserRole;
 }): string {
   return jwt.sign(
-    { sub: user.id, email: user.email, companyId: user.companyId, role: user.role },
+    { sub: user.id, email: user.email, companyId: user.companyId },
     config.jwt.accessSecret,
     { expiresIn: "1h" }
   );
@@ -73,9 +71,9 @@ export async function provisionCoreOpsFixture(): Promise<CoreOpsFixture> {
       name: "Core Ops Admin",
       email,
       passwordHash: await hashPassword("core-ops-test-password-32chars!!"),
-      role: "admin",
     },
   });
+  await prisma.company.update({ where: { id: company.id }, data: { ownerUserId: user.id } });
 
   const group = await prisma.employeeGroup.create({
     data: { companyId: company.id, name: "Guards", sortOrder: 0 },
@@ -278,7 +276,6 @@ export async function provisionCoreOpsFixture(): Promise<CoreOpsFixture> {
     id: user.id,
     email: user.email,
     companyId: company.id,
-    role: user.role,
   });
 
   return {

@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { academyApi, uploadAcademyStudentDocument } from "@/lib/api";
+import { academyApi, downloadPrivateFile, uploadAcademyStudentDocument } from "@/lib/api";
+import { hasCapability } from "@/lib/permissions";
 import { DateInput } from "@/components/date-input";
 import { useConfirmDialog } from "@/components/ui";
 
@@ -48,6 +49,7 @@ interface DocRow {
   mimeType: string;
   sizeBytes: number;
   createdAt: string;
+  downloadUrl?: string;
   uploadedBy?: { name: string };
 }
 
@@ -73,8 +75,12 @@ function dateInput(iso: string | null | undefined): string {
 export default function AcademyStudentDetailPage() {
   const params = useParams();
   const id = params.id as string;
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { confirm, confirmDialog } = useConfirmDialog();
+  const canCreate = Boolean(user && hasCapability(user, "/academy", "create"));
+  const canEdit = Boolean(user && hasCapability(user, "/academy", "edit"));
+  const canDelete = Boolean(user && hasCapability(user, "/academy", "delete"));
+  const canExport = Boolean(user && hasCapability(user, "/academy", "export"));
   const [student, setStudent] = useState<Student | null>(null);
   const [documents, setDocuments] = useState<DocRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,7 +113,7 @@ export default function AcademyStudentDetailPage() {
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !student) return;
+    if (!token || !student || !canEdit) return;
     setSaving(true);
     setError(null);
     try {
@@ -145,7 +151,7 @@ export default function AcademyStudentDetailPage() {
 
   const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!token || !file) return;
+    if (!token || !file || !canCreate) return;
     setUploading(true);
     setError(null);
     try {
@@ -160,7 +166,7 @@ export default function AcademyStudentDetailPage() {
   };
 
   const removeDoc = async (docId: string) => {
-    if (!token) return;
+    if (!token || !canDelete) return;
     const confirmed = await confirm({
       title: "Remove document?",
       message: "This removes the uploaded document from the learner profile.",
@@ -256,7 +262,7 @@ export default function AcademyStudentDetailPage() {
             ) : null}
           </dl>
         )}
-        <div className="mt-4 grid gap-4 border-t border-neutral-200 pt-4 md:grid-cols-2">
+        {canEdit && <div className="mt-4 grid gap-4 border-t border-neutral-200 pt-4 md:grid-cols-2">
           <form
             className="space-y-2"
             onSubmit={async (e) => {
@@ -336,8 +342,8 @@ export default function AcademyStudentDetailPage() {
               {feeSaving ? "Saving…" : "Waive"}
             </button>
           </form>
-        </div>
-        <div className="mt-3">
+        </div>}
+        {canEdit && <div className="mt-3">
           <button
             type="button"
             className="btn-ghost px-2 py-1 text-xs text-neutral-500"
@@ -364,11 +370,12 @@ export default function AcademyStudentDetailPage() {
           >
             Reset to unpaid (correction)
           </button>
-        </div>
+        </div>}
       </section>
 
       <form onSubmit={save} className="space-y-4 rounded-lg border border-neutral-300 p-4">
         <h2 className="font-medium">Profile</h2>
+        <fieldset disabled={!canEdit}>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="First name" value={student.firstName} onChange={(v) => setStudent({ ...student, firstName: v })} />
           <Field label="Last name" value={student.lastName} onChange={(v) => setStudent({ ...student, lastName: v })} />
@@ -420,14 +427,15 @@ export default function AcademyStudentDetailPage() {
             </select>
           </div>
         </div>
-        <button type="submit" className="btn-primary px-3 py-1.5 text-xs" disabled={saving}>
+        {canEdit && <button type="submit" className="btn-primary px-3 py-1.5 text-xs" disabled={saving}>
           {saving ? "Saving…" : "Save changes"}
-        </button>
+        </button>}
+        </fieldset>
       </form>
 
       <section className="rounded-lg border border-neutral-300 p-4">
         <h2 className="font-medium">Documents</h2>
-        <div className="mt-3 flex flex-wrap items-end gap-2">
+        {canCreate && <div className="mt-3 flex flex-wrap items-end gap-2">
           <div>
             <label className="label-text mb-1 block">Type</label>
             <select
@@ -451,7 +459,7 @@ export default function AcademyStudentDetailPage() {
               onChange={onUpload}
             />
           </div>
-        </div>
+        </div>}
         {documents.length === 0 ? (
           <p className="mt-3 text-sm text-neutral-500">No documents uploaded.</p>
         ) : (
@@ -462,9 +470,28 @@ export default function AcademyStudentDetailPage() {
                   <span className="font-medium">{d.documentType}</span> — {d.fileName}{" "}
                   <span className="text-neutral-500">({Math.round(d.sizeBytes / 1024)} KB)</span>
                 </span>
-                <button type="button" className="btn-ghost px-2 py-1 text-xs text-red-700" onClick={() => removeDoc(d.id)}>
-                  Remove
-                </button>
+                <span className="flex items-center gap-1">
+                  {canExport && token && d.downloadUrl && (
+                    <button
+                      type="button"
+                      className="btn-ghost px-2 py-1 text-xs"
+                      onClick={() => {
+                        void downloadPrivateFile(token, d.downloadUrl!, d.fileName).catch((downloadError) =>
+                          setError(
+                            downloadError instanceof Error
+                              ? downloadError.message
+                              : "Document download failed"
+                          )
+                        );
+                      }}
+                    >
+                      Download
+                    </button>
+                  )}
+                  {canDelete && <button type="button" className="btn-ghost px-2 py-1 text-xs text-red-700" onClick={() => removeDoc(d.id)}>
+                    Remove
+                  </button>}
+                </span>
               </li>
             ))}
           </ul>

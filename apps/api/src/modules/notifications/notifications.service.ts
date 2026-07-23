@@ -1,5 +1,6 @@
 import type { NotificationChannel, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
+import { hasCapability, normalizeCapabilities } from "../../lib/capabilities.js";
 import { sendText } from "../../whatsapp/services/send.service.js";
 
 export type CreateNotificationInput = {
@@ -142,7 +143,7 @@ export async function markAllNotificationsRead(companyId: string, userId: string
   });
 }
 
-/** Notify users who have a given module path assigned (or full admins). */
+/** Notify active users who can currently view the module (plus the company owner). */
 export async function notifyModuleUsers(params: {
   companyId: string;
   modulePath: string;
@@ -154,26 +155,25 @@ export async function notifyModuleUsers(params: {
   linkUrl?: string;
 }) {
   const users = await prisma.user.findMany({
-    where: {
-      companyId: params.companyId,
-      role: { in: ["admin", "operations_manager", "hr_payroll", "supervisor", "controller"] },
+    where: { companyId: params.companyId, isActive: true },
+    select: {
+      id: true,
+      capabilities: true,
+      company: { select: { ownerUserId: true } },
     },
-    select: { id: true, role: true, moduleAccess: true },
   });
 
   let created = 0;
   for (const u of users) {
-    const access = u.moduleAccess;
-    const isFullAdmin = u.role === "admin" && (access == null || !Array.isArray(access) || access.length === 0);
-    const hasModule =
-      isFullAdmin ||
-      (Array.isArray(access) &&
-        access.some(
-          (m) =>
-            typeof m === "string" &&
-            (m === params.modulePath || params.modulePath.startsWith(`${m}/`))
-        ));
-    if (!hasModule) continue;
+    if (!hasCapability(
+      {
+        isOwner: u.company.ownerUserId === u.id,
+        isActive: true,
+        capabilities: normalizeCapabilities(u.capabilities),
+      },
+      params.modulePath,
+      "view"
+    )) continue;
 
     const result = await createNotification({
       companyId: params.companyId,

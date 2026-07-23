@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { authMiddleware } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireAnyCapability, requireCrudCapability } from "../../middleware/authorization.js";
 import {
   listAlertsQuerySchema,
   resolveAlertBodySchema,
@@ -13,20 +13,16 @@ import {
   resolveAlert,
 } from "./alerts.service.js";
 
-const ALERT_ROLES = [
-  "admin",
-  "operations_manager",
-  "hr_payroll",
-  "supervisor",
-  "controller",
-] as const;
-
 const ALERT_MODULES = ["/", "/attendance", "/sites", "/tasks", "/payroll", "/reports"] as const;
 
 export async function alertsRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole([...ALERT_ROLES], { anyOfModules: [...ALERT_MODULES] }),
+    requireCrudCapability({ anyOfModules: [...ALERT_MODULES] }),
+  ];
+  const editProtect = [
+    authMiddleware,
+    requireAnyCapability([...ALERT_MODULES], "edit"),
   ];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
@@ -48,7 +44,7 @@ export async function alertsRoutes(app: FastifyInstance) {
     return reply.send(counts);
   });
 
-  app.post("/:id/acknowledge", { preHandler: protect }, async (request, reply) => {
+  app.post("/:id/acknowledge", { preHandler: editProtect }, async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
     const alert = await acknowledgeAlert({
@@ -62,7 +58,7 @@ export async function alertsRoutes(app: FastifyInstance) {
     return reply.send(alert);
   });
 
-  app.post("/:id/resolve", { preHandler: protect }, async (request, reply) => {
+  app.post("/:id/resolve", { preHandler: editProtect }, async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
     const body = resolveAlertBodySchema.safeParse(request.body ?? {});
@@ -84,7 +80,7 @@ export async function alertsRoutes(app: FastifyInstance) {
     return reply.send(alert);
   });
 
-  app.post("/:id/dismiss", { preHandler: protect }, async (request, reply) => {
+  app.post("/:id/dismiss", { preHandler: editProtect }, async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
     const alert = await dismissAlert({

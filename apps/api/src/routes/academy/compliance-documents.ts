@@ -10,7 +10,6 @@ const schema = z.object({
   issueDate: z.string().optional().nullable(),
   expiryDate: z.string().optional().nullable(),
   status: z.enum(["active", "expired", "pending_review", "missing"]).optional(),
-  filePath: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
 const patchSchema = schema.partial();
@@ -25,6 +24,11 @@ function deriveStatus(expiryDate?: Date | null, explicit?: "active" | "expired" 
   if (explicit) return explicit;
   if (!expiryDate) return "pending_review" as const;
   return expiryDate < new Date() ? ("expired" as const) : ("active" as const);
+}
+
+function withoutFilePath<T extends { filePath: string | null }>(document: T): Omit<T, "filePath"> {
+  const { filePath: _filePath, ...metadata } = document;
+  return metadata;
 }
 
 export async function academyComplianceDocumentsRoutes(app: FastifyInstance) {
@@ -43,7 +47,7 @@ export async function academyComplianceDocumentsRoutes(app: FastifyInstance) {
       prisma.academyComplianceDocument.findMany({ where, include: { verifiedBy: { select: { id: true, name: true } } }, orderBy: [{ expiryDate: "asc" }, { createdAt: "desc" }], take: limit, skip: offset }),
       prisma.academyComplianceDocument.count({ where }),
     ]);
-    return { documents, total, limit, offset };
+    return { documents: documents.map(withoutFilePath), total, limit, offset };
   });
 
   app.get("/:id", { preHandler: academyProtect }, async (request, reply) => {
@@ -51,7 +55,7 @@ export async function academyComplianceDocumentsRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const document = await prisma.academyComplianceDocument.findFirst({ where: { id, companyId }, include: { verifiedBy: { select: { id: true, name: true } } } });
     if (!document) return reply.code(404).send({ error: "Not found", message: "Document not found" });
-    return { document };
+    return { document: withoutFilePath(document) };
   });
 
   app.post("/", { preHandler: academyProtect }, async (request, reply) => {
@@ -69,12 +73,11 @@ export async function academyComplianceDocumentsRoutes(app: FastifyInstance) {
         issueDate: parseDate(d.issueDate),
         expiryDate,
         status: deriveStatus(expiryDate, d.status),
-        filePath: d.filePath,
         notes: d.notes,
       },
     });
     await createAuditLog({ userId, companyId, action: "academy.compliance.create", entityType: "AcademyComplianceDocument", entityId: doc.id });
-    return reply.code(201).send({ document: doc });
+    return reply.code(201).send({ document: withoutFilePath(doc) });
   });
 
   app.patch("/:id", { preHandler: academyProtect }, async (request, reply) => {
@@ -98,7 +101,7 @@ export async function academyComplianceDocumentsRoutes(app: FastifyInstance) {
       },
     });
     await createAuditLog({ userId, companyId, action: "academy.compliance.update", entityType: "AcademyComplianceDocument", entityId: id });
-    return { document };
+    return { document: withoutFilePath(document) };
   });
 
   app.delete("/:id", { preHandler: academyProtect }, async (request, reply) => {

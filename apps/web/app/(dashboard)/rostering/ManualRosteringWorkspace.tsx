@@ -12,6 +12,7 @@ import {
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
+import { hasCapability } from "@/lib/permissions";
 import { useConfirmDialog } from "@/components/ui";
 import {
   applyManualOverridesBulk,
@@ -147,6 +148,11 @@ export const ManualRosteringWorkspace = forwardRef<
 ) {
   const { token, user } = useAuth();
   const { confirm, confirmDialog } = useConfirmDialog();
+  const canCreateRoster = Boolean(user && hasCapability(user, "/rostering", "create"));
+  const canEditRoster = Boolean(user && hasCapability(user, "/rostering", "edit"));
+  const canApproveRoster = Boolean(user && hasCapability(user, "/rostering", "approve"));
+  const canExportRoster = Boolean(user && hasCapability(user, "/rostering", "export"));
+  const canEditSite = Boolean(user && hasCapability(user, "/sites", "edit"));
   const [siteConfig, setSiteConfig] = useState<RosterSiteConfig | null>(null);
   const [grid, setGrid] = useState<RosterPeriodGrid | null>(null);
   const [loading, setLoading] = useState(false);
@@ -274,6 +280,7 @@ export const ManualRosteringWorkspace = forwardRef<
   );
 
   const handleCellChange = (guardId: string, colKey: string, shiftCode: RosterShiftCode) => {
+    if (!canEditRoster) return;
     const cellKey = `${guardId}:${colKey}`;
     const original = baselineCellsRef.current.get(cellKey) ?? "blank";
     setPublishSummary(null);
@@ -318,7 +325,7 @@ export const ManualRosteringWorkspace = forwardRef<
 
   const handleSaveRoster = useCallback(async () => {
     const committedChanges = Array.from(pendingChangesRef.current.values());
-    if (!token || committedChanges.length === 0) {
+    if (!token || committedChanges.length === 0 || !canEditRoster) {
       return;
     }
     const changeCount = committedChanges.length;
@@ -346,7 +353,7 @@ export const ManualRosteringWorkspace = forwardRef<
     } finally {
       setIsSaving(false);
     }
-  }, [token, siteId, fetchGrid]);
+  }, [token, siteId, fetchGrid, canEditRoster]);
 
   const handleDiscardChanges = useCallback(async () => {
     if (pendingChangesRef.current.size === 0) return;
@@ -360,7 +367,7 @@ export const ManualRosteringWorkspace = forwardRef<
 
   const handleSaveOngoingPattern = useCallback(async () => {
     const committedChanges = Array.from(pendingChangesRef.current.values());
-    if (!token || committedChanges.length === 0 || !siteConfigRef.current?.activePattern) return;
+    if (!token || committedChanges.length === 0 || !siteConfigRef.current?.activePattern || !canEditRoster) return;
     setIsSaving(true);
     setError(null);
     try {
@@ -383,14 +390,14 @@ export const ManualRosteringWorkspace = forwardRef<
     } finally {
       setIsSaving(false);
     }
-  }, [token, siteId, loadConfig, fetchGrid]);
+  }, [token, siteId, loadConfig, fetchGrid, canEditRoster]);
 
   const hardIssueCount = grid?.warnings.filter((warning) => warning.severity === "hard").length ?? 0;
   const warningCount = grid?.warnings.length ?? 0;
-  const canPublish = !!grid && pendingChanges.size === 0 && hardIssueCount === 0 && !isSaving && !isPublishing;
+  const canPublish = canApproveRoster && !!grid && pendingChanges.size === 0 && hardIssueCount === 0 && !isSaving && !isPublishing;
 
   const handlePublishRoster = useCallback(async () => {
-    if (!token || !grid || pendingChangesRef.current.size > 0 || hardIssueCount > 0) return;
+    if (!token || !grid || !canApproveRoster || pendingChangesRef.current.size > 0 || hardIssueCount > 0) return;
     setIsPublishing(true);
     setError(null);
     try {
@@ -412,7 +419,7 @@ export const ManualRosteringWorkspace = forwardRef<
     } finally {
       setIsPublishing(false);
     }
-  }, [token, grid, hardIssueCount, siteId, periodStart, periodEnd]);
+  }, [token, grid, hardIssueCount, siteId, periodStart, periodEnd, canApproveRoster]);
 
 
   useEffect(() => {
@@ -437,10 +444,10 @@ export const ManualRosteringWorkspace = forwardRef<
     [grid]
   );
 
-  const canExport = !!grid && !loading && exportSheetRows.length > 0 && pendingChanges.size === 0;
+  const exportReady = !!grid && !loading && exportSheetRows.length > 0 && pendingChanges.size === 0;
 
   const handleDownloadRoster = useCallback(() => {
-    if (!grid || !siteConfig) return;
+    if (!grid || !siteConfig || !canExportRoster) return;
     setExporting(true);
     try {
       const blob = generateShiftRosterSheetPDF({
@@ -470,10 +477,11 @@ export const ManualRosteringWorkspace = forwardRef<
     exportCalendarDays,
     exportSheetRows,
     user?.name,
+    canExportRoster,
   ]);
 
   const handleAddGuardToSite = async (guardId: string) => {
-    if (!token || !siteConfig) return;
+    if (!token || !siteConfig || !canEditSite) return;
     if (
       pendingChangesRef.current.size > 0 &&
       !(await confirm({
@@ -502,7 +510,7 @@ export const ManualRosteringWorkspace = forwardRef<
   };
 
   const handleAddPlaceholderGuard = async (type: "unknown" | "reliever") => {
-    if (!token || !siteConfig) return;
+    if (!token || !siteConfig || !canCreateRoster) return;
     if (
       pendingChangesRef.current.size > 0 &&
       !(await confirm({
@@ -533,7 +541,7 @@ export const ManualRosteringWorkspace = forwardRef<
 
   const applyGuardPattern = useCallback(
     (guardId: string, cycleCodes: RosterShiftCode[]) => {
-      if (!grid || cycleCodes.length === 0) return;
+      if (!grid || cycleCodes.length === 0 || !canEditRoster) return;
       const cycleLength = cycleCodes.length;
       const anchorDate = periodStart;
 
@@ -591,12 +599,12 @@ export const ManualRosteringWorkspace = forwardRef<
       setStatusMsg("Pattern applied to guard row — save roster to keep changes.");
       setTimeout(() => setStatusMsg(null), 4000);
     },
-    [grid, periodStart]
+    [grid, periodStart, canEditRoster]
   );
 
   const applyPatternToAll = useCallback(
     (cycleCodes: RosterShiftCode[]) => {
-      if (!grid || cycleCodes.length === 0) return;
+      if (!grid || cycleCodes.length === 0 || !canEditRoster) return;
       const anchorDate = periodStart;
       const guardIds = new Set(grid.rows.map((row) => row.guardId));
 
@@ -664,7 +672,7 @@ export const ManualRosteringWorkspace = forwardRef<
       setStatusMsg("Staggered pattern applied to all guards — save roster to keep changes.");
       setTimeout(() => setStatusMsg(null), 4000);
     },
-    [grid, periodStart]
+    [grid, periodStart, canEditRoster]
   );
 
   useImperativeHandle(
@@ -716,7 +724,7 @@ export const ManualRosteringWorkspace = forwardRef<
                 Assign shifts in the grid, then save when ready
               </p>
             )}
-            {pendingChanges.size > 0 && siteConfig.activePattern && !ongoingMode && (
+            {canEditRoster && pendingChanges.size > 0 && siteConfig.activePattern && !ongoingMode && (
               <button
                 type="button"
                 onClick={async () => {
@@ -738,7 +746,7 @@ export const ManualRosteringWorkspace = forwardRef<
             <button
               type="button"
               onClick={() => setShowPreview(true)}
-              disabled={!canExport}
+              disabled={!exportReady}
               title={
                 pendingChanges.size > 0
                   ? "Save draft before previewing"
@@ -750,10 +758,10 @@ export const ManualRosteringWorkspace = forwardRef<
             >
               Preview
             </button>
-            <button
+            {canExportRoster && <button
               type="button"
               onClick={handleDownloadRoster}
-              disabled={!canExport || exporting}
+              disabled={!exportReady || exporting}
               title={
                 pendingChanges.size > 0
                   ? "Save draft before downloading"
@@ -764,8 +772,8 @@ export const ManualRosteringWorkspace = forwardRef<
               className="btn-secondary text-xs px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {exporting ? "Preparing…" : "Download PDF"}
-            </button>
-            {!canExport && (
+            </button>}
+            {!exportReady && (
               <p className="basis-full text-[11px] text-neutral-500 dark:text-neutral-400 sm:text-right">
                 {pendingChanges.size > 0
                   ? "Save the draft before previewing or downloading."
@@ -846,7 +854,7 @@ export const ManualRosteringWorkspace = forwardRef<
         </section>
       )}
 
-      {availableGuards.some((g) => !g.onSite) && (
+      {canEditSite && availableGuards.some((g) => !g.onSite) && (
         <div className="flex flex-wrap items-end gap-2 rounded-xl border border-dashed border-neutral-300 dark:border-neutral-600 bg-neutral-50/50 dark:bg-neutral-900/30 p-3">
           <label className="flex-1 min-w-[12rem] space-y-1">
             <span className="text-xs font-medium text-neutral-500">Add guard to this site</span>
@@ -882,10 +890,10 @@ export const ManualRosteringWorkspace = forwardRef<
           rows={grid.rows}
           columnKeys={columnKeys}
           coverageByDay={grid.coverageByDay}
-          editable
+          editable={canEditRoster}
           shiftOptions={MANUAL_SHIFT_CODE_OPTIONS}
           onCellChange={handleCellChange}
-          onAddPlaceholderGuard={(type) => void handleAddPlaceholderGuard(type)}
+          onAddPlaceholderGuard={canCreateRoster ? (type) => void handleAddPlaceholderGuard(type) : undefined}
           addingPlaceholder={addingPlaceholder}
         />
       ) : (

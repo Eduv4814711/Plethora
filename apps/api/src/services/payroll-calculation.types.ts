@@ -1,7 +1,7 @@
 import type { PayPeriod } from "./tax.service.js";
 
 /** Version bumps when snapshot shape or formula semantics change intentionally. */
-export const PAYROLL_CALCULATION_VERSION = "1.2.0";
+export const PAYROLL_CALCULATION_VERSION = "1.3.0";
 
 export interface PayrollRuleSnapshot {
   overtimeMultiplier: number;

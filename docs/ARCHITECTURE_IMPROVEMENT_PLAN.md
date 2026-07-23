@@ -4,6 +4,13 @@
 **Date:** 2026-05-21  
 **Scope:** `apps/api`, `apps/web` — no runtime or database behaviour changes in this phase.
 
+> **Security model update (2026-07-23):** The role-based design described in
+> the original audit has been replaced by live, deny-by-default module
+> capabilities in `middleware/authorization.ts`. Roles and `moduleAccess` no
+> longer exist. Each company has one transferable owner; all other access is
+> granted explicitly through `view`, `create`, `edit`, `delete`, `approve`,
+> `export`, and `manage_access`.
+
 ---
 
 ## 1. Current architecture summary
@@ -22,7 +29,7 @@ Root scripts (`package.json`): `npm run build` builds all workspaces; `npm run t
 ```
 Client (browser / WhatsApp)
   → Fastify route (apps/api/src/routes/**)
-    → preHandler: authMiddleware → requireRole / requireAdmin
+    → preHandler: authMiddleware → explicit capability guard
     → Zod safeParse on body/query (inline per route file)
     → prisma.* and/or domain service (apps/api/src/services/**)
     → JSON response / audit log
@@ -30,7 +37,7 @@ Client (browser / WhatsApp)
 
 - **Composition:** `apps/api/src/app.ts` registers ~40 route modules plus WhatsApp under `/whatsapp`.
 - **Auth:** JWT access tokens (`middleware/auth.ts`); refresh tokens and password hashing in `services/auth.service.ts` + `services/refresh-token.service.ts`.
-- **RBAC:** `middleware/rbac.ts` — full admin bypass; all other users require explicit `moduleAccess` paths (e.g. `/payroll`, `/rostering`). Role enums come from Prisma `UserRole`.
+- **Authorization:** `middleware/authorization.ts` — a single owner bypass plus explicit per-module capabilities for every other user. Current access is loaded from the database on every authenticated request.
 - **Tenant isolation:** Single-company-per-user model; `companyId` on JWT (`JWTPayload`). Queries typically filter `where: { companyId: user.companyId }`. Helpers in `lib/tenant.ts` (`companyScopedWhere`, `requireTenantRecord`) exist but are **not used consistently** across routes.
 - **Persistence:** Single shared `PrismaClient` (`lib/prisma.ts`). No repository or unit-of-work abstraction.
 
@@ -39,7 +46,7 @@ Client (browser / WhatsApp)
 - **Routing:** Next.js App Router under `app/(dashboard)/*` and `app/(auth)/*`.
 - **API access:** Large typed client in `lib/api.ts` (~1,500+ lines) calling the configured API origin.
 - **Auth state:** `lib/auth-context.tsx` (localStorage tokens, proactive refresh).
-- **Permissions (client-only):** `lib/permissions.ts` mirrors server module paths for nav and route guards; **must stay aligned with** `middleware/rbac.ts`.
+- **Permissions (client-only):** `lib/permissions.ts` mirrors server module paths for navigation and route guards; **must stay aligned with** `middleware/authorization.ts`.
 
 ### Domain modules (product)
 
@@ -59,7 +66,7 @@ Client (browser / WhatsApp)
 ## 2. Strengths
 
 1. **Clear product modularisation** — Payroll, rostering, attendance, academy, and WhatsApp are separated by URL prefix and nav module paths.
-2. **RBAC model is explicit** — Full admin vs scoped `moduleAccess` is documented in code and mirrored on the web (`permissions.ts`).
+2. **Capability model is explicit** — Module/action grants and the owner bypass are documented in code and mirrored on the web (`permissions.ts`).
 3. **High-value domain logic is already extracted** — Roster engine, payroll run creation, statutory/cost/compliance calculations, and attendance geofence checks live in `services/` with **meaningful unit tests**.
 4. **Operational guardrails** — Production JWT/CORS assertions in `app.ts`, rate limits on auth, Helmet, request IDs, centralized error handler.
 5. **Multi-tenant schema** — Prisma models are `companyId`-scoped; comment in schema notes multi-tenant readiness.
@@ -76,7 +83,7 @@ Client (browser / WhatsApp)
 | **Duplicated Zod schemas** | Payroll rule pairs, employee CSV vs API create, inline schemas in large files | Drift between endpoints and import paths |
 | **Thin / partial service layer** | Only ~12 route files import services; attendance/shifts still heavy inline DB | Inconsistent patterns for new features |
 | **Tenant scoping by convention** | `companyScopedWhere` tested once; many routes use ad-hoc `where` | Cross-tenant ID leakage if a query omits `companyId` |
-| **No API integration tests** | Vitest covers services/libs only (14 test files) | Regressions in auth, RBAC, route wiring undetected |
+| **API integration coverage** | Vitest covers route, authorization, service, and tenant-isolation behavior | Keep capability and route-wiring regressions in CI |
 | **No web tests** | No Vitest/Jest in `apps/web` | Permission UI drift, broken flows undetected |
 | **Monolithic web API client** | Single `lib/api.ts` | Merge conflicts, duplicated fetch patterns |
 | **WhatsApp handler complexity** | `handler.service.ts` — many Prisma calls, clock-in/out state machine | Bugs affect payroll and attendance data |
@@ -123,7 +130,7 @@ Client (browser / WhatsApp)
 | File | Notes |
 |------|-------|
 | `routes/uploads.ts` | Filesystem only; uses `companyId` from JWT for path |
-| `routes/academy/constants.ts` | Shared RBAC/MIME constants only |
+| `routes/academy/constants.ts` | Shared authorization/MIME constants only |
 | `routes/academy/index.ts` | Route registration only |
 
 ### Routes that use services *and* still call Prisma
@@ -204,7 +211,7 @@ No Zod on the web; validation is ad hoc in page components (regex email, ID numb
 | `routes/tasks.ts` | 496 | Task CRUD, assignments, filters, Prisma |
 | `routes/academy/invoices.ts` | 440 | Invoicing + finance service |
 | `routes/academy/students.ts` | 409 | Student CRUD + documents |
-| `routes/users.ts` | 377 | User admin, moduleAccess column fallback, Prisma |
+| `routes/users.ts` | User access management, capability validation, ownership transfer, Prisma |
 
 **Smaller but same anti-pattern (200–400 LOC):** `dashboard.ts`, `payroll-intelligence.ts`, `migrations.ts`, `academy/course-runs.ts`, `academy/payments.ts`, `auth.ts`.
 
@@ -229,7 +236,7 @@ No Zod on the web; validation is ad hoc in page components (regex email, ID numb
 | Domain | Gap | Priority tests to add |
 |--------|-----|------------------------|
 | **Auth** | No tests for login, refresh, onboard, setup-password, token revocation | Service tests for `auth.service` / `refresh-token.service`; HTTP tests for `/auth/*` rate limit and 401/403 |
-| **RBAC** | No tests for `requireRole`, `requireAdmin`, scoped admin | Matrix tests: role × moduleAccess × route; assert 403 without module |
+| **Capability access** | Guard and tenant-isolation tests | Matrix tests: module × action × route; assert 403 without the exact capability |
 | **Tenant isolation** | Only `companyScopedWhere` unit test | Integration tests: user A cannot read/update company B resource by ID; webhook company resolution |
 | **Rostering** | Strong engine tests; **no route tests** for shift CRUD, bulk create, apply plan | Service tests for `validateShiftAssignment` edges; API tests for `POST /shifts` roster apply |
 | **Attendance** | Geofence only; no clock-in/out, hours, missed shift | Service tests for `validateClockIn` / `calculateHours`; API tests with mocked shifts |
@@ -257,7 +264,7 @@ No Zod on the web; validation is ad hoc in page components (regex email, ID numb
 │         │                  │                    │           │
 │         ▼                  ▼                    ▼           │
 │  middleware/         schemas/ (Zod)      lib/prisma.ts      │
-│  auth, rbac          shared validation                      │
+│  auth, authorization shared validation                      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -267,7 +274,7 @@ No Zod on the web; validation is ad hoc in page components (regex email, ID numb
 2. **Services:** Business rules, transactions, orchestration; depend on repositories.
 3. **Repositories:** Prisma only; every query includes `companyId` (or documents why not).
 4. **Schemas:** Shared Zod definitions imported by routes and services (and optionally a future `packages/shared` for web).
-5. **RBAC:** Declarative route metadata (role + module) to avoid copy-pasted `protect` arrays.
+5. **Authorization:** Declarative route metadata (module + action) to avoid copy-pasted `protect` arrays.
 
 ### Non-goals for early phases
 
@@ -314,7 +321,7 @@ Order by incident impact and test payoff:
 ### Phase 5 — Integration / contract tests
 
 - Fastify `inject()` tests per module with test DB or transactional rollback.
-- RBAC matrix and tenant isolation suites in CI.
+- Capability matrix and tenant isolation suites in CI.
 
 ---
 
@@ -358,7 +365,7 @@ Order by incident impact and test payoff:
 
 ### Phase 5 — Integration tests
 
-| Create | `apps/api/src/routes/__tests__/auth.integration.test.ts`, `rbac.integration.test.ts`, `tenant-isolation.integration.test.ts`, `shifts.integration.test.ts` |
+| Create | `apps/api/src/routes/__tests__/auth.integration.test.ts`, capability authorization tests, `tenant-isolation.integration.test.ts`, `shifts.integration.test.ts` |
 | CI | `.github/workflows/ci.yml` (test DB service if needed) |
 
 ---
@@ -373,13 +380,13 @@ Order by incident impact and test payoff:
 | 1 | New schema tests; no regression in existing 14 test files |
 | 2 | Repository tests with mocked Prisma; pilot routes unchanged HTTP contract |
 | 3 | + domain service tests; + Fastify `inject()` smoke per refactored route |
-| 4 | Web vitest for permissions; manual smoke of login + one module per role |
-| 5 | CI job with Postgres service; tenant + RBAC matrix required on PR |
+| 4 | Web Vitest for permissions; smoke-test representative module/action grants |
+| 5 | CI job with Postgres service; tenant + capability matrix required on PR |
 
 ### Domain test backlog (acceptance criteria)
 
 1. **Auth** — Invalid password → 401; refresh rotation; onboard creates exactly one company + admin; setup token single-use.
-2. **RBAC** — Supervisor with only `/rostering` → 403 on `DELETE /employees/:id`; scoped admin → 403 on admin-only routes.
+2. **Capability access** — A user with only `/rostering:view` receives 403 on `DELETE /employees/:id` and on rostering edits.
 3. **Tenant** — UUID from company B on company A token → 404 (not 403) for get-by-id endpoints.
 4. **Rostering** — `generateRosterPlan` + `applyRosterPlan` integration; gender rule conflicts returned not thrown.
 5. **Attendance** — Clock-in outside geofence → 400; duplicate clock-in rejected.

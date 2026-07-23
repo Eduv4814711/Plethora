@@ -1,5 +1,7 @@
 "use client";
 
+import { hasCapability } from "@/lib/permissions";
+
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
@@ -31,7 +33,7 @@ export default function AcademyProfilePage() {
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
-  const canEdit = user?.role === "admin";
+  const canEdit = Boolean(user && hasCapability(user, "/academy", "edit"));
   const formReadOnly = !canEdit || !isEditing || saving;
   const fieldLabelClass = "text-xs font-medium text-[#35383f]";
   const fieldClass =
@@ -125,7 +127,7 @@ export default function AcademyProfilePage() {
 
       {!canEdit && (
         <div className="rounded-lg border border-neutral-300 bg-neutral-100/50 px-3 py-2 text-sm">
-          Read-only: only admins can update academy profile.
+          Read-only: academy edit access is required to update the profile.
         </div>
       )}
 

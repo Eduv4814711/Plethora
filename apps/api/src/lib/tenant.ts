@@ -1,5 +1,5 @@
 import type { FastifyRequest } from "fastify";
-import type { JWTPayload } from "./types.js";
+import type { AuthenticatedUser } from "./types.js";
 import { prisma } from "./prisma.js";
 
 export function getUserCompanyId(request: FastifyRequest): string {
@@ -22,6 +22,6 @@ export async function requireTenantRecord<T extends { id: string; companyId: str
   return record;
 }
 
-export function tenantUser(user: JWTPayload) {
+export function tenantUser(user: AuthenticatedUser) {
   return { companyId: user.companyId, userId: user.sub };
 }

@@ -1,10 +1,15 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { createHash, randomBytes } from "crypto";
+import type { AccountType } from "@prisma/client";
 import { config } from "../lib/config.js";
-import type { UserRole } from "@prisma/client";
-import { normalizeModulePermissions } from "../middleware/rbac.js";
-import { findFirstUserAuthScalars, findManyUserAuthScalars, findUniqueUserAuthScalars } from "../lib/user-module-column.js";
+import { normalizeCapabilities, type CapabilityMap } from "../lib/capabilities.js";
+import {
+  findFirstUserAuthScalars,
+  findManyUserAuthScalars,
+  findUniqueUserAuthScalars,
+  type UserAuthScalars,
+} from "../lib/user-access.js";
 import {
   isRefreshTokenActive,
   persistRefreshToken,
@@ -23,10 +28,12 @@ export interface AuthUserPublic {
   id: string;
   name: string;
   email: string;
-  role: UserRole;
-  roleLabel?: string | null;
+  accountType: AccountType;
+  jobTitle: string | null;
+  isActive: boolean;
+  isOwner: boolean;
   companyId: string;
-  moduleAccess: Record<string, "read" | "write"> | null;
+  capabilities: CapabilityMap;
 }
 
 export interface AuthResult {
@@ -40,64 +47,45 @@ export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, config.bcrypt.rounds);
 }
 
-export async function verifyPassword(
-  password: string,
-  hash: string
-): Promise<boolean> {
+export function verifyPassword(password: string, hash: string): Promise<boolean> {
   return bcrypt.compare(password, hash);
 }
 
-function buildPayload(user: {
-  id: string;
-  email: string;
-  companyId: string;
-  role: UserRole;
-  moduleAccess?: unknown;
-}) {
-  const moduleAccess = normalizeModulePermissions(user.moduleAccess);
-  return {
-    sub: user.id,
-    email: user.email,
-    companyId: user.companyId,
-    role: user.role,
-    ...(moduleAccess ? { moduleAccess } : {}),
-  };
+type TokenUser = Pick<
+  UserAuthScalars,
+  "id" | "name" | "email" | "companyId" | "accountType" | "jobTitle" | "isActive" | "capabilities"
+> & {
+  company?: { ownerUserId: string | null };
+  isOwner?: boolean;
+};
+
+function buildPayload(user: Pick<TokenUser, "id" | "email" | "companyId">) {
+  return { sub: user.id, email: user.email, companyId: user.companyId };
 }
 
-function issueJwtPair(user: {
-  id: string;
-  email: string;
-  companyId: string;
-  role: UserRole;
-  moduleAccess?: unknown;
-  name: string;
-  roleLabel?: string | null;
-}): AuthResult {
-  const moduleAccess = normalizeModulePermissions(user.moduleAccess);
+function issueJwtPair(user: TokenUser): AuthResult {
   const payload = buildPayload(user);
-
   const accessToken = jwt.sign(payload, config.jwt.accessSecret, {
     expiresIn: config.jwt.accessExpiry,
   });
-
-  const refreshToken = jwt.sign(
-    { ...payload, type: "refresh" },
-    config.jwt.refreshSecret,
-    { expiresIn: config.jwt.refreshExpiry }
-  );
-
+  const refreshToken = jwt.sign({ ...payload, type: "refresh" }, config.jwt.refreshSecret, {
+    expiresIn: config.jwt.refreshExpiry,
+  });
   const decoded = jwt.decode(accessToken) as { exp?: number };
   const expiresIn = decoded?.exp ? decoded.exp - Math.floor(Date.now() / 1000) : 900;
+  const isOwner = user.isOwner ?? user.company?.ownerUserId === user.id;
 
   return {
     user: {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role,
-      roleLabel: user.roleLabel ?? null,
+      accountType: user.accountType,
+      jobTitle: user.jobTitle,
+      isActive: user.isActive,
+      isOwner,
       companyId: user.companyId,
-      moduleAccess,
+      capabilities: normalizeCapabilities(user.capabilities),
     },
     accessToken,
     refreshToken,
@@ -105,52 +93,38 @@ function issueJwtPair(user: {
   };
 }
 
-export async function login(
-  input: LoginInput,
-  meta?: RefreshTokenMeta
-): Promise<AuthResult | null> {
+export async function login(input: LoginInput, meta?: RefreshTokenMeta): Promise<AuthResult | null> {
   const email = input.email.toLowerCase();
-
-  const user = input.companyId
-    ? await findFirstUserAuthScalars({ email, companyId: input.companyId })
+  const requested = input.companyId
+    ? await findFirstUserAuthScalars({ email, companyId: input.companyId, isActive: true })
     : null;
 
-  if (user) {
-    if (user.passwordSetupRequired) return null;
-    const valid = await verifyPassword(input.password, user.passwordHash);
-    if (!valid) return null;
+  if (requested) {
+    if (requested.passwordSetupRequired || !(await verifyPassword(input.password, requested.passwordHash))) {
+      return null;
+    }
   } else if (input.companyId) {
     return null;
   }
 
-  let matchedUser = user;
+  let matchedUser = requested;
   if (!matchedUser) {
-    const candidates = await findManyUserAuthScalars({ email });
+    const candidates = await findManyUserAuthScalars({ email, isActive: true });
     for (const candidate of candidates) {
       if (candidate.passwordSetupRequired) continue;
-      const valid = await verifyPassword(input.password, candidate.passwordHash);
-      if (valid) {
+      if (await verifyPassword(input.password, candidate.passwordHash)) {
         matchedUser = candidate;
         break;
       }
     }
   }
   if (!matchedUser) return null;
-
   const result = issueJwtPair(matchedUser);
   await persistRefreshToken(matchedUser.id, result.refreshToken, meta);
   return result;
 }
 
-export interface UserForTokens {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  roleLabel?: string | null;
-  companyId: string;
-  moduleAccess?: unknown;
-}
+export type UserForTokens = TokenUser;
 
 export function generatePasswordSetupToken(): string {
   return randomBytes(32).toString("base64url");
@@ -160,10 +134,7 @@ export function hashPasswordSetupToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export async function issueTokensForUser(
-  user: UserForTokens,
-  meta?: RefreshTokenMeta
-): Promise<AuthResult> {
+export async function issueTokensForUser(user: UserForTokens, meta?: RefreshTokenMeta): Promise<AuthResult> {
   const result = issueJwtPair(user);
   await persistRefreshToken(user.id, result.refreshToken, meta);
   return result;
@@ -178,29 +149,15 @@ export async function refreshAccessToken(
       sub: string;
       email: string;
       companyId: string;
-      role: UserRole;
-      moduleAccess?: unknown;
       type?: string;
     };
-
     if (decoded.type !== "refresh") return null;
-
-    const active = await isRefreshTokenActive(refreshToken, decoded.sub);
-    if (!active) return null;
-
+    if (!(await isRefreshTokenActive(refreshToken, decoded.sub))) return null;
     const user = await findUniqueUserAuthScalars({ id: decoded.sub });
-    if (!user) return null;
-
+    if (!user?.isActive) return null;
     const result = issueJwtPair(user);
-    const rotated = await rotateRefreshToken(
-      refreshToken,
-      result.refreshToken,
-      user.id,
-      meta
-    );
-    if (!rotated) return null;
-
-    return result;
+    const rotated = await rotateRefreshToken(refreshToken, result.refreshToken, user.id, meta);
+    return rotated ? result : null;
   } catch {
     return null;
   }
@@ -210,9 +167,7 @@ export async function logoutUser(userId?: string, refreshToken?: string): Promis
   if (refreshToken) {
     const { revokeRefreshToken } = await import("./refresh-token.service.js");
     await revokeRefreshToken(refreshToken);
-    return;
-  }
-  if (userId) {
+  } else if (userId) {
     await revokeAllUserRefreshTokens(userId);
   }
 }

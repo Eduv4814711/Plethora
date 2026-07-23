@@ -5,6 +5,7 @@ vi.mock("../../../lib/prisma.js", () => ({
   prisma: {
     company: { findUnique: vi.fn() },
     attendanceException: { count: vi.fn() },
+    shift: { findMany: vi.fn() },
     payrollPeriodReadiness: {
       upsert: vi.fn(),
       findUnique: vi.fn(),
@@ -16,6 +17,11 @@ vi.mock("../../alerts/alerts.service.js", () => ({
   upsertAlert: vi.fn().mockResolvedValue({ alert: {}, created: true }),
 }));
 
+vi.mock("../../../lib/timezone.js", () => ({
+  getCompanyTimezone: vi.fn().mockResolvedValue("Africa/Johannesburg"),
+  dateKeyInTimeZone: (date: Date) => date.toISOString().slice(0, 10),
+}));
+
 import { prisma } from "../../../lib/prisma.js";
 
 describe("getPayrollReadiness pay period alignment", () => {
@@ -24,6 +30,10 @@ describe("getPayrollReadiness pay period alignment", () => {
     vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
     vi.mocked(prisma.company.findUnique).mockReset();
     vi.mocked(prisma.attendanceException.count).mockReset();
+    vi.mocked(prisma.shift.findMany).mockReset();
+    vi.mocked(prisma.shift.findMany).mockResolvedValue([
+      { id: "shift-period", startTime: new Date("2026-07-10T06:00:00.000Z") },
+    ] as never);
     vi.mocked(prisma.payrollPeriodReadiness.upsert).mockReset();
     vi.mocked(prisma.payrollPeriodReadiness.findUnique).mockReset();
   });

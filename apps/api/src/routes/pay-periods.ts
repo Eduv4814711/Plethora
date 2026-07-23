@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
 import { parsePayrollCalendarSettings } from "../lib/payroll-calendar-settings.js";
 import {
@@ -18,7 +18,7 @@ import {
 export async function payPeriodsRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
+    requireCrudCapability({
       anyOfModules: ["/payroll", "/rostering", "/attendance", "/reports", "/settings"],
     }),
   ];

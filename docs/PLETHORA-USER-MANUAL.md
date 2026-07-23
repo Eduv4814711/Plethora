@@ -11,7 +11,7 @@ This manual helps your team understand and use the Plethora system for workforce
 
 1. [Overview](#1-overview)
 2. [Getting Started](#2-getting-started)
-3. [User Roles & Permissions](#3-user-roles--permissions)
+3. [Module Capabilities](#3-module-capabilities)
 4. [Company Setup](#4-company-setup)
 5. [Employees](#5-employees)
 6. [Sites & Posts](#6-sites--posts)
@@ -47,16 +47,13 @@ The system is **multi-tenant**: each company has its own data. Users belong to o
 2. Enter your **email** and **password**.
 3. Click **Sign in**.
 
-**Default admin credentials** (for first-time setup):
-
-- Email: `admin@quickbopha.com`
-- Password: `admin123`
-
-> **Important:** Change the default password after first login.
+The first user created during company registration becomes the company owner.
+Seeded environments require `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`; there
+is no hard-coded default password.
 
 ### First-Time Setup
 
-If your company name is still "My Company", you will see a **Company Setup** modal. An administrator must:
+If your company name is still "My Company", you will see a **Company Setup** modal. The company owner must:
 
 1. Enter the **Company Name** (required).
 2. Fill in **Business Details** (legal name, PSIRA registration, tax number, UIF reference, contact info, address).
@@ -78,7 +75,7 @@ The sidebar provides access to:
 | Attendance  | Clock in/out, view records, handle missed shifts  |
 | Payroll     | Payroll runs, configuration, payslips             |
 | Reports     | (Coming soon) Reports and analytics               |
-| Audit       | Activity log (admin only)                         |
+| Audit       | Activity log (requires Audit view access)          |
 | Settings    | Company details, users, bulk import, factory reset |
 
 ### Global Search
@@ -90,42 +87,34 @@ Use the search bar in the header to quickly find:
 
 ---
 
-## 3. User Roles & Permissions
+## 3. Module Capabilities
 
-Plethora has four roles with different access levels:
+Access is assigned directly to each user for each module. Job titles and account
+types describe the user; they never grant authority.
 
-| Role                  | Description                                                                 |
-|-----------------------|-----------------------------------------------------------------------------|
-| **Admin**             | Full access: company setup, users, factory reset, bulk import, all features |
-| **Operations Manager**| Rostering, attendance, shifts, sites, employees; no payroll config or users |
-| **HR & Payroll**      | Employees, payroll, pay grades, earnings/deductions, attendance verification|
-| **Supervisor**        | Rostering, attendance, shifts, sites, employees; no payroll or settings    |
+| Capability | Allows |
+|------------|--------|
+| **View** | Open and read the module |
+| **Create** | Add records |
+| **Edit** | Change records and perform edit-like workflow actions |
+| **Delete** | Remove records or perform destructive resets |
+| **Approve** | Approve, reject, verify, publish, unlock, or finalize controlled workflows |
+| **Export** | Download reports, payroll files, payslips, or other bulk data |
+| **Manage access** | Assign capabilities; user creation, editing, and deletion also require their matching action capability |
 
-### Permission Summary
+Capabilities are independent: Edit does not automatically include View or
+Export. A more specific assignment, such as **Team / Leave**, overrides its
+parent **Team** assignment for that submodule.
 
-| Feature              | Admin | Ops Manager | HR & Payroll | Supervisor |
-|----------------------|-------|-------------|--------------|------------|
-| Company setup        | ✓     | —           | —            | —          |
-| Users & roles        | ✓     | —           | —            | —          |
-| Business details     | ✓     | —           | —            | —          |
-| Employees            | ✓     | ✓           | ✓            | ✓          |
-| Sites                | ✓     | ✓           | ✓            | ✓          |
-| Rostering            | ✓     | ✓           | ✓            | ✓          |
-| Attendance           | ✓     | ✓           | ✓            | ✓          |
-| Payroll runs         | ✓     | ✓           | ✓            | —          |
-| Payroll config       | ✓     | —           | ✓            | —          |
-| Pay grades           | ✓     | —           | ✓            | —          |
-| Earnings/deductions  | ✓     | —           | ✓            | —          |
-| Public holidays      | ✓     | —           | ✓            | —          |
-| Bulk import          | ✓     | ✓           | ✓            | ✓          |
-| Audit logs           | ✓     | —           | —            | —          |
-| Factory reset        | ✓     | —           | —            | —          |
+Each company has one transferable **owner**. The owner has full system access
+and is the only user who can transfer ownership or run a full factory reset.
+The owner cannot be deactivated or deleted until ownership is transferred.
 
 ---
 
 ## 4. Company Setup
 
-**Settings → Profile** – View your profile (name, email, role).
+**Settings → Profile** – View your profile, account type, and job title.
 
 **Settings → Business Details** – Configure company information used across the system (invoices, payslips, reports):
 
@@ -143,7 +132,7 @@ Plethora has four roles with different access levels:
 - **Payroll period** – Weekly, bi-weekly, monthly
 - **Employee ID prefix** – For auto-generated IDs (e.g. EMP-0001)
 
-Only **admins** can edit business details and settings.
+Editing business details and settings requires Settings edit access.
 
 ---
 
@@ -191,7 +180,7 @@ Click an employee card to expand it, then click **Edit**. Update the relevant ta
 
 ### Deleting an Employee
 
-Only **admins** can delete employees. In the edit modal, use the **Delete** button.
+Deleting employees requires Team delete access. In the edit modal, use the **Delete** button.
 
 ### Filtering
 
@@ -229,8 +218,8 @@ When creating or editing a site, you can:
 ### Managing Sites
 
 - **Register Site** – Create a new site.
-- **Edit** – Update site details (admin only).
-- **Delete** – Remove a site (admin only).
+- **Edit** – Update site details (requires Sites edit).
+- **Delete** – Remove a site (requires Sites delete).
 - **View detail** – Click a site card to open the site detail page with roster and calendar.
 
 ---
@@ -351,7 +340,7 @@ Click **Configuration** to manage:
 - **Earnings** – Fixed or percentage (e.g. transport, allowances).
 - **Deductions** – Fixed or percentage (e.g. UIF, tax).
 
-Only **admins** and **HR & Payroll** can edit configuration.
+Editing configuration requires Payroll edit access.
 
 ---
 
@@ -359,7 +348,7 @@ Only **admins** and **HR & Payroll** can edit configuration.
 
 ### Profile
 
-View your name, email, and role. Profile editing is not supported in this version.
+View your name, email, account type, and job title.
 
 ### Business Details
 
@@ -369,17 +358,19 @@ Company information for payslips and compliance. See [Company Setup](#4-company-
 
 Defaults for payroll, dates, and reporting. See [Company Setup](#4-company-setup).
 
-### Users & Roles (Admin Only)
+### User Access
 
-- **Add User** – Name, email, password, role.
-- **Edit** – Update name, email, role, or password.
-- **Delete** – Remove a user (cannot delete yourself).
+- **View** requires User Access view.
+- **Add User** requires User Access create and manage-access capabilities.
+- **Edit** requires User Access edit and manage-access capabilities.
+- **Delete** requires User Access delete and manage-access capabilities.
+- The owner can transfer ownership to another active user after confirming their password.
 
 ### Bulk Import
 
 See [Bulk Import (Migration)](#12-bulk-import-migration).
 
-### Factory Reset (Admin Only)
+### Factory Reset (Owner Only)
 
 **Warning:** Module resets clear selected module data only. A full **Reset all modules** permanently deletes the current company, all users, and all company data.
 
@@ -414,7 +405,10 @@ The Reports module is planned for future releases. For now, use:
 - **Attendance** – Attendance records
 - **Payroll** – Payroll runs and items
 
-### Audit Logs (Admin Only)
+### Audit Logs
+
+Audit view access is required. Exporting audit data additionally requires Audit
+export access.
 
 View a log of actions:
 
@@ -433,7 +427,6 @@ Bulk import is used to add many employees and sites at once via CSV.
 
 1. Go to **Settings** → **Bulk Import**.
 2. Download:
-   - **Company** (admin only) – For multi-company import
    - **Employees** – Employee data
    - **Sites** – Site data
 
@@ -455,17 +448,17 @@ Bulk import is used to add many employees and sites at once via CSV.
 1. When validation shows no errors, click **Import**.
 2. Review the result (created counts and any errors).
 
-**Admin:** Can import companies + employees + sites in one go.  
-**Other roles:** Can import employees and sites into the current company only.
+Imports always target the current company and require Settings edit access.
+Exports require Settings export access.
 
 ---
 
 ## 13. Quick Reference
 
-### Default Login
+### Initial Owner
 
-- Email: `admin@quickbopha.com`
-- Password: `admin123`
+Register a company through the application, or provide `SEED_ADMIN_EMAIL` and
+`SEED_ADMIN_PASSWORD` when seeding a development environment.
 
 ### Employee Status Flow
 

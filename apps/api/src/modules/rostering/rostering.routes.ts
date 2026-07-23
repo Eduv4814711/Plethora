@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { authMiddleware } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireAnyCapability, requireCapability, requireCrudCapability } from "../../middleware/authorization.js";
 import {
   applyAutomationRun,
   dismissAutomationRun,
@@ -32,14 +32,17 @@ function sendServiceError(
 export async function rosteringRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
+    requireCrudCapability({
       module: "/rostering",
     }),
   ];
   const verifyProtect = [
     authMiddleware,
-    requireRole(["admin", "hr_payroll"], { anyOfModules: ["/rostering", "/payroll"] }),
+    requireAnyCapability(["/rostering", "/payroll"], "approve"),
   ];
+  const readProtect = [authMiddleware, requireCapability("/rostering", "view")];
+  const editProtect = [authMiddleware, requireCapability("/rostering", "edit")];
+  const deleteProtect = [authMiddleware, requireCapability("/rostering", "delete")];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
@@ -67,7 +70,7 @@ export async function rosteringRoutes(app: FastifyInstance) {
     return reply.code(201).send(result.shift);
   });
 
-  app.post("/reset", { preHandler: protect }, async (request, reply) => {
+  app.post("/reset", { preHandler: deleteProtect }, async (request, reply) => {
     const parsed = resetSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -105,7 +108,7 @@ export async function rosteringRoutes(app: FastifyInstance) {
     return reply.code(201).send(result);
   });
 
-  app.post("/roster/preview", { preHandler: protect }, async (request, reply) => {
+  app.post("/roster/preview", { preHandler: readProtect }, async (request, reply) => {
     const parsed = rosterPreviewSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -123,7 +126,7 @@ export async function rosteringRoutes(app: FastifyInstance) {
     return reply.send(result.plan);
   });
 
-  app.post("/roster/apply", { preHandler: protect }, async (request, reply) => {
+  app.post("/roster/apply", { preHandler: editProtect }, async (request, reply) => {
     const parsed = rosterApplySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -157,7 +160,7 @@ export async function rosteringRoutes(app: FastifyInstance) {
     return reply.send({ data: runs.map(serializeAutomationRun) });
   });
 
-  app.post("/roster/automation/:id/apply", { preHandler: protect }, async (request, reply) => {
+  app.post("/roster/automation/:id/apply", { preHandler: editProtect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const result = await applyAutomationRun(request.user!.companyId, id, request.user!.sub);
     if ("error" in result) {
@@ -166,7 +169,7 @@ export async function rosteringRoutes(app: FastifyInstance) {
     return reply.code(201).send(result);
   });
 
-  app.post("/roster/automation/:id/dismiss", { preHandler: protect }, async (request, reply) => {
+  app.post("/roster/automation/:id/dismiss", { preHandler: editProtect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const result = await dismissAutomationRun(request.user!.companyId, id, request.user!.sub);
     if ("error" in result) {
@@ -217,7 +220,7 @@ export async function rosteringRoutes(app: FastifyInstance) {
     return reply.send(result.shift);
   });
 
-  app.post("/:id/transition", { preHandler: protect }, async (request, reply) => {
+  app.post("/:id/transition", { preHandler: editProtect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const parsed = transitionSchema.safeParse(request.body);
     if (!parsed.success) {

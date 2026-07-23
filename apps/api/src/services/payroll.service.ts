@@ -3,7 +3,10 @@ import { prisma } from "../lib/prisma.js";
 import { canTransitionPayroll } from "../lib/state-machines.js";
 import type { PayrollStatus } from "@prisma/client";
 import { aggregateTimesheets, type TimesheetAggregate } from "./timesheet.service.js";
-import { calculateDeductions } from "./deductions.service.js";
+import {
+  calculateDeductions,
+  InvalidDeductionConfigurationError,
+} from "./deductions.service.js";
 import { exceedsSdlThreshold, type PayPeriod } from "./tax.service.js";
 import { getCompanyTimezone, dateKeyInTimeZone } from "../lib/timezone.js";
 import { parsePayrollSettings } from "../lib/payroll-settings.js";
@@ -12,6 +15,7 @@ import { getRolling12MonthPayroll } from "./sdl-tracking.service.js";
 import {
   buildPayrollCalculationSnapshot,
   computePayrollLines,
+  validateComputedPayrollLines,
   type PayrollCalculationContext,
   type PayrollDeductionResult,
 } from "./payroll-calculation.engine.js";
@@ -53,24 +57,72 @@ export async function findSitesNeedingApproval(
       startTime: { lt: periodEndExclusive },
       endTime: { gt: periodStart },
     },
-    select: { siteId: true },
-    distinct: ["siteId"],
+    select: {
+      id: true,
+      siteId: true,
+      employeeId: true,
+      shiftType: true,
+      startTime: true,
+    },
   });
-  const siteIds = shifts.map((s) => s.siteId);
+  const siteIds = [...new Set(shifts.map((s) => s.siteId))];
   if (siteIds.length === 0) return [];
 
-  const approved = await prisma.siteTimesheet.findMany({
+  const approvedRows = await prisma.siteTimesheetRow.findMany({
     where: {
       companyId,
       siteId: { in: siteIds },
-      status: { in: ["approved", "locked"] },
-      periodStart: { lte: periodEnd },
-      periodEnd: { gte: periodStart },
+      workDate: { gte: periodStart, lte: periodEnd },
+      siteTimesheet: {
+        status: { in: ["approved", "locked"] },
+        periodStart: { lte: periodEnd },
+        periodEnd: { gte: periodStart },
+      },
     },
-    select: { siteId: true },
+    select: {
+      siteId: true,
+      workDate: true,
+      actualGuardId: true,
+      actualShiftType: true,
+      sourceShiftId: true,
+    },
   });
-  const approvedSet = new Set(approved.map((a) => a.siteId));
-  const missingIds = siteIds.filter((id) => !approvedSet.has(id));
+  const timezone = await getCompanyTimezone(companyId);
+  const coveredShiftIds = new Set(
+    approvedRows
+      .map((row) => row.sourceShiftId)
+      .filter((id): id is string => typeof id === "string")
+  );
+  const coveredFallbackKeys = new Set(
+    approvedRows
+      .filter((row) => row.sourceShiftId == null && row.actualGuardId != null)
+      .map((row) =>
+        siteShiftMatchKey(
+          row.siteId,
+          row.actualGuardId!,
+          row.workDate.toISOString().slice(0, 10),
+          row.actualShiftType
+        )
+      )
+  );
+  const missingIds = [
+    ...new Set(
+      shifts
+        .filter(
+          (shift) =>
+            !coveredShiftIds.has(shift.id) &&
+            !coveredFallbackKeys.has(
+              siteShiftMatchKey(
+                shift.siteId,
+                shift.employeeId,
+                dateKeyInTimeZone(shift.startTime, timezone),
+                shift.shiftType
+              )
+            )
+        )
+        .map((shift) => shift.siteId)
+    ),
+  ];
   if (missingIds.length === 0) return [];
 
   return prisma.site.findMany({
@@ -78,6 +130,15 @@ export async function findSitesNeedingApproval(
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
+}
+
+export function siteShiftMatchKey(
+  siteId: string,
+  employeeId: string,
+  dateKey: string,
+  shiftType: string | null | undefined
+): string {
+  return `${siteId}:${employeeId}:${dateKey}:${shiftType ?? "unknown"}`;
 }
 
 export interface CalculatePayrollResult {
@@ -102,15 +163,21 @@ const employeeInclude = {
 export async function loadEmployeesForPayroll(
   companyId: string,
   aggregates: TimesheetAggregate[],
-  includeRelieversWithAttendance: boolean
+  includeRelieversWithAttendance: boolean,
+  payPeriod?: PayPeriod
 ) {
-  const baseEmployees = await prisma.employee.findMany({
+  const allBaseEmployees = await prisma.employee.findMany({
     where: {
       companyId,
       status: { in: ["active", "training", "suspended"] },
     },
     include: employeeInclude,
   });
+  const baseEmployees = payPeriod
+    ? allBaseEmployees.filter((employee) =>
+        employeePayFrequencyMatches(employee.payFrequency, payPeriod)
+      )
+    : allBaseEmployees;
 
   if (!includeRelieversWithAttendance) {
     return baseEmployees;
@@ -125,7 +192,7 @@ export async function loadEmployeesForPayroll(
     return baseEmployees;
   }
 
-  const relievers = await prisma.employee.findMany({
+  const allRelievers = await prisma.employee.findMany({
     where: {
       companyId,
       status: "reliever",
@@ -133,8 +200,36 @@ export async function loadEmployeesForPayroll(
     },
     include: employeeInclude,
   });
+  const relievers = payPeriod
+    ? allRelievers.filter((employee) =>
+        employeePayFrequencyMatches(employee.payFrequency, payPeriod)
+      )
+    : allRelievers;
 
   return [...baseEmployees, ...relievers];
+}
+
+export function normalizeEmployeePayFrequency(value: string | null | undefined): PayPeriod | null {
+  const normalized = value?.trim().toLowerCase().replace(/[\s_-]+/g, "");
+  if (!normalized) return null;
+  if (normalized === "weekly" || normalized === "week") return "weekly";
+  if (
+    normalized === "biweekly" ||
+    normalized === "fortnightly" ||
+    normalized === "fortnight"
+  ) {
+    return "biweekly";
+  }
+  if (normalized === "monthly" || normalized === "month") return "monthly";
+  return null;
+}
+
+export function employeePayFrequencyMatches(
+  value: string | null | undefined,
+  payPeriod: PayPeriod
+): boolean {
+  if (!value?.trim()) return true;
+  return normalizeEmployeePayFrequency(value) === payPeriod;
 }
 
 function buildSdlStatus(params: {
@@ -182,6 +277,7 @@ export async function calculatePayroll(
 
   const periodStart = run.periodStart;
   const periodEnd = run.periodEnd;
+  const payPeriod = run.payPeriod as PayPeriod;
   const calculatedAt = new Date();
 
   const sitesNeedingApproval = await findSitesNeedingApproval(companyId, periodStart, periodEnd);
@@ -215,7 +311,8 @@ export async function calculatePayroll(
   const employees = await loadEmployeesForPayroll(
     companyId,
     aggregates,
-    payrollSettings.includeRelieversWithAttendance
+    payrollSettings.includeRelieversWithAttendance,
+    payPeriod
   );
 
   const publicHolidayDates = holidays.map((h) =>
@@ -250,9 +347,6 @@ export async function calculatePayroll(
     list.push(r);
     groupEarningsByGroup.set(r.groupId, list);
   }
-
-  const settings = (company.settings as Record<string, unknown>) ?? {};
-  const payPeriod = (settings.payrollPeriod as PayPeriod) ?? "monthly";
 
   const ctxBase: Omit<PayrollCalculationContext, "deductionsByEmployee" | "isSdlLiable"> = {
     payrollRunId,
@@ -289,16 +383,28 @@ export async function calculatePayroll(
   for (const line of grossPass.lines) {
     const emp = employees.find((e) => e.id === line.employeeId);
     if (!emp) continue;
-    const { total, lines: dedLines } = await calculateDeductions(
-      companyId,
-      emp.id,
-      { employeeType: emp.employeeType },
-      line.grossPay,
-      periodStart,
-      periodEnd,
-      emp.groupId ?? undefined,
-      ["UIF"]
-    );
+    let deductionResult;
+    try {
+      deductionResult = await calculateDeductions(
+        companyId,
+        emp.id,
+        { employeeType: emp.employeeType },
+        line.grossPay,
+        periodStart,
+        periodEnd,
+        emp.groupId ?? undefined,
+        ["UIF"]
+      );
+    } catch (error) {
+      if (error instanceof InvalidDeductionConfigurationError) {
+        throw new PayrollServiceError(
+          `Invalid deduction configuration for ${emp.firstName} ${emp.lastName}: ${error.message}`,
+          { employeeId: emp.id }
+        );
+      }
+      throw error;
+    }
+    const { total, lines: dedLines } = deductionResult;
     deductionsByEmployee.set(emp.id, { total, lines: dedLines });
   }
 
@@ -307,6 +413,13 @@ export async function calculatePayroll(
     isSdlLiable,
     deductionsByEmployee,
   });
+  const lineValidationIssues = validateComputedPayrollLines(lines);
+  if (lineValidationIssues.length > 0) {
+    throw new PayrollServiceError(
+      "Payroll calculation produced invalid payment values. Correct deductions or pay configuration before continuing.",
+      { lineValidationIssues }
+    );
+  }
 
   const snapshot = buildPayrollCalculationSnapshot({
     ctx: { ...ctxBase, isSdlLiable, deductionsByEmployee },
@@ -389,14 +502,24 @@ export async function calculatePayroll(
       });
     }
 
-    await tx.payrollRun.update({
-      where: { id: payrollRunId },
+    const transitioned = await tx.payrollRun.updateMany({
+      where: {
+        id: payrollRunId,
+        companyId,
+        status: "draft",
+        lockedAt: null,
+      },
       data: {
         status: "calculated",
         calculatedAt,
         calculationSnapshot: snapshot as unknown as Prisma.InputJsonValue,
       },
     });
+    if (transitioned.count !== 1) {
+      throw new PayrollServiceError(
+        "Payroll run changed while it was being calculated. Refresh and try again."
+      );
+    }
   }, { timeout: 120_000, maxWait: 30_000 });
 
   return { snapshot };
@@ -488,8 +611,12 @@ export async function revertPayrollToDraft(
       }
     }
 
-    await tx.payrollRun.update({
-      where: { id: payrollRunId },
+    const transitioned = await tx.payrollRun.updateMany({
+      where: {
+        id: payrollRunId,
+        companyId,
+        status: run.status,
+      },
       data: {
         status: "draft",
         lockedAt: null,
@@ -497,6 +624,11 @@ export async function revertPayrollToDraft(
         calculationSnapshot: Prisma.DbNull,
       },
     });
+    if (transitioned.count !== 1) {
+      throw new PayrollServiceError(
+        "Payroll run changed while it was being reverted. Refresh and try again."
+      );
+    }
   });
 }
 

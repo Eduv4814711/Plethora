@@ -5,28 +5,29 @@ import {
   hasRestrictedFields,
   omitFields,
 } from "../sensitive-data.js";
-import type { JWTPayload } from "../types.js";
 
-const admin: JWTPayload = { sub: "a", email: "admin@test.com", companyId: "c", role: "admin" };
-const hr: JWTPayload = {
-  sub: "h", email: "hr@test.com", companyId: "c", role: "hr_payroll", moduleAccess: ["/employees"],
-};
+const user = (capabilities: unknown = {}, isOwner = false) => ({
+  sub: "u",
+  email: "u@test.com",
+  companyId: "c",
+  name: "User",
+  accountType: "staff" as const,
+  jobTitle: null,
+  isActive: true,
+  isOwner,
+  capabilities: capabilities as never,
+});
 
 describe("sensitive data policy", () => {
-  it("does not treat broad admin access as private-data access", () => {
-    expect(canAccessSensitiveData(admin, "/employees")).toBe(false);
+  it("allows the owner and explicit sensitive-data viewers", () => {
+    expect(canAccessSensitiveData(user({}, true), "/employees")).toBe(true);
+    expect(canAccessSensitiveData(user({ "/employees": ["view_sensitive"] }), "/employees")).toBe(true);
   });
 
-  it("requires the relevant assigned module", () => {
-    expect(canAccessSensitiveData(hr, "/employees")).toBe(true);
-    expect(canAccessSensitiveData(hr, "/academy")).toBe(false);
-  });
-
-  it("uses module assignment rather than designation", () => {
-    expect(canAccessSensitiveData({ ...admin, moduleAccess: ["/employees"] }, "/employees")).toBe(true);
-    expect(
-      canAccessSensitiveData({ ...admin, role: "supervisor", moduleAccess: ["/employees"] }, "/employees")
-    ).toBe(true);
+  it("does not infer private-data access from ordinary module actions", () => {
+    expect(canAccessSensitiveData(user({ "/employees": ["edit"] }), "/employees")).toBe(false);
+    expect(canAccessSensitiveData(user({ "/employees": ["view"] }), "/employees")).toBe(false);
+    expect(canAccessSensitiveData(user({ "/employees": ["view_sensitive"] }), "/academy")).toBe(false);
   });
 
   it("detects protected write fields and redacts them", () => {

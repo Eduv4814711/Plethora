@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { authMiddleware } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireCrudCapability } from "../../middleware/authorization.js";
 import { config } from "../../lib/config.js";
 
 const GRAPH_URL = "https://graph.facebook.com";
@@ -13,7 +13,7 @@ const GRAPH_URL = "https://graph.facebook.com";
 export async function templatesRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
+    requireCrudCapability({
       module: "/whatsapp",
     }),
   ];

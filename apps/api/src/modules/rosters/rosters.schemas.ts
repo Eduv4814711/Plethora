@@ -99,14 +99,17 @@ export const siteTimesheetCaptureOverviewQuerySchema = z.object({
   shiftType: z.enum(["day", "night", "all"]).default("all"),
 });
 
-export const siteTimesheetRowUpdateSchema = z.object({
+const timesheetTimestampSchema = z.string().datetime({ offset: true });
+const timesheetHoursSchema = z.number().finite().min(0).max(24);
+
+const siteTimesheetRowEditableShape = {
   actualGuardId: z.string().min(1).nullable().optional(),
   actualShiftCode: z.string().nullable().optional(),
   actualShiftType: z.string().nullable().optional(),
-  clockIn: z.string().nullable().optional(),
-  clockOut: z.string().nullable().optional(),
-  hoursWorked: z.number().nullable().optional(),
-  overtimeHours: z.number().nullable().optional(),
+  clockIn: timesheetTimestampSchema.nullable().optional(),
+  clockOut: timesheetTimestampSchema.nullable().optional(),
+  hoursWorked: timesheetHoursSchema.nullable().optional(),
+  overtimeHours: timesheetHoursSchema.nullable().optional(),
   attendanceStatus: z.enum([
     "pending",
     "present",
@@ -120,13 +123,65 @@ export const siteTimesheetRowUpdateSchema = z.object({
     "training",
     "off",
   ]).optional(),
-  approvalStatus: z.enum(["pending", "partially_reviewed", "reviewed", "approved"]).optional(),
   dutyOnObNumber: z.string().max(80).nullable().optional(),
   dutyOffObNumber: z.string().max(80).nullable().optional(),
   /** @deprecated Use dutyOnObNumber */
   occurrenceBookNumber: z.string().max(80).nullable().optional(),
   comments: z.string().nullable().optional(),
-});
+};
+
+function validateTimesheetClockPatch(
+  data: {
+    clockIn?: string | null;
+    clockOut?: string | null;
+    hoursWorked?: number | null;
+    overtimeHours?: number | null;
+  },
+  ctx: z.RefinementCtx
+) {
+  if (data.clockIn && data.clockOut) {
+    const clockIn = new Date(data.clockIn);
+    const clockOut = new Date(data.clockOut);
+    if (clockOut <= clockIn) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Clock out must be after clock in",
+        path: ["clockOut"],
+      });
+    } else if (clockOut.getTime() - clockIn.getTime() > 24 * 60 * 60 * 1000) {
+      ctx.addIssue({
+        code: "custom",
+        message: "A worked shift cannot exceed 24 hours",
+        path: ["clockOut"],
+      });
+    }
+  }
+  if (
+    data.hoursWorked != null &&
+    data.overtimeHours != null &&
+    data.overtimeHours > data.hoursWorked
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Overtime hours cannot exceed total hours worked",
+      path: ["overtimeHours"],
+    });
+  }
+}
+
+/**
+ * Generic edits deliberately exclude approvalStatus. Row confirmation and
+ * timesheet approval use their dedicated, capability-gated endpoints.
+ */
+export const siteTimesheetRowUpdateSchema = z
+  .object(siteTimesheetRowEditableShape)
+  .strict()
+  .superRefine(validateTimesheetClockPatch);
+
+export const approveSiteTimesheetRowSchema = z
+  .object(siteTimesheetRowEditableShape)
+  .strict()
+  .superRefine(validateTimesheetClockPatch);
 
 export const siteTimesheetRowCreateSchema = z.object({
   workDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Work date must use YYYY-MM-DD"),
@@ -151,11 +206,27 @@ export const siteTimesheetRowCreateSchema = z.object({
   /** @deprecated Use dutyOnObNumber */
   occurrenceBookNumber: z.string().trim().min(1).max(80).optional(),
   comments: z.string().nullable().optional(),
-  hoursWorked: z.number().nullable().optional(),
-  overtimeHours: z.number().nullable().optional(),
-}).refine((data) => Boolean(data.dutyOnObNumber?.trim() || data.occurrenceBookNumber?.trim()), {
-  message: "Duty ON OB number is required",
-  path: ["dutyOnObNumber"],
+  hoursWorked: timesheetHoursSchema.nullable().optional(),
+  overtimeHours: timesheetHoursSchema.nullable().optional(),
+}).superRefine((data, ctx) => {
+  if (!data.dutyOnObNumber?.trim() && !data.occurrenceBookNumber?.trim()) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Duty ON OB number is required",
+      path: ["dutyOnObNumber"],
+    });
+  }
+  if (
+    data.hoursWorked != null &&
+    data.overtimeHours != null &&
+    data.overtimeHours > data.hoursWorked
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Overtime hours cannot exceed total hours worked",
+      path: ["overtimeHours"],
+    });
+  }
 });
 
 export const approveSiteTimesheetSchema = z.object({

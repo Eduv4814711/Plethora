@@ -35,7 +35,7 @@ export async function buildEmp201Data(
   const periodStart = new Date(year, month - 1, 1);
   const periodEnd = new Date(year, month, 0, 23, 59, 59, 999);
 
-  const [company, runs, adminUser] = await Promise.all([
+  const [company, runs] = await Promise.all([
     prisma.company.findUnique({
       where: { id: companyId },
       select: {
@@ -46,6 +46,7 @@ export async function buildEmp201Data(
         uifReference: true,
         phone: true,
         email: true,
+        owner: { select: { name: true, email: true } },
       },
     }),
     prisma.payrollRun.findMany({
@@ -57,10 +58,6 @@ export async function buildEmp201Data(
       include: {
         items: { include: { payslip: true } },
       },
-    }),
-    prisma.user.findFirst({
-      where: { companyId, role: "admin" },
-      select: { name: true, email: true },
     }),
   ]);
 
@@ -86,7 +83,7 @@ export async function buildEmp201Data(
   const uifLiability = uifEmployeeTotal + uifEmployerTotal;
   const totalPayable = payeLiability + sdlLiability + uifLiability;
 
-  const nameParts = (adminUser?.name ?? "Contact").trim().split(/\s+/);
+  const nameParts = (company.owner?.name ?? "Contact").trim().split(/\s+/);
   const firstName = nameParts[0] ?? "Contact";
   const surname = nameParts.slice(1).join(" ") || (nameParts[0] ?? "User");
 
@@ -108,7 +105,7 @@ export async function buildEmp201Data(
       surname,
       position: "Authorised Representative",
       phone: company.phone ?? "",
-      email: company.email ?? adminUser?.email ?? null,
+      email: company.email ?? company.owner?.email ?? null,
     },
   };
 }

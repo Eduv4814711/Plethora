@@ -8,7 +8,7 @@ import { authFetch } from "@/lib/api";
 import { fetchEmployeePickerOptions, type GuardPickerOption } from "@/lib/roster-api";
 import { DateInput } from "@/components/date-input";
 import { GuardSearchPicker } from "@/components/guard-search-picker";
-import { canManageLeave } from "@/lib/permissions";
+import { hasCapability } from "@/lib/permissions";
 import {
   leaveOccurrenceCount,
   prepareLeaveAdjustmentResolution,
@@ -145,15 +145,15 @@ const monthStart = format(startOfMonth(new Date()), "yyyy-MM-dd");
 const monthEnd = format(endOfMonth(new Date()), "yyyy-MM-dd");
 const pendingStatuses = ["PENDING_HR", "SUBMITTED"];
 const actionStatuses = ["PENDING_HR", "ADJUSTMENT_REQUIRED", "CANCELLATION_REQUESTED"];
-const tabs: Array<{ key: Tab; label: string; shortLabel: string; icon: IconName; manageOnly?: boolean }> = [
+const tabs: Array<{ key: Tab; label: string; shortLabel: string; icon: IconName }> = [
   { key: "queue", label: "Approval queue", shortLabel: "Queue", icon: "inbox" },
   { key: "records", label: "Leave records", shortLabel: "Records", icon: "records" },
   { key: "balances", label: "Balances", shortLabel: "Balances", icon: "balance" },
   { key: "calendar", label: "Leave calendar", shortLabel: "Calendar", icon: "calendar" },
   { key: "reports", label: "Reports", shortLabel: "Reports", icon: "report" },
   { key: "policies", label: "Policies", shortLabel: "Policies", icon: "policy" },
-  { key: "adjustments", label: "Adjustments", shortLabel: "Adjust", icon: "adjust", manageOnly: true },
-  { key: "audit", label: "Audit history", shortLabel: "Audit", icon: "audit", manageOnly: true },
+  { key: "adjustments", label: "Adjustments", shortLabel: "Adjust", icon: "adjust" },
+  { key: "audit", label: "Audit history", shortLabel: "Audit", icon: "audit" },
 ];
 
 function errorMessage(value: unknown, fallback: string): string {
@@ -213,7 +213,26 @@ function statusClass(status: string): string {
 
 export default function LeaveManagementPage() {
   const { token, user } = useAuth();
-  const canManage = user ? canManageLeave(user) : false;
+  const canCreate = Boolean(
+    user &&
+      (hasCapability(user, "/employees/leave", "create") ||
+        hasCapability(user, "/payroll", "create"))
+  );
+  const canEdit = Boolean(
+    user &&
+      (hasCapability(user, "/employees/leave", "edit") ||
+        hasCapability(user, "/payroll", "edit"))
+  );
+  const canApprove = Boolean(
+    user &&
+      (hasCapability(user, "/employees/leave", "approve") ||
+        hasCapability(user, "/payroll", "approve"))
+  );
+  const canExport = Boolean(
+    user &&
+      (hasCapability(user, "/employees/leave", "export") ||
+        hasCapability(user, "/payroll", "export"))
+  );
   const [tab, setTab] = useState<Tab>("queue");
   const [employees, setEmployees] = useState<GuardPickerOption[]>([]);
   const [types, setTypes] = useState<LeaveType[]>([]);
@@ -293,9 +312,9 @@ export default function LeaveManagementPage() {
         setPolicies((await request("/leave/policies")).data ?? []);
       } else if (tab === "reports") {
         setReport(await request(`/leave/reports?start=${range.start}&end=${range.end}`));
-      } else if (tab === "adjustments" && canManage) {
+      } else if (tab === "adjustments") {
         setPendingAdjustments((await request("/leave/adjustments?status=PENDING")).data ?? []);
-      } else if (tab === "audit" && canManage) {
+      } else if (tab === "audit") {
         setAudit((await request("/leave/audit?limit=250")).data ?? []);
       }
     } catch (cause) {
@@ -303,7 +322,7 @@ export default function LeaveManagementPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, tab, status, employeeFilter, range.start, range.end, request, canManage]);
+  }, [token, tab, status, employeeFilter, range.start, range.end, request]);
 
   useEffect(() => {
     loadBase().catch((cause) => setError(cause instanceof Error ? cause.message : "Unable to load leave configuration"));
@@ -369,6 +388,7 @@ export default function LeaveManagementPage() {
 
   async function createApplication(event: React.FormEvent) {
     event.preventDefault();
+    if (!canCreate) return;
     setBusy("create");
     setError(null);
     try {
@@ -407,6 +427,7 @@ export default function LeaveManagementPage() {
   }
 
   async function decide(application: LeaveApplication, decision: "approve" | "reject", reason?: string) {
+    if (!canApprove) return;
     setBusy(application.id);
     setError(null);
     try {
@@ -425,6 +446,7 @@ export default function LeaveManagementPage() {
   }
 
   async function verifyDocument(id: string) {
+    if (!canApprove) return;
     setBusy(id);
     setError(null);
     try {
@@ -438,7 +460,7 @@ export default function LeaveManagementPage() {
   }
 
   async function reviewDocument(leaveDocument: LeaveDocument) {
-    if (!token) {
+    if (!token || !canExport) {
       setError("Not signed in");
       return;
     }
@@ -481,6 +503,7 @@ export default function LeaveManagementPage() {
   }
 
   async function cancelApplication(application: LeaveApplication, reason: string) {
+    if (!canEdit) return;
     setBusy(application.id);
     setError(null);
     try {
@@ -497,6 +520,7 @@ export default function LeaveManagementPage() {
 
   async function postAdjustment(event: React.FormEvent) {
     event.preventDefault();
+    if (!canCreate) return;
     setBusy("adjustment");
     setError(null);
     try {
@@ -522,7 +546,7 @@ export default function LeaveManagementPage() {
   }
 
   async function resolvePendingAdjustment() {
-    if (!adjustmentDialog) return;
+    if (!adjustmentDialog || !canApprove) return;
     const prepared = prepareLeaveAdjustmentResolution({
       decision: adjustmentDialog.decision,
       reason: adjustmentResolution.reason,
@@ -551,6 +575,7 @@ export default function LeaveManagementPage() {
   }
 
   async function confirmPolicy(versionId: string) {
+    if (!canApprove) return;
     setBusy(versionId);
     setError(null);
     try {
@@ -564,6 +589,8 @@ export default function LeaveManagementPage() {
   }
 
   async function saveAndConfirmPolicy(selection: PolicyEditorSelection, payload: PolicyConfigurationPayload) {
+    const canConfigure = selection.version.reviewStatus === "PENDING_HR_LEGAL_CONFIRMATION" ? canEdit : canCreate;
+    if (!canConfigure || !canApprove) return;
     const busyKey = `policy-config:${selection.version.id}`;
     setBusy(busyKey);
     setError(null);
@@ -591,6 +618,7 @@ export default function LeaveManagementPage() {
   }
 
   async function runCurrentAccruals() {
+    if (!canApprove) return;
     if (currentPolicyIssues.length > 0) {
       setError("Configure and confirm every current leave policy before posting accruals.");
       return;
@@ -612,7 +640,7 @@ export default function LeaveManagementPage() {
     }
   }
 
-  const visibleTabs = tabs.filter((item) => !item.manageOnly || canManage);
+  const visibleTabs = tabs;
 
   return (
     <div className="mx-auto max-w-[1500px] animate-fade-in pb-12">
@@ -627,7 +655,7 @@ export default function LeaveManagementPage() {
             <p className="mt-1 max-w-2xl text-sm text-neutral-600">Review requests, protect staffing, and keep leave balances and payroll aligned.</p>
           </div>
         </div>
-        {canManage && (
+        {canCreate && (
           <button onClick={() => setTab("add")} className="btn-primary inline-flex items-center justify-center gap-2 shadow-sm">
             <Icon name="plus" className="h-4 w-4" /> New leave request
           </button>
@@ -697,7 +725,9 @@ export default function LeaveManagementPage() {
                   key={application.id}
                   application={application}
                   busy={busy}
-                  canManage={canManage}
+                  canEdit={canEdit}
+                  canApprove={canApprove}
+                  canExport={canExport}
                   onApprove={(app) => decide(app, "approve")}
                   onReject={(app) => { setActionReason(""); setActionDialog({ kind: "reject", application: app }); }}
                   onCancel={(app) => { setActionReason(""); setActionDialog({ kind: "cancel", application: app }); }}
@@ -707,7 +737,7 @@ export default function LeaveManagementPage() {
                 />
               ))}
             </div>
-          ) : <EmptyState icon="inbox" title="Queue cleared" text="There are no requests matching this status and employee filter." action={canManage ? { label: "Create a leave request", onClick: () => setTab("add") } : undefined} />}
+          ) : <EmptyState icon="inbox" title="Queue cleared" text="There are no requests matching this status and employee filter." action={canCreate ? { label: "Create a leave request", onClick: () => setTab("add") } : undefined} />}
         </SectionShell>
       )}
 
@@ -716,7 +746,7 @@ export default function LeaveManagementPage() {
           <FilterBar range={range} setRange={setRange} onRefresh={loadTab}>
             <EmployeeSelect value={employeeFilter} onChange={setEmployeeFilter} employees={employees} allLabel="All employees" />
           </FilterBar>
-          {loading ? <LoadingTable /> : <ApplicationTable applications={applications} busy={busy} canManage={canManage} onCancel={(app) => { setActionReason(""); setActionDialog({ kind: "cancel", application: app }); }} onReview={reviewDocument} onVerify={verifyDocument} />}
+          {loading ? <LoadingTable /> : <ApplicationTable applications={applications} busy={busy} canEdit={canEdit} canApprove={canApprove} canExport={canExport} onCancel={(app) => { setActionReason(""); setActionDialog({ kind: "cancel", application: app }); }} onReview={reviewDocument} onVerify={verifyDocument} />}
         </SectionShell>
       )}
 
@@ -734,11 +764,11 @@ export default function LeaveManagementPage() {
       {tab === "balances" && (
         <SectionShell title="Leave balances" description="Available hours include approved ledger entries and exclude active reservations.">
           <div className="mb-5 max-w-sm"><EmployeeSelect value={employeeFilter} onChange={setEmployeeFilter} employees={employees} allLabel="All employees" /></div>
-          {loading ? <LoadingTable /> : balances.length ? <BalanceTable balances={balances} /> : <EmptyState icon="balance" title="No balances yet" text="Capture approved opening balances before relying on entitlement calculations." action={canManage ? { label: "Add an opening balance", onClick: () => setTab("adjustments") } : undefined} />}
+          {loading ? <LoadingTable /> : balances.length ? <BalanceTable balances={balances} /> : <EmptyState icon="balance" title="No balances yet" text="Capture approved opening balances before relying on entitlement calculations." action={canCreate ? { label: "Add an opening balance", onClick: () => setTab("adjustments") } : undefined} />}
         </SectionShell>
       )}
 
-      {tab === "add" && canManage && (
+      {tab === "add" && canCreate && (
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
           <form onSubmit={createApplication} className="card-wireframe overflow-hidden">
             <div className="border-b border-neutral-200 px-5 py-5 sm:px-7">
@@ -796,7 +826,7 @@ export default function LeaveManagementPage() {
         </div>
       )}
 
-      {tab === "adjustments" && canManage && (
+      {tab === "adjustments" && (
         <SectionShell title="Leave adjustments" description="Resolve paid-payroll cancellation corrections and post approved balance entries with a complete audit trail.">
           <div className="space-y-8">
             <section aria-labelledby="payroll-adjustment-heading">
@@ -817,8 +847,8 @@ export default function LeaveManagementPage() {
                       key={row.id}
                       adjustment={row}
                       busy={busy === `adjustment-resolution:${row.id}`}
-                      onConfirm={() => openAdjustmentResolution(row, "confirm_external_correction")}
-                      onReject={() => openAdjustmentResolution(row, "reject")}
+                      onConfirm={canApprove ? () => openAdjustmentResolution(row, "confirm_external_correction") : undefined}
+                      onReject={canApprove ? () => openAdjustmentResolution(row, "reject") : undefined}
                     />
                   ))}
                 </div>
@@ -830,13 +860,13 @@ export default function LeaveManagementPage() {
                 <h3 id="balance-adjustment-heading" className="font-bold text-neutral-950">Opening balance or ledger correction</h3>
                 <p className="mt-1 text-sm text-neutral-500">Post an approved balance entry without editing an employee balance directly.</p>
               </div>
-              <form onSubmit={postAdjustment} className="max-w-2xl space-y-5 rounded-xl border border-neutral-200 bg-neutral-50 p-5">
+              {canCreate && <form onSubmit={postAdjustment} className="max-w-2xl space-y-5 rounded-xl border border-neutral-200 bg-neutral-50 p-5">
                 <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800"><strong>Use carefully.</strong> Positive hours add balance; negative hours reduce it. Every change creates an immutable ledger entry and audit event.</div>
                 <Field label="Employee" required><GuardSearchPicker guards={employees} value={adjustment.employeeId} onChange={(employeeId) => setAdjustment((old) => ({ ...old, employeeId: employeeId ?? "" }))} placeholder="Search employee" /></Field>
                 <div className="grid gap-4 sm:grid-cols-2"><EmployeeLeaveType types={types} value={adjustment.leaveTypeCode} onChange={(leaveTypeCode) => setAdjustment((old) => ({ ...old, leaveTypeCode }))} /><Field label="Adjustment hours" required><input required type="number" step="0.25" value={adjustment.hours} onChange={(event) => setAdjustment((old) => ({ ...old, hours: event.target.value }))} className="input-modern mt-1" placeholder="e.g. 12 or -4" /></Field></div>
                 <Field label="Reason" required hint="Include the source of the approved opening balance or correction."><textarea required value={adjustment.reason} onChange={(event) => setAdjustment((old) => ({ ...old, reason: event.target.value }))} className="input-modern mt-1 min-h-24" /></Field>
                 <button disabled={busy === "adjustment" || !adjustment.employeeId} className="btn-primary">{busy === "adjustment" ? "Posting..." : "Post adjustment"}</button>
-              </form>
+              </form>}
             </section>
           </div>
         </SectionShell>
@@ -844,7 +874,7 @@ export default function LeaveManagementPage() {
 
       {tab === "policies" && (
         <SectionShell title="Leave policies" description="Effective-dated rules preserve the policy used for every historical application.">
-          {canManage && (
+          {canApprove && (
             <div className="mb-5 rounded-xl border border-neutral-200 bg-neutral-50 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -859,7 +889,7 @@ export default function LeaveManagementPage() {
               {accrualRunResult && <p className={`mt-3 rounded-lg border p-3 text-sm ${accrualRunResult.skipped.length ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>Posted {accrualRunResult.posted.length} new ledger entr{accrualRunResult.posted.length === 1 ? "y" : "ies"}. Skipped {accrualRunResult.skipped.length}; details are recorded in Audit history.</p>}
             </div>
           )}
-          {loading ? <LoadingCards /> : policies.length ? <div className="space-y-4">{policies.map((policy) => <PolicyCard key={policy.id} policy={policy} canManage={canManage} busy={busy} onConfirm={confirmPolicy} onConfigure={(version) => setPolicyEditor({ policyId: policy.id, policyName: policy.name, version })} />)}</div> : <EmptyState icon="policy" title="No policies configured" text="Default policy seeds are created when this section is loaded." />}
+          {loading ? <LoadingCards /> : policies.length ? <div className="space-y-4">{policies.map((policy) => <PolicyCard key={policy.id} policy={policy} canCreate={canCreate} canEdit={canEdit} canApprove={canApprove} busy={busy} onConfirm={confirmPolicy} onConfigure={(version) => setPolicyEditor({ policyId: policy.id, policyName: policy.name, version })} />)}</div> : <EmptyState icon="policy" title="No policies configured" text="Default policy seeds are created when this section is loaded." />}
         </SectionShell>
       )}
 
@@ -870,13 +900,13 @@ export default function LeaveManagementPage() {
         </SectionShell>
       )}
 
-      {tab === "audit" && canManage && (
+      {tab === "audit" && (
         <SectionShell title="Audit history" description="A chronological record of leave, balance, document, and policy actions.">
           {loading ? <LoadingTable /> : audit.length ? <div className="relative ml-3 border-l border-neutral-200 pl-6">{audit.map((event) => <AuditRow key={event.id} event={event} />)}</div> : <EmptyState icon="audit" title="No audit events yet" text="Leave actions will appear here as they occur." />}
         </SectionShell>
       )}
 
-      {actionDialog && (
+      {actionDialog && ((actionDialog.kind === "reject" && canApprove) || (actionDialog.kind === "cancel" && canEdit)) && (
         <ActionDialog
           kind={actionDialog.kind}
           application={actionDialog.application}
@@ -888,7 +918,7 @@ export default function LeaveManagementPage() {
         />
       )}
 
-      {adjustmentDialog && (
+      {adjustmentDialog && canApprove && (
         <AdjustmentResolutionDialog
           adjustment={adjustmentDialog.adjustment}
           decision={adjustmentDialog.decision}
@@ -903,7 +933,7 @@ export default function LeaveManagementPage() {
         />
       )}
 
-      {policyEditor && (
+      {policyEditor && canApprove && (
         <PolicyConfigurationDialog
           selection={policyEditor}
           busy={busy === `policy-config:${policyEditor.version.id}`}
@@ -971,17 +1001,17 @@ function EmployeeLeaveType({ types, value, onChange }: { types: LeaveType[]; val
   return <Field label="Leave type" required><select value={value} onChange={(event) => onChange(event.target.value)} className="input-modern mt-1">{types.map((type) => <option key={type.id} value={type.code}>{type.name}</option>)}</select></Field>;
 }
 
-function DocumentReviewActions({ leaveDocument, busy, canManage, onReview, onVerify }: { leaveDocument: LeaveDocument; busy: string | null; canManage: boolean; onReview: (leaveDocument: LeaveDocument) => void; onVerify: (id: string) => void }) {
+function DocumentReviewActions({ leaveDocument, busy, canExport, canApprove, onReview, onVerify }: { leaveDocument: LeaveDocument; busy: string | null; canExport: boolean; canApprove: boolean; onReview: (leaveDocument: LeaveDocument) => void; onVerify: (id: string) => void }) {
   const isBusy = busy === leaveDocument.id;
   return <span className="inline-flex min-w-0 flex-wrap items-center gap-1.5" title={`${leaveDocument.fileName} - ${leaveDocument.mimeType} - ${fileSizeLabel(leaveDocument.fileSize)}`}>
     <Status value={leaveDocument.reviewStatus} />
     <span className="max-w-40 truncate text-neutral-600">{leaveDocument.fileName}</span>
-    {canManage && <button type="button" onClick={() => onReview(leaveDocument)} disabled={isBusy} className="font-semibold text-blue-700 underline decoration-blue-300 underline-offset-2 disabled:opacity-50">{isBusy ? "Opening..." : "Review file"}</button>}
-    {canManage && leaveDocument.reviewStatus === "PENDING_REVIEW" && <button type="button" onClick={() => onVerify(leaveDocument.id)} disabled={isBusy} className="font-semibold text-emerald-700 underline decoration-emerald-300 underline-offset-2 disabled:opacity-50">Verify</button>}
+    {canExport && <button type="button" onClick={() => onReview(leaveDocument)} disabled={isBusy} className="font-semibold text-blue-700 underline decoration-blue-300 underline-offset-2 disabled:opacity-50">{isBusy ? "Opening..." : "Review file"}</button>}
+    {canApprove && leaveDocument.reviewStatus === "PENDING_REVIEW" && <button type="button" onClick={() => onVerify(leaveDocument.id)} disabled={isBusy} className="font-semibold text-emerald-700 underline decoration-emerald-300 underline-offset-2 disabled:opacity-50">Verify</button>}
   </span>;
 }
 
-function ApprovalCard({ application: app, busy, canManage, onApprove, onReject, onCancel, onResolveAdjustment, onReview, onVerify }: { application: LeaveApplication; busy: string | null; canManage: boolean; onApprove: (app: LeaveApplication) => void; onReject: (app: LeaveApplication) => void; onCancel: (app: LeaveApplication) => void; onResolveAdjustment: () => void; onReview: (leaveDocument: LeaveDocument) => void; onVerify: (id: string) => void }) {
+function ApprovalCard({ application: app, busy, canEdit, canApprove, canExport, onApprove, onReject, onCancel, onResolveAdjustment, onReview, onVerify }: { application: LeaveApplication; busy: string | null; canEdit: boolean; canApprove: boolean; canExport: boolean; onApprove: (app: LeaveApplication) => void; onReject: (app: LeaveApplication) => void; onCancel: (app: LeaveApplication) => void; onResolveAdjustment: () => void; onReview: (leaveDocument: LeaveDocument) => void; onVerify: (id: string) => void }) {
   const canDecide = pendingStatuses.includes(app.status);
   const canCancel = ["DRAFT", "SUBMITTED", "PENDING_HR", "APPROVED", "IMPORTED_APPROVED", "PAYROLL_PROCESSED", "CANCELLATION_REQUESTED"].includes(app.status);
   const needsAdjustment = app.status === "ADJUSTMENT_REQUIRED";
@@ -991,9 +1021,9 @@ function ApprovalCard({ application: app, busy, canManage, onApprove, onReject, 
       <div className="flex items-start gap-3"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-sm font-bold text-white">{initials(app.employee)}</span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-bold text-neutral-950">{employeeName(app.employee)}</h3><p className="text-xs text-neutral-500">{app.employee.employeeNumber} {app.employee.group?.name ? `- ${app.employee.group.name}` : ""}</p></div><Status value={app.status} /></div></div></div>
       <div className="mt-5 grid grid-cols-2 gap-3 rounded-xl bg-neutral-50 p-4 sm:grid-cols-4"><CardFact label="Period" value={period(app.startDate, app.endDate)} /><CardFact label="Leave type" value={app.leaveType.name} /><CardFact label="Duration" value={hours(app.calculatedMinutes)} /><CardFact label="Payroll" value={app.unpaidMinutes > 0 ? `${hours(app.unpaidMinutes)} unpaid` : friendly(app.leaveType.payrollTreatment)} danger={app.unpaidMinutes > 0} /></div>
       {app.reason && <p className="mt-4 rounded-lg border-l-2 border-neutral-300 bg-neutral-50 px-3 py-2 text-sm italic text-neutral-600">{app.reason}</p>}
-      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs"><span className="text-neutral-500">Evidence:</span>{app.documents.length ? app.documents.map((doc) => <DocumentReviewActions key={doc.id} leaveDocument={doc} busy={busy} canManage={canManage} onReview={onReview} onVerify={onVerify} />) : <span className={app.leaveType.requiresDocument ? "font-semibold text-red-600" : "text-neutral-500"}>{app.leaveType.requiresDocument ? "Required - not uploaded" : "Not required"}</span>}{verified && <span className="inline-flex items-center gap-1 text-emerald-700"><Icon name="check" className="h-3.5 w-3.5" /> Ready</span>}</div>
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs"><span className="text-neutral-500">Evidence:</span>{app.documents.length ? app.documents.map((doc) => <DocumentReviewActions key={doc.id} leaveDocument={doc} busy={busy} canExport={canExport} canApprove={canApprove} onReview={onReview} onVerify={onVerify} />) : <span className={app.leaveType.requiresDocument ? "font-semibold text-red-600" : "text-neutral-500"}>{app.leaveType.requiresDocument ? "Required - not uploaded" : "Not required"}</span>}{verified && <span className="inline-flex items-center gap-1 text-emerald-700"><Icon name="check" className="h-3.5 w-3.5" /> Ready</span>}</div>
     </div>
-    {canManage && (canDecide || canCancel || needsAdjustment) && <div className="flex flex-wrap items-center justify-end gap-2 border-t border-neutral-200 bg-neutral-50 px-5 py-3">{canCancel && <button onClick={() => onCancel(app)} disabled={busy === app.id} className="btn-ghost px-3 py-2 text-sm">{app.status === "CANCELLATION_REQUESTED" ? "Approve cancellation" : ["APPROVED", "IMPORTED_APPROVED", "PAYROLL_PROCESSED"].includes(app.status) ? "Cancel leave" : "Withdraw"}</button>}{needsAdjustment && <button type="button" onClick={onResolveAdjustment} className="btn-primary px-3 py-2 text-sm">Resolve payroll correction</button>}{canDecide && <><button onClick={() => onReject(app)} disabled={busy === app.id} className="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50">Reject</button><button onClick={() => onApprove(app)} disabled={busy === app.id} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"><Icon name="check" className="h-4 w-4" />{busy === app.id ? "Working..." : "Approve"}</button></>}</div>}
+    {((canEdit && canCancel) || (canApprove && (canDecide || needsAdjustment))) && <div className="flex flex-wrap items-center justify-end gap-2 border-t border-neutral-200 bg-neutral-50 px-5 py-3">{canEdit && canCancel && <button onClick={() => onCancel(app)} disabled={busy === app.id} className="btn-ghost px-3 py-2 text-sm">{app.status === "CANCELLATION_REQUESTED" ? "Approve cancellation" : ["APPROVED", "IMPORTED_APPROVED", "PAYROLL_PROCESSED"].includes(app.status) ? "Cancel leave" : "Withdraw"}</button>}{canApprove && needsAdjustment && <button type="button" onClick={onResolveAdjustment} className="btn-primary px-3 py-2 text-sm">Resolve payroll correction</button>}{canApprove && canDecide && <><button onClick={() => onReject(app)} disabled={busy === app.id} className="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50">Reject</button><button onClick={() => onApprove(app)} disabled={busy === app.id} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"><Icon name="check" className="h-4 w-4" />{busy === app.id ? "Working..." : "Approve"}</button></>}</div>}
   </article>;
 }
 
@@ -1001,9 +1031,9 @@ function CardFact({ label, value, danger }: { label: string; value: string; dang
   return <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">{label}</p><p className={`mt-1 text-sm font-semibold ${danger ? "text-red-700" : "text-neutral-900"}`}>{value}</p></div>;
 }
 
-function ApplicationTable({ applications, busy, canManage, onCancel, onReview, onVerify }: { applications: LeaveApplication[]; busy: string | null; canManage: boolean; onCancel: (app: LeaveApplication) => void; onReview: (leaveDocument: LeaveDocument) => void; onVerify: (id: string) => void }) {
+function ApplicationTable({ applications, busy, canEdit, canApprove, canExport, onCancel, onReview, onVerify }: { applications: LeaveApplication[]; busy: string | null; canEdit: boolean; canApprove: boolean; canExport: boolean; onCancel: (app: LeaveApplication) => void; onReview: (leaveDocument: LeaveDocument) => void; onVerify: (id: string) => void }) {
   if (!applications.length) return <EmptyState icon="records" title="No records found" text="No leave applications match the selected employee and date range." />;
-  return <div className="overflow-hidden rounded-xl border border-neutral-200"><div className="overflow-x-auto"><table className="w-full min-w-[980px] text-sm"><thead className="bg-neutral-50 text-xs uppercase tracking-wider text-neutral-500"><tr><Th>Employee</Th><Th>Dates</Th><Th>Leave</Th><Th>Duration</Th><Th>Evidence</Th><Th>Status</Th>{canManage && <Th><span className="sr-only">Actions</span></Th>}</tr></thead><tbody className="divide-y divide-neutral-200">{applications.map((app) => <tr key={app.id} className="bg-white align-top hover:bg-neutral-50"><Td><div className="flex items-center gap-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-xs font-bold">{initials(app.employee)}</span><div><strong className="block text-neutral-900">{employeeName(app.employee)}</strong><span className="text-xs text-neutral-500">{app.employee.employeeNumber}</span></div></div></Td><Td><strong className="font-medium">{period(app.startDate, app.endDate)}</strong><span className="mt-1 block text-xs text-neutral-500">Created {dateLabel(app.createdAt)}</span></Td><Td>{app.leaveType.name}<span className="mt-1 block text-xs text-neutral-500">{friendly(app.leaveType.payrollTreatment)}</span></Td><Td><strong>{hours(app.calculatedMinutes)}</strong>{app.unpaidMinutes > 0 && <span className="mt-1 block text-xs font-semibold text-red-600">{hours(app.unpaidMinutes)} unpaid</span>}</Td><Td>{app.documents.length ? app.documents.map((doc) => <div className="mb-1 flex items-center gap-1 text-xs" key={doc.id}><DocumentReviewActions leaveDocument={doc} busy={busy} canManage={canManage} onReview={onReview} onVerify={onVerify} /></div>) : <span className={app.leaveType.requiresDocument ? "font-semibold text-red-600" : "text-neutral-400"}>{app.leaveType.requiresDocument ? "Missing" : "None"}</span>}</Td><Td><Status value={app.status} />{app.decisionReason && <span className="mt-1 block max-w-52 text-xs text-neutral-500">{app.decisionReason}</span>}</Td>{canManage && <Td><button onClick={() => onCancel(app)} disabled={busy === app.id || !["DRAFT", "SUBMITTED", "PENDING_HR", "APPROVED", "IMPORTED_APPROVED", "PAYROLL_PROCESSED", "CANCELLATION_REQUESTED"].includes(app.status)} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-100 disabled:hidden">{app.status === "CANCELLATION_REQUESTED" ? "Approve cancellation" : "Cancel"}</button></Td>}</tr>)}</tbody></table></div></div>;
+  return <div className="overflow-hidden rounded-xl border border-neutral-200"><div className="overflow-x-auto"><table className="w-full min-w-[980px] text-sm"><thead className="bg-neutral-50 text-xs uppercase tracking-wider text-neutral-500"><tr><Th>Employee</Th><Th>Dates</Th><Th>Leave</Th><Th>Duration</Th><Th>Evidence</Th><Th>Status</Th>{canEdit && <Th><span className="sr-only">Actions</span></Th>}</tr></thead><tbody className="divide-y divide-neutral-200">{applications.map((app) => <tr key={app.id} className="bg-white align-top hover:bg-neutral-50"><Td><div className="flex items-center gap-2.5"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-xs font-bold">{initials(app.employee)}</span><div><strong className="block text-neutral-900">{employeeName(app.employee)}</strong><span className="text-xs text-neutral-500">{app.employee.employeeNumber}</span></div></div></Td><Td><strong className="font-medium">{period(app.startDate, app.endDate)}</strong><span className="mt-1 block text-xs text-neutral-500">Created {dateLabel(app.createdAt)}</span></Td><Td>{app.leaveType.name}<span className="mt-1 block text-xs text-neutral-500">{friendly(app.leaveType.payrollTreatment)}</span></Td><Td><strong>{hours(app.calculatedMinutes)}</strong>{app.unpaidMinutes > 0 && <span className="mt-1 block text-xs font-semibold text-red-600">{hours(app.unpaidMinutes)} unpaid</span>}</Td><Td>{app.documents.length ? app.documents.map((doc) => <div className="mb-1 flex items-center gap-1 text-xs" key={doc.id}><DocumentReviewActions leaveDocument={doc} busy={busy} canExport={canExport} canApprove={canApprove} onReview={onReview} onVerify={onVerify} /></div>) : <span className={app.leaveType.requiresDocument ? "font-semibold text-red-600" : "text-neutral-400"}>{app.leaveType.requiresDocument ? "Missing" : "None"}</span>}</Td><Td><Status value={app.status} />{app.decisionReason && <span className="mt-1 block max-w-52 text-xs text-neutral-500">{app.decisionReason}</span>}</Td>{canEdit && <Td><button onClick={() => onCancel(app)} disabled={busy === app.id || !["DRAFT", "SUBMITTED", "PENDING_HR", "APPROVED", "IMPORTED_APPROVED", "PAYROLL_PROCESSED", "CANCELLATION_REQUESTED"].includes(app.status)} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-100 disabled:hidden">{app.status === "CANCELLATION_REQUESTED" ? "Approve cancellation" : "Cancel"}</button></Td>}</tr>)}</tbody></table></div></div>;
 }
 
 function Th({ children }: { children: React.ReactNode }) { return <th className="px-4 py-3 text-left font-semibold">{children}</th>; }
@@ -1029,13 +1059,16 @@ function PreviewMetric({ label, value, tone = "default" }: { label: string; valu
 
 function ImpactCheck({ ok, text }: { ok: boolean; text: string }) { return <div className={`flex items-center gap-2 ${ok ? "text-emerald-700" : "text-amber-700"}`}><span className={`rounded-full p-1 ${ok ? "bg-emerald-50" : "bg-amber-50"}`}><Icon name={ok ? "check" : "warning"} className="h-3.5 w-3.5"/></span><span>{text}</span></div>; }
 
-function PolicyCard({ policy, canManage, busy, onConfirm, onConfigure }: { policy: Policy; canManage: boolean; busy: string | null; onConfirm: (id: string) => void; onConfigure: (version: PolicyVersion) => void }) {
+function PolicyCard({ policy, canCreate, canEdit, canApprove, busy, onConfirm, onConfigure }: { policy: Policy; canCreate: boolean; canEdit: boolean; canApprove: boolean; busy: string | null; onConfirm: (id: string) => void; onConfigure: (version: PolicyVersion) => void }) {
   return (
     <article className="rounded-xl border border-neutral-200 bg-white">
       <div className="border-b border-neutral-200 px-5 py-4"><h3 className="font-bold">{policy.name}</h3><p className="mt-1 text-sm text-neutral-500">{policy.description}</p></div>
       <div className="divide-y divide-neutral-200">
         {policy.versions.map((version) => {
           const configuring = busy === `policy-config:${version.id}`;
+          const canConfigure = canApprove && (
+            version.reviewStatus === "PENDING_HR_LEGAL_CONFIRMATION" ? canEdit : canCreate
+          );
           return (
             <div key={version.id} className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
@@ -1045,10 +1078,10 @@ function PolicyCard({ policy, canManage, busy, onConfirm, onConfigure }: { polic
                 {version.legalReference && <p className="mt-1 text-xs text-neutral-500">{version.legalReference}</p>}
                 {version.configurationIssues.length > 0 && <ul className="mt-2 space-y-1 text-xs text-red-700">{version.configurationIssues.map((issue) => <li key={issue}>• {issue}</li>)}</ul>}
               </div>
-              {canManage && (
+              {(canConfigure || canApprove) && (
                 <div className="flex shrink-0 gap-2">
-                  {!version.configurationReady ? <button disabled={configuring} onClick={() => onConfigure(version)} className="btn-secondary px-3 py-2 text-sm">{configuring ? "Saving..." : "Configure rules"}</button>
-                    : version.reviewStatus === "PENDING_HR_LEGAL_CONFIRMATION" ? <button disabled={busy === version.id} onClick={() => onConfirm(version.id)} className="btn-secondary px-3 py-2 text-sm">{busy === version.id ? "Confirming..." : "Confirm after review"}</button>
+                  {!version.configurationReady && canConfigure ? <button disabled={configuring} onClick={() => onConfigure(version)} className="btn-secondary px-3 py-2 text-sm">{configuring ? "Saving..." : "Configure rules"}</button>
+                    : version.reviewStatus === "PENDING_HR_LEGAL_CONFIRMATION" && canApprove ? <button disabled={busy === version.id} onClick={() => onConfirm(version.id)} className="btn-secondary px-3 py-2 text-sm">{busy === version.id ? "Confirming..." : "Confirm after review"}</button>
                     : null}
                 </div>
               )}
@@ -1141,7 +1174,7 @@ function BreakdownTable({ title, rows }: { title: string; rows: ReportBreakdown 
 
 function AuditRow({ event }: { event: AuditEvent }) { return <article className="relative pb-6"><span className="absolute -left-[31px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-neutral-400 ring-1 ring-neutral-300"/><div className="flex flex-col justify-between gap-2 sm:flex-row"><div><h3 className="text-sm font-bold">{friendly(event.eventType)}</h3><p className="mt-1 text-sm text-neutral-500">{event.employee ? `${event.employee.firstName} ${event.employee.lastName}` : "Company policy"}{event.reason ? ` - ${event.reason}` : ""}</p></div><div className="shrink-0 text-xs text-neutral-500 sm:text-right"><p>{dateLabel(event.occurredAt, "d MMM yyyy, HH:mm")}</p><p>{event.user?.name ?? "System"}</p></div></div></article>; }
 
-function PendingAdjustmentCard({ adjustment, busy, onConfirm, onReject }: { adjustment: LeaveAdjustment; busy: boolean; onConfirm: () => void; onReject: () => void }) {
+function PendingAdjustmentCard({ adjustment, busy, onConfirm, onReject }: { adjustment: LeaveAdjustment; busy: boolean; onConfirm?: () => void; onReject?: () => void }) {
   const app = adjustment.application;
   return (
     <article className="overflow-hidden rounded-xl border border-red-200 bg-white shadow-sm">
@@ -1163,10 +1196,10 @@ function PendingAdjustmentCard({ adjustment, busy, onConfirm, onReject }: { adju
           <p className="mt-1 text-sm leading-6 text-neutral-700">{adjustment.reason}</p>
         </div>
       </div>
-      <div className="flex flex-col-reverse gap-2 border-t border-neutral-200 bg-neutral-50 p-4 sm:flex-row sm:justify-end">
+      {(onConfirm || onReject) && <div className="flex flex-col-reverse gap-2 border-t border-neutral-200 bg-neutral-50 p-4 sm:flex-row sm:justify-end">
         <button type="button" onClick={onReject} disabled={busy || !app} className="btn-secondary">Reject correction</button>
         <button type="button" onClick={onConfirm} disabled={busy || !app} className="btn-primary">{busy ? "Saving..." : "Confirm external correction"}</button>
-      </div>
+      </div>}
     </article>
   );
 }
@@ -1222,7 +1255,7 @@ function AdjustmentResolutionDialog({ adjustment, decision, reason, payrollRefer
 
 function ActionDialog({ kind, application, reason, onReasonChange, busy, onClose, onSubmit }: { kind: "reject" | "cancel"; application: LeaveApplication; reason: string; onReasonChange: (value: string) => void; busy: boolean; onClose: () => void; onSubmit: () => void }) {
   const isReject = kind === "reject";
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="leave-action-title"><div className="w-full max-w-md overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl"><div className="flex items-start gap-3 border-b border-neutral-200 p-5"><span className={`rounded-xl p-2 ${isReject ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"}`}><Icon name={isReject ? "close" : "warning"} /></span><div><h2 id="leave-action-title" className="text-lg font-bold">{isReject ? "Reject leave request" : "Cancel or withdraw leave"}</h2><p className="mt-1 text-sm text-neutral-500">{employeeName(application.employee)} - {period(application.startDate, application.endDate)}</p></div></div><div className="p-5"><Field label={isReject ? "Reason for rejection" : "Reason for cancellation"} required hint="This will be recorded in the audit history."><textarea autoFocus value={reason} onChange={(event) => onReasonChange(event.target.value)} className="input-modern mt-2 min-h-28 resize-y" placeholder={isReject ? "Explain what the employee or administrator needs to correct" : "Explain why this leave is being cancelled or withdrawn"} /></Field></div><div className="flex justify-end gap-2 border-t border-neutral-200 bg-neutral-50 p-4"><button onClick={onClose} disabled={busy} className="btn-ghost">Keep request</button><button onClick={onSubmit} disabled={busy || !reason.trim()} className={isReject ? "btn-destructive" : "btn-primary"}>{busy ? "Saving..." : isReject ? "Reject request" : "Confirm cancellation"}</button></div></div></div>;
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="leave-action-title"><div className="w-full max-w-md overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl"><div className="flex items-start gap-3 border-b border-neutral-200 p-5"><span className={`rounded-xl p-2 ${isReject ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"}`}><Icon name={isReject ? "close" : "warning"} /></span><div><h2 id="leave-action-title" className="text-lg font-bold">{isReject ? "Reject leave request" : "Cancel or withdraw leave"}</h2><p className="mt-1 text-sm text-neutral-500">{employeeName(application.employee)} - {period(application.startDate, application.endDate)}</p></div></div><div className="p-5"><Field label={isReject ? "Reason for rejection" : "Reason for cancellation"} required hint="This will be recorded in the audit history."><textarea autoFocus value={reason} onChange={(event) => onReasonChange(event.target.value)} className="input-modern mt-2 min-h-28 resize-y" placeholder={isReject ? "Explain what the applicant needs to correct" : "Explain why this leave is being cancelled or withdrawn"} /></Field></div><div className="flex justify-end gap-2 border-t border-neutral-200 bg-neutral-50 p-4"><button onClick={onClose} disabled={busy} className="btn-ghost">Keep request</button><button onClick={onSubmit} disabled={busy || !reason.trim()} className={isReject ? "btn-destructive" : "btn-primary"}>{busy ? "Saving..." : isReject ? "Reject request" : "Confirm cancellation"}</button></div></div></div>;
 }
 
 function EmptyState({ icon, title, text, action }: { icon: IconName; title: string; text: string; action?: { label: string; onClick: () => void } }) { return <div className="flex min-h-60 flex-col items-center justify-center rounded-xl border border-dashed border-neutral-300 bg-neutral-50/70 px-6 py-10 text-center"><span className="mb-3 rounded-full bg-white p-3 text-neutral-500 shadow-sm"><Icon name={icon} /></span><h3 className="font-bold text-neutral-900">{title}</h3><p className="mt-1 max-w-md text-sm leading-6 text-neutral-500">{text}</p>{action && <button onClick={action.onClick} className="btn-secondary mt-4 px-4 py-2 text-sm">{action.label}</button>}</div>; }

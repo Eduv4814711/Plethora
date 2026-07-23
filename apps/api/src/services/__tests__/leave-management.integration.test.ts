@@ -40,10 +40,10 @@ describe.runIf(dbReady)("authoritative leave source of truth (PostgreSQL integra
     app = await buildApp();
     const company = await prisma.company.create({ data: { name: `Leave V2 ${suffix}`, settings: { timezone: "Africa/Johannesburg" } } });
     companyId = company.id;
-    const actor = await prisma.user.create({ data: { companyId, name: "HR", email: `leave-v2-hr-${suffix}@test.local`, passwordHash: await hashPassword("leave-source-test-password!!"), role: "hr_payroll" } });
+    const actor = await prisma.user.create({ data: { companyId, name: "HR", email: `leave-v2-hr-${suffix}@test.local`, passwordHash: await hashPassword("leave-source-test-password!!") } });
     actorId = actor.id;
-    const controller = await prisma.user.create({ data: { companyId, name: "Controller", email: `leave-v2-controller-${suffix}@test.local`, passwordHash: actor.passwordHash, role: "controller", moduleAccess: ["/employees"] } });
-    controllerToken = jwt.sign({ sub: controller.id, email: controller.email, companyId, role: controller.role, moduleAccess: controller.moduleAccess }, config.jwt.accessSecret, { expiresIn: "1h" });
+    const controller = await prisma.user.create({ data: { companyId, name: "Controller", email: `leave-v2-controller-${suffix}@test.local`, passwordHash: actor.passwordHash, capabilities: { "/employees/leave": ["view", "approve"] } } });
+    controllerToken = jwt.sign({ sub: controller.id, email: controller.email, companyId }, config.jwt.accessSecret, { expiresIn: "1h" });
     const employee = await prisma.employee.create({ data: { companyId, employeeNumber: `LV2-${suffix}`, firstName: "Night", lastName: "Guard", status: "active", employeeType: "security", hourlyRate: 100, commencementDate: new Date("2026-01-01") } });
     employeeId = employee.id;
     await prisma.employmentTerm.create({ data: { companyId, employeeId, effectiveFrom: new Date("2026-01-01"), contractType: "permanent", normalMinutesPerShift: 720, workingPattern: { rosterControlled: true } } });
@@ -52,8 +52,8 @@ describe.runIf(dbReady)("authoritative leave source of truth (PostgreSQL integra
     shiftId = shift.id;
     const other = await prisma.company.create({ data: { name: `Other Leave Tenant ${suffix}` } });
     otherCompanyId = other.id;
-    const otherAdmin = await prisma.user.create({ data: { companyId: other.id, name: "Other", email: `leave-other-${suffix}@test.local`, passwordHash: actor.passwordHash, role: "admin" } });
-    otherTenantToken = jwt.sign({ sub: otherAdmin.id, email: otherAdmin.email, companyId: other.id, role: otherAdmin.role }, config.jwt.accessSecret, { expiresIn: "1h" });
+    const otherUser = await prisma.user.create({ data: { companyId: other.id, name: "Other", email: `leave-other-${suffix}@test.local`, passwordHash: actor.passwordHash, capabilities: { "/employees/leave": ["view"] } } });
+    otherTenantToken = jwt.sign({ sub: otherUser.id, email: otherUser.email, companyId: other.id }, config.jwt.accessSecret, { expiresIn: "1h" });
   });
 
   afterAll(async () => {
@@ -128,7 +128,7 @@ describe.runIf(dbReady)("authoritative leave source of truth (PostgreSQL integra
     expect(await prisma.leaveAdjustment.count({ where: { applicationId: application.id } })).toBe(0);
   });
 
-  it("uses assigned module permissions instead of role names and preserves tenant isolation", async () => {
+  it("uses assigned capabilities and preserves tenant isolation", async () => {
     const application = await prisma.leaveApplication.findFirstOrThrow({ where: { companyId } });
     const permitted = await app.inject({ method: "POST", url: `/leave/applications/${application.id}/decision`, headers: { ...authHeader(controllerToken), "content-type": "application/json" }, payload: { decision: "approve" } });
     expect(permitted.statusCode).not.toBe(403);

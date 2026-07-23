@@ -1,13 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requireCapability, requireCrudCapability } from "../middleware/authorization.js";
+import { hasCapability } from "../lib/capabilities.js";
+import { privateDownloadUrl } from "../lib/private-download.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 import { upsertAlert } from "../modules/alerts/alerts.service.js";
 import { createNotification } from "../modules/notifications/notifications.service.js";
-
-const TASK_ROLES = ["admin", "operations_manager", "hr_payroll", "supervisor"] as const;
 
 function sanitizeDate(v: string | undefined): Date | undefined {
   if (!v) return undefined;
@@ -135,14 +135,15 @@ const taskDetailInclude = {
 } as const;
 
 export async function tasksRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole([...TASK_ROLES], { module: "/tasks" })];
+  const protect = [authMiddleware, requireCrudCapability({ module: "/tasks" })];
+  const editProtect = [authMiddleware, requireCapability("/tasks", "edit")];
 
   app.get("/assignees", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     const [users, employees] = await Promise.all([
       prisma.user.findMany({
         where: { companyId: user.companyId },
-        select: { id: true, name: true, email: true, role: true },
+        select: { id: true, name: true, email: true, jobTitle: true },
       }),
       prisma.employee.findMany({
         where: { companyId: user.companyId, status: { in: ["active", "training", "hired", "reliever"] } },
@@ -154,7 +155,7 @@ export async function tasksRoutes(app: FastifyInstance) {
         id: u.id,
         type: "user" as const,
         displayName: u.name,
-        subtitle: u.role.replace(/_/g, " "),
+        subtitle: u.jobTitle ?? "Staff",
       })),
       employees: employees.map((e) => ({
         id: e.id,
@@ -371,7 +372,18 @@ export async function tasksRoutes(app: FastifyInstance) {
       user.companyId
     );
 
-    return reply.send({ ...task, assigneeDisplayName });
+    const canExport = hasCapability(user, "/tasks", "export");
+    const attachments = task.attachments.map(({ url: _url, ...metadata }) =>
+      canExport
+        ? {
+            ...metadata,
+            downloadUrl: privateDownloadUrl(
+              `/task-attachments/attachments/${metadata.id}/download`
+            ),
+          }
+        : metadata
+    );
+    return reply.send({ ...task, attachments, assigneeDisplayName });
   });
 
   app.patch("/:id", { preHandler: protect }, async (request, reply) => {
@@ -553,7 +565,7 @@ export async function tasksRoutes(app: FastifyInstance) {
     return reply.code(204).send();
   });
 
-  app.post("/:id/complete", { preHandler: protect }, async (request, reply) => {
+  app.post("/:id/complete", { preHandler: editProtect }, async (request, reply) => {
     const user = request.user!;
     const userId = request.user!.sub!;
     const { id } = request.params as { id: string };
@@ -637,7 +649,7 @@ export async function tasksRoutes(app: FastifyInstance) {
     return reply.send({ ...task, assigneeDisplayName });
   });
 
-  app.post("/:id/reopen", { preHandler: protect }, async (request, reply) => {
+  app.post("/:id/reopen", { preHandler: editProtect }, async (request, reply) => {
     const user = request.user!;
     const userId = request.user!.sub!;
     const { id } = request.params as { id: string };

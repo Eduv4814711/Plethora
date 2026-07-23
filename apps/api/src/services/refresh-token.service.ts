@@ -2,7 +2,6 @@ import { createHash, randomBytes } from "crypto";
 import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma.js";
 import { config } from "../lib/config.js";
-import type { UserRole } from "@prisma/client";
 
 export function hashRefreshToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -58,34 +57,45 @@ export async function rotateRefreshToken(
   const oldHash = hashRefreshToken(oldToken);
   const now = new Date();
 
-  const existing = await prisma.refreshToken.findFirst({
-    where: {
-      userId,
-      tokenHash: oldHash,
-      revokedAt: null,
-      expiresAt: { gt: now },
-    },
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.refreshToken.findFirst({
+      where: {
+        userId,
+        tokenHash: oldHash,
+        revokedAt: null,
+        expiresAt: { gt: now },
+      },
+      select: { id: true },
+    });
+    if (!existing) return false;
+
+    // The conditional update is the single-use claim. Concurrent refreshes
+    // wait on the same row; exactly one transaction can change it from NULL.
+    const claimed = await tx.refreshToken.updateMany({
+      where: {
+        id: existing.id,
+        revokedAt: null,
+        expiresAt: { gt: now },
+      },
+      data: { revokedAt: now },
+    });
+    if (claimed.count !== 1) return false;
+
+    const newRecord = await tx.refreshToken.create({
+      data: {
+        userId,
+        tokenHash: hashRefreshToken(newToken),
+        expiresAt: refreshExpiresAt(),
+        userAgent: meta?.userAgent?.slice(0, 512),
+        ipAddress: meta?.ipAddress?.slice(0, 64),
+      },
+    });
+    await tx.refreshToken.update({
+      where: { id: existing.id },
+      data: { replacedByTokenId: newRecord.id },
+    });
+    return true;
   });
-
-  if (!existing) return false;
-
-  const newRecord = await prisma.refreshToken.create({
-    data: {
-      userId,
-      tokenHash: hashRefreshToken(newToken),
-      expiresAt: refreshExpiresAt(),
-      userAgent: meta?.userAgent?.slice(0, 512),
-      ipAddress: meta?.ipAddress?.slice(0, 64),
-      replacedByTokenId: undefined,
-    },
-  });
-
-  await prisma.refreshToken.update({
-    where: { id: existing.id },
-    data: { revokedAt: now, replacedByTokenId: newRecord.id },
-  });
-
-  return true;
 }
 
 export async function isRefreshTokenActive(refreshToken: string, userId: string): Promise<boolean> {
@@ -105,8 +115,6 @@ export function signRefreshJwt(payload: {
   sub: string;
   email: string;
   companyId: string;
-  role: UserRole;
-  moduleAccess?: unknown;
 }): string {
   return jwt.sign(
     { ...payload, type: "refresh" },

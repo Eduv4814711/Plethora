@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
+import { hasCapability } from "@/lib/permissions";
 import { DateInput } from "@/components/date-input";
 import { useConfirmDialog } from "@/components/ui";
 
@@ -35,8 +36,11 @@ interface InvoiceDetail {
 export default function AcademyInvoiceDetailPage() {
   const params = useParams();
   const id = params.id as string;
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { confirm, confirmDialog } = useConfirmDialog();
+  const canCreate = Boolean(user && hasCapability(user, "/academy", "create"));
+  const canEdit = Boolean(user && hasCapability(user, "/academy", "edit"));
+  const canApprove = Boolean(user && hasCapability(user, "/academy", "approve"));
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [payDate, setPayDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -61,7 +65,7 @@ export default function AcademyInvoiceDetailPage() {
   }, [invoice?.id, invoice?.totalAmount]);
 
   const issue = async () => {
-    if (!token) return;
+    if (!token || !canApprove) return;
     setError(null);
     try {
       await academyApi.issueInvoice(token, id);
@@ -72,7 +76,7 @@ export default function AcademyInvoiceDetailPage() {
   };
 
   const cancel = async () => {
-    if (!token) return;
+    if (!token || !canEdit) return;
     const confirmed = await confirm({
       title: "Cancel invoice?",
       message: "Invoices can only be cancelled when there are no verified payments.",
@@ -90,7 +94,7 @@ export default function AcademyInvoiceDetailPage() {
 
   const addPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !payAmount.trim()) return;
+    if (!token || !payAmount.trim() || !canCreate) return;
     setError(null);
     try {
       await academyApi.createPayment(token, {
@@ -107,7 +111,7 @@ export default function AcademyInvoiceDetailPage() {
   };
 
   const verify = async (paymentId: string) => {
-    if (!token) return;
+    if (!token || !canApprove) return;
     setError(null);
     try {
       await academyApi.verifyPayment(token, paymentId);
@@ -118,7 +122,7 @@ export default function AcademyInvoiceDetailPage() {
   };
 
   const reject = async (paymentId: string) => {
-    if (!token) return;
+    if (!token || !canApprove) return;
     const remarks = prompt("Rejection note (optional)") ?? "";
     setError(null);
     try {
@@ -169,15 +173,19 @@ export default function AcademyInvoiceDetailPage() {
         <span className="badge-neutral px-3 py-1 text-sm">{invoice.status}</span>
         {invoice.status === "draft" && (
           <>
+            {canApprove && (
             <button type="button" className="btn-primary px-3 py-1.5 text-xs" onClick={issue}>
               Issue invoice
             </button>
+            )}
+            {canEdit && (
             <button type="button" className="btn-ghost px-3 py-1.5 text-xs text-red-700" onClick={cancel}>
               Cancel
             </button>
+            )}
           </>
         )}
-        {(invoice.status === "issued" || invoice.status === "partially_paid" || invoice.status === "overdue") && (
+        {canEdit && (invoice.status === "issued" || invoice.status === "partially_paid" || invoice.status === "overdue") && (
           <button type="button" className="btn-ghost px-3 py-1.5 text-xs text-red-700" onClick={cancel}>
             Cancel (no verified payments)
           </button>
@@ -200,7 +208,7 @@ export default function AcademyInvoiceDetailPage() {
         </ul>
       </div>
 
-      <section className="rounded-lg border border-neutral-300 p-4">
+      {canCreate && <section className="rounded-lg border border-neutral-300 p-4">
         <h2 className="font-medium">Record payment</h2>
         <form onSubmit={addPayment} className="mt-3 flex flex-wrap items-end gap-2">
           <div>
@@ -226,7 +234,7 @@ export default function AcademyInvoiceDetailPage() {
         <p className="mt-2 text-xs text-neutral-500">
           Upload proof of payment from the student profile (Documents → payment_proof), then optionally link the document id via API later.
         </p>
-      </section>
+      </section>}
 
       <section className="rounded-lg border border-neutral-300 p-4">
         <h2 className="font-medium">Payments</h2>
@@ -252,7 +260,7 @@ export default function AcademyInvoiceDetailPage() {
                     <td>{p.verificationStatus}</td>
                     <td className="font-mono text-xs">{p.receipt?.receiptNumber ?? "—"}</td>
                     <td>
-                      {p.verificationStatus === "pending" && (
+                      {canApprove && p.verificationStatus === "pending" && (
                         <div className="flex gap-1">
                           <button type="button" className="btn-primary px-2 py-1 text-xs" onClick={() => verify(p.id)}>
                             Verify

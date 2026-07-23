@@ -1,10 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requireCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
 
 export async function auditRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin"])];
+  const protect = [authMiddleware, requireCapability("/audit", "view")];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

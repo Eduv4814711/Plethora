@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authMiddleware } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireCrudCapability } from "../../middleware/authorization.js";
 import { prisma } from "../../lib/prisma.js";
 import { sendText, sendTemplate } from "../services/send.service.js";
 
@@ -25,7 +25,7 @@ const sendTemplateSchema = z.object({
 export async function sendRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
+    requireCrudCapability({
       module: "/whatsapp",
     }),
   ];

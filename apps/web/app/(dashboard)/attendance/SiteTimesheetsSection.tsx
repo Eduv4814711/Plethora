@@ -14,9 +14,11 @@ import { defaultShiftTime, displayShiftTime } from "@/lib/shift-times";
 import {
   addSiteTimesheetRow,
   approveSiteTimesheet,
+  confirmSiteTimesheetRow,
   fetchSecurityGuardOptions,
   fetchSiteTimesheet,
   mergeTimesheetGuardOptions,
+  reopenSiteTimesheetRow,
   resyncSiteTimesheet,
   siteTimesheetCsvUrl,
   type GuardPickerOption,
@@ -38,7 +40,7 @@ import {
   rowNeedsObNumbers,
   sortSiteTimesheetRows,
 } from "@/lib/site-timesheet-utils";
-import { isFullAdmin } from "@/lib/permissions";
+import { hasCapability } from "@/lib/permissions";
 import { ConfirmModal, useConfirmDialog } from "@/components/ui";
 
 type GuardOption = GuardPickerOption;
@@ -161,7 +163,6 @@ function buildRowApprovalPatch(
     dutyOnObNumber,
     dutyOffObNumber,
     occurrenceBookNumber: dutyOnObNumber,
-    approvalStatus: "reviewed",
   };
 }
 
@@ -181,7 +182,27 @@ export function SiteTimesheetsSection({
   shiftType?: AttendanceShiftTypeFilter;
 }) {
   const { user } = useAuth();
-  const canEditLockedOb = Boolean(user && isFullAdmin(user));
+  const canCreate = Boolean(
+    user &&
+      (hasCapability(user, "/attendance", "create") ||
+        hasCapability(user, "/rostering", "create"))
+  );
+  const canEdit = Boolean(
+    user &&
+      (hasCapability(user, "/attendance", "edit") ||
+        hasCapability(user, "/rostering", "edit"))
+  );
+  const canApprove = Boolean(
+    user &&
+      (hasCapability(user, "/attendance", "approve") ||
+        hasCapability(user, "/rostering", "approve"))
+  );
+  const canExport = Boolean(
+    user &&
+      (hasCapability(user, "/attendance", "export") ||
+        hasCapability(user, "/rostering", "export"))
+  );
+  const canEditLockedOb = canApprove;
   const [sheet, setSheet] = useState<SiteTimesheet | null>(null);
   const [guards, setGuards] = useState<GuardOption[]>([]);
   const [loading, setLoading] = useState(false);
@@ -212,6 +233,7 @@ export function SiteTimesheetsSection({
   });
 
   const locked = sheet?.status === "approved" || sheet?.status === "locked";
+  const readOnly = locked || !canEdit;
   const loadIdRef = useRef(0);
   const displaySiteName = sheet?.siteName ?? siteName;
 
@@ -298,14 +320,11 @@ export function SiteTimesheetsSection({
     shiftType === "day" ? "day-shift" : shiftType === "night" ? "night-shift" : "all";
 
   const updateRow = async (row: SiteTimesheetRow, patch: Partial<SiteTimesheetRow>) => {
-    const nextPatch =
-      row.approvalStatus === "reviewed" && patch.approvalStatus === undefined
-        ? { ...patch, approvalStatus: "pending" as const }
-        : patch;
+    if (!canEdit) return;
     setSavingRowId(row.id);
     setError(null);
     try {
-      const res = await updateSiteTimesheetRow(token, row.id, nextPatch);
+      const res = await updateSiteTimesheetRow(token, row.id, patch);
       setSheet((current) =>
         current
           ? {
@@ -321,6 +340,31 @@ export function SiteTimesheetsSection({
       const message = err instanceof Error ? err.message : "Failed to save timesheet row";
       showNotice("Could not save", message);
       throw err instanceof Error ? err : new Error(message);
+    } finally {
+      setSavingRowId(null);
+    }
+  };
+
+  const reopenRow = async (row: SiteTimesheetRow) => {
+    if (!canEdit) return;
+    setSavingRowId(row.id);
+    setError(null);
+    try {
+      const res = await reopenSiteTimesheetRow(token, row.id);
+      setSheet((current) =>
+        current
+          ? {
+              ...current,
+              rows: sortSiteTimesheetRows(
+                current.rows.map((r) => (r.id === row.id ? res.row : r))
+              ),
+            }
+          : current
+      );
+      await load({ silent: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to reopen attendance row";
+      showNotice("Could not reopen", message);
     } finally {
       setSavingRowId(null);
     }
@@ -355,7 +399,7 @@ export function SiteTimesheetsSection({
     if (!canEditLockedOb && current && next !== current) {
       showNotice(
         "Duty ON locked",
-        "Duty ON OB number can only be changed by an administrator once it has been entered."
+        "Duty ON OB number can only be changed with Attendance approval access once it has been entered."
       );
       setDutyOnDraft(row.id, current);
       return;
@@ -383,7 +427,7 @@ export function SiteTimesheetsSection({
     if (!canEditLockedOb && current && next !== current) {
       showNotice(
         "Duty OFF locked",
-        "Duty OFF OB number can only be changed by an administrator once it has been entered."
+        "Duty OFF OB number can only be changed with Attendance approval access once it has been entered."
       );
       setDutyOffDraft(row.id, current);
       return;
@@ -411,13 +455,28 @@ export function SiteTimesheetsSection({
     }
     try {
       setError(null);
-      await updateRow(
-        row,
+      setSavingRowId(row.id);
+      const res = await confirmSiteTimesheetRow(
+        token,
+        row.id,
         buildRowApprovalPatch(row, dutyOn, dutyOff)
       );
+      setSheet((current) =>
+        current
+          ? {
+              ...current,
+              rows: sortSiteTimesheetRows(
+                current.rows.map((r) => (r.id === row.id ? res.row : r))
+              ),
+            }
+          : current
+      );
+      await load({ silent: true });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to confirm this attendance entry";
       setError(message);
+    } finally {
+      setSavingRowId(null);
     }
   };
 
@@ -440,7 +499,7 @@ export function SiteTimesheetsSection({
   };
 
   const exportPdf = () => {
-    if (!sheet) return;
+    if (!sheet || !canExport) return;
     const exportRows = shiftScopedRows;
     const doc = new jsPDF({ orientation: "landscape" });
     doc.setFontSize(16);
@@ -480,6 +539,7 @@ export function SiteTimesheetsSection({
   };
 
   const refreshFromShifts = async () => {
+    if (!canEdit) return;
     setLoading(true);
     setError(null);
     try {
@@ -494,7 +554,7 @@ export function SiteTimesheetsSection({
   };
 
   const exportCsv = async () => {
-    if (!sheet) return;
+    if (!sheet || !canExport) return;
     try {
       const res = await authFetch(siteTimesheetCsvUrl(siteId, periodStart, periodEnd, shiftType), token);
       if (!res.ok) {
@@ -521,7 +581,7 @@ export function SiteTimesheetsSection({
   };
 
   const approveVisibleTimesheet = async () => {
-    if (!sheet) return;
+    if (!sheet || !canApprove) return;
     const blocked = explainSheetApproveBlocked();
     if (blocked) {
       showNotice("Cannot approve timesheet yet", blocked);
@@ -554,7 +614,7 @@ export function SiteTimesheetsSection({
   };
 
   const submitUnlock = async () => {
-    if (!sheet || !unlockReason.trim()) return;
+    if (!sheet || !unlockReason.trim() || !canApprove) return;
     try {
       setError(null);
       await unlockSiteTimesheet(token, sheet.id, unlockReason.trim());
@@ -584,7 +644,7 @@ export function SiteTimesheetsSection({
         onConfirm={() => setNotice(null)}
       />
       {confirmDialog}
-      {unlockOpen && (
+      {unlockOpen && canApprove && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/45 p-4" role="presentation">
           <form
             className="w-full max-w-md rounded-xl border border-neutral-200 bg-white p-6 shadow-xl dark:border-neutral-700 dark:bg-neutral-950"
@@ -627,7 +687,7 @@ export function SiteTimesheetsSection({
             record and the source for payroll actuals. Download it as audit evidence of who worked each day.
           </p>
         </div>
-        {sheet && (
+        {sheet && (canEdit || canApprove || canExport) && (
           <div className="relative flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <button
               type="button"
@@ -640,15 +700,15 @@ export function SiteTimesheetsSection({
             </button>
             {showSecondaryActions && (
               <div id="timesheet-secondary-actions" className="z-20 grid gap-2 rounded-lg border border-neutral-200 bg-white p-2 shadow-lg dark:border-neutral-700 dark:bg-neutral-900 sm:absolute sm:right-0 sm:top-12 sm:min-w-52">
-                {!locked && <button type="button" onClick={() => void refreshFromShifts()} className="btn-secondary min-h-11 text-left">Refresh from shifts</button>}
-                <button type="button" onClick={() => { exportPdf(); setShowSecondaryActions(false); }} className="btn-secondary min-h-11 text-left">Download PDF</button>
-                <button type="button" onClick={() => void exportCsv()} className="btn-secondary min-h-11 text-left">Download CSV</button>
-                {locked && canEditLockedOb && (
+                {!locked && canEdit && <button type="button" onClick={() => void refreshFromShifts()} className="btn-secondary min-h-11 text-left">Refresh from shifts</button>}
+                {canExport && <button type="button" onClick={() => { exportPdf(); setShowSecondaryActions(false); }} className="btn-secondary min-h-11 text-left">Download PDF</button>}
+                {canExport && <button type="button" onClick={() => void exportCsv()} className="btn-secondary min-h-11 text-left">Download CSV</button>}
+                {locked && canApprove && (
                   <button type="button" onClick={() => setUnlockOpen(true)} className="btn-secondary min-h-11 text-left">Admin unlock</button>
                 )}
               </div>
             )}
-            {!locked && (
+            {!locked && canApprove && (
               <button
                 type="button"
                 onClick={() => void approveVisibleTimesheet()}
@@ -725,7 +785,7 @@ export function SiteTimesheetsSection({
             </div>
           )}
 
-          {!locked && (
+          {!locked && canCreate && (
             <>
               <div className="flex justify-end">
                 <button type="button" onClick={() => setShowRelieverForm(true)} className="btn-secondary min-h-11">
@@ -997,7 +1057,7 @@ export function SiteTimesheetsSection({
                 key={row.id}
                 row={row}
                 guards={guardOptions}
-                locked={locked}
+                locked={locked || !canEdit}
                 saving={savingRowId === row.id}
                 dutyOnObNumber={getDutyOnDraft(row)}
                 dutyOffObNumber={getDutyOffDraft(row)}
@@ -1013,6 +1073,7 @@ export function SiteTimesheetsSection({
                 hoursBetween={hoursBetween}
                 onUpdate={(r, patch) => void updateRow(r, patch)}
                 onApprove={(r) => void approveRowAttendance(r)}
+                onReopen={(r) => void reopenRow(r)}
               />
             ))}
           </div>
@@ -1081,7 +1142,7 @@ export function SiteTimesheetsSection({
                         value={row.actualGuardId}
                         defaultGuardId={row.plannedGuardId}
                         defaultGuardLabel={row.plannedGuardName}
-                        disabled={locked || savingRowId === row.id}
+                        disabled={readOnly || savingRowId === row.id}
                         onChange={(guardId) => void updateRow(row, { actualGuardId: guardId })}
                         clearLabel="Nobody worked"
                         truncateLabel
@@ -1094,7 +1155,7 @@ export function SiteTimesheetsSection({
                         Plan: {label(row.plannedShiftType ?? row.plannedShiftCode)}
                       </p>
                       <select
-                        disabled={locked}
+                        disabled={readOnly}
                         value={row.actualShiftType ?? ""}
                         onChange={(e) => {
                           const shiftType =
@@ -1116,7 +1177,7 @@ export function SiteTimesheetsSection({
                       <div className="flex items-center gap-0.5">
                         <ShiftTimeSelect
                           value={displayShiftTime(row.clockIn, rowShiftType(row), "start")}
-                          disabled={locked || savingRowId === row.id}
+                          disabled={readOnly || savingRowId === row.id}
                           onChange={(time) => {
                             const clockIn = combineDateTime(row.workDate, time);
                             if (clockIn === (row.clockIn ?? null)) return;
@@ -1128,7 +1189,7 @@ export function SiteTimesheetsSection({
                         <span className="text-neutral-400">/</span>
                         <ShiftTimeSelect
                           value={displayShiftTime(row.clockOut, rowShiftType(row), "end")}
-                          disabled={locked || savingRowId === row.id}
+                          disabled={readOnly || savingRowId === row.id}
                           onChange={(time) => {
                             const shiftType = rowShiftType(row);
                             const clockIn =
@@ -1159,7 +1220,7 @@ export function SiteTimesheetsSection({
                     </td>
                     <td className={cellClass}>
                       <input
-                        disabled={locked}
+                        disabled={readOnly}
                         defaultValue={row.comments ?? ""}
                         onBlur={(e) => void updateRow(row, { comments: e.target.value })}
                         className="input-compact w-full !px-2 !py-1 text-[11px]"
@@ -1171,13 +1232,13 @@ export function SiteTimesheetsSection({
                       {(() => {
                         const savedDutyOn = resolveDutyOnFromRow(row);
                         const dutyOnLocked = Boolean(savedDutyOn) && !canEditLockedOb;
-                        if (locked || row.approvalStatus === "approved" || dutyOnLocked) {
+                        if (readOnly || row.approvalStatus === "approved" || dutyOnLocked) {
                           return (
                             <span
                               className="font-medium text-neutral-800 dark:text-neutral-200"
                               title={
                                 dutyOnLocked
-                                  ? "Duty ON OB is locked. Only an administrator can change it."
+                                  ? "Duty ON OB is locked. Attendance approval access is required to change it."
                                   : "Duty ON OB number"
                               }
                             >
@@ -1206,13 +1267,13 @@ export function SiteTimesheetsSection({
                         const savedDutyOff = resolveDutyOffFromRow(row);
                         const dutyOffLocked = Boolean(savedDutyOff) && !canEditLockedOb;
                         const dutyOffEnabled = Boolean(savedDutyOn) || Boolean(getDutyOnDraft(row).trim());
-                        if (locked || row.approvalStatus === "approved" || dutyOffLocked) {
+                        if (readOnly || row.approvalStatus === "approved" || dutyOffLocked) {
                           return (
                             <span
                               className="font-medium text-neutral-800 dark:text-neutral-200"
                               title={
                                 dutyOffLocked
-                                  ? "Duty OFF OB is locked. Only an administrator can change it."
+                                  ? "Duty OFF OB is locked. Attendance approval access is required to change it."
                                   : "Duty OFF OB number"
                               }
                             >
@@ -1239,6 +1300,10 @@ export function SiteTimesheetsSection({
                         <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
                           Approved
                         </span>
+                      ) : !canEdit ? (
+                        <span className="inline-flex items-center rounded-full border border-neutral-200 bg-neutral-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-neutral-600">
+                          {formatAttendanceStatus(row.approvalStatus)}
+                        </span>
                       ) : row.approvalStatus === "reviewed" ? (
                         <div className="flex flex-col gap-0.5">
                           <span className="inline-flex w-fit items-center rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
@@ -1247,7 +1312,7 @@ export function SiteTimesheetsSection({
                           <button
                             type="button"
                             disabled={savingRowId === row.id}
-                            onClick={() => void updateRow(row, { approvalStatus: "pending" })}
+                            onClick={() => void reopenRow(row)}
                             className="text-left text-[9px] text-neutral-500 underline-offset-2 hover:text-neutral-700 hover:underline dark:hover:text-neutral-300"
                           >
                             Reopen
@@ -1307,14 +1372,14 @@ export function SiteTimesheetsSection({
                 : "Approving the final shift locks this site timesheet for payroll."}
             </p>
           </div>
-          <button
+          {canApprove && <button
             type="button"
             onClick={() => void approveVisibleTimesheet()}
             disabled={pendingReviewCount > 0 || shiftScopedRows.length === 0}
             className="btn-primary min-h-11 w-full disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
           >
             {shiftType === "all" ? "Approve timesheet" : `Approve ${shiftLabel}`}
-          </button>
+          </button>}
         </div>
       )}
     </section>

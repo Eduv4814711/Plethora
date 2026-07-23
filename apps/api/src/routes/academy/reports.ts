@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
+import { authMiddleware } from "../../middleware/auth.js";
+import { requireCapability } from "../../middleware/authorization.js";
 import { academyProtect } from "./constants.js";
 
 function toNum(d: Prisma.Decimal | null | undefined): number {
@@ -8,6 +10,10 @@ function toNum(d: Prisma.Decimal | null | undefined): number {
 }
 
 export async function academyReportsRoutes(app: FastifyInstance) {
+  const exportProtect = [
+    authMiddleware,
+    requireCapability("/academy", "export"),
+  ];
   app.get("/dashboard", { preHandler: academyProtect }, async (request) => {
     const companyId = request.user!.companyId;
     const q = request.query as Record<string, string | undefined>;
@@ -63,7 +69,7 @@ export async function academyReportsRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get("/dashboard/export", { preHandler: academyProtect }, async (request) => {
+  app.get("/dashboard/export", { preHandler: exportProtect }, async (request) => {
     const companyId = request.user!.companyId;
     const q = request.query as Record<string, string | undefined>;
     const from = q.from ? new Date(q.from) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);

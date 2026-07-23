@@ -1,5 +1,7 @@
 "use client";
 
+import { hasCapability } from "@/lib/permissions";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
@@ -17,7 +19,9 @@ interface Course {
 export default function AcademyCoursesPage() {
   const { token, user } = useAuth();
   const { confirm, confirmDialog } = useConfirmDialog();
-  const canManage = user?.role === "admin";
+  const canCreate = Boolean(user && hasCapability(user, "/academy", "create"));
+  const canEdit = Boolean(user && hasCapability(user, "/academy", "edit"));
+  const canDelete = Boolean(user && hasCapability(user, "/academy", "delete"));
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [code, setCode] = useState("");
@@ -46,7 +50,7 @@ export default function AcademyCoursesPage() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !code.trim() || !title.trim() || !canManage) return;
+    if (!token || !code.trim() || !title.trim() || !canCreate) return;
     setError(null);
     setSaving(true);
     try {
@@ -75,7 +79,7 @@ export default function AcademyCoursesPage() {
   };
 
   const saveEdit = async () => {
-    if (!token || !editId || !editTitle.trim() || !canManage) return;
+    if (!token || !editId || !editTitle.trim() || !canEdit) return;
     setError(null);
     setSaving(true);
     try {
@@ -94,7 +98,7 @@ export default function AcademyCoursesPage() {
   };
 
   const toggleActive = async (course: Course) => {
-    if (!token || !canManage) return;
+    if (!token || !canEdit) return;
     setError(null);
     setSaving(true);
     try {
@@ -108,7 +112,7 @@ export default function AcademyCoursesPage() {
   };
 
   const remove = async (course: Course) => {
-    if (!token || !canManage) return;
+    if (!token || !canDelete) return;
     const confirmed = await confirm({
       title: "Delete or deactivate course?",
       message: `${course.code} ${course.title} will be deleted when possible, or deactivated if it is already in use.`,
@@ -138,9 +142,9 @@ export default function AcademyCoursesPage() {
         <h1 className="mt-1 text-2xl font-semibold">Courses</h1>
       </div>
 
-      {!canManage && (
+      {!canCreate && !canEdit && !canDelete && (
         <div className="rounded-lg border border-neutral-300 bg-neutral-100/50 px-3 py-2 text-sm">
-          Read-only: only admins can create, edit, activate, or delete courses.
+          Read-only: course changes have not been granted for your account.
         </div>
       )}
 
@@ -155,7 +159,7 @@ export default function AcademyCoursesPage() {
             className="input-compact"
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            disabled={!canManage || saving}
+            disabled={!canCreate || saving}
           />
         </div>
         <div className="min-w-[180px] flex-1">
@@ -164,7 +168,7 @@ export default function AcademyCoursesPage() {
             className="input-compact w-full"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            disabled={!canManage || saving}
+            disabled={!canCreate || saving}
           />
         </div>
         <div>
@@ -175,13 +179,13 @@ export default function AcademyCoursesPage() {
             className="input-compact w-28"
             value={feeAmount}
             onChange={(e) => setFeeAmount(e.target.value)}
-            disabled={!canManage || saving}
+            disabled={!canCreate || saving}
           />
         </div>
         <button
           type="submit"
           className="btn-primary px-3 py-1.5 text-xs"
-          disabled={!canManage || !code.trim() || !title.trim() || saving}
+          disabled={!canCreate || !code.trim() || !title.trim() || saving}
         >
           Add course
         </button>
@@ -213,7 +217,7 @@ export default function AcademyCoursesPage() {
                         className="input-modern input-xs w-full min-w-[200px]"
                         value={editTitle}
                         onChange={(e) => setEditTitle(e.target.value)}
-                        disabled={!canManage || saving}
+                        disabled={!canEdit || saving}
                       />
                     ) : (
                       c.title
@@ -226,7 +230,7 @@ export default function AcademyCoursesPage() {
                         value={editFeeAmount}
                         onChange={(e) => setEditFeeAmount(e.target.value)}
                         placeholder="0.00"
-                        disabled={!canManage || saving}
+                        disabled={!canEdit || saving}
                       />
                     ) : c.feeAmount != null ? (
                       c.feeAmount
@@ -252,7 +256,7 @@ export default function AcademyCoursesPage() {
                           type="button"
                           className="btn-ghost px-2 py-1 text-xs"
                           onClick={() => setEditActive((v) => !v)}
-                          disabled={!canManage || saving}
+                          disabled={!canEdit || saving}
                         >
                           {editActive ? "Set inactive" : "Set active"}
                         </button>
@@ -260,7 +264,7 @@ export default function AcademyCoursesPage() {
                           type="button"
                           className="btn-primary px-2 py-1 text-xs"
                           onClick={saveEdit}
-                          disabled={!canManage || !editTitle.trim() || saving}
+                          disabled={!canEdit || !editTitle.trim() || saving}
                         >
                           Save
                         </button>
@@ -279,7 +283,7 @@ export default function AcademyCoursesPage() {
                           type="button"
                           className="btn-ghost px-2 py-1 text-xs"
                           onClick={() => startEdit(c)}
-                          disabled={!canManage || saving}
+                          disabled={!canEdit || saving}
                         >
                           Edit
                         </button>
@@ -287,7 +291,7 @@ export default function AcademyCoursesPage() {
                           type="button"
                           className="btn-ghost px-2 py-1 text-xs"
                           onClick={() => toggleActive(c)}
-                          disabled={!canManage || saving}
+                          disabled={!canEdit || saving}
                         >
                           {c.active ? "Deactivate" : "Activate"}
                         </button>
@@ -295,7 +299,7 @@ export default function AcademyCoursesPage() {
                           type="button"
                           className="btn-ghost px-2 py-1 text-xs text-red-700"
                           onClick={() => remove(c)}
-                          disabled={!canManage || saving}
+                          disabled={!canDelete || saving}
                         >
                           Delete
                         </button>

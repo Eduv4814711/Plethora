@@ -2,8 +2,15 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { authMiddleware } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireCapability, requireCrudCapability } from "../../middleware/authorization.js";
+import { hasCapability } from "../../lib/capabilities.js";
+import { privateDownloadUrl, sendPrivateStoredFile } from "../../lib/private-download.js";
 import { readStreamToBuffer, storage } from "../../lib/storage.js";
+import {
+  extensionForMime,
+  matchesMagicBytes,
+  sanitizeUploadFilename,
+} from "../../lib/upload-validation.js";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
 import {
@@ -14,15 +21,20 @@ import {
   updateIncident,
 } from "./incidents.service.js";
 
-const ROLES = [
-  "admin",
-  "operations_manager",
-  "hr_payroll",
-  "supervisor",
-  "controller",
-] as const;
-
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "text/plain",
+  "text/csv",
+]);
 
 const incidentTypeSchema = z.enum([
   "THEFT",
@@ -75,7 +87,7 @@ const reviewSchema = z.object({
 export async function incidentsRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole([...ROLES], {
+    requireCrudCapability({
       anyOfModules: ["/", "/incidents", "/sites", "/reports"],
     }),
   ];
@@ -104,8 +116,45 @@ export async function incidentsRoutes(app: FastifyInstance) {
     if (!incident) {
       return reply.code(404).send({ error: "Not found", message: "Incident not found" });
     }
-    return reply.send(incident);
+    const canExport = hasCapability(user, "/incidents", "export");
+    const attachments = incident.attachments.map(({ url: _url, ...attachment }) =>
+      canExport
+        ? {
+            ...attachment,
+            downloadUrl: privateDownloadUrl(
+              `/incidents/${incident.id}/attachments/${attachment.id}/download`
+            ),
+          }
+        : attachment
+    );
+    return reply.send({ ...incident, attachments });
   });
+
+  app.get(
+    "/:id/attachments/:attachmentId/download",
+    { preHandler: [authMiddleware, requireCapability("/incidents", "export")] },
+    async (request, reply) => {
+      const user = request.user!;
+      const { id, attachmentId } = request.params as { id: string; attachmentId: string };
+      const attachment = await prisma.incidentAttachment.findFirst({
+        where: {
+          id: attachmentId,
+          incidentId: id,
+          incident: { companyId: user.companyId },
+        },
+        select: { url: true, filename: true, mimeType: true },
+      });
+      if (!attachment) {
+        return reply.code(404).send({ error: "Not found", message: "Attachment not found" });
+      }
+      return sendPrivateStoredFile(reply, {
+        storedReference: attachment.url,
+        allowedPrefixes: [`incidents/${user.companyId}/${id}`],
+        fileName: attachment.filename,
+        mimeType: attachment.mimeType,
+      });
+    }
+  );
 
   app.post("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
@@ -173,6 +222,14 @@ export async function incidentsRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "No file", message: "Please select a file to upload" });
     }
 
+    const mimetype = data.mimetype;
+    if (!ALLOWED_ATTACHMENT_TYPES.has(mimetype)) {
+      return reply.code(400).send({
+        error: "Invalid file type",
+        message: "Allowed: images, PDF, Word, Excel, text, or CSV",
+      });
+    }
+
     let fileBuffer: Buffer;
     try {
       fileBuffer = await readStreamToBuffer(data.file, MAX_ATTACHMENT_SIZE);
@@ -183,8 +240,14 @@ export async function incidentsRoutes(app: FastifyInstance) {
       return reply.code(500).send({ error: "Upload failed", message: "Could not read the file" });
     }
 
-    const mimetype = data.mimetype;
-    const ext = mimetype.split("/")[1]?.replace("jpeg", "jpg") || "bin";
+    if (!matchesMagicBytes(fileBuffer, mimetype)) {
+      return reply.code(400).send({
+        error: "Invalid file",
+        message: "File content does not match the declared type",
+      });
+    }
+
+    const ext = extensionForMime(mimetype);
     const filename = `${randomUUID()}.${ext}`;
     const key = `incidents/${user.companyId}/${id}/${filename}`;
 
@@ -198,7 +261,7 @@ export async function incidentsRoutes(app: FastifyInstance) {
       data: {
         incidentId: id,
         url: storage.getAssetUrl(key),
-        filename: data.filename || filename,
+        filename: sanitizeUploadFilename(data.filename || filename, mimetype),
         mimeType: mimetype,
         size: fileBuffer.length,
         uploadedById: user.sub,
@@ -214,10 +277,23 @@ export async function incidentsRoutes(app: FastifyInstance) {
       metadata: { attachmentId: attachment.id },
     });
 
-    return reply.code(201).send(attachment);
+    const { url: _url, ...metadata } = attachment;
+    return reply.code(201).send(
+      hasCapability(user, "/incidents", "export")
+        ? {
+            ...metadata,
+            downloadUrl: privateDownloadUrl(
+              `/incidents/${id}/attachments/${attachment.id}/download`
+            ),
+          }
+        : metadata
+    );
   });
 
-  app.post("/:id/review", { preHandler: protect }, async (request, reply) => {
+  app.post(
+    "/:id/review",
+    { preHandler: [authMiddleware, requireCapability("/incidents", "approve")] },
+    async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
     const parsed = reviewSchema.safeParse(request.body);
@@ -237,5 +313,6 @@ export async function incidentsRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Not found", message: "Incident not found" });
     }
     return reply.send(result);
-  });
+    }
+  );
 }

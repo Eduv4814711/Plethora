@@ -1,18 +1,12 @@
-import type { JWTPayload } from "./types.js";
-import { normalizeModulePermissions } from "../middleware/rbac.js";
+import type { AuthenticatedUser } from "./types.js";
+import { hasCapability } from "./capabilities.js";
 
 /**
- * Private information is intentionally opt-in. A broad administrator account
- * is not automatically a sensitive-data reader; any user explicitly assigned
- * the relevant module may handle that module's data.
+ * Private information is intentionally opt-in. Ordinary module view access
+ * never implies access to identity, health, banking, tax, or compensation data.
  */
-export function canAccessSensitiveData(user: JWTPayload, module: string): boolean {
-  const modules = normalizeModulePermissions(user.moduleAccess);
-  return Boolean(modules && Object.entries(modules).some(([granted, permission]) => permission === "write" && (module === granted || module.startsWith(`${granted}/`))));
-}
-
-export function isPrivacyLimitedAdmin(user: JWTPayload): boolean {
-  return user.role === "admin";
+export function canAccessSensitiveData(user: AuthenticatedUser, module: string): boolean {
+  return hasCapability(user, module, "view_sensitive");
 }
 
 export function hasRestrictedFields(body: unknown, fields: readonly string[]): boolean {
@@ -30,10 +24,12 @@ export function omitFields<T extends Record<string, unknown>, K extends readonly
 }
 
 export const EMPLOYEE_RESTRICTED_FIELDS = [
-  "idNumber", "dateOfBirth", "phone", "email", "physicalAddress", "postalAddress", "postalCode",
+  "idNumber", "dateOfBirth", "gender", "phone", "email", "physicalAddress", "postalAddress", "postalCode",
   "maritalStatus", "nextOfKin1Name", "nextOfKin1Phone", "nextOfKin2Name", "nextOfKin2Phone",
   "nextOfKin3Name", "nextOfKin3Phone", "taxNumber", "taxDirectiveNumber", "taxDirectiveRate",
   "bankName", "bankAccountNumber", "bankBranchCode", "hourlyRate", "monthlySalary", "overtimeRate",
+  "previousService", "residedOutsideSA", "militaryPoliceService", "criminalInvestigation",
+  "mentallyUnstable",
 ] as const;
 
 export const STUDENT_RESTRICTED_FIELDS = [

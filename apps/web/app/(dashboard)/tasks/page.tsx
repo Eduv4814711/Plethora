@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { hasCapability } from "@/lib/permissions";
 import {
   listTasks,
   listTaskProjects,
@@ -101,6 +102,7 @@ function TaskCard({ task }: { task: Task }) {
 
 export default function TasksPage() {
   const { token, user } = useAuth();
+  const canCreate = Boolean(user && hasCapability(user, "/tasks", "create"));
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<TaskProject[]>([]);
   const [total, setTotal] = useState(0);
@@ -157,7 +159,7 @@ export default function TasksPage() {
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !formTitle.trim()) {
+    if (!token || !canCreate || !formTitle.trim()) {
       setFormError("Title is required");
       return;
     }
@@ -239,9 +241,9 @@ export default function TasksPage() {
           >
             Projects
           </Link>
-          <button onClick={() => setShowForm(true)} className="btn-primary text-sm py-2">
+          {canCreate && <button onClick={() => setShowForm(true)} className="btn-primary text-sm py-2">
             New Task
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -264,7 +266,7 @@ export default function TasksPage() {
         ))}
       </div>
 
-      {showForm && (
+      {showForm && canCreate && (
         <div className="card-dashboard mb-6 p-4">
           <h2 className="section-title mb-3">Create task</h2>
           <form onSubmit={handleCreateTask} className="space-y-3">
@@ -341,11 +343,11 @@ export default function TasksPage() {
               ? "Adjust the filters to find operational work."
               : "Create tasks to assign work, track follow-ups, and keep operations moving."
           }
-          action={
+          action={canCreate ? (
             <button type="button" className="btn-primary px-3 py-1.5 text-xs" onClick={() => setShowForm(true)}>
               New task
             </button>
-          }
+          ) : undefined}
         />
       )}
     </div>

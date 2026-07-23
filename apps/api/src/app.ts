@@ -62,6 +62,7 @@ import { notificationsRoutes } from "./modules/notifications/notifications.route
 import { clientsRoutes, clientPortalRoutes } from "./modules/clients/clients.routes.js";
 import { reportsExtendedRoutes } from "./modules/reports-extended/reports-extended.routes.js";
 import { corsOriginFromEnv, env } from "./lib/env.js";
+import { verifyDatabaseReadiness } from "./lib/db-connectivity.js";
 
 function isValidationError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
@@ -114,7 +115,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(rateLimit, {
-    max: 100,
+    // Authentication endpoints have their own stricter limits. Keep the
+    // application-wide ceiling high enough that staff behind one office NAT do
+    // not lock each other out during normal dashboard polling.
+    max: 1_000,
     timeWindow: "1 minute",
   });
 
@@ -124,9 +128,12 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   if (isLocalStorage()) {
     await app.register(fastifyStatic, {
-      root: uploadsRoot,
-      prefix: "/uploads/",
-      allowedPath: (pathName) => !pathName.replace(/^[\\/]+/, "").startsWith("leave-private/"),
+      root: join(uploadsRoot, "logos"),
+      prefix: "/uploads/logos/",
+      allowedPath: (pathName) =>
+        /^[A-Za-z0-9][A-Za-z0-9._-]*\.(?:jpe?g|png|gif|webp)$/i.test(
+          pathName.replace(/^[\\/]+/, "")
+        ),
     });
   }
 
@@ -172,7 +179,20 @@ export async function buildApp(): Promise<FastifyInstance> {
     });
   });
 
-  app.get("/health", async () => ({ status: "ok", service: "plethora-api" }));
+  const live = async () => ({ status: "ok", service: "plethora-api" });
+  app.get("/health", live);
+  app.get("/health/live", live);
+  app.get("/health/ready", async (_request, reply) => {
+    try {
+      await verifyDatabaseReadiness();
+      return reply.send({ status: "ready", service: "plethora-api" });
+    } catch {
+      return reply.code(503).send({
+        status: "unavailable",
+        service: "plethora-api",
+      });
+    }
+  });
 
   await app.register(registerWhatsApp);
   await app.register(authRoutes, { prefix: "/auth" });

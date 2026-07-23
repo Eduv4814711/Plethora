@@ -1,5 +1,7 @@
 "use client";
 
+import { hasCapability } from "@/lib/permissions";
+
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
@@ -31,7 +33,8 @@ interface Row {
 export default function AcademyAssessmentsPage() {
   const { token, user } = useAuth();
   const { confirm, confirmDialog } = useConfirmDialog();
-  const canManage = user?.role === "admin";
+  const canCreate = Boolean(user && hasCapability(user, "/academy", "create"));
+  const canDelete = Boolean(user && hasCapability(user, "/academy", "delete"));
   const [rows, setRows] = useState<Row[]>([]);
   const [students, setStudents] = useState<StudentOption[]>([]);
   const [courses, setCourses] = useState<CourseOption[]>([]);
@@ -69,7 +72,7 @@ export default function AcademyAssessmentsPage() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !learnerId || !courseId || !assessmentDate || !canManage) return;
+    if (!token || !learnerId || !courseId || !assessmentDate || !canCreate) return;
     setSaving(true);
     try {
       await academyApi.createAssessment(token, { learnerId, courseId, assessmentType, assessmentDate });
@@ -83,7 +86,7 @@ export default function AcademyAssessmentsPage() {
   };
 
   const remove = async (id: string) => {
-    if (!token || !canManage) return;
+    if (!token || !canDelete) return;
     const confirmed = await confirm({
       title: "Delete assessment record?",
       message: "This removes the learner assessment result from the register.",
@@ -109,9 +112,9 @@ export default function AcademyAssessmentsPage() {
         <p className="mt-1 text-sm text-neutral-600">Capture assessment outcomes, attempts, and result statuses.</p>
       </div>
 
-      {!canManage && (
+      {!canCreate && !canDelete && (
         <div className="rounded-lg border border-neutral-300 bg-neutral-100/50 px-3 py-2 text-sm">
-          Read-only: only admins can add or delete assessments.
+          Read-only: assessment changes have not been granted for your account.
         </div>
       )}
 
@@ -124,7 +127,7 @@ export default function AcademyAssessmentsPage() {
             className="input-modern rounded-xl"
             value={learnerId}
             onChange={(e) => setLearnerId(e.target.value)}
-            disabled={!canManage || saving}
+            disabled={!canCreate || saving}
           >
             <option value="">Select learner</option>
             {students.map((s) => (
@@ -137,7 +140,7 @@ export default function AcademyAssessmentsPage() {
             className="input-modern rounded-xl"
             value={courseId}
             onChange={(e) => setCourseId(e.target.value)}
-            disabled={!canManage || saving}
+            disabled={!canCreate || saving}
           >
             <option value="">Select course</option>
             {courses.map((c) => (
@@ -151,17 +154,17 @@ export default function AcademyAssessmentsPage() {
             placeholder="Type"
             value={assessmentType}
             onChange={(e) => setAssessmentType(e.target.value)}
-            disabled={!canManage || saving}
+            disabled={!canCreate || saving}
           />
           <DateInput
             value={assessmentDate}
             onChange={setAssessmentDate}
             className="input-modern"
             showToday
-            disabled={!canManage || saving}
+            disabled={!canCreate || saving}
             ariaLabel="Assessment date"
           />
-          <button className="btn-primary rounded-xl" disabled={!canManage || saving}>Add</button>
+          <button className="btn-primary rounded-xl" disabled={!canCreate || saving}>Add</button>
         </form>
       </div>
 
@@ -175,7 +178,7 @@ export default function AcademyAssessmentsPage() {
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-sm text-neutral-500">Loading assessments...</td>
                 </tr>
-              ) : rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{r.learner ? `${r.learner.firstName} ${r.learner.lastName}` : r.learnerId}</td><td>{r.assessmentType}</td><td>{String(r.assessmentDate).slice(0,10)}</td><td><span className={`badge-neutral ${r.result === "pass" || r.result === "competent" ? "badge-success" : r.result ? "badge-warning" : "badge-neutral border border-neutral-300"}`}>{r.result ?? "pending"}</span></td><td className="text-right">{canManage && <button className="btn-destructive px-2 py-1 text-xs" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}</td></tr>)}
+              ) : rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{r.learner ? `${r.learner.firstName} ${r.learner.lastName}` : r.learnerId}</td><td>{r.assessmentType}</td><td>{String(r.assessmentDate).slice(0,10)}</td><td><span className={`badge-neutral ${r.result === "pass" || r.result === "competent" ? "badge-success" : r.result ? "badge-warning" : "badge-neutral border border-neutral-300"}`}>{r.result ?? "pending"}</span></td><td className="text-right">{canDelete && <button className="btn-destructive px-2 py-1 text-xs" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}</td></tr>)}
               {!loading && rows.length === 0 && (
                 <tr>
                   <td colSpan={5} className="py-8 text-center text-sm text-neutral-500">No assessments yet.</td>

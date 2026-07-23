@@ -1,5 +1,5 @@
 /**
- * Reset an admin password using explicit environment variables.
+ * Reset a company owner's password using explicit environment variables.
  * Run: npx tsx prisma/reset-admin.ts
  * Or: npm run db:reset-admin (from api workspace)
  */
@@ -16,9 +16,14 @@ import bcrypt from "bcrypt";
 import { z } from "zod";
 import { validatePassword } from "../src/lib/password-policy.js";
 
+const databaseUrl = process.env.DATABASE_URL?.trim();
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL is required for owner password reset.");
+}
+
 const prisma = new PrismaClient({
   adapter: new PrismaPg({
-    connectionString: process.env.DATABASE_URL ?? "postgresql://localhost:5432/plethora",
+    connectionString: databaseUrl,
   }),
 });
 
@@ -40,11 +45,15 @@ async function main() {
   }
 
   const user = await prisma.user.findFirst({
-    where: { email },
+    where: {
+      email,
+      isActive: true,
+      ownedCompany: { isNot: null },
+    },
   });
 
   if (!user) {
-    console.error("Admin user not found. Create an admin user through the app first.");
+    console.error("User not found. Create the company owner through the app first.");
     process.exit(1);
   }
 

@@ -14,6 +14,7 @@ import { config } from "dotenv";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { LeaveApplicationStatus, Prisma } from "@prisma/client";
+import { hasCapability } from "../src/lib/capabilities.js";
 import { confirmDatabaseTarget } from "../src/lib/leave-import-target.js";
 import {
   findExistingApplicationConflicts,
@@ -67,10 +68,13 @@ async function main() {
   ]);
   disconnectPrisma = () => prisma.$disconnect();
 
-  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { id: true, name: true } });
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { id: true, name: true, ownerUserId: true },
+  });
   if (!company) throw new Error(`Company not found: ${companyId}`);
 
-  const [requests, records, existingApplications, lockedPayroll, actor] = await Promise.all([
+  const [requests, records, existingApplications, lockedPayroll, actorCandidates] = await Promise.all([
     prisma.leaveRequest.findMany({ where: { employee: { companyId } }, orderBy: [{ employeeId: "asc" }, { date: "asc" }] }),
     prisma.leaveRecord.findMany({ where: { employee: { companyId } }, orderBy: [{ employeeId: "asc" }, { date: "asc" }] }),
     prisma.leaveApplication.findMany({
@@ -86,9 +90,23 @@ async function main() {
       },
     }),
     prisma.payrollRun.findMany({ where: { companyId, status: { in: ["approved", "paid"] } }, include: { items: { select: { employeeId: true } } } }),
-    prisma.user.findFirst({ where: { companyId, role: { in: ["hr_payroll", "admin"] } }, orderBy: { createdAt: "asc" }, select: { id: true } }),
+    prisma.user.findMany({
+      where: { companyId, isActive: true },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, capabilities: true },
+    }),
   ]);
-  if (apply && !actor) throw new Error("An HR/payroll or company-admin user is required as the migration audit actor.");
+  const actor =
+    actorCandidates.find((candidate) => candidate.id === company.ownerUserId) ??
+    actorCandidates.find((candidate) =>
+      hasCapability(candidate, "/employees/leave", "approve") ||
+      hasCapability(candidate, "/payroll", "approve")
+    );
+  if (apply && !actor) {
+    throw new Error(
+      "An active company owner or user with leave/payroll approval capability is required as the migration audit actor."
+    );
+  }
 
   const requestIdsDone = new Set(existingApplications.map((a) => a.legacyLeaveRequestId).filter((id): id is string => Boolean(id)));
   const recordIdsDone = new Set(existingApplications.flatMap((a) => Array.isArray(a.legacyLeaveRecordIds) ? a.legacyLeaveRecordIds.filter((id): id is string => typeof id === "string") : []));
@@ -224,7 +242,7 @@ async function main() {
           occurrences: status === "REJECTED" ? undefined : {
             create: [{ companyId, employeeId: source.employeeId, leaveDate: source.date, scheduledMinutes: minutes, requestedMinutes: minutes, balanceMinutes, paidMinutes, unpaidMinutes, payrollTreatment: leaveType.payrollTreatment, status: status === "PENDING_HR" ? "RESERVED" : "APPROVED" }],
           },
-          approvalSteps: { create: [{ stepOrder: 1, role: "hr_payroll", decision: status === "PENDING_HR" ? "PENDING" : status === "REJECTED" ? "REJECTED" : "APPROVED", actorId: status === "PENDING_HR" ? null : actor!.id, decidedAt: status === "PENDING_HR" ? null : new Date() }] },
+          approvalSteps: { create: [{ stepOrder: 1, requiredCapability: "/employees/leave:approve", decision: status === "PENDING_HR" ? "PENDING" : status === "REJECTED" ? "REJECTED" : "APPROVED", actorId: status === "PENDING_HR" ? null : actor!.id, decidedAt: status === "PENDING_HR" ? null : new Date() }] },
         },
       });
       if (status === "PENDING_HR" && balanceMinutes > 0) {

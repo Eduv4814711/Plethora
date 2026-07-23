@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { clsx } from "clsx";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
-import { canAccessSensitiveData } from "@/lib/permissions";
+import { canAccessSensitiveData, hasCapability } from "@/lib/permissions";
 import { PayPeriodSelect } from "@/components/pay-period-select";
 import {
   AlertBanner,
@@ -218,6 +218,10 @@ function workflowStepClass(highlight?: "amber" | "emerald") {
 export default function PayrollPage() {
   const { token, user } = useAuth();
   const canViewSensitivePayroll = user ? canAccessSensitiveData(user, "/payroll") : false;
+  const canCreatePayroll = Boolean(user && hasCapability(user, "/payroll", "create"));
+  const canEditPayroll = Boolean(user && hasCapability(user, "/payroll", "edit"));
+  const canApprovePayroll = Boolean(user && hasCapability(user, "/payroll", "approve"));
+  const canExportPayroll = Boolean(user && hasCapability(user, "/payroll", "export"));
   const [runs, setRuns] = useState<PayrollRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -341,10 +345,10 @@ export default function PayrollPage() {
         description="Manage payroll runs, review financial metrics, and control the pay period workflow."
         actions={
           <>
-            <Button type="button" variant={showForm ? "secondary" : "primary"} onClick={() => setShowForm(!showForm)}>
+            {canCreatePayroll && <Button type="button" variant={showForm ? "secondary" : "primary"} onClick={() => setShowForm(!showForm)}>
               {showForm ? "Cancel" : "New payroll run"}
-            </Button>
-            {canViewSensitivePayroll && <SarsExportsDropdown token={token!} />}
+            </Button>}
+            {canExportPayroll && canViewSensitivePayroll && <SarsExportsDropdown token={token!} />}
             <Link href="/employees/leave" className="btn-secondary text-sm">
               Leave requests
             </Link>
@@ -415,7 +419,7 @@ export default function PayrollPage() {
         </div>
       </section>
 
-      {showForm && (
+      {showForm && canCreatePayroll && (
         <PayrollRunForm
           token={token!}
           onSuccess={() => {
@@ -533,18 +537,26 @@ export default function PayrollPage() {
             <p className="text-sm text-neutral-600">{runs.length} run{runs.length === 1 ? "" : "s"}</p>
           </div>
           {runs.map((run) => (
-            <PayrollRunCard key={run.id} run={run} token={token!} onAction={refresh} />
+            <PayrollRunCard
+              key={run.id}
+              run={run}
+              token={token!}
+              canEdit={canEditPayroll}
+              canApprove={canApprovePayroll}
+              canExport={canExportPayroll}
+              onAction={refresh}
+            />
           ))}
         </section>
       ) : (
         <EmptyState
           title="No payroll runs yet"
           description="Create a run to calculate wages, run compliance checks, and prepare bank and SARS exports."
-          action={
+          action={canCreatePayroll ? (
             <Button type="button" onClick={() => setShowForm(true)}>
               Create payroll run
             </Button>
-          }
+          ) : null}
         />
       )}
     </div>
@@ -1151,10 +1163,16 @@ function skipReasonLabel(reason: string): string {
 function PayrollRunCard({
   run,
   token,
+  canEdit,
+  canApprove,
+  canExport,
   onAction,
 }: {
   run: PayrollRun;
   token: string;
+  canEdit: boolean;
+  canApprove: boolean;
+  canExport: boolean;
   onAction: () => void;
 }) {
   const [items, setItems] = useState<PayrollItem[]>([]);
@@ -1226,6 +1244,7 @@ function PayrollRunCard({
   };
 
   const handleCalculate = async () => {
+    if (!canEdit) return;
     setActionLoading(true);
     setActionError(null);
     setSitesNeedingApproval([]);
@@ -1252,6 +1271,7 @@ function PayrollRunCard({
   };
 
   const handleApprove = async () => {
+    if (!canApprove) return;
     if (validation && validation.criticalCount > 0) {
       setActionError(
         `Cannot approve: ${validation.criticalCount} critical validation issue(s) must be resolved first.`
@@ -1294,6 +1314,7 @@ function PayrollRunCard({
   };
 
   const handleRevertToDraft = async () => {
+    if (!canEdit) return;
     if (revertReason.trim().length < 5) {
       setActionError("Please provide a revert reason (at least 5 characters).");
       return;
@@ -1323,6 +1344,7 @@ function PayrollRunCard({
   };
 
   const handleMarkPaid = async () => {
+    if (!canApprove) return;
     const confirmed = await confirm({
       title: "Mark this payroll run as paid?",
       message:
@@ -1363,6 +1385,7 @@ function PayrollRunCard({
   };
 
   const handlePreviewPayslip = async (item: PayrollItem) => {
+    if (!canExport) return;
     setPreviewingId(item.id);
     setPreviewError(null);
     try {
@@ -1380,6 +1403,7 @@ function PayrollRunCard({
   };
 
   const handleDownloadFnbCsv = async (groupKey: string, groupName: string) => {
+    if (!canExport) return;
     setDownloadingFnbGroup(groupKey);
     try {
       const groupParam =
@@ -1416,7 +1440,7 @@ function PayrollRunCard({
     }
   };
 
-  const canExportFnb = ["calculated", "approved", "paid"].includes(run.status);
+  const canExportFnb = canExport && ["calculated", "approved", "paid"].includes(run.status);
   const status = statusConfig[run.status] ?? { label: run.status, variant: "neutral" as const };
 
   const toggleExpand = () => {
@@ -1452,16 +1476,19 @@ function PayrollRunCard({
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          {run.status === "draft" && (
+          {canEdit && run.status === "draft" && (
             <Button type="button" size="sm" onClick={handleCalculate} loading={actionLoading}>
               Calculate
             </Button>
           )}
           {run.status === "calculated" && (
             <>
+              {canApprove && (
               <Button type="button" size="sm" onClick={handleApprove} loading={actionLoading}>
                 Approve
               </Button>
+              )}
+              {canEdit && (
               <Button
                 type="button"
                 variant="secondary"
@@ -1474,13 +1501,17 @@ function PayrollRunCard({
               >
                 Revert to draft
               </Button>
+              )}
             </>
           )}
           {run.status === "approved" && (
             <>
+              {canApprove && (
               <Button type="button" size="sm" onClick={handleMarkPaid} loading={actionLoading}>
                 Mark paid
               </Button>
+              )}
+              {canEdit && (
               <Button
                 type="button"
                 variant="secondary"
@@ -1493,6 +1524,7 @@ function PayrollRunCard({
               >
                 Revert to draft
               </Button>
+              )}
             </>
           )}
           <Button type="button" variant="secondary" size="sm" onClick={toggleExpand}>
@@ -1698,7 +1730,7 @@ function PayrollRunCard({
         </div>
       )}
 
-      {showRevertModal && (
+      {showRevertModal && canEdit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-security-lg bg-white p-5 shadow-security-card">
             <h3 className="text-lg font-semibold text-black">Revert to draft</h3>

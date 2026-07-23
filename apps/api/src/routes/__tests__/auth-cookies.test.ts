@@ -28,13 +28,13 @@ vi.mock("../../lib/prisma.js", () => ({
   },
 }));
 
-vi.mock("../../lib/user-module-column.js", () => ({
+vi.mock("../../lib/user-access.js", () => ({
   findUniqueUserForMe: vi.fn(),
 }));
 
 vi.mock("../../middleware/auth.js", () => ({
   authMiddleware: async (request: { user?: { sub: string } }) => {
-    request.user = { sub: "user-1", email: "a@b.com", companyId: "co-1", role: "admin" };
+    request.user = { sub: "user-1" };
   },
 }));
 
@@ -43,10 +43,12 @@ const mockAuthResult = {
     id: "user-1",
     name: "Test User",
     email: "test@example.com",
-    role: "admin" as const,
-    roleLabel: null,
     companyId: "co-1",
-    moduleAccess: null,
+    accountType: "staff" as const,
+    jobTitle: null,
+    isActive: true,
+    isOwner: true,
+    capabilities: {},
   },
   accessToken: "access.jwt.token",
   refreshToken: "refresh.jwt.token",

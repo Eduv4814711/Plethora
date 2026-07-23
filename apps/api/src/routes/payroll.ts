@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requireCapability, requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
 import {
   calculatePayroll,
@@ -27,13 +27,13 @@ import { format } from "date-fns";
 import { canAccessSensitiveData, omitFields } from "../lib/sensitive-data.js";
 import { getLeaveReadiness, postLeaveToPayroll } from "../services/leave-management.service.js";
 
-function canHandlePayrollPrivateData(user: import("../lib/types.js").JWTPayload) {
+function canHandlePayrollPrivateData(user: import("../lib/types.js").AuthenticatedUser) {
   return canAccessSensitiveData(user, "/payroll");
 }
-function sanitizePayrollRun<T extends Record<string, unknown>>(run: T, user: import("../lib/types.js").JWTPayload) {
+function sanitizePayrollRun<T extends Record<string, unknown>>(run: T, user: import("../lib/types.js").AuthenticatedUser) {
   return canHandlePayrollPrivateData(user) ? run : omitFields(run, ["calculationSnapshot"]);
 }
-function denyPayrollPrivateData(user: import("../lib/types.js").JWTPayload, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
+function denyPayrollPrivateData(user: import("../lib/types.js").AuthenticatedUser, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
   if (canHandlePayrollPrivateData(user)) return false;
   reply.code(403).send({ error: "Forbidden", message: "Sensitive payroll data is restricted to HR/payroll users" });
   return true;
@@ -48,10 +48,52 @@ const revertToDraftSchema = z.object({
   reason: z.string().trim().min(5, "Reason must be at least 5 characters"),
 });
 
+const fnbExportQuerySchema = z.object({
+  groupId: z
+    .string()
+    .trim()
+    .min(1, "groupId must be a group ID or 'ungrouped'")
+    .optional(),
+});
+
+const employeeDeductionSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    type: z.enum(["fixed", "percentage"]),
+    amount: z.number().finite().positive().optional(),
+    rate: z.number().finite().positive().max(100).optional(),
+    deductionRuleId: z.string().min(1).optional(),
+    appliesFrom: z.string().datetime().optional(),
+    appliesTo: z.string().datetime().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === "fixed" && data.amount == null) {
+      ctx.addIssue({ code: "custom", path: ["amount"], message: "A positive amount is required for a fixed deduction" });
+    }
+    if (data.type === "percentage" && data.rate == null) {
+      ctx.addIssue({ code: "custom", path: ["rate"], message: "A percentage rate between 0 and 100 is required" });
+    }
+    if (
+      data.appliesFrom &&
+      data.appliesTo &&
+      new Date(data.appliesTo) < new Date(data.appliesFrom)
+    ) {
+      ctx.addIssue({ code: "custom", path: ["appliesTo"], message: "appliesTo must be on or after appliesFrom" });
+    }
+  });
+
 export async function payrollRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll"], { module: "/payroll" }),
+    requireCrudCapability({ module: "/payroll" }),
+  ];
+  const exportProtect = [
+    authMiddleware,
+    requireCapability("/payroll", "export"),
+  ];
+  const editProtect = [
+    authMiddleware,
+    requireCapability("/payroll", "edit"),
   ];
 
   app.get("/runs", { preHandler: protect }, async (request, reply) => {
@@ -93,14 +135,55 @@ export async function payrollRoutes(app: FastifyInstance) {
       });
     }
 
-    const run = await prisma.payrollRun.create({
-      data: {
-        companyId,
-        periodStart,
-        periodEnd,
-        status: "draft",
-      },
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { settings: true },
     });
+    const configuredPeriod =
+      (company?.settings as { payrollPeriod?: unknown } | null)?.payrollPeriod;
+    const payPeriod =
+      configuredPeriod === "weekly" ||
+      configuredPeriod === "biweekly" ||
+      configuredPeriod === "monthly"
+        ? configuredPeriod
+        : "monthly";
+
+    const createResult = await prisma.$transaction(async (tx) => {
+      // Serialize run creation per tenant so two requests cannot pass the
+      // overlap check concurrently.
+      await tx.$queryRaw`
+        SELECT pg_advisory_xact_lock(hashtext(${"payroll:" + companyId})) IS NULL AS acquired
+      `;
+      const overlapping = await tx.payrollRun.findFirst({
+        where: {
+          companyId,
+          payPeriod,
+          periodStart: { lte: periodEnd },
+          periodEnd: { gte: periodStart },
+        },
+        select: { id: true, periodStart: true, periodEnd: true, status: true },
+      });
+      if (overlapping) return { overlapping };
+      const run = await tx.payrollRun.create({
+        data: {
+          companyId,
+          periodStart,
+          periodEnd,
+          payPeriod,
+          status: "draft",
+        },
+      });
+      return { run };
+    });
+
+    if ("overlapping" in createResult) {
+      return reply.code(409).send({
+        error: "Payroll period overlap",
+        message: `A ${payPeriod} payroll run already covers part of this period.`,
+        conflictingRun: createResult.overlapping,
+      });
+    }
+    const run = createResult.run;
 
     await createAuditLog({
       userId: request.user!.sub,
@@ -162,7 +245,7 @@ export async function payrollRoutes(app: FastifyInstance) {
     return reply.send({ data: items });
   });
 
-  app.post("/runs/:id/calculate", { preHandler: protect }, async (request, reply) => {
+  app.post("/runs/:id/calculate", { preHandler: editProtect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const companyId = request.user!.companyId;
 
@@ -226,7 +309,10 @@ export async function payrollRoutes(app: FastifyInstance) {
     return reply.send(sanitizePayrollRun(run, request.user!));
   });
 
-  app.post("/runs/:id/approve", { preHandler: protect }, async (request, reply) => {
+  app.post(
+    "/runs/:id/approve",
+    { preHandler: [authMiddleware, requireCapability("/payroll", "approve")] },
+    async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
 
@@ -287,7 +373,10 @@ export async function payrollRoutes(app: FastifyInstance) {
       return changed;
     });
     if (updatedCount.count === 0) {
-      return reply.code(404).send({ error: "Payroll run not found" });
+      return reply.code(409).send({
+        error: "Payroll status changed",
+        message: "Payroll was already approved or changed by another request. Refresh and try again.",
+      });
     }
 
     const updated = await prisma.payrollRun.findFirst({
@@ -320,9 +409,13 @@ export async function payrollRoutes(app: FastifyInstance) {
     });
 
     return reply.send(sanitizePayrollRun(updated ?? {}, user));
-  });
+    }
+  );
 
-  app.post("/runs/:id/revert-to-draft", { preHandler: protect }, async (request, reply) => {
+  app.post(
+    "/runs/:id/revert-to-draft",
+    { preHandler: [authMiddleware, requireCapability("/payroll", "approve")] },
+    async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
 
@@ -380,7 +473,8 @@ export async function payrollRoutes(app: FastifyInstance) {
     });
 
     return reply.send(sanitizePayrollRun(updated ?? {}, user));
-  });
+    }
+  );
 
   app.get("/runs/:id/validation", { preHandler: protect }, async (request, reply) => {
     const { id } = request.params as { id: string };
@@ -433,49 +527,74 @@ export async function payrollRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post("/runs/:id/mark-paid", { preHandler: protect }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const user = request.user!;
+  app.post(
+    "/runs/:id/mark-paid",
+    { preHandler: [authMiddleware, requireCapability("/payroll", "approve")] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const user = request.user!;
 
-    const run = await prisma.payrollRun.findFirst({
-      where: { id, companyId: user.companyId },
-    });
-
-    if (!run) {
-      return reply.code(404).send({ error: "Payroll run not found" });
-    }
-
-    if (!canTransitionPayrollStatus(run.status, "paid")) {
-      return reply.code(400).send({
-        error: "Invalid transition",
-        message: `Cannot mark as paid. Payroll must be approved first. Current status: ${run.status}`,
+      const run = await prisma.payrollRun.findFirst({
+        where: { id, companyId: user.companyId },
       });
+
+      if (!run) {
+        return reply.code(404).send({ error: "Payroll run not found" });
+      }
+
+      if (!canTransitionPayrollStatus(run.status, "paid")) {
+        return reply.code(400).send({
+          error: "Invalid transition",
+          message: `Cannot mark as paid. Payroll must be approved first. Current status: ${run.status}`,
+        });
+      }
+
+      const transition = await prisma.$transaction(async (tx) => {
+        // SDL totals are stored as a JSON object on Company. Serialize paid
+        // transitions per tenant so concurrent payroll runs cannot overwrite
+        // each other's read-modify-write update.
+        await tx.$queryRaw`
+          SELECT pg_advisory_xact_lock(hashtext(${"payroll-sdl:" + user.companyId})) IS NULL AS acquired
+        `;
+
+        const updatedCount = await tx.payrollRun.updateMany({
+          where: {
+            id,
+            companyId: user.companyId,
+            status: "approved",
+            lockedAt: { not: null },
+          },
+          data: { status: "paid" },
+        });
+        if (updatedCount.count === 0) return null;
+
+        // Passing the transaction client makes the status change and the SDL
+        // tracking update one atomic operation. A tracking failure rolls the
+        // run back to approved.
+        await updateSdlTrackingOnPayrollPaid(user.companyId, id, tx);
+        return tx.payrollRun.findFirst({
+          where: { id, companyId: user.companyId },
+        });
+      });
+
+      if (!transition) {
+        return reply.code(409).send({
+          error: "Payroll status changed",
+          message: "Payroll is no longer in the approved state. Refresh and try again.",
+        });
+      }
+
+      await createAuditLog({
+        userId: user.sub,
+        companyId: user.companyId,
+        action: "payroll_run.mark_paid",
+        entityType: "payroll_run",
+        entityId: id,
+      });
+
+      return reply.send(sanitizePayrollRun(transition, user));
     }
-
-    const updatedCount = await prisma.payrollRun.updateMany({
-      where: { id, companyId: user.companyId },
-      data: { status: "paid" },
-    });
-    if (updatedCount.count === 0) {
-      return reply.code(404).send({ error: "Payroll run not found" });
-    }
-
-    const updated = await prisma.payrollRun.findFirst({
-      where: { id, companyId: user.companyId },
-    });
-
-    await updateSdlTrackingOnPayrollPaid(user.companyId, id);
-
-    await createAuditLog({
-      userId: user.sub,
-      companyId: user.companyId,
-      action: "payroll_run.mark_paid",
-      entityType: "payroll_run",
-      entityId: id,
-    });
-
-    return reply.send(sanitizePayrollRun(updated ?? {}, user));
-  });
+  );
 
   app.get("/runs/:id/items/:itemId/payslip", { preHandler: protect }, async (request, reply) => {
     const { id, itemId } = request.params as { id: string; itemId: string };
@@ -505,7 +624,7 @@ export async function payrollRoutes(app: FastifyInstance) {
     });
   });
 
-  app.get("/runs/:id/items/:itemId/payslip/pdf", { preHandler: protect }, async (request, reply) => {
+  app.get("/runs/:id/items/:itemId/payslip/pdf", { preHandler: exportProtect }, async (request, reply) => {
     const { id, itemId } = request.params as { id: string; itemId: string };
     const user = request.user!;
     if (denyPayrollPrivateData(user, reply)) return;
@@ -526,7 +645,7 @@ export async function payrollRoutes(app: FastifyInstance) {
       .send(pdfBuffer);
   });
 
-  app.get("/runs/:id/export/pdf", { preHandler: protect }, async (request, reply) => {
+  app.get("/runs/:id/export/pdf", { preHandler: exportProtect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
     if (denyPayrollPrivateData(user, reply)) return;
@@ -565,7 +684,7 @@ export async function payrollRoutes(app: FastifyInstance) {
       .send(outBuffer);
   });
 
-  app.get("/runs/:id/export/excel", { preHandler: protect }, async (request, reply) => {
+  app.get("/runs/:id/export/excel", { preHandler: exportProtect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
     if (denyPayrollPrivateData(user, reply)) return;
@@ -608,11 +727,18 @@ export async function payrollRoutes(app: FastifyInstance) {
       .send(csv);
   });
 
-  app.get("/runs/:id/export/fnb", { preHandler: protect }, async (request, reply) => {
+  app.get("/runs/:id/export/fnb", { preHandler: exportProtect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
     if (denyPayrollPrivateData(user, reply)) return;
-    const q = request.query as { groupId?: string };
+    const parsedQuery = fnbExportQuerySchema.safeParse(request.query);
+    if (!parsedQuery.success) {
+      return reply.code(400).send({
+        error: "Invalid group",
+        message: parsedQuery.error.issues[0]?.message ?? "Invalid groupId",
+      });
+    }
+    const groupId = parsedQuery.data.groupId;
 
     const run = await prisma.payrollRun.findFirst({
       where: { id, companyId: user.companyId },
@@ -635,9 +761,44 @@ export async function payrollRoutes(app: FastifyInstance) {
       },
     });
     if (!run) return reply.code(404).send({ error: "Payroll run not found" });
+    if (run.status !== "approved" && run.status !== "paid") {
+      return reply.code(409).send({
+        error: "Bank export unavailable",
+        message: "FNB payment files can only be generated for approved or paid payroll runs.",
+      });
+    }
+
+    if (groupId && groupId !== "ungrouped") {
+      const group = await prisma.employeeGroup.findFirst({
+        where: { id: groupId, companyId: user.companyId },
+        select: { id: true },
+      });
+      if (!group) {
+        return reply.code(404).send({
+          error: "Employee group not found",
+          message: "The selected employee group does not belong to this company.",
+        });
+      }
+    }
+
+    const items =
+      groupId === "ungrouped"
+        ? run.items.filter((item) => item.employee.groupId == null)
+        : groupId
+          ? run.items.filter((item) => item.employee.groupId === groupId)
+          : run.items;
+
+    if (items.length === 0) {
+      return reply.code(409).send({
+        error: "Bank export unavailable",
+        message: groupId
+          ? "The selected employee group has no payroll items in this run."
+          : "This payroll run has no payment items to export.",
+      });
+    }
 
     const bankValidation = validateBankDetailsForItems(
-      run.items.map((item) => ({
+      items.map((item) => ({
         id: item.id,
         employeeId: item.employeeId,
         netPay: item.netPay,
@@ -653,22 +814,22 @@ export async function payrollRoutes(app: FastifyInstance) {
       });
     }
 
+    const payableItems = items.filter((item) => Number(item.netPay) > 0);
+    if (payableItems.length === 0) {
+      return reply.code(409).send({
+        error: "Bank export unavailable",
+        message: "The selected payroll items do not contain any positive net payments.",
+      });
+    }
+
     const periodLabel = format(run.periodStart, "yyyy-MM");
     const ownRef = `Payroll ${periodLabel}`.slice(0, 15);
-
-    const groupId = q.groupId?.trim();
-    const items =
-      groupId === "ungrouped"
-        ? run.items.filter((item) => item.employee.groupId == null)
-        : groupId
-          ? run.items.filter((item) => item.employee.groupId === groupId)
-          : run.items;
 
     const rows: string[][] = [
       ["Recipient Name", "Recipient Account", "Account Type", "Branch Code", "Amount", "Own Reference", "Recipient Reference"],
     ];
 
-    for (const item of items) {
+    for (const item of payableItems) {
       const acc = item.employee.bankAccountNumber?.trim();
       if (!acc) {
         return reply.code(400).send({
@@ -695,7 +856,7 @@ export async function payrollRoutes(app: FastifyInstance) {
       .send(csv);
   });
 
-  app.get("/emp201-export", { preHandler: protect }, async (request, reply) => {
+  app.get("/emp201-export", { preHandler: exportProtect }, async (request, reply) => {
     const user = request.user!;
     if (denyPayrollPrivateData(user, reply)) return;
     const q = request.query as { period?: string };
@@ -723,7 +884,7 @@ export async function payrollRoutes(app: FastifyInstance) {
       .send(csv);
   });
 
-  app.get("/irp5-export", { preHandler: protect }, async (request, reply) => {
+  app.get("/irp5-export", { preHandler: exportProtect }, async (request, reply) => {
     const user = request.user!;
     if (denyPayrollPrivateData(user, reply)) return;
     const q = request.query as { taxYear?: string };
@@ -775,21 +936,35 @@ export async function payrollRoutes(app: FastifyInstance) {
   app.post("/employees/:employeeId/deductions", { preHandler: protect }, async (request, reply) => {
     if (denyPayrollPrivateData(request.user!, reply)) return;
     const { employeeId } = request.params as { employeeId: string };
-    const body = request.body as { name: string; type: "fixed" | "percentage"; amount: number; rate?: number; deductionRuleId?: string; appliesFrom?: string; appliesTo?: string };
+    const parsed = employeeDeductionSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.flatten().fieldErrors,
+      });
+    }
+    const body = parsed.data;
 
     const employee = await prisma.employee.findFirst({
       where: { id: employeeId, companyId: request.user!.companyId },
     });
     if (!employee) return reply.code(404).send({ error: "Employee not found" });
 
-    if (!body.name || !body.type) {
-      return reply.code(400).send({ error: "name and type are required" });
-    }
-    if (body.type === "fixed" && (body.amount == null || body.amount < 0)) {
-      return reply.code(400).send({ error: "amount required for fixed deductions" });
-    }
-    if (body.type === "percentage" && (body.rate == null || body.rate < 0)) {
-      return reply.code(400).send({ error: "rate required for percentage deductions" });
+    if (body.deductionRuleId) {
+      const rule = await prisma.deductionRule.findFirst({
+        where: {
+          id: body.deductionRuleId,
+          companyId: request.user!.companyId,
+          isActive: true,
+        },
+        select: { id: true },
+      });
+      if (!rule) {
+        return reply.code(400).send({
+          error: "Validation error",
+          message: { deductionRuleId: ["Deduction rule not found for this company"] },
+        });
+      }
     }
 
     const deduction = await prisma.employeeDeduction.create({
@@ -798,8 +973,8 @@ export async function payrollRoutes(app: FastifyInstance) {
         deductionRuleId: body.deductionRuleId ?? null,
         name: body.name,
         type: body.type,
-        amount: body.amount ?? 0,
-        rate: body.rate ?? null,
+        amount: body.type === "fixed" ? body.amount! : 0,
+        rate: body.type === "percentage" ? body.rate! : null,
         appliesFrom: body.appliesFrom ? new Date(body.appliesFrom) : undefined,
         appliesTo: body.appliesTo ? new Date(body.appliesTo) : null,
       },

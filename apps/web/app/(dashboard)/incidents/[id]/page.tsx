@@ -4,11 +4,16 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { hasCapability } from "@/lib/permissions";
 import { getIncident, reviewIncident, uploadIncidentAttachment, type Incident } from "@/lib/msr-api";
+import { downloadPrivateFile } from "@/lib/api";
 import { AlertBanner, Badge, PageHeader } from "@/components/ui";
 
 export default function IncidentDetailPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canCreate = Boolean(user && hasCapability(user, "/incidents", "create"));
+  const canApprove = Boolean(user && hasCapability(user, "/incidents", "approve"));
+  const canExport = Boolean(user && hasCapability(user, "/incidents", "export"));
   const params = useParams();
   const id = params.id as string;
   const [incident, setIncident] = useState<Incident | null>(null);
@@ -30,7 +35,7 @@ export default function IncidentDetailPage() {
   }, [token, id]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || !canApprove) return;
     setLoading(true);
     refresh().finally(() => setLoading(false));
   }, [token, refresh]);
@@ -63,7 +68,7 @@ export default function IncidentDetailPage() {
     );
   }
 
-  const canReview = ["SUBMITTED", "UNDER_REVIEW"].includes(incident.status);
+  const canReview = canApprove && ["SUBMITTED", "UNDER_REVIEW"].includes(incident.status);
 
   return (
     <div className="animate-fade-in max-w-3xl mx-auto">
@@ -121,14 +126,26 @@ export default function IncidentDetailPage() {
           <ul className="mb-3 space-y-1 text-sm">
             {incident.attachments.map((a) => (
               <li key={a.id}>
-                <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-security-navy-800 hover:underline">
-                  {a.filename}
-                </a>
+                {canExport && token && a.downloadUrl ? (
+                  <button
+                    type="button"
+                    className="text-security-navy-800 hover:underline"
+                    onClick={() => {
+                      void downloadPrivateFile(token, a.downloadUrl!, a.filename).catch((error) =>
+                        setError(error instanceof Error ? error.message : "Attachment download failed")
+                      );
+                    }}
+                  >
+                    {a.filename}
+                  </button>
+                ) : (
+                  <span>{a.filename}</span>
+                )}
               </li>
             ))}
           </ul>
         )}
-        <label className="btn-secondary text-sm py-1.5 inline-block cursor-pointer">
+        {canCreate && <label className="btn-secondary text-sm py-1.5 inline-block cursor-pointer">
           Upload file
           <input
             type="file"
@@ -145,7 +162,7 @@ export default function IncidentDetailPage() {
               }
             }}
           />
-        </label>
+        </label>}
       </section>
 
       {canReview && (

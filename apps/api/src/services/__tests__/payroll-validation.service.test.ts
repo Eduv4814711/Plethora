@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   reconcileStatutoryTotals,
   validateBankDetailsForItems,
+  validatePayrollFinancialValues,
 } from "../payroll-validation.service.js";
 import type { PayrollCalculationSnapshot } from "../payroll-calculation.types.js";
 
@@ -69,5 +70,25 @@ describe("reconcileStatutoryTotals", () => {
     expect(result.matched).toBe(false);
     expect(result.paye.matched).toBe(false);
     expect(result.mismatches.some((m) => m.startsWith("PAYE"))).toBe(true);
+  });
+});
+
+describe("validatePayrollFinancialValues", () => {
+  it("blocks negative net pay and deductions above gross pay", () => {
+    const issues = validatePayrollFinancialValues([{
+      id: "item-1",
+      employeeId: "emp-1",
+      grossPay: 1_000,
+      deductions: 1_200,
+      netPay: -200,
+      employee: { firstName: "Test", lastName: "Employee" },
+    }]);
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({
+      ruleId: "invalid_payment_values",
+      severity: "critical",
+      employeeId: "emp-1",
+    });
   });
 });

@@ -2,65 +2,46 @@ import { describe, expect, it } from "vitest";
 import {
   canEditEmployeeDetails,
   canViewEmployeeSensitiveFields,
+  canWriteEmployeeSensitiveFields,
   sanitizeEmployeeForList,
 } from "../employee-dto.js";
-import type { JWTPayload } from "../types.js";
+
+const user = (capabilities: unknown = {}, isOwner = false) => ({
+  sub: "u",
+  email: "u@test.com",
+  companyId: "c",
+  name: "User",
+  accountType: "staff" as const,
+  jobTitle: null,
+  isActive: true,
+  isOwner,
+  capabilities: capabilities as never,
+});
 
 describe("employee sensitive fields", () => {
-  const fullAdmin: JWTPayload = {
-    sub: "u1",
-    email: "a@test.com",
-    companyId: "c1",
-    role: "admin",
-  };
-
-  const supervisor: JWTPayload = {
-    sub: "u2",
-    email: "s@test.com",
-    companyId: "c1",
-    role: "supervisor",
-    moduleAccess: ["/rostering"],
-  };
-
-  const payrollUser: JWTPayload = {
-    sub: "u3",
-    email: "hr@test.com",
-    companyId: "c1",
-    role: "hr_payroll",
-    moduleAccess: ["/employees", "/payroll"],
-  };
-
-  it("does not allow a broad admin to view private employee data", () => {
-    expect(canViewEmployeeSensitiveFields(fullAdmin)).toBe(false);
+  it("allows view through Team, Payroll, or owner access", () => {
+    expect(canViewEmployeeSensitiveFields(user({ "/employees": ["view_sensitive"] }))).toBe(true);
+    expect(canViewEmployeeSensitiveFields(user({ "/payroll": ["view_sensitive"] }))).toBe(true);
+    expect(canViewEmployeeSensitiveFields(user({}, true))).toBe(true);
   });
 
-  it("allows users assigned a relevant module to view employee details", () => {
-    expect(canViewEmployeeSensitiveFields(payrollUser)).toBe(true);
-    expect(canViewEmployeeSensitiveFields({ ...supervisor, moduleAccess: ["/employees"] })).toBe(true);
+  it("requires edit explicitly for private-data changes", () => {
+    expect(canEditEmployeeDetails(user({ "/employees": ["view"] }))).toBe(false);
+    expect(canEditEmployeeDetails(user({ "/employees": ["edit"] }))).toBe(true);
+    expect(canEditEmployeeDetails(user({ "/payroll": ["edit"] }))).toBe(true);
   });
 
-  it.each(["/employees", "/payroll"])(
-    "allows HR/payroll to edit with the relevant %s module",
-    (module) => {
-      expect(canEditEmployeeDetails({ ...payrollUser, moduleAccess: [module] })).toBe(true);
-    }
-  );
-
-  it("allows any role explicitly assigned a relevant module", () => {
-    expect(canEditEmployeeDetails(fullAdmin)).toBe(false);
-    expect(canEditEmployeeDetails({ ...fullAdmin, moduleAccess: ["/employees"] })).toBe(true);
-    expect(canEditEmployeeDetails({ ...supervisor, moduleAccess: ["/employees"] })).toBe(true);
-    expect(canEditEmployeeDetails({ ...supervisor, moduleAccess: ["/payroll"] })).toBe(true);
+  it("authorizes sensitive writes by action without implying read access", () => {
+    const creator = user({ "/employees": ["create"] });
+    expect(canWriteEmployeeSensitiveFields(creator, "create")).toBe(true);
+    expect(canWriteEmployeeSensitiveFields(creator, "edit")).toBe(false);
+    expect(canViewEmployeeSensitiveFields(creator)).toBe(false);
+    expect(canWriteEmployeeSensitiveFields(user({ "/payroll": ["edit"] }), "edit")).toBe(true);
   });
 
-  it("requires every user to have a relevant explicit module assignment", () => {
-    expect(canEditEmployeeDetails({ ...supervisor, moduleAccess: ["/attendance"] })).toBe(false);
-    expect(canEditEmployeeDetails({ ...payrollUser, moduleAccess: null })).toBe(false);
-  });
-
-  it("strips sensitive fields for roster-only supervisor", () => {
+  it("strips sensitive fields without relevant view access", () => {
     const row = { id: "e1", idNumber: "900101", bankAccountNumber: "123" };
-    const out = sanitizeEmployeeForList(row, supervisor) as Record<string, unknown>;
+    const out = sanitizeEmployeeForList(row, user({ "/rostering": ["view"] })) as Record<string, unknown>;
     expect(out.idNumber).toBeUndefined();
     expect(out.bankAccountNumber).toBeUndefined();
     expect(out.id).toBe("e1");

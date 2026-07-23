@@ -12,6 +12,10 @@ import {
   type DetectedException,
 } from "./exception-detection.js";
 import { parseExceptionPeriodBoundary } from "./exception-period.js";
+import { dateKeyInTimeZone, getCompanyTimezone } from "../../lib/timezone.js";
+
+const EXCEPTION_SCAN_BATCH_SIZE = 500;
+const PAYROLL_BLOCKING_CRITICAL_STATUSES = ["OPEN", "UNDER_REVIEW", "APPROVED"] as const;
 
 async function persistException(params: {
   companyId: string;
@@ -71,14 +75,21 @@ async function persistException(params: {
         select: { supervisorId: true },
       });
       if (site?.supervisorId) {
-        const systemUser = await prisma.user.findFirst({
-          where: {
-            companyId: params.companyId,
-            role: { in: ["admin", "operations_manager", "hr_payroll"] },
-          },
-          select: { id: true },
-        });
-        const requestedById = systemUser?.id ?? site.supervisorId;
+        const [company, capabilityUser] = await Promise.all([
+          prisma.company.findUnique({
+            where: { id: params.companyId },
+            select: { ownerUserId: true },
+          }),
+          prisma.user.findFirst({
+            where: {
+              companyId: params.companyId,
+              isActive: true,
+              capabilities: { path: ["/approvals"], array_contains: ["create"] },
+            },
+            select: { id: true },
+          }),
+        ]);
+        const requestedById = company?.ownerUserId ?? capabilityUser?.id ?? site.supervisorId;
         if (requestedById !== site.supervisorId) {
           await createApprovalRequest({
             companyId: params.companyId,
@@ -114,64 +125,101 @@ export async function detectAndPersistExceptions(params: {
   const since = new Date(Date.now() - lookbackHours * 3600_000);
   const now = new Date();
 
-  const shifts = await prisma.shift.findMany({
-    where: {
-      companyId: params.companyId,
-      ...(params.siteId ? { siteId: params.siteId } : {}),
-      startTime: { gte: since },
-      status: { in: ["assigned", "active", "completed", "verified"] },
-    },
-    include: {
-      attendances: { orderBy: { createdAt: "desc" }, take: 1 },
-      site: {
-        select: {
-          id: true,
-          latitude: true,
-          longitude: true,
-          geofenceRadiusMeters: true,
+  let created = 0;
+  let scanned = 0;
+  let cursor: string | undefined;
+  while (true) {
+    const shifts = await prisma.shift.findMany({
+      where: {
+        companyId: params.companyId,
+        ...(params.siteId ? { siteId: params.siteId } : {}),
+        startTime: { gte: since },
+        status: { in: ["assigned", "active", "completed", "verified"] },
+      },
+      include: {
+        attendances: { orderBy: { createdAt: "desc" }, take: 1 },
+        site: {
+          select: {
+            id: true,
+            latitude: true,
+            longitude: true,
+            geofenceRadiusMeters: true,
+          },
         },
       },
-    },
-    take: 500,
-  });
+      orderBy: { id: "asc" },
+      take: EXCEPTION_SCAN_BATCH_SIZE,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+    scanned += shifts.length;
 
-  let created = 0;
-  for (const shift of shifts) {
-    const att = shift.attendances[0];
-    const detected = detectExceptionsForShift(
-      {
-        shiftId: shift.id,
-        employeeId: shift.employeeId,
-        siteId: shift.siteId,
-        scheduledStart: shift.startTime,
-        scheduledEnd: shift.endTime,
-        clockIn: att?.clockIn ?? null,
-        clockOut: att?.clockOut ?? null,
-        clockInLat: att ? toGeoNumber(att.clockInLat) : null,
-        clockInLng: att ? toGeoNumber(att.clockInLng) : null,
-        geofenceLat: shift.site ? toGeoNumber(shift.site.latitude) : null,
-        geofenceLng: shift.site ? toGeoNumber(shift.site.longitude) : null,
-        geofenceRadiusMeters: shift.site?.geofenceRadiusMeters ?? null,
-        now,
-      },
-      graceMinutes
-    );
+    for (const shift of shifts) {
+      const att = shift.attendances[0];
+      const detected = detectExceptionsForShift(
+        {
+          shiftId: shift.id,
+          employeeId: shift.employeeId,
+          siteId: shift.siteId,
+          scheduledStart: shift.startTime,
+          scheduledEnd: shift.endTime,
+          clockIn: att?.clockIn ?? null,
+          clockOut: att?.clockOut ?? null,
+          clockInLat: att ? toGeoNumber(att.clockInLat) : null,
+          clockInLng: att ? toGeoNumber(att.clockInLng) : null,
+          geofenceLat: shift.site ? toGeoNumber(shift.site.latitude) : null,
+          geofenceLng: shift.site ? toGeoNumber(shift.site.longitude) : null,
+          geofenceRadiusMeters: shift.site?.geofenceRadiusMeters ?? null,
+          now,
+        },
+        graceMinutes
+      );
 
-    for (const d of detected) {
-      const result = await persistException({
-        companyId: params.companyId,
-        attendanceId: att?.id,
-        shiftId: shift.id,
-        employeeId: shift.employeeId,
-        siteId: shift.siteId,
-        detected: d,
-      });
-      if (result.created) created += 1;
+      for (const d of detected) {
+        const result = await persistException({
+          companyId: params.companyId,
+          attendanceId: att?.id,
+          shiftId: shift.id,
+          employeeId: shift.employeeId,
+          siteId: shift.siteId,
+          detected: d,
+        });
+        if (result.created) created += 1;
+      }
     }
+    if (shifts.length < EXCEPTION_SCAN_BATCH_SIZE) break;
+    cursor = shifts.at(-1)!.id;
   }
 
   await refreshPayrollReadiness(params.companyId);
-  return { scanned: shifts.length, created };
+  return { scanned, created };
+}
+
+async function shiftIdsForWorkedPeriod(
+  companyId: string,
+  periodStart: Date,
+  periodEnd: Date
+): Promise<string[]> {
+  const timeZone = await getCompanyTimezone(companyId);
+  const startKey = periodStart.toISOString().slice(0, 10);
+  const endKey = periodEnd.toISOString().slice(0, 10);
+  const queryStart = new Date(periodStart.getTime() - 36 * 60 * 60 * 1000);
+  const queryEnd =
+    periodEnd.getUTCFullYear() >= 9999
+      ? periodEnd
+      : new Date(periodEnd.getTime() + 36 * 60 * 60 * 1000);
+  const shifts = await prisma.shift.findMany({
+    where: {
+      companyId,
+      startTime: { gte: queryStart, lte: queryEnd },
+    },
+    select: { id: true, startTime: true },
+  });
+  return shifts
+    .filter((shift) => {
+      const workedDate = dateKeyInTimeZone(shift.startTime, timeZone);
+      return workedDate >= startKey && workedDate <= endKey;
+    })
+    .map((shift) => shift.id);
 }
 
 export async function listExceptions(
@@ -188,6 +236,20 @@ export async function listExceptions(
     offset: number;
   }
 ) {
+  const periodStart = query.periodStart
+    ? parseExceptionPeriodBoundary(query.periodStart, "start")
+    : undefined;
+  const periodEnd = query.periodEnd
+    ? parseExceptionPeriodBoundary(query.periodEnd, "end")
+    : undefined;
+  const periodShiftIds =
+    periodStart || periodEnd
+      ? await shiftIdsForWorkedPeriod(
+          companyId,
+          periodStart ?? new Date(0),
+          periodEnd ?? new Date("9999-12-31T23:59:59.999Z")
+        )
+      : undefined;
   const where: Prisma.AttendanceExceptionWhereInput = {
     companyId,
     ...(query.status ? { status: query.status as never } : {}),
@@ -195,18 +257,7 @@ export async function listExceptions(
     ...(query.exceptionType ? { exceptionType: query.exceptionType as never } : {}),
     ...(query.siteId ? { siteId: query.siteId } : {}),
     ...(query.employeeId ? { employeeId: query.employeeId } : {}),
-    ...(query.periodStart || query.periodEnd
-      ? {
-          detectedAt: {
-            ...(query.periodStart
-              ? { gte: parseExceptionPeriodBoundary(query.periodStart, "start") }
-              : {}),
-            ...(query.periodEnd
-              ? { lte: parseExceptionPeriodBoundary(query.periodEnd, "end") }
-              : {}),
-          },
-        }
-      : {}),
+    ...(periodShiftIds ? { shiftId: { in: periodShiftIds } } : {}),
   };
 
   const [items, total] = await Promise.all([
@@ -287,8 +338,10 @@ export async function reviewException(params: {
     metadata: { previousStatus: exception.status, reviewNote: params.reviewNote },
   });
 
-  // Resolve linked alert when exception is closed
-  if (["approve", "reject", "resolve", "mark_absent"].includes(params.action)) {
+  // Confirming an exception does not prove the underlying attendance was
+  // corrected. Keep its alert active until it is explicitly resolved/rejected
+  // or converted to an absence.
+  if (["reject", "resolve", "mark_absent"].includes(params.action)) {
     await prisma.operationalAlert.updateMany({
       where: {
         companyId: params.companyId,
@@ -312,16 +365,17 @@ export async function getExceptionAnalytics(
   periodStart?: Date,
   periodEnd?: Date
 ) {
+  const periodShiftIds =
+    periodStart || periodEnd
+      ? await shiftIdsForWorkedPeriod(
+          companyId,
+          periodStart ?? new Date(0),
+          periodEnd ?? new Date("9999-12-31T23:59:59.999Z")
+        )
+      : undefined;
   const where: Prisma.AttendanceExceptionWhereInput = {
     companyId,
-    ...(periodStart || periodEnd
-      ? {
-          detectedAt: {
-            ...(periodStart ? { gte: periodStart } : {}),
-            ...(periodEnd ? { lte: periodEnd } : {}),
-          },
-        }
-      : {}),
+    ...(periodShiftIds ? { shiftId: { in: periodShiftIds } } : {}),
   };
 
   const [byType, bySeverity, bySite, byEmployee, openCritical, openCount, total] =
@@ -348,15 +402,18 @@ export async function getExceptionAnalytics(
       }),
       prisma.attendanceException.count({
         where: {
-          companyId,
+          ...where,
           severity: "CRITICAL",
-          status: { in: ["OPEN", "UNDER_REVIEW"] },
+          status: { in: [...PAYROLL_BLOCKING_CRITICAL_STATUSES] },
         },
       }),
       prisma.attendanceException.count({
         where: {
           ...where,
-          status: { in: ["OPEN", "UNDER_REVIEW"] },
+          OR: [
+            { status: { in: ["OPEN", "UNDER_REVIEW"] } },
+            { severity: "CRITICAL", status: "APPROVED" },
+          ],
         },
       }),
       prisma.attendanceException.count({ where }),
@@ -420,24 +477,30 @@ export async function refreshPayrollReadiness(
   const now = new Date();
   const start =
     periodStart ??
-    new Date(now.getFullYear(), now.getMonth(), 1);
+    new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const end =
     periodEnd ??
-    new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999)
+    );
+  const periodShiftIds = await shiftIdsForWorkedPeriod(companyId, start, end);
 
   const openCritical = await prisma.attendanceException.count({
     where: {
       companyId,
+      shiftId: { in: periodShiftIds },
       severity: "CRITICAL",
-      status: { in: ["OPEN", "UNDER_REVIEW"] },
-      detectedAt: { gte: start, lte: end },
+      status: { in: [...PAYROLL_BLOCKING_CRITICAL_STATUSES] },
     },
   });
   const openAny = await prisma.attendanceException.count({
     where: {
       companyId,
-      status: { in: ["OPEN", "UNDER_REVIEW"] },
-      detectedAt: { gte: start, lte: end },
+      shiftId: { in: periodShiftIds },
+      OR: [
+        { status: { in: ["OPEN", "UNDER_REVIEW"] } },
+        { severity: "CRITICAL", status: "APPROVED" },
+      ],
     },
   });
 
@@ -471,7 +534,7 @@ export async function refreshPayrollReadiness(
     await upsertAlert({
       companyId,
       title: "Payroll blocked because attendance is not approved",
-      message: `${openCritical} critical attendance issue(s) must be reviewed before payroll can proceed.`,
+      message: `${openCritical} critical attendance issue(s) must be corrected or explicitly resolved before payroll can proceed.`,
       priority: "CRITICAL",
       sourceModule: "PAYROLL",
       dedupeKey: `payroll_blocked:${start.toISOString().slice(0, 10)}`,
@@ -491,7 +554,7 @@ export async function assertPayrollNotBlocked(
   if (readiness.status === "BLOCKED_BY_EXCEPTIONS") {
     return {
       blocked: true,
-      message: `${readiness.openCritical} critical attendance issue(s) must be reviewed before payroll can proceed.`,
+      message: `${readiness.openCritical} critical attendance issue(s) must be corrected or explicitly resolved before payroll can proceed.`,
       status: readiness.status,
       openExceptions: readiness.openExceptions,
     };

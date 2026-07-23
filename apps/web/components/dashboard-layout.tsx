@@ -14,8 +14,7 @@ import {
   MORE_NAV_HREFS,
   canAccessRoute,
   getDefaultRouteForUser,
-  isFullAdmin,
-  normalizeUserModuleAccess,
+  hasAnyModuleView,
 } from "@/lib/permissions";
 import { clsx } from "clsx";
 
@@ -36,7 +35,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!user || !pathname) return;
-    if (!canAccessRoute(pathname, user.role, user.moduleAccess)) {
+    if (!canAccessRoute(pathname, user)) {
       router.replace(getDefaultRouteForUser(user));
     }
   }, [pathname, user, router]);
@@ -121,26 +120,26 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           });
           await refresh();
         }}
-        isAdmin={isFullAdmin(user)}
+        isOwner={user.isOwner}
         onLogout={logout}
       />
     );
   }
 
-  const allNavItems = NAV_ITEMS.filter((item) => canAccessRoute(item.href, user.role, user.moduleAccess));
+  const allNavItems = NAV_ITEMS.filter((item) => canAccessRoute(item.href, user));
 
   const mainNavItems = allNavItems.filter((item) => MAIN_NAV_HREFS.includes(item.href));
   const moreNavItems = allNavItems.filter((item) => MORE_NAV_HREFS.includes(item.href));
-  const canAccessSettings = canAccessRoute("/settings", user.role, user.moduleAccess);
+  const canAccessSettings = canAccessRoute("/settings", user);
 
-  const hasAccess = canAccessRoute(pathname, user.role, user.moduleAccess);
+  const hasAccess = canAccessRoute(pathname, user);
   const isDashboardHome = pathname === "/";
   const isWhatsAppPage = pathname === "/whatsapp" || pathname.startsWith("/whatsapp/");
   const isAcademyPage = pathname === "/academy" || (pathname != null && pathname.startsWith("/academy/"));
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
-  const roleDisplay = user.roleLabel?.trim() || user.role.replace(/_/g, " ");
+  const accessDisplay = user.isOwner ? "Company owner" : user.jobTitle?.trim() || (user.accountType === "client" ? "Client" : "Staff");
 
   return (
     <div className="flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-[var(--bg-canvas)]">
@@ -290,7 +289,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <div className="flex items-center gap-0.5 sm:gap-2 shrink-0">
           <NotificationBell />
           <div ref={searchRef} className="relative flex items-center">
-            {(user.role === "admin" || normalizeUserModuleAccess(user.moduleAccess)) && (
+            {hasAnyModuleView(user) && (
             <>
             {searchOpen ? (
               <div className="flex max-w-[calc(100vw-6.5rem)] items-center gap-1 sm:gap-2 md:max-w-none">
@@ -360,7 +359,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <div className="px-4 py-3 border-b border-security-navy-100">
                   <p className="text-sm font-semibold text-security-navy">{user.name}</p>
                   <p className="text-xs text-security-navy-500 capitalize mt-0.5">
-                    {roleDisplay}
+                  {accessDisplay}
                   </p>
                 </div>
                 <button

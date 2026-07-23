@@ -812,6 +812,76 @@ export function isRowFullyReviewed(approvalStatus: string): boolean {
   return approvalStatus === "reviewed" || approvalStatus === "approved";
 }
 
+type SiteTimesheetRowEditInput = {
+  actualGuardId?: string | null;
+  actualShiftCode?: string | null;
+  actualShiftType?: string | null;
+  clockIn?: string | null;
+  clockOut?: string | null;
+  hoursWorked?: number | null;
+  overtimeHours?: number | null;
+  attendanceStatus?: SiteTimesheetAttendance;
+  dutyOnObNumber?: string | null;
+  dutyOffObNumber?: string | null;
+  occurrenceBookNumber?: string | null;
+  comments?: string | null;
+};
+
+const APPROVAL_AFFECTING_ROW_FIELDS = new Set<keyof SiteTimesheetRowEditInput>([
+  "actualGuardId",
+  "actualShiftCode",
+  "actualShiftType",
+  "clockIn",
+  "clockOut",
+  "hoursWorked",
+  "overtimeHours",
+  "attendanceStatus",
+  "dutyOnObNumber",
+  "dutyOffObNumber",
+  "occurrenceBookNumber",
+]);
+
+function rowEditAffectsApproval(input: SiteTimesheetRowEditInput): boolean {
+  return Object.keys(input).some((key) =>
+    APPROVAL_AFFECTING_ROW_FIELDS.has(key as keyof SiteTimesheetRowEditInput)
+  );
+}
+
+function validateWorkedTime(input: {
+  clockIn: string | null;
+  clockOut: string | null;
+  hoursWorked: number | null;
+  overtimeHours: number | null;
+}): string | null {
+  const values = [
+    ["Hours worked", input.hoursWorked],
+    ["Overtime hours", input.overtimeHours],
+  ] as const;
+  for (const [label, value] of values) {
+    if (value != null && (!Number.isFinite(value) || value < 0 || value > 24)) {
+      return `${label} must be between 0 and 24.`;
+    }
+  }
+  if (
+    input.hoursWorked != null &&
+    input.overtimeHours != null &&
+    input.overtimeHours > input.hoursWorked
+  ) {
+    return "Overtime hours cannot exceed total hours worked.";
+  }
+
+  const clockIn = input.clockIn == null ? null : new Date(input.clockIn);
+  const clockOut = input.clockOut == null ? null : new Date(input.clockOut);
+  if (clockIn && !Number.isFinite(clockIn.getTime())) return "Clock in must be a valid timestamp.";
+  if (clockOut && !Number.isFinite(clockOut.getTime())) return "Clock out must be a valid timestamp.";
+  if (clockIn && clockOut) {
+    const duration = clockOut.getTime() - clockIn.getTime();
+    if (duration <= 0) return "Clock out must be after clock in.";
+    if (duration > 24 * 60 * 60 * 1000) return "A worked shift cannot exceed 24 hours.";
+  }
+  return null;
+}
+
 function resolveDutyOnFromRow(row: {
   dutyOnObNumber?: string | null;
   occurrenceBookNumber?: string | null;
@@ -822,22 +892,87 @@ function resolveDutyOnFromRow(row: {
 export async function updateSiteTimesheetRow(
   companyId: string,
   rowId: string,
-  input: {
-    actualGuardId?: string | null;
-    actualShiftCode?: string | null;
-    actualShiftType?: string | null;
-    clockIn?: string | null;
-    clockOut?: string | null;
-    hoursWorked?: number | null;
-    overtimeHours?: number | null;
-    attendanceStatus?: SiteTimesheetAttendance;
-    approvalStatus?: SiteTimesheetRowStatus;
-    dutyOnObNumber?: string | null;
-    dutyOffObNumber?: string | null;
-    occurrenceBookNumber?: string | null;
-    comments?: string | null;
-  },
-  actor?: { role: string; userId?: string }
+  input: SiteTimesheetRowEditInput,
+  actor?: { canOverrideObNumbers: boolean; userId?: string }
+) {
+  return writeSiteTimesheetRow(companyId, rowId, input, actor);
+}
+
+/** Confirm an individual row through the dedicated review action. */
+export async function confirmSiteTimesheetRow(
+  companyId: string,
+  rowId: string,
+  input: SiteTimesheetRowEditInput,
+  actor?: { canOverrideObNumbers: boolean; userId?: string }
+) {
+  return writeSiteTimesheetRow(companyId, rowId, input, actor, "reviewed");
+}
+
+export async function reopenSiteTimesheetRow(
+  companyId: string,
+  rowId: string,
+  userId?: string
+) {
+  const existing = await prisma.siteTimesheetRow.findFirst({
+    where: { id: rowId, companyId },
+    include: { siteTimesheet: true },
+  });
+  if (!existing) return null;
+  if (existing.siteTimesheet.status === "approved" || existing.siteTimesheet.status === "locked") {
+    return { error: "Timesheet is approved and locked. Unlock it before reopening a row." };
+  }
+
+  const row = await prisma.$transaction(async (tx) => {
+    await tx.siteTimesheetRow.update({
+      where: { id: rowId },
+      data: { approvalStatus: "pending" },
+    });
+    await tx.siteTimesheet.update({
+      where: { id: existing.siteTimesheetId },
+      data: {
+        status: "draft",
+        reviewedBy: null,
+        reviewedAt: null,
+        approvedBy: null,
+        approvedAt: null,
+        approvalNotes: null,
+      },
+    });
+    return tx.siteTimesheetRow.findUnique({
+      where: { id: rowId },
+      include: { plannedGuard: true, actualGuard: true },
+    });
+  });
+  if (!row) return null;
+
+  await createAuditLog({
+    userId,
+    companyId,
+    action: "site_timesheet.row_reopen",
+    entityType: "SiteTimesheetRow",
+    entityId: rowId,
+    metadata: {
+      siteTimesheetId: existing.siteTimesheetId,
+      previousApprovalStatus: existing.approvalStatus,
+    },
+  });
+
+  const sheetContext = await prisma.siteTimesheet.findUnique({
+    where: { id: existing.siteTimesheetId },
+    include: { site: true, rows: true },
+  });
+  const discrepancyMap = sheetContext
+    ? computeDiscrepancyMap(sheetContext.site, sheetContext.rows)
+    : new Map();
+  return { row: serializeRow(row, discrepancyMap.get(row.id) ?? []) };
+}
+
+async function writeSiteTimesheetRow(
+  companyId: string,
+  rowId: string,
+  input: SiteTimesheetRowEditInput,
+  actor?: { canOverrideObNumbers: boolean; userId?: string },
+  approvalAction?: "reviewed"
 ) {
   const existing = await prisma.siteTimesheetRow.findFirst({
     where: { id: rowId, companyId },
@@ -863,19 +998,46 @@ export async function updateSiteTimesheetRow(
 
   const existingDutyOn = resolveDutyOnFromRow(existing);
   const existingDutyOff = normalizeObNumber(existing.dutyOffObNumber) ?? null;
+  const effectiveClockIn =
+    input.clockIn !== undefined
+      ? input.clockIn
+      : existing.clockIn?.toISOString() ?? null;
+  const effectiveClockOut =
+    input.clockOut !== undefined
+      ? input.clockOut
+      : existing.clockOut?.toISOString() ?? null;
+  const effectiveHours =
+    input.hoursWorked !== undefined
+      ? input.hoursWorked
+      : existing.hoursWorked != null
+        ? Number(existing.hoursWorked)
+        : null;
+  const effectiveOvertime =
+    input.overtimeHours !== undefined
+      ? input.overtimeHours
+      : existing.overtimeHours != null
+        ? Number(existing.overtimeHours)
+        : null;
+  const workedTimeError = validateWorkedTime({
+    clockIn: effectiveClockIn,
+    clockOut: effectiveClockOut,
+    hoursWorked: effectiveHours,
+    overtimeHours: effectiveOvertime,
+  });
+  if (workedTimeError) return { error: workedTimeError };
 
-  if (nextDutyOn !== undefined && existingDutyOn && nextDutyOn !== existingDutyOn && actor?.role !== "admin") {
+  if (nextDutyOn !== undefined && existingDutyOn && nextDutyOn !== existingDutyOn && !actor?.canOverrideObNumbers) {
     return {
-      error: "Duty ON OB number can only be changed by an administrator once it has been entered.",
+      error: "Duty ON OB number requires attendance approval access to change once it has been entered.",
     };
   }
-  if (nextDutyOff !== undefined && existingDutyOff && nextDutyOff !== existingDutyOff && actor?.role !== "admin") {
+  if (nextDutyOff !== undefined && existingDutyOff && nextDutyOff !== existingDutyOff && !actor?.canOverrideObNumbers) {
     return {
-      error: "Duty OFF OB number can only be changed by an administrator once it has been entered.",
+      error: "Duty OFF OB number requires attendance approval access to change once it has been entered.",
     };
   }
 
-  const approving = input.approvalStatus === "reviewed" || input.approvalStatus === "approved";
+  const approving = approvalAction === "reviewed";
   const resolvedDutyOn = nextDutyOn !== undefined ? nextDutyOn : existingDutyOn;
   const resolvedDutyOff = nextDutyOff !== undefined ? nextDutyOff : existingDutyOff;
   const attendanceStatus = input.attendanceStatus ?? existing.attendanceStatus;
@@ -919,15 +1081,20 @@ export async function updateSiteTimesheetRow(
     }
   }
 
-  let nextApprovalStatus: SiteTimesheetRowStatus | undefined = input.approvalStatus;
-  if (!approving && input.approvalStatus === undefined) {
+  let nextApprovalStatus: SiteTimesheetRowStatus | undefined = approvalAction;
+  if (!approving) {
     if (!needsOb) {
-      // off/leave rows can be reviewed without OB fields
+      if (isRowFullyReviewed(existing.approvalStatus) && rowEditAffectsApproval(input)) {
+        nextApprovalStatus = "pending";
+      }
     } else {
       const dutyOnAfter = nextDutyOn !== undefined ? nextDutyOn : existingDutyOn;
       if (!dutyOnAfter) {
         nextApprovalStatus = "pending";
-      } else if (!isRowFullyReviewed(existing.approvalStatus)) {
+      } else if (
+        !isRowFullyReviewed(existing.approvalStatus) ||
+        rowEditAffectsApproval(input)
+      ) {
         nextApprovalStatus = "partially_reviewed";
       }
     }
@@ -1025,6 +1192,13 @@ export async function addSiteTimesheetRow(
     };
   }
   const dutyOffObNumber = normalizeObNumber(input.dutyOffObNumber) ?? null;
+  const workedTimeError = validateWorkedTime({
+    clockIn: null,
+    clockOut: null,
+    hoursWorked: input.hoursWorked ?? null,
+    overtimeHours: input.overtimeHours ?? null,
+  });
+  if (workedTimeError) return { error: workedTimeError };
   const workDate = dateOnly(input.workDate);
   const row = await prisma.$transaction(async (tx) => {
     const created = await tx.siteTimesheetRow.create({
@@ -1249,9 +1423,25 @@ export async function approveSiteTimesheet(
 export async function unlockSiteTimesheet(companyId: string, timesheetId: string, userId: string, reason?: string) {
   const sheet = await prisma.siteTimesheet.findFirst({ where: { id: timesheetId, companyId } });
   if (!sheet) return null;
-  await prisma.siteTimesheet.update({
-    where: { id: timesheetId },
-    data: { status: "draft", unlockedBy: userId, unlockedAt: new Date(), unlockReason: reason },
+  await prisma.$transaction(async (tx) => {
+    await tx.siteTimesheetRow.updateMany({
+      where: { siteTimesheetId: timesheetId, companyId },
+      data: { approvalStatus: "pending" },
+    });
+    await tx.siteTimesheet.update({
+      where: { id: timesheetId },
+      data: {
+        status: "draft",
+        reviewedBy: null,
+        reviewedAt: null,
+        approvedBy: null,
+        approvedAt: null,
+        approvalNotes: null,
+        unlockedBy: userId,
+        unlockedAt: new Date(),
+        unlockReason: reason,
+      },
+    });
   });
   await createAuditLog({
     userId,

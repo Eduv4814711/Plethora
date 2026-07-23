@@ -1,12 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { authMiddleware } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireCrudCapability } from "../../middleware/authorization.js";
 import { prisma } from "../../lib/prisma.js";
 
 export async function contactsRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
+    requireCrudCapability({
       module: "/whatsapp",
     }),
   ];

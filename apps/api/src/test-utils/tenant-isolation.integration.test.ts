@@ -1,8 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
-import jwt from "jsonwebtoken";
 import { buildApp } from "../app.js";
-import { config } from "../lib/config.js";
 import {
   authHeader,
   isIntegrationDatabaseAvailable,
@@ -20,17 +18,7 @@ describe.runIf(dbReady)("tenant isolation (integration)", () => {
   beforeAll(async () => {
     app = await buildApp();
     fx = await provisionTenantFixture();
-    employeeWriterToken = jwt.sign(
-      {
-        sub: fx.tenantA.userId,
-        email: fx.tenantA.email,
-        companyId: fx.tenantA.companyId,
-        role: "admin",
-        moduleAccess: { "/employees": "write" },
-      },
-      config.jwt.accessSecret,
-      { expiresIn: "1h" }
-    );
+    employeeWriterToken = fx.tenantA.accessToken;
   }, 60_000);
 
   afterAll(async () => {

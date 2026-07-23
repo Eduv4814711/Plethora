@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { academyApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { isFullAdmin } from "@/lib/permissions";
+import { hasCapability } from "@/lib/permissions";
 import {
   BulkActionBar,
   DEFAULT_INSTRUCTOR_FORM,
@@ -207,7 +207,7 @@ function toInstructorDocument(raw: unknown): InstructorDocument | null {
     id,
     instructorId: asString(row.instructorId),
     documentType: asString(row.documentType),
-    fileUrl: asString(row.fileUrl),
+    downloadUrl: asString(row.downloadUrl) || undefined,
     fileName: asString(row.fileName),
     issueDate: asNullableString(row.issueDate),
     expiryDate: asNullableString(row.expiryDate),
@@ -524,23 +524,12 @@ export default function AcademyInstructorsPage() {
   const [activity, setActivity] = useState<InstructorAuditItem[]>([]);
   const [confirmState, setConfirmState] = useState<ConfirmState>(null);
 
-  const fullAdmin = isFullAdmin({
-    role: user?.role ?? "",
-    moduleAccess: user?.moduleAccess,
-  });
-  const canEditRecords = Boolean(
-    user &&
-      ["admin", "operations_manager", "hr_payroll", "controller"].includes(user.role)
-  );
-  const canEditCompliance = Boolean(
-    user &&
-      ["admin", "operations_manager", "hr_payroll"].includes(user.role)
-  );
-  const canArchiveDelete = Boolean(
-    user &&
-      ["admin", "operations_manager"].includes(user.role)
-  );
-  const canPermanentDelete = fullAdmin;
+  const canCreateRecords = Boolean(user && hasCapability(user, "/academy", "create"));
+  const canEditRecords = Boolean(user && hasCapability(user, "/academy", "edit"));
+  const canEditCompliance = Boolean(user && hasCapability(user, "/academy", "approve"));
+  const canArchiveDelete = Boolean(user && hasCapability(user, "/academy", "delete"));
+  const canExportRecords = Boolean(user && hasCapability(user, "/academy", "export"));
+  const canPermanentDelete = Boolean(user?.isOwner);
 
   const loadMeta = useCallback(async () => {
     if (!token) return;
@@ -722,7 +711,8 @@ export default function AcademyInstructorsPage() {
 
   const saveDrawer = useCallback(
     async (draft: boolean) => {
-      if (!token || !canEditRecords) return;
+      const allowed = drawerMode === "create" || !activeInstructorId ? canCreateRecords : canEditRecords;
+      if (!token || !allowed) return;
       const validation = validateForm(drawerForm, { draft });
       setDrawerErrors(validation);
       if (Object.keys(validation).length > 0) {
@@ -767,6 +757,7 @@ export default function AcademyInstructorsPage() {
     },
     [
       token,
+      canCreateRecords,
       canEditRecords,
       drawerForm,
       drawerMode,
@@ -858,11 +849,20 @@ export default function AcademyInstructorsPage() {
       if (!token || selectedIds.size === 0) return;
       const ids = [...selectedIds];
       if (payload.action === "export_selected") {
+        if (!canExportRecords) return;
         const selectedRows = rows.filter((row) => selectedIds.has(row.id));
         downloadCsv(`academy-instructors-selected-${new Date().toISOString().slice(0, 10)}.csv`, selectedRows);
         setNotice(`Exported ${selectedRows.length} selected instructors.`);
         return;
       }
+
+      const allowed =
+        payload.action === "archive_selected" || payload.action === "delete_selected"
+          ? canArchiveDelete
+          : payload.action === "mark_documents_requested" || payload.action === "send_reminder"
+            ? canEditCompliance
+            : canEditRecords;
+      if (!allowed) return;
 
       setBusy(true);
       try {
@@ -894,7 +894,7 @@ export default function AcademyInstructorsPage() {
         setBusy(false);
       }
     },
-    [token, selectedIds, rows, refreshAfterMutation]
+    [token, selectedIds, rows, refreshAfterMutation, canExportRecords, canArchiveDelete, canEditCompliance, canEditRecords]
   );
 
   const uploadDocument = useCallback(
@@ -1009,6 +1009,7 @@ export default function AcademyInstructorsPage() {
 
   const exportCurrent = useCallback(
     (asPdf: boolean) => {
+      if (!canExportRecords) return;
       const exportRows = rows;
       if (exportRows.length === 0) {
         setNotice("No data to export for current view.");
@@ -1020,7 +1021,7 @@ export default function AcademyInstructorsPage() {
         downloadCsv(`academy-instructors-${new Date().toISOString().slice(0, 10)}.csv`, exportRows);
       }
     },
-    [rows]
+    [rows, canExportRecords]
   );
 
   const applyFilterPatch = useCallback((patch: Partial<InstructorFilters>) => {
@@ -1070,7 +1071,7 @@ export default function AcademyInstructorsPage() {
           action: "delete",
           instructorId: id,
           title: "Delete instructor?",
-          message: "This performs a soft delete (archive) by default. Permanent delete is restricted to super admins.",
+          message: "This performs a soft delete (archive) by default. Permanent delete is restricted to the company owner.",
           confirmLabel: "Delete",
         });
       }
@@ -1149,35 +1150,26 @@ export default function AcademyInstructorsPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button
+            {canCreateRecords && <button
               type="button"
               className="btn-primary px-3 py-1.5 text-xs rounded-lg"
               onClick={openCreateDrawer}
-              disabled={!canEditRecords}
             >
               Add Instructor
-            </button>
+            </button>}
             <details className="dropdown dropdown-end">
               <summary className="btn-secondary px-3 py-1.5 text-xs rounded-lg">Actions</summary>
               <ul className="menu dropdown-content z-[50] mt-1 w-52 rounded-box border border-slate-200 bg-white p-2 shadow">
-                <li>
+                {canExportRecords && <li>
                   <button type="button" onClick={() => exportCurrent(false)}>
                     Export CSV
                   </button>
-                </li>
-                <li>
+                </li>}
+                {canExportRecords && <li>
                   <button type="button" onClick={() => exportCurrent(true)}>
                     Export PDF
                   </button>
-                </li>
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => setNotice("Bulk upload workflow will be enabled in the next API iteration.")}
-                  >
-                    Bulk Upload
-                  </button>
-                </li>
+                </li>}
                 <li>
                   <button
                     type="button"
@@ -1226,9 +1218,9 @@ export default function AcademyInstructorsPage() {
         </div>
       </section>
 
-      {!canEditRecords && (
+      {!canCreateRecords && !canEditRecords && (
         <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-neutral-700">
-          Read-only access for your role. You can review instructor data but cannot create or update records.
+          Your access is read-only. You can review instructor data but cannot create or update records.
         </div>
       )}
 
@@ -1270,10 +1262,8 @@ export default function AcademyInstructorsPage() {
               <EmptyStateCard
                 title="No instructors yet"
                 description="Add your first instructor to manage contracts, certificates, and compliance in one place."
-                ctaLabel="Add Instructor"
-                secondaryCtaLabel="Bulk Upload"
-                onCta={openCreateDrawer}
-                onSecondaryCta={() => setNotice("Bulk upload workflow will be enabled in the next API iteration.")}
+                ctaLabel={canCreateRecords ? "Add Instructor" : undefined}
+                onCta={canCreateRecords ? openCreateDrawer : undefined}
               />
             ) : (
               <EmptyStateCard
@@ -1290,6 +1280,12 @@ export default function AcademyInstructorsPage() {
               rows={rows}
               loading={loading}
               selectedIds={selectedIds}
+              allowedActions={[
+                "view",
+                ...(canEditRecords ? (["edit", "assign_courses", "assign_branch", "renew_contract"] as const) : []),
+                ...(canEditCompliance ? (["upload_documents"] as const) : []),
+                ...(canArchiveDelete ? (["archive", "delete"] as const) : []),
+              ]}
               onToggleSelect={(id, checked) =>
                 setSelectedIds((current) => {
                   const next = new Set(current);
@@ -1344,19 +1340,24 @@ export default function AcademyInstructorsPage() {
         selectedCount={selectedIds.size}
         branches={branches}
         courses={courses}
+        allowedActions={[
+          ...(canExportRecords ? (["export_selected"] as const) : []),
+          ...(canEditRecords ? (["assign_branch", "assign_course"] as const) : []),
+          ...(canArchiveDelete ? (["archive_selected", "delete_selected"] as const) : []),
+          ...(canEditCompliance ? (["send_reminder", "mark_documents_requested"] as const) : []),
+        ]}
         disabled={busy}
         onClear={() => setSelectedIds(new Set())}
         onApply={handleBulkAction}
       />
 
-      <button
+      {canCreateRecords && <button
         type="button"
         className="btn-primary fixed bottom-4 right-4 z-40 rounded-full px-4 py-2 shadow-xl lg:hidden"
         onClick={openCreateDrawer}
-        disabled={!canEditRecords}
       >
         + Add Instructor
-      </button>
+      </button>}
 
       {mobileFiltersOpen && (
         <div className="fixed inset-0 z-[85] bg-slate-900/35 lg:hidden">
@@ -1392,7 +1393,7 @@ export default function AcademyInstructorsPage() {
         activity={activity}
         saving={drawerSaving || drawerLoading}
         uploading={uploadingDocument}
-        canEdit={canEditRecords}
+        canEdit={drawerMode === "create" ? canCreateRecords : canEditRecords}
         canEditCompliance={canEditCompliance}
         canArchive={canArchiveDelete}
         canDelete={canArchiveDelete}

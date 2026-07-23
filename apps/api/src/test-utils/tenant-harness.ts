@@ -1,6 +1,5 @@
 import { randomBytes } from "node:crypto";
 import jwt from "jsonwebtoken";
-import type { UserRole } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { config } from "../lib/config.js";
 import { hashPassword } from "../services/auth.service.js";
@@ -32,14 +31,12 @@ function signAccessToken(user: {
   id: string;
   email: string;
   companyId: string;
-  role: UserRole;
 }): string {
   return jwt.sign(
     {
       sub: user.id,
       email: user.email,
       companyId: user.companyId,
-      role: user.role,
     },
     config.jwt.accessSecret,
     { expiresIn: "1h" }
@@ -59,9 +56,9 @@ async function provisionCompany(label: "A" | "B", runId: string): Promise<Tenant
       name: `Admin ${label}`,
       email,
       passwordHash: await hashPassword("tenant-test-password-32chars!!"),
-      role: "admin",
     },
   });
+  await prisma.company.update({ where: { id: company.id }, data: { ownerUserId: user.id } });
 
   const group = await prisma.employeeGroup.create({
     data: {
@@ -163,7 +160,6 @@ async function provisionCompany(label: "A" | "B", runId: string): Promise<Tenant
     id: user.id,
     email: user.email,
     companyId: company.id,
-    role: user.role,
   });
 
   return {

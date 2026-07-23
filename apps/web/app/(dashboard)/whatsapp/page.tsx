@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { hasCapability } from "@/lib/permissions";
 import {
   getWhatsAppContacts,
   getWhatsAppMessages,
@@ -17,7 +18,8 @@ import { ConversationView } from "@/components/whatsapp/conversation-view";
 import { AlertBanner, EmptyState, PageHeader } from "@/components/ui";
 
 export default function WhatsAppPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canSend = Boolean(user && hasCapability(user, "/whatsapp", "create"));
   const searchParams = useSearchParams();
   const [contacts, setContacts] = useState<WhatsAppContact[]>([]);
   const [selectedContact, setSelectedContact] = useState<WhatsAppContact | null>(null);
@@ -95,7 +97,7 @@ export default function WhatsAppPage() {
   }, [requiresTemplate, token]);
 
   const handleSendMessage = async () => {
-    if (!token || !selectedContact || !messageInput.trim()) return;
+    if (!token || !canSend || !selectedContact || !messageInput.trim()) return;
     setSending(true);
     setError(null);
     try {
@@ -116,7 +118,7 @@ export default function WhatsAppPage() {
   };
 
   const handleSendTemplate = async () => {
-    if (!token || !selectedContact || !selectedTemplate) return;
+    if (!token || !canSend || !selectedContact || !selectedTemplate) return;
     setSending(true);
     setError(null);
     try {
@@ -238,7 +240,7 @@ export default function WhatsAppPage() {
                 isLoading={loadingMessages}
               />
 
-              <div className="p-4 border-t border-neutral-200">
+              {canSend ? <div className="p-4 border-t border-neutral-200">
                 {error && <p className="text-xs text-red-600 mb-2">{error}</p>}
                 {requiresTemplate ? (
                   <div className="space-y-2">
@@ -297,7 +299,7 @@ export default function WhatsAppPage() {
                     </button>
                   </div>
                 )}
-              </div>
+              </div> : <div className="border-t border-neutral-200 p-4 text-sm text-neutral-500">You have view-only access to WhatsApp.</div>}
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-neutral-500 p-8">

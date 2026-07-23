@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { PayrollStatus } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
 import { startOfMonth, subMonths, format, startOfDay, endOfDay } from "date-fns";
 import { getAlertCounts } from "../modules/alerts/alerts.service.js";
@@ -47,7 +47,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
   app.get("/", {
     preHandler: [
       authMiddleware,
-      requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"], { module: "/" }),
+      requireCrudCapability({ module: "/" }),
     ],
   }, async (request, reply) => {
     const user = request.user!;

@@ -18,7 +18,7 @@ watchPatterns = [
 # Migrations run in a separate pre-deploy container before Fastify starts.
 preDeployCommand = ["cd apps/api && npm run db:migrate:deploy"]
 startCommand = "cd apps/api && npm run start:server"
-healthcheckPath = "/health"
+healthcheckPath = "/health/ready"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5

@@ -3,6 +3,8 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
+import { authMiddleware } from "../../middleware/auth.js";
+import { requireCapability } from "../../middleware/authorization.js";
 import { academyProtect } from "./constants.js";
 import {
   generateNextReceiptNumber,
@@ -38,6 +40,10 @@ const rejectSchema = z.object({
 });
 
 export async function academyPaymentsRoutes(app: FastifyInstance) {
+  const approveProtect = [
+    authMiddleware,
+    requireCapability("/academy", "approve"),
+  ];
   app.get("/", { preHandler: academyProtect }, async (request) => {
     const companyId = request.user!.companyId;
     const q = request.query as Record<string, string | undefined>;
@@ -190,7 +196,7 @@ export async function academyPaymentsRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post("/:id/verify", { preHandler: academyProtect }, async (request, reply) => {
+  app.post("/:id/verify", { preHandler: approveProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     const { id } = request.params as { id: string };
@@ -260,7 +266,7 @@ export async function academyPaymentsRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post("/:id/reject", { preHandler: academyProtect }, async (request, reply) => {
+  app.post("/:id/reject", { preHandler: approveProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     const { id } = request.params as { id: string };

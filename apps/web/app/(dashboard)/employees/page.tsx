@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
-import { canManageEmployeeDetails, isFullAdmin } from "@/lib/permissions";
+import { canManageEmployeeDetails, hasCapability } from "@/lib/permissions";
 import { DateInput } from "@/components/date-input";
 import { useConfirmDialog } from "@/components/ui";
 import { clsx } from "clsx";
@@ -101,7 +101,10 @@ const TEAM_UNASSIGNED_FOLDER_KEY = "__unassigned__";
 
 export default function EmployeesPage() {
   const { token, user } = useAuth();
-  const canDeleteEmployees = user ? isFullAdmin(user) : false;
+  const canCreateEmployees = user
+    ? hasCapability(user, "/employees", "create") || hasCapability(user, "/payroll", "create")
+    : false;
+  const canDeleteEmployees = user ? hasCapability(user, "/employees", "delete") : false;
   const canEditEmployeeDetails = user ? canManageEmployeeDetails(user) : false;
   const searchParams = useSearchParams();
   const searchQuery = searchParams.get("q") ?? "";
@@ -258,19 +261,19 @@ export default function EmployeesPage() {
           </button>
           <button
             onClick={() => {
-              if (!canEditEmployeeDetails) return;
+              if (!canCreateEmployees) return;
               setShowForm(!showForm);
             }}
-            disabled={!canEditEmployeeDetails}
+            disabled={!canCreateEmployees}
             title={
-              canEditEmployeeDetails
+              canCreateEmployees
                 ? undefined
-                : "Team or Payroll module access is required to add or edit employee details"
+                : "Team or Payroll create access is required to add team members"
             }
             className={clsx(
               showForm ? "btn-secondary" : "btn-primary",
               "h-11 shrink-0",
-              !canEditEmployeeDetails && "cursor-not-allowed opacity-45 hover:shadow-none"
+              !canCreateEmployees && "cursor-not-allowed opacity-45 hover:shadow-none"
             )}
           >
             {showForm ? "Cancel" : "Add team member"}
@@ -325,7 +328,7 @@ export default function EmployeesPage() {
         </div>
       </div>
 
-      {showForm && canEditEmployeeDetails && (
+      {showForm && canCreateEmployees && (
         <EmployeeForm
           token={token!}
           defaultPlaceOfWork={defaultCompanyName}
@@ -475,18 +478,18 @@ export default function EmployeesPage() {
           {statusFilter === "all" && searchQuery.trim().length < 2 && (
             <button
               onClick={() => {
-                if (!canEditEmployeeDetails) return;
+                if (!canCreateEmployees) return;
                 setShowForm(true);
               }}
-              disabled={!canEditEmployeeDetails}
+              disabled={!canCreateEmployees}
               title={
-                canEditEmployeeDetails
+                canCreateEmployees
                   ? undefined
-                  : "Team or Payroll module access is required to add or edit employee details"
+                  : "Team or Payroll create access is required to add team members"
               }
               className={clsx(
                 "btn-primary mt-6",
-                !canEditEmployeeDetails && "cursor-not-allowed opacity-45 hover:shadow-none"
+                !canCreateEmployees && "cursor-not-allowed opacity-45 hover:shadow-none"
               )}
             >
               Add team member
@@ -1846,9 +1849,9 @@ function EditModal({
                   type="button"
                   onClick={async () => {
                     const confirmed = await confirm({
-                      title: "Delete team member permanently?",
-                      message: `This permanently deletes ${firstName} ${lastName} from the system.`,
-                      confirmLabel: "Delete team member",
+                      title: "Offboard and archive team member?",
+                      message: `${firstName} ${lastName} will be marked offboarded and removed from active assignments. Payroll, attendance, leave, and audit history will be preserved.`,
+                      confirmLabel: "Offboard and archive",
                     });
                     if (!confirmed) return;
                     setError("");
@@ -1857,12 +1860,12 @@ function EditModal({
                       const res = await authFetch(`/employees/${employeeId}`, token, { method: "DELETE" });
                       if (!res.ok) {
                         const data = await res.json();
-                        throw new Error(data?.message || data?.error || "Failed to delete");
+                        throw new Error(data?.message || data?.error || "Failed to archive");
                       }
                       onSuccess();
                       onClose();
                     } catch (err) {
-                      setError(err instanceof Error ? err.message : "Failed to delete team member");
+                      setError(err instanceof Error ? err.message : "Failed to archive team member");
                     } finally {
                       setDeleting(false);
                     }
@@ -1870,7 +1873,7 @@ function EditModal({
                   disabled={deleting}
                   className="flex-1 btn-destructive"
                 >
-                  {deleting ? "Deleting..." : "Delete team member"}
+                  {deleting ? "Archiving..." : "Offboard and archive"}
                 </button>
               )}
             </div>

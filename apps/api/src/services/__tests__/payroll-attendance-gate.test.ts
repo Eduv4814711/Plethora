@@ -23,17 +23,27 @@ const periodEnd = new Date("2026-05-31T23:59:59.999Z");
 
 describe("findSitesNeedingApproval (payroll attendance gate)", () => {
   beforeEach(() => {
+    vi.mocked(prisma.company.findUnique).mockReset();
+    vi.mocked(prisma.company.findUnique).mockResolvedValue({
+      settings: { timezone: "Africa/Johannesburg" },
+    } as never);
     vi.mocked(prisma.shift.findMany).mockReset();
-    vi.mocked(prisma.siteTimesheet.findMany).mockReset();
+    vi.mocked(prisma.siteTimesheetRow.findMany).mockReset();
     vi.mocked(prisma.site.findMany).mockReset();
   });
 
-  it("returns sites that have shifts but no approved timesheet", async () => {
+  it("returns sites whose worked shifts have no approved timesheet row", async () => {
     vi.mocked(prisma.shift.findMany).mockResolvedValue([
-      { siteId: "A" },
-      { siteId: "B" },
+      { id: "shift-a", siteId: "A", employeeId: "G1", shiftType: "day", startTime: new Date("2026-05-06T04:00:00.000Z") },
+      { id: "shift-b", siteId: "B", employeeId: "G2", shiftType: "day", startTime: new Date("2026-05-06T04:00:00.000Z") },
     ] as never);
-    vi.mocked(prisma.siteTimesheet.findMany).mockResolvedValue([{ siteId: "A" }] as never);
+    vi.mocked(prisma.siteTimesheetRow.findMany).mockResolvedValue([{
+      siteId: "A",
+      workDate: new Date("2026-05-06T00:00:00.000Z"),
+      actualGuardId: "G1",
+      actualShiftType: "day",
+      sourceShiftId: "shift-a",
+    }] as never);
     vi.mocked(prisma.site.findMany).mockResolvedValue([{ id: "B", name: "Site B" }] as never);
 
     const result = await findSitesNeedingApproval(companyId, periodStart, periodEnd);
@@ -56,15 +66,46 @@ describe("findSitesNeedingApproval (payroll attendance gate)", () => {
     vi.mocked(prisma.shift.findMany).mockResolvedValue([] as never);
     const result = await findSitesNeedingApproval(companyId, periodStart, periodEnd);
     expect(result).toEqual([]);
-    expect(prisma.siteTimesheet.findMany).not.toHaveBeenCalled();
+    expect(prisma.siteTimesheetRow.findMany).not.toHaveBeenCalled();
   });
 
-  it("returns empty when every site with shifts is approved", async () => {
-    vi.mocked(prisma.shift.findMany).mockResolvedValue([{ siteId: "A" }] as never);
-    vi.mocked(prisma.siteTimesheet.findMany).mockResolvedValue([{ siteId: "A" }] as never);
+  it("returns empty when every worked shift has an approved row", async () => {
+    vi.mocked(prisma.shift.findMany).mockResolvedValue([{
+      id: "shift-a",
+      siteId: "A",
+      employeeId: "G1",
+      shiftType: "day",
+      startTime: new Date("2026-05-06T04:00:00.000Z"),
+    }] as never);
+    vi.mocked(prisma.siteTimesheetRow.findMany).mockResolvedValue([{
+      siteId: "A",
+      workDate: new Date("2026-05-06T00:00:00.000Z"),
+      actualGuardId: "G1",
+      actualShiftType: "day",
+      sourceShiftId: "shift-a",
+    }] as never);
     const result = await findSitesNeedingApproval(companyId, periodStart, periodEnd);
     expect(result).toEqual([]);
     expect(prisma.site.findMany).not.toHaveBeenCalled();
+  });
+
+  it("does not treat an approved sheet as complete when one worked shift row is missing", async () => {
+    vi.mocked(prisma.shift.findMany).mockResolvedValue([
+      { id: "shift-a", siteId: "A", employeeId: "G1", shiftType: "day", startTime: new Date("2026-05-06T04:00:00.000Z") },
+      { id: "shift-missing", siteId: "A", employeeId: "G2", shiftType: "day", startTime: new Date("2026-05-06T04:00:00.000Z") },
+    ] as never);
+    vi.mocked(prisma.siteTimesheetRow.findMany).mockResolvedValue([{
+      siteId: "A",
+      workDate: new Date("2026-05-06T00:00:00.000Z"),
+      actualGuardId: "G1",
+      actualShiftType: "day",
+      sourceShiftId: "shift-a",
+    }] as never);
+    vi.mocked(prisma.site.findMany).mockResolvedValue([{ id: "A", name: "Site A" }] as never);
+
+    await expect(findSitesNeedingApproval(companyId, periodStart, periodEnd)).resolves.toEqual([
+      { id: "A", name: "Site A" },
+    ]);
   });
 });
 
@@ -90,6 +131,9 @@ describe("aggregateTimesheets per-site behaviour", () => {
     // Site A is approved -> contributes via an approved site-timesheet row (guard G1).
     vi.mocked(prisma.siteTimesheetRow.findMany).mockResolvedValue([
       {
+        siteId: "A",
+        sourceShiftId: "shift-a",
+        actualShiftType: "day",
         actualGuardId: "G1",
         workDate: new Date("2026-05-06T00:00:00.000Z"),
         clockIn: null,
@@ -98,12 +142,20 @@ describe("aggregateTimesheets per-site behaviour", () => {
         attendanceStatus: "present",
       },
     ] as never);
-    vi.mocked(prisma.siteTimesheet.findMany).mockResolvedValue([{ siteId: "A" }] as never);
+    vi.mocked(prisma.siteTimesheet.findMany).mockResolvedValue([{
+      id: "ts-a",
+      siteId: "A",
+      periodStart,
+      periodEnd,
+    }] as never);
 
     // Site B has no approved timesheet -> raw shift falls back (guard G2).
     vi.mocked(prisma.shift.findMany).mockResolvedValue([
       {
+        id: "shift-b",
+        siteId: "B",
         employeeId: "G2",
+        shiftType: "day",
         startTime: new Date("2026-05-06T04:00:00.000Z"),
         attendances: [{ hoursWorked: 8, overtimeHours: 0 }],
       },
@@ -116,11 +168,53 @@ describe("aggregateTimesheets per-site behaviour", () => {
     expect(g1?.basicHours).toBe(8);
     expect(g2?.basicHours).toBe(8);
 
-    // Raw fallback must exclude the approved site so its hours are not double counted.
+    // Raw attendance is suppressed in memory only for exact approved site/date keys.
     const shiftWhere = vi.mocked(prisma.shift.findMany).mock.calls[0][0] as {
       where: { siteId?: { notIn: string[] } };
     };
-    expect(shiftWhere.where.siteId).toEqual({ notIn: ["A"] });
+    expect(shiftWhere.where.siteId).toBeUndefined();
+  });
+
+  it("keeps raw attendance when an approved sheet is missing that exact shift row", async () => {
+    vi.mocked(prisma.siteTimesheet.findMany).mockResolvedValue([{
+      id: "ts-a",
+      siteId: "A",
+      periodStart,
+      periodEnd,
+    }] as never);
+    vi.mocked(prisma.siteTimesheetRow.findMany).mockResolvedValue([{
+      siteId: "A",
+      sourceShiftId: "shift-covered",
+      actualGuardId: "G1",
+      actualShiftType: "day",
+      workDate: new Date("2026-05-06T00:00:00.000Z"),
+      clockIn: null,
+      hoursWorked: 8,
+      overtimeHours: 0,
+      attendanceStatus: "present",
+    }] as never);
+    vi.mocked(prisma.shift.findMany).mockResolvedValue([
+      {
+        id: "shift-covered",
+        siteId: "A",
+        employeeId: "G1",
+        shiftType: "day",
+        startTime: new Date("2026-05-06T04:00:00.000Z"),
+        attendances: [{ hoursWorked: 8, overtimeHours: 0 }],
+      },
+      {
+        id: "shift-missing",
+        siteId: "A",
+        employeeId: "G2",
+        shiftType: "day",
+        startTime: new Date("2026-05-06T04:00:00.000Z"),
+        attendances: [{ hoursWorked: 8, overtimeHours: 0 }],
+      },
+    ] as never);
+
+    const result = await aggregateTimesheets(companyId, periodStart, periodEnd);
+    expect(result.find((row) => row.employeeId === "G1")?.basicHours).toBe(8);
+    expect(result.find((row) => row.employeeId === "G2")?.basicHours).toBe(8);
   });
 
   it("does not restrict raw shifts when no site is approved", async () => {
@@ -139,6 +233,9 @@ describe("aggregateTimesheets per-site behaviour", () => {
   it("excludes absent site-timesheet rows from payroll hours", async () => {
     vi.mocked(prisma.siteTimesheetRow.findMany).mockResolvedValue([
       {
+        siteId: "A",
+        sourceShiftId: "shift-a",
+        actualShiftType: "day",
         actualGuardId: "G1",
         workDate: new Date("2026-05-06T00:00:00.000Z"),
         clockIn: null,
@@ -147,7 +244,12 @@ describe("aggregateTimesheets per-site behaviour", () => {
         attendanceStatus: "present",
       },
     ] as never);
-    vi.mocked(prisma.siteTimesheet.findMany).mockResolvedValue([{ siteId: "A" }] as never);
+    vi.mocked(prisma.siteTimesheet.findMany).mockResolvedValue([{
+      id: "ts-a",
+      siteId: "A",
+      periodStart,
+      periodEnd,
+    }] as never);
     vi.mocked(prisma.shift.findMany).mockResolvedValue([] as never);
 
     await aggregateTimesheets(companyId, periodStart, periodEnd);
@@ -158,24 +260,36 @@ describe("aggregateTimesheets per-site behaviour", () => {
           attendanceStatus: {
             in: ["present", "late", "left_early", "reliever", "shift_swapped", "leave", "sick_leave", "training"],
           },
-          siteTimesheet: expect.objectContaining({
-            status: { in: ["approved", "locked"] },
-          }),
+          siteTimesheetId: { in: ["ts-a"] },
         }),
       })
     );
   });
 
   it("treats locked site timesheets the same as approved for the payroll gate", async () => {
-    vi.mocked(prisma.shift.findMany).mockResolvedValue([{ siteId: "A" }] as never);
-    vi.mocked(prisma.siteTimesheet.findMany).mockResolvedValue([{ siteId: "A" }] as never);
+    vi.mocked(prisma.shift.findMany).mockResolvedValue([{
+      id: "shift-a",
+      siteId: "A",
+      employeeId: "G1",
+      shiftType: "day",
+      startTime: new Date("2026-05-06T04:00:00.000Z"),
+    }] as never);
+    vi.mocked(prisma.siteTimesheetRow.findMany).mockResolvedValue([{
+      siteId: "A",
+      workDate: new Date("2026-05-06T00:00:00.000Z"),
+      actualGuardId: "G1",
+      actualShiftType: "day",
+      sourceShiftId: "shift-a",
+    }] as never);
 
     const result = await findSitesNeedingApproval(companyId, periodStart, periodEnd);
     expect(result).toEqual([]);
-    expect(prisma.siteTimesheet.findMany).toHaveBeenCalledWith(
+    expect(prisma.siteTimesheetRow.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          status: { in: ["approved", "locked"] },
+          siteTimesheet: expect.objectContaining({
+            status: { in: ["approved", "locked"] },
+          }),
         }),
       })
     );
@@ -200,6 +314,9 @@ describe("aggregateTimesheets per-site behaviour", () => {
 
   it("does not count a leave site-timesheet row as worked time when an authoritative occurrence exists", async () => {
     vi.mocked(prisma.siteTimesheetRow.findMany).mockResolvedValue([{
+      siteId: "A",
+      sourceShiftId: null,
+      actualShiftType: "day",
       actualGuardId: "G1",
       workDate: new Date("2026-05-06T00:00:00.000Z"),
       clockIn: null,
@@ -207,7 +324,12 @@ describe("aggregateTimesheets per-site behaviour", () => {
       overtimeHours: null,
       attendanceStatus: "leave",
     }] as never);
-    vi.mocked(prisma.siteTimesheet.findMany).mockResolvedValue([{ siteId: "A" }] as never);
+    vi.mocked(prisma.siteTimesheet.findMany).mockResolvedValue([{
+      id: "ts-a",
+      siteId: "A",
+      periodStart,
+      periodEnd,
+    }] as never);
     vi.mocked(prisma.shift.findMany).mockResolvedValue([] as never);
     vi.mocked(prisma.leaveOccurrence.findMany).mockResolvedValue([{
       employeeId: "G1",
@@ -227,6 +349,9 @@ describe("aggregateTimesheets per-site behaviour", () => {
 
   it("uses a leave site-timesheet row as paid-leave fallback when no leave record exists", async () => {
     vi.mocked(prisma.siteTimesheetRow.findMany).mockResolvedValue([{
+      siteId: "A",
+      sourceShiftId: null,
+      actualShiftType: "day",
       actualGuardId: "G1",
       workDate: new Date("2026-05-06T00:00:00.000Z"),
       clockIn: null,
@@ -234,7 +359,12 @@ describe("aggregateTimesheets per-site behaviour", () => {
       overtimeHours: null,
       attendanceStatus: "sick_leave",
     }] as never);
-    vi.mocked(prisma.siteTimesheet.findMany).mockResolvedValue([{ siteId: "A" }] as never);
+    vi.mocked(prisma.siteTimesheet.findMany).mockResolvedValue([{
+      id: "ts-a",
+      siteId: "A",
+      periodStart,
+      periodEnd,
+    }] as never);
     vi.mocked(prisma.shift.findMany).mockResolvedValue([] as never);
 
     const result = await aggregateTimesheets(companyId, periodStart, periodEnd);

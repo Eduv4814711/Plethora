@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchCurrentPayPeriod, fetchPayPeriods, type PayPeriodOption } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { hasCapability } from "@/lib/permissions";
 import { useConfirmDialog } from "@/components/ui";
 import { fetchRosterContinuityStatus, type RosterContinuityStatus, type RosterShiftCode } from "@/lib/roster-api";
 import { GuardPatternBuilder } from "../../../GuardPatternBuilder";
@@ -29,7 +30,8 @@ export default function AdvancedRosterEditorPage() {
   const params = useParams<{ siteId: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canApprove = Boolean(user && hasCapability(user, "/rostering", "approve"));
   const { confirm, confirmDialog } = useConfirmDialog();
   const siteId = params.siteId;
   const [status, setStatus] = useState<RosterContinuityStatus | null>(null);
@@ -92,7 +94,7 @@ export default function AdvancedRosterEditorPage() {
   };
 
   const applyOngoingSchedule = async () => {
-    if (!period || draft.pendingCount === 0 || draft.hardIssueCount > 0) return;
+    if (!status?.permissions.canUseAdvancedEditor || !period || draft.pendingCount === 0 || draft.hardIssueCount > 0) return;
     const accepted = await confirm({
       title: "Start this ongoing schedule?",
       message: `These ${draft.pendingCount} change${draft.pendingCount === 1 ? "" : "s"} will create a new repeating schedule effective from the first changed date in ${period.rosterLabel}. Historical periods will remain unchanged.`,
@@ -103,7 +105,7 @@ export default function AdvancedRosterEditorPage() {
   };
 
   if (loading || !status || !period) return <div className="space-y-4 animate-pulse"><div className="h-24 rounded-2xl bg-neutral-200 dark:bg-neutral-800" /><div className="h-96 rounded-2xl bg-neutral-200 dark:bg-neutral-800" /></div>;
-  if (error || !status.permissions.canUseAdvancedEditor) return <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200"><h1 className="text-lg font-semibold">Advanced editor unavailable</h1><p className="mt-2 text-sm">{error ?? "Only administrators and operations managers can use this editor."}</p><Link href={`/rostering/sites/${siteId}`} className="btn-secondary mt-4 inline-flex">Back to site roster</Link></div>;
+  if (error || !status.permissions.canUseAdvancedEditor) return <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200"><h1 className="text-lg font-semibold">Advanced editor unavailable</h1><p className="mt-2 text-sm">{error ?? "Roster edit capability is required to use this editor."}</p><Link href={`/rostering/sites/${siteId}`} className="btn-secondary mt-4 inline-flex">Back to site roster</Link></div>;
 
   const continuous = status.state !== "not_setup";
 
@@ -111,8 +113,8 @@ export default function AdvancedRosterEditorPage() {
     <div className="space-y-4 animate-fade-in">
       <header className="sticky top-0 z-30 rounded-2xl border border-neutral-200 bg-white/95 p-4 shadow-sm backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/95">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div><Link href={`/rostering/sites/${siteId}`} className="text-sm font-medium text-orange-700 hover:underline dark:text-orange-300">← Back to simple roster view</Link><div className="mt-2 flex flex-wrap items-center gap-2"><h1 className="text-xl font-bold text-neutral-900 dark:text-white">{ongoingMode ? "Change the ongoing schedule" : "Advanced roster editor"}</h1><span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">Managers only</span></div><p className="mt-1 text-sm text-neutral-500">{status.siteName} · {ongoingMode ? "Create a new effective-dated repeating schedule without changing roster history." : "Use for bulk edits, patterns, manual sites, and PDF exports."}</p></div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end"><label><span className="block text-xs font-medium text-neutral-500">{ongoingMode ? "Effective roster period" : "Roster period"}</span><select value={period.periodKey} onChange={(event) => { const next = periods.find((item) => item.periodKey === event.target.value); if (next) void changePeriod(next); }} className="input-modern mt-1 w-full sm:w-64">{periods.map((item) => <option key={item.periodKey} value={item.periodKey}>{item.rosterLabel}</option>)}</select></label>{draft.hasUnsavedChanges && <button type="button" onClick={() => void workspaceRef.current?.discardChanges()} disabled={draft.isSaving} className="btn-secondary">Discard</button>}{ongoingMode ? <button type="button" onClick={() => void applyOngoingSchedule()} disabled={!draft.hasUnsavedChanges || draft.hardIssueCount > 0 || draft.isSaving} className="btn-primary disabled:opacity-50">{draft.isSaving ? "Applying…" : "Review and start schedule"}</button> : <button type="button" onClick={() => void workspaceRef.current?.saveRoster()} disabled={!draft.hasUnsavedChanges || draft.isSaving} className="btn-primary disabled:opacity-50">{draft.isSaving ? "Saving…" : `Save ${draft.pendingCount || ""} change${draft.pendingCount === 1 ? "" : "s"}`}</button>}{!continuous && !ongoingMode && <button type="button" onClick={() => void workspaceRef.current?.publishRoster()} disabled={!draft.canPublish || draft.isPublishing} className="btn-secondary disabled:opacity-50">{draft.isPublishing ? "Publishing…" : "Publish shifts"}</button>}</div>
+          <div><Link href={`/rostering/sites/${siteId}`} className="text-sm font-medium text-orange-700 hover:underline dark:text-orange-300">← Back to simple roster view</Link><div className="mt-2 flex flex-wrap items-center gap-2"><h1 className="text-xl font-bold text-neutral-900 dark:text-white">{ongoingMode ? "Change the ongoing schedule" : "Advanced roster editor"}</h1><span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">Edit access</span></div><p className="mt-1 text-sm text-neutral-500">{status.siteName} · {ongoingMode ? "Create a new effective-dated repeating schedule without changing roster history." : "Use for bulk edits, patterns, manual sites, and PDF exports."}</p></div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end"><label><span className="block text-xs font-medium text-neutral-500">{ongoingMode ? "Effective roster period" : "Roster period"}</span><select value={period.periodKey} onChange={(event) => { const next = periods.find((item) => item.periodKey === event.target.value); if (next) void changePeriod(next); }} className="input-modern mt-1 w-full sm:w-64">{periods.map((item) => <option key={item.periodKey} value={item.periodKey}>{item.rosterLabel}</option>)}</select></label>{draft.hasUnsavedChanges && <button type="button" onClick={() => void workspaceRef.current?.discardChanges()} disabled={draft.isSaving} className="btn-secondary">Discard</button>}{ongoingMode ? <button type="button" onClick={() => void applyOngoingSchedule()} disabled={!draft.hasUnsavedChanges || draft.hardIssueCount > 0 || draft.isSaving} className="btn-primary disabled:opacity-50">{draft.isSaving ? "Applying…" : "Review and start schedule"}</button> : <button type="button" onClick={() => void workspaceRef.current?.saveRoster()} disabled={!draft.hasUnsavedChanges || draft.isSaving} className="btn-primary disabled:opacity-50">{draft.isSaving ? "Saving…" : `Save ${draft.pendingCount || ""} change${draft.pendingCount === 1 ? "" : "s"}`}</button>}{canApprove && !continuous && !ongoingMode && <button type="button" onClick={() => void workspaceRef.current?.publishRoster()} disabled={!draft.canPublish || draft.isPublishing} className="btn-secondary disabled:opacity-50">{draft.isPublishing ? "Publishing…" : "Publish shifts"}</button>}</div>
         </div>
         {continuous && <p className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:bg-blue-950/30 dark:text-blue-200">This site is managed continuously. Saving one-day edits publishes them through the continuity engine; there is no separate Publish step.</p>}
       </header>

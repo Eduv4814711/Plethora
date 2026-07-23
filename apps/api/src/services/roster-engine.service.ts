@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { inferPostShiftType } from "../lib/site-post-api.js";
 import { getCompanyTimezone, getShiftTimes, dateKeyInTimeZone } from "../lib/timezone.js";
@@ -38,6 +39,13 @@ import {
 
 const ROSTERABLE_STATUSES = ["active", "training", "hired", "reliever"] as const;
 const MAX_PLAN_ENTRIES = 1000;
+
+export class RosterPlanValidationError extends Error {
+  constructor(public readonly errors: string[]) {
+    super("PLAN_VALIDATION_FAILED");
+    this.name = "RosterPlanValidationError";
+  }
+}
 
 export type RosterPlanEntry = {
   employeeId: string;
@@ -843,6 +851,7 @@ function validateApplyEntryInMemory(
   siteId: string,
   employeeId: string,
   postId: string,
+  shiftType: "day" | "night",
   startTime: Date,
   endTime: Date,
   ctx: ApplyValidationContext
@@ -857,6 +866,11 @@ function validateApplyEntryInMemory(
   if (!post) return "Post not found";
   if (post.site.companyId !== companyId) return "Post does not belong to company";
   if (post.siteId !== siteId) return "Post does not belong to this site";
+  const postShiftType =
+    (post.shiftType ?? "day").toLowerCase() === "night" ? "night" : "day";
+  if (postShiftType !== shiftType) {
+    return `Shift type ${shiftType} does not match the ${postShiftType} post`;
+  }
 
   if (!ctx.siteAssignedEmployeeIds.has(employeeId)) {
     return "Employee is not assigned to this site. Assign the guard to the site in Sites first.";
@@ -873,6 +887,98 @@ function validateApplyEntryInMemory(
   }
 
   return null;
+}
+
+function parseRosterPlanBoundary(value: string, endOfDay: boolean): Date | null {
+  const key = value.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return null;
+  const parsed = new Date(`${key}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === key
+    ? parsed
+    : null;
+}
+
+export async function findApprovedLeaveConflictsForPlan(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  shifts: { employeeId: string; startTime: Date }[],
+  timeZone: string
+): Promise<string[]> {
+  if (shifts.length === 0) return [];
+  const plannedDays = shifts.map((shift) => ({
+    employeeId: shift.employeeId,
+    dateKey: dateKeyInTimeZone(shift.startTime, timeZone),
+  }));
+  const employeeIds = [...new Set(plannedDays.map((row) => row.employeeId))];
+  const dates = plannedDays.map((row) => new Date(`${row.dateKey}T00:00:00.000Z`));
+  const rangeStart = new Date(Math.min(...dates.map((date) => date.getTime())));
+  const rangeEnd = new Date(Math.max(...dates.map((date) => date.getTime())));
+
+  const [occurrences, applications, legacyRecords] = await Promise.all([
+    tx.leaveOccurrence.findMany({
+      where: {
+        companyId,
+        employeeId: { in: employeeIds },
+        leaveDate: { gte: rangeStart, lte: rangeEnd },
+        status: { in: ["APPROVED", "PAYROLL_PROCESSED"] },
+      },
+      select: { employeeId: true, leaveDate: true },
+    }),
+    tx.leaveApplication.findMany({
+      where: {
+        companyId,
+        employeeId: { in: employeeIds },
+        startDate: { lte: rangeEnd },
+        endDate: { gte: rangeStart },
+        status: {
+          in: [
+            "APPROVED",
+            "CANCELLATION_REQUESTED",
+            "PAYROLL_PROCESSED",
+            "ADJUSTMENT_REQUIRED",
+            "IMPORTED_APPROVED",
+          ],
+        },
+      },
+      select: { employeeId: true, startDate: true, endDate: true },
+    }),
+    tx.leaveRecord.findMany({
+      where: {
+        employeeId: { in: employeeIds },
+        employee: { companyId },
+        date: { gte: rangeStart, lte: rangeEnd },
+      },
+      select: { employeeId: true, date: true },
+    }),
+  ]);
+
+  const conflicts = new Set<string>();
+  for (const planned of plannedDays) {
+    const day = new Date(`${planned.dateKey}T00:00:00.000Z`);
+    const hasConflict =
+      occurrences.some(
+        (row) =>
+          row.employeeId === planned.employeeId &&
+          row.leaveDate.getTime() === day.getTime()
+      ) ||
+      applications.some(
+        (row) =>
+          row.employeeId === planned.employeeId &&
+          row.startDate <= day &&
+          row.endDate >= day
+      ) ||
+      legacyRecords.some(
+        (row) =>
+          row.employeeId === planned.employeeId &&
+          row.date.getTime() === day.getTime()
+      );
+    if (hasConflict) {
+      conflicts.add(
+        `${planned.dateKey}: Employee ${planned.employeeId} is on approved leave`
+      );
+    }
+  }
+  return [...conflicts];
 }
 
 /**
@@ -906,8 +1012,13 @@ export async function applyRosterPlan(input: ApplyRosterPlanInput): Promise<Appl
     }
   }
 
-  const start = new Date(`${plan.startDate.slice(0, 10)}T00:00:00.000Z`);
-  const end = new Date(`${plan.endDate.slice(0, 10)}T23:59:59.999Z`);
+  const start = parseRosterPlanBoundary(plan.startDate, false);
+  const end = parseRosterPlanBoundary(plan.endDate, true);
+  if (!start || !end || start > end) {
+    throw new RosterPlanValidationError([
+      "Roster plan dates must be valid YYYY-MM-DD values and endDate must not precede startDate",
+    ]);
+  }
 
   let deleted = 0;
   let created = 0;
@@ -940,6 +1051,22 @@ export async function applyRosterPlan(input: ApplyRosterPlanInput): Promise<Appl
   for (const entry of plan.entries) {
     const startTime = new Date(entry.startTime);
     const endTime = new Date(entry.endTime);
+    if (!Number.isFinite(startTime.getTime()) || !Number.isFinite(endTime.getTime())) {
+      errors.push("Roster plan contains an invalid shift timestamp");
+      continue;
+    }
+    if (endTime <= startTime) {
+      errors.push(`${entry.startTime.slice(0, 10)}: Shift end must be after shift start`);
+      continue;
+    }
+    if (endTime.getTime() - startTime.getTime() > 24 * 60 * 60 * 1000) {
+      errors.push(`${entry.startTime.slice(0, 10)}: A shift cannot exceed 24 hours`);
+      continue;
+    }
+    if (startTime < start || startTime > end) {
+      errors.push(`${entry.startTime.slice(0, 10)}: Shift is outside the roster plan period`);
+      continue;
+    }
     const dateKey = dateKeyInTimeZone(startTime, timeZone);
 
     let restMap = plannedRestByEmployee.get(entry.employeeId);
@@ -973,6 +1100,7 @@ export async function applyRosterPlan(input: ApplyRosterPlanInput): Promise<Appl
       plan.siteId,
       entry.employeeId,
       entry.postId,
+      entry.shiftType,
       startTime,
       endTime,
       validationCtx
@@ -997,8 +1125,22 @@ export async function applyRosterPlan(input: ApplyRosterPlanInput): Promise<Appl
     restMap.set(dateKey, entry.shiftType);
   }
 
+  if (errors.length > 0) {
+    throw new RosterPlanValidationError(errors);
+  }
+
   await prisma.$transaction(
     async (tx) => {
+      const leaveConflicts = await findApprovedLeaveConflictsForPlan(
+        tx,
+        companyId,
+        shiftsToCreate,
+        timeZone
+      );
+      if (leaveConflicts.length > 0) {
+        throw new RosterPlanValidationError(leaveConflicts);
+      }
+
       if (replaceExisting) {
         const del = await tx.shift.deleteMany({
           where: {
@@ -1020,6 +1162,7 @@ export async function applyRosterPlan(input: ApplyRosterPlanInput): Promise<Appl
     {
       maxWait: 10_000,
       timeout: Math.min(120_000, 15_000 + shiftsToCreate.length * 50),
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     }
   );
 

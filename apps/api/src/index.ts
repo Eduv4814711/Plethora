@@ -2,13 +2,13 @@ import "dotenv/config";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "./app.js";
 import { env } from "./lib/env.js";
-import { databaseHostFromUrl, verifyDatabaseConnection } from "./lib/db-connectivity.js";
+import { databaseHostFromUrl, verifyDatabaseReadiness } from "./lib/db-connectivity.js";
 import { prisma } from "./lib/prisma.js";
 
 let app: FastifyInstance;
 try {
-  await verifyDatabaseConnection();
-  console.log(`Database connected (${databaseHostFromUrl(process.env.DATABASE_URL)})`);
+  await verifyDatabaseReadiness();
+  console.log(`Database ready (${databaseHostFromUrl(process.env.DATABASE_URL)})`);
   app = await buildApp();
 } catch (err) {
   console.error("FATAL: API failed to initialize (check environment variables, logs above):", err);

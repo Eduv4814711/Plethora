@@ -1,13 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authMiddleware } from "../../middleware/auth.js";
-import { normalizeModuleAccess, requireRole } from "../../middleware/rbac.js";
-import type { JWTPayload } from "../../lib/types.js";
+import { requireAnyCapability, requireCapability } from "../../middleware/authorization.js";
+import type { AuthenticatedUser } from "../../lib/types.js";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
+import { hasCapability } from "../../lib/capabilities.js";
 import { getExceptionAnalytics } from "../attendance-exceptions/exceptions.service.js";
-
-const ADMIN_ROLES = ["admin", "operations_manager"] as const;
 
 async function resolveClientForUser(companyId: string, userId: string) {
   return prisma.client.findFirst({
@@ -23,21 +22,17 @@ export function clientOwnsSite(
   return !!siteClientId && siteClientId === clientId;
 }
 
-export function isFullAdminUser(user: Pick<JWTPayload, "role" | "moduleAccess">): boolean {
-  return user.role === "admin" && !normalizeModuleAccess(user.moduleAccess);
-}
-
 type PortalClientResolution =
   | { ok: true; clientId: string; clientName: string | null }
   | { ok: false; statusCode: 400 | 403; message: string };
 
 export async function resolveClientPortalAccess(
-  user: JWTPayload,
+  user: AuthenticatedUser,
   queryClientId?: string
 ): Promise<PortalClientResolution> {
   const client = await resolveClientForUser(user.companyId, user.sub);
 
-  if (user.role === "client") {
+  if (user.accountType === "client") {
     if (!client) {
       return {
         ok: false,
@@ -51,12 +46,12 @@ export async function resolveClientPortalAccess(
     return { ok: true, clientId: client.id, clientName: client.name };
   }
 
-  if (user.role === "admin") {
-    if (!isFullAdminUser(user)) {
+  if (user.accountType === "staff") {
+    if (!hasCapability(user, "/client-portal", "view")) {
       return {
         ok: false,
         statusCode: 403,
-        message: "Full administrator access required for client portal preview",
+        message: "Client portal view access is required for preview",
       };
     }
     if (!queryClientId) {
@@ -75,12 +70,14 @@ export async function resolveClientPortalAccess(
 }
 
 export async function clientsRoutes(app: FastifyInstance) {
-  const adminProtect = [
+  const clientViewProtect = [
     authMiddleware,
-    requireRole([...ADMIN_ROLES], { anyOfModules: ["/", "/settings", "/sites"] }),
+    requireAnyCapability(["/settings", "/sites"], "view"),
   ];
+  const clientCreateProtect = [authMiddleware, requireCapability("/sites", "create")];
+  const clientEditProtect = [authMiddleware, requireCapability("/sites", "edit")];
 
-  app.get("/", { preHandler: adminProtect }, async (request, reply) => {
+  app.get("/", { preHandler: clientViewProtect }, async (request, reply) => {
     const user = request.user!;
     const clients = await prisma.client.findMany({
       where: { companyId: user.companyId },
@@ -93,7 +90,20 @@ export async function clientsRoutes(app: FastifyInstance) {
     return reply.send(clients);
   });
 
-  app.post("/", { preHandler: adminProtect }, async (request, reply) => {
+  app.get("/user-candidates", { preHandler: clientViewProtect }, async (request, reply) => {
+    const users = await prisma.user.findMany({
+      where: {
+        companyId: request.user!.companyId,
+        accountType: "client",
+        isActive: true,
+      },
+      select: { id: true, name: true, email: true },
+      orderBy: { name: "asc" },
+    });
+    return reply.send({ data: users });
+  });
+
+  app.post("/", { preHandler: clientCreateProtect }, async (request, reply) => {
     const user = request.user!;
     const schema = z.object({
       name: z.string().min(1),
@@ -110,12 +120,12 @@ export async function clientsRoutes(app: FastifyInstance) {
     }
     if (parsed.data.userId) {
       const linkUser = await prisma.user.findFirst({
-        where: { id: parsed.data.userId, companyId: user.companyId, role: "client" },
+        where: { id: parsed.data.userId, companyId: user.companyId, accountType: "client" },
       });
       if (!linkUser) {
         return reply.code(400).send({
           error: "Validation error",
-          message: "Linked user must have the client role",
+          message: "Linked user must be a client account",
         });
       }
     }
@@ -138,7 +148,7 @@ export async function clientsRoutes(app: FastifyInstance) {
     return reply.code(201).send(client);
   });
 
-  app.patch("/:id", { preHandler: adminProtect }, async (request, reply) => {
+  app.patch("/:id", { preHandler: clientEditProtect }, async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
     const schema = z.object({
@@ -163,12 +173,12 @@ export async function clientsRoutes(app: FastifyInstance) {
     }
     if (parsed.data.userId) {
       const linkUser = await prisma.user.findFirst({
-        where: { id: parsed.data.userId, companyId: user.companyId, role: "client" },
+        where: { id: parsed.data.userId, companyId: user.companyId, accountType: "client" },
       });
       if (!linkUser) {
         return reply.code(400).send({
           error: "Validation error",
-          message: "Linked user must have the client role",
+          message: "Linked user must be a client account",
         });
       }
     }
@@ -196,17 +206,7 @@ export async function clientsRoutes(app: FastifyInstance) {
 export async function clientPortalRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    async (request: { user?: { role: string } }, reply: { code: (n: number) => { send: (b: unknown) => unknown } }) => {
-      if (!request.user) {
-        return reply.code(401).send({ error: "Unauthorized", message: "Authentication required" });
-      }
-      if (request.user.role !== "client" && request.user.role !== "admin") {
-        return reply.code(403).send({
-          error: "Forbidden",
-          message: "Client portal access only",
-        });
-      }
-    },
+    requireCapability("/client-portal", "view"),
   ];
 
   app.get("/dashboard", { preHandler: protect as never }, async (request, reply) => {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { hasCapability } from "@/lib/permissions";
 import {
   listTaskProjects,
   createTaskProject,
@@ -13,7 +14,10 @@ import {
 import { useConfirmDialog } from "@/components/ui";
 
 export default function TaskProjectsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canCreate = Boolean(user && hasCapability(user, "/tasks", "create"));
+  const canEdit = Boolean(user && hasCapability(user, "/tasks", "edit"));
+  const canDelete = Boolean(user && hasCapability(user, "/tasks", "delete"));
   const { confirm, confirmDialog } = useConfirmDialog();
   const [projects, setProjects] = useState<TaskProject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +44,7 @@ export default function TaskProjectsPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !formName.trim()) return;
+    if (!token || !canCreate || !formName.trim()) return;
     setSubmitting(true);
     setError("");
     try {
@@ -60,7 +64,7 @@ export default function TaskProjectsPage() {
   };
 
   const handleUpdate = async (id: string) => {
-    if (!token || !editName.trim()) return;
+    if (!token || !canEdit || !editName.trim()) return;
     setSubmitting(true);
     setError("");
     try {
@@ -75,7 +79,7 @@ export default function TaskProjectsPage() {
   };
 
   const handleDelete = async (p: TaskProject) => {
-    if (!token) return;
+    if (!token || !canDelete) return;
     const confirmed = await confirm({
       title: "Delete project?",
       message: `Tasks in "${p.name}" will be unassigned.`,
@@ -114,9 +118,9 @@ export default function TaskProjectsPage() {
 
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-black">Task Projects</h1>
-        <button onClick={() => setShowForm(true)} className="btn-primary">
+        {canCreate && <button onClick={() => setShowForm(true)} className="btn-primary">
           New Project
-        </button>
+        </button>}
       </div>
 
       {error && (
@@ -125,7 +129,7 @@ export default function TaskProjectsPage() {
         </div>
       )}
 
-      {showForm && (
+      {showForm && canCreate && (
         <div className="mb-6 bg-gray-100 border border-gray-300 rounded-lg p-4">
           <h2 className="font-bold text-black mb-3">Create Project</h2>
           <form onSubmit={handleCreate} className="space-y-3">
@@ -169,7 +173,7 @@ export default function TaskProjectsPage() {
             key={p.id}
             className="bg-gray-100 border border-gray-300 rounded-lg p-4 flex items-center justify-between"
           >
-            {editingId === p.id ? (
+              {canEdit && editingId === p.id ? (
               <div className="flex-1 flex gap-2">
                 <input
                   type="text"
@@ -201,7 +205,7 @@ export default function TaskProjectsPage() {
                   )}
                 </Link>
                 <div className="flex gap-2">
-                  <button
+                  {canEdit && <button
                     onClick={() => {
                       setEditingId(p.id);
                       setEditName(p.name);
@@ -209,13 +213,13 @@ export default function TaskProjectsPage() {
                     className="btn-secondary text-sm"
                   >
                     Edit
-                  </button>
-                  <button
+                  </button>}
+                  {canDelete && <button
                     onClick={() => handleDelete(p)}
                     className="btn-secondary text-sm text-red-600 border-red-600"
                   >
                     Delete
-                  </button>
+                  </button>}
                 </div>
               </>
             )}

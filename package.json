@@ -21,7 +21,6 @@
     "db:migrate:deploy": "npm run db:migrate:deploy --workspace=api",
     "db:migrate:status": "npm run db:migrate:status --workspace=api",
     "db:push": "npm run db:push --workspace=api",
-    "db:add-module-access": "npm run db:add-module-access --workspace=api",
     "db:seed": "npm run db:seed --workspace=api",
     "db:reset-admin": "npm run db:reset-admin --workspace=api",
     "test": "npm run test --workspace=api && npm run test --workspace=web",

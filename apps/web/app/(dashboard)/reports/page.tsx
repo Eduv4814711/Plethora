@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
+import { hasCapability } from "@/lib/permissions";
 import {
   downloadExtendedReport,
   listExtendedReportTypes,
@@ -36,7 +37,8 @@ interface ReportsData {
 const COLORS = ["#F57C00", "#f59e0b", "#10b981", "#ef4444", "#64748b", "#92400e"];
 
 export default function ReportsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canExport = Boolean(user && hasCapability(user, "/reports", "export"));
   const [data, setData] = useState<ReportsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [payPeriodCount, setPayPeriodCount] = useState(6);
@@ -56,7 +58,7 @@ export default function ReportsPage() {
   const [exportClientId, setExportClientId] = useState("");
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || !canExport) return;
     Promise.all([
       authFetch("/sites?limit=200", token).then((r) => r.json()),
       import("@/lib/msr-api").then(({ listClients }) => listClients(token)),
@@ -69,7 +71,7 @@ export default function ReportsPage() {
         setSites([]);
         setClients([]);
       });
-  }, [token]);
+  }, [token, canExport]);
 
   useEffect(() => {
     if (!token) return;
@@ -168,7 +170,7 @@ export default function ReportsPage() {
         </div>
       )}
 
-      <div className="card-dashboard mb-8 p-5">
+      {canExport && <div className="card-dashboard mb-8 p-5">
         <h2 className="section-title text-neutral-900 mb-1">Export operational reports</h2>
         <p className="text-sm text-neutral-600 mb-4">
           Download attendance, incidents, and performance reports for sharing or records.
@@ -245,7 +247,7 @@ export default function ReportsPage() {
         {exportError && (
           <p className="mt-3 text-sm text-red-600" role="alert">{exportError}</p>
         )}
-      </div>
+      </div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Payroll by status - Pie */}

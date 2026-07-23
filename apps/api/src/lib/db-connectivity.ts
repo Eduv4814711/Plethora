@@ -1,5 +1,8 @@
 import { prisma } from "./prisma.js";
 
+const REQUIRED_SCHEMA_MIGRATION = "20260723140000_payroll_run_invariants";
+const READINESS_TIMEOUT_MS = 5_000;
+
 function databaseHostFromUrl(databaseUrl: string | undefined): string {
   if (!databaseUrl?.trim()) return "(not set)";
   try {
@@ -25,6 +28,63 @@ export async function verifyDatabaseConnection(): Promise<void> {
       "If you use Railway or Prisma Postgres, confirm DATABASE_URL is current and the database is online.",
     ];
     throw new Error(`${message}\n\n${hints.join("\n")}`);
+  }
+}
+
+function withTimeout<T>(operation: Promise<T>): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new Error("Database readiness check timed out")),
+      READINESS_TIMEOUT_MS
+    );
+    timer.unref?.();
+  });
+  return Promise.race([operation, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+/**
+ * Verify the database is reachable and compatible with this application
+ * release. LIMIT 0 makes PostgreSQL resolve every required table/column
+ * without reading company data.
+ */
+export async function verifyDatabaseReadiness(): Promise<void> {
+  await withTimeout(verifyDatabaseConnection());
+  await withTimeout(prisma.$queryRaw`
+    SELECT
+      u."accountType",
+      u."capabilities",
+      u."isActive",
+      c."ownerUserId",
+      l."requiredCapability"
+    FROM "User" u
+    CROSS JOIN "Company" c
+    CROSS JOIN "LeaveApprovalStep" l
+    LIMIT 0
+  `);
+  const state = await withTimeout(prisma.$queryRaw<Array<{
+    required_applied: boolean;
+    unfinished: boolean;
+  }>>`
+    SELECT
+      EXISTS (
+        SELECT 1
+        FROM "_prisma_migrations"
+        WHERE "migration_name" = ${REQUIRED_SCHEMA_MIGRATION}
+          AND "finished_at" IS NOT NULL
+          AND "rolled_back_at" IS NULL
+      ) AS required_applied,
+      EXISTS (
+        SELECT 1
+        FROM "_prisma_migrations"
+        WHERE "finished_at" IS NULL
+          AND "rolled_back_at" IS NULL
+      ) AS unfinished
+  `);
+  if (!state[0]?.required_applied || state[0]?.unfinished) {
+    throw new Error("Database schema migrations are incomplete for this application release");
   }
 }
 

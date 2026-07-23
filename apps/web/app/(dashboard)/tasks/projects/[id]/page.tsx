@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { hasCapability } from "@/lib/permissions";
 import { getTaskProject, createTask, type Task, type TaskProject } from "@/lib/api";
 
 export default function TaskProjectDetailPage() {
   const params = useParams();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canCreate = Boolean(user && hasCapability(user, "/tasks", "create"));
   const id = params.id as string;
 
   const [project, setProject] = useState<(TaskProject & { tasks: Task[] }) | null>(null);
@@ -33,7 +35,7 @@ export default function TaskProjectDetailPage() {
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !project || !formTitle.trim()) return;
+    if (!token || !canCreate || !project || !formTitle.trim()) return;
     setSubmitting(true);
     try {
       await createTask(token, {
@@ -89,9 +91,9 @@ export default function TaskProjectDetailPage() {
             <p className="text-gray-600 mt-1">{project.description}</p>
           )}
         </div>
-        <button onClick={() => setShowForm(true)} className="btn-primary">
+        {canCreate && <button onClick={() => setShowForm(true)} className="btn-primary">
           Add Task
-        </button>
+        </button>}
       </div>
 
       {error && (
@@ -100,7 +102,7 @@ export default function TaskProjectDetailPage() {
         </div>
       )}
 
-      {showForm && (
+      {showForm && canCreate && (
         <div className="mb-6 bg-gray-100 border border-gray-300 rounded-lg p-4">
           <form onSubmit={handleCreateTask} className="flex gap-2">
             <input

@@ -3,7 +3,8 @@
 import { useState } from "react";
 import type { InstructorDocument } from "./types";
 import { DateInput } from "@/components/date-input";
-import { buildApiUrl } from "@/lib/api";
+import { downloadPrivateFile } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 
 const DOCUMENT_TYPES = [
   { value: "instructor_certificate", label: "Instructor Certificate" },
@@ -26,14 +27,6 @@ function statusLabel(status: string): string {
   if (status === "pending_review") return "Pending Review";
   if (status === "expired") return "Expired";
   return "Missing";
-}
-
-function fileHref(fileUrl: string): string {
-  if (/^https?:\/\//i.test(fileUrl)) return fileUrl;
-  const path = fileUrl.startsWith("/uploads/")
-    ? fileUrl.slice("/uploads/".length)
-    : fileUrl.replace(/^\/+/, "");
-  return buildApiUrl(`/uploads/${path}`);
 }
 
 export function InstructorDocumentsManager({
@@ -59,6 +52,7 @@ export function InstructorDocumentsManager({
   onDelete: (documentId: string) => Promise<void>;
   onMarkVerified: (documentId: string) => Promise<void>;
 }) {
+  const { token } = useAuth();
   const [documentType, setDocumentType] = useState("instructor_certificate");
   const [issueDate, setIssueDate] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
@@ -192,17 +186,22 @@ export function InstructorDocumentsManager({
                   <td>{doc.uploadedBy?.name || doc.uploadedBy?.email || "—"}</td>
                   <td>
                     <div className="flex flex-wrap gap-1">
-                      <a
-                        href={fileHref(doc.fileUrl)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn-ghost px-2 py-1 text-xs rounded-lg"
-                      >
-                        Preview
-                      </a>
-                      <a href={fileHref(doc.fileUrl)} download className="btn-ghost px-2 py-1 text-xs rounded-lg">
-                        Download
-                      </a>
+                      {token && doc.downloadUrl && (
+                        <button
+                          type="button"
+                          className="btn-ghost px-2 py-1 text-xs rounded-lg"
+                          onClick={() => {
+                            void downloadPrivateFile(token, doc.downloadUrl!, doc.fileName).catch(
+                              (error) =>
+                                window.alert(
+                                  error instanceof Error ? error.message : "Document download failed"
+                                )
+                            );
+                          }}
+                        >
+                          Download
+                        </button>
+                      )}
                       {canEdit && (
                         <label className="btn-ghost px-2 py-1 text-xs rounded-lg">
                           Replace

@@ -4,16 +4,40 @@ import { randomUUID } from "crypto";
 import type { AcademyStudentDocumentType } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
+import { authMiddleware } from "../../middleware/auth.js";
+import { requireCapability } from "../../middleware/authorization.js";
+import { hasCapability } from "../../lib/capabilities.js";
+import { privateDownloadUrl, sendPrivateStoredFile } from "../../lib/private-download.js";
 import {
   academyProtect,
   ACADEMY_DOCUMENT_ALLOWED_TYPES,
   ACADEMY_MAX_FILE_BYTES,
 } from "./constants.js";
 import { readStreamToBuffer, storage } from "../../lib/storage.js";
-import { canAccessSensitiveData, omitFields } from "../../lib/sensitive-data.js";
+import { canAccessSensitiveData } from "../../lib/sensitive-data.js";
+import {
+  extensionForMime,
+  matchesMagicBytes,
+  sanitizeUploadFilename,
+} from "../../lib/upload-validation.js";
 
-function canManageStudentDocuments(user: import("../../lib/types.js").JWTPayload) {
+function canManageStudentDocuments(user: import("../../lib/types.js").AuthenticatedUser) {
   return canAccessSensitiveData(user, "/academy");
+}
+
+function studentDocumentForUser<T extends { id: string; studentId: string; storagePath: string }>(
+  document: T,
+  canExport: boolean
+): Omit<T, "storagePath"> & { downloadUrl?: string } {
+  const { storagePath: _storagePath, ...metadata } = document;
+  return canExport
+    ? {
+        ...metadata,
+        downloadUrl: privateDownloadUrl(
+          `/academy/students/${document.studentId}/documents/${document.id}/download`
+        ),
+      }
+    : metadata;
 }
 
 const documentTypeSchema = z.enum([
@@ -44,12 +68,40 @@ export async function academyStudentDocumentsRoutes(app: FastifyInstance) {
       orderBy: { createdAt: "desc" },
       include: { uploadedBy: { select: { id: true, name: true, email: true } } },
     });
+    const canExport = hasCapability(request.user!, "/academy", "export");
     return {
-      documents: canManageStudentDocuments(request.user!)
-        ? documents
-        : documents.map((document) => omitFields(document, ["storagePath"])),
+      documents: documents.map((document) => studentDocumentForUser(document, canExport)),
     };
   });
+
+  app.get(
+    "/:studentId/documents/:documentId/download",
+    { preHandler: [authMiddleware, requireCapability("/academy", "export")] },
+    async (request, reply) => {
+      const companyId = request.user!.companyId;
+      const { studentId, documentId } = request.params as {
+        studentId: string;
+        documentId: string;
+      };
+      const document = await prisma.studentDocument.findFirst({
+        where: { id: documentId, studentId, companyId, deletedAt: null },
+        select: {
+          storagePath: true,
+          fileName: true,
+          mimeType: true,
+        },
+      });
+      if (!document) {
+        return reply.code(404).send({ error: "Not found", message: "Document not found" });
+      }
+      return sendPrivateStoredFile(reply, {
+        storedReference: document.storagePath,
+        allowedPrefixes: [`academy/${companyId}/${studentId}`],
+        fileName: document.fileName,
+        mimeType: document.mimeType,
+      });
+    }
+  );
 
   app.post("/:studentId/documents", { preHandler: academyProtect }, async (request, reply) => {
     if (!canManageStudentDocuments(request.user!)) {
@@ -74,8 +126,7 @@ export async function academyStudentDocumentsRoutes(app: FastifyInstance) {
 
     const mimetype = data.mimetype;
     if (
-      !ACADEMY_DOCUMENT_ALLOWED_TYPES.includes(mimetype as (typeof ACADEMY_DOCUMENT_ALLOWED_TYPES)[number]) &&
-      !mimetype.startsWith("image/")
+      !ACADEMY_DOCUMENT_ALLOWED_TYPES.includes(mimetype as (typeof ACADEMY_DOCUMENT_ALLOWED_TYPES)[number])
     ) {
       return reply.code(400).send({
         error: "Invalid file type",
@@ -91,7 +142,7 @@ export async function academyStudentDocumentsRoutes(app: FastifyInstance) {
       if (parsed.success) documentType = parsed.data;
     }
 
-    const ext = mimetype.split("/")[1]?.replace("jpeg", "jpg") || "bin";
+    const ext = extensionForMime(mimetype);
     const filename = `${randomUUID()}.${ext}`;
     const storagePath = `academy/${companyId}/${studentId}/${filename}`;
 
@@ -109,6 +160,13 @@ export async function academyStudentDocumentsRoutes(app: FastifyInstance) {
       return reply.code(500).send({ error: "Upload failed", message: "Could not read the file" });
     }
 
+    if (!matchesMagicBytes(fileBuffer, mimetype)) {
+      return reply.code(400).send({
+        error: "Invalid file",
+        message: "File content does not match the declared type",
+      });
+    }
+
     try {
       await storage.uploadFile({
         key: storagePath,
@@ -122,7 +180,7 @@ export async function academyStudentDocumentsRoutes(app: FastifyInstance) {
 
     const size = fileBuffer.length;
 
-    const originalName = data.filename || filename;
+    const originalName = sanitizeUploadFilename(data.filename || filename, mimetype);
     const doc = await prisma.studentDocument.create({
       data: {
         companyId,
@@ -145,7 +203,12 @@ export async function academyStudentDocumentsRoutes(app: FastifyInstance) {
       metadata: { studentId, documentType, fileName: originalName },
     });
 
-    return reply.code(201).send({ document: doc });
+    return reply.code(201).send({
+      document: studentDocumentForUser(
+        doc,
+        hasCapability(request.user!, "/academy", "export")
+      ),
+    });
   });
 
   app.delete("/:studentId/documents/:documentId", { preHandler: academyProtect }, async (request, reply) => {
@@ -174,7 +237,7 @@ export async function academyStudentDocumentsRoutes(app: FastifyInstance) {
       action: "academy.student_document.soft_delete",
       entityType: "StudentDocument",
       entityId: documentId,
-      metadata: { studentId, storagePath: doc.storagePath },
+      metadata: { studentId, fileName: doc.fileName },
     });
 
     return { ok: true };

@@ -5,6 +5,7 @@
 import { prisma } from "../lib/prisma.js";
 import type { PayrollCalculationSnapshot } from "./payroll-calculation.types.js";
 import { buildEmp201Data } from "./emp201.service.js";
+import { runPayrollComplianceChecks } from "./payroll-compliance/payroll-compliance.service.js";
 
 export type ValidationSeverity = "critical" | "warning";
 
@@ -89,6 +90,16 @@ export function validateBankDetailsForItems(
 
   for (const item of items) {
     const netPay = round2(Number(item.netPay));
+    if (!Number.isFinite(netPay) || netPay < 0) {
+      excludedEmployees.push({
+        employeeId: item.employeeId,
+        employeeName: employeeDisplayName(item.employee.firstName, item.employee.lastName),
+        employeeNumber: item.employee.employeeNumber,
+        netPay,
+        missingFields: ["a valid non-negative net pay amount"],
+      });
+      continue;
+    }
     totalNetPay += netPay;
     if (netPay <= 0) continue;
 
@@ -114,7 +125,9 @@ export function validateBankDetailsForItems(
     valid: excludedEmployees.length === 0,
     totalNetPay: round2(totalNetPay),
     exportTotal: round2(exportTotal),
-    includedCount: items.filter((i) => Number(i.netPay) > 0).length - excludedEmployees.length,
+    includedCount:
+      items.filter((i) => Number.isFinite(Number(i.netPay)) && Number(i.netPay) > 0).length -
+      excludedEmployees.filter((employee) => employee.netPay > 0).length,
     excludedEmployees,
   };
 }
@@ -255,6 +268,47 @@ function validateStatutoryReconciliationIssues(
   }));
 }
 
+export function validatePayrollFinancialValues(
+  items: Array<{
+    id: string;
+    employeeId: string;
+    grossPay: number | string;
+    deductions: number | string;
+    netPay: number | string;
+    employee: { firstName: string; lastName: string };
+  }>
+): PayrollValidationIssue[] {
+  const issues: PayrollValidationIssue[] = [];
+  for (const item of items) {
+    const grossPay = Number(item.grossPay);
+    const deductions = Number(item.deductions);
+    const netPay = Number(item.netPay);
+    const name = employeeDisplayName(item.employee.firstName, item.employee.lastName);
+    const invalid =
+      !Number.isFinite(grossPay) ||
+      !Number.isFinite(deductions) ||
+      !Number.isFinite(netPay) ||
+      grossPay < 0 ||
+      deductions < 0 ||
+      netPay < 0 ||
+      deductions > grossPay ||
+      Math.abs(grossPay - deductions - netPay) >= 0.02;
+    if (!invalid) continue;
+    issues.push({
+      ruleId: "invalid_payment_values",
+      ruleName: "Invalid payroll payment values",
+      severity: "critical",
+      message: `${name} has invalid payroll values (gross=${grossPay}, deductions=${deductions}, net=${netPay}).`,
+      entityType: "employee",
+      entityId: item.employeeId,
+      employeeId: item.employeeId,
+      employeeName: name,
+      suggestedAction: "Correct the employee's pay and deduction configuration, then recalculate payroll.",
+    });
+  }
+  return issues;
+}
+
 export async function validatePayrollFinalisation(
   payrollRunId: string,
   companyId: string
@@ -356,7 +410,42 @@ export async function validatePayrollFinalisation(
     }
   }
 
+  const complianceResults = await runPayrollComplianceChecks(payrollRunId, companyId);
+  const complianceIssues: PayrollValidationIssue[] = complianceResults
+    .filter((result) => result.severity === "critical" || result.severity === "warning")
+    .map((result) => ({
+      ruleId: `compliance:${result.ruleId}`,
+      ruleName: result.ruleName,
+      severity: result.severity === "critical" ? "critical" : "warning",
+      message: result.message,
+      entityType: result.employeeId ? "employee" : "payroll_run",
+      entityId: result.employeeId ?? payrollRunId,
+      employeeId: result.employeeId,
+      suggestedAction: result.suggestedAction,
+    }));
+
   const issues: PayrollValidationIssue[] = [
+    ...(run.items.length === 0
+      ? [{
+          ruleId: "empty_payroll_run",
+          ruleName: "Payroll run has no employees",
+          severity: "critical" as const,
+          message: "This payroll run contains no payment items.",
+          entityType: "payroll_run" as const,
+          entityId: payrollRunId,
+          suggestedAction: "Check pay-frequency assignments and attendance, then recalculate payroll.",
+        }]
+      : []),
+    ...validatePayrollFinancialValues(
+      run.items.map((item) => ({
+        id: item.id,
+        employeeId: item.employeeId,
+        grossPay: item.grossPay.toString(),
+        deductions: item.deductions.toString(),
+        netPay: item.netPay.toString(),
+        employee: item.employee,
+      }))
+    ),
     ...validateIrp5Fields(
       run.items.map((item) => ({
         employeeId: item.employeeId,
@@ -366,6 +455,7 @@ export async function validatePayrollFinalisation(
     ),
     ...validateBankExportIssues(bankExport),
     ...validateStatutoryReconciliationIssues(statutoryReconciliation),
+    ...complianceIssues,
   ];
 
   const criticalCount = issues.filter((i) => i.severity === "critical").length;
@@ -373,7 +463,11 @@ export async function validatePayrollFinalisation(
 
   return {
     canApprove: criticalCount === 0 && run.status === "calculated",
-    canExportBank: bankExport.valid && run.items.length > 0,
+    canExportBank:
+      bankExport.valid &&
+      issues.every((issue) => issue.severity !== "critical") &&
+      run.items.length > 0 &&
+      (run.status === "approved" || run.status === "paid"),
     criticalCount,
     warningCount,
     issues,

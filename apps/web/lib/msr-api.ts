@@ -127,7 +127,7 @@ export interface Incident {
   clientVisible?: boolean;
   followUpRequired?: boolean;
   supervisorApprovalStatus?: string;
-  attachments?: { id: string; filename: string; url: string; mimeType: string }[];
+  attachments?: { id: string; filename: string; downloadUrl?: string; mimeType: string }[];
   site?: { id: string; name: string };
   reportedBy?: { id: string; name: string };
 }
@@ -181,7 +181,7 @@ export interface ManagedDocument {
   category: string;
   status: string;
   fileName: string;
-  fileUrl: string;
+  downloadUrl?: string;
   expiryDate?: string | null;
   createdAt: string;
   site?: { id: string; name: string } | null;
@@ -354,6 +354,23 @@ export interface ClientRecord {
 export async function listClients(token: string): Promise<ClientRecord[]> {
   const res = await authFetch("/clients", token);
   return parseJson(res, "Failed to load clients");
+}
+
+export interface ClientAccountCandidate {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export async function listClientAccountCandidates(
+  token: string
+): Promise<ClientAccountCandidate[]> {
+  const res = await authFetch("/clients/user-candidates", token);
+  const body = await parseJson<{ data: ClientAccountCandidate[] }>(
+    res,
+    "Failed to load client accounts"
+  );
+  return body.data;
 }
 
 export async function createClient(

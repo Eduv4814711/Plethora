@@ -1,5 +1,7 @@
 "use client";
 
+import { hasCapability } from "@/lib/permissions";
+
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
@@ -16,7 +18,8 @@ interface Doc {
 
 export default function AcademyComplianceDocumentsPage() {
   const { token, user } = useAuth();
-  const canManage = user?.role === "admin";
+  const canCreate = Boolean(user && hasCapability(user, "/academy", "create"));
+  const canDelete = Boolean(user && hasCapability(user, "/academy", "delete"));
   const [rows, setRows] = useState<Doc[]>([]);
   const [name, setName] = useState("");
   const [type, setType] = useState("PSIRA Registration Certificate");
@@ -39,7 +42,7 @@ export default function AcademyComplianceDocumentsPage() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !name.trim() || !canManage) return;
+    if (!token || !name.trim() || !canCreate) return;
     setSaving(true);
     setError(null);
     try {
@@ -51,7 +54,7 @@ export default function AcademyComplianceDocumentsPage() {
   };
 
   const remove = async (id: string) => {
-    if (!token || !canManage) return;
+    if (!token || !canDelete) return;
     try { await academyApi.deleteComplianceDocument(token, id); load(); }
     catch (e) { setError(e instanceof Error ? e.message : "Delete failed"); }
   };
@@ -74,7 +77,7 @@ export default function AcademyComplianceDocumentsPage() {
             <input id="compliance-document-type" className="input-modern rounded-xl" value={type} onChange={(e) => setType(e.target.value)} />
           </label>
           <DateInput value={expiryDate} onChange={setExpiryDate} className="input-modern" showToday ariaLabel="Document expiry date" />
-          <Button type="submit" className="md:col-span-4 md:justify-self-end" disabled={!canManage} loading={saving}>Add document</Button>
+          <Button type="submit" className="md:col-span-4 md:justify-self-end" disabled={!canCreate} loading={saving}>Add document</Button>
         </form>
       </div>
 
@@ -90,7 +93,7 @@ export default function AcademyComplianceDocumentsPage() {
               ) : rows.length === 0 ? (
                 <TableEmptyRow colSpan={5} message="No compliance documents have been added yet. Add required documents to track completeness and expiry." />
               ) : (
-                rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{r.documentName}</td><td>{r.documentType}</td><td>{r.status}</td><td>{r.expiryDate ? String(r.expiryDate).slice(0,10) : "—"}</td><td className="text-right">{canManage && <Button variant="destructive" size="sm" onClick={() => remove(r.id)}>Delete</Button>}</td></tr>)
+                rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{r.documentName}</td><td>{r.documentType}</td><td>{r.status}</td><td>{r.expiryDate ? String(r.expiryDate).slice(0,10) : "—"}</td><td className="text-right">{canDelete && <Button variant="destructive" size="sm" onClick={() => remove(r.id)}>Delete</Button>}</td></tr>)
               )}
             </tbody>
           </table>

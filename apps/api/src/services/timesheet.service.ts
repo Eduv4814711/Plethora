@@ -25,6 +25,38 @@ export interface TimesheetAggregate {
 /** Maximum leave hours accepted per single leave record (guards against bad data). */
 export const MAX_LEAVE_HOURS_PER_RECORD = 24;
 
+export function buildApprovedSiteDateCoverage(
+  timesheets: Array<{ siteId: string; periodStart: Date; periodEnd: Date }>
+): Set<string> {
+  const covered = new Set<string>();
+  for (const timesheet of timesheets) {
+    const cursor = new Date(Date.UTC(
+      timesheet.periodStart.getUTCFullYear(),
+      timesheet.periodStart.getUTCMonth(),
+      timesheet.periodStart.getUTCDate()
+    ));
+    const end = new Date(Date.UTC(
+      timesheet.periodEnd.getUTCFullYear(),
+      timesheet.periodEnd.getUTCMonth(),
+      timesheet.periodEnd.getUTCDate()
+    ));
+    while (cursor <= end) {
+      covered.add(`${timesheet.siteId}:${cursor.toISOString().slice(0, 10)}`);
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+  }
+  return covered;
+}
+
+export function siteTimesheetShiftMatchKey(
+  siteId: string,
+  employeeId: string,
+  dateKey: string,
+  shiftType: string | null | undefined
+): string {
+  return `${siteId}:${employeeId}:${dateKey}:${shiftType ?? "unknown"}`;
+}
+
 /**
  * Sum leave hours from records, ignoring invalid entries.
  */
@@ -100,18 +132,6 @@ export async function aggregateTimesheets(
     holidayDates.add(dateKeyInTimeZone(new Date(h.date), timeZone));
   }
 
-  const approvedSiteRows = await prisma.siteTimesheetRow.findMany({
-    where: {
-      companyId,
-      workDate: { gte: periodStart, lte: periodEnd },
-      actualGuardId: { not: null },
-      siteTimesheet: { status: { in: ["approved", "locked"] } },
-      attendanceStatus: {
-        in: ["present", "late", "left_early", "reliever", "shift_swapped", "leave", "sick_leave", "training"],
-      },
-    },
-  });
-
   // Per-site aggregation: a site contributes hours either through its approved/locked
   // site timesheet rows OR through raw shift attendance — never both. This avoids the
   // legacy all-or-nothing switch where one approved site disabled raw attendance for all.
@@ -122,17 +142,49 @@ export async function aggregateTimesheets(
       periodStart: { lte: periodEnd },
       periodEnd: { gte: periodStart },
     },
-    select: { siteId: true },
+    select: { id: true, siteId: true, periodStart: true, periodEnd: true },
   });
-  const approvedSiteIds = [...new Set(approvedTimesheets.map((t) => t.siteId))];
+  const approvedCoverage = buildApprovedSiteDateCoverage(approvedTimesheets);
+  const approvedSiteRowsRaw = approvedTimesheets.length > 0
+    ? await prisma.siteTimesheetRow.findMany({
+        where: {
+          companyId,
+          siteTimesheetId: { in: approvedTimesheets.map((timesheet) => timesheet.id) },
+          workDate: { gte: periodStart, lte: periodEnd },
+          actualGuardId: { not: null },
+          attendanceStatus: {
+            in: ["present", "late", "left_early", "reliever", "shift_swapped", "leave", "sick_leave", "training"],
+          },
+        },
+      })
+    : [];
+  const approvedSiteRows = approvedSiteRowsRaw.filter((row) =>
+    approvedCoverage.has(`${row.siteId}:${row.workDate.toISOString().slice(0, 10)}`)
+  );
+  const approvedSourceShiftIds = new Set(
+    approvedSiteRows
+      .map((row) => row.sourceShiftId)
+      .filter((id): id is string => typeof id === "string")
+  );
+  const approvedFallbackShiftKeys = new Set(
+    approvedSiteRows
+      .filter((row) => row.sourceShiftId == null && row.actualGuardId != null)
+      .map((row) =>
+        siteTimesheetShiftMatchKey(
+          row.siteId,
+          row.actualGuardId!,
+          row.workDate.toISOString().slice(0, 10),
+          row.actualShiftType
+        )
+      )
+  );
 
-  const shiftsWithAttendance = await prisma.shift.findMany({
+  const shiftsWithAttendanceRaw = await prisma.shift.findMany({
     where: {
       companyId,
       status: { in: ["completed", "verified"] },
       startTime: { lt: periodEndExclusive },
       endTime: { gt: periodStart },
-      ...(approvedSiteIds.length > 0 ? { siteId: { notIn: approvedSiteIds } } : {}),
       attendances: {
         some: {
           clockIn: { not: null },
@@ -150,6 +202,18 @@ export async function aggregateTimesheets(
       },
     },
   });
+  const shiftsWithAttendance = shiftsWithAttendanceRaw.filter(
+    (shift) =>
+      !approvedSourceShiftIds.has(shift.id) &&
+      !approvedFallbackShiftKeys.has(
+        siteTimesheetShiftMatchKey(
+          shift.siteId,
+          shift.employeeId,
+          dateKeyInTimeZone(shift.startTime, timeZone),
+          shift.shiftType
+        )
+      )
+  );
 
   const [leaveOccurrences, legacyLeaveRecords] = await Promise.all([
     prisma.leaveOccurrence.findMany({

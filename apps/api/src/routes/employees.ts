@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { EmployeeStatus } from "@prisma/client";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requireAnyCapability, requireCapability, requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
 import { reconcileContinuityForEmployee } from "../modules/rosters/roster-continuity.service.js";
 import { transitionEmployeeStatus } from "../services/employee.service.js";
@@ -15,20 +15,44 @@ import {
   sanitizeEmployeeForDetail,
   canEditEmployeeDetails,
   canViewEmployeeSensitiveFields,
+  canWriteEmployeeSensitiveFields,
 } from "../lib/employee-dto.js";
 import { EMPLOYEE_RESTRICTED_FIELDS, hasRestrictedFields } from "../lib/sensitive-data.js";
+import { hasCapability } from "../lib/capabilities.js";
 
-function rejectEmployeeDetailEdits(request: { user?: import("../lib/types.js").JWTPayload }, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
+function rejectEmployeeDetailEdits(request: { user?: import("../lib/types.js").AuthenticatedUser }, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
   if (request.user && canEditEmployeeDetails(request.user)) return false;
   reply.code(403).send({ error: "Forbidden", message: "Team or Payroll module access is required to edit employee details" });
   return true;
 }
 
-function rejectRestrictedEmployeeFields(request: { user?: import("../lib/types.js").JWTPayload; body: unknown }, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
-  if (canViewEmployeeSensitiveFields(request.user!) || !hasRestrictedFields(request.body, EMPLOYEE_RESTRICTED_FIELDS)) {
+function rejectEmployeeCreation(request: { user?: import("../lib/types.js").AuthenticatedUser }, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
+  if (
+    request.user &&
+    (hasCapability(request.user, "/employees", "create") ||
+      hasCapability(request.user, "/payroll", "create"))
+  ) {
     return false;
   }
-  reply.code(403).send({ error: "Forbidden", message: "Team or Payroll module access is required for sensitive employee data" });
+  reply.code(403).send({ error: "Forbidden", message: "Team or Payroll create access is required to add employees" });
+  return true;
+}
+
+function rejectRestrictedEmployeeFields(
+  request: { user?: import("../lib/types.js").AuthenticatedUser; body: unknown },
+  reply: { code: (status: number) => { send: (body: unknown) => unknown } },
+  action: "create" | "edit"
+) {
+  if (
+    canWriteEmployeeSensitiveFields(request.user!, action) ||
+    !hasRestrictedFields(request.body, EMPLOYEE_RESTRICTED_FIELDS)
+  ) {
+    return false;
+  }
+  reply.code(403).send({
+    error: "Forbidden",
+    message: `Team or Payroll ${action} access is required for sensitive employee data`,
+  });
   return true;
 }
 
@@ -138,7 +162,10 @@ const createEmployeeSchema = z.object({
   ordinaryHours: optionalString,
   ordinaryDays: optionalString,
   overtimeRate: optionalNumber,
-  payFrequency: optionalString,
+  payFrequency: z
+    .enum(["weekly", "bi-weekly", "biweekly", "monthly"])
+    .transform((value) => value === "bi-weekly" ? "biweekly" : value)
+    .optional(),
   leaveEntitlement: optionalString,
   noticePeriod: optionalString,
   previousService: optionalString,
@@ -174,11 +201,10 @@ const createEmployeeSchemaWithRefine = createEmployeeSchema.superRefine((data, c
   }
 });
 
-const updateEmployeeSchema = createEmployeeSchema.partial().extend({
+const updateEmployeeSchema = createEmployeeSchema.omit({ status: true }).partial().extend({
   employeeNumber: z.string().min(1).max(50).optional(),
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
-  status: z.enum(["applicant", "hired", "training", "active", "reliever", "suspended", "offboarded"]).optional(),
   // Create defaults must not leak into partial updates. Without this override,
   // an omitted employeeType is parsed as "security" and an existing office
   // employee incorrectly fails PSIRA/pay-grade validation.
@@ -203,17 +229,21 @@ const statusTransitionSchema = z.object({
 export async function employeesRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"], {
+    requireCrudCapability({
       anyOfModules: ["/employees", "/payroll"],
     }),
   ];
   const readProtect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
+    requireCrudCapability({
       // Attendance controllers need the sanitized employee list for the
       // "different guard" and reliever pickers in site timesheets.
       anyOfModules: ["/employees", "/payroll", "/rostering", "/attendance"],
     }),
+  ];
+  const editProtect = [
+    authMiddleware,
+    requireAnyCapability(["/employees", "/payroll"], "edit"),
   ];
 
   app.get("/", { preHandler: readProtect }, async (request, reply) => {
@@ -292,8 +322,8 @@ export async function employeesRoutes(app: FastifyInstance) {
   });
 
   app.post("/", { preHandler: protect }, async (request, reply) => {
-    if (rejectEmployeeDetailEdits(request, reply)) return;
-    if (rejectRestrictedEmployeeFields(request, reply)) return;
+    if (rejectEmployeeCreation(request, reply)) return;
+    if (rejectRestrictedEmployeeFields(request, reply, "create")) return;
     const parsed = createEmployeeSchemaWithRefine.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -433,7 +463,17 @@ export async function employeesRoutes(app: FastifyInstance) {
 
   app.put("/:id", { preHandler: protect }, async (request, reply) => {
     if (rejectEmployeeDetailEdits(request, reply)) return;
-    if (rejectRestrictedEmployeeFields(request, reply)) return;
+    if (rejectRestrictedEmployeeFields(request, reply, "edit")) return;
+    if (
+      typeof request.body === "object" &&
+      request.body !== null &&
+      Object.prototype.hasOwnProperty.call(request.body, "status")
+    ) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: { status: ["Use the employee status transition endpoint"] },
+      });
+    }
     const { id } = request.params as { id: string };
     const parsed = updateEmployeeSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -524,8 +564,8 @@ export async function employeesRoutes(app: FastifyInstance) {
       data: updateData,
     });
 
-    if (parsed.data.status !== undefined || parsed.data.employeeType !== undefined) {
-      void reconcileContinuityForEmployee(id, companyId, "employee_status_changed").catch(() => undefined);
+    if (parsed.data.employeeType !== undefined) {
+      void reconcileContinuityForEmployee(id, companyId, "employee_type_changed").catch(() => undefined);
     }
     if (updated.count === 0) {
       return reply.code(404).send({ error: "Employee not found" });
@@ -565,7 +605,7 @@ export async function employeesRoutes(app: FastifyInstance) {
     return reply.send(sanitizeEmployeeForDetail(employee ?? {}, request.user!));
   });
 
-  app.delete("/:id", { preHandler: [authMiddleware, requireRole(["admin"])] }, async (request, reply) => {
+  app.delete("/:id", { preHandler: [authMiddleware, requireCapability("/employees", "delete")] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
 
@@ -577,26 +617,46 @@ export async function employeesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Employee not found" });
     }
 
-    const deleted = await prisma.employee.deleteMany({
-      where: { id, companyId: user.companyId },
-    });
-    if (deleted.count === 0) {
-      return reply.code(404).send({ error: "Employee not found" });
+    const [payrollItems, shifts, leaveApplications] = await Promise.all([
+      prisma.payrollItem.count({ where: { employeeId: id } }),
+      prisma.shift.count({ where: { employeeId: id } }),
+      prisma.leaveApplication.count({ where: { employeeId: id, companyId: user.companyId } }),
+    ]);
+
+    if (employee.status !== "offboarded") {
+      const archived = await transitionEmployeeStatus(id, user.companyId, "offboarded");
+      if (!archived.success) {
+        return reply.code(409).send({
+          error: "Employee could not be offboarded",
+          message: archived.error,
+        });
+      }
+      void reconcileContinuityForEmployee(id, user.companyId, "employee_offboarded").catch(() => undefined);
     }
 
     await createAuditLog({
       userId: user.sub,
       companyId: user.companyId,
-      action: "employee.delete",
+      action: "employee.archive",
       entityType: "employee",
       entityId: id,
-      metadata: { employeeNumber: employee.employeeNumber, firstName: employee.firstName, lastName: employee.lastName },
+      metadata: {
+        employeeNumber: employee.employeeNumber,
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        preservedDependencies: { payrollItems, shifts, leaveApplications },
+      },
     });
 
-    return reply.code(204).send();
+    return reply.send({
+      success: true,
+      archived: true,
+      status: "offboarded",
+      preservedDependencies: { payrollItems, shifts, leaveApplications },
+    });
   });
 
-  app.post("/:id/status", { preHandler: protect }, async (request, reply) => {
+  app.post("/:id/status", { preHandler: editProtect }, async (request, reply) => {
     if (rejectEmployeeDetailEdits(request, reply)) return;
     const { id } = request.params as { id: string };
     const parsed = statusTransitionSchema.safeParse(request.body);

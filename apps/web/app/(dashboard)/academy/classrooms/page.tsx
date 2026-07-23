@@ -1,5 +1,7 @@
 "use client";
 
+import { hasCapability } from "@/lib/permissions";
+
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
@@ -19,7 +21,8 @@ interface Branch {
 
 export default function AcademyClassroomsPage() {
   const { token, user } = useAuth();
-  const canManage = user?.role === "admin";
+  const canCreate = Boolean(user && hasCapability(user, "/academy", "create"));
+  const canDelete = Boolean(user && hasCapability(user, "/academy", "delete"));
   const [rows, setRows] = useState<Classroom[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [name, setName] = useState("");
@@ -52,7 +55,7 @@ export default function AcademyClassroomsPage() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !name.trim() || !branchId || !canManage) return;
+    if (!token || !name.trim() || !branchId || !canCreate) return;
     setSaving(true);
     setError(null);
     try {
@@ -71,7 +74,7 @@ export default function AcademyClassroomsPage() {
   };
 
   const remove = async (id: string) => {
-    if (!token || !canManage) return;
+    if (!token || !canDelete) return;
     try {
       await academyApi.deleteClassroom(token, id);
       load();
@@ -105,7 +108,7 @@ export default function AcademyClassroomsPage() {
             <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">Capacity</span>
             <input id="classroom-capacity" className="input-modern w-24 rounded-xl" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
           </label>
-          <Button type="submit" disabled={!canManage} loading={saving}>Add classroom</Button>
+          <Button type="submit" disabled={!canCreate} loading={saving}>Add classroom</Button>
         </form>
       </div>
 
@@ -137,7 +140,7 @@ export default function AcademyClassroomsPage() {
                     <td>{r.branch?.name ?? "—"}</td>
                     <td>{r.capacity}</td>
                     <td>{r.status}</td>
-                    <td className="text-right">{canManage && <Button variant="destructive" size="sm" onClick={() => remove(r.id)}>Delete</Button>}</td>
+                    <td className="text-right">{canDelete && <Button variant="destructive" size="sm" onClick={() => remove(r.id)}>Delete</Button>}</td>
                   </tr>
                 ))
               )}

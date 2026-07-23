@@ -935,7 +935,10 @@ export async function processLeaveDocumentAndSend(
   if (!allowed.has(mimeType) || !matchesMagicBytes(buffer, mimeType)) {
     return deliverProcessResult(from, { reply: "The leave document failed file type or size validation." });
   }
-  const safeName = sanitizeUploadFilename(filename ?? `whatsapp-evidence.${extensionForMime(mimeType)}`);
+  const safeName = sanitizeUploadFilename(
+    filename ?? `whatsapp-evidence.${extensionForMime(mimeType)}`,
+    mimeType
+  );
   const key = `leave-private/${employee.companyId}/${application.id}/${randomUUID()}.${extensionForMime(mimeType)}`;
   await storage.uploadFile({ key, body: buffer, contentType: mimeType });
   try {

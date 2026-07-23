@@ -1,31 +1,41 @@
 import { describe, expect, it } from "vitest";
 import { rosterActionPermissions } from "../roster-continuity.service.js";
 
-describe("rosterActionPermissions", () => {
-  it.each(["admin", "operations_manager"] as const)(
-    "allows %s to manage recurring and advanced rosters",
-    (role) => {
-      expect(rosterActionPermissions(role)).toEqual({
-        canManageBaseline: true,
-        canManageExceptions: true,
-        canUseAdvancedEditor: true,
-      });
-    }
-  );
+const user = (capabilities: unknown = {}, isOwner = false) => ({
+  sub: "u",
+  email: "u@test.com",
+  companyId: "c",
+  name: "User",
+  accountType: "staff" as const,
+  jobTitle: null,
+  isActive: true,
+  isOwner,
+  capabilities: capabilities as never,
+});
 
-  it("allows supervisors to resolve daily exceptions without changing the baseline", () => {
-    expect(rosterActionPermissions("supervisor")).toEqual({
+describe("rosterActionPermissions", () => {
+  it("keeps recurring edits and exception approval independent", () => {
+    expect(rosterActionPermissions(user({ "/rostering": ["edit", "approve"] }))).toEqual({
+      canManageBaseline: true,
+      canManageExceptions: true,
+      canUseAdvancedEditor: true,
+    });
+  });
+
+  it("allows approve-only users to resolve daily exceptions", () => {
+    expect(rosterActionPermissions(user({ "/rostering": ["approve"] }))).toEqual({
       canManageBaseline: false,
       canManageExceptions: true,
       canUseAdvancedEditor: false,
     });
   });
 
-  it("keeps controllers read-only", () => {
-    expect(rosterActionPermissions("controller")).toEqual({
+  it("keeps view-only users non-mutating and allows the owner", () => {
+    expect(rosterActionPermissions(user({ "/rostering": ["view"] }))).toEqual({
       canManageBaseline: false,
       canManageExceptions: false,
       canUseAdvancedEditor: false,
     });
+    expect(rosterActionPermissions(user({}, true)).canManageBaseline).toBe(true);
   });
 });

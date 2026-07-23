@@ -11,10 +11,11 @@ datasource db {
 }
 
 model Company {
-  id        String   @id @default(cuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  name        String
+  ownerUserId String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Business details
   legalName            String?
@@ -37,7 +38,8 @@ model Company {
   settings Json? // { currency, dateFormat, timezone, payrollPeriod, etc. }
   theme    Json? // { primaryColor, accentColor, mode: "light"|"dark"|"system" }
 
-  users                 User[]
+  users                 User[]   @relation("CompanyUsers")
+  owner                 User?    @relation("CompanyOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
   employees             Employee[]
   sites                 Site[]
   whatsAppClockPendings WhatsAppClockPending[]
@@ -119,14 +121,16 @@ model User {
   passwordSetupTokenHash       String?
   passwordSetupTokenExpiresAt  DateTime?
   passwordSetupTokenConsumedAt DateTime?
-  role                         UserRole
-  roleLabel                    String?
-  /// Null grants full access only to admins. Otherwise stores a path-to-permission map (e.g. {"/employees":"read","/payroll":"write"}); legacy path arrays are normalized as write access.
-  moduleAccess                 Json?
+  accountType                  AccountType @default(staff)
+  jobTitle                     String?
+  isActive                     Boolean     @default(true)
+  /// Explicit path-to-capability map. Missing capabilities are denied. The company owner bypasses this map.
+  capabilities                 Json        @default("{}")
   createdAt                    DateTime  @default(now())
   updatedAt                    DateTime  @updatedAt
 
-  company                  Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company                  Company           @relation("CompanyUsers", fields: [companyId], references: [id], onDelete: Cascade)
+  ownedCompany             Company?          @relation("CompanyOwner")
   auditLogs                AuditLog[]
   tasksCreated             Task[]
   taskComments             TaskComment[]
@@ -163,6 +167,7 @@ model User {
   leaveAuditEvents                  LeaveAuditEvent[]
 
   @@index([companyId])
+  @@unique([companyId, id])
 }
 
 model RefreshToken {
@@ -185,12 +190,8 @@ model RefreshToken {
   @@index([expiresAt])
 }
 
-enum UserRole {
-  admin
-  operations_manager
-  hr_payroll
-  supervisor
-  controller
+enum AccountType {
+  staff
   client
 }
 
@@ -324,7 +325,7 @@ model Site {
   contractEndDate            DateTime?
   serviceType                String? // guarding, access_control, patrols, etc.
   monthlyRevenue             Decimal? @db.Decimal(12, 2) // Optional - for labour % and profitability
-  /// Site supervisor (User with supervisor/ops role)
+  /// Site supervisor assignment; job titles never authorize access.
   supervisorId               String?
   riskLevel                  SiteRiskLevel @default(LOW)
   siteStatus                 SiteOperationalStatus @default(ACTIVE)
@@ -566,6 +567,7 @@ model PayrollRun {
   companyId            String
   periodStart          DateTime
   periodEnd            DateTime
+  payPeriod            String        @default("monthly") // weekly | biweekly | monthly; frozen when the run is created
   status               PayrollStatus
   lockedAt             DateTime?
   calculatedAt         DateTime?
@@ -615,6 +617,7 @@ model PayrollItem {
 
   @@index([payrollRunId])
   @@index([employeeId])
+  @@unique([payrollRunId, employeeId])
 }
 
 model PayRule {
@@ -2203,8 +2206,10 @@ model LeaveOccurrence {
   shift        Shift?           @relation(fields: [shiftId], references: [id], onDelete: SetNull)
   payrollPostings LeavePayrollPosting[]
 
-  // The migration also adds a partial unique index on (applicationId, leaveDate)
-  // for unrostered rows where shiftId is NULL; Prisma cannot model that index.
+  // A migration also adds a partial unique index on (applicationId, leaveDate)
+  // for genuinely unrostered rows (shiftId and siteId are NULL). Roster-backed
+  // rows retain siteId if their source shift is deleted; Prisma cannot model
+  // this partial index.
   @@unique([applicationId, leaveDate, shiftId])
   @@index([companyId, leaveDate, status])
   @@index([employeeId, leaveDate, status])
@@ -2243,7 +2248,7 @@ model LeaveApprovalStep {
   id            String                @id @default(cuid())
   applicationId String
   stepOrder     Int
-  role          String
+  requiredCapability String
   decision      LeaveApprovalDecision @default(PENDING)
   actorId       String?
   comment       String?
@@ -2254,7 +2259,7 @@ model LeaveApprovalStep {
   actor       User?            @relation("LeaveApprovalActor", fields: [actorId], references: [id], onDelete: SetNull)
 
   @@unique([applicationId, stepOrder])
-  @@index([role, decision])
+  @@index([requiredCapability, decision])
 }
 
 model LeaveApplicationDocument {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
+import { hasCapability } from "@/lib/permissions";
 import { DateInput } from "@/components/date-input";
 
 type Step = 1 | 2 | 3;
@@ -34,7 +35,9 @@ function seatsLeft(r: CourseRunRow): string {
 }
 
 export default function AcademyIntakePage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canCreate = Boolean(user && hasCapability(user, "/academy", "create"));
+  const canEdit = Boolean(user && hasCapability(user, "/academy", "edit"));
   const [step, setStep] = useState<Step>(1);
   const [error, setError] = useState<string | null>(null);
   const [studentId, setStudentId] = useState<string | null>(null);
@@ -76,7 +79,7 @@ export default function AcademyIntakePage() {
 
   const submitProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !firstName.trim() || !lastName.trim()) return;
+    if (!token || !firstName.trim() || !lastName.trim() || !canCreate) return;
     setError(null);
     setSubmitting(true);
     try {
@@ -107,7 +110,7 @@ export default function AcademyIntakePage() {
 
   const recordPaid = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !studentId) return;
+    if (!token || !studentId || !canEdit) return;
     setError(null);
     setSubmitting(true);
     try {
@@ -127,7 +130,7 @@ export default function AcademyIntakePage() {
 
   const recordWaived = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !studentId) return;
+    if (!token || !studentId || !canEdit) return;
     setError(null);
     setSubmitting(true);
     try {
@@ -153,7 +156,7 @@ export default function AcademyIntakePage() {
   };
 
   const submitEnrolments = async () => {
-    if (!token || !studentId || selectedRunIds.size === 0) return;
+    if (!token || !studentId || selectedRunIds.size === 0 || !canCreate) return;
     setError(null);
     setSubmitting(true);
     try {
@@ -207,7 +210,7 @@ export default function AcademyIntakePage() {
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
-      {step === 1 && (
+      {step === 1 && canCreate && (
         <form onSubmit={submitProfile} className="space-y-4 rounded-lg border border-neutral-300 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-medium">Personal details</h2>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -245,7 +248,14 @@ export default function AcademyIntakePage() {
         </form>
       )}
 
-      {step === 2 && studentId && (
+      {step === 2 && studentId && !canEdit && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          Your account can create the student but cannot record or waive the admin fee. Ask a user with Academy edit access to continue from the student profile.
+          <Link href={`/academy/students/${studentId}`} className="ml-2 font-semibold underline">Open profile</Link>
+        </div>
+      )}
+
+      {step === 2 && studentId && canEdit && (
         <div className="space-y-6">
           <div className="rounded-lg border border-neutral-300 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-medium">Record admin fee (paid)</h2>
@@ -289,7 +299,7 @@ export default function AcademyIntakePage() {
         </div>
       )}
 
-      {step === 3 && studentId && (
+      {step === 3 && studentId && canCreate && (
         <div className="rounded-lg border border-neutral-300 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-medium">Enrol in course runs</h2>
           <p className="mt-1 text-sm text-neutral-600">

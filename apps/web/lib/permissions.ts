@@ -1,44 +1,32 @@
-import type { UserRole } from "./api";
+import type { AuthUser, Capability, CapabilityMap } from "./api";
 
 export interface NavItem {
   href: string;
   label: string;
-  /** Roles that can see this module when no custom `moduleAccess` is set. */
-  roles: UserRole[];
 }
 
-/**
- * Navigation items. `roles` are used for **templates** (defaultModulesForRole) and docs only.
- * Runtime access: only **full** admins (see isFullAdmin) may see everything without a list;
- * everyone else must have an explicit non-empty `moduleAccess` from an administrator.
- */
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Dashboard", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
-  { href: "/employees", label: "Team", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
-  { href: "/sites", label: "Sites", roles: ["admin", "operations_manager", "supervisor"] },
-  { href: "/rostering", label: "Rostering", roles: ["admin", "operations_manager", "supervisor", "controller"] },
-  { href: "/attendance", label: "Attendance", roles: ["admin", "operations_manager", "hr_payroll", "supervisor", "controller"] },
-  { href: "/payroll", label: "Payroll", roles: ["admin", "operations_manager", "hr_payroll"] },
-  { href: "/tasks", label: "Tasks", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
-  { href: "/whatsapp", label: "WhatsApp", roles: ["admin", "operations_manager", "hr_payroll", "supervisor", "controller"] },
-  { href: "/reports", label: "Reports", roles: ["admin", "operations_manager", "hr_payroll"] },
-  { href: "/approvals", label: "Approvals", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
-  { href: "/incidents", label: "Incidents", roles: ["admin", "operations_manager", "supervisor", "controller"] },
-  { href: "/documents", label: "Documents", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
-  { href: "/client-portal", label: "Client Portal", roles: ["admin", "client"] },
-  {
-    href: "/academy",
-    label: "Academy",
-    roles: ["admin", "operations_manager", "hr_payroll", "supervisor", "controller"],
-  },
-  { href: "/audit", label: "Audit", roles: ["admin"] },
-  { href: "/settings", label: "Settings", roles: ["admin", "operations_manager", "hr_payroll", "supervisor"] },
+  { href: "/", label: "Dashboard" },
+  { href: "/employees", label: "Team" },
+  { href: "/employees/leave", label: "Leave" },
+  { href: "/sites", label: "Sites" },
+  { href: "/rostering", label: "Rostering" },
+  { href: "/attendance", label: "Attendance" },
+  { href: "/payroll", label: "Payroll" },
+  { href: "/tasks", label: "Tasks" },
+  { href: "/whatsapp", label: "WhatsApp" },
+  { href: "/reports", label: "Reports" },
+  { href: "/approvals", label: "Approvals" },
+  { href: "/incidents", label: "Incidents" },
+  { href: "/documents", label: "Documents" },
+  { href: "/client-portal", label: "Client Portal" },
+  { href: "/academy", label: "Academy" },
+  { href: "/audit", label: "Audit" },
+  { href: "/settings/migrate", label: "Data Import / Export" },
+  { href: "/settings", label: "Settings" },
 ];
 
-/** Main nav links shown in the horizontal bar (first 6 items). */
-export const MAIN_NAV_HREFS = ["/", "/employees", "/sites", "/rostering", "/attendance", "/payroll", "/tasks"];
-
-/** Nav items shown in the "More" dropdown (remaining items). */
+export const MAIN_NAV_HREFS = ["/", "/employees", "/employees/leave", "/sites", "/rostering", "/attendance", "/payroll", "/tasks"];
 export const MORE_NAV_HREFS = [
   "/whatsapp",
   "/reports",
@@ -48,132 +36,96 @@ export const MORE_NAV_HREFS = [
   "/client-portal",
   "/academy",
   "/audit",
+  "/settings/migrate",
 ];
-
-/** Modules an admin can assign to a user (same as primary nav; Audit only effective for admin accounts). */
-export const MODULE_ASSIGN_OPTIONS: { href: string; label: string }[] = NAV_ITEMS.map(({ href, label }) => ({
-  href,
-  label,
-}));
-
-/** Shown when a non-admin has no modules assigned yet (login-only). Not a product module. */
 export const ACCESS_PENDING_HREF = "/access-pending";
 
-export type ModulePermission = "read" | "write";
-export type ModulePermissions = Record<string, ModulePermission>;
+type AccessSubject = Pick<AuthUser, "isOwner" | "isActive" | "capabilities">;
 
-export function normalizeUserModulePermissions(raw: unknown): ModulePermissions | null {
-  if (raw == null) return null;
-  const out: ModulePermissions = {};
-  if (Array.isArray(raw)) raw.forEach((path) => { if (typeof path === "string" && path.startsWith("/")) out[path] = "write"; });
-  else if (typeof raw === "object") Object.entries(raw as Record<string, unknown>).forEach(([path, permission]) => {
-    if (path.startsWith("/") && (permission === "read" || permission === "write")) out[path] = permission;
-  });
-  return Object.keys(out).length ? out : null;
+export function normalizeCapabilities(raw: unknown): CapabilityMap {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const result: CapabilityMap = {};
+  for (const [path, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!path.startsWith("/") || !Array.isArray(value)) continue;
+    const list = value.filter((item): item is Capability =>
+      ["view", "view_sensitive", "create", "edit", "delete", "approve", "export", "manage_access"].includes(String(item))
+    );
+    if (list.length) result[path] = [...new Set(list)];
+  }
+  return result;
 }
 
-export function normalizeUserModuleAccess(raw: unknown): string[] | null {
-  const permissions = normalizeUserModulePermissions(raw);
-  return permissions ? Object.keys(permissions) : null;
-}
-
-function modulePermissionForPath(raw: unknown, module: string): ModulePermission | null {
-  const permissions = normalizeUserModulePermissions(raw);
-  if (!permissions) return null;
+export function capabilitiesForPath(raw: unknown, path: string): readonly Capability[] | null {
+  const permissions = normalizeCapabilities(raw);
   const match = Object.keys(permissions)
-    .filter((granted) => module === granted || module.startsWith(`${granted}/`))
+    .filter((granted) => path === granted || path.startsWith(`${granted}/`))
     .sort((a, b) => b.length - a.length)[0];
   return match ? permissions[match] : null;
 }
 
-/** Suggested module paths for a role (admin UI pre-fill). Not applied at runtime without saving. */
-export function defaultModulesForRole(role: string): string[] {
-  if (role === "client") return ["/client-portal"];
-  const userRole = role as UserRole;
-  return NAV_ITEMS.filter(
-    (n) => n.roles.includes(userRole) && (n.href !== "/audit" || userRole === "admin")
-  ).map((n) => n.href);
+export function hasCapability(
+  user: AccessSubject,
+  path: string,
+  capability: Capability
+): boolean {
+  if (!user.isActive) return false;
+  if (user.isOwner) return true;
+  return capabilitiesForPath(user.capabilities, path)?.includes(capability) ?? false;
 }
 
-/** Full tenant administrator: may use all modules and admin-only APIs. Scoped admins have role admin + explicit module list. */
-export function isFullAdmin(user: { role: string; moduleAccess?: unknown }): boolean {
-  return user.role === "admin" && !normalizeUserModuleAccess(user.moduleAccess);
-}
-
-/** Sensitive module data requires an explicit assignment; broad admin access is not enough. */
-export function canAccessSensitiveData(user: { role: string; moduleAccess?: unknown }, module: string): boolean {
-  return modulePermissionForPath(user.moduleAccess, module) === "write";
-}
-
-/** Employee records may be managed by users explicitly assigned either relevant module. */
-export function canManageEmployeeDetails(user: { role: string; moduleAccess?: unknown }): boolean {
-  return canAccessSensitiveData(user, "/employees") || canAccessSensitiveData(user, "/payroll");
-}
-
-/** Leave mutations follow the user's write access to Team > Leave or Payroll, regardless of role title. */
-export function canManageLeave(user: { role: string; moduleAccess?: unknown }): boolean {
-  return isFullAdmin(user)
-    || canAccessSensitiveData(user, "/employees/leave")
-    || canAccessSensitiveData(user, "/payroll");
+export function hasAnyModuleView(user: AccessSubject): boolean {
+  return (
+    user.isOwner ||
+    Object.values(normalizeCapabilities(user.capabilities)).some((list) => list.includes("view")) ||
+    canAccessMigrationTools(user)
+  );
 }
 
 function navItemForPath(pathname: string): NavItem | undefined {
-  return NAV_ITEMS.find((n) => {
-    if (n.href === "/") return pathname === "/" || pathname === "";
-    return pathname === n.href || pathname.startsWith(`${n.href}/`);
-  });
+  return NAV_ITEMS
+    .filter((item) =>
+      item.href === "/"
+        ? pathname === "/" || pathname === ""
+        : pathname === item.href || pathname.startsWith(`${item.href}/`)
+    )
+    .sort((a, b) => b.href.length - a.href.length)[0];
 }
 
-/**
- * First route to open for a user. Non-admins without assigned modules → access-pending page.
- */
-export function getDefaultRouteForUser(user: { role: string; moduleAccess?: unknown }): string {
-  const custom = normalizeUserModuleAccess(user.moduleAccess);
-  if (custom) {
-    for (const nav of NAV_ITEMS) {
-      if (!custom.includes(nav.href)) continue;
-      if (nav.href === "/audit" && user.role !== "admin") continue;
-      return nav.href;
-    }
-    return custom[0] ?? (user.role === "admin" ? "/" : ACCESS_PENDING_HREF);
-  }
-  if (user.role === "admin") return "/";
-  return ACCESS_PENDING_HREF;
-}
-
-/**
- * Route access: full admin → all nav modules; anyone else → explicit module list only.
- */
-export function canAccessRoute(pathname: string, role: string, moduleAccess?: unknown): boolean {
-  const userRole = role as UserRole;
-
+export function canAccessRoute(pathname: string, user: AccessSubject): boolean {
   if (pathname === ACCESS_PENDING_HREF || pathname.startsWith(`${ACCESS_PENDING_HREF}/`)) {
-    if (userRole === "admin") return false;
-    return normalizeUserModuleAccess(moduleAccess) == null;
+    return !hasAnyModuleView(user);
   }
-
   const item = navItemForPath(pathname);
-  if (!item) return false;
-
-  if (userRole === "admin" && !normalizeUserModuleAccess(moduleAccess)) {
-    return true;
+  if (item?.href === "/settings/migrate") {
+    return canAccessMigrationTools(user);
   }
-
-  const custom = normalizeUserModuleAccess(moduleAccess);
-  if (!custom) return false;
-
-  const covers = custom.some(
-    (m) => item.href === m || pathname === m || pathname.startsWith(`${m}/`)
-  );
-  if (!covers) return false;
-  if (item.href === "/audit" && userRole !== "admin") return false;
-  return true;
+  if (item?.href === "/employees/leave") {
+    return (
+      hasCapability(user, "/employees/leave", "view") ||
+      hasCapability(user, "/payroll", "view")
+    );
+  }
+  return item ? hasCapability(user, item.href, "view") : false;
 }
 
-/** Site create/edit/delete: must have `/sites` in assigned modules; full admin unrestricted. */
-export function canManageSitesModule(user: { role: string; moduleAccess?: unknown }): boolean {
-  if (!canAccessRoute("/sites", user.role, user.moduleAccess)) return false;
-  const custom = normalizeUserModuleAccess(user.moduleAccess);
-  if (custom) return modulePermissionForPath(user.moduleAccess, "/sites") === "write";
-  return user.role === "admin";
+export function canAccessMigrationTools(user: AccessSubject): boolean {
+  return (
+    hasCapability(user, "/employees", "create") ||
+    hasCapability(user, "/employees", "export") ||
+    hasCapability(user, "/sites", "create") ||
+    hasCapability(user, "/sites", "export")
+  );
+}
+
+export function getDefaultRouteForUser(user: AccessSubject): string {
+  const first = NAV_ITEMS.find((item) => canAccessRoute(item.href, user));
+  return first?.href ?? ACCESS_PENDING_HREF;
+}
+
+export function canManageEmployeeDetails(user: AccessSubject): boolean {
+  return hasCapability(user, "/employees", "edit") || hasCapability(user, "/payroll", "edit");
+}
+
+export function canAccessSensitiveData(user: AccessSubject, module: string): boolean {
+  return hasCapability(user, module, "view_sensitive");
 }

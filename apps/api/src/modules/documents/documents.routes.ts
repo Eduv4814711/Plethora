@@ -2,8 +2,18 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { authMiddleware } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireCapability, requireCrudCapability } from "../../middleware/authorization.js";
+import { hasCapability } from "../../lib/capabilities.js";
 import { readStreamToBuffer, storage } from "../../lib/storage.js";
+import {
+  privateDownloadUrl,
+  sendPrivateStoredFile,
+} from "../../lib/private-download.js";
+import {
+  extensionForMime,
+  matchesMagicBytes,
+  sanitizeUploadFilename,
+} from "../../lib/upload-validation.js";
 import {
   createDocumentRecord,
   listDocuments,
@@ -11,13 +21,6 @@ import {
 } from "./documents.service.js";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
-
-const ROLES = [
-  "admin",
-  "operations_manager",
-  "hr_payroll",
-  "supervisor",
-] as const;
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_TYPES = [
@@ -60,10 +63,18 @@ const metaSchema = z.object({
 export async function documentsRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole([...ROLES], {
-      anyOfModules: ["/", "/documents", "/employees", "/sites", "/payroll"],
-    }),
+    requireCrudCapability({ module: "/documents" }),
   ];
+
+  const forUser = <T extends { id: string; fileUrl: string }>(
+    document: T,
+    canExport: boolean
+  ): Omit<T, "fileUrl"> & { downloadUrl?: string } => {
+    const { fileUrl: _fileUrl, ...metadata } = document;
+    return canExport
+      ? { ...metadata, downloadUrl: privateDownloadUrl(`/documents/${document.id}/download`) }
+      : metadata;
+  };
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
@@ -78,7 +89,11 @@ export async function documentsRoutes(app: FastifyInstance) {
       limit: q.limit ? Number(q.limit) : 50,
       offset: q.offset ? Number(q.offset) : 0,
     });
-    return reply.send(result);
+    const canExport = hasCapability(user, "/documents", "export");
+    return reply.send({
+      ...result,
+      items: result.items.map((document) => forUser(document, canExport)),
+    });
   });
 
   app.post("/sync-expiry-alerts", { preHandler: protect }, async (request, reply) => {
@@ -108,7 +123,7 @@ export async function documentsRoutes(app: FastifyInstance) {
     }
 
     const mimetype = data.mimetype;
-    if (!ALLOWED_TYPES.includes(mimetype) && !mimetype.startsWith("image/")) {
+    if (!ALLOWED_TYPES.includes(mimetype)) {
       return reply.code(400).send({
         error: "Invalid file type",
         message: "Allowed: images, PDF, Word, Excel, text, CSV",
@@ -127,8 +142,14 @@ export async function documentsRoutes(app: FastifyInstance) {
       }
       return reply.code(500).send({ error: "Upload failed", message: "Could not read the file" });
     }
+    if (!matchesMagicBytes(fileBuffer, mimetype)) {
+      return reply.code(400).send({
+        error: "Invalid file",
+        message: "File content does not match the declared type",
+      });
+    }
 
-    const ext = mimetype.split("/")[1]?.replace("jpeg", "jpg") || "bin";
+    const ext = extensionForMime(mimetype);
     const filename = `${randomUUID()}.${ext}`;
     const key = `documents/${user.companyId}/${filename}`;
 
@@ -146,7 +167,7 @@ export async function documentsRoutes(app: FastifyInstance) {
       documentType: parsed.data.documentType,
       category: parsed.data.category,
       fileUrl: url,
-      fileName: data.filename || filename,
+      fileName: sanitizeUploadFilename(data.filename || filename, mimetype),
       mimeType: mimetype,
       size: fileBuffer.length,
       employeeId: parsed.data.employeeId,
@@ -157,8 +178,32 @@ export async function documentsRoutes(app: FastifyInstance) {
       expiryDate: parsed.data.expiryDate ? new Date(parsed.data.expiryDate) : null,
     });
 
-    return reply.code(201).send(doc);
+    return reply.code(201).send(
+      forUser(doc, hasCapability(user, "/documents", "export"))
+    );
   });
+
+  app.get(
+    "/:id/download",
+    { preHandler: [authMiddleware, requireCapability("/documents", "export")] },
+    async (request, reply) => {
+      const user = request.user!;
+      const { id } = request.params as { id: string };
+      const document = await prisma.managedDocument.findFirst({
+        where: { id, companyId: user.companyId },
+        select: { fileUrl: true, fileName: true, mimeType: true },
+      });
+      if (!document) {
+        return reply.code(404).send({ error: "Not found", message: "Document not found" });
+      }
+      return sendPrivateStoredFile(reply, {
+        storedReference: document.fileUrl,
+        allowedPrefixes: [`documents/${user.companyId}`],
+        fileName: document.fileName,
+        mimeType: document.mimeType,
+      });
+    }
+  );
 
   app.get("/:id", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
@@ -174,7 +219,9 @@ export async function documentsRoutes(app: FastifyInstance) {
     if (!doc) {
       return reply.code(404).send({ error: "Not found", message: "Document not found" });
     }
-    return reply.send(doc);
+    return reply.send(
+      forUser(doc, hasCapability(user, "/documents", "export"))
+    );
   });
 
   app.patch("/:id/archive", { preHandler: protect }, async (request, reply) => {
@@ -197,6 +244,8 @@ export async function documentsRoutes(app: FastifyInstance) {
       entityType: "ManagedDocument",
       entityId: id,
     });
-    return reply.send(updated);
+    return reply.send(
+      forUser(updated, hasCapability(user, "/documents", "export"))
+    );
   });
 }

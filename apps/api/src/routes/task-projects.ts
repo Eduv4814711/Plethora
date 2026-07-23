@@ -1,11 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
-
-const TASK_ROLES = ["admin", "operations_manager", "hr_payroll", "supervisor"] as const;
 
 const createProjectSchema = z.object({
   name: z.string().min(1),
@@ -22,7 +20,7 @@ const updateProjectSchema = z.object({
 });
 
 export async function taskProjectsRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole([...TASK_ROLES], { module: "/tasks" })];
+  const protect = [authMiddleware, requireCrudCapability({ module: "/tasks" })];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
+import { hasCapability } from "@/lib/permissions";
 import { useConfirmDialog } from "@/components/ui";
 
 interface StudentOpt {
@@ -31,8 +32,10 @@ interface EnrolRow {
 }
 
 export default function AcademyEnrolmentsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { confirm, confirmDialog } = useConfirmDialog();
+  const canCreate = Boolean(user && hasCapability(user, "/academy", "create"));
+  const canDelete = Boolean(user && hasCapability(user, "/academy", "delete"));
   const [enrolments, setEnrolments] = useState<EnrolRow[]>([]);
   const [students, setStudents] = useState<StudentOpt[]>([]);
   const [runs, setRuns] = useState<RunOpt[]>([]);
@@ -76,7 +79,7 @@ export default function AcademyEnrolmentsPage() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !studentId || !courseRunId) return;
+    if (!token || !studentId || !courseRunId || !canCreate) return;
     if (!adminFeeOk) {
       setError("Record or waive the admin fee on this student before enrolling.");
       return;
@@ -95,7 +98,7 @@ export default function AcademyEnrolmentsPage() {
   };
 
   const remove = async (enrolId: string) => {
-    if (!token) return;
+    if (!token || !canDelete) return;
     const confirmed = await confirm({
       title: "Remove enrolment?",
       message: "This removes the learner from the selected course run.",
@@ -124,16 +127,16 @@ export default function AcademyEnrolmentsPage() {
             Course runs below are limited to intakes that still accept enrolments and have capacity.
           </p>
         </div>
-        <Link href="/academy/intake" className="btn-secondary px-3 py-1.5 text-xs">
+        {canCreate && <Link href="/academy/intake" className="btn-secondary px-3 py-1.5 text-xs">
           Guided intake
-        </Link>
+        </Link>}
       </div>
 
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
-      <form onSubmit={create} className="grid gap-3 rounded-lg border border-neutral-300 p-4 sm:grid-cols-2 lg:grid-cols-4">
+      {canCreate && <form onSubmit={create} className="grid gap-3 rounded-lg border border-neutral-300 p-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <label className="label-text mb-1 block">Student</label>
           <select className="input-compact w-full" value={studentId} onChange={(e) => setStudentId(e.target.value)}>
@@ -189,9 +192,9 @@ export default function AcademyEnrolmentsPage() {
             Enrol
           </button>
         </div>
-      </form>
+      </form>}
 
-      {!students.length || !runs.length ? (
+      {canCreate && (!students.length || !runs.length) ? (
         <p className="text-sm text-amber-700">
           Create at least one student (with admin fee cleared), branch, course, and an enrolable course run before
           enrolling.
@@ -230,9 +233,9 @@ export default function AcademyEnrolmentsPage() {
                   </td>
                   <td>{en.financialStatus}</td>
                   <td>
-                    <button type="button" className="btn-ghost px-2 py-1 text-xs text-red-700" onClick={() => remove(en.id)}>
+                    {canDelete && <button type="button" className="btn-ghost px-2 py-1 text-xs text-red-700" onClick={() => remove(en.id)}>
                       Remove
-                    </button>
+                    </button>}
                   </td>
                 </tr>
               ))}

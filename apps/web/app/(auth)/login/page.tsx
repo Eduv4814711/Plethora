@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { getDefaultRouteForUser, normalizeUserModuleAccess } from "@/lib/permissions";
 
 function LoginForm() {
   const { user, login, error, setError } = useAuth();

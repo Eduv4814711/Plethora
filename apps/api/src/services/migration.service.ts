@@ -7,7 +7,6 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_EMPLOYEES = 1000;
 const MAX_SITES = 200;
 const MAX_GROUPS = 500;
-const MAX_COMPANIES = 50;
 
 /** Large CSV imports (many employees) can exceed default interactive transaction limits on hosted DBs. */
 const MIGRATION_TRANSACTION_OPTIONS = { maxWait: 30_000, timeout: 300_000 } as const;
@@ -43,28 +42,12 @@ function emptyToUndefined(s: string | undefined): string | undefined {
 
 // --- Zod schemas for CSV rows ---
 
-const companyRowSchema = z.object({
-  name: z.string().min(1, "Company name is required"),
-  legalName: z.string().optional().transform(emptyToUndefined),
-  registrationNumber: z.string().optional().transform(emptyToUndefined),
-  taxNumber: z.string().optional().transform(emptyToUndefined),
-  address: z.string().optional().transform(emptyToUndefined),
-  phone: z.string().optional().transform(emptyToUndefined),
-  email: z.union([z.string().email(), z.literal("")]).optional().transform((v) => (v === "" ? undefined : v)),
-  website: z.string().optional().transform(emptyToUndefined),
-  psiraRegistration: z.string().optional().transform(emptyToUndefined),
-  uifReference: z.string().optional().transform(emptyToUndefined),
-  currency: z.string().optional().transform(emptyToUndefined),
-  timezone: z.string().optional().transform(emptyToUndefined),
-  payrollPeriod: z.enum(["weekly", "biweekly", "monthly"]).optional(),
-});
-
 const employeeStatusEnum = z.enum(["applicant", "hired", "training", "active", "suspended", "offboarded"]);
 const employeeTypeEnum = z.enum(["office", "security"]);
 
 /** CSV row shape (shared by strict and relaxed employee import parsers). */
 const employeeRowBaseSchema = z.object({
-  companyName: z.string().optional().transform(emptyToUndefined), // Admin flow: links to company
+  companyName: z.string().optional().transform(emptyToUndefined),
   employeeNumber: z.string().optional().transform(emptyToUndefined),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
@@ -135,7 +118,7 @@ const employeeGroupRowSchema = z.object({
 });
 
 const siteRowSchema = z.object({
-  companyName: z.string().optional().transform(emptyToUndefined), // Admin flow: links to company
+  companyName: z.string().optional().transform(emptyToUndefined),
   name: z.string().min(1, "Site name is required"),
   location: z.string().optional().transform(emptyToUndefined),
   physicalAddress: z.string().optional().transform(emptyToUndefined),
@@ -192,7 +175,6 @@ export interface ParseResult<T> {
   errors: { row: number; field: string; value: string; message: string }[];
 }
 
-export type ValidatedCompany = z.infer<typeof companyRowSchema>;
 export type ValidatedEmployee = z.infer<typeof employeeRowBaseSchema>;
 export type ValidatedSite = z.infer<typeof siteRowSchema>;
 export type ValidatedEmployeeGroup = z.infer<typeof employeeGroupRowSchema>;
@@ -210,39 +192,9 @@ export function parseCsvBuffer(buffer: Buffer): { headers: string[]; rows: strin
   return { headers: headers ?? [], rows };
 }
 
-export function parseAndValidateCompanies(buffer: Buffer): ParseResult<ValidatedCompany> {
-  const { headers, rows } = parseCsvBuffer(buffer);
-  const valid: ValidatedCompany[] = [];
-  const errors: ParseResult<ValidatedCompany>["errors"] = [];
-
-  if (rows.length > MAX_COMPANIES) {
-    errors.push({ row: 0, field: "_", value: "", message: `Maximum ${MAX_COMPANIES} companies per import` });
-    return { valid, errors };
-  }
-
-  for (let i = 0; i < rows.length; i++) {
-    const obj = rowToObject(rows[i], headers);
-    const result = companyRowSchema.safeParse(obj);
-    if (result.success) {
-      valid.push(result.data);
-    } else {
-      for (const issue of result.error.issues) {
-        const path = issue.path.join(".");
-        errors.push({
-          row: i + 2, // 1-based, +1 for header
-          field: path || "unknown",
-          value: obj[path] ?? "",
-          message: issue.message,
-        });
-      }
-    }
-  }
-  return { valid, errors };
-}
-
 export function parseAndValidateEmployees(
   buffer: Buffer,
-  options?: { requireCompanyName?: boolean; allowIncompleteRows?: boolean }
+  options?: { allowIncompleteRows?: boolean }
 ): ParseResult<ValidatedEmployee> {
   const { headers, rows } = parseCsvBuffer(buffer);
   const valid: ValidatedEmployee[] = [];
@@ -260,15 +212,8 @@ export function parseAndValidateEmployees(
   const rowSchema = options?.allowIncompleteRows ? employeeRowSchemaRelaxed : employeeRowSchema;
 
   for (const { index, obj } of employeeRows) {
-    let result = rowSchema.safeParse(obj);
-    if (result.success && options?.requireCompanyName && !result.data.companyName) {
-      errors.push({
-        row: index + 2,
-        field: "companyName",
-        value: obj.companyname ?? "",
-        message: "companyName is required for admin bulk import",
-      });
-    } else if (result.success) {
+    const result = rowSchema.safeParse(obj);
+    if (result.success) {
       valid.push(result.data);
     } else {
       for (const issue of result.error.issues) {
@@ -285,10 +230,7 @@ export function parseAndValidateEmployees(
   return { valid, errors };
 }
 
-export function parseAndValidateSites(
-  buffer: Buffer,
-  options?: { requireCompanyName?: boolean }
-): ParseResult<ValidatedSite> {
+export function parseAndValidateSites(buffer: Buffer): ParseResult<ValidatedSite> {
   const { headers, rows } = parseCsvBuffer(buffer);
   const valid: ValidatedSite[] = [];
   const errors: ParseResult<ValidatedSite>["errors"] = [];
@@ -300,15 +242,8 @@ export function parseAndValidateSites(
 
   for (let i = 0; i < rows.length; i++) {
     const obj = rowToObject(rows[i], headers);
-    let result = siteRowSchema.safeParse(obj);
-    if (result.success && options?.requireCompanyName && !result.data.companyName) {
-      errors.push({
-        row: i + 2,
-        field: "companyName",
-        value: obj.companyname ?? "",
-        message: "companyName is required for admin bulk import",
-      });
-    } else if (result.success) {
+    const result = siteRowSchema.safeParse(obj);
+    if (result.success) {
       valid.push(result.data);
     } else {
       for (const issue of result.error.issues) {
@@ -372,162 +307,11 @@ export function parseAndValidateEmployeeGroups(buffer: Buffer): ParseResult<Vali
 // --- Import execution ---
 
 export interface ImportResult {
-  companiesCreated: number;
   employeesCreated: number;
   sitesCreated: number;
   groupsCreated: number;
   groupsSkipped: number;
   errors: { entity: string; row?: number; message: string }[];
-}
-
-export async function executeCompanyImport(
-  companies: ValidatedCompany[],
-  employees: ValidatedEmployee[],
-  sites: ValidatedSite[],
-  companyNameToId: Map<string, string>
-): Promise<ImportResult> {
-  const result: ImportResult = {
-    companiesCreated: 0,
-    employeesCreated: 0,
-    sitesCreated: 0,
-    groupsCreated: 0,
-    groupsSkipped: 0,
-    errors: [],
-  };
-
-  await prisma.$transaction(async (tx) => {
-    // 1. Create companies
-    for (const c of companies) {
-      const created = await tx.company.create({
-        data: {
-          name: c.name,
-          legalName: c.legalName ?? null,
-          registrationNumber: c.registrationNumber ?? null,
-          taxNumber: c.taxNumber ?? null,
-          address: c.address ?? null,
-          phone: c.phone ?? null,
-          email: c.email ?? null,
-          website: c.website ?? null,
-          psiraRegistration: c.psiraRegistration ?? null,
-          uifReference: c.uifReference ?? null,
-          settings:
-            c.currency || c.timezone || c.payrollPeriod
-              ? { currency: c.currency ?? undefined, timezone: c.timezone ?? undefined, payrollPeriod: c.payrollPeriod ?? undefined }
-              : undefined,
-        },
-      });
-      companyNameToId.set(c.name.trim(), created.id);
-      result.companiesCreated++;
-    }
-
-    // 2. Create employees
-    for (const e of employees) {
-      const companyId = e.companyName ? companyNameToId.get(e.companyName.trim()) : undefined;
-      if (!companyId) {
-        result.errors.push({
-          entity: "employee",
-          message: `Unknown company "${e.companyName}" for ${e.firstName} ${e.lastName}`,
-        });
-        continue;
-      }
-
-      const employeeNumber =
-        e.employeeNumber && e.employeeNumber.trim()
-          ? e.employeeNumber.trim()
-          : `EMP-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-      const existing = await tx.employee.findUnique({
-        where: { companyId_employeeNumber: { companyId, employeeNumber } },
-      });
-      if (existing) {
-        result.errors.push({
-          entity: "employee",
-          message: `Employee number ${employeeNumber} already exists`,
-        });
-        continue;
-      }
-
-      await tx.employee.create({
-        data: {
-          companyId,
-          employeeNumber,
-          firstName: e.firstName,
-          lastName: e.lastName,
-          idNumber: e.idNumber ?? null,
-          phone: e.phone ?? null,
-          email: e.email ?? null,
-          status: e.status,
-          employeeType: e.employeeType,
-          hourlyRate: e.hourlyRate ?? null,
-          monthlySalary: e.monthlySalary ?? null,
-          jobRole: e.jobRole ?? null,
-          psiraNumber: e.psiraNumber ?? null,
-          securityServiceType: e.securityServiceType ?? null,
-          dateOfBirth: e.dateOfBirth ?? null,
-          gender: e.gender ?? null,
-          maritalStatus: e.maritalStatus ?? null,
-          physicalAddress: e.physicalAddress ?? null,
-          postalAddress: e.postalAddress ?? null,
-          postalCode: e.postalCode ?? null,
-          taxNumber: e.taxNumber ?? null,
-          bankName: e.bankName ?? null,
-          bankAccountNumber: e.bankAccountNumber ?? null,
-          bankBranchCode: e.bankBranchCode ?? null,
-          commencementDate: e.commencementDate ?? null,
-          occupation: e.occupation ?? null,
-          placeOfWork: e.placeOfWork ?? null,
-          ordinaryHours: e.ordinaryHours ?? null,
-          ordinaryDays: e.ordinaryDays ?? null,
-          overtimeRate: e.overtimeRate ?? null,
-          payFrequency: e.payFrequency ?? null,
-          leaveEntitlement: e.leaveEntitlement ?? null,
-          noticePeriod: e.noticePeriod ?? null,
-          previousService: e.previousService ?? null,
-          psiraExpiryDate: e.psiraExpiryDate ?? null,
-          nextOfKin1Name: e.nextOfKin1Name ?? null,
-          nextOfKin1Phone: e.nextOfKin1Phone ?? null,
-          nextOfKin2Name: e.nextOfKin2Name ?? null,
-          nextOfKin2Phone: e.nextOfKin2Phone ?? null,
-          nextOfKin3Name: e.nextOfKin3Name ?? null,
-          nextOfKin3Phone: e.nextOfKin3Phone ?? null,
-          residedOutsideSA: e.residedOutsideSA ?? null,
-          militaryPoliceService: e.militaryPoliceService ?? null,
-          criminalInvestigation: e.criminalInvestigation ?? null,
-          mentallyUnstable: e.mentallyUnstable ?? null,
-          trainingCompleted: e.trainingCompleted ?? null,
-        },
-      });
-      result.employeesCreated++;
-    }
-
-    // 3. Create sites
-    for (const s of sites) {
-      const companyId = s.companyName ? companyNameToId.get(s.companyName.trim()) : undefined;
-      if (!companyId) {
-        result.errors.push({
-          entity: "site",
-          message: `Unknown company "${s.companyName}" for site ${s.name}`,
-        });
-        continue;
-      }
-
-      await tx.site.create({
-        data: {
-          companyId,
-          name: s.name,
-          location: s.location ?? null,
-          physicalAddress: s.physicalAddress ?? null,
-          contactPersonName: s.contactPersonName ?? null,
-          contactPersonPhone: s.contactPersonPhone ?? null,
-          contractOrServiceAgreement: s.contractOrServiceAgreement ?? null,
-          serviceType: s.serviceType ?? null,
-        },
-      });
-      result.sitesCreated++;
-    }
-  }, MIGRATION_TRANSACTION_OPTIONS);
-
-  return result;
 }
 
 export async function executeSelfImport(
@@ -537,7 +321,6 @@ export async function executeSelfImport(
   groups: ValidatedEmployeeGroup[] = []
 ): Promise<ImportResult> {
   const result: ImportResult = {
-    companiesCreated: 0,
     employeesCreated: 0,
     sitesCreated: 0,
     groupsCreated: 0,
@@ -545,15 +328,8 @@ export async function executeSelfImport(
     errors: [],
   };
 
-  const companyNameToId = new Map<string, string>();
-  companyNameToId.set("_self", companyId);
-
-  // Assign all to current company
-  const employeesWithCompany = employees.map((e) => ({ ...e, companyName: "_self" }));
-  const sitesWithCompany = sites.map((s) => ({ ...s, companyName: "_self" }));
-
   await prisma.$transaction(async (tx) => {
-    for (const e of employeesWithCompany) {
+    for (const e of employees) {
       const employeeNumber =
         e.employeeNumber && e.employeeNumber.trim()
           ? e.employeeNumber.trim()
@@ -623,7 +399,7 @@ export async function executeSelfImport(
       result.employeesCreated++;
     }
 
-    for (const s of sitesWithCompany) {
+    for (const s of sites) {
       await tx.site.create({
         data: {
           companyId,

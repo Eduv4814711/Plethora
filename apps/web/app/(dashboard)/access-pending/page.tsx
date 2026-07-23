@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { getDefaultRouteForUser, normalizeUserModuleAccess } from "@/lib/permissions";
+import { getDefaultRouteForUser, hasAnyModuleView } from "@/lib/permissions";
 
 export default function AccessPendingPage() {
   const { user, loading } = useAuth();
@@ -11,7 +11,7 @@ export default function AccessPendingPage() {
 
   useEffect(() => {
     if (loading || !user) return;
-    if (user.role === "admin" || normalizeUserModuleAccess(user.moduleAccess)) {
+    if (hasAnyModuleView(user)) {
       router.replace(getDefaultRouteForUser(user));
     }
   }, [loading, user, router]);
@@ -24,7 +24,7 @@ export default function AccessPendingPage() {
     );
   }
 
-  if (user.role === "admin" || normalizeUserModuleAccess(user.moduleAccess)) {
+  if (hasAnyModuleView(user)) {
     return null;
   }
 
@@ -32,7 +32,7 @@ export default function AccessPendingPage() {
     <div className="max-w-lg mx-auto card-wireframe p-8 text-center space-y-4">
       <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">No app access yet</h1>
       <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-        Your account is active, but an administrator has not assigned any application modules to it. You cannot open
+        Your account is active, but the company owner or an access manager has not assigned any application modules to it. You cannot open
         payroll, team, or other areas until they do. If you believe this is a mistake, contact your company admin.
       </p>
       <p className="text-xs text-neutral-500 dark:text-neutral-500">You can still sign out from the profile menu.</p>

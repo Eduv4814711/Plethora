@@ -4,6 +4,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { academyProtect } from "./constants.js";
+import { authMiddleware } from "../../middleware/auth.js";
+import { requireCapability } from "../../middleware/authorization.js";
 import {
   computeInvoiceTotals,
   computeLineTotal,
@@ -63,6 +65,8 @@ function serializeInvoice(inv: Record<string, unknown>) {
 }
 
 export async function academyInvoicesRoutes(app: FastifyInstance) {
+  const editProtect = [authMiddleware, requireCapability("/academy", "edit")];
+  const approveProtect = [authMiddleware, requireCapability("/academy", "approve")];
   app.get("/", { preHandler: academyProtect }, async (request) => {
     const companyId = request.user!.companyId;
     const q = request.query as Record<string, string | undefined>;
@@ -338,7 +342,7 @@ export async function academyInvoicesRoutes(app: FastifyInstance) {
     return { invoice: serializeInvoiceWithLines(invoice) };
   });
 
-  app.post("/:id/issue", { preHandler: academyProtect }, async (request, reply) => {
+  app.post("/:id/issue", { preHandler: approveProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     const { id } = request.params as { id: string };
@@ -379,7 +383,7 @@ export async function academyInvoicesRoutes(app: FastifyInstance) {
     return { invoice: serializeInvoiceWithLines(invoice) };
   });
 
-  app.post("/:id/cancel", { preHandler: academyProtect }, async (request, reply) => {
+  app.post("/:id/cancel", { preHandler: editProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     const { id } = request.params as { id: string };

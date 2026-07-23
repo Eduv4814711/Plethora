@@ -12,8 +12,8 @@ export function EmptyStateCard({
 }: {
   title: string;
   description: string;
-  ctaLabel: string;
-  onCta: () => void;
+  ctaLabel?: string;
+  onCta?: () => void;
   secondaryCtaLabel?: string;
   onSecondaryCta?: () => void;
 }) {
@@ -21,11 +21,11 @@ export function EmptyStateCard({
     <EmptyState
       title={title}
       description={description}
-      action={
+      action={ctaLabel && onCta ? (
         <Button size="sm" onClick={onCta}>
           {ctaLabel}
         </Button>
-      }
+      ) : null}
       secondaryAction={
         secondaryCtaLabel && onSecondaryCta ? (
           <Button variant="secondary" size="sm" onClick={onSecondaryCta}>

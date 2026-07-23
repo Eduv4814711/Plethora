@@ -9,7 +9,7 @@ Production cutover is intentionally **not automatic**. Each company still needs 
 ## Defects addressed
 
 - Leave requests and approved records now have one authoritative application lifecycle.
-- Administrators and HR create submitted applications; approval is a separate state transition with version checking and an audit event.
+- Users with leave create access submit applications; approval requires the separate leave approve capability, version checking, and an audit event.
 - Paid, ordinary unpaid, UIF-supported, injury-on-duty, information-only, and split treatment remain distinct through occurrence and payroll inputs.
 - Payroll approval and unique leave posting are committed in one database transaction.
 - Fixed-salary unpaid/UIF reductions are explicit; hourly unpaid leave is never converted into paid hours.
@@ -84,14 +84,14 @@ Recommended company cutover gates:
 
 ## Permission model
 
-- `hr_payroll`: tenant-wide leave-management access when the role also has explicit employee or payroll module access.
-- Full company admin: equivalent leave-management access when the role also has explicit employee or payroll module access.
-- Supervisor and controller roles are not admitted to the sensitive leave-management routes.
-- No cross-company platform-root permission was introduced.
+- Leave access is granted per user through explicit `view`, `create`, `edit`, `delete`, `approve`, and `export` capabilities on `/employees/leave` or the applicable payroll capability.
+- The most-specific capability assignment wins, so a dedicated leave assignment can narrow broader Team access.
+- The active company owner has the documented owner bypass; all other users are denied capabilities they were not granted.
+- No cross-company bypass was introduced.
 
 ## Tests and verification
 
-Coverage added or retained for strict dates, leap dates, range insertion, overlap detection, payroll paid/unpaid/UIF treatment, versioned snapshots, roster/timesheet behaviour, tenant isolation, controller denial, overnight shift anchoring, balance impact, idempotent applications, attendance blocking, unique payroll posting, and locked-run adjustment creation.
+Coverage added or retained for strict dates, leap dates, range insertion, overlap detection, payroll paid/unpaid/UIF treatment, versioned snapshots, roster/timesheet behaviour, tenant isolation, missing-capability denial, overnight shift anchoring, balance impact, idempotent applications, attendance blocking, unique payroll posting, and locked-run adjustment creation.
 
 Payroll-critical integration tests use PostgreSQL. The production-readiness workflow provisions PostgreSQL, applies every migration, and supplies `TEST_DATABASE_URL`; in CI, absence of that variable is a hard failure rather than a silent skip.
 

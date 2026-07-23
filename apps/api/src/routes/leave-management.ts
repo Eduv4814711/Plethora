@@ -1,16 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
-import { join } from "node:path";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requireAnyCapability, requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
+import { sendPrivateStoredFile } from "../lib/private-download.js";
 import { persistWithUploadedFileRollback, readStreamToBuffer, storage } from "../lib/storage.js";
-import { uploadsRoot } from "../lib/uploads-root.js";
-import { matchesMagicBytes } from "../lib/upload-validation.js";
+import { matchesMagicBytes, sanitizeUploadFilename } from "../lib/upload-validation.js";
 import {
   cancelOrWithdrawLeave,
   accrueConfirmedLeave,
@@ -82,7 +79,8 @@ const employmentTermSchema = z.object({
 const supportedApprovalFlowSchema = z.tuple([
   z.object({
     order: z.literal(1),
-    role: z.literal("hr_payroll"),
+    module: z.literal("/employees/leave"),
+    capability: z.literal("approve"),
     required: z.literal(true),
   }).strict(),
 ]);
@@ -94,7 +92,9 @@ const policyVersionSchema = z.object({
   carryOverLimitMinutes: z.number().int().nonnegative().nullable().optional(), expiryMonths: z.number().int().positive().nullable().optional(),
   noticeDays: z.number().int().nonnegative().nullable().optional(), maxConsecutiveDays: z.number().int().positive().optional(),
   negativeBalanceAllowed: z.boolean().default(false), autoConvertToUnpaid: z.boolean().default(false),
-  approvalFlow: supportedApprovalFlowSchema.default([{ order: 1, role: "hr_payroll", required: true }]),
+  approvalFlow: supportedApprovalFlowSchema.default([
+    { order: 1, module: "/employees/leave", capability: "approve", required: true },
+  ]),
   documentRules: z.record(z.string(), z.unknown()).optional(), calculationRules: z.record(z.string(), z.unknown()).optional(),
 });
 const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
@@ -107,13 +107,10 @@ function sendLeaveError(reply: import("fastify").FastifyReply, error: unknown) {
   throw error;
 }
 
-async function visibleEmployeeIds(user: { companyId: string; sub: string; role: string }): Promise<string[] | undefined> {
-  if (user.role !== "supervisor") return undefined;
-  const assignments = await prisma.siteAssignment.findMany({
-    where: { isActive: true, site: { companyId: user.companyId, supervisorId: user.sub } },
-    select: { employeeId: true },
-  });
-  return [...new Set(assignments.map((assignment) => assignment.employeeId))];
+async function visibleEmployeeIds(_user: { companyId: string; sub: string }): Promise<string[] | undefined> {
+  // Titles never determine record visibility. Tenant-wide module grants currently
+  // cover tenant records; client data remains scoped through its linked profile.
+  return undefined;
 }
 
 function employeeIsVisible(employeeId: string, scope: string[] | undefined): boolean {
@@ -123,11 +120,23 @@ function employeeIsVisible(employeeId: string, scope: string[] | undefined): boo
 export async function leaveManagementRoutes(app: FastifyInstance) {
   const readProtect = [
     authMiddleware,
-    requireRole(["admin", "hr_payroll"], { anyOfModules: ["/employees/leave", "/payroll"] }),
+    requireAnyCapability(["/employees/leave", "/payroll"], "view"),
   ];
   const manageProtect = [
     authMiddleware,
-    requireRole(["admin", "hr_payroll"], { anyOfModules: ["/employees/leave", "/payroll"] }),
+    requireCrudCapability({ anyOfModules: ["/employees/leave", "/payroll"] }),
+  ];
+  const approveProtect = [
+    authMiddleware,
+    requireAnyCapability(["/employees/leave", "/payroll"], "approve"),
+  ];
+  const exportProtect = [
+    authMiddleware,
+    requireAnyCapability(["/employees/leave", "/payroll"], "export"),
+  ];
+  const editProtect = [
+    authMiddleware,
+    requireAnyCapability(["/employees/leave", "/payroll"], "edit"),
   ];
 
   app.get("/types", { preHandler: readProtect }, async (request, reply) => {
@@ -229,7 +238,7 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
     return reply.send(updated);
   });
 
-  app.post("/policies/versions/:id/confirm", { preHandler: manageProtect }, async (request, reply) => {
+  app.post("/policies/versions/:id/confirm", { preHandler: approveProtect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const updated = await prisma.$transaction(async (tx) => {
       const version = await tx.leavePolicyVersion.findFirst({ where: { id, companyId: request.user!.companyId }, include: { leaveType: true } });
@@ -330,7 +339,7 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
     return employeeIsVisible(result.employeeId, scope) ? reply.send(result) : reply.code(403).send({ error: "Forbidden", message: "Employee is outside your supervised sites" });
   });
 
-  app.post("/applications/:id/submit", { preHandler: manageProtect }, async (request, reply) => {
+  app.post("/applications/:id/submit", { preHandler: editProtect }, async (request, reply) => {
     const parsed = z.object({ expectedVersion: z.number().int().positive().optional() }).safeParse(request.body ?? {});
     if (!parsed.success) return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
     try {
@@ -338,7 +347,7 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
     } catch (error) { return sendLeaveError(reply, error); }
   });
 
-  app.post("/applications/:id/decision", { preHandler: manageProtect }, async (request, reply) => {
+  app.post("/applications/:id/decision", { preHandler: approveProtect }, async (request, reply) => {
     const parsed = decisionSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
     try {
@@ -348,7 +357,7 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post("/applications/:id/cancel", { preHandler: manageProtect }, async (request, reply) => {
+  app.post("/applications/:id/cancel", { preHandler: approveProtect }, async (request, reply) => {
     const parsed = cancellationSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
     try {
@@ -382,7 +391,7 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
     const document = await persistWithUploadedFileRollback(
       key,
       () => prisma.$transaction(async (tx) => {
-        const created = await tx.leaveApplicationDocument.create({ data: { applicationId: application.id, documentType, fileUrl: storage.getAssetUrl(key), fileName: data.filename || `document.${ext}`, mimeType: data.mimetype, fileSize: buffer.length, uploadedById: request.user!.sub } });
+        const created = await tx.leaveApplicationDocument.create({ data: { applicationId: application.id, documentType, fileUrl: storage.getAssetUrl(key), fileName: sanitizeUploadFilename(data.filename || `document.${ext}`, data.mimetype), mimeType: data.mimetype, fileSize: buffer.length, uploadedById: request.user!.sub } });
         await tx.leaveAuditEvent.create({ data: { companyId: request.user!.companyId, employeeId: application.employeeId, applicationId: application.id, userId: request.user!.sub, eventType: "DOCUMENT_UPLOADED", newValue: { documentId: created.id, documentType, fileName: created.fileName } } });
         return created;
       }),
@@ -391,7 +400,7 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
     return reply.code(201).send(withoutDocumentStoragePath(document));
   });
 
-  app.post("/documents/:id/verify", { preHandler: manageProtect }, async (request, reply) => {
+  app.post("/documents/:id/verify", { preHandler: approveProtect }, async (request, reply) => {
     const body = z.object({ decision: z.enum(["verify", "reject"]), note: z.string().max(2000).optional() }).safeParse(request.body);
     if (!body.success) return reply.code(400).send({ error: "Validation error", message: body.error.flatten().fieldErrors });
     const document = await prisma.leaveApplicationDocument.findFirst({ where: { id: (request.params as { id: string }).id, application: { companyId: request.user!.companyId } }, include: { application: true } });
@@ -401,7 +410,7 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
     return reply.send(withoutDocumentStoragePath(updated));
   });
 
-  app.get("/documents/:id/download", { preHandler: readProtect }, async (request, reply) => {
+  app.get("/documents/:id/download", { preHandler: exportProtect }, async (request, reply) => {
     const document = await prisma.leaveApplicationDocument.findFirst({
       where: { id: (request.params as { id: string }).id, application: { companyId: request.user!.companyId } },
       include: { application: { select: { employeeId: true } } },
@@ -409,22 +418,15 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
     if (!document) return reply.code(404).send({ error: "Not found", message: "Document not found" });
     const scope = await visibleEmployeeIds(request.user!);
     if (!employeeIsVisible(document.application.employeeId, scope)) return reply.code(403).send({ error: "Forbidden", message: "Employee is outside your supervised sites" });
-    const key = storage.resolveKeyFromUrl(document.fileUrl);
-    if (!key || !key.startsWith("leave-private/")) {
-      return reply.code(409).send({ error: "Legacy document", message: "This legacy document is not stored in the secure leave-document area" });
-    }
-    const filePath = join(uploadsRoot, key);
-    let fileStats;
-    try { fileStats = await stat(filePath); } catch { return reply.code(404).send({ error: "Not found", message: "Stored document is missing" }); }
-    const safeName = document.fileName.replace(/[\u0000-\u001F\u007F"\\]/g, "_") || "leave-document";
-    const asciiName = safeName.replace(/[^\x20-\x7E]/g, "_");
-    const encodedName = encodeURIComponent(safeName).replace(/['()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
-    reply.header("content-type", document.mimeType);
-    reply.header("content-length", String(fileStats.size));
-    reply.header("content-disposition", `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`);
-    reply.header("cache-control", "private, no-store");
-    reply.header("x-content-type-options", "nosniff");
-    return reply.send(createReadStream(filePath));
+    return sendPrivateStoredFile(reply, {
+      storedReference: document.fileUrl,
+      allowedPrefixes: [
+        `leave-private/${request.user!.companyId}`,
+        `leave-sick-notes/${request.user!.companyId}`,
+      ],
+      fileName: document.fileName,
+      mimeType: document.mimeType,
+    });
   });
 
   app.get("/balances", { preHandler: readProtect }, async (request, reply) => {
@@ -500,7 +502,7 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post("/adjustments", { preHandler: manageProtect }, async (request, reply) => {
+  app.post("/adjustments", { preHandler: approveProtect }, async (request, reply) => {
     const parsed = adjustmentSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
     try {
@@ -517,7 +519,7 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
     return reply.send({ data: await listLeaveAdjustments(request.user!.companyId, status?.success ? status.data : undefined) });
   });
 
-  app.post("/adjustments/:id/resolve", { preHandler: manageProtect }, async (request, reply) => {
+  app.post("/adjustments/:id/resolve", { preHandler: approveProtect }, async (request, reply) => {
     const parsed = adjustmentResolutionSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
     try {
@@ -527,7 +529,7 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post("/accruals/run", { preHandler: manageProtect }, async (request, reply) => {
+  app.post("/accruals/run", { preHandler: approveProtect }, async (request, reply) => {
     const parsed = z.object({ asOf: z.string().regex(DATE) }).safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
     try { return reply.send(await accrueConfirmedLeave({ companyId: request.user!.companyId, actorId: request.user!.sub, asOf: parsed.data.asOf })); }

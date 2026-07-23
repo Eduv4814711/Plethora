@@ -33,7 +33,7 @@ export async function transitionEmployeeStatus(
 
   const updated = await prisma.$transaction(async (tx) => {
     const result = await tx.employee.updateMany({
-      where: { id: employeeId, companyId },
+      where: { id: employeeId, companyId, status: employee.status },
       data: { status: newStatus },
     });
     if (result.count > 0 && deactivatesAssignments) {
@@ -47,7 +47,10 @@ export async function transitionEmployeeStatus(
   });
 
   if (updated.count === 0) {
-    return { success: false, error: "Employee not found" };
+    return {
+      success: false,
+      error: "Employee status changed while this request was processed; refresh and try again",
+    };
   }
 
   return { success: true };

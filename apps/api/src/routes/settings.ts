@@ -3,12 +3,13 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { basename } from "node:path";
 import { authMiddleware } from "../middleware/auth.js";
-import { canViewSensitiveCompanyFields, requireAdmin } from "../middleware/rbac.js";
+import { canViewSensitiveCompanyFields, requireCapability, requireOwner } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 import { runAutoRosterForCompany } from "../services/auto-roster.service.js";
 import { parsePayrollCalendarSettings } from "../lib/payroll-calendar-settings.js";
 import { storage } from "../lib/storage.js";
+import { verifyPassword } from "../services/auth.service.js";
 const businessDetailsSchema = z.object({
   legalName: z.string().optional(),
   registrationNumber: z.string().optional(),
@@ -65,6 +66,8 @@ const FACTORY_RESET_MODULES = [
 ] as const;
 
 const factoryResetSchema = z.object({
+  currentPassword: z.string().min(1),
+  confirmation: z.literal("FACTORY RESET"),
   modules: z
     .array(z.enum(FACTORY_RESET_MODULES))
     .optional()
@@ -161,7 +164,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     return reply.send(company);
   });
 
-  app.put("/", { preHandler: [authMiddleware, requireAdmin()] }, async (request, reply) => {
+  app.put("/", { preHandler: [authMiddleware, requireCapability("/settings", "edit")] }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const parsed = updateSettingsSchema.safeParse(request.body);
 
@@ -255,7 +258,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     return reply.send(company);
   });
 
-  app.post("/factory-reset", { preHandler: [authMiddleware, requireAdmin()] }, async (request, reply) => {
+  app.post("/factory-reset", { preHandler: [authMiddleware, requireOwner()] }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
 
@@ -269,6 +272,16 @@ export async function settingsRoutes(app: FastifyInstance) {
     const modules = parsed.data.modules;
     const attendanceEmployeeId = parsed.data.attendanceEmployeeId;
     const attendanceFromDate = parsed.data.attendanceFromDate;
+    const owner = await prisma.user.findFirst({
+      where: { id: userId, companyId, isActive: true },
+      select: { passwordHash: true },
+    });
+    if (!owner || !(await verifyPassword(parsed.data.currentPassword, owner.passwordHash))) {
+      return reply.code(403).send({
+        error: "Forbidden",
+        message: "Current password is incorrect",
+      });
+    }
 
     const company = await prisma.company.findUnique({
       where: { id: companyId },

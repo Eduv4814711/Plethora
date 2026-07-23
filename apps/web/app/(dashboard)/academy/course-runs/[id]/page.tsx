@@ -5,18 +5,20 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
+import { hasCapability } from "@/lib/permissions";
 
 export default function AcademyCourseRunDetailPage() {
   const params = useParams();
   const id = params.id as string;
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canEdit = Boolean(user && hasCapability(user, "/academy", "edit"));
   const [run, setRun] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState("planned");
 
   useEffect(() => {
-    if (!token || !id) return;
+    if (!token || !id || !canEdit) return;
     academyApi
       .getCourseRun(token, id)
       .then((d) => {
@@ -78,7 +80,7 @@ export default function AcademyCourseRunDetailPage() {
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
-      <div className="flex flex-wrap items-end gap-2 rounded-lg border border-neutral-300 p-4">
+      {canEdit && <div className="flex flex-wrap items-end gap-2 rounded-lg border border-neutral-300 p-4">
         <div>
           <label className="label-text mb-1 block">Status</label>
           <select className="input-compact" value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -92,7 +94,7 @@ export default function AcademyCourseRunDetailPage() {
         <button type="button" className="btn-primary px-3 py-1.5 text-xs" onClick={saveStatus}>
           Update status
         </button>
-      </div>
+      </div>}
 
       <p className="text-sm text-neutral-500">
         Start: {String(run.startDate).slice(0, 10)} · End: {String(run.endDate).slice(0, 10)} · Enrolled:{" "}

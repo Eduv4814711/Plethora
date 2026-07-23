@@ -22,6 +22,7 @@ const AuthContext = createContext<AuthState & {
   login: (email: string, password: string) => Promise<void>;
   loginWithResponse: (data: LoginResponse) => void;
   logout: () => void;
+  refreshUser: () => Promise<void>;
   setError: (err: string | null) => void;
 } | null>(null);
 
@@ -143,6 +144,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshUser = async () => {
+    const refreshed = await doRefresh(undefined, "explicit-access-refresh");
+    if (!refreshed) throw new Error("Unable to refresh the current session");
+    scheduleProactiveRefresh();
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -153,6 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         loginWithResponse,
         logout,
+        refreshUser,
         setError,
       }}
     >

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
+import { hasCapability } from "@/lib/permissions";
 import { DateInput } from "@/components/date-input";
 
 interface Course {
@@ -31,7 +32,8 @@ interface CourseRun {
 }
 
 export default function AcademyCourseRunsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canCreate = Boolean(user && hasCapability(user, "/academy", "create"));
   const [runs, setRuns] = useState<CourseRun[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -68,7 +70,7 @@ export default function AcademyCourseRunsPage() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !runCode.trim() || !courseId || !branchId || !startDate || !endDate) return;
+    if (!token || !runCode.trim() || !courseId || !branchId || !startDate || !endDate || !canCreate) return;
     setError(null);
     try {
       await academyApi.createCourseRun(token, {
@@ -99,7 +101,7 @@ export default function AcademyCourseRunsPage() {
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
-      <form onSubmit={create} className="grid gap-3 rounded-lg border border-neutral-300 p-4 sm:grid-cols-2 lg:grid-cols-3">
+      {canCreate && <form onSubmit={create} className="grid gap-3 rounded-lg border border-neutral-300 p-4 sm:grid-cols-2 lg:grid-cols-3">
         <div>
           <label className="label-text mb-1 block">Run code</label>
           <input className="input-compact w-full" value={runCode} onChange={(e) => setRunCode(e.target.value)} />
@@ -141,7 +143,7 @@ export default function AcademyCourseRunsPage() {
             Create run
           </button>
         </div>
-      </form>
+      </form>}
 
       {loading ? (
         <p className="text-sm text-neutral-500">Loading…</p>

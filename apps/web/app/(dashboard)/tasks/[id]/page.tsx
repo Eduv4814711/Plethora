@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { hasCapability } from "@/lib/permissions";
 import {
   getTask,
   updateTask,
@@ -17,7 +18,7 @@ import {
   deleteTaskAttachment,
   addTaskReminder,
   deleteTaskReminder,
-  buildApiUrl,
+  downloadPrivateFile,
   type Task,
   type TaskProject,
   type TaskAttachment,
@@ -48,7 +49,11 @@ const PRIORITY_LABELS: Record<TaskPriority, string> = {
 export default function TaskDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canCreate = Boolean(user && hasCapability(user, "/tasks", "create"));
+  const canEdit = Boolean(user && hasCapability(user, "/tasks", "edit"));
+  const canDelete = Boolean(user && hasCapability(user, "/tasks", "delete"));
+  const canExport = Boolean(user && hasCapability(user, "/tasks", "export"));
   const { confirm, confirmDialog } = useConfirmDialog();
   const id = params.id as string;
 
@@ -128,7 +133,7 @@ export default function TaskDetailPage() {
   }, [task]);
 
   const handleSave = async () => {
-    if (!token || !task) return;
+    if (!token || !task || !canEdit) return;
     setSubmitting(true);
     try {
       const recurrenceRule =
@@ -163,7 +168,7 @@ export default function TaskDetailPage() {
   };
 
   const handleComplete = async () => {
-    if (!token || !task) return;
+    if (!token || !task || !canEdit) return;
     try {
       const updated = await completeTask(token, task.id);
       setTask(updated);
@@ -173,7 +178,7 @@ export default function TaskDetailPage() {
   };
 
   const handleReopen = async () => {
-    if (!token || !task) return;
+    if (!token || !task || !canEdit) return;
     try {
       const updated = await reopenTask(token, task.id);
       setTask(updated);
@@ -183,7 +188,7 @@ export default function TaskDetailPage() {
   };
 
   const handleDelete = async () => {
-    if (!token || !task) return;
+    if (!token || !task || !canDelete) return;
     const confirmed = await confirm({
       title: "Delete task?",
       message: "This removes the task and its activity from the task list.",
@@ -200,7 +205,7 @@ export default function TaskDetailPage() {
 
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !task || !commentBody.trim()) return;
+    if (!token || !task || !canCreate || !commentBody.trim()) return;
     setSubmitting(true);
     try {
       const comment = await addTaskComment(token, task.id, commentBody.trim());
@@ -219,7 +224,7 @@ export default function TaskDetailPage() {
 
   const handleUploadAttachment = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!token || !task || !file) return;
+    if (!token || !task || !canCreate || !file) return;
     setUploading(true);
     try {
       const att = await uploadTaskAttachment(token, task.id, file);
@@ -237,7 +242,7 @@ export default function TaskDetailPage() {
   };
 
   const handleDeleteAttachment = async (attId: string) => {
-    if (!token || !task) return;
+    if (!token || !task || !canDelete) return;
     try {
       await deleteTaskAttachment(token, attId);
       setTask((prev) =>
@@ -252,7 +257,7 @@ export default function TaskDetailPage() {
 
   const handleAddReminder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !task || !remindAt) return;
+    if (!token || !task || !canCreate || !remindAt) return;
     setSubmitting(true);
     try {
       const reminder = await addTaskReminder(token, task.id, new Date(remindAt).toISOString());
@@ -270,7 +275,7 @@ export default function TaskDetailPage() {
   };
 
   const handleDeleteReminder = async (remId: string) => {
-    if (!token || !task) return;
+    if (!token || !task || !canDelete) return;
     try {
       await deleteTaskReminder(token, remId);
       setTask((prev) =>
@@ -320,7 +325,7 @@ export default function TaskDetailPage() {
       )}
 
       <div className="bg-gray-100 border border-gray-300 rounded-lg p-6 mb-6">
-        {editing ? (
+        {editing && canEdit ? (
           <div className="space-y-4">
             <input
               type="text"
@@ -476,10 +481,10 @@ export default function TaskDetailPage() {
                 </div>
               </div>
               <div className="flex gap-2 shrink-0">
-                <button onClick={() => setEditing(true)} className="btn-secondary text-sm">
+                {canEdit && <button onClick={() => setEditing(true)} className="btn-secondary text-sm">
                   Edit
-                </button>
-                {task.status === "done" ? (
+                </button>}
+                {canEdit && (task.status === "done" ? (
                   <button onClick={handleReopen} className="btn-secondary text-sm">
                     Reopen
                   </button>
@@ -487,10 +492,10 @@ export default function TaskDetailPage() {
                   <button onClick={handleComplete} className="btn-primary text-sm">
                     Complete
                   </button>
-                )}
-                <button onClick={handleDelete} className="btn-secondary text-sm text-red-600 border-red-600">
+                ))}
+                {canDelete && <button onClick={handleDelete} className="btn-secondary text-sm text-red-600 border-red-600">
                   Delete
-                </button>
+                </button>}
               </div>
             </div>
 
@@ -513,7 +518,7 @@ export default function TaskDetailPage() {
       {/* Comments */}
       <div className="bg-gray-100 border border-gray-300 rounded-lg p-4 mb-6">
         <h2 className="font-bold text-black mb-3">Comments</h2>
-        <form onSubmit={handleAddComment} className="mb-4">
+        {canCreate && <form onSubmit={handleAddComment} className="mb-4">
           <textarea
             value={commentBody}
             onChange={(e) => setCommentBody(e.target.value)}
@@ -524,7 +529,7 @@ export default function TaskDetailPage() {
           <button type="submit" disabled={submitting || !commentBody.trim()} className="btn-primary mt-2 text-sm">
             Add Comment
           </button>
-        </form>
+        </form>}
         <div className="space-y-3">
           {(task.comments || []).map((c) => (
             <div key={c.id} className="bg-white rounded p-3 border border-gray-200">
@@ -540,7 +545,7 @@ export default function TaskDetailPage() {
       {/* Attachments */}
       <div className="bg-gray-100 border border-gray-300 rounded-lg p-4 mb-6">
         <h2 className="font-bold text-black mb-3">Attachments</h2>
-        <label className="btn-secondary text-sm inline-block cursor-pointer">
+        {canCreate && <label className="btn-secondary text-sm inline-block cursor-pointer">
           {uploading ? "Uploading..." : "Upload file"}
           <input
             type="file"
@@ -548,24 +553,31 @@ export default function TaskDetailPage() {
             onChange={handleUploadAttachment}
             disabled={uploading}
           />
-        </label>
+        </label>}
         <div className="mt-3 space-y-2">
           {(task.attachments || []).map((a) => (
             <div key={a.id} className="flex items-center justify-between bg-white rounded p-2 border border-gray-200">
-              <a
-                href={a.url.startsWith("http") ? a.url : buildApiUrl(a.url)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-blue-600 hover:underline"
-              >
-                {a.filename}
-              </a>
-              <button
+              {canExport && token && a.downloadUrl ? (
+                <button
+                  type="button"
+                  className="text-sm text-blue-600 hover:underline"
+                  onClick={() => {
+                    void downloadPrivateFile(token, a.downloadUrl!, a.filename).catch((error) =>
+                      setError(error instanceof Error ? error.message : "Attachment download failed")
+                    );
+                  }}
+                >
+                  {a.filename}
+                </button>
+              ) : (
+                <span className="text-sm">{a.filename}</span>
+              )}
+              {canDelete && <button
                 onClick={() => handleDeleteAttachment(a.id)}
                 className="text-sm text-red-600 hover:underline"
               >
                 Delete
-              </button>
+              </button>}
             </div>
           ))}
         </div>
@@ -574,7 +586,7 @@ export default function TaskDetailPage() {
       {/* Reminders */}
       <div className="bg-gray-100 border border-gray-300 rounded-lg p-4">
         <h2 className="font-bold text-black mb-3">Reminders</h2>
-        <form onSubmit={handleAddReminder} className="mb-4 flex gap-2 items-end">
+        {canCreate && <form onSubmit={handleAddReminder} className="mb-4 flex gap-2 items-end">
           <input
             type="datetime-local"
             value={remindAt}
@@ -584,19 +596,19 @@ export default function TaskDetailPage() {
           <button type="submit" disabled={submitting || !remindAt} className="btn-primary text-sm">
             Add Reminder
           </button>
-        </form>
+        </form>}
         <div className="space-y-2">
           {(task.reminders || []).map((r) => (
             <div key={r.id} className="flex items-center justify-between bg-white rounded p-2 border border-gray-200">
               <span className="text-sm">
                 {new Date(r.remindAt).toLocaleString()}
               </span>
-              <button
+              {canDelete && <button
                 onClick={() => handleDeleteReminder(r.id)}
                 className="text-sm text-red-600 hover:underline"
               >
                 Delete
-              </button>
+              </button>}
             </div>
           ))}
         </div>

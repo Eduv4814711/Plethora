@@ -1,80 +1,64 @@
 import { describe, expect, it } from "vitest";
-import type { AuthUser } from "../api";
-import { canManageEmployeeDetails, canManageLeave } from "../permissions";
+import type { CapabilityMap } from "../api";
+import {
+  canAccessRoute,
+  canAccessMigrationTools,
+  canManageEmployeeDetails,
+  capabilitiesForPath,
+  hasCapability,
+} from "../permissions";
 
-describe("employee edit permissions", () => {
-  it.each(["/employees", "/payroll"])(
-    "allows HR/payroll with the relevant %s module",
-    (module) => {
-      expect(canManageEmployeeDetails({ role: "hr_payroll", moduleAccess: [module] })).toBe(true);
-    }
-  );
+const subject = (capabilities: CapabilityMap = {}, isOwner = false) => ({
+  isOwner,
+  isActive: true,
+  capabilities,
+});
 
-  it("allows HR/payroll when both relevant modules are assigned", () => {
-    expect(
-      canManageEmployeeDetails({ role: "hr_payroll", moduleAccess: ["/employees", "/payroll"] })
-    ).toBe(true);
+describe("capability access", () => {
+  it("denies missing capabilities by default", () => {
+    expect(hasCapability(subject(), "/employees", "view")).toBe(false);
+    expect(canManageEmployeeDetails(subject())).toBe(false);
   });
 
-  it.each(["admin", "operations_manager", "supervisor", "controller", "client"])(
-    "allows the %s role when Team is explicitly assigned",
-    (role) => {
-      expect(
-        canManageEmployeeDetails({ role, moduleAccess: ["/employees"] })
-      ).toBe(true);
-    }
-  );
-
-  it("denies users without Team or Payroll module access", () => {
-    const user = { role: "supervisor", moduleAccess: ["/attendance"] };
-    expect(canManageEmployeeDetails(user)).toBe(false);
+  it("keeps capabilities explicit and non-hierarchical", () => {
+    const user = subject({ "/employees": ["edit"] });
+    expect(hasCapability(user, "/employees", "edit")).toBe(true);
+    expect(hasCapability(user, "/employees", "view")).toBe(false);
   });
 
-  it("keeps read-only Team and Payroll grants read-only", () => {
-    expect(canManageEmployeeDetails({ role: "hr_payroll", moduleAccess: { "/employees": "read" } })).toBe(false);
-    expect(canManageEmployeeDetails({ role: "hr_payroll", moduleAccess: { "/payroll": "read" } })).toBe(false);
-    expect(canManageEmployeeDetails({ role: "hr_payroll", moduleAccess: { "/employees": "write" } })).toBe(true);
+  it("uses the most-specific submodule assignment", () => {
+    const user = subject({
+      "/employees": ["view", "edit"],
+      "/employees/leave": ["view"],
+    });
+    expect(capabilitiesForPath(user.capabilities, "/employees/leave/requests")).toEqual(["view"]);
+    expect(hasCapability(user, "/employees/leave/requests", "edit")).toBe(false);
   });
 
-  it("does not treat broad full-admin access as an explicit private-data assignment", () => {
-    expect(canManageEmployeeDetails({ role: "admin", moduleAccess: null })).toBe(false);
+  it("allows the owner bypass while the account is active", () => {
+    expect(hasCapability(subject({}, true), "/payroll", "delete")).toBe(true);
+    expect(hasCapability({ ...subject({}, true), isActive: false }, "/payroll", "view")).toBe(false);
   });
 
-  it("accepts the permission map returned by authentication", () => {
-    const user: AuthUser = {
-      id: "user-1",
-      name: "Read-only controller",
-      email: "controller@example.com",
-      role: "controller",
-      companyId: "company-1",
-      moduleAccess: { "/attendance": "read" },
-    };
+  it("allows the leave workspace through explicit Leave or Payroll view access", () => {
+    expect(canAccessRoute("/employees/leave", subject({ "/employees/leave": ["view"] }))).toBe(true);
+    expect(canAccessRoute("/employees/leave", subject({ "/payroll": ["view"] }))).toBe(true);
+    expect(canAccessRoute("/employees/leave", subject({ "/employees": ["view"], "/employees/leave": ["edit"] }))).toBe(false);
+  });
 
-    expect(user.moduleAccess).toEqual({ "/attendance": "read" });
+  it("opens migration tools only through the affected module actions", () => {
+    const teamExporter = subject({ "/employees": ["export"] });
+    expect(canAccessMigrationTools(teamExporter)).toBe(true);
+    expect(canAccessRoute("/settings/migrate", teamExporter)).toBe(true);
+    expect(canAccessRoute("/settings", teamExporter)).toBe(false);
+    expect(canAccessMigrationTools(subject({ "/settings": ["export"] }))).toBe(false);
   });
 });
 
-describe("leave management permissions", () => {
-  it.each(["admin", "operations_manager", "hr_payroll", "supervisor", "controller", "client"])(
-    "allows %s with Team write access",
-    (role) => {
-      expect(canManageLeave({ role, moduleAccess: { "/employees": "write" } })).toBe(true);
-    }
-  );
-
-  it("supports a granular Team > Leave write override", () => {
-    expect(canManageLeave({
-      role: "controller",
-      moduleAccess: { "/employees": "read", "/employees/leave": "write" },
-    })).toBe(true);
-  });
-
-  it("keeps read-only and unrelated module assignments non-mutating", () => {
-    expect(canManageLeave({ role: "hr_payroll", moduleAccess: { "/employees": "read" } })).toBe(false);
-    expect(canManageLeave({ role: "hr_payroll", moduleAccess: { "/attendance": "write" } })).toBe(false);
-  });
-
-  it("preserves the full administrator bypass", () => {
-    expect(canManageLeave({ role: "admin", moduleAccess: null })).toBe(true);
+describe("employee management helpers", () => {
+  it("allows employee edits through Team or Payroll edit capability", () => {
+    expect(canManageEmployeeDetails(subject({ "/employees": ["edit"] }))).toBe(true);
+    expect(canManageEmployeeDetails(subject({ "/payroll": ["edit"] }))).toBe(true);
+    expect(canManageEmployeeDetails(subject({ "/employees": ["view"] }))).toBe(false);
   });
 });

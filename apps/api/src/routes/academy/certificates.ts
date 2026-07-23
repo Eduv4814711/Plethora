@@ -4,6 +4,8 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { getAcademyComplianceGate } from "../../services/academy-compliance.service.js";
+import { authMiddleware } from "../../middleware/auth.js";
+import { requireCapability } from "../../middleware/authorization.js";
 import { academyProtect } from "./constants.js";
 
 const createSchema = z.object({
@@ -66,6 +68,10 @@ async function enforceCertificateGate(companyId: string, learnerId: string, cour
 }
 
 export async function academyCertificatesRoutes(app: FastifyInstance) {
+  const approveProtect = [
+    authMiddleware,
+    requireCapability("/academy", "approve"),
+  ];
   app.get("/", { preHandler: academyProtect }, async (request) => {
     const companyId = request.user!.companyId;
     const q = request.query as Record<string, string | undefined>;
@@ -158,7 +164,7 @@ export async function academyCertificatesRoutes(app: FastifyInstance) {
     return reply.code(204).send();
   });
 
-  app.post("/:id/reprint", { preHandler: academyProtect }, async (request, reply) => {
+  app.post("/:id/reprint", { preHandler: approveProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     const { id } = request.params as { id: string };
@@ -169,7 +175,7 @@ export async function academyCertificatesRoutes(app: FastifyInstance) {
     return { certificate: next };
   });
 
-  app.post("/:id/revoke", { preHandler: academyProtect }, async (request, reply) => {
+  app.post("/:id/revoke", { preHandler: approveProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     const { id } = request.params as { id: string };

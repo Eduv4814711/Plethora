@@ -18,14 +18,14 @@ type CompanySetupModalProps = {
       employeeIdPrefix: string;
     };
   }) => Promise<void>;
-  isAdmin: boolean;
+  isOwner: boolean;
   onLogout: () => void;
 };
 
 export function CompanySetupModal({
   settings,
   onSave,
-  isAdmin,
+  isOwner,
   onLogout,
 }: CompanySetupModalProps) {
   const [form, setForm] = useState({
@@ -79,7 +79,7 @@ export function CompanySetupModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isAdmin) return;
+    if (!isOwner) return;
     setSaving(true);
     setError(null);
     try {
@@ -114,7 +114,7 @@ export function CompanySetupModal({
     }
   };
 
-  if (!isAdmin) {
+  if (!isOwner) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 p-4">
         <div className="card-elevated w-full max-w-md p-8 text-center">
@@ -122,7 +122,7 @@ export function CompanySetupModal({
             Company Setup Required
           </h2>
           <p className="text-sm text-black mb-6">
-            Company setup is required. Please contact your administrator to configure company details.
+            Company setup is required. Please contact the company owner to configure company details.
           </p>
           <button
             type="button"

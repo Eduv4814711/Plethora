@@ -75,11 +75,12 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string;
-  role: string;
-  roleLabel?: string | null;
+  accountType: AccountType;
+  jobTitle: string | null;
+  isActive: boolean;
+  isOwner: boolean;
   companyId: string;
-  /** Explicit module permissions; legacy arrays are treated as write grants. */
-  moduleAccess?: ModulePermissions | string[] | null;
+  capabilities: CapabilityMap;
 }
 
 export interface LoginResponse {
@@ -414,15 +415,24 @@ export type FactoryResetResponse = CompanySettings | { companyDeleted: true };
 export async function factoryReset(
   token: string,
   modules?: FactoryResetModuleId[],
-  options?: { attendanceEmployeeId?: string; attendanceFromDate?: string }
+  options?: {
+    attendanceEmployeeId?: string;
+    attendanceFromDate?: string;
+    currentPassword: string;
+    confirmation: "FACTORY RESET";
+  }
 ): Promise<FactoryResetResponse> {
-  const body: Record<string, unknown> = modules && modules.length > 0 ? { modules } : {};
+  const body: Record<string, unknown> = {
+    ...(modules && modules.length > 0 ? { modules } : {}),
+    currentPassword: options?.currentPassword,
+    confirmation: options?.confirmation,
+  };
   if (options?.attendanceEmployeeId) body.attendanceEmployeeId = options.attendanceEmployeeId;
   if (options?.attendanceFromDate) body.attendanceFromDate = options.attendanceFromDate;
   const res = await fetch(`${API_BASE}/settings/factory-reset`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify(Object.keys(body).length > 0 ? body : {}),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -477,28 +487,82 @@ export async function authFetch(url: string, token: string, init?: RequestInit):
   return res;
 }
 
-// User management (admin only)
-export type UserRole =
-  | "admin"
-  | "operations_manager"
-  | "hr_payroll"
-  | "supervisor"
-  | "controller"
-  | "client";
+function responseDownloadName(response: Response, fallback: string): string {
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      // Fall back to the ASCII filename.
+    }
+  }
+  const ascii = disposition.match(/filename="([^"]+)"/i)?.[1];
+  return ascii || fallback;
+}
+
+export async function downloadPrivateFile(
+  token: string,
+  downloadUrl: string,
+  fallbackFileName: string
+): Promise<void> {
+  const response = await authFetch(
+    downloadUrl.startsWith("/") ? downloadUrl : `/${downloadUrl}`,
+    token
+  );
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(
+      (error as { message?: string }).message ||
+        (error as { error?: string }).error ||
+        "File download failed"
+    );
+  }
+  const objectUrl = URL.createObjectURL(await response.blob());
+  try {
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = responseDownloadName(response, fallbackFileName);
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+// Capability-based user access management
+export type AccountType = "staff" | "client";
+export type Capability =
+  | "view"
+  | "view_sensitive"
+  | "create"
+  | "edit"
+  | "delete"
+  | "approve"
+  | "export"
+  | "manage_access";
+export type CapabilityMap = Record<string, Capability[]>;
 
 export interface UserListItem {
   id: string;
   name: string;
   email: string;
-  role: UserRole;
-  roleLabel?: string | null;
+  accountType: AccountType;
+  jobTitle: string | null;
+  isActive: boolean;
+  isOwner: boolean;
   companyId: string;
   createdAt: string;
-  moduleAccess?: unknown;
+  capabilities: CapabilityMap;
   setupLink?: string;
 }
-export type ModulePermission = "read" | "write";
-export type ModulePermissions = Record<string, ModulePermission>;
+
+export interface CapabilityDefinition {
+  path: string;
+  label: string;
+  capabilities: Capability[];
+}
 
 export async function listUsers(token: string): Promise<{ data: UserListItem[]; total: number }> {
   const res = await authFetch("/users", token);
@@ -507,6 +571,16 @@ export async function listUsers(token: string): Promise<{ data: UserListItem[]; 
     throw new Error(err.message || "Failed to fetch users");
   }
   return res.json();
+}
+
+export async function getCapabilityCatalog(token: string): Promise<CapabilityDefinition[]> {
+  const res = await authFetch("/users/capability-catalog", token);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(apiErrorMessage(err, "Failed to fetch capability catalog"));
+  }
+  const body = (await res.json()) as { data: CapabilityDefinition[] };
+  return body.data;
 }
 
 export interface TeamMemberCandidate {
@@ -542,9 +616,10 @@ export async function createUser(
     email: string;
     password?: string;
     sendSetupLink?: boolean;
-    role: UserRole;
-    roleLabel?: string | null;
-    moduleAccess?: ModulePermissions | string[] | null;
+    accountType: AccountType;
+    jobTitle?: string | null;
+    isActive?: boolean;
+    capabilities: CapabilityMap;
   }
 ): Promise<UserListItem> {
   const res = await authFetch("/users", token, {
@@ -562,7 +637,15 @@ export async function createUser(
 export async function updateUser(
   token: string,
   id: string,
-  data: Partial<{ name: string; email: string; password: string; role: UserRole; roleLabel: string | null; moduleAccess: ModulePermissions | string[] | null }>
+  data: Partial<{
+    name: string;
+    email: string;
+    password: string;
+    accountType: AccountType;
+    jobTitle: string | null;
+    isActive: boolean;
+    capabilities: CapabilityMap;
+  }>
 ): Promise<UserListItem> {
   const res = await authFetch(`/users/${id}`, token, {
     method: "PUT",
@@ -579,11 +662,26 @@ export async function deleteUser(token: string, id: string): Promise<void> {
   const res = await authFetch(`/users/${id}`, token, { method: "DELETE" });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to delete user");
+    throw new Error(err.message || "Failed to deactivate user");
   }
 }
 
-// Companies (multi-tenant registration)
+export async function transferCompanyOwnership(
+  token: string,
+  newOwnerUserId: string,
+  currentPassword: string
+): Promise<void> {
+  const res = await authFetch("/users/transfer-ownership", token, {
+    method: "POST",
+    body: JSON.stringify({ newOwnerUserId, currentPassword }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(apiErrorMessage(err, "Failed to transfer ownership"));
+  }
+}
+
+// Current tenant company
 export interface CompanyListItem {
   id: string;
   name: string;
@@ -591,41 +689,11 @@ export interface CompanyListItem {
   updatedAt: string;
 }
 
-export interface CreateCompanyPayload {
-  name: string;
-  admin: { name: string; email: string; password: string };
-}
-
-export interface CreateCompanyResponse extends CompanyListItem {
-  adminUser: { id: string; name: string; email: string; role: string };
-}
-
 export async function listCompanies(token: string): Promise<{ data: CompanyListItem[]; total: number; limit: number; offset: number }> {
   const res = await authFetch("/companies", token);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || err.error || "Failed to fetch companies");
-  }
-  return res.json();
-}
-
-export async function createCompany(token: string, payload: CreateCompanyPayload): Promise<CreateCompanyResponse> {
-  const res = await authFetch("/companies", token, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    const msg = err?.message ?? err?.error ?? "Failed to create company";
-    const messageStr =
-      typeof msg === "string"
-        ? msg
-        : typeof msg === "object" && msg !== null
-          ? Object.entries(msg)
-              .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
-              .join("; ")
-          : "Failed to create company";
-    throw new Error(messageStr);
   }
   return res.json();
 }
@@ -769,14 +837,12 @@ export async function getWhatsAppTemplates(token: string): Promise<{ data: { nam
 
 // Migration / bulk import
 export interface MigrationPreviewResponse {
-  companies: { validCount: number; valid: unknown[]; errors: { row: number; field: string; value: string; message: string }[] };
   employees: { validCount: number; valid: unknown[]; errors: { row: number; field: string; value: string; message: string }[] };
   sites: { validCount: number; valid: unknown[]; errors: { row: number; field: string; value: string; message: string }[] };
   groups: { validCount: number; valid: unknown[]; errors: { row: number; field: string; value: string; message: string }[] };
 }
 
 export interface MigrationImportResult {
-  companiesCreated: number;
   employeesCreated: number;
   sitesCreated: number;
   groupsCreated: number;
@@ -786,12 +852,10 @@ export interface MigrationImportResult {
 
 export async function downloadMigrationTemplate(
   token: string,
-  type: "company" | "employees" | "sites" | "groups"
+  type: "employees" | "sites" | "groups"
 ): Promise<void> {
   const filename =
-    type === "company"
-      ? "company-import-template.csv"
-      : type === "employees"
+    type === "employees"
         ? "employees-import-template.csv"
         : type === "sites"
           ? "sites-import-template.csv"
@@ -854,10 +918,9 @@ export async function exportEmployeeGroups(token: string): Promise<void> {
 
 export async function migrationPreview(
   token: string,
-  files: { companies?: File; employees?: File; sites?: File; groups?: File }
+  files: { employees?: File; sites?: File; groups?: File }
 ): Promise<MigrationPreviewResponse> {
   const formData = new FormData();
-  if (files.companies) formData.append("companies", files.companies);
   if (files.employees) formData.append("employees", files.employees);
   if (files.sites) formData.append("sites", files.sites);
   if (files.groups) formData.append("groups", files.groups);
@@ -891,28 +954,6 @@ export async function migrationImport(
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || err.error || "Import failed");
-  }
-  return res.json();
-}
-
-export async function migrationAdminBulkCreate(
-  token: string,
-  files: { companies: File; employees?: File; sites?: File; groups?: File }
-): Promise<MigrationImportResult> {
-  const formData = new FormData();
-  formData.append("companies", files.companies);
-  if (files.employees) formData.append("employees", files.employees);
-  if (files.sites) formData.append("sites", files.sites);
-  if (files.groups) formData.append("groups", files.groups);
-
-  const res = await fetch(`${API_BASE}/migrations/admin/bulk-create`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-    body: formData,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || err.error || "Bulk create failed");
   }
   return res.json();
 }
@@ -967,7 +1008,7 @@ export interface TaskAttachment {
   filename: string;
   mimeType: string;
   size: number;
-  url: string;
+  downloadUrl?: string;
 }
 
 export interface TaskReminder {

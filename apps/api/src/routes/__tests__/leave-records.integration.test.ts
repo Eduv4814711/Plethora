@@ -36,12 +36,16 @@ describe.runIf(dbReady)("leave records API (integration)", () => {
         name: "Leave Admin",
         email: `leave-admin-${runId}@plethora-test.local`,
         passwordHash: await hashPassword("leave-test-password-32chars!!"),
-        role: "admin",
+        capabilities: {
+          "/employees/leave": ["view", "create", "edit", "delete", "approve", "export"],
+          "/payroll": ["view", "create", "edit", "delete", "approve", "export"],
+        },
       },
     });
+    await prisma.company.update({ where: { id: companyId }, data: { ownerUserId: user.id } });
 
     accessToken = jwt.sign(
-      { sub: user.id, email: user.email, companyId, role: user.role },
+      { sub: user.id, email: user.email, companyId },
       config.jwt.accessSecret,
       { expiresIn: "1h" }
     );

@@ -6,7 +6,7 @@ import {
   markNotificationRead,
 } from "./notifications.service.js";
 
-/** In-app notifications are scoped to the authenticated user — any logged-in role. */
+/** In-app notifications are scoped to the authenticated user. */
 export async function notificationsRoutes(app: FastifyInstance) {
   app.get("/", { preHandler: [authMiddleware] }, async (request, reply) => {
     const user = request.user!;

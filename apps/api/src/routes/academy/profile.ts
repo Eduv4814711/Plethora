@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { academyProtect } from "./constants.js";
+import { hasCapability } from "../../lib/capabilities.js";
 
 const profileSchema = z
   .object({
@@ -85,8 +86,8 @@ export async function academyProfileRoutes(app: FastifyInstance) {
   });
 
   app.patch("/", { preHandler: academyProtect }, async (request, reply) => {
-    if (request.user?.role !== "admin") {
-      return reply.code(403).send({ error: "Forbidden", message: "Only administrators may edit academy profile" });
+    if (!hasCapability(request.user!, "/academy", "edit")) {
+      return reply.code(403).send({ error: "Forbidden", message: "Academy edit access is required" });
     }
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
-import { canManageSitesModule } from "@/lib/permissions";
+import { hasCapability } from "@/lib/permissions";
 import { rosterSiteRulesLines } from "@/lib/roster-site-rules-defaults";
 import { buildSiteRosterReadinessHints } from "@/lib/roster-readiness-hints";
 import { useConfirmDialog } from "@/components/ui";
@@ -127,7 +127,10 @@ export default function SiteDetailPage() {
   const [staffingSaving, setStaffingSaving] = useState(false);
   const [staffingError, setStaffingError] = useState<string | null>(null);
   const [staffingSavedFlash, setStaffingSavedFlash] = useState(false);
-  const canManage = user ? canManageSitesModule(user) : false;
+  const canCreate = user ? hasCapability(user, "/sites", "create") : false;
+  const canEdit = user ? hasCapability(user, "/sites", "edit") : false;
+  const canDelete = user ? hasCapability(user, "/sites", "delete") : false;
+  const canMovePostGuards = canCreate && canDelete;
 
   const refresh = () => {
     if (!token || !siteId) return;
@@ -157,7 +160,7 @@ export default function SiteDetailPage() {
   const hasNightPost = site?.posts.some((p) => p.shiftType === "night") ?? false;
 
   const saveSiteShiftStaffing = async () => {
-    if (!token || !site) return;
+    if (!token || !site || !canEdit) return;
     setStaffingError(null);
     const rosterableCount = site.assignedGuards.filter((a) =>
       ROSTERABLE_GUARD_STATUSES.includes(a.employee.status as (typeof ROSTERABLE_GUARD_STATUSES)[number])
@@ -220,7 +223,7 @@ export default function SiteDetailPage() {
   const handleDrop = async (e: React.DragEvent, postId: string) => {
     e.preventDefault();
     setDragOverPost(null);
-    if (!draggedGuard || !token) return;
+    if (!draggedGuard || !token || !canMovePostGuards) return;
 
     const { guard, source } = draggedGuard;
     setDraggedGuard(null);
@@ -260,7 +263,7 @@ export default function SiteDetailPage() {
   };
 
   const handleRemoveFromPost = async (postId: string, employeeId: string) => {
-    if (!token) return;
+    if (!token || !canDelete) return;
     await authFetch(`/sites/${siteId}/posts/${postId}/guards/${employeeId}`, token, { method: "DELETE" });
     refresh();
   };
@@ -354,7 +357,7 @@ export default function SiteDetailPage() {
           <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 mb-4 max-w-2xl">
             Text here appears on the shift sheet and PDF for this site (e.g. female-only day shift, male-only night shift). Leave blank to use the default contract lines.
           </p>
-          <SiteRosterSheetFields site={site} siteId={siteId} token={token!} canManage={canManage} onSaved={refresh} />
+          <SiteRosterSheetFields site={site} siteId={siteId} token={token!} canManage={canEdit} onSaved={refresh} />
         </div>
 
         <div className="border-t border-neutral-200 dark:border-neutral-700 pt-5">
@@ -362,7 +365,7 @@ export default function SiteDetailPage() {
             site={site}
             siteId={siteId}
             token={token!}
-            canManage={canManage}
+            canManage={canEdit}
             onUpdated={refresh}
           />
         </div>
@@ -380,7 +383,7 @@ export default function SiteDetailPage() {
               site={site}
               siteId={siteId}
               token={token!}
-              canManage={canManage}
+              canManage={canEdit}
               onSaved={refresh}
             />
           </div>
@@ -398,7 +401,7 @@ export default function SiteDetailPage() {
                   .
                 </p>
               </div>
-              {canManage && (
+              {canCreate && (
                 <button
                   onClick={() => setShowAddPost(!showAddPost)}
                   className="btn-primary flex items-center gap-2 text-sm py-2"
@@ -411,7 +414,7 @@ export default function SiteDetailPage() {
               )}
             </div>
 
-            {showAddPost && canManage && (
+            {showAddPost && canCreate && (
               <div className="mb-6">
                 <AddPostForm
                   siteId={siteId}
@@ -433,7 +436,7 @@ export default function SiteDetailPage() {
                 shiftType="day"
                 guardsRequired={dayGuardsRequired}
                 onGuardsRequiredChange={setDayGuardsRequired}
-                canManage={canManage}
+                canManage={canEdit}
                 readOnlyValue={site.rosterDayShiftGuardsRequired ?? 1}
               />
             )}
@@ -447,7 +450,9 @@ export default function SiteDetailPage() {
                 token={token!}
                 guards={getGuardsInPost(post.id)}
                 isDragOver={dragOverPost === post.id}
-                canManage={canManage}
+                canEdit={canEdit}
+                canDelete={canDelete}
+                canAssignGuards={canMovePostGuards}
                 staffingEditor={staffingEditor}
                 guardsRequired={staffingEditor === "day" ? dayGuardsRequired : nightGuardsRequired}
                 onGuardsRequiredChange={
@@ -466,7 +471,7 @@ export default function SiteDetailPage() {
                 onDragEnd={handleDragEnd}
                 onDelete={refresh}
                 onError={(msg) => setDeleteError(msg || null)}
-                onEdit={canManage ? (nextPost) => setEditingPost(nextPost) : undefined}
+                onEdit={canEdit ? (nextPost) => setEditingPost(nextPost) : undefined}
               />
             );
             })}
@@ -475,13 +480,13 @@ export default function SiteDetailPage() {
                 shiftType="night"
                 guardsRequired={nightGuardsRequired}
                 onGuardsRequiredChange={setNightGuardsRequired}
-                canManage={canManage}
+                canManage={canEdit}
                 readOnlyValue={site.rosterNightShiftGuardsRequired ?? 1}
               />
             )}
           </div>
 
-            {(canManage || site.posts.length > 0 || !hasDayPost || !hasNightPost) && (
+            {(canEdit || site.posts.length > 0 || !hasDayPost || !hasNightPost) && (
               <div className="mt-5 space-y-3 border-t border-neutral-200 dark:border-neutral-700 pt-5">
                 {staffingError && (
                   <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
@@ -507,7 +512,7 @@ export default function SiteDetailPage() {
                     ))}
                   </ul>
                 )}
-                {canManage && (
+                {canEdit && (
                   <>
                     <p className="text-[11px] text-neutral-400 dark:text-neutral-500">
                       Set guards required per shift on each post. Use 0 for day-only or night-only sites.
@@ -525,7 +530,7 @@ export default function SiteDetailPage() {
               </div>
             )}
 
-            {site.posts.length === 0 && !canManage && (
+            {site.posts.length === 0 && (
               <div className="card-wireframe text-center py-12 px-6 rounded-lg">
                 <div className="w-14 h-14 mx-auto rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-4">
                   <svg className="w-7 h-7 text-neutral-500 dark:text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -540,7 +545,7 @@ export default function SiteDetailPage() {
                   </Link>
                   .
                 </p>
-                {canManage && (
+                {canCreate && (
                   <button onClick={() => setShowAddPost(true)} className="mt-4 btn-primary">Add Post</button>
                 )}
               </div>
@@ -548,7 +553,7 @@ export default function SiteDetailPage() {
           </div>
       </div>
 
-      {editingPost && canManage && (
+      {editingPost && canEdit && (
         <EditPostModal
           post={editingPost}
           siteId={siteId}
@@ -1349,7 +1354,7 @@ function SiteAutoRosterSettings({
                   <span className="text-sm text-neutral-500">%</span>
                 </div>
                 <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-1">
-                  Default 100%. Lower values auto-apply partial coverage; otherwise plans queue for manager review.
+                  Default 100%. Lower values auto-apply partial coverage; otherwise plans queue for roster approval review.
                 </p>
               </div>
             </div>
@@ -1520,7 +1525,9 @@ function PostCard({
   token,
   guards,
   isDragOver,
-  canManage,
+  canEdit,
+  canDelete,
+  canAssignGuards,
   onDragOver,
   onDragLeave,
   onDrop,
@@ -1540,7 +1547,9 @@ function PostCard({
   token: string;
   guards: Guard[];
   isDragOver: boolean;
-  canManage: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  canAssignGuards: boolean;
   onDragOver: (e: React.DragEvent) => void;
   onDragLeave: () => void;
   onDrop: (e: React.DragEvent) => void;
@@ -1562,12 +1571,12 @@ function PostCard({
 
   return (
     <div
-      onDragOver={canManage ? onDragOver : undefined}
-      onDragLeave={canManage ? onDragLeave : undefined}
-      onDrop={canManage ? onDrop : undefined}
-      onClick={canManage && onEdit ? () => onEdit(post) : undefined}
+      onDragOver={canAssignGuards ? onDragOver : undefined}
+      onDragLeave={canAssignGuards ? onDragLeave : undefined}
+      onDrop={canAssignGuards ? onDrop : undefined}
+      onClick={canEdit && onEdit ? () => onEdit(post) : undefined}
       onKeyDown={
-        canManage && onEdit
+        canEdit && onEdit
           ? (e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
@@ -1576,14 +1585,14 @@ function PostCard({
             }
           : undefined
       }
-      role={canManage && onEdit ? "button" : undefined}
-      tabIndex={canManage && onEdit ? 0 : undefined}
+      role={canEdit && onEdit ? "button" : undefined}
+      tabIndex={canEdit && onEdit ? 0 : undefined}
       className={`p-4 rounded-lg border-2 transition-all duration-200 ${
         isDragOver
           ? "border-neutral-400 dark:border-neutral-500 bg-neutral-50 dark:bg-neutral-800/50 ring-2 ring-neutral-300 dark:ring-neutral-600 ring-offset-2 dark:ring-offset-neutral-900"
           : "border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/50 hover:border-neutral-300 dark:hover:border-neutral-600"
       } ${
-        canManage && onEdit ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-neutral-600 focus:ring-offset-2 dark:focus:ring-offset-neutral-900" : ""
+        canEdit && onEdit ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-neutral-600 focus:ring-offset-2 dark:focus:ring-offset-neutral-900" : ""
       }`}
     >
       {confirmDialog}
@@ -1609,7 +1618,7 @@ function PostCard({
           <p className="text-xs text-neutral-500 dark:text-neutral-400">{shiftLabel}</p>
         </div>
         </div>
-        {canManage && (
+        {canDelete && (
           <button
             onClick={async (e) => {
               e.stopPropagation();
@@ -1653,7 +1662,7 @@ function PostCard({
             inputId={`${staffingInputId}-${post.id}`}
             value={guardsRequired}
             onChange={onGuardsRequiredChange}
-            canManage={canManage}
+            canManage={canEdit}
             readOnlyValue={staffingReadOnly}
             shiftType={staffingEditor}
           />
@@ -1676,10 +1685,10 @@ function PostCard({
               <GuardChip
                 key={g.id}
                 guard={g}
-                draggable={canManage}
+                draggable={canAssignGuards}
                 onDragStart={() => onDragStart(g)}
                 onDragEnd={onDragEnd}
-                onRemove={canManage ? () => onRemoveGuard(g.id) : undefined}
+                onRemove={canDelete ? () => onRemoveGuard(g.id) : undefined}
               />
             ))}
           </div>

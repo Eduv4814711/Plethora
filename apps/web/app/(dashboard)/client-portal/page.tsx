@@ -9,7 +9,7 @@ import {
   listClients,
   type Incident,
 } from "@/lib/msr-api";
-import { isFullAdmin } from "@/lib/permissions";
+import { hasCapability } from "@/lib/permissions";
 import { AlertBanner, Badge, PageHeader } from "@/components/ui";
 
 interface ClientSite {
@@ -54,7 +54,7 @@ export default function ClientPortalPage() {
 
   useEffect(() => {
     if (!token || !user) return;
-    if (isFullAdmin(user)) {
+    if (user.accountType === "staff" && hasCapability(user, "/client-portal", "view")) {
       listClients(token)
         .then((list) => {
           setAdminClients(list.map((c) => ({ id: c.id, name: c.name })));
@@ -67,7 +67,7 @@ export default function ClientPortalPage() {
   }, [token, user, loadPortal]);
 
   useEffect(() => {
-    if (!token || !user || !isFullAdmin(user) || !previewClientId) return;
+    if (!token || !user || user.accountType !== "staff" || !hasCapability(user, "/client-portal", "view") || !previewClientId) return;
     loadPortal(previewClientId);
   }, [token, user, previewClientId, loadPortal]);
 
@@ -85,13 +85,13 @@ export default function ClientPortalPage() {
       <PageHeader
         title="Client portal"
         description={
-          user?.role === "client"
+          user?.accountType === "client"
             ? "Your sites, attendance summary, and incident updates."
             : "Preview of what clients see in their portal."
         }
       />
 
-      {user && isFullAdmin(user) && adminClients.length > 0 && (
+      {user && user.accountType === "staff" && hasCapability(user, "/client-portal", "view") && adminClients.length > 0 && (
         <div className="mb-4">
           <label className="label-text block mb-1">Preview as client</label>
           <select

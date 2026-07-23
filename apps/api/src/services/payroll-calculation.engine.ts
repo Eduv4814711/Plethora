@@ -24,6 +24,11 @@ export const DEFAULT_SUNDAY_MULTIPLIER = 2.0;
 export const DEFAULT_PUBLIC_HOLIDAY_MULTIPLIER = 2.0;
 /** Matches leave day conversion in timesheet aggregation (leave hours / 8). */
 export const STANDARD_LEAVE_DAY_HOURS = 8;
+const PAY_PERIODS_PER_YEAR: Record<PayPeriod, number> = {
+  weekly: 52,
+  biweekly: 26,
+  monthly: 12,
+};
 
 export type EmployeeForPayroll = Employee & {
   grade: PayGrade | null;
@@ -56,6 +61,15 @@ export interface PayrollCalculationContext {
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/** Convert a contractual monthly salary to the amount payable for this run. */
+export function monthlySalaryForPayPeriod(
+  monthlySalary: number,
+  payPeriod: PayPeriod
+): number {
+  if (!Number.isFinite(monthlySalary) || monthlySalary < 0) return Number.NaN;
+  return round2((monthlySalary * 12) / PAY_PERIODS_PER_YEAR[payPeriod]);
 }
 
 function resolvePayRules(
@@ -181,15 +195,24 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
     const isFixedMonthly = monthlySalary > 0;
 
     if (isFixedMonthly) {
+      const periodSalary = monthlySalaryForPayPeriod(monthlySalary, ctx.payPeriod);
       const standardMonthlyHours = emp.employeeType === "office" ? 195 : 208;
+      const standardPeriodHours =
+        (standardMonthlyHours * 12) / PAY_PERIODS_PER_YEAR[ctx.payPeriod];
       const unpaidLeaveReduction = round2(
-        Math.min(monthlySalary, (agg?.unpaidLeaveHours ?? 0) * (monthlySalary / standardMonthlyHours))
+        Math.min(
+          periodSalary,
+          (agg?.unpaidLeaveHours ?? 0) * (periodSalary / standardPeriodHours)
+        )
       );
       const uifLeaveReduction = round2(
-        Math.min(monthlySalary - unpaidLeaveReduction, (agg?.uifLeaveHours ?? 0) * (monthlySalary / standardMonthlyHours))
+        Math.min(
+          periodSalary - unpaidLeaveReduction,
+          (agg?.uifLeaveHours ?? 0) * (periodSalary / standardPeriodHours)
+        )
       );
-      grossPay = round2(monthlySalary - unpaidLeaveReduction - uifLeaveReduction);
-      earningsLines.push({ name: "Basic Salary", amount: monthlySalary });
+      grossPay = round2(periodSalary - unpaidLeaveReduction - uifLeaveReduction);
+      earningsLines.push({ name: "Basic Salary", amount: periodSalary });
       if (unpaidLeaveReduction > 0) {
         earningsLines.push({ name: "Unpaid Leave Reduction", amount: -unpaidLeaveReduction });
       }
@@ -378,6 +401,78 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
   }
 
   return { lines, employeeSnapshots };
+}
+
+export interface PayrollLineValidationIssue {
+  employeeId: string;
+  field: string;
+  value: number;
+  message: string;
+}
+
+/**
+ * Payroll values are payment instructions. Never persist a line containing a
+ * non-finite/negative value or a deduction total that would produce negative
+ * net pay.
+ */
+export function validateComputedPayrollLines(
+  lines: PayrollComputedLine[]
+): PayrollLineValidationIssue[] {
+  const issues: PayrollLineValidationIssue[] = [];
+  const nonNegativeFields: Array<keyof PayrollComputedLine> = [
+    "hoursWorked",
+    "overtimeHours",
+    "basePay",
+    "overtimePay",
+    "sundayPay",
+    "publicHolidayPay",
+    "grossPay",
+    "deductions",
+    "netPay",
+    "tax",
+    "taxableEarnings",
+    "uifEmployee",
+    "uifEmployer",
+    "sdl",
+  ];
+
+  for (const line of lines) {
+    for (const field of nonNegativeFields) {
+      const value = line[field];
+      if (typeof value !== "number") continue;
+      if (!Number.isFinite(value) || value < 0) {
+        issues.push({
+          employeeId: line.employeeId,
+          field,
+          value,
+          message: `${field} must be a finite, non-negative amount`,
+        });
+      }
+    }
+    if (
+      Number.isFinite(line.grossPay) &&
+      Number.isFinite(line.deductions) &&
+      line.deductions > line.grossPay
+    ) {
+      issues.push({
+        employeeId: line.employeeId,
+        field: "deductions",
+        value: line.deductions,
+        message: "Deductions cannot exceed gross pay",
+      });
+    }
+    for (const deduction of line.deductionLines) {
+      if (!Number.isFinite(deduction.amount) || deduction.amount < 0) {
+        issues.push({
+          employeeId: line.employeeId,
+          field: `deduction:${deduction.name}`,
+          value: deduction.amount,
+          message: "Deduction line must be a finite, non-negative amount",
+        });
+      }
+    }
+  }
+  return issues;
 }
 
 export function buildPayrollCalculationSnapshot(params: {

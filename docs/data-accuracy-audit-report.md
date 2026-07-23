@@ -6,6 +6,42 @@
 
 ---
 
+## Release re-verification — 23 July 2026
+
+This section supersedes the historical status assessments below for the current
+release candidate. The older findings remain in this document as audit history.
+
+- All 26 migrations applied successfully to a new empty PostgreSQL database.
+- The complete API suite passed: 77 test files and 522 tests, including payroll
+  lifecycle, tenant isolation, capability delegation, leave, rostering,
+  attendance, and private-file access.
+- The clean database audit reported zero findings.
+- API and web production builds passed, and the local readiness endpoint
+  reported `ready`.
+- Payroll now freezes pay frequency per run, enforces one item per employee,
+  blocks invalid payment values, serializes overlapping run creation, and
+  performs paid-state/SDL tracking atomically.
+- Authorization is capability-based and deny-by-default. Job titles and account
+  types do not grant access.
+
+The current company database has no critical or high findings, but the following
+medium findings must be reconciled before approving the first live payroll:
+
+| Finding | Count |
+|---------|------:|
+| Timesheet rows whose source shift/attendance record is missing | 32 |
+| Duplicate legacy leave groups for the same employee/date/type | 5 |
+| Legacy leave records overlapping a working roster shift | 70 |
+| Site-timesheet periods not aligned to the configured 26–25 cycle | 52 |
+| Reviewed/approved working rows missing Duty ON/OFF OB numbers | At least 500 |
+
+**Release decision:** the application code is suitable for staging deployment.
+Production payroll go-live remains gated on an owner-reviewed data reconciliation,
+a verified database restore point, and a tested backup/restore procedure for the
+uploads volume.
+
+---
+
 ## Executive Summary
 
 | Module | RAG Status | Notes |
@@ -17,7 +53,7 @@
 | Dashboard / Alerts | **Green** (post-fix) | Payroll readiness uses pay period; pending metrics clarified |
 | Leave / Employees / Sites | **Amber** | No duplicate prevention on LeaveRecord; pay rate nullable at DB |
 | Academy / Billing | **Green** | Isolated subdomain; AcademyInvoice has proper constraints |
-| Security / RBAC | **Green** | API enforces roles; tenant isolation integration tests exist |
+| Security / capability access | **Green** | API enforces live per-module capabilities; tenant isolation integration tests exist |
 
 **Overall:** Data accuracy for core payroll chain is **substantially trustworthy** after fixes to shift-type inference and payroll-readiness period alignment. Remaining risks are documented below with recommended follow-ups.
 
@@ -225,11 +261,11 @@ DATABASE_URL="postgresql://..." npm run db:audit -- --category orphans
 | Exceptions | Open CRITICAL blocks payroll | `attendance-payroll.mjs` |
 | Reports/Exports | CSV vs UI parity | Manual test plan needed |
 | Academy | Separate billing models | Schema constraints OK |
-| RBAC | API middleware | `tenant-isolation.integration.test.ts` |
+| Capability access | API middleware | `tenant-isolation.integration.test.ts` |
 
 ### Phase 6 — Security
 
-- API routes use `authMiddleware` + `requireRole` — verified on dashboard, payroll, rosters.
+- API routes use `authMiddleware` plus explicit capability guards — verified on dashboard, payroll, and rosters.
 - Frontend `permissions.ts` is not sole control — API enforces.
 - Client portal isolation tested in `client-isolation.test.ts`.
 

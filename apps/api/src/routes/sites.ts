@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 import { runAutoRosterForSite } from "../services/auto-roster.service.js";
@@ -175,11 +175,11 @@ const assignGuardSchema = z.object({
 export async function sitesRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor"], { module: "/sites" }),
+    requireCrudCapability({ module: "/sites" }),
   ];
   const readProtect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], {
+    requireCrudCapability({
       // Attendance work queues and exception filters need site names, while
       // create/update permissions remain restricted to the Sites module.
       anyOfModules: ["/sites", "/rostering", "/attendance"],
@@ -187,7 +187,7 @@ export async function sitesRoutes(app: FastifyInstance) {
   ];
   const manageSites = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "supervisor"], { module: "/sites" }),
+    requireCrudCapability({ module: "/sites" }),
   ];
 
   app.get("/", { preHandler: readProtect }, async (request, reply) => {

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
+import { hasCapability } from "@/lib/permissions";
 import {
   detectAttendanceExceptions,
   getExceptionAnalytics,
@@ -34,7 +35,9 @@ function validShift(value: string | null): ExceptionShiftFilter {
 }
 
 export default function AttendanceExceptionsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canCreate = Boolean(user && hasCapability(user, "/attendance", "create"));
+  const canApprove = Boolean(user && hasCapability(user, "/attendance", "approve"));
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -67,7 +70,7 @@ export default function AttendanceExceptionsPage() {
   }, [pathname, router, searchParams, severityFilter, shiftFilter, siteFilter, statusFilter]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || !canApprove) return;
     let cancelled = false;
     authFetch("/sites?limit=200", token)
       .then(async (response) => {
@@ -86,7 +89,7 @@ export default function AttendanceExceptionsPage() {
   }, [token]);
 
   const refresh = useCallback(async () => {
-    if (!token) return;
+    if (!token || !canCreate) return;
     const requestId = ++requestIdRef.current;
     setError("");
     try {
@@ -177,11 +180,11 @@ export default function AttendanceExceptionsPage() {
       <PageHeader
         title="Attendance issues"
         description="Review missing clock events, late arrivals, and other items that could block payroll."
-        actions={
+        actions={canCreate ? (
           <button type="button" className="btn-secondary min-h-11" onClick={() => void handleDetect()} disabled={detecting}>
             {detecting ? "Scanning…" : "Scan for new issues"}
           </button>
-        }
+        ) : undefined}
       />
 
       {payrollReadiness && payrollReadiness.status !== "READY" && (
@@ -270,7 +273,7 @@ export default function AttendanceExceptionsPage() {
                   </div>
                 </div>
 
-                {["OPEN", "UNDER_REVIEW"].includes(exception.status) && (
+                {canApprove && ["OPEN", "UNDER_REVIEW"].includes(exception.status) && (
                   <div className="mt-4 border-t border-neutral-100 pt-3 dark:border-neutral-800">
                     <button
                       type="button"
@@ -321,7 +324,7 @@ export default function AttendanceExceptionsPage() {
         <EmptyState
           title="No attendance issues match these filters"
           description="Try another filter, or scan for new issues if attendance has recently changed."
-          action={<button type="button" className="btn-secondary min-h-11" onClick={() => void handleDetect()} disabled={detecting}>Scan for issues</button>}
+          action={canCreate ? <button type="button" className="btn-secondary min-h-11" onClick={() => void handleDetect()} disabled={detecting}>Scan for issues</button> : undefined}
         />
       )}
     </main>

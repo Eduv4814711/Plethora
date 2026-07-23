@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
 import {
   validateClockIn,
@@ -42,7 +42,7 @@ const manualAttendanceSchema = z.object({
 export async function attendanceRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll", "supervisor", "controller"], { module: "/attendance" }),
+    requireCrudCapability({ module: "/attendance" }),
   ];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
@@ -591,7 +591,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
 
   const updateAttendanceProtect = [
     authMiddleware,
-    requireRole(["admin", "hr_payroll"], { module: "/attendance" }),
+    requireCrudCapability({ module: "/attendance" }),
   ];
 
   app.put("/:id", { preHandler: updateAttendanceProtect }, async (request, reply) => {

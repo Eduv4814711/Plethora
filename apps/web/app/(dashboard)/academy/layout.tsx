@@ -143,7 +143,7 @@ function isNavActive(pathname: string, href: string) {
 export default function AcademyLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "";
   const { user } = useAuth();
-  const canReports = user ? canAccessRoute("/reports", user.role, user.moduleAccess) : false;
+  const canReports = user ? canAccessRoute("/reports", user) : false;
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -215,9 +215,9 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
         </nav>
         <div className="mt-3 shrink-0 rounded-lg border border-neutral-200 bg-gradient-to-b from-security-navy-50 to-white p-2.5 lg:mt-auto">
           <p className="text-sm font-medium text-security-navy-800">Need help?</p>
-          <p className="mt-1 text-xs text-neutral-500">Module access and billing questions? Contact an administrator.</p>
+          <p className="mt-1 text-xs text-neutral-500">Module access and billing questions? Contact the company owner or an access manager.</p>
           <p className="mt-2 rounded-security border border-neutral-200 bg-white px-3 py-2 text-xs text-neutral-600">
-            Ask an administrator to update module access or billing details.
+            Ask the company owner or an access manager to update module access or billing details.
           </p>
         </div>
       </aside>

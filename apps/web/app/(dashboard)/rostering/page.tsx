@@ -59,7 +59,7 @@ function siteStatusLine(site: RosterContinuityOverviewSite): string {
     if (site.maintainedThrough) return `Running through ${displayDate(site.maintainedThrough)}`;
     return site.lastStatus === "failed" ? "Automatic update failed" : "Preparing future shifts";
   }
-  if (site.state === "needs_attention") return site.nextIssue?.message ?? "Roster needs manager review";
+  if (site.state === "needs_attention") return site.nextIssue?.message ?? "Roster needs authorized review";
   if (site.state === "paused") return "Automatic rostering is paused";
   return "Ready for a manager to review and set up";
 }

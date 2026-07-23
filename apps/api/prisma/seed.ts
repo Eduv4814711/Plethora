@@ -16,9 +16,14 @@ import { z } from "zod";
 import { ensureSiteEmployeeGroups } from "../src/lib/site-employee-groups.js";
 import { validatePassword } from "../src/lib/password-policy.js";
 
+const databaseUrl = process.env.DATABASE_URL?.trim();
+if (!databaseUrl) {
+  throw new Error("DATABASE_URL is required for database seeding.");
+}
+
 const prisma = new PrismaClient({
   adapter: new PrismaPg({
-    connectionString: process.env.DATABASE_URL ?? "postgresql://localhost:5432/plethora",
+    connectionString: databaseUrl,
   }),
 });
 
@@ -80,18 +85,31 @@ async function main() {
 
   if (!existingUser) {
     const passwordHash = await bcrypt.hash(adminPassword, 12);
-    await prisma.user.create({
+    const createdOwner = await prisma.user.create({
       data: {
         companyId: company.id,
         name: "Admin",
         email: adminEmail,
         passwordHash,
-        role: "admin",
+        accountType: "staff",
       },
+    });
+    await prisma.company.update({
+      where: { id: company.id },
+      data: { ownerUserId: createdOwner.id },
     });
     console.log(`Created admin user: ${adminEmail}`);
     console.log("The seed password was read from SEED_ADMIN_PASSWORD and was not printed.");
   } else {
+    if (!company.ownerUserId) {
+      if (!existingUser.isActive) {
+        throw new Error("The existing seed administrator is inactive and cannot become company owner.");
+      }
+      await prisma.company.update({
+        where: { id: company.id },
+        data: { ownerUserId: existingUser.id },
+      });
+    }
     console.log(`Admin user already exists: ${adminEmail}`);
     console.log(`If you forgot the password, run: npx tsx prisma/reset-admin.ts`);
   }

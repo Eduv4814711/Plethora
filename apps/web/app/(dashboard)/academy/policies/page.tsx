@@ -1,5 +1,7 @@
 "use client";
 
+import { hasCapability } from "@/lib/permissions";
+
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
@@ -14,7 +16,8 @@ interface Policy {
 
 export default function AcademyPoliciesPage() {
   const { token, user } = useAuth();
-  const canManage = user?.role === "admin";
+  const canCreate = Boolean(user && hasCapability(user, "/academy", "create"));
+  const canDelete = Boolean(user && hasCapability(user, "/academy", "delete"));
   const [rows, setRows] = useState<Policy[]>([]);
   const [policyType, setPolicyType] = useState("Enrolment Policy");
   const [version, setVersion] = useState("1.0");
@@ -36,7 +39,7 @@ export default function AcademyPoliciesPage() {
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !policyType.trim() || !version.trim() || !canManage) return;
+    if (!token || !policyType.trim() || !version.trim() || !canCreate) return;
     setSaving(true);
     setError(null);
     try { await academyApi.createPolicy(token, { policyType: policyType.trim(), version: version.trim() }); load(); }
@@ -45,7 +48,7 @@ export default function AcademyPoliciesPage() {
   };
 
   const remove = async (id: string) => {
-    if (!token || !canManage) return;
+    if (!token || !canDelete) return;
     try { await academyApi.deletePolicy(token, id); load(); }
     catch (e) { setError(e instanceof Error ? e.message : "Delete failed"); }
   };
@@ -67,7 +70,7 @@ export default function AcademyPoliciesPage() {
             <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">Version</span>
             <input id="policy-version" className="input-modern rounded-xl" value={version} onChange={(e) => setVersion(e.target.value)} />
           </label>
-          <Button type="submit" disabled={!canManage} loading={saving}>Add policy</Button>
+          <Button type="submit" disabled={!canCreate} loading={saving}>Add policy</Button>
         </form>
       </div>
 
@@ -83,7 +86,7 @@ export default function AcademyPoliciesPage() {
               ) : rows.length === 0 ? (
                 <TableEmptyRow colSpan={4} message="No policies have been added yet. Add policy versions to keep Academy governance records current." />
               ) : (
-                rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{r.policyType}</td><td>{r.version}</td><td>{r.nextReviewDate ? String(r.nextReviewDate).slice(0,10) : "—"}</td><td className="text-right">{canManage && <Button variant="destructive" size="sm" onClick={() => remove(r.id)}>Delete</Button>}</td></tr>)
+                rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{r.policyType}</td><td>{r.version}</td><td>{r.nextReviewDate ? String(r.nextReviewDate).slice(0,10) : "—"}</td><td className="text-right">{canDelete && <Button variant="destructive" size="sm" onClick={() => remove(r.id)}>Delete</Button>}</td></tr>)
               )}
             </tbody>
           </table>

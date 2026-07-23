@@ -6,6 +6,7 @@ vi.mock("../../../lib/prisma.js", () => ({
       findFirst: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       create: vi.fn(),
     },
     siteTimesheet: {
@@ -25,7 +26,12 @@ vi.mock("../../../lib/audit.js", () => ({
 }));
 
 import { prisma } from "../../../lib/prisma.js";
-import { addSiteTimesheetRow, updateSiteTimesheetRow } from "../site-timesheets.service.js";
+import {
+  addSiteTimesheetRow,
+  confirmSiteTimesheetRow,
+  unlockSiteTimesheet,
+  updateSiteTimesheetRow,
+} from "../site-timesheets.service.js";
 
 const baseRow = {
   id: "row-1",
@@ -167,7 +173,7 @@ describe("duty ON / duty OFF OB workflow (service)", () => {
       approvalStatus: "partially_reviewed",
     } as never);
 
-    const result = await updateSiteTimesheetRow("co-1", "row-1", { approvalStatus: "reviewed" });
+    const result = await confirmSiteTimesheetRow("co-1", "row-1", {});
 
     expect(result).toEqual({
       error: "Duty OFF OB number is required before you can approve this shift.",
@@ -203,7 +209,7 @@ describe("duty ON / duty OFF OB workflow (service)", () => {
       rows: [],
     } as never);
 
-    const result = await updateSiteTimesheetRow("co-1", "row-1", { approvalStatus: "reviewed" });
+    const result = await confirmSiteTimesheetRow("co-1", "row-1", {});
 
     expect(result).toEqual(
       expect.objectContaining({
@@ -275,6 +281,92 @@ describe("duty ON / duty OFF OB workflow (service)", () => {
     expect(result).toEqual({
       error: "Duty ON OB number is required before you can add a reliever to the timesheet.",
     });
+  });
+
+  it("invalidates a reviewed row when payroll-affecting work data changes", async () => {
+    vi.mocked(prisma.siteTimesheetRow.findFirst).mockResolvedValue({
+      ...baseRow,
+      approvalStatus: "reviewed",
+      dutyOnObNumber: "0232",
+      dutyOffObNumber: "0233",
+      clockIn: new Date("2026-07-10T06:00:00.000Z"),
+      clockOut: new Date("2026-07-10T18:00:00.000Z"),
+      hoursWorked: 12,
+      overtimeHours: 0,
+    } as never);
+    const update = vi.fn();
+    vi.mocked(prisma.$transaction).mockImplementation(async (fn) =>
+      fn({
+        siteTimesheetRow: {
+          update,
+          findUnique: vi.fn().mockResolvedValue({
+            ...baseRow,
+            approvalStatus: "partially_reviewed",
+            dutyOnObNumber: "0232",
+            dutyOffObNumber: "0233",
+            hoursWorked: 10,
+          }),
+        },
+        siteTimesheet: { update: vi.fn() },
+      })
+    );
+    vi.mocked(prisma.siteTimesheet.findUnique).mockResolvedValue({
+      id: "ts-1",
+      site: {},
+      rows: [],
+    } as never);
+
+    await updateSiteTimesheetRow("co-1", "row-1", { hoursWorked: 10 });
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ approvalStatus: "partially_reviewed", hoursWorked: 10 }),
+      })
+    );
+  });
+
+  it("rejects invalid hours before mutating a row", async () => {
+    vi.mocked(prisma.siteTimesheetRow.findFirst).mockResolvedValue(baseRow as never);
+
+    const result = await updateSiteTimesheetRow("co-1", "row-1", { hoursWorked: -1 });
+
+    expect(result).toEqual({ error: "Hours worked must be between 0 and 24." });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("resets every row and clears approval metadata when unlocking", async () => {
+    vi.mocked(prisma.siteTimesheet.findFirst).mockResolvedValue({
+      id: "ts-1",
+      companyId: "co-1",
+      status: "locked",
+    } as never);
+    const updateMany = vi.fn();
+    const updateSheet = vi.fn();
+    vi.mocked(prisma.$transaction).mockImplementation(async (fn) =>
+      fn({
+        siteTimesheetRow: { updateMany },
+        siteTimesheet: { update: updateSheet },
+      })
+    );
+
+    const result = await unlockSiteTimesheet("co-1", "ts-1", "user-1", "Correction");
+
+    expect(result).toEqual({ success: true });
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { siteTimesheetId: "ts-1", companyId: "co-1" },
+      data: { approvalStatus: "pending" },
+    });
+    expect(updateSheet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "draft",
+          approvedBy: null,
+          approvedAt: null,
+          reviewedBy: null,
+          reviewedAt: null,
+        }),
+      })
+    );
   });
 
   it("rejects a reliever row outside the timesheet period", async () => {

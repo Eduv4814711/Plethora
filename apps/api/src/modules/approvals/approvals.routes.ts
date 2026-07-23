@@ -1,19 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authMiddleware } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireCapability } from "../../middleware/authorization.js";
 import {
   createApprovalRequest,
   listApprovals,
   reviewApproval,
 } from "./approvals.service.js";
-
-const ROLES = [
-  "admin",
-  "operations_manager",
-  "hr_payroll",
-  "supervisor",
-] as const;
 
 const reviewBodySchema = z.object({
   action: z.enum(["approve", "reject", "query"]),
@@ -41,14 +34,11 @@ const createBodySchema = z.object({
 });
 
 export async function approvalsRoutes(app: FastifyInstance) {
-  const protect = [
-    authMiddleware,
-    requireRole([...ROLES], {
-      anyOfModules: ["/", "/attendance", "/payroll", "/tasks", "/sites", "/approvals"],
-    }),
-  ];
+  const viewProtect = [authMiddleware, requireCapability("/approvals", "view")];
+  const createProtect = [authMiddleware, requireCapability("/approvals", "create")];
+  const approveProtect = [authMiddleware, requireCapability("/approvals", "approve")];
 
-  app.get("/", { preHandler: protect }, async (request, reply) => {
+  app.get("/", { preHandler: viewProtect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as {
       status?: string;
@@ -63,7 +53,7 @@ export async function approvalsRoutes(app: FastifyInstance) {
     return reply.send(result);
   });
 
-  app.post("/", { preHandler: protect }, async (request, reply) => {
+  app.post("/", { preHandler: createProtect }, async (request, reply) => {
     const user = request.user!;
     const parsed = createBodySchema.safeParse(request.body);
     if (!parsed.success) {
@@ -80,7 +70,7 @@ export async function approvalsRoutes(app: FastifyInstance) {
     return reply.code(201).send(approval);
   });
 
-  app.post("/:id/review", { preHandler: protect }, async (request, reply) => {
+  app.post("/:id/review", { preHandler: approveProtect }, async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
     const parsed = reviewBodySchema.safeParse(request.body);

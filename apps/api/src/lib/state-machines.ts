@@ -2,7 +2,7 @@ import type { EmployeeStatus, ShiftStatus, PayrollStatus } from "@prisma/client"
 
 // Employee lifecycle: Applicant → Hired → Training → Active / Reliever → Suspended → Offboarded
 export const EMPLOYEE_TRANSITIONS: Record<EmployeeStatus, EmployeeStatus[]> = {
-  applicant: ["hired"],
+  applicant: ["hired", "offboarded"],
   hired: ["training", "offboarded"],
   training: ["active", "reliever", "offboarded"],
   active: ["suspended", "reliever", "offboarded"],

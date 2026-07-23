@@ -52,6 +52,7 @@ export function InstructorTable({
   rows,
   loading,
   selectedIds,
+  allowedActions,
   onToggleSelect,
   onToggleSelectAll,
   onRowClick,
@@ -60,6 +61,7 @@ export function InstructorTable({
   rows: InstructorRecord[];
   loading: boolean;
   selectedIds: Set<string>;
+  allowedActions: RowAction[];
   onToggleSelect: (id: string, checked: boolean) => void;
   onToggleSelectAll: (checked: boolean) => void;
   onRowClick: (id: string) => void;
@@ -190,7 +192,7 @@ export function InstructorTable({
                         }}
                       >
                         <option value="">Actions...</option>
-                        {ACTIONS.map((action) => (
+                        {ACTIONS.filter((action) => allowedActions.includes(action.value)).map((action) => (
                           <option key={action.value} value={action.value}>
                             {action.label}
                           </option>
@@ -275,7 +277,7 @@ export function InstructorTable({
                   }}
                 >
                   <option value="">Row actions...</option>
-                  {ACTIONS.map((action) => (
+                  {ACTIONS.filter((action) => allowedActions.includes(action.value)).map((action) => (
                     <option key={action.value} value={action.value}>
                       {action.label}
                     </option>

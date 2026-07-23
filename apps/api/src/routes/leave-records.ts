@@ -2,10 +2,17 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requireAnyCapability, requireCrudCapability } from "../middleware/authorization.js";
+import { hasAnyCapability } from "../lib/capabilities.js";
+import { privateDownloadUrl, sendPrivateStoredFile } from "../lib/private-download.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 import { readStreamToBuffer, storage } from "../lib/storage.js";
+import {
+  extensionForMime,
+  matchesMagicBytes,
+  sanitizeUploadFilename,
+} from "../lib/upload-validation.js";
 import {
   deleteLeaveRecordsForRange,
   LeaveAvailabilityError,
@@ -26,8 +33,6 @@ const SICK_NOTE_ALLOWED_TYPES = [
   "image/png",
   "image/gif",
   "image/webp",
-  "image/heic",
-  "image/heif",
   "application/pdf",
 ];
 const SICK_NOTE_MAX_BYTES = 10 * 1024 * 1024;
@@ -91,9 +96,17 @@ async function legacyMutationBlocker(companyId: string, employeeId: string, star
 export async function leaveRecordsRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole(["admin", "operations_manager", "hr_payroll"], {
+    requireCrudCapability({
       anyOfModules: ["/employees/leave", "/payroll"],
     }),
+  ];
+  const exportProtect = [
+    authMiddleware,
+    requireAnyCapability(["/employees/leave", "/payroll"], "export"),
+  ];
+  const approveProtect = [
+    authMiddleware,
+    requireAnyCapability(["/employees/leave", "/payroll"], "approve"),
   ];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
@@ -137,7 +150,42 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
       },
     });
 
-    return reply.send({ data: records, sickNotes });
+    const canExport = hasAnyCapability(
+      user,
+      ["/employees/leave", "/payroll"],
+      "export"
+    );
+    return reply.send({
+      data: records,
+      sickNotes: sickNotes.map(({ fileUrl: _fileUrl, ...note }) =>
+        canExport
+          ? {
+              ...note,
+              downloadUrl: privateDownloadUrl(
+                `/payroll/leave-records/sick-notes/${note.id}/download`
+              ),
+            }
+          : note
+      ),
+    });
+  });
+
+  app.get("/sick-notes/:id/download", { preHandler: exportProtect }, async (request, reply) => {
+    const companyId = request.user!.companyId;
+    const { id } = request.params as { id: string };
+    const note = await prisma.leaveSickNote.findFirst({
+      where: { id, companyId },
+      select: { fileUrl: true, fileName: true, mimeType: true, employeeId: true },
+    });
+    if (!note) {
+      return reply.code(404).send({ error: "Not found", message: "Sick note not found" });
+    }
+    return sendPrivateStoredFile(reply, {
+      storedReference: note.fileUrl,
+      allowedPrefixes: [`leave-sick-notes/${companyId}/${note.employeeId}`],
+      fileName: note.fileName,
+      mimeType: note.mimeType,
+    });
   });
 
   app.post("/sick-note", { preHandler: protect }, async (request, reply) => {
@@ -196,7 +244,7 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
     }
 
     const mimetype = data.mimetype;
-    if (!SICK_NOTE_ALLOWED_TYPES.includes(mimetype) && !mimetype.startsWith("image/")) {
+    if (!SICK_NOTE_ALLOWED_TYPES.includes(mimetype)) {
       return reply.code(400).send({
         error: "Invalid file type",
         message: "Allowed: images (JPEG, PNG, GIF, WebP) or PDF",
@@ -217,7 +265,14 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
       return reply.code(500).send({ error: "Upload failed", message: "Could not read the file" });
     }
 
-    const ext = mimetype.split("/")[1]?.replace("jpeg", "jpg") || "bin";
+    if (!matchesMagicBytes(fileBuffer, mimetype)) {
+      return reply.code(400).send({
+        error: "Invalid file",
+        message: "File content does not match the declared type",
+      });
+    }
+
+    const ext = extensionForMime(mimetype);
     const storageName = `${randomUUID()}.${ext}`;
     const key = `leave-sick-notes/${companyId}/${employeeId}/${storageName}`;
 
@@ -233,7 +288,7 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
     }
 
     const fileUrl = storage.getAssetUrl(key);
-    const originalName = data.filename || storageName;
+    const originalName = sanitizeUploadFilename(data.filename || storageName, mimetype);
 
     const sickNote = await prisma.leaveSickNote.create({
       data: {
@@ -287,10 +342,20 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
       metadata: { employeeId, startDate, endDate: endDate ?? startDate, fileName: originalName },
     });
 
-    return reply.code(201).send(sickNote);
+    const { fileUrl: _fileUrl, ...metadata } = sickNote;
+    return reply.code(201).send(
+      hasAnyCapability(request.user!, ["/employees/leave", "/payroll"], "export")
+        ? {
+            ...metadata,
+            downloadUrl: privateDownloadUrl(
+              `/payroll/leave-records/sick-notes/${sickNote.id}/download`
+            ),
+          }
+        : metadata
+    );
   });
 
-  app.post("/", { preHandler: protect }, async (request, reply) => {
+  app.post("/", { preHandler: approveProtect }, async (request, reply) => {
     const parsed = createLeaveRecordSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -355,7 +420,7 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
     }
   });
 
-  app.put("/range", { preHandler: protect }, async (request, reply) => {
+  app.put("/range", { preHandler: approveProtect }, async (request, reply) => {
     const parsed = updateLeaveRangeSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -411,7 +476,7 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
     }
   });
 
-  app.delete("/range", { preHandler: protect }, async (request, reply) => {
+  app.delete("/range", { preHandler: approveProtect }, async (request, reply) => {
     const parsed = leaveRangeSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({

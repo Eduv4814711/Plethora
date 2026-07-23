@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
+import { hasCapability } from "@/lib/permissions";
 import { createIncident, listIncidents, type Incident } from "@/lib/msr-api";
 import { AlertBanner, Badge, EmptyState, PageHeader } from "@/components/ui";
 
@@ -32,7 +33,8 @@ function severityBadge(severity: string) {
 }
 
 export default function IncidentsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canCreate = Boolean(user && hasCapability(user, "/incidents", "create"));
   const [items, setItems] = useState<Incident[]>([]);
   const [sites, setSites] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,7 +82,7 @@ export default function IncidentsPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !formSiteId || !formTitle.trim() || !formDescription.trim()) return;
+    if (!token || !canCreate || !formSiteId || !formTitle.trim() || !formDescription.trim()) return;
     setSubmitting(true);
     setError("");
     try {
@@ -119,11 +121,11 @@ export default function IncidentsPage() {
       <PageHeader
         title="Incidents"
         description="Report and track security incidents across your sites."
-        actions={
+        actions={canCreate ? (
           <button type="button" className="btn-primary" onClick={() => setShowForm(true)}>
             Report incident
           </button>
-        }
+        ) : undefined}
       />
 
       <div className="mb-4 flex flex-wrap gap-2">
@@ -156,7 +158,7 @@ export default function IncidentsPage() {
 
       {error && <AlertBanner variant="error" className="mb-4">{error}</AlertBanner>}
 
-      {showForm && (
+      {showForm && canCreate && (
         <div className="card-dashboard mb-6 p-4">
           <h2 className="section-title mb-3">Report incident</h2>
           <form onSubmit={handleCreate} className="space-y-3">
@@ -255,11 +257,11 @@ export default function IncidentsPage() {
           className="mt-6"
           title="No incidents recorded"
           description="Report incidents to keep a clear record and notify supervisors."
-          action={
+          action={canCreate ? (
             <button type="button" className="btn-primary text-sm py-1.5" onClick={() => setShowForm(true)}>
               Report incident
             </button>
-          }
+          ) : undefined}
         />
       )}
     </div>

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { classifyShiftHours } from "../timesheet.service.js";
+import {
+  buildApprovedSiteDateCoverage,
+  classifyShiftHours,
+} from "../timesheet.service.js";
 import { getShiftTimes } from "../../lib/timezone.js";
 
 describe("classifyShiftHours", () => {
@@ -77,5 +80,20 @@ describe("classifyShiftHours", () => {
     });
     expect(result.basicHours).toBe(12);
     expect(result.sundayHours).toBe(0);
+  });
+
+  it("tracks approved site-timesheet coverage by exact site and calendar date", () => {
+    const covered = buildApprovedSiteDateCoverage([
+      {
+        siteId: "site-a",
+        periodStart: new Date("2026-05-04T00:00:00.000Z"),
+        periodEnd: new Date("2026-05-06T23:59:59.999Z"),
+      },
+    ]);
+
+    expect(covered.has("site-a:2026-05-04")).toBe(true);
+    expect(covered.has("site-a:2026-05-06")).toBe(true);
+    expect(covered.has("site-a:2026-05-07")).toBe(false);
+    expect(covered.has("site-b:2026-05-05")).toBe(false);
   });
 });

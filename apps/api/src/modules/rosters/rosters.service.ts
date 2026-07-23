@@ -13,6 +13,13 @@ import { reconcileRosterContinuityForSite } from "./roster-continuity.service.js
 const ROSTERABLE_STATUSES = ["active", "training", "hired", "reliever"] as const;
 const WORKING_SHIFT_CODES = new Set<SiteRosterShiftCode>(["D", "N"]);
 
+export class RosterGuardValidationError extends Error {
+  constructor() {
+    super("ROSTER_GUARD_NOT_FOUND");
+    this.name = "RosterGuardValidationError";
+  }
+}
+
 type RosterWarning = {
   code: string;
   severity: "advisory" | "hard";
@@ -76,6 +83,21 @@ async function loadSiteGuards(siteId: string, companyId: string) {
         (e.employeeType ?? "security") === "security" &&
         ROSTERABLE_STATUSES.includes(e.status as (typeof ROSTERABLE_STATUSES)[number])
     );
+}
+
+async function assertRosterGuardsBelongToCompany(
+  companyId: string,
+  guardIds: string[]
+): Promise<void> {
+  const uniqueGuardIds = [...new Set(guardIds)];
+  if (uniqueGuardIds.length === 0) return;
+  const guards = await prisma.employee.findMany({
+    where: { companyId, id: { in: uniqueGuardIds } },
+    select: { id: true },
+  });
+  if (guards.length !== uniqueGuardIds.length) {
+    throw new RosterGuardValidationError();
+  }
 }
 
 function mapPatternSummary(pattern: {
@@ -539,6 +561,10 @@ export async function createPattern(
 ) {
   const site = await prisma.site.findFirst({ where: { id: input.siteId, companyId } });
   if (!site) return null;
+  await assertRosterGuardsBelongToCompany(
+    companyId,
+    input.cells?.map((cell) => cell.guardId) ?? []
+  );
 
   const pattern = await prisma.siteRosterPattern.create({
     data: {
@@ -583,6 +609,10 @@ export async function updatePattern(
     where: { id: patternId, companyId },
   });
   if (!existing) return null;
+  await assertRosterGuardsBelongToCompany(
+    companyId,
+    input.cells?.map((cell) => cell.guardId) ?? []
+  );
 
   await prisma.$transaction(async (tx) => {
     await tx.siteRosterPattern.update({
@@ -812,6 +842,7 @@ export async function applyManualOverride(
 ) {
   const site = await prisma.site.findFirst({ where: { id: input.siteId, companyId } });
   if (!site) return null;
+  await assertRosterGuardsBelongToCompany(companyId, [input.guardId]);
 
   if (input.doesChangeBasePattern) {
     await applyOngoingPatternChanges(companyId, userId, input.siteId, [input]);
@@ -926,6 +957,10 @@ export async function applyManualOverridesBulk(
 ) {
   const site = await prisma.site.findFirst({ where: { id: input.siteId, companyId } });
   if (!site) return null;
+  await assertRosterGuardsBelongToCompany(
+    companyId,
+    input.changes.map((change) => change.guardId)
+  );
 
   const ongoingChanges = input.changes.filter((change) => change.doesChangeBasePattern);
   const oneDayChanges = input.changes.filter((change) => !change.doesChangeBasePattern);

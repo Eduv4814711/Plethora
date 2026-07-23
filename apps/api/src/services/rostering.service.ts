@@ -297,6 +297,8 @@ export async function validateShiftAssignment(params: {
   startTime: Date;
   endTime: Date;
   excludeShiftId?: string;
+  /** Exclude a known replacement set while validating a complete roster plan. */
+  excludeShiftIds?: string[];
   allowRosterable?: boolean;
   /** When false (default), employee must have a SiteAssignment for the post's site. */
   allowUnassigned?: boolean;
@@ -308,6 +310,7 @@ export async function validateShiftAssignment(params: {
     startTime,
     endTime,
     excludeShiftId,
+    excludeShiftIds,
     allowRosterable,
     allowUnassigned,
   } = params;
@@ -373,10 +376,14 @@ export async function validateShiftAssignment(params: {
     );
   }
 
+  const excludedShiftIds = [
+    ...(excludeShiftId ? [excludeShiftId] : []),
+    ...(excludeShiftIds ?? []),
+  ];
   const overlapping = await prisma.shift.findFirst({
     where: {
       employeeId,
-      id: excludeShiftId ? { not: excludeShiftId } : undefined,
+      id: excludedShiftIds.length > 0 ? { notIn: excludedShiftIds } : undefined,
       OR: [
         {
           startTime: { lt: endTime },
@@ -405,7 +412,7 @@ export async function validateShiftAssignment(params: {
     where: {
       employeeId,
       companyId,
-      id: excludeShiftId ? { not: excludeShiftId } : undefined,
+      id: excludedShiftIds.length > 0 ? { notIn: excludedShiftIds } : undefined,
       startTime: { lt: restRangeEnd },
       endTime: { gt: restRangeStart },
     },

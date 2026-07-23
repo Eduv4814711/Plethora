@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { hasCapability } from "@/lib/permissions";
 import { listDocuments, uploadDocument, archiveDocument, type ManagedDocument } from "@/lib/msr-api";
-import { authFetch } from "@/lib/api";
+import { authFetch, downloadPrivateFile } from "@/lib/api";
 import { AlertBanner, Badge, EmptyState, PageHeader } from "@/components/ui";
 
 const CATEGORIES = [
@@ -12,7 +13,10 @@ const CATEGORIES = [
 ];
 
 export default function DocumentsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canCreate = Boolean(user && hasCapability(user, "/documents", "create"));
+  const canEdit = Boolean(user && hasCapability(user, "/documents", "edit"));
+  const canExport = Boolean(user && hasCapability(user, "/documents", "export"));
   const [items, setItems] = useState<ManagedDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -59,7 +63,7 @@ export default function DocumentsPage() {
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !file || !title.trim() || !documentType.trim()) return;
+    if (!token || !canCreate || !file || !title.trim() || !documentType.trim()) return;
     setUploading(true);
     setError("");
     try {
@@ -92,11 +96,11 @@ export default function DocumentsPage() {
       <PageHeader
         title="Documents"
         description="Store contracts, compliance files, and operational records."
-        actions={
+        actions={canCreate ? (
           <button type="button" className="btn-primary" onClick={() => setShowUpload(true)}>
             Upload document
           </button>
-        }
+        ) : undefined}
       />
 
       <div className="mb-4">
@@ -115,7 +119,7 @@ export default function DocumentsPage() {
 
       {error && <AlertBanner variant="error" className="mb-4">{error}</AlertBanner>}
 
-      {showUpload && (
+      {showUpload && canCreate && (
         <div className="card-dashboard mb-6 p-4">
           <h2 className="section-title mb-3">Upload document</h2>
           <form onSubmit={handleUpload} className="space-y-3">
@@ -177,10 +181,20 @@ export default function DocumentsPage() {
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <Badge variant={doc.status === "ACTIVE" ? "success" : "neutral"}>{doc.status}</Badge>
-              <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer" className="btn-secondary text-sm py-1.5">
-                Open
-              </a>
-              {doc.status === "ACTIVE" && token && (
+              {canExport && token && doc.downloadUrl && (
+                <button
+                  type="button"
+                  className="btn-secondary text-sm py-1.5"
+                  onClick={() => {
+                    void downloadPrivateFile(token, doc.downloadUrl!, doc.fileName).catch((error) =>
+                      setError(error instanceof Error ? error.message : "Document download failed")
+                    );
+                  }}
+                >
+                  Download
+                </button>
+              )}
+              {doc.status === "ACTIVE" && token && canEdit && (
                 <button
                   type="button"
                   className="btn-secondary text-sm py-1.5"
@@ -202,11 +216,11 @@ export default function DocumentsPage() {
           className="mt-6"
           title="No documents yet"
           description="Upload contracts, policies, and compliance files for your team."
-          action={
+          action={canCreate ? (
             <button type="button" className="btn-primary text-sm py-1.5" onClick={() => setShowUpload(true)}>
               Upload document
             </button>
-          }
+          ) : undefined}
         />
       )}
     </div>

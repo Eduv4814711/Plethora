@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireRole } from "../middleware/rbac.js";
+import { requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
 import { createAuditLog } from "../lib/audit.js";
 
@@ -16,7 +16,7 @@ const createEarningsRuleSchema = z.object({
 const updateEarningsRuleSchema = createEarningsRuleSchema.partial();
 
 export async function earningsRulesRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireRole(["admin", "hr_payroll"], { module: "/payroll" })];
+  const protect = [authMiddleware, requireCrudCapability({ module: "/payroll" })];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

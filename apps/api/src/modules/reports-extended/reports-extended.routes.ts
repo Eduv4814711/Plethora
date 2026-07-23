@@ -1,16 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { authMiddleware } from "../../middleware/auth.js";
-import { requireRole } from "../../middleware/rbac.js";
+import { requireCapability } from "../../middleware/authorization.js";
 import { prisma } from "../../lib/prisma.js";
 import { getExceptionAnalytics } from "../attendance-exceptions/exceptions.service.js";
-
-const ROLES = [
-  "admin",
-  "operations_manager",
-  "hr_payroll",
-  "supervisor",
-  "controller",
-] as const;
 
 function csvEscape(v: unknown): string {
   const s = v == null ? "" : String(v);
@@ -37,8 +29,9 @@ function parseRange(q: Record<string, string | undefined>) {
 export async function reportsExtendedRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireRole([...ROLES], { module: "/reports" }),
+    requireCapability("/reports", "view"),
   ];
+  const exportProtect = [authMiddleware, requireCapability("/reports", "export")];
 
   app.get("/types", { preHandler: protect }, async (_request, reply) => {
     return reply.send({
@@ -61,7 +54,7 @@ export async function reportsExtendedRoutes(app: FastifyInstance) {
     });
   });
 
-  app.get("/:type", { preHandler: protect }, async (request, reply) => {
+  app.get("/:type", { preHandler: exportProtect }, async (request, reply) => {
     const user = request.user!;
     const { type } = request.params as { type: string };
     const q = request.query as Record<string, string | undefined>;

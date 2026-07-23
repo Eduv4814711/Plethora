@@ -1,7 +1,12 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { exceedsSdlThreshold } from "./tax.service.js";
 
 type MonthlyTotals = Record<string, number>;
+
+function monthKeyUtc(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
 
 /**
  * Update SDL tracking when a payroll run is marked as paid.
@@ -10,9 +15,10 @@ type MonthlyTotals = Record<string, number>;
  */
 export async function updateSdlTrackingOnPayrollPaid(
   companyId: string,
-  payrollRunId: string
+  payrollRunId: string,
+  db: Prisma.TransactionClient | typeof prisma = prisma
 ): Promise<void> {
-  const items = await prisma.payrollItem.findMany({
+  const items = await db.payrollItem.findMany({
     where: { payrollRunId },
     select: { grossPay: true },
   });
@@ -20,16 +26,16 @@ export async function updateSdlTrackingOnPayrollPaid(
   const totalLeviable = items.reduce((sum, i) => sum + Number(i.grossPay), 0);
   if (totalLeviable <= 0) return;
 
-  const run = await prisma.payrollRun.findFirst({
+  const run = await db.payrollRun.findFirst({
     where: { id: payrollRunId, companyId },
     select: { periodEnd: true },
   });
   if (!run) return;
 
   const periodEnd = new Date(run.periodEnd);
-  const monthKey = `${periodEnd.getFullYear()}-${String(periodEnd.getMonth() + 1).padStart(2, "0")}`;
+  const monthKey = monthKeyUtc(periodEnd);
 
-  const company = await prisma.company.findUnique({
+  const company = await db.company.findUnique({
     where: { id: companyId },
     select: { monthlyPayrollTotals: true, sdlLiableFrom: true },
   });
@@ -42,10 +48,13 @@ export async function updateSdlTrackingOnPayrollPaid(
     [monthKey]: currentMonthTotal + totalLeviable,
   };
 
-  // Prune months older than 12 months
-  const cutoff = new Date(periodEnd);
-  cutoff.setMonth(cutoff.getMonth() - 12);
-  const cutoffKey = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, "0")}`;
+  // The current month plus the preceding 11 months is a 12-month window.
+  // Use UTC because payroll period timestamps are stored as UTC instants and
+  // must not move into another month based on the API server's timezone.
+  const cutoff = new Date(
+    Date.UTC(periodEnd.getUTCFullYear(), periodEnd.getUTCMonth() - 11, 1)
+  );
+  const cutoffKey = monthKeyUtc(cutoff);
 
   const pruned: MonthlyTotals = {};
   for (const [key, val] of Object.entries(updated)) {
@@ -56,10 +65,12 @@ export async function updateSdlTrackingOnPayrollPaid(
   let sdlLiableFrom = company.sdlLiableFrom;
 
   if (!sdlLiableFrom && exceedsSdlThreshold(rollingTotal)) {
-    sdlLiableFrom = new Date(periodEnd.getFullYear(), periodEnd.getMonth(), 1);
+    sdlLiableFrom = new Date(
+      Date.UTC(periodEnd.getUTCFullYear(), periodEnd.getUTCMonth(), 1)
+    );
   }
 
-  await prisma.company.update({
+  await db.company.update({
     where: { id: companyId },
     data: {
       monthlyPayrollTotals: pruned,
