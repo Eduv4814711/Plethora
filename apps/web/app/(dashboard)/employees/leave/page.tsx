@@ -15,7 +15,7 @@ import {
   type LeaveAdjustmentResolutionDecision,
 } from "@/lib/leave-management-utils";
 
-type Tab = "queue" | "records" | "balances" | "calendar" | "adjustments" | "policies" | "reports" | "audit" | "add";
+type Tab = "queue" | "approved" | "records" | "balances" | "calendar" | "adjustments" | "policies" | "reports" | "audit" | "add";
 type IconName = "inbox" | "records" | "balance" | "calendar" | "adjust" | "policy" | "report" | "audit" | "plus" | "arrow" | "warning" | "check" | "file" | "people" | "clock" | "search" | "close";
 type Employee = { id: string; firstName: string; lastName: string; employeeNumber: string; group?: { name: string } | null };
 type LeaveType = { id: string; code: string; name: string; description?: string; payrollTreatment: string; durationMode: string; requiresDocument: boolean };
@@ -147,6 +147,7 @@ const pendingStatuses = ["PENDING_HR", "SUBMITTED"];
 const actionStatuses = ["PENDING_HR", "ADJUSTMENT_REQUIRED", "CANCELLATION_REQUESTED"];
 const tabs: Array<{ key: Tab; label: string; shortLabel: string; icon: IconName }> = [
   { key: "queue", label: "Approval queue", shortLabel: "Queue", icon: "inbox" },
+  { key: "approved", label: "Approved leave", shortLabel: "Approved", icon: "check" },
   { key: "records", label: "Leave records", shortLabel: "Records", icon: "records" },
   { key: "balances", label: "Balances", shortLabel: "Balances", icon: "balance" },
   { key: "calendar", label: "Leave calendar", shortLabel: "Calendar", icon: "calendar" },
@@ -247,6 +248,10 @@ export default function LeaveManagementPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState("PENDING_HR");
+  const [approvedSearch, setApprovedSearch] = useState("");
+  const [approvedSort, setApprovedSort] = useState("startDate:asc");
+  const [approvedPage, setApprovedPage] = useState(0);
+  const [approvedTotal, setApprovedTotal] = useState(0);
   const [employeeFilter, setEmployeeFilter] = useState("");
   const [range, setRange] = useState({ start: monthStart, end: monthEnd });
   const [partialLeave, setPartialLeave] = useState(false);
@@ -293,7 +298,7 @@ export default function LeaveManagementPage() {
     setLoading(true);
     setError(null);
     try {
-      if (tab === "queue" || tab === "records") {
+      if (tab === "queue" || tab === "records" || tab === "approved") {
         const query = new URLSearchParams();
         if (tab === "queue") query.set("status", status);
         if (employeeFilter) query.set("employeeId", employeeFilter);
@@ -301,8 +306,18 @@ export default function LeaveManagementPage() {
           query.set("start", range.start);
           query.set("end", range.end);
         }
+        if (tab === "approved") {
+          const [sortBy, sortOrder] = approvedSort.split(":");
+          query.set("approved", "true");
+          query.set("search", approvedSearch);
+          query.set("sortBy", sortBy);
+          query.set("sortOrder", sortOrder);
+          query.set("limit", "25");
+          query.set("offset", String(approvedPage * 25));
+        }
         const body = await request(`/leave/applications?${query}`);
         setApplications(body.data ?? []);
+        if (tab === "approved") setApprovedTotal(body.total ?? 0);
       } else if (tab === "balances") {
         const query = employeeFilter ? `?employeeId=${encodeURIComponent(employeeFilter)}` : "";
         setBalances((await request(`/leave/balances${query}`)).data ?? []);
@@ -322,7 +337,7 @@ export default function LeaveManagementPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, tab, status, employeeFilter, range.start, range.end, request]);
+  }, [token, tab, status, employeeFilter, range.start, range.end, approvedSearch, approvedSort, approvedPage, request]);
 
   useEffect(() => {
     loadBase().catch((cause) => setError(cause instanceof Error ? cause.message : "Unable to load leave configuration"));
@@ -362,6 +377,68 @@ export default function LeaveManagementPage() {
   }, [policies, types]);
 
   function resetPreview() { setPreview(null); }
+
+  async function changeApprovedLeave(application: LeaveApplication, earlyReturn: boolean) {
+    const datePrompt = earlyReturn ? "First date back at work (YYYY-MM-DD)" : "New leave end date (YYYY-MM-DD)";
+    const proposedDate = window.prompt(datePrompt, earlyReturn ? application.endDate.slice(0, 10) : application.endDate.slice(0, 10));
+    if (!proposedDate) return;
+    const reason = window.prompt(earlyReturn ? "Reason for early return (required)" : "Reason for amendment (required)");
+    if (!reason?.trim()) return;
+    setBusy(application.id);
+    setError(null);
+    try {
+      const endDate = earlyReturn
+        ? format(addDays(parseISO(proposedDate), -1), "yyyy-MM-dd")
+        : proposedDate;
+      const impact = await request(`/leave/applications/${application.id}/change-preview`, {
+        method: "POST",
+        body: JSON.stringify({ endDate }),
+      });
+      const confirmed = window.confirm(
+        `Confirm ${earlyReturn ? "early return" : "amendment"}?\n\n` +
+        `Leave hours: ${hours(impact.previous.calculatedMinutes)} → ${hours(impact.proposed.calculatedMinutes)}\n` +
+        `Balance impact: ${hours(impact.delta.balanceMinutes)}\n` +
+        `Roster shifts affected: ${impact.previous.shiftsAffected} → ${impact.proposed.staffingImpact.shiftsAffected}\n` +
+        `Payroll action: ${friendly(impact.payroll.action)}\n\nReason: ${reason.trim()}`
+      );
+      if (!confirmed) return;
+      await request(`/leave/applications/${application.id}/${earlyReturn ? "early-return" : "amend"}`, {
+        method: "POST",
+        body: JSON.stringify({
+          ...(earlyReturn ? { returnDate: proposedDate } : { endDate }),
+          reason: reason.trim(),
+          expectedVersion: impact.version,
+          confirmed: true,
+        }),
+      });
+      await Promise.all([loadTab(), loadSummary()]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to change approved leave");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function exportApprovedLeave() {
+    if (!token) return;
+    const query = new URLSearchParams({ search: approvedSearch });
+    if (employeeFilter) query.set("employeeId", employeeFilter);
+    const [sortBy, sortOrder] = approvedSort.split(":");
+    query.set("sortBy", sortBy);
+    query.set("sortOrder", sortOrder);
+    const response = await authFetch(`/leave/applications/approved/export?${query}`, token);
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      setError(errorMessage(body, "Unable to export approved leave"));
+      return;
+    }
+    const url = URL.createObjectURL(await response.blob());
+    const anchor = globalThis.document.createElement("a");
+    anchor.href = url;
+    anchor.download = `approved-leave-${today}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
 
   async function previewApplication() {
     setBusy("preview");
@@ -738,6 +815,51 @@ export default function LeaveManagementPage() {
               ))}
             </div>
           ) : <EmptyState icon="inbox" title="Queue cleared" text="There are no requests matching this status and employee filter." action={canCreate ? { label: "Create a leave request", onClick: () => setTab("add") } : undefined} />}
+        </SectionShell>
+      )}
+
+      {tab === "approved" && (
+        <SectionShell title="Approved leave" description="Find, review, export, amend, cancel, or record an early return against authoritative approved leave.">
+          <div className="mb-5 grid gap-3 border-b border-neutral-200 pb-5 lg:grid-cols-[minmax(0,1fr)_280px_210px_auto]">
+            <input
+              value={approvedSearch}
+              onChange={(event) => { setApprovedSearch(event.target.value); setApprovedPage(0); }}
+              className="input-modern"
+              placeholder="Search employee, number, or reason"
+              aria-label="Search approved leave"
+            />
+            <EmployeeSelect value={employeeFilter} onChange={(value) => { setEmployeeFilter(value); setApprovedPage(0); }} employees={employees} allLabel="All employees" />
+            <select value={approvedSort} onChange={(event) => { setApprovedSort(event.target.value); setApprovedPage(0); }} className="input-modern" aria-label="Sort approved leave">
+              <option value="startDate:asc">Start date — earliest</option>
+              <option value="startDate:desc">Start date — latest</option>
+              <option value="employee:asc">Employee — A to Z</option>
+              <option value="createdAt:desc">Recently created</option>
+            </select>
+            {canExport && <button type="button" onClick={exportApprovedLeave} className="btn-secondary">Export CSV</button>}
+          </div>
+          {loading ? <LoadingCards /> : applications.length ? (
+            <>
+              <div className="space-y-3">
+                {applications.map((application) => (
+                  <div key={application.id} className="rounded-xl border border-neutral-200 bg-white">
+                    <CalendarRow application={application} />
+                    {canApprove && <div className="flex flex-wrap justify-end gap-2 border-t border-neutral-200 bg-neutral-50 p-3">
+                      <button type="button" disabled={busy === application.id} onClick={() => changeApprovedLeave(application, false)} className="btn-ghost px-3 py-2 text-sm">Amend dates</button>
+                      <button type="button" disabled={busy === application.id} onClick={() => changeApprovedLeave(application, true)} className="btn-ghost px-3 py-2 text-sm">Record early return</button>
+                      <button type="button" disabled={busy === application.id} onClick={() => { setActionReason(""); setActionDialog({ kind: "cancel", application }); }} className="btn-ghost px-3 py-2 text-sm">Cancel leave</button>
+                    </div>}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-5 flex items-center justify-between text-sm text-neutral-600">
+                <span>{approvedTotal} approved record{approvedTotal === 1 ? "" : "s"}</span>
+                <div className="flex gap-2">
+                  <button type="button" className="btn-ghost px-3 py-2" disabled={approvedPage === 0} onClick={() => setApprovedPage((page) => page - 1)}>Previous</button>
+                  <button type="button" className="btn-ghost px-3 py-2" disabled={(approvedPage + 1) * 25 >= approvedTotal} onClick={() => setApprovedPage((page) => page + 1)}>Next</button>
+                </div>
+              </div>
+            </>
+          ) : <EmptyState icon="check" title="No approved leave found" text="Try a different employee or search term." />}
         </SectionShell>
       )}
 

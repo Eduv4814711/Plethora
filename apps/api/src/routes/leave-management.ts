@@ -10,6 +10,7 @@ import { persistWithUploadedFileRollback, readStreamToBuffer, storage } from "..
 import { matchesMagicBytes, sanitizeUploadFilename } from "../lib/upload-validation.js";
 import {
   cancelOrWithdrawLeave,
+  amendApprovedLeave,
   accrueConfirmedLeave,
   createLeaveApplication,
   createOpeningBalanceAdjustment,
@@ -23,6 +24,7 @@ import {
   LeaveManagementError,
   listLeaveApplications,
   previewLeave,
+  previewApprovedLeaveChange,
   resolveLeaveAdjustment,
   submitLeaveApplication,
 } from "../services/leave-management.service.js";
@@ -53,6 +55,14 @@ const decisionSchema = z.object({
   expectedVersion: z.number().int().positive().optional(),
 });
 const cancellationSchema = z.object({ reason: z.string().min(1).max(2000), expectedVersion: z.number().int().positive().optional() });
+const approvedChangeSchema = z.object({
+  startDate: z.string().regex(DATE).optional(),
+  endDate: z.string().regex(DATE),
+  requestedMinutesPerDay: z.number().int().positive().max(24 * 60).optional(),
+  reason: z.string().min(1).max(2000).optional(),
+  expectedVersion: z.number().int().positive().optional(),
+  confirmed: z.boolean().optional(),
+});
 const adjustmentSchema = z.object({
   employeeId: z.string().min(1),
   leaveTypeCode: z.string().min(1),
@@ -306,6 +316,7 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
       if (q.employeeId && !employeeIsVisible(q.employeeId, scope)) return reply.code(403).send({ error: "Forbidden", message: "Employee is outside your supervised sites" });
       return reply.send(await listLeaveApplications(request.user!.companyId, {
         status: status?.success ? status.data : undefined,
+        statuses: q.approved === "true" ? ["APPROVED", "IMPORTED_APPROVED", "PAYROLL_PROCESSED"] : undefined,
         employeeId: q.employeeId,
         employeeIds: scope,
         leaveTypeCode: q.leaveTypeCode,
@@ -313,6 +324,9 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
         end: q.end,
         limit: q.limit ? Number(q.limit) : undefined,
         offset: q.offset ? Number(q.offset) : undefined,
+        search: q.search,
+        sortBy: z.enum(["startDate", "endDate", "createdAt", "employee"]).safeParse(q.sortBy).data,
+        sortOrder: z.enum(["asc", "desc"]).safeParse(q.sortOrder).data,
       }));
     } catch (error) {
       return sendLeaveError(reply, error);
@@ -362,6 +376,99 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
     try {
       return reply.send(await cancelOrWithdrawLeave({ companyId: request.user!.companyId, applicationId: (request.params as { id: string }).id, actorId: request.user!.sub, reason: parsed.data.reason, expectedVersion: parsed.data.expectedVersion }));
+    } catch (error) {
+      return sendLeaveError(reply, error);
+    }
+  });
+
+  app.get("/applications/approved/export", { preHandler: exportProtect }, async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>;
+    const scope = await visibleEmployeeIds(request.user!);
+    if (q.employeeId && !employeeIsVisible(q.employeeId, scope)) return reply.code(403).send({ error: "Forbidden", message: "Employee is outside your supervised sites" });
+    const result = await listLeaveApplications(request.user!.companyId, {
+      statuses: ["APPROVED", "IMPORTED_APPROVED", "PAYROLL_PROCESSED"],
+      employeeId: q.employeeId,
+      employeeIds: scope,
+      leaveTypeCode: q.leaveTypeCode,
+      start: q.start,
+      end: q.end,
+      search: q.search,
+      sortBy: z.enum(["startDate", "endDate", "createdAt", "employee"]).safeParse(q.sortBy).data,
+      sortOrder: z.enum(["asc", "desc"]).safeParse(q.sortOrder).data,
+      limit: 10_000,
+      offset: 0,
+    });
+    const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll("\"", "\"\"").replace(/^[=+\-@]/, "'$&")}"`;
+    const rows = [
+      ["Application ID", "Employee number", "Employee", "Leave type", "Start date", "End date", "Hours", "Status", "Reason"],
+      ...result.data.map((application) => [
+        application.id,
+        application.employee.employeeNumber,
+        `${application.employee.firstName} ${application.employee.lastName}`,
+        application.leaveType.name,
+        application.startDate.toISOString().slice(0, 10),
+        application.endDate.toISOString().slice(0, 10),
+        (application.calculatedMinutes / 60).toFixed(2),
+        application.status,
+        application.reason ?? "",
+      ]),
+    ];
+    reply.header("Content-Type", "text/csv; charset=utf-8");
+    reply.header("Content-Disposition", `attachment; filename="approved-leave-${new Date().toISOString().slice(0, 10)}.csv"`);
+    return reply.send(`\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}`);
+  });
+
+  app.post("/applications/:id/change-preview", { preHandler: approveProtect }, async (request, reply) => {
+    const parsed = approvedChangeSchema.pick({ startDate: true, endDate: true, requestedMinutesPerDay: true }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
+    try {
+      return reply.send(await previewApprovedLeaveChange({
+        companyId: request.user!.companyId,
+        applicationId: (request.params as { id: string }).id,
+        ...parsed.data,
+      }));
+    } catch (error) {
+      return sendLeaveError(reply, error);
+    }
+  });
+
+  app.post("/applications/:id/amend", { preHandler: approveProtect }, async (request, reply) => {
+    const parsed = approvedChangeSchema.required({ reason: true, confirmed: true }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
+    try {
+      return reply.send(await amendApprovedLeave({
+        companyId: request.user!.companyId,
+        applicationId: (request.params as { id: string }).id,
+        actorId: request.user!.sub,
+        changeType: "AMENDMENT",
+        ...parsed.data,
+      }));
+    } catch (error) {
+      return sendLeaveError(reply, error);
+    }
+  });
+
+  app.post("/applications/:id/early-return", { preHandler: approveProtect }, async (request, reply) => {
+    const parsed = z.object({
+      returnDate: z.string().regex(DATE),
+      reason: z.string().min(1).max(2000),
+      expectedVersion: z.number().int().positive().optional(),
+      confirmed: z.literal(true),
+    }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
+    const returnDate = normalizeDate(parsed.data.returnDate);
+    const endDate = new Date(returnDate.getTime() - 86_400_000).toISOString().slice(0, 10);
+    try {
+      return reply.send(await amendApprovedLeave({
+        companyId: request.user!.companyId,
+        applicationId: (request.params as { id: string }).id,
+        actorId: request.user!.sub,
+        endDate,
+        reason: parsed.data.reason,
+        expectedVersion: parsed.data.expectedVersion,
+        confirmed: true,
+        changeType: "EARLY_RETURN",
+      }));
     } catch (error) {
       return sendLeaveError(reply, error);
     }
