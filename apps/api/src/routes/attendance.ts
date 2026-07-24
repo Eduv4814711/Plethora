@@ -188,8 +188,15 @@ export async function attendanceRoutes(app: FastifyInstance) {
       });
     }
     const shiftDate = normalizeLeaveDate(dateKeyInTimeZone(shift.startTime, await getCompanyTimezone(companyId)));
-    if (await findApprovedLeaveConflict(companyId, shift.employeeId, shiftDate)) {
-      return reply.code(409).send({ error: "Approved leave conflict", message: "Cancel or adjust the approved leave before recording attendance." });
+    const leaveConflict = await findApprovedLeaveConflict(companyId, shift.employeeId, shiftDate);
+    if (leaveConflict) {
+      const applicationId = leaveConflict.application?.id ?? leaveConflict.occurrence?.applicationId;
+      return reply.code(409).send({
+        error: "Approved leave conflict",
+        code: "APPROVED_LEAVE_CONFLICT",
+        message: "Record an early return, amend, or cancel the approved leave before recording attendance.",
+        action: applicationId ? { type: "REVIEW_APPROVED_LEAVE", applicationId, href: `/employees/leave?approved=${applicationId}` } : undefined,
+      });
     }
 
     const clockIn = parsed.data.clockIn
@@ -537,8 +544,15 @@ export async function attendanceRoutes(app: FastifyInstance) {
       });
     }
     const leaveDate = normalizeLeaveDate(dateKeyInTimeZone(clockIn, await getCompanyTimezone(companyId)));
-    if (await findApprovedLeaveConflict(companyId, employeeId, leaveDate)) {
-      return reply.code(409).send({ error: "Approved leave conflict", message: "Cancel or adjust the approved leave before creating manual attendance." });
+    const leaveConflict = await findApprovedLeaveConflict(companyId, employeeId, leaveDate);
+    if (leaveConflict) {
+      const applicationId = leaveConflict.application?.id ?? leaveConflict.occurrence?.applicationId;
+      return reply.code(409).send({
+        error: "Approved leave conflict",
+        code: "APPROVED_LEAVE_CONFLICT",
+        message: "Record an early return, amend, or cancel the approved leave before creating manual attendance.",
+        action: applicationId ? { type: "REVIEW_APPROVED_LEAVE", applicationId, href: `/employees/leave?approved=${applicationId}` } : undefined,
+      });
     }
 
     const { hoursWorked, overtimeHours } = calculateHours(clockIn, clockOut, clockIn, clockOut);

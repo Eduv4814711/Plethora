@@ -10,6 +10,7 @@ import { authHeader, isIntegrationDatabaseAvailable } from "../../test-utils/ten
 import { AttendanceValidationError, validateClockIn } from "../attendance.service.js";
 import { revertPayrollToDraft } from "../payroll.service.js";
 import {
+  amendApprovedLeave,
   cancelOrWithdrawLeave,
   accrueConfirmedLeave,
   createLeaveApplication,
@@ -19,6 +20,7 @@ import {
   getLeaveReadiness,
   listLeaveApplications,
   postLeaveToPayroll,
+  previewApprovedLeaveChange,
   previewLeave,
   resolveLeaveAdjustment,
 } from "../leave-management.service.js";
@@ -229,6 +231,43 @@ describe.runIf(dbReady)("authoritative leave source of truth (PostgreSQL integra
     expect(await prisma.leaveOccurrence.count({ where: { applicationId: application.id, status: "CANCELLED" } })).toBe(1);
     expect((await prisma.payrollRun.findUniqueOrThrow({ where: { id: payroll.id } })).status).toBe("paid");
     await prisma.shift.delete({ where: { id: paidShift.id } });
+  });
+
+  it("previews and transactionally records an approved early return with one idempotent balance correction", async () => {
+    const originalShift = await prisma.shift.findUniqueOrThrow({ where: { id: shiftId }, select: { siteId: true } });
+    const shifts = await prisma.shift.createManyAndReturn({ data: [
+      { companyId, employeeId, siteId: originalShift.siteId, startTime: new Date("2026-12-10T06:00:00.000Z"), endTime: new Date("2026-12-10T18:00:00.000Z"), shiftType: "day", status: "assigned" },
+      { companyId, employeeId, siteId: originalShift.siteId, startTime: new Date("2026-12-11T06:00:00.000Z"), endTime: new Date("2026-12-11T18:00:00.000Z"), shiftType: "day", status: "assigned" },
+    ] });
+    const application = await createLeaveApplication({
+      companyId, employeeId, leaveTypeCode: "annual", startDate: "2026-12-10", endDate: "2026-12-11",
+      reason: "Two day leave", actorId, idempotencyKey: `early-return:${suffix}`,
+    });
+    const approved = await decideLeaveApplication({ companyId, applicationId: application.id, actorId, decision: "approve", expectedVersion: application.version });
+    const impact = await previewApprovedLeaveChange({ companyId, applicationId: application.id, endDate: "2026-12-10" });
+    expect(impact.delta.balanceMinutes).toBe(-12 * 60);
+    expect(impact.payroll.action).toBe("NONE");
+    await expect(amendApprovedLeave({
+      companyId, applicationId: application.id, actorId, endDate: "2026-12-10",
+      reason: "Employee returned on 11 December", expectedVersion: approved!.version, confirmed: false, changeType: "EARLY_RETURN",
+    })).rejects.toMatchObject({ code: "CONFIRMATION_REQUIRED" });
+    const changed = await amendApprovedLeave({
+      companyId, applicationId: application.id, actorId, endDate: "2026-12-10",
+      reason: "Employee returned on 11 December", expectedVersion: approved!.version, confirmed: true, changeType: "EARLY_RETURN",
+    });
+    expect(changed?.endDate.toISOString().slice(0, 10)).toBe("2026-12-10");
+    expect(changed?.calculatedMinutes).toBe(12 * 60);
+    expect(await prisma.leaveOccurrence.count({ where: { applicationId: application.id, status: "APPROVED" } })).toBe(1);
+    expect(await prisma.leaveLedgerEntry.count({ where: { applicationId: application.id, entryType: "REVERSAL" } })).toBe(1);
+    expect(await prisma.leaveLedgerEntry.count({ where: { applicationId: application.id, idempotencyKey: { startsWith: `approved-leave-change:${application.id}:` } } })).toBe(1);
+    const audit = await prisma.leaveAuditEvent.findFirstOrThrow({ where: { applicationId: application.id, eventType: "APPROVED_LEAVE_EARLY_RETURN" } });
+    expect(audit.reason).toBe("Employee returned on 11 December");
+    expect(audit.previousValue).toMatchObject({ endDate: "2026-12-11", balanceMinutes: 24 * 60 });
+    await expect(amendApprovedLeave({
+      companyId, applicationId: application.id, actorId, endDate: "2026-12-10",
+      reason: "Duplicate retry", expectedVersion: approved!.version, confirmed: true,
+    })).rejects.toMatchObject({ code: "VERSION_CONFLICT" });
+    await prisma.shift.deleteMany({ where: { id: { in: shifts.map((shift) => shift.id) } } });
   });
 
   it("treats legacy hours as a full day for non-partial leave without weakening modern partial-day validation", async () => {

@@ -819,6 +819,251 @@ export async function cancelOrWithdrawLeave(params: {
   return getLeaveApplication(params.companyId, application.id);
 }
 
+export type ApprovedLeaveChangePreview = {
+  applicationId: string;
+  version: number;
+  previous: {
+    startDate: string;
+    endDate: string;
+    calculatedMinutes: number;
+    paidMinutes: number;
+    unpaidMinutes: number;
+    balanceMinutes: number;
+    shiftsAffected: number;
+  };
+  proposed: LeavePreview;
+  delta: {
+    calculatedMinutes: number;
+    paidMinutes: number;
+    unpaidMinutes: number;
+    balanceMinutes: number;
+    shiftsAffected: number;
+  };
+  payroll: {
+    posted: boolean;
+    locked: boolean;
+    paid: boolean;
+    action: "NONE" | "REVERT_TO_DRAFT" | "EXTERNAL_CORRECTION_REQUIRED";
+  };
+};
+
+async function loadApprovedLeaveForChange(companyId: string, applicationId: string) {
+  const application = await prisma.leaveApplication.findFirst({
+    where: { id: applicationId, companyId },
+    include: {
+      leaveType: true,
+      occurrences: true,
+      payrollPostings: { where: { isReversal: false }, include: { payrollRun: { select: { status: true } } } },
+    },
+  });
+  if (!application) throw new LeaveManagementError("Leave application not found", 404, "NOT_FOUND");
+  if (!["APPROVED", "IMPORTED_APPROVED", "PAYROLL_PROCESSED"].includes(application.status)) {
+    throw new LeaveManagementError("Only approved leave can be amended or ended early", 409, "LEAVE_STATUS_CONFLICT");
+  }
+  return application;
+}
+
+export async function previewApprovedLeaveChange(params: {
+  companyId: string;
+  applicationId: string;
+  startDate?: string;
+  endDate: string;
+  requestedMinutesPerDay?: number;
+}): Promise<ApprovedLeaveChangePreview> {
+  const application = await loadApprovedLeaveForChange(params.companyId, params.applicationId);
+  const startDate = params.startDate ?? formatLeaveDateKey(application.startDate);
+  const proposed = await previewLeave({
+    companyId: params.companyId,
+    employeeId: application.employeeId,
+    leaveTypeCode: application.leaveType.code,
+    startDate,
+    endDate: params.endDate,
+    requestedMinutesPerDay: params.requestedMinutesPerDay,
+    excludeApplicationId: application.id,
+  });
+  const previousBalanceMinutes = application.occurrences.reduce((sum, occurrence) => sum + occurrence.balanceMinutes, 0);
+  const proposedBalanceMinutes = proposed.occurrences.reduce((sum, occurrence) => sum + occurrence.balanceMinutes, 0);
+  const paid = application.payrollPostings.some((posting) => posting.payrollRun.status === "paid");
+  const locked = application.payrollPostings.some((posting) => posting.payrollRun.status === "approved");
+  return {
+    applicationId: application.id,
+    version: application.version,
+    previous: {
+      startDate: formatLeaveDateKey(application.startDate),
+      endDate: formatLeaveDateKey(application.endDate),
+      calculatedMinutes: application.calculatedMinutes,
+      paidMinutes: application.paidMinutes,
+      unpaidMinutes: application.unpaidMinutes,
+      balanceMinutes: previousBalanceMinutes,
+      shiftsAffected: application.occurrences.filter((occurrence) => occurrence.shiftId).length,
+    },
+    proposed,
+    delta: {
+      calculatedMinutes: proposed.calculatedMinutes - application.calculatedMinutes,
+      paidMinutes: proposed.paidMinutes - application.paidMinutes,
+      unpaidMinutes: proposed.unpaidMinutes - application.unpaidMinutes,
+      balanceMinutes: proposedBalanceMinutes - previousBalanceMinutes,
+      shiftsAffected: proposed.staffingImpact.shiftsAffected - application.occurrences.filter((occurrence) => occurrence.shiftId).length,
+    },
+    payroll: {
+      posted: application.payrollPostings.length > 0,
+      locked,
+      paid,
+      action: paid ? "EXTERNAL_CORRECTION_REQUIRED" : locked ? "REVERT_TO_DRAFT" : "NONE",
+    },
+  };
+}
+
+export async function amendApprovedLeave(params: {
+  companyId: string;
+  applicationId: string;
+  actorId: string;
+  startDate?: string;
+  endDate: string;
+  requestedMinutesPerDay?: number;
+  reason: string;
+  expectedVersion?: number;
+  confirmed: boolean;
+  changeType?: "AMENDMENT" | "EARLY_RETURN";
+}) {
+  if (!params.reason.trim()) throw new LeaveManagementError("A reason is required for an approved leave change");
+  if (!params.confirmed) throw new LeaveManagementError("Confirm the impact preview before changing approved leave", 409, "CONFIRMATION_REQUIRED");
+  const application = await loadApprovedLeaveForChange(params.companyId, params.applicationId);
+  if (params.expectedVersion != null && application.version !== params.expectedVersion) {
+    throw new LeaveManagementError("Leave application changed since the impact was previewed; preview it again", 409, "VERSION_CONFLICT");
+  }
+  const impact = await previewApprovedLeaveChange(params);
+  if (impact.proposed.conflicts.length) throw new LeaveManagementError("The amended dates overlap another active leave", 409, "LEAVE_OVERLAP");
+  if (!impact.proposed.policyConfirmed) throw new LeaveManagementError("A confirmed policy version must cover the amended leave period", 409, "POLICY_NOT_CONFIRMED");
+  if (impact.proposed.balanceImpact.projectedMinutes < 0 && !impact.proposed.negativeBalanceAllowed) {
+    throw new LeaveManagementError("The amendment would create a negative leave balance", 409, "INSUFFICIENT_LEAVE_BALANCE");
+  }
+  if (impact.payroll.paid) {
+    throw new LeaveManagementError("Paid payroll contains this leave; use cancellation and complete an external payroll correction", 409, "EXTERNAL_CORRECTION_REQUIRED");
+  }
+  if (impact.payroll.locked) {
+    throw new LeaveManagementError("Revert the approved payroll run to draft before amending this leave", 409, "PAYROLL_REVERT_REQUIRED");
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const changed = await tx.leaveApplication.updateMany({
+      where: { id: application.id, companyId: params.companyId, version: application.version, status: application.status },
+      data: {
+        startDate: normalizeLeaveDate(impact.proposed.startDate),
+        endDate: normalizeLeaveDate(impact.proposed.endDate),
+        requestedMinutes: params.requestedMinutesPerDay ?? impact.proposed.calculatedMinutes,
+        calculatedMinutes: impact.proposed.calculatedMinutes,
+        paidMinutes: impact.proposed.paidMinutes,
+        unpaidMinutes: impact.proposed.unpaidMinutes,
+        policyVersionId: impact.proposed.policyVersionId,
+        decisionReason: params.reason.trim(),
+        status: "APPROVED",
+        version: { increment: 1 },
+      },
+    });
+    if (changed.count !== 1) throw new LeaveManagementError("Leave application changed during amendment; preview it again", 409, "VERSION_CONFLICT");
+
+    await tx.leavePayrollPosting.deleteMany({ where: { applicationId: application.id } });
+    await tx.leaveOccurrence.deleteMany({ where: { applicationId: application.id } });
+    await tx.leaveOccurrence.createMany({
+      data: impact.proposed.occurrences.map((occurrence) => ({
+        companyId: params.companyId,
+        applicationId: application.id,
+        employeeId: application.employeeId,
+        leaveDate: occurrence.leaveDate,
+        shiftId: occurrence.shiftId,
+        siteId: occurrence.siteId,
+        scheduledMinutes: occurrence.scheduledMinutes,
+        requestedMinutes: occurrence.requestedMinutes,
+        balanceMinutes: occurrence.balanceMinutes,
+        paidMinutes: occurrence.paidMinutes,
+        unpaidMinutes: occurrence.unpaidMinutes,
+        payrollTreatment: occurrence.payrollTreatment,
+        status: "APPROVED",
+      })),
+    });
+
+    const takenEntries = await tx.leaveLedgerEntry.findMany({
+      where: { applicationId: application.id, entryType: "TAKEN", reversedBy: null },
+    });
+    for (const entry of takenEntries) {
+      await tx.leaveLedgerEntry.create({
+        data: {
+          companyId: params.companyId, employeeId: application.employeeId, leaveTypeId: application.leaveTypeId,
+          applicationId: application.id, entryType: "REVERSAL", effectiveDate: normalizeLeaveDate(new Date()),
+          minutes: -entry.minutes, reason: params.reason.trim(), createdById: params.actorId, reversalOfId: entry.id,
+          metadata: { changeType: params.changeType ?? "AMENDMENT", applicationVersion: application.version + 1 },
+        },
+      });
+    }
+    const balanceMinutes = impact.proposed.occurrences.reduce((sum, occurrence) => sum + occurrence.balanceMinutes, 0);
+    if (balanceMinutes > 0) {
+      await tx.leaveLedgerEntry.upsert({
+        where: { companyId_idempotencyKey: { companyId: params.companyId, idempotencyKey: `approved-leave-change:${application.id}:v${application.version + 1}:taken` } },
+        create: {
+          companyId: params.companyId, employeeId: application.employeeId, leaveTypeId: application.leaveTypeId,
+          applicationId: application.id, entryType: "TAKEN", effectiveDate: normalizeLeaveDate(impact.proposed.startDate),
+          minutes: -balanceMinutes, reason: `Approved leave ${params.changeType === "EARLY_RETURN" ? "ended early" : "amended"}`,
+          createdById: params.actorId, idempotencyKey: `approved-leave-change:${application.id}:v${application.version + 1}:taken`,
+        },
+        update: {},
+      });
+    }
+    const legacyIds = Array.isArray(application.legacyLeaveRecordIds) ? application.legacyLeaveRecordIds.filter((id): id is string => typeof id === "string") : [];
+    if (legacyIds.length) await tx.leaveRecord.deleteMany({ where: { id: { in: legacyIds } } });
+    const rowsByDate = new Map<string, { date: Date; hours: number }>();
+    for (const occurrence of impact.proposed.occurrences) {
+      const key = formatLeaveDateKey(occurrence.leaveDate);
+      const current = rowsByDate.get(key) ?? { date: occurrence.leaveDate, hours: 0 };
+      current.hours += occurrence.requestedMinutes / 60;
+      rowsByDate.set(key, current);
+    }
+    const legacyRecords = await tx.leaveRecord.createManyAndReturn({
+      data: [...rowsByDate.values()].map((row) => ({ employeeId: application.employeeId, date: row.date, type: application.leaveType.code, hours: row.hours })),
+    });
+    await tx.leaveApplication.update({ where: { id: application.id }, data: { legacyLeaveRecordIds: legacyRecords.map((row) => row.id) } });
+    await tx.operationalAlert.updateMany({
+      where: { companyId: params.companyId, dedupeKey: { startsWith: `leave_vacancy:${application.id}:` }, status: { in: ["OPEN", "ACKNOWLEDGED"] } },
+      data: { status: "RESOLVED", resolvedAt: new Date(), resolvedById: params.actorId },
+    });
+    for (const occurrence of impact.proposed.occurrences.filter((row) => row.shiftId && row.siteId)) {
+      const dedupeKey = `leave_vacancy:${application.id}:${occurrence.shiftId}`;
+      await tx.operationalAlert.upsert({
+        where: { companyId_dedupeKey: { companyId: params.companyId, dedupeKey } },
+        create: {
+          companyId: params.companyId, title: "Roster cover required for amended approved leave",
+          message: `Approved leave on ${formatLeaveDateKey(occurrence.leaveDate)} leaves a rostered shift requiring cover.`,
+          priority: "CRITICAL", sourceModule: "ROSTERING",
+          dedupeKey, sourceId: occurrence.shiftId!,
+          siteId: occurrence.siteId!, employeeId: application.employeeId,
+          metadata: { applicationId: application.id, shiftId: occurrence.shiftId, leaveDate: formatLeaveDateKey(occurrence.leaveDate), applicationVersion: application.version + 1 },
+        },
+        update: {
+          title: "Roster cover required for amended approved leave",
+          message: `Approved leave on ${formatLeaveDateKey(occurrence.leaveDate)} leaves a rostered shift requiring cover.`,
+          status: "OPEN", resolvedAt: null, resolvedById: null,
+          metadata: { applicationId: application.id, shiftId: occurrence.shiftId, leaveDate: formatLeaveDateKey(occurrence.leaveDate), applicationVersion: application.version + 1 },
+        },
+      });
+    }
+    await addLeaveAudit(tx, {
+      companyId: params.companyId, employeeId: application.employeeId, applicationId: application.id, userId: params.actorId,
+      eventType: params.changeType === "EARLY_RETURN" ? "APPROVED_LEAVE_EARLY_RETURN" : "APPROVED_LEAVE_AMENDED",
+      reason: params.reason.trim(),
+      previousValue: impact.previous,
+      newValue: {
+        startDate: impact.proposed.startDate, endDate: impact.proposed.endDate,
+        calculatedMinutes: impact.proposed.calculatedMinutes, paidMinutes: impact.proposed.paidMinutes,
+        unpaidMinutes: impact.proposed.unpaidMinutes, balanceMinutes,
+      },
+      metadata: { impact: impact.delta, confirmed: true, previousVersion: application.version, newVersion: application.version + 1 },
+    });
+    return tx.leaveApplication.findUniqueOrThrow({ where: { id: application.id } });
+  });
+  await reconcileContinuityForEmployee(application.employeeId, params.companyId, params.changeType === "EARLY_RETURN" ? "leave_early_return" : "leave_amended").catch(() => undefined);
+  return getLeaveApplication(params.companyId, result.id);
+}
+
 export async function getLeaveApplication(companyId: string, id: string, transaction?: Prisma.TransactionClient) {
   const db = transaction ?? prisma;
   return db.leaveApplication.findFirst({
@@ -838,6 +1083,7 @@ export async function getLeaveApplication(companyId: string, id: string, transac
 
 export async function listLeaveApplications(companyId: string, filter: {
   status?: LeaveApplicationStatus;
+  statuses?: LeaveApplicationStatus[];
   employeeId?: string;
   employeeIds?: string[];
   start?: string;
@@ -845,18 +1091,31 @@ export async function listLeaveApplications(companyId: string, filter: {
   leaveTypeCode?: string;
   limit?: number;
   offset?: number;
+  search?: string;
+  sortBy?: "startDate" | "endDate" | "createdAt" | "employee";
+  sortOrder?: "asc" | "desc";
 }) {
+  const search = filter.search?.trim();
   const where: Prisma.LeaveApplicationWhereInput = {
     companyId,
-    ...(filter.status ? { status: filter.status } : {}),
+    ...(filter.status ? { status: filter.status } : filter.statuses?.length ? { status: { in: filter.statuses } } : {}),
     ...(filter.employeeId ? { employeeId: filter.employeeId } : {}),
     ...(!filter.employeeId && filter.employeeIds ? { employeeId: { in: filter.employeeIds } } : {}),
     ...(filter.leaveTypeCode ? { leaveType: { code: filter.leaveTypeCode } } : {}),
+    ...(search ? { OR: [
+      { employee: { firstName: { contains: search, mode: "insensitive" } } },
+      { employee: { lastName: { contains: search, mode: "insensitive" } } },
+      { employee: { employeeNumber: { contains: search, mode: "insensitive" } } },
+      { reason: { contains: search, mode: "insensitive" } },
+    ] } : {}),
     ...(filter.start || filter.end ? {
       startDate: filter.end ? { lte: normalizeLeaveDate(filter.end) } : undefined,
       endDate: filter.start ? { gte: normalizeLeaveDate(filter.start) } : undefined,
     } : {}),
   };
+  const orderBy: Prisma.LeaveApplicationOrderByWithRelationInput[] = filter.sortBy === "employee"
+    ? [{ employee: { lastName: filter.sortOrder ?? "asc" } }, { employee: { firstName: filter.sortOrder ?? "asc" } }, { id: "asc" }]
+    : [{ [filter.sortBy ?? "createdAt"]: filter.sortOrder ?? "desc" }, { id: "asc" }];
   const [data, total] = await Promise.all([
     prisma.leaveApplication.findMany({
       where,
@@ -866,7 +1125,7 @@ export async function listLeaveApplications(companyId: string, filter: {
         documents: { select: LEAVE_DOCUMENT_PUBLIC_SELECT },
         _count: { select: { occurrences: true } },
       },
-      orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
+      orderBy,
       take: Math.min(filter.limit ?? 100, 500),
       skip: filter.offset ?? 0,
     }),
