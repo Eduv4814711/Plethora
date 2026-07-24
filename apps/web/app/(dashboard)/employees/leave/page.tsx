@@ -11,6 +11,7 @@ import { GuardSearchPicker } from "@/components/guard-search-picker";
 import { hasCapability } from "@/lib/permissions";
 import {
   leaveOccurrenceCount,
+  leavePolicyVersionDisplayState,
   prepareLeaveAdjustmentResolution,
   type LeaveAdjustmentResolutionDecision,
 } from "@/lib/leave-management-utils";
@@ -145,6 +146,7 @@ const monthStart = format(startOfMonth(new Date()), "yyyy-MM-dd");
 const monthEnd = format(endOfMonth(new Date()), "yyyy-MM-dd");
 const pendingStatuses = ["PENDING_HR", "SUBMITTED"];
 const actionStatuses = ["PENDING_HR", "ADJUSTMENT_REQUIRED", "CANCELLATION_REQUESTED"];
+const supportedBalanceAccrualMethods = new Set(["EVEN_MONTHLY", "MONTHLY_FIXED", "ANNUAL_GRANT"]);
 const tabs: Array<{ key: Tab; label: string; shortLabel: string; icon: IconName }> = [
   { key: "queue", label: "Approval queue", shortLabel: "Queue", icon: "inbox" },
   { key: "approved", label: "Approved leave", shortLabel: "Approved", icon: "check" },
@@ -208,7 +210,7 @@ function friendly(value: string): string {
 function statusClass(status: string): string {
   if (["APPROVED", "IMPORTED_APPROVED", "PAYROLL_PROCESSED", "ACTIVE", "VERIFIED"].includes(status)) return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (["REJECTED", "CANCELLED", "ADJUSTMENT_REQUIRED"].includes(status)) return "border-red-200 bg-red-50 text-red-700";
-  if (["DRAFT", "WITHDRAWN", "EXPIRED"].includes(status)) return "border-neutral-200 bg-neutral-100 text-neutral-600";
+  if (["DRAFT", "WITHDRAWN", "EXPIRED", "SUPERSEDED"].includes(status)) return "border-neutral-200 bg-neutral-100 text-neutral-600";
   return "border-amber-200 bg-amber-50 text-amber-700";
 }
 
@@ -1187,23 +1189,29 @@ function PolicyCard({ policy, canCreate, canEdit, canApprove, busy, onConfirm, o
       <div className="border-b border-neutral-200 px-5 py-4"><h3 className="font-bold">{policy.name}</h3><p className="mt-1 text-sm text-neutral-500">{policy.description}</p></div>
       <div className="divide-y divide-neutral-200">
         {policy.versions.map((version) => {
+          const display = leavePolicyVersionDisplayState(version, today);
           const configuring = busy === `policy-config:${version.id}`;
-          const canConfigure = canApprove && (
+          const canConfigure = !display.isSuperseded && canApprove && (
             version.reviewStatus === "PENDING_HR_LEGAL_CONFIRMATION" ? canEdit : canCreate
           );
+          const showConfigure = display.configurationRequired && canConfigure;
+          const showConfirm = !display.isSuperseded
+            && version.reviewStatus === "PENDING_HR_LEGAL_CONFIRMATION"
+            && canApprove;
           return (
             <div key={version.id} className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2"><strong>{version.leaveType.name}</strong><Status value={version.reviewStatus} />{!version.configurationReady && <Status value="CONFIGURATION_REQUIRED" />}</div>
+                <div className="flex flex-wrap items-center gap-2"><strong>{version.leaveType.name}</strong><Status value={display.status} />{display.configurationRequired && <Status value="CONFIGURATION_REQUIRED" />}</div>
                 <p className="mt-1 text-xs text-neutral-500">Version {version.version} · effective {dateLabel(version.effectiveFrom)}{version.effectiveTo ? ` to ${dateLabel(version.effectiveTo)}` : " onward"} · {version.sourceAuthority}</p>
                 <p className="mt-1 text-xs text-neutral-600">{friendly(version.accrualMethod)}{version.entitlementMinutes ? ` · ${hours(version.entitlementMinutes)} per ${version.cycleMonths}-month cycle` : ""}{version.accrualRateMinutes ? ` · ${hours(Number(version.accrualRateMinutes))} monthly` : ""}</p>
                 {version.legalReference && <p className="mt-1 text-xs text-neutral-500">{version.legalReference}</p>}
-                {version.configurationIssues.length > 0 && <ul className="mt-2 space-y-1 text-xs text-red-700">{version.configurationIssues.map((issue) => <li key={issue}>• {issue}</li>)}</ul>}
+                {display.isSuperseded && <p className="mt-2 text-xs text-neutral-500">Historical version retained for audit; configure the current version instead.</p>}
+                {display.configurationIssues.length > 0 && <ul className="mt-2 space-y-1 text-xs text-red-700">{display.configurationIssues.map((issue) => <li key={issue}>• {issue}</li>)}</ul>}
               </div>
-              {(canConfigure || canApprove) && (
+              {(showConfigure || showConfirm) && (
                 <div className="flex shrink-0 gap-2">
-                  {!version.configurationReady && canConfigure ? <button disabled={configuring} onClick={() => onConfigure(version)} className="btn-secondary px-3 py-2 text-sm">{configuring ? "Saving..." : "Configure rules"}</button>
-                    : version.reviewStatus === "PENDING_HR_LEGAL_CONFIRMATION" && canApprove ? <button disabled={busy === version.id} onClick={() => onConfirm(version.id)} className="btn-secondary px-3 py-2 text-sm">{busy === version.id ? "Confirming..." : "Confirm after review"}</button>
+                  {showConfigure ? <button disabled={configuring} onClick={() => onConfigure(version)} className="btn-secondary px-3 py-2 text-sm">{configuring ? "Saving..." : "Configure rules"}</button>
+                    : showConfirm ? <button disabled={busy === version.id} onClick={() => onConfirm(version.id)} className="btn-secondary px-3 py-2 text-sm">{busy === version.id ? "Confirming..." : "Confirm after review"}</button>
                     : null}
                 </div>
               )}
@@ -1218,7 +1226,7 @@ function PolicyCard({ policy, canCreate, canEdit, canApprove, busy, onConfirm, o
 function PolicyConfigurationDialog({ selection, busy, onClose, onSubmit }: { selection: PolicyEditorSelection; busy: boolean; onClose: () => void; onSubmit: (payload: PolicyConfigurationPayload) => void }) {
   const { version } = selection;
   const requiresBalance = version.leaveType.requiresBalance;
-  const supportedMethod = ["EVEN_MONTHLY", "MONTHLY_FIXED", "ANNUAL_GRANT"].includes(version.accrualMethod) ? version.accrualMethod : "EVEN_MONTHLY";
+  const supportedMethod = supportedBalanceAccrualMethods.has(version.accrualMethod) ? version.accrualMethod : "";
   const [effectiveFrom, setEffectiveFrom] = useState(version.reviewStatus === "ACTIVE" ? today : version.effectiveFrom.slice(0, 10));
   const [sourceAuthority, setSourceAuthority] = useState(version.sourceAuthority);
   const [legalReference, setLegalReference] = useState(version.legalReference ?? "");
@@ -1237,6 +1245,7 @@ function PolicyConfigurationDialog({ selection, busy, onClose, onSubmit }: { sel
     const monthly = Number(monthlyHours);
     if (!sourceAuthority.trim()) return setLocalError("Enter the policy authority or approved company policy name.");
     if (requiresBalance && (!Number.isInteger(cycle) || cycle <= 0)) return setLocalError("Enter a positive whole-number cycle length.");
+    if (requiresBalance && !supportedBalanceAccrualMethods.has(accrualMethod)) return setLocalError("Choose a supported balance accrual method.");
     if (requiresBalance && accrualMethod === "MONTHLY_FIXED" && (!Number.isFinite(monthly) || monthly <= 0)) return setLocalError("Enter a positive monthly accrual in hours.");
     if (requiresBalance && accrualMethod !== "MONTHLY_FIXED" && (!Number.isFinite(entitlement) || entitlement <= 0)) return setLocalError("Enter a positive entitlement in hours for the cycle.");
     setLocalError(null);
@@ -1268,8 +1277,9 @@ function PolicyConfigurationDialog({ selection, busy, onClose, onSubmit }: { sel
           <Field label="Authority or approved policy" required><input required maxLength={250} value={sourceAuthority} onChange={(event) => setSourceAuthority(event.target.value)} className="input-modern mt-1" /></Field>
           <Field label="Legal or policy reference"><input maxLength={1000} value={legalReference} onChange={(event) => setLegalReference(event.target.value)} className="input-modern mt-1" /></Field>
           {requiresBalance ? <>
-            <Field label="Accrual method" required><select value={accrualMethod} onChange={(event) => setAccrualMethod(event.target.value)} className="input-modern mt-1"><option value="EVEN_MONTHLY">Even monthly from cycle entitlement</option><option value="MONTHLY_FIXED">Fixed monthly hours</option><option value="ANNUAL_GRANT">Grant at employment-cycle anniversary</option></select></Field>
-            {accrualMethod === "MONTHLY_FIXED" ? <Field label="Monthly accrual hours" required><input required type="number" min="0.01" step="0.01" value={monthlyHours} onChange={(event) => setMonthlyHours(event.target.value)} className="input-modern mt-1" /></Field> : <Field label="Entitlement hours per cycle" required><input required type="number" min="0.01" step="0.01" value={entitlementHours} onChange={(event) => setEntitlementHours(event.target.value)} className="input-modern mt-1" /></Field>}
+            <Field label="Accrual method" required><select required value={accrualMethod} onChange={(event) => { setAccrualMethod(event.target.value); setLocalError(null); }} className="input-modern mt-1"><option value="" disabled>Select an accrual method</option><option value="EVEN_MONTHLY">Even monthly from cycle entitlement</option><option value="MONTHLY_FIXED">Fixed monthly hours</option><option value="ANNUAL_GRANT">Grant at employment-cycle anniversary</option></select></Field>
+            <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-blue-800">{accrualMethod === "MONTHLY_FIXED" ? "Enter the approved hours earned each month below." : accrualMethod === "ANNUAL_GRANT" ? "Enter the full approved cycle entitlement below; it will be granted on the employee's cycle anniversary." : accrualMethod === "EVEN_MONTHLY" ? "Enter the full approved cycle entitlement below; the system will divide it evenly across the cycle months." : "Choose the approved accrual method, complete its entitlement value, then save and confirm to clear the policy warning."}</p>
+            {accrualMethod === "MONTHLY_FIXED" ? <Field label="Monthly accrual hours" required><input required type="number" min="0.01" step="0.01" value={monthlyHours} onChange={(event) => { setMonthlyHours(event.target.value); setLocalError(null); }} className="input-modern mt-1" /></Field> : accrualMethod ? <Field label="Entitlement hours per cycle" required><input required type="number" min="0.01" step="0.01" value={entitlementHours} onChange={(event) => { setEntitlementHours(event.target.value); setLocalError(null); }} className="input-modern mt-1" /></Field> : null}
             <Field label="Maximum consecutive days"><input type="number" min="1" step="1" value={maxConsecutiveDays} onChange={(event) => setMaxConsecutiveDays(event.target.value)} className="input-modern mt-1" /></Field>
             <p className="rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-xs leading-5 text-neutral-600">Carry-over and balance expiry are not silently automated. When the approved policy requires either, HR must post the cycle-close change as an audited balance adjustment.</p>
             <label className="flex items-start gap-3 rounded-lg border border-neutral-200 p-3"><input type="checkbox" checked={negativeBalanceAllowed} onChange={(event) => setNegativeBalanceAllowed(event.target.checked)} className="mt-1 h-4 w-4 accent-orange-600" /><span><span className="block text-sm font-semibold">Allow a negative balance</span><span className="text-xs text-neutral-500">Leave approvals are blocked when insufficient unless this is explicitly enabled.</span></span></label>
