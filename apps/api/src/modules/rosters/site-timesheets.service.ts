@@ -3,6 +3,7 @@ import type { Prisma, SiteRosterShiftCode, SiteTimesheetAttendance, SiteTimeshee
 import { createAuditLog } from "../../lib/audit.js";
 import { prisma } from "../../lib/prisma.js";
 import { getCompanyTimezone, inferShiftTypeFromStartTime } from "../../lib/timezone.js";
+import { findApprovedLeaveConflict } from "../../services/attendance.service.js";
 import { dateKey, dateOnly } from "./rosters.service.js";
 
 type Tx = Prisma.TransactionClient | typeof prisma;
@@ -174,6 +175,7 @@ function inferredAttendanceStatus(input: {
   actualShiftCode?: string | null;
   clockIn?: Date | null;
   clockOut?: Date | null;
+  isOnApprovedLeave?: boolean;
 }): SiteTimesheetAttendance {
   if (input.clockIn || input.clockOut) return "present";
   if (input.actualShiftCode === "R") return "reliever";
@@ -181,6 +183,10 @@ function inferredAttendanceStatus(input: {
   if (input.actualShiftCode === "SL") return "sick_leave";
   if (input.actualShiftCode === "TR") return "training";
   if (input.actualShiftCode === "O" || input.actualShiftCode === "blank") return "off";
+  // No shift/clock data resolved this row yet — if the roster row is stale (leave was
+  // approved after generation, or continuity hasn't reconciled it to "L" yet), fall back
+  // to the real leave record rather than leaving the row stuck on "pending" forever.
+  if (input.isOnApprovedLeave) return "leave";
   if (WORKING_CODES.has(input.plannedShiftCode ?? "")) return "pending";
   return "off";
 }
@@ -269,9 +275,13 @@ async function seedRows(tx: Tx, companyId: string, timesheetId: string, siteId: 
     shiftByGuardDateType.set(shiftMatchKey(shift.employeeId, shift.startTime, type), shift);
   }
 
+  const workingPlanned = planned.filter((p) => WORKING_CODES.has(p.shiftCode));
+  const leaveConflicts = await Promise.all(
+    workingPlanned.map((p) => findApprovedLeaveConflict(companyId, p.guardId, dateOnly(p.rosterDate)))
+  );
+
   const rows: Prisma.SiteTimesheetRowCreateManyInput[] = [];
-  for (const p of planned) {
-    if (!WORKING_CODES.has(p.shiftCode)) continue;
+  workingPlanned.forEach((p, index) => {
     const plannedType = normalizeShiftType(p.shiftType) ?? (p.shiftCode === "N" ? "night" : "day");
     const shift = shiftByGuardDateType.get(shiftMatchKey(p.guardId, p.rosterDate, plannedType));
     const attendance = shift?.attendances[0];
@@ -295,11 +305,12 @@ async function seedRows(tx: Tx, companyId: string, timesheetId: string, siteId: 
         actualShiftCode: shift ? p.shiftCode : null,
         clockIn: attendance?.clockIn,
         clockOut: attendance?.clockOut,
+        isOnApprovedLeave: Boolean(leaveConflicts[index]),
       }),
       sourceShiftId: shift?.id ?? null,
       sourceAttendanceId: attendance?.id ?? null,
     });
-  }
+  });
 
   if (rows.length > 0) await tx.siteTimesheetRow.createMany({ data: rows });
 }
@@ -344,12 +355,19 @@ async function resyncRows(tx: Tx, companyId: string, timesheetId: string, siteId
   }
 
   // 1. Add rows for newly published roster cells that have no row yet.
+  const newPlanned = planned.filter((p) => {
+    if (!WORKING_CODES.has(p.shiftCode)) return false;
+    const plannedType = normalizeShiftType(p.shiftType) ?? (p.shiftCode === "N" ? "night" : "day");
+    return !rowByPlanned.has(shiftMatchKey(p.guardId, p.rosterDate, plannedType));
+  });
+  const newPlannedLeaveConflicts = await Promise.all(
+    newPlanned.map((p) => findApprovedLeaveConflict(companyId, p.guardId, dateOnly(p.rosterDate)))
+  );
+
   const toCreate: Prisma.SiteTimesheetRowCreateManyInput[] = [];
-  for (const p of planned) {
-    if (!WORKING_CODES.has(p.shiftCode)) continue;
+  newPlanned.forEach((p, index) => {
     const plannedType = normalizeShiftType(p.shiftType) ?? (p.shiftCode === "N" ? "night" : "day");
     const key = shiftMatchKey(p.guardId, p.rosterDate, plannedType);
-    if (rowByPlanned.has(key)) continue;
     const shift = shiftByGuardDateType.get(key);
     const attendance = shift?.attendances[0];
     toCreate.push({
@@ -372,11 +390,12 @@ async function resyncRows(tx: Tx, companyId: string, timesheetId: string, siteId
         actualShiftCode: shift ? p.shiftCode : null,
         clockIn: attendance?.clockIn,
         clockOut: attendance?.clockOut,
+        isOnApprovedLeave: Boolean(newPlannedLeaveConflicts[index]),
       }),
       sourceShiftId: shift?.id ?? null,
       sourceAttendanceId: attendance?.id ?? null,
     });
-  }
+  });
   if (toCreate.length > 0) await tx.siteTimesheetRow.createMany({ data: toCreate });
 
   // 2. Default actual worker to scheduled guard on rostered rows still missing one.
@@ -389,7 +408,32 @@ async function resyncRows(tx: Tx, companyId: string, timesheetId: string, siteId
     });
   }
 
-  // 3. Fill actual data on still-pending seeded rows that now have attendance.
+  // 3. Rows still "pending" with no matching shift may now have leave approved for that
+  // date (approved after the row was seeded, or before roster continuity reconciled the
+  // planned shift code to "L") — resolve them to "leave" instead of leaving them stuck.
+  const stillPendingNoShift = existingRows.filter((row) => {
+    if (!row.plannedGuardId) return false;
+    if (row.attendanceStatus !== "pending") return false;
+    if (row.approvalStatus !== "pending") return false;
+    const rowType = resolveRowShiftType(row);
+    return !shiftByGuardDateType.has(shiftMatchKey(row.plannedGuardId, row.workDate, rowType));
+  });
+  const pendingLeaveConflicts = await Promise.all(
+    stillPendingNoShift.map((row) =>
+      findApprovedLeaveConflict(companyId, row.plannedGuardId!, dateOnly(row.workDate))
+    )
+  );
+  await Promise.all(
+    stillPendingNoShift.map((row, index) => {
+      if (!pendingLeaveConflicts[index]) return Promise.resolve();
+      return tx.siteTimesheetRow.update({
+        where: { id: row.id },
+        data: { attendanceStatus: "leave" },
+      });
+    })
+  );
+
+  // 4. Fill actual data on still-pending seeded rows that now have attendance.
   for (const row of existingRows) {
     if (!row.plannedGuardId) continue; // manual/reliever row
     if (row.attendanceStatus !== "pending") continue; // already actioned by an operator
@@ -1423,6 +1467,9 @@ export async function approveSiteTimesheet(
 export async function unlockSiteTimesheet(companyId: string, timesheetId: string, userId: string, reason?: string) {
   const sheet = await prisma.siteTimesheet.findFirst({ where: { id: timesheetId, companyId } });
   if (!sheet) return null;
+  if (sheet.status !== "approved" && sheet.status !== "locked") {
+    return { error: "Timesheet is not approved or locked; there is nothing to unlock." };
+  }
   await prisma.$transaction(async (tx) => {
     await tx.siteTimesheetRow.updateMany({
       where: { siteTimesheetId: timesheetId, companyId },

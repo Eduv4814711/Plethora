@@ -35,9 +35,9 @@ export async function syncContractExpiryAlerts(companyId: string, siteId?: strin
   let created = 0;
   for (const site of sites) {
     if (!site.contractEndDate) continue;
-    const days = Math.ceil(
-      (site.contractEndDate.getTime() - now.getTime()) / (24 * 3600_000)
-    );
+    const diffMs = site.contractEndDate.getTime() - now.getTime();
+    const hasExpired = diffMs <= 0;
+    const days = Math.ceil(diffMs / (24 * 3600_000));
     const priority = contractExpiryPriority(days);
     if (!priority) continue;
 
@@ -45,10 +45,9 @@ export async function syncContractExpiryAlerts(companyId: string, siteId?: strin
     const result = await upsertAlert({
       companyId,
       title: "Site contract expiring soon",
-      message:
-        days < 0
-          ? `Contract for ${site.name} expired ${Math.abs(days)} day(s) ago`
-          : `Contract for ${site.name} expires in ${days} day(s)`,
+      message: hasExpired
+        ? `Contract for ${site.name} expired ${Math.floor(Math.abs(diffMs) / (24 * 3600_000))} day(s) ago`
+        : `Contract for ${site.name} expires in ${days} day(s)`,
       priority,
       sourceModule: "SITES",
       dedupeKey: `contract_expiry:${site.id}:${bucket}`,
@@ -75,10 +74,12 @@ export async function syncDocumentExpiryAlerts(companyId: string) {
   let created = 0;
   for (const doc of docs) {
     if (!doc.expiryDate) continue;
-    const days = Math.ceil((doc.expiryDate.getTime() - now.getTime()) / (24 * 3600_000));
+    const diffMs = doc.expiryDate.getTime() - now.getTime();
+    const hasExpired = diffMs <= 0;
+    const days = Math.ceil(diffMs / (24 * 3600_000));
     const priority = documentExpiryPriority(days);
     if (!priority) continue;
-    if (days < 0 && doc.status === "ACTIVE") {
+    if (hasExpired && doc.status === "ACTIVE") {
       await prisma.managedDocument.update({
         where: { id: doc.id },
         data: { status: "EXPIRED" },
@@ -87,8 +88,8 @@ export async function syncDocumentExpiryAlerts(companyId: string) {
     const bucket = priority === "CRITICAL" ? "7d" : priority === "MEDIUM" ? "30d" : "60d";
     const result = await upsertAlert({
       companyId,
-      title: days < 0 ? "Document expired" : "Document expiring soon",
-      message: `${doc.title} (${doc.documentType}) ${days < 0 ? "has expired" : `expires in ${days} day(s)`}`,
+      title: hasExpired ? "Document expired" : "Document expiring soon",
+      message: `${doc.title} (${doc.documentType}) ${hasExpired ? "has expired" : `expires in ${days} day(s)`}`,
       priority,
       sourceModule: "DOCUMENTS",
       dedupeKey: `doc_expiry:${doc.id}:${bucket}`,
@@ -146,6 +147,51 @@ export async function listDocuments(
     prisma.managedDocument.count({ where }),
   ]);
   return { items, total };
+}
+
+/**
+ * Confirms every optional foreign key on an upload belongs to the uploading company before
+ * it's persisted. Without this, a client-supplied id pointing at another tenant's row would
+ * link a document (and leak its name/id via the document's `include`) across tenants.
+ */
+export async function validateDocumentReferences(
+  companyId: string,
+  refs: {
+    employeeId?: string | null;
+    siteId?: string | null;
+    clientId?: string | null;
+    incidentId?: string | null;
+    taskId?: string | null;
+  }
+): Promise<string | null> {
+  const checks: Array<Promise<boolean>> = [];
+  const labels: string[] = [];
+
+  if (refs.employeeId) {
+    labels.push("employee");
+    checks.push(prisma.employee.findFirst({ where: { id: refs.employeeId, companyId }, select: { id: true } }).then(Boolean));
+  }
+  if (refs.siteId) {
+    labels.push("site");
+    checks.push(prisma.site.findFirst({ where: { id: refs.siteId, companyId }, select: { id: true } }).then(Boolean));
+  }
+  if (refs.clientId) {
+    labels.push("client");
+    checks.push(prisma.client.findFirst({ where: { id: refs.clientId, companyId }, select: { id: true } }).then(Boolean));
+  }
+  if (refs.incidentId) {
+    labels.push("incident");
+    checks.push(prisma.incident.findFirst({ where: { id: refs.incidentId, companyId }, select: { id: true } }).then(Boolean));
+  }
+  if (refs.taskId) {
+    labels.push("task");
+    checks.push(prisma.task.findFirst({ where: { id: refs.taskId, companyId }, select: { id: true } }).then(Boolean));
+  }
+
+  const results = await Promise.all(checks);
+  const invalidIndex = results.findIndex((exists) => !exists);
+  if (invalidIndex === -1) return null;
+  return `The referenced ${labels[invalidIndex]} was not found`;
 }
 
 export async function createDocumentRecord(params: {

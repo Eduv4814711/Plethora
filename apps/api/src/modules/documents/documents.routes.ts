@@ -18,6 +18,7 @@ import {
   createDocumentRecord,
   listDocuments,
   syncDocumentExpiryAlerts,
+  validateDocumentReferences,
 } from "./documents.service.js";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
@@ -120,6 +121,11 @@ export async function documentsRoutes(app: FastifyInstance) {
         error: "Validation error",
         message: parsed.error.issues[0]?.message ?? "Missing document details",
       });
+    }
+
+    const referenceError = await validateDocumentReferences(user.companyId, parsed.data);
+    if (referenceError) {
+      return reply.code(400).send({ error: "Validation error", message: referenceError });
     }
 
     const mimetype = data.mimetype;

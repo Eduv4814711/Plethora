@@ -399,6 +399,62 @@ function overlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date): boolean {
   return aStart < bEnd && aEnd > bStart;
 }
 
+/**
+ * Seeds the rest-rule/consecutive-day-streak maps with real history from the days just
+ * before the reconciliation window. Without this, the window always starts at "today" and
+ * both maps would start empty every run — meaning the night-shift-into-day-shift rest rule
+ * and the 6-consecutive-day cap could never fire on the first day of any reconciliation.
+ * Only looks back 7 days: beyond the 6-day cap, the exact streak length no longer changes
+ * whether CONSECUTIVE_WORK_LIMIT should fire on the next working day.
+ */
+export async function seedGuardWorkHistory(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  siteId: string,
+  guardIds: string[],
+  start: Date
+): Promise<{
+  previousWorkingTypeByGuard: Map<string, "day" | "night">;
+  consecutiveWorkingDaysByGuard: Map<string, number>;
+}> {
+  const previousWorkingTypeByGuard = new Map<string, "day" | "night">();
+  const consecutiveWorkingDaysByGuard = new Map<string, number>();
+  if (guardIds.length === 0) {
+    return { previousWorkingTypeByGuard, consecutiveWorkingDaysByGuard };
+  }
+
+  const LOOKBACK_DAYS = 7;
+  const priorShifts = await tx.siteRosterGeneratedShift.findMany({
+    where: {
+      companyId,
+      siteId,
+      guardId: { in: guardIds },
+      rosterDate: { gte: addDays(start, -LOOKBACK_DAYS), lte: addDays(start, -1) },
+    },
+    select: { guardId: true, rosterDate: true, shiftCode: true },
+  });
+  const shiftByGuardDay = new Map<string, SiteRosterShiftCode>();
+  for (const row of priorShifts) {
+    shiftByGuardDay.set(`${row.guardId}:${dateKey(row.rosterDate)}`, row.shiftCode);
+  }
+
+  for (const guardId of guardIds) {
+    let streak = 0;
+    let previousType: "day" | "night" | undefined;
+    for (let offset = 1; offset <= LOOKBACK_DAYS; offset += 1) {
+      const code = shiftByGuardDay.get(`${guardId}:${dateKey(addDays(start, -offset))}`);
+      const isWorking = code != null && WORKING_CODES.has(code);
+      if (offset === 1) previousType = isWorking ? (code === "N" ? "night" : "day") : undefined;
+      if (!isWorking) break;
+      streak += 1;
+    }
+    if (previousType) previousWorkingTypeByGuard.set(guardId, previousType);
+    if (streak > 0) consecutiveWorkingDaysByGuard.set(guardId, streak);
+  }
+
+  return { previousWorkingTypeByGuard, consecutiveWorkingDaysByGuard };
+}
+
 export async function reconcileRosterContinuityForSite(
   companyId: string,
   siteId: string,
@@ -542,8 +598,13 @@ export async function reconcileRosterContinuityForSite(
         source: SiteRosterGeneratedSource;
       }[] = [];
       const issues: ContinuityIssue[] = [];
-      const previousWorkingTypeByGuard = new Map<string, "day" | "night">();
-      const consecutiveWorkingDaysByGuard = new Map<string, number>();
+      const { previousWorkingTypeByGuard, consecutiveWorkingDaysByGuard } = await seedGuardWorkHistory(
+        tx,
+        companyId,
+        siteId,
+        guardIds,
+        start
+      );
       for (let day = start; day <= end; day = addDays(day, 1)) {
         const dayKey = dateKey(day);
         const patternDay = patternDayForDate(pattern.anchorDate, pattern.cycleLengthDays, day);
@@ -639,6 +700,41 @@ export async function reconcileRosterContinuityForSite(
       let updated = 0;
       let removed = 0;
 
+      // A confirmed replacement guard must take over the absent guard's still-live shift
+      // rather than get a brand-new one created alongside it — otherwise both shifts stay
+      // "assigned" for the same site/date/shift-type, which can trigger false attendance
+      // exceptions on the absent guard's stale shift and double-counts payroll cost.
+      //
+      // Resolved entirely up front (not interleaved with the persistence loop below)
+      // because `desired` interleaves leave and replacement items in guard-array order,
+      // not role order, so a "leave" item and the "replacement" item that should claim its
+      // shift can appear in either order.
+      const leaveCoveredShiftPool = new Map<string, { generatedKey: string; shift: (typeof shifts)[number] }[]>();
+      for (const item of desired) {
+        if (item.source !== "leave") continue;
+        const key = `${item.guardId}:${dateKey(item.date)}`;
+        const linkedShift = generatedByKey.get(key)?.publishedShift;
+        if (!linkedShift) continue;
+        const slot = `${dateKey(item.date)}:${linkedShift.shiftType}`;
+        const bucket = leaveCoveredShiftPool.get(slot) ?? [];
+        bucket.push({ generatedKey: key, shift: linkedShift });
+        leaveCoveredShiftPool.set(slot, bucket);
+      }
+      const consumedLeaveGeneratedKeys = new Set<string>();
+      const reassignmentByReplacementKey = new Map<string, { generatedKey: string; shift: (typeof shifts)[number] }>();
+      for (const item of desired) {
+        if (item.source !== "replacement" || !WORKING_CODES.has(item.code)) continue;
+        const key = `${item.guardId}:${dateKey(item.date)}`;
+        if (generatedByKey.get(key)?.publishedShift) continue; // already has its own shift
+        const shiftType = item.code === "N" ? "night" : "day";
+        const slot = `${dateKey(item.date)}:${shiftType}`;
+        const bucket = leaveCoveredShiftPool.get(slot);
+        const candidate = bucket?.find((entry) => !consumedLeaveGeneratedKeys.has(entry.generatedKey));
+        if (!candidate) continue;
+        consumedLeaveGeneratedKeys.add(candidate.generatedKey);
+        reassignmentByReplacementKey.set(key, candidate);
+      }
+
       for (const item of desired) {
         const key = `${item.guardId}:${dateKey(item.date)}`;
         const existingGenerated = generatedByKey.get(key);
@@ -684,7 +780,15 @@ export async function reconcileRosterContinuityForSite(
         }
 
         if (!isWorking) {
-          if (item.source === "leave" && linkedShift) {
+          if (item.source === "leave" && linkedShift && consumedLeaveGeneratedKeys.has(key)) {
+            // A confirmed replacement already took over this shift below — detach it from
+            // the absent guard's own roster row so future runs don't treat it as still
+            // theirs (and don't re-raise LEAVE_COVERAGE_REQUIRED for an already-covered day).
+            await tx.siteRosterGeneratedShift.update({
+              where: { id: generatedRow.id },
+              data: { publishedShiftId: null },
+            });
+          } else if (item.source === "leave" && linkedShift) {
             // Keep the original duty as the coverage requirement. The approved
             // leave occurrence marks the guard unavailable; vacancy detection
             // and reliever assignment can now reference the unchanged shift.
@@ -730,6 +834,26 @@ export async function reconcileRosterContinuityForSite(
             });
             updated += 1;
           }
+          continue;
+        }
+
+        const reassignment = reassignmentByReplacementKey.get(key);
+        if (reassignment) {
+          await tx.shift.update({
+            where: { id: reassignment.shift.id },
+            data: {
+              employeeId: item.guardId,
+              shiftType,
+              startTime: shiftStart,
+              endTime: shiftEnd,
+              legacyPostName: "Continuous roster",
+            },
+          });
+          await tx.siteRosterGeneratedShift.update({
+            where: { id: generatedRow.id },
+            data: { publishedShiftId: reassignment.shift.id },
+          });
+          updated += 1;
           continue;
         }
 

@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
-import { startOfMonth, subMonths, format, startOfDay, endOfDay } from "date-fns";
+import { startOfMonth, subMonths, format } from "date-fns";
 import { getAlertCounts } from "../modules/alerts/alerts.service.js";
 import { getPayrollReadiness } from "../modules/attendance-exceptions/exceptions.service.js";
 import { syncContractExpiryAlerts } from "../modules/documents/documents.service.js";
@@ -14,34 +14,6 @@ import {
   getGuardsOnDutyByDay as computeGuardsOnDutyByDay,
   getGuardsOnDutyNow,
 } from "../services/dashboard-guards-on-duty.service.js";
-
-function parseDateRange(q: Record<string, string | undefined>): { start: Date; end: Date } {
-  const now = new Date();
-  const range = q.dateRange || "month";
-  const customStart = q.startDate ? new Date(q.startDate) : null;
-  const customEnd = q.endDate ? new Date(q.endDate) : null;
-
-  if (range === "custom" && customStart && customEnd && !Number.isNaN(customStart.getTime()) && !Number.isNaN(customEnd.getTime())) {
-    return { start: startOfDay(customStart), end: endOfDay(customEnd) };
-  }
-  if (range === "today") {
-    return { start: startOfDay(now), end: endOfDay(now) };
-  }
-  if (range === "week") {
-    const start = new Date(now);
-    start.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start);
-    end.setDate(start.getDate() + 6);
-    end.setHours(23, 59, 59, 999);
-    return { start, end };
-  }
-  // month (default)
-  return {
-    start: startOfMonth(now),
-    end: endOfDay(now),
-  };
-}
 
 export async function dashboardRoutes(app: FastifyInstance) {
   app.get("/", {
@@ -59,7 +31,6 @@ export async function dashboardRoutes(app: FastifyInstance) {
       : undefined;
 
     const now = new Date();
-    const { start: dateStart, end: dateEnd } = parseDateRange(q);
 
     const shiftWhereBase = {
       companyId,
@@ -80,7 +51,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
       ? { companyId, id: { in: siteIds } }
       : { companyId };
 
-    const [guardsOnDutyByDay, guardsOnDuty, activeSitesCount, activeSitesLastMonth, payrollStatus, missedShifts, pendingApprovals, employeesByStatus, shiftsByStatus] =
+    const [guardsOnDutyByDay, guardsOnDuty, activeSitesCount, activeSitesLastMonth, payrollStatus, pendingApprovals, employeesByStatus, shiftsByStatus] =
       await Promise.all([
         computeGuardsOnDutyByDay(companyId, startOfWeek, dayNames, { siteIds }),
         getGuardsOnDutyNow(companyId, now, { siteIds }),
@@ -101,14 +72,6 @@ export async function dashboardRoutes(app: FastifyInstance) {
           by: ["status"],
           where: { companyId },
           _count: { id: true },
-        }),
-        prisma.shift.count({
-          where: {
-            companyId,
-            status: { in: ["assigned", "created"] },
-            endTime: { lt: now },
-            attendances: { none: { clockIn: { not: null } } },
-          },
         }),
         prisma.payrollRun.count({
           where: { companyId, status: "calculated" },
@@ -141,14 +104,6 @@ export async function dashboardRoutes(app: FastifyInstance) {
       priority?: string;
       id?: string;
     }[] = [];
-    if (missedShifts > 0) {
-      alerts.push({
-        type: "missed_shifts",
-        message: "Guard missed clock-in",
-        count: missedShifts,
-        priority: "CRITICAL",
-      });
-    }
     if (pendingApprovals > 0) {
       alerts.push({
         type: "pending_payroll_run_approvals",
@@ -182,6 +137,15 @@ export async function dashboardRoutes(app: FastifyInstance) {
           },
         }),
       ]);
+
+    if (payrollReadiness && payrollReadiness.openExceptions > 0) {
+      alerts.push({
+        type: "attendance_exceptions",
+        message: "Attendance issues need review",
+        count: payrollReadiness.openExceptions,
+        priority: "CRITICAL",
+      });
+    }
 
     const payPeriod = getCurrentPayPeriod(parsePayrollCalendarSettings(companyRow?.settings));
 

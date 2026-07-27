@@ -13,6 +13,8 @@ import {
 } from "./exception-detection.js";
 import { parseExceptionPeriodBoundary } from "./exception-period.js";
 import { dateKeyInTimeZone, getCompanyTimezone } from "../../lib/timezone.js";
+import { findApprovedLeaveConflict } from "../../services/attendance.service.js";
+import { normalizeLeaveDate } from "../../services/leave-availability.service.js";
 
 const EXCEPTION_SCAN_BATCH_SIZE = 500;
 const PAYROLL_BLOCKING_CRITICAL_STATUSES = ["OPEN", "UNDER_REVIEW", "APPROVED"] as const;
@@ -124,6 +126,7 @@ export async function detectAndPersistExceptions(params: {
   const graceMinutes = params.graceMinutes ?? 15;
   const since = new Date(Date.now() - lookbackHours * 3600_000);
   const now = new Date();
+  const timeZone = await getCompanyTimezone(params.companyId);
 
   let created = 0;
   let scanned = 0;
@@ -154,6 +157,11 @@ export async function detectAndPersistExceptions(params: {
     scanned += shifts.length;
 
     for (const shift of shifts) {
+      if (shift.employeeId) {
+        const shiftDate = normalizeLeaveDate(dateKeyInTimeZone(shift.startTime, timeZone));
+        const leaveConflict = await findApprovedLeaveConflict(params.companyId, shift.employeeId, shiftDate);
+        if (leaveConflict) continue;
+      }
       const att = shift.attendances[0];
       const detected = detectExceptionsForShift(
         {
@@ -190,7 +198,7 @@ export async function detectAndPersistExceptions(params: {
     cursor = shifts.at(-1)!.id;
   }
 
-  await refreshPayrollReadiness(params.companyId);
+  await refreshCurrentPayrollReadiness(params.companyId);
   return { scanned, created };
 }
 
@@ -356,7 +364,7 @@ export async function reviewException(params: {
     });
   }
 
-  await refreshPayrollReadiness(params.companyId);
+  await refreshCurrentPayrollReadiness(params.companyId);
   return updated;
 }
 
@@ -467,6 +475,21 @@ export async function getExceptionAnalytics(
     bySite: bySite.map((s) => ({ siteId: s.siteId, count: s._count.id })),
     byEmployee: byEmployee.map((e) => ({ employeeId: e.employeeId, count: e._count.id })),
   };
+}
+
+/**
+ * Refreshes payroll readiness for a company's actual current pay period (which may not
+ * be a calendar month) rather than refreshPayrollReadiness's calendar-month default —
+ * otherwise this can upsert a readiness row under the wrong period key, leaving the row
+ * getPayrollReadiness actually reads stale.
+ */
+async function refreshCurrentPayrollReadiness(companyId: string) {
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { settings: true },
+  });
+  const period = getCurrentPayPeriod(parsePayrollCalendarSettings(company?.settings));
+  await refreshPayrollReadiness(companyId, period.periodStart, period.periodEnd);
 }
 
 export async function refreshPayrollReadiness(

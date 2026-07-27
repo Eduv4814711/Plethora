@@ -6,6 +6,7 @@
  */
 
 import { prisma } from "../../lib/prisma.js";
+import { aggregateTimesheets } from "../timesheet.service.js";
 import type {
   ComplianceCheckResult,
   ComplianceContext,
@@ -69,6 +70,9 @@ export async function runPayrollComplianceChecks(
 
   const config = getRuleConfig(companyId, company?.settings);
 
+  const aggregates = await aggregateTimesheets(companyId, run.periodStart, run.periodEnd);
+  const aggregateByEmployeeId = new Map(aggregates.map((agg) => [agg.employeeId, agg]));
+
   const context: ComplianceContext = {
     companyId,
     payrollRunId,
@@ -89,6 +93,8 @@ export async function runPayrollComplianceChecks(
       netPay: Number(item.netPay),
       hoursWorked: Number(item.hoursWorked),
       overtimeHours: Number(item.overtimeHours),
+      sundayHours: aggregateByEmployeeId.get(item.employeeId)?.sundayHours ?? null,
+      publicHolidayHours: aggregateByEmployeeId.get(item.employeeId)?.publicHolidayHours ?? null,
       employee: item.employee,
       payslip: item.payslip
         ? {
@@ -109,7 +115,7 @@ export async function runPayrollComplianceChecks(
     { fn: () => checkNegativeValues(context), id: "negative_values" },
     { fn: () => checkMissingUifFields(context), id: "missing_uif" },
     { fn: () => checkMissingTaxId(context), id: "missing_tax_id" },
-    { fn: () => checkHighOvertime(context, config.overtimeThresholdPct), id: "high_overtime" },
+    { fn: () => checkHighOvertime(context, config.overtimeThresholdPct, config.maxWeeklyHours), id: "high_overtime" },
     { fn: () => checkZeroPayActive(context), id: "zero_pay_active" },
     { fn: () => checkPremiumPay(context), id: "premium_checks" },
   ];

@@ -369,6 +369,19 @@ describe("duty ON / duty OFF OB workflow (service)", () => {
     );
   });
 
+  it("refuses to unlock a sheet that isn't approved or locked, so it can't wipe partial-approval progress", async () => {
+    vi.mocked(prisma.siteTimesheet.findFirst).mockResolvedValue({
+      id: "ts-1",
+      companyId: "co-1",
+      status: "draft",
+    } as never);
+
+    const result = await unlockSiteTimesheet("co-1", "ts-1", "user-1", "Correction");
+
+    expect(result).toEqual({ error: "Timesheet is not approved or locked; there is nothing to unlock." });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it("rejects a reliever row outside the timesheet period", async () => {
     vi.mocked(prisma.siteTimesheet.findFirst).mockResolvedValue({
       id: "ts-1",

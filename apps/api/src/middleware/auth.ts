@@ -18,7 +18,11 @@ export async function authMiddleware(
   }
 
   try {
-    const decoded = jwt.verify(token, config.jwt.accessSecret) as AccessTokenPayload;
+    const decoded = jwt.verify(token, config.jwt.accessSecret) as AccessTokenPayload & { type?: string };
+    if (decoded.type === "refresh") {
+      reply.code(401).send({ error: "Unauthorized", message: "Invalid or expired token" });
+      return;
+    }
     const current = await prisma.user.findFirst({
       where: { id: decoded.sub, companyId: decoded.companyId, isActive: true },
       select: {

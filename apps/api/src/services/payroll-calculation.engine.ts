@@ -211,7 +211,16 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
           (agg?.uifLeaveHours ?? 0) * (periodSalary / standardPeriodHours)
         )
       );
-      grossPay = round2(periodSalary - unpaidLeaveReduction - uifLeaveReduction);
+      const effectiveHourlyRate = periodSalary / standardPeriodHours;
+      overtimeHours = agg?.overtimeHours ?? 0;
+      overtimePay = round2(overtimeHours * effectiveHourlyRate * rules.overtimeMultiplier);
+      sundayPay = round2((agg?.sundayHours ?? 0) * effectiveHourlyRate * rules.sundayMultiplier);
+      publicHolidayPay = round2(
+        (agg?.publicHolidayHours ?? 0) * effectiveHourlyRate * rules.publicHolidayMultiplier
+      );
+      grossPay = round2(
+        periodSalary - unpaidLeaveReduction - uifLeaveReduction + overtimePay + sundayPay + publicHolidayPay
+      );
       earningsLines.push({ name: "Basic Salary", amount: periodSalary });
       if (unpaidLeaveReduction > 0) {
         earningsLines.push({ name: "Unpaid Leave Reduction", amount: -unpaidLeaveReduction });
@@ -219,6 +228,9 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
       if (uifLeaveReduction > 0) {
         earningsLines.push({ name: "UIF-supported Leave Reduction", amount: -uifLeaveReduction });
       }
+      if (overtimePay > 0) earningsLines.push({ name: "Overtime", amount: overtimePay });
+      if (sundayPay > 0) earningsLines.push({ name: "Sunday", amount: sundayPay });
+      if (publicHolidayPay > 0) earningsLines.push({ name: "Public Holiday", amount: publicHolidayPay });
     } else {
       if (hourlyRate === 0 && monthlySalary === 0) {
         const skipReason =

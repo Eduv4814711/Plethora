@@ -135,6 +135,42 @@ describe("computePayrollLines", () => {
     expect(lines[0]!.hoursWorked).toBe(0);
   });
 
+  it("pays overtime, Sunday, and public holiday premiums on top of a fixed monthly salary", () => {
+    const emp = baseEmployee({
+      employeeType: "security",
+      monthlySalary: 20800,
+    });
+    const aggregates = new Map([
+      [
+        "emp-1",
+        agg({
+          overtimeHours: 10,
+          sundayHours: 8,
+          publicHolidayHours: 12,
+        }),
+      ],
+    ]);
+
+    const { lines } = computePayrollLines(
+      ctx({
+        employees: [emp],
+        aggregates,
+        deductionsByEmployee: new Map([["emp-1", { total: 0, lines: [] }]]),
+      })
+    );
+
+    expect(lines).toHaveLength(1);
+    const line = lines[0]!;
+    // effective hourly rate = 20800 / 208 standard monthly hours = 100
+    expect(line.overtimePay).toBe(1500); // 10 * 100 * 1.5
+    expect(line.sundayPay).toBe(1600); // 8 * 100 * 2.0
+    expect(line.publicHolidayPay).toBe(2400); // 12 * 100 * 2.0
+    expect(line.grossPay).toBe(26300); // 20800 + 1500 + 1600 + 2400
+    expect(line.earningsLines.map((l) => l.name)).toEqual(
+      expect.arrayContaining(["Overtime", "Sunday", "Public Holiday"])
+    );
+  });
+
   it("prorates contractual monthly salary for weekly and biweekly runs", () => {
     expect(monthlySalaryForPayPeriod(26_000, "weekly")).toBe(6_000);
     expect(monthlySalaryForPayPeriod(26_000, "biweekly")).toBe(12_000);

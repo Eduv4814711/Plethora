@@ -59,6 +59,11 @@ export interface ComplianceContext {
     netPay: number;
     hoursWorked: number;
     overtimeHours: number;
+    /** Raw hours worked on a Sunday/public holiday in the period, from the timesheet
+     * aggregate — 0 when no such hours were recorded (distinct from `null`, which means
+     * the aggregate couldn't be resolved for this employee, e.g. no timesheet rows). */
+    sundayHours: number | null;
+    publicHolidayHours: number | null;
     employee: {
       id: string;
       idNumber: string | null;

@@ -432,6 +432,46 @@ async function addLeaveAudit(
   await tx.leaveAuditEvent.create({ data: input });
 }
 
+/**
+ * Reverses every not-yet-reversed original debit (RESERVATION/TAKEN) ledger entry for an
+ * application. Must skip RESERVATION_RELEASE and REVERSAL entries too — those are already
+ * reversals of something else, and re-reversing them re-applies the original debit they undid.
+ */
+async function reverseUnreversedLedgerEntries(
+  tx: Prisma.TransactionClient,
+  params: {
+    companyId: string;
+    employeeId: string;
+    leaveTypeId: string;
+    applicationId: string;
+    reason: string;
+    actorId?: string;
+    metadata?: Prisma.InputJsonValue;
+  }
+) {
+  const unreversed = await tx.leaveLedgerEntry.findMany({
+    where: { applicationId: params.applicationId, reversedBy: null },
+  });
+  for (const entry of unreversed) {
+    if (entry.entryType === "RESERVATION_RELEASE" || entry.entryType === "REVERSAL") continue;
+    await tx.leaveLedgerEntry.create({
+      data: {
+        companyId: params.companyId,
+        employeeId: params.employeeId,
+        leaveTypeId: params.leaveTypeId,
+        applicationId: params.applicationId,
+        entryType: entry.entryType === "RESERVATION" ? "RESERVATION_RELEASE" : "REVERSAL",
+        effectiveDate: normalizeLeaveDate(new Date()),
+        minutes: -entry.minutes,
+        reason: params.reason,
+        createdById: params.actorId,
+        reversalOfId: entry.id,
+        ...(params.metadata ? { metadata: params.metadata } : {}),
+      },
+    });
+  }
+}
+
 export async function createLeaveApplication(params: {
   companyId: string;
   employeeId: string;
@@ -802,11 +842,7 @@ export async function cancelOrWithdrawLeave(params: {
     if (changed.count !== 1) throw new LeaveManagementError("Leave application changed during cancellation; refresh and try again", 409, "VERSION_CONFLICT");
     if (!payrollLocked) {
       await tx.leaveOccurrence.updateMany({ where: { applicationId: application.id }, data: { status: "CANCELLED" } });
-      const unreversed = await tx.leaveLedgerEntry.findMany({ where: { applicationId: application.id, reversedBy: null } });
-      for (const entry of unreversed) {
-        if (entry.entryType === "RESERVATION_RELEASE") continue;
-        await tx.leaveLedgerEntry.create({ data: { companyId: params.companyId, employeeId: application.employeeId, leaveTypeId: application.leaveTypeId, applicationId: application.id, entryType: entry.entryType === "RESERVATION" ? "RESERVATION_RELEASE" : "REVERSAL", effectiveDate: normalizeLeaveDate(new Date()), minutes: -entry.minutes, reason: params.reason.trim(), createdById: params.actorId, reversalOfId: entry.id } });
-      }
+      await reverseUnreversedLedgerEntries(tx, { companyId: params.companyId, employeeId: application.employeeId, leaveTypeId: application.leaveTypeId, applicationId: application.id, reason: params.reason.trim(), actorId: params.actorId });
       const legacyIds = Array.isArray(application.legacyLeaveRecordIds) ? application.legacyLeaveRecordIds.filter((id): id is string => typeof id === "string") : [];
       if (legacyIds.length) await tx.leaveRecord.deleteMany({ where: { id: { in: legacyIds } } });
       await tx.operationalAlert.updateMany({ where: { companyId: params.companyId, dedupeKey: { startsWith: `leave_vacancy:${application.id}:` }, status: { in: ["OPEN", "ACKNOWLEDGED"] } }, data: { status: "RESOLVED", resolvedAt: new Date(), resolvedById: params.actorId } });
@@ -1343,11 +1379,7 @@ export async function resolveLeaveAdjustment(params: {
       });
     }
     await tx.leaveOccurrence.updateMany({ where: { applicationId: application.id }, data: { status: "CANCELLED" } });
-    const unreversed = await tx.leaveLedgerEntry.findMany({ where: { applicationId: application.id, reversedBy: null } });
-    for (const entry of unreversed) {
-      if (entry.entryType === "RESERVATION_RELEASE") continue;
-      await tx.leaveLedgerEntry.create({ data: { companyId: params.companyId, employeeId: application.employeeId, leaveTypeId: application.leaveTypeId, applicationId: application.id, entryType: entry.entryType === "RESERVATION" ? "RESERVATION_RELEASE" : "REVERSAL", effectiveDate: normalizeLeaveDate(new Date()), minutes: -entry.minutes, reason: params.reason.trim(), createdById: params.actorId, reversalOfId: entry.id, metadata: { adjustmentId: adjustment.id, payrollReference: params.payrollReference!.trim() } } });
-    }
+    await reverseUnreversedLedgerEntries(tx, { companyId: params.companyId, employeeId: application.employeeId, leaveTypeId: application.leaveTypeId, applicationId: application.id, reason: params.reason.trim(), actorId: params.actorId, metadata: { adjustmentId: adjustment.id, payrollReference: params.payrollReference!.trim() } });
     const legacyIds = Array.isArray(application.legacyLeaveRecordIds) ? application.legacyLeaveRecordIds.filter((id): id is string => typeof id === "string") : [];
     if (legacyIds.length) await tx.leaveRecord.deleteMany({ where: { id: { in: legacyIds } } });
     await tx.operationalAlert.updateMany({ where: { companyId: params.companyId, dedupeKey: { startsWith: `leave_vacancy:${application.id}:` }, status: { in: ["OPEN", "ACKNOWLEDGED"] } }, data: { status: "RESOLVED", resolvedAt: new Date(), resolvedById: params.actorId } });

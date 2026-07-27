@@ -5,6 +5,10 @@ vi.mock("../../../lib/prisma.js", () => ({
     shift: { findMany: vi.fn() },
     attendanceException: { count: vi.fn() },
     payrollPeriodReadiness: { upsert: vi.fn() },
+    leaveOccurrence: { findFirst: vi.fn() },
+    leaveApplication: { findFirst: vi.fn() },
+    leaveRecord: { findFirst: vi.fn() },
+    company: { findUnique: vi.fn() },
   },
 }));
 
@@ -29,6 +33,10 @@ describe("attendance exception scan pagination", () => {
     vi.mocked(prisma.payrollPeriodReadiness.upsert).mockReset();
     vi.mocked(prisma.attendanceException.count).mockResolvedValue(0);
     vi.mocked(prisma.payrollPeriodReadiness.upsert).mockResolvedValue({} as never);
+    vi.mocked(prisma.leaveOccurrence.findFirst).mockReset().mockResolvedValue(null as never);
+    vi.mocked(prisma.leaveApplication.findFirst).mockReset().mockResolvedValue(null as never);
+    vi.mocked(prisma.leaveRecord.findFirst).mockReset().mockResolvedValue(null as never);
+    vi.mocked(prisma.company.findUnique).mockReset().mockResolvedValue({ settings: null } as never);
   });
 
   afterEach(() => {
