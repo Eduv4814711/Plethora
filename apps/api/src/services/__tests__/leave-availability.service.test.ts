@@ -26,6 +26,7 @@ import {
   leaveTypeToRosterShiftCode,
   normalizeLeaveDate,
   replaceLeaveRecordRange,
+  resolveDuplicateLeaveDay,
   validateLeaveDateRange,
 } from "../leave-availability.service.js";
 
@@ -304,5 +305,115 @@ describe("leave-availability.service", () => {
         })
       ).rejects.toThrow(/Leave record not found/);
     });
+  });
+});
+
+describe("resolveDuplicateLeaveDay", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(prisma.employee.findFirst).mockResolvedValue({ id: "emp-1" } as never);
+  });
+
+  function mockDayRows(rows: Array<{ id: string }>) {
+    const deleteMany = vi.fn().mockResolvedValue({ count: rows.length - 1 });
+    vi.mocked(prisma.$transaction).mockImplementation(async (fn) =>
+      fn({
+        leaveRecord: { findMany: vi.fn().mockResolvedValue(rows), deleteMany },
+      } as never)
+    );
+    return deleteMany;
+  }
+
+  it("keeps the chosen record and deletes only the others", async () => {
+    const deleteMany = mockDayRows([{ id: "lr-1" }, { id: "lr-2" }, { id: "lr-3" }]);
+
+    const result = await resolveDuplicateLeaveDay({
+      companyId: "co-1",
+      employeeId: "emp-1",
+      date: "2026-07-11",
+      keepRecordId: "lr-2",
+    });
+
+    expect(result).toEqual({ kept: "lr-2", deleted: ["lr-1", "lr-3"] });
+    // The kept row must never appear in the delete set — that would strip the leave day.
+    expect(deleteMany).toHaveBeenCalledWith({ where: { id: { in: ["lr-1", "lr-3"] } } });
+  });
+
+  it("deletes every row for the day when no record is kept", async () => {
+    const deleteMany = mockDayRows([{ id: "lr-1" }, { id: "lr-2" }]);
+
+    const result = await resolveDuplicateLeaveDay({
+      companyId: "co-1",
+      employeeId: "emp-1",
+      date: "2026-07-11",
+      keepRecordId: null,
+    });
+
+    expect(result).toEqual({ kept: null, deleted: ["lr-1", "lr-2"] });
+    expect(deleteMany).toHaveBeenCalledWith({ where: { id: { in: ["lr-1", "lr-2"] } } });
+  });
+
+  it("treats an omitted keepRecordId as delete-the-day", async () => {
+    const deleteMany = mockDayRows([{ id: "lr-1" }, { id: "lr-2" }]);
+
+    const result = await resolveDuplicateLeaveDay({
+      companyId: "co-1",
+      employeeId: "emp-1",
+      date: "2026-07-11",
+    });
+
+    expect(result.kept).toBeNull();
+    expect(deleteMany).toHaveBeenCalledWith({ where: { id: { in: ["lr-1", "lr-2"] } } });
+  });
+
+  it("refuses a record that does not belong to the day", async () => {
+    const deleteMany = mockDayRows([{ id: "lr-1" }, { id: "lr-2" }]);
+    await expect(
+      resolveDuplicateLeaveDay({
+        companyId: "co-1",
+        employeeId: "emp-1",
+        date: "2026-07-11",
+        keepRecordId: "lr-999",
+      })
+    ).rejects.toThrow(LeaveAvailabilityError);
+    expect(deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("refuses when the day has only one record", async () => {
+    const deleteMany = mockDayRows([{ id: "lr-1" }]);
+    await expect(
+      resolveDuplicateLeaveDay({
+        companyId: "co-1",
+        employeeId: "emp-1",
+        date: "2026-07-11",
+        keepRecordId: "lr-1",
+      })
+    ).rejects.toThrow(/single leave record/);
+    expect(deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("refuses when the day has no records", async () => {
+    mockDayRows([]);
+    await expect(
+      resolveDuplicateLeaveDay({
+        companyId: "co-1",
+        employeeId: "emp-1",
+        date: "2026-07-11",
+        keepRecordId: "lr-1",
+      })
+    ).rejects.toThrow(/No leave records found/);
+  });
+
+  it("refuses an employee outside the company", async () => {
+    vi.mocked(prisma.employee.findFirst).mockResolvedValue(null as never);
+    await expect(
+      resolveDuplicateLeaveDay({
+        companyId: "co-1",
+        employeeId: "emp-other",
+        date: "2026-07-11",
+        keepRecordId: "lr-1",
+      })
+    ).rejects.toThrow("Employee not found");
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

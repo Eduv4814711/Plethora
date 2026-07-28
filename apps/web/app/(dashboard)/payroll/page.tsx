@@ -1122,6 +1122,16 @@ interface SkippedEmployee {
   skipReason: string;
 }
 
+interface DuplicateLegacyLeaveDay {
+  key: string;
+  employeeId: string;
+  employeeName: string;
+  employeeNumber: string | null;
+  date: string;
+  kind: "exact-duplicate" | "conflicting-rows";
+  records: Array<{ id: string; type: string; hours: number }>;
+}
+
 interface CalculationSnapshotResponse {
   snapshot: {
     inputs: { employeesSkipped: number };
@@ -1187,6 +1197,9 @@ function PayrollRunCard({
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [sitesNeedingApproval, setSitesNeedingApproval] = useState<{ id: string; name: string }[]>([]);
+  const [duplicateLeaveDays, setDuplicateLeaveDays] = useState<DuplicateLegacyLeaveDay[]>([]);
+  const [resolvingDay, setResolvingDay] = useState<string | null>(null);
+  const [resolveError, setResolveError] = useState<string | null>(null);
   const [validation, setValidation] = useState<PayrollValidationResponse | null>(null);
   const [showRevertModal, setShowRevertModal] = useState(false);
   const [revertReason, setRevertReason] = useState("");
@@ -1248,6 +1261,7 @@ function PayrollRunCard({
     setActionLoading(true);
     setActionError(null);
     setSitesNeedingApproval([]);
+    setDuplicateLeaveDays([]);
     try {
       const res = await authFetch(`/payroll/runs/${run.id}/calculate`, token, { method: "POST" });
       if (!res.ok) {
@@ -1255,6 +1269,10 @@ function PayrollRunCard({
         const sites = err?.details?.sitesNeedingApproval;
         if (Array.isArray(sites) && sites.length > 0) {
           setSitesNeedingApproval(sites);
+        }
+        const duplicateDays = err?.leaveReadiness?.duplicateLegacyDays;
+        if (Array.isArray(duplicateDays) && duplicateDays.length > 0) {
+          setDuplicateLeaveDays(duplicateDays);
         }
         throw new Error(
           typeof err.message === "string" ? err.message : "Payroll calculation failed"
@@ -1267,6 +1285,49 @@ function PayrollRunCard({
       setActionError(err instanceof Error ? err.message : "Payroll calculation failed");
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleResolveDuplicateDay = async (
+    day: DuplicateLegacyLeaveDay,
+    keepRecordId: string | null
+  ) => {
+    const kept = keepRecordId ? day.records.find((r) => r.id === keepRecordId) : null;
+    const removedCount = keepRecordId ? day.records.length - 1 : day.records.length;
+    const confirmed = await confirm({
+      title: kept ? "Resolve duplicate leave day?" : "Delete this leave day?",
+      message: kept
+        ? `${day.employeeName} on ${day.date}: keep ${kept.type.replace(/_/g, " ")} ${kept.hours}h ` +
+          `and permanently delete the other ${removedCount} record(s) for this day. This cannot be undone.`
+        : `${day.employeeName} on ${day.date}: permanently delete all ${removedCount} leave record(s). ` +
+          `The day will no longer count as leave and will not be paid. This cannot be undone.`,
+      confirmLabel: kept ? "Keep this one" : "Delete the day",
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    setResolvingDay(day.key);
+    setResolveError(null);
+    try {
+      const res = await authFetch(`/payroll/leave-records/resolve-duplicate-day`, token, {
+        method: "POST",
+        body: JSON.stringify({
+          employeeId: day.employeeId,
+          date: day.date,
+          ...(keepRecordId ? { keepRecordId } : {}),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof err.message === "string" ? err.message : "Could not resolve this leave day"
+        );
+      }
+      setDuplicateLeaveDays((days) => days.filter((d) => d.key !== day.key));
+    } catch (err) {
+      setResolveError(err instanceof Error ? err.message : "Could not resolve this leave day");
+    } finally {
+      setResolvingDay(null);
     }
   };
 
@@ -1547,6 +1608,73 @@ function PayrollRunCard({
                   >
                     Approve {s.name} →
                   </Link>
+                ))}
+              </div>
+            )}
+            {resolveError && <p className="font-medium">{resolveError}</p>}
+            {duplicateLeaveDays.length > 0 && (
+              <div className="space-y-2">
+                {duplicateLeaveDays.length > 0 && (
+                  <p className="text-xs text-neutral-600">
+                    Resolve each day below, then click Calculate again.
+                  </p>
+                )}
+                {duplicateLeaveDays.map((day) => (
+                  <div
+                    key={day.key}
+                    className="rounded-md border border-red-200 bg-white px-3 py-2 text-xs text-neutral-700"
+                  >
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="font-semibold text-neutral-900">{day.employeeName}</span>
+                      {day.employeeNumber && (
+                        <span className="text-neutral-500">({day.employeeNumber})</span>
+                      )}
+                      <span className="text-neutral-500">
+                        {format(new Date(`${day.date}T00:00:00`), "d MMM yyyy")}
+                      </span>
+                      <Badge variant={day.kind === "conflicting-rows" ? "error" : "warning"}>
+                        {day.kind === "conflicting-rows" ? "Conflicting" : "Exact duplicate"}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-neutral-500">
+                      {day.kind === "conflicting-rows"
+                        ? "These rows differ, so payroll would add them together and pay this day more than once. Choose the one that reflects what was actually taken — the rest are deleted."
+                        : "Identical rows from a legacy import. Keep one and the rest are deleted."}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {/* Identical rows collapse to one choice — two buttons reading
+                          "Keep annual 12h" are indistinguishable and do the same thing. */}
+                      {[
+                        ...new Map(
+                          day.records.map((r) => [`${r.type}:${r.hours}`, r])
+                        ).values(),
+                      ].map((record) => (
+                        <button
+                          key={record.id}
+                          type="button"
+                          disabled={resolvingDay === day.key}
+                          onClick={() => handleResolveDuplicateDay(day, record.id)}
+                          className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {resolvingDay === day.key
+                            ? "Working…"
+                            : `Keep ${record.type.replace(/_/g, " ")} ${record.hours}h`}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        disabled={resolvingDay === day.key}
+                        onClick={() => handleResolveDuplicateDay(day, null)}
+                        className="inline-flex items-center gap-1 rounded-md bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {resolvingDay === day.key ? "Working…" : "Delete the day"}
+                      </button>
+                    </div>
+                    <p className="mt-1 text-neutral-400">
+                      Deleting the day removes the leave entirely — use it only when the
+                      employee did not actually take leave on this date.
+                    </p>
+                  </div>
                 ))}
               </div>
             )}

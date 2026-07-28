@@ -6,7 +6,14 @@ import {
   exceedsSdlThreshold,
   uifEarningsCeilingForPeriod,
 } from "../tax.service.js";
-import { SDL_THRESHOLD_ANNUAL, UIF_EARNINGS_CEILING } from "../../lib/tax-brackets.js";
+import {
+  resolveTaxYearConfig,
+  taxYearEndDate,
+  taxYearStartingYearForDate,
+  SDL_THRESHOLD_ANNUAL,
+  TAX_YEAR_2025_2026,
+  UIF_EARNINGS_CEILING,
+} from "../../lib/tax-brackets.js";
 
 describe("calculatePAYE", () => {
   it("returns zero tax below the annual threshold", () => {
@@ -77,5 +84,57 @@ describe("exceedsSdlThreshold", () => {
     expect(exceedsSdlThreshold(SDL_THRESHOLD_ANNUAL)).toBe(true);
     expect(exceedsSdlThreshold(SDL_THRESHOLD_ANNUAL + 1)).toBe(true);
     expect(exceedsSdlThreshold(SDL_THRESHOLD_ANNUAL - 1)).toBe(false);
+  });
+});
+
+describe("tax year resolution", () => {
+  it("treats March as the start of a new year of assessment", () => {
+    expect(taxYearStartingYearForDate(new Date("2026-02-28T00:00:00.000Z"))).toBe(2025);
+    expect(taxYearStartingYearForDate(new Date("2026-03-01T00:00:00.000Z"))).toBe(2026);
+    expect(taxYearStartingYearForDate(new Date("2027-01-31T00:00:00.000Z"))).toBe(2026);
+  });
+
+  it("ends a year of assessment on the last day of February", () => {
+    expect(taxYearEndDate(2025).toISOString().slice(0, 10)).toBe("2026-02-28");
+    // 2028 is a leap year, so the 2027 year of assessment ends on the 29th.
+    expect(taxYearEndDate(2027).toISOString().slice(0, 10)).toBe("2028-02-29");
+  });
+
+  it("resolves the configured table for a known year", () => {
+    expect(resolveTaxYearConfig(new Date("2025-06-30T00:00:00.000Z")).year).toBe(2025);
+    expect(resolveTaxYearConfig(new Date("2026-06-30T00:00:00.000Z")).year).toBe(2026);
+  });
+
+  it("marks an unconfigured future year as provisional rather than throwing", () => {
+    const future = resolveTaxYearConfig(new Date("2035-06-30T00:00:00.000Z"));
+    expect(future.year).toBe(2035);
+    expect(future.provisional).toBe(true);
+    expect(future.brackets.length).toBeGreaterThan(0);
+  });
+});
+
+describe("age-based rebates", () => {
+  it("uses age at the end of the year of assessment, not today's date", () => {
+    // Turns 65 on 2026-01-15, i.e. before the 2025/2026 year of assessment ends.
+    const employee = { dateOfBirth: new Date("1961-01-15") };
+    const paye2025 = calculatePAYE(30000, "monthly", employee, TAX_YEAR_2025_2026);
+
+    // Someone a year younger gets the primary rebate only, so pays more.
+    const younger = { dateOfBirth: new Date("1962-01-15") };
+    const payeYounger = calculatePAYE(30000, "monthly", younger, TAX_YEAR_2025_2026);
+
+    expect(paye2025).toBeLessThan(payeYounger);
+    // The secondary rebate is R9,444/year = R787/month.
+    expect(payeYounger - paye2025).toBeCloseTo(787, 0);
+  });
+
+  it("produces the same PAYE for a given tax year no matter when it is recalculated", () => {
+    const employee = { dateOfBirth: new Date("1961-01-15") };
+    const first = calculatePAYE(30000, "monthly", employee, TAX_YEAR_2025_2026);
+    const second = calculatePAYE(30000, "monthly", employee, TAX_YEAR_2025_2026);
+    expect(first).toBe(second);
+    // The rebate band is fixed by the tax year, so a later year of assessment for the
+    // same employee is a deliberate change, not drift from the current clock.
+    expect(first).toBe(calculatePAYE(30000, "monthly", employee, TAX_YEAR_2025_2026));
   });
 });

@@ -1,7 +1,7 @@
 import type { PayPeriod } from "./tax.service.js";
 
 /** Version bumps when snapshot shape or formula semantics change intentionally. */
-export const PAYROLL_CALCULATION_VERSION = "1.3.0";
+export const PAYROLL_CALCULATION_VERSION = "1.4.0";
 
 export interface PayrollRuleSnapshot {
   overtimeMultiplier: number;
@@ -89,12 +89,24 @@ export interface PayrollEmployeeCalculationSnapshot {
   output: PayrollEmployeeOutputSnapshot;
 }
 
+/** Which SARS tax tables a run was calculated on, for audit and re-derivation. */
+export interface PayrollTaxYearSnapshot {
+  /** Starting calendar year of the year of assessment (2025 = 2025/2026). */
+  year: number;
+  label: string;
+  /** True when the rates were carried forward rather than confirmed against SARS. */
+  provisional: boolean;
+  primaryRebate: number;
+  thresholdUnder65: number;
+}
+
 export interface PayrollCalculationInputsSnapshot {
   periodStart: string;
   periodEnd: string;
   payPeriod: PayPeriod;
   isSdlLiable: boolean;
   sdlStatus: PayrollSdlStatusSnapshot;
+  taxYear: PayrollTaxYearSnapshot;
   timezone: string;
   publicHolidayDates: string[];
   employeeCount: number;

@@ -324,7 +324,7 @@ describe("computePayrollLines", () => {
         includeRelieversWithAttendance: true,
       },
     });
-    expect(snapshot.version).toBe("1.3.0");
+    expect(snapshot.version).toBe("1.4.0");
     expect(snapshot.totals.grossPay).toBe(5000);
     expect(snapshot.inputs.defaultMultipliers).toEqual({
       overtime: DEFAULT_OT_MULTIPLIER,
@@ -508,6 +508,110 @@ describe("computePayrollLines", () => {
     expect(line.grossPay).toBe(16000);
     expect(line.deductions).toBeGreaterThan(200);
     expect(line.netPay).toBe(Math.round((line.grossPay - line.deductions) * 100) / 100);
+  });
+
+  it("records the period salary as base pay on a fixed-monthly line", () => {
+    const emp = baseEmployee({ employeeType: "office", monthlySalary: 25_000 as never });
+    const { lines } = computePayrollLines(
+      ctx({
+        employees: [emp],
+        deductionsByEmployee: new Map([["emp-1", { total: 0, lines: [] }]]),
+      })
+    );
+    // basePay drives PayrollItem.basePay, which cost reporting and compliance rules read.
+    expect(lines[0]!.basePay).toBe(25_000);
+    expect(lines[0]!.grossPay).toBe(25_000);
+  });
+
+  it("excludes unpaid leave from a salaried employee's base pay", () => {
+    const emp = baseEmployee({ employeeType: "office", monthlySalary: 19_500 as never });
+    const { lines } = computePayrollLines(
+      ctx({
+        employees: [emp],
+        aggregates: new Map([["emp-1", agg({ unpaidLeaveHours: 8 })]]),
+        deductionsByEmployee: new Map([["emp-1", { total: 0, lines: [] }]]),
+      })
+    );
+    expect(lines[0]!.basePay).toBe(18_700);
+  });
+
+  it("bases percentage earnings rules on basic pay for salaried and hourly alike", () => {
+    const rule = {
+      id: "er-1",
+      companyId: "co-1",
+      name: "Allowance",
+      type: "percentage",
+      rate: 10,
+      amount: null,
+      appliesTo: "all",
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as EarningsRule;
+    const aggregates = new Map([["emp-1", agg({ basicHours: 208, overtimeHours: 10 })]]);
+
+    const hourly = computePayrollLines(
+      ctx({
+        employees: [
+          baseEmployee({
+            hourlyRate: 100 as never,
+            grade: { id: "g1", name: "A", hourlyRate: 100, companyId: "co-1" } as PayGrade,
+          }),
+        ],
+        aggregates,
+        companyEarningsRules: [rule],
+        deductionsByEmployee: new Map([["emp-1", { total: 0, lines: [] }]]),
+      })
+    );
+    const salaried = computePayrollLines(
+      ctx({
+        employees: [baseEmployee({ employeeType: "office", monthlySalary: 20_800 as never })],
+        aggregates,
+        companyEarningsRules: [rule],
+        deductionsByEmployee: new Map([["emp-1", { total: 0, lines: [] }]]),
+      })
+    );
+
+    // 10% of basic in both cases — overtime must not inflate the allowance.
+    expect(hourly.lines[0]!.earningsLines).toContainEqual({ name: "Allowance", amount: 2_080 });
+    expect(salaried.lines[0]!.earningsLines).toContainEqual({ name: "Allowance", amount: 2_080 });
+  });
+
+  it("taxes a run on the tax year of its period, not the current date", () => {
+    const emp = baseEmployee({ employeeType: "office", monthlySalary: 30_000 as never });
+    const build = (periodStart: Date, periodEnd: Date) => {
+      const calculationCtx = ctx({
+        periodStart,
+        periodEnd,
+        employees: [emp],
+        deductionsByEmployee: new Map([["emp-1", { total: 0, lines: [] }]]),
+      });
+      const { lines, employeeSnapshots } = computePayrollLines(calculationCtx);
+      return buildPayrollCalculationSnapshot({
+        ctx: calculationCtx,
+        employeeSnapshots,
+        lines,
+        calculatedAt: new Date("2026-07-28T00:00:00.000Z"),
+        sdlStatus: {
+          isLiable: false,
+          liableFrom: null,
+          rolling12MonthPayroll: 0,
+          projectedRolling12Month: 0,
+          threshold: 500_000,
+          includeRelieversWithAttendance: true,
+        },
+      });
+    };
+
+    // February 2026 still falls in the 2025/2026 year of assessment.
+    const feb = build(new Date("2026-02-01T00:00:00.000Z"), new Date("2026-02-28T00:00:00.000Z"));
+    expect(feb.inputs.taxYear.year).toBe(2025);
+    expect(feb.inputs.taxYear.label).toBe("2025/2026");
+
+    // March 2026 begins the next one.
+    const mar = build(new Date("2026-03-01T00:00:00.000Z"), new Date("2026-03-31T00:00:00.000Z"));
+    expect(mar.inputs.taxYear.year).toBe(2026);
+    expect(mar.inputs.taxYear.provisional).toBe(true);
   });
 
   it("flags deductions that would create negative net pay", () => {

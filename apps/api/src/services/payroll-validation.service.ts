@@ -309,6 +309,63 @@ export function validatePayrollFinancialValues(
   return issues;
 }
 
+/**
+ * Warn when a run was taxed on carried-forward rates. PAYE still calculates, but the
+ * figures have not been confirmed against a published SARS table for that year and
+ * must not be filed without checking.
+ */
+export function validateTaxYearConfiguration(
+  snapshot: PayrollCalculationSnapshot | null,
+  payrollRunId: string
+): PayrollValidationIssue[] {
+  const taxYear = snapshot?.inputs?.taxYear;
+  if (!taxYear?.provisional) return [];
+
+  return [
+    {
+      ruleId: "provisional_tax_year",
+      ruleName: "Provisional tax tables",
+      severity: "warning",
+      message: `PAYE for this run was calculated on provisional ${taxYear.label} tax tables carried forward from the previous year.`,
+      entityType: "payroll_run",
+      entityId: payrollRunId,
+      suggestedAction: `Confirm the SARS ${taxYear.label} brackets and rebates in tax-brackets.ts, then recalculate this run before filing.`,
+    },
+  ];
+}
+
+/**
+ * Warn when an employee carries both a monthly salary and an hourly rate. Payroll
+ * treats a non-zero monthly salary as authoritative and absorbs worked hours into it,
+ * so a stale salary on an hourly employee silently pays the wrong amount.
+ */
+export function validateConflictingPayConfiguration(
+  snapshot: PayrollCalculationSnapshot | null
+): PayrollValidationIssue[] {
+  if (!snapshot?.employees) return [];
+
+  const issues: PayrollValidationIssue[] = [];
+  for (const employee of snapshot.employees) {
+    const { context, output } = employee;
+    if (output.skipped) continue;
+    if (context.monthlySalary <= 0 || context.hourlyRate <= 0) continue;
+
+    const name = employeeDisplayName(context.firstName, context.lastName);
+    issues.push({
+      ruleId: "conflicting_pay_configuration",
+      ruleName: "Both monthly salary and hourly rate configured",
+      severity: "warning",
+      message: `${name} has a monthly salary of R${context.monthlySalary.toFixed(2)} and an hourly rate of R${context.hourlyRate.toFixed(2)}. Payroll paid the monthly salary and did not pay the worked hours at the hourly rate.`,
+      entityType: "employee",
+      entityId: context.employeeId,
+      employeeId: context.employeeId,
+      employeeName: name,
+      suggestedAction: "Clear whichever rate does not apply on the employee record, then recalculate payroll.",
+    });
+  }
+  return issues;
+}
+
 export async function validatePayrollFinalisation(
   payrollRunId: string,
   companyId: string
@@ -455,6 +512,8 @@ export async function validatePayrollFinalisation(
     ),
     ...validateBankExportIssues(bankExport),
     ...validateStatutoryReconciliationIssues(statutoryReconciliation),
+    ...validateTaxYearConfiguration(snapshot, payrollRunId),
+    ...validateConflictingPayConfiguration(snapshot),
     ...complianceIssues,
   ];
 

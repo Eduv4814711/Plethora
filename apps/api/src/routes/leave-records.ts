@@ -17,6 +17,7 @@ import {
   deleteLeaveRecordsForRange,
   LeaveAvailabilityError,
   replaceLeaveRecordRange,
+  resolveDuplicateLeaveDay,
   validateLeaveDateRange,
 } from "../services/leave-availability.service.js";
 import {
@@ -52,6 +53,16 @@ const leaveRangeSchema = z.object({
   type: z.enum(SA_LEAVE_TYPES),
   startDate: z.string(),
   endDate: z.string(),
+});
+
+const resolveDuplicateDaySchema = z.object({
+  employeeId: z.string().min(1),
+  date: z.string(),
+  /**
+   * Which of the day's duplicate rows to retain; the rest are deleted.
+   * Omit to delete the whole day, for leave the employee never took.
+   */
+  keepRecordId: z.string().min(1).nullish(),
 });
 
 const updateLeaveRangeSchema = leaveRangeSchema.extend({
@@ -468,6 +479,65 @@ export async function leaveRecordsRoutes(app: FastifyInstance) {
       });
 
       return reply.send({ data: records, days });
+    } catch (err) {
+      if (err instanceof LeaveAvailabilityError) {
+        return reply.code(400).send({ error: "Validation error", message: err.message });
+      }
+      throw err;
+    }
+  });
+
+  /**
+   * Collapse a duplicated legacy leave day to the chosen row. Deleting by range is not
+   * usable here: it would remove every row for the day and strip the employee's leave.
+   */
+  app.post("/resolve-duplicate-day", { preHandler: approveProtect }, async (request, reply) => {
+    const parsed = resolveDuplicateDaySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const companyId = request.user!.companyId;
+    try {
+      // Same immutability rules as the other legacy mutations: an authoritative
+      // application owns the day, and paid/approved payroll must never be rewritten.
+      const blocked = await legacyMutationBlocker(
+        companyId,
+        parsed.data.employeeId,
+        parsed.data.date,
+        parsed.data.date
+      );
+      if (blocked) {
+        return reply.code(409).send({ error: "Authoritative leave is immutable", message: blocked });
+      }
+
+      const { kept, deleted } = await resolveDuplicateLeaveDay({
+        companyId,
+        employeeId: parsed.data.employeeId,
+        date: parsed.data.date,
+        keepRecordId: parsed.data.keepRecordId,
+      });
+
+      await createAuditLog({
+        userId: request.user!.sub,
+        companyId,
+        action: kept
+          ? "leave_record.resolve_duplicate_day"
+          : "leave_record.delete_duplicate_day",
+        entityType: "leave_record",
+        entityId: kept ?? parsed.data.employeeId,
+        metadata: {
+          employeeId: parsed.data.employeeId,
+          date: parsed.data.date,
+          keptRecordId: kept,
+          deletedRecordIds: deleted,
+        },
+      });
+
+      return reply.send({ kept, deleted, deletedCount: deleted.length });
     } catch (err) {
       if (err instanceof LeaveAvailabilityError) {
         return reply.code(400).send({ error: "Validation error", message: err.message });

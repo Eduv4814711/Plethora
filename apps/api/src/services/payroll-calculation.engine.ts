@@ -6,6 +6,7 @@ import {
   calculateUIF,
   type PayPeriod,
 } from "./tax.service.js";
+import { resolveTaxYearConfig } from "../lib/tax-brackets.js";
 import {
   PAYROLL_CALCULATION_VERSION,
   type PayrollCalculationSnapshot,
@@ -169,6 +170,9 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
 } {
   const lines: PayrollComputedLine[] = [];
   const employeeSnapshots: PayrollEmployeeCalculationSnapshot[] = [];
+  // Tax tables come from the period being paid, so recalculating an old run reproduces
+  // the rates it was originally filed on rather than the current year's.
+  const taxYearConfig = resolveTaxYearConfig(ctx.periodEnd);
 
   for (const emp of ctx.employees) {
     const rules = resolvePayRules(emp, ctx);
@@ -218,9 +222,11 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
       publicHolidayPay = round2(
         (agg?.publicHolidayHours ?? 0) * effectiveHourlyRate * rules.publicHolidayMultiplier
       );
-      grossPay = round2(
-        periodSalary - unpaidLeaveReduction - uifLeaveReduction + overtimePay + sundayPay + publicHolidayPay
-      );
+      // The salary actually payable for the period is this employee's base pay. It must
+      // be recorded on the line, not only in the payslip earnings JSON — PayrollItem.basePay
+      // is what cost reporting and compliance rules read.
+      basePay = round2(periodSalary - unpaidLeaveReduction - uifLeaveReduction);
+      grossPay = round2(basePay + overtimePay + sundayPay + publicHolidayPay);
       earningsLines.push({ name: "Basic Salary", amount: periodSalary });
       if (unpaidLeaveReduction > 0) {
         earningsLines.push({ name: "Unpaid Leave Reduction", amount: -unpaidLeaveReduction });
@@ -330,7 +336,10 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
     }
 
     const empType = emp.employeeType ?? "security";
-    const baseForPct = isFixedMonthly ? grossPay : basePay;
+    // Percentage allowances are a proportion of basic pay for everyone. Basing salaried
+    // employees on gross instead would inflate the same rule whenever they worked
+    // overtime or premium hours.
+    const baseForPct = basePay;
     for (const er of earningsRules) {
       const applies =
         er.appliesTo === "all" ||
@@ -353,7 +362,7 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
     }
 
     const taxableEarnings = grossPay;
-    const paye = calculatePAYE(taxableEarnings, ctx.payPeriod, emp);
+    const paye = calculatePAYE(taxableEarnings, ctx.payPeriod, emp, taxYearConfig);
     const { employee: uifEmployee, employer: uifEmployer } = calculateUIF(grossPay, ctx.payPeriod);
     const sdl = calculateSDL(grossPay, ctx.isSdlLiable);
 
@@ -495,6 +504,7 @@ export function buildPayrollCalculationSnapshot(params: {
   sdlStatus: PayrollSdlStatusSnapshot;
 }): PayrollCalculationSnapshot {
   const { ctx, employeeSnapshots, lines, calculatedAt, sdlStatus } = params;
+  const taxYearConfig = resolveTaxYearConfig(ctx.periodEnd);
   const companyRules: Record<string, number> = {};
   for (const [k, v] of ctx.companyPayRules) {
     companyRules[k] = v;
@@ -527,6 +537,13 @@ export function buildPayrollCalculationSnapshot(params: {
       payPeriod: ctx.payPeriod,
       isSdlLiable: ctx.isSdlLiable,
       sdlStatus,
+      taxYear: {
+        year: taxYearConfig.year,
+        label: `${taxYearConfig.year}/${taxYearConfig.year + 1}`,
+        provisional: taxYearConfig.provisional === true,
+        primaryRebate: taxYearConfig.primaryRebate,
+        thresholdUnder65: taxYearConfig.thresholdUnder65,
+      },
       timezone: ctx.timezone,
       publicHolidayDates: ctx.publicHolidayDates,
       employeeCount: ctx.employees.length,

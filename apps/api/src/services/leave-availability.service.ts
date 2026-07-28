@@ -177,6 +177,69 @@ export async function deleteLeaveRecordsForRange(params: {
   return result.count;
 }
 
+/**
+ * Resolve a duplicated legacy leave day, either by collapsing it to one row or by
+ * removing the day outright.
+ *
+ * Payroll blocks any employee-day holding more than one legacy LeaveRecord with no
+ * authoritative occurrence, because timesheet aggregation sums rows that differ and
+ * would pay the day twice. Deleting by range is not a remedy for the first case — it
+ * removes every row — so keeping a row has to name it explicitly.
+ *
+ * Omit `keepRecordId` to delete every row for the day, for imports that recorded leave
+ * the employee never took.
+ */
+export async function resolveDuplicateLeaveDay(params: {
+  companyId: string;
+  employeeId: string;
+  date: string;
+  keepRecordId?: string | null;
+}): Promise<{ kept: string | null; deleted: string[] }> {
+  const employee = await prisma.employee.findFirst({
+    where: { id: params.employeeId, companyId: params.companyId },
+    select: { id: true },
+  });
+  if (!employee) {
+    throw new LeaveAvailabilityError("Employee not found");
+  }
+
+  const day = normalizeLeaveDate(params.date);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const rows = await tx.leaveRecord.findMany({
+      where: { employeeId: params.employeeId, date: day },
+      select: { id: true },
+      orderBy: { id: "asc" },
+    });
+    if (rows.length === 0) {
+      throw new LeaveAvailabilityError("No leave records found for this employee and date");
+    }
+    if (rows.length === 1) {
+      throw new LeaveAvailabilityError(
+        "This day already has a single leave record — nothing to resolve"
+      );
+    }
+    if (params.keepRecordId != null && !rows.some((row) => row.id === params.keepRecordId)) {
+      throw new LeaveAvailabilityError(
+        "The record to keep does not belong to this employee and date"
+      );
+    }
+
+    const keepRecordId = params.keepRecordId ?? null;
+    const toDelete = rows.filter((row) => row.id !== keepRecordId).map((row) => row.id);
+    await tx.leaveRecord.deleteMany({ where: { id: { in: toDelete } } });
+    return { kept: keepRecordId, deleted: toDelete };
+  });
+
+  await reconcileContinuityForEmployee(
+    params.employeeId,
+    params.companyId,
+    "leave_duplicates_resolved"
+  ).catch(() => undefined);
+
+  return result;
+}
+
 export async function replaceLeaveRecordRange(params: {
   companyId: string;
   employeeId: string;

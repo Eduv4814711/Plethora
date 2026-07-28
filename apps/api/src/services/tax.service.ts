@@ -1,6 +1,7 @@
 import type { Employee } from "@prisma/client";
 import {
-  TAX_YEAR_2025_2026,
+  resolveTaxYearConfig,
+  taxYearEndDate,
   UIF_EARNINGS_CEILING,
   SDL_THRESHOLD_ANNUAL,
   type TaxYearConfig,
@@ -17,12 +18,16 @@ const PERIODS_PER_YEAR: Record<PayPeriod, number> = {
 /**
  * Calculate PAYE (income tax) for a pay period.
  * Uses SARS progressive brackets with annualization.
+ *
+ * `taxYearConfig` must be resolved from the payroll period (see `resolveTaxYearConfig`),
+ * not from the current date — recalculating a historical run has to reproduce the tax
+ * that run was originally filed on.
  */
 export function calculatePAYE(
   taxableEarnings: number,
   payPeriod: PayPeriod,
   employee: Pick<Employee, "dateOfBirth" | "taxDirectiveRate" | "taxDirectiveNumber">,
-  taxYearConfig: TaxYearConfig = TAX_YEAR_2025_2026
+  taxYearConfig: TaxYearConfig = resolveTaxYearConfig(new Date())
 ): number {
   if (taxableEarnings <= 0) return 0;
 
@@ -41,8 +46,12 @@ export function calculatePAYE(
   const periodsPerYear = PERIODS_PER_YEAR[payPeriod];
   const annualTaxable = taxableEarnings * periodsPerYear;
 
-  // Tax threshold - no tax if below
-  const age = employee.dateOfBirth ? getAge(employee.dateOfBirth) : 0;
+  // SARS applies the age rebates on the employee's age at the END of the year of
+  // assessment, so age is derived from the tax year being calculated — never from
+  // today, which would make the same run tax differently each time it is recalculated.
+  const age = employee.dateOfBirth
+    ? getAgeAt(employee.dateOfBirth, taxYearEndDate(taxYearConfig.year))
+    : 0;
   const threshold =
     age >= 75
       ? taxYearConfig.threshold75Plus
@@ -74,12 +83,12 @@ export function calculatePAYE(
   return Math.round(periodTax * 100) / 100;
 }
 
-function getAge(dateOfBirth: Date): number {
-  const today = new Date();
+/** Age in completed years as at a reference date. UTC throughout for determinism. */
+export function getAgeAt(dateOfBirth: Date, asAt: Date): number {
   const dob = new Date(dateOfBirth);
-  let age = today.getFullYear() - dob.getFullYear();
-  const m = today.getMonth() - dob.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
+  let age = asAt.getUTCFullYear() - dob.getUTCFullYear();
+  const m = asAt.getUTCMonth() - dob.getUTCMonth();
+  if (m < 0 || (m === 0 && asAt.getUTCDate() < dob.getUTCDate())) age--;
   return age;
 }
 

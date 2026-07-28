@@ -1501,6 +1501,61 @@ export async function accrueConfirmedLeave(params: { companyId: string; actorId:
   return { asOf: params.asOf, posted, skipped };
 }
 
+export interface LegacyLeaveRowForReadiness {
+  id: string;
+  employeeId: string;
+  date: Date;
+  type: string;
+  hours: unknown;
+  employee: { firstName: string; lastName: string; employeeNumber: string | null };
+}
+
+/**
+ * Employee-days that hold more than one legacy leave row and have no authoritative
+ * occurrence to supersede them. Payroll blocks on these because aggregateTimesheets
+ * collapses only rows identical in type AND hours — anything else is summed, which
+ * pays a single day twice.
+ *
+ * `kind` decides the remedy, so callers can act without inspecting the database:
+ * exact-duplicate rows can be pruned, conflicting rows need an HR decision.
+ */
+export function classifyDuplicateLegacyDays(
+  legacyRows: LegacyLeaveRowForReadiness[],
+  authoritativeDayKeys: Set<string>
+) {
+  const legacyRowsByEmployeeDay = new Map<string, LegacyLeaveRowForReadiness[]>();
+  for (const row of legacyRows) {
+    const key = `${row.employeeId}:${formatLeaveDateKey(row.date)}`;
+    // Modern approvals retain legacy compatibility rows for older screens. A
+    // multi-shift leave day can legitimately produce several such rows; only
+    // standalone legacy days are migration anomalies that must block payroll.
+    if (authoritativeDayKeys.has(key)) continue;
+    legacyRowsByEmployeeDay.set(key, [...(legacyRowsByEmployeeDay.get(key) ?? []), row]);
+  }
+
+  return [...legacyRowsByEmployeeDay.entries()]
+    .filter(([, rows]) => rows.length > 1)
+    .map(([key, rows]) => {
+      const employee = rows[0]!.employee;
+      const distinctRows = new Set(rows.map((row) => `${row.type}:${Number(row.hours).toFixed(2)}`));
+      return {
+        key,
+        recordIds: rows.map((row) => row.id),
+        types: [...new Set(rows.map((row) => row.type))],
+        employeeId: rows[0]!.employeeId,
+        employeeName: `${employee.firstName} ${employee.lastName}`.trim(),
+        employeeNumber: employee.employeeNumber,
+        date: formatLeaveDateKey(rows[0]!.date),
+        kind: distinctRows.size === 1 ? ("exact-duplicate" as const) : ("conflicting-rows" as const),
+        records: rows.map((row) => ({
+          id: row.id,
+          type: row.type,
+          hours: Number(row.hours),
+        })),
+      };
+    });
+}
+
 export async function getLeaveReadiness(companyId: string, start: Date, end: Date) {
   const [unresolved, missingDocuments, legacyRows, authoritativeOccurrences] = await Promise.all([
     prisma.leaveApplication.findMany({
@@ -1512,7 +1567,14 @@ export async function getLeaveReadiness(companyId: string, start: Date, end: Dat
     }),
     prisma.leaveRecord.findMany({
       where: { employee: { companyId }, date: { gte: normalizeLeaveDate(start), lte: normalizeLeaveDate(end) } },
-      select: { id: true, employeeId: true, date: true, type: true, hours: true },
+      select: {
+        id: true,
+        employeeId: true,
+        date: true,
+        type: true,
+        hours: true,
+        employee: { select: { firstName: true, lastName: true, employeeNumber: true } },
+      },
       orderBy: [{ employeeId: "asc" }, { date: "asc" }, { id: "asc" }],
     }),
     prisma.leaveOccurrence.findMany({
@@ -1527,18 +1589,7 @@ export async function getLeaveReadiness(companyId: string, start: Date, end: Dat
   const authoritativeDayKeys = new Set(authoritativeOccurrences.map((occurrence) =>
     `${occurrence.employeeId}:${formatLeaveDateKey(occurrence.leaveDate)}`
   ));
-  const legacyRowsByEmployeeDay = new Map<string, typeof legacyRows>();
-  for (const row of legacyRows) {
-    const key = `${row.employeeId}:${formatLeaveDateKey(row.date)}`;
-    // Modern approvals retain legacy compatibility rows for older screens. A
-    // multi-shift leave day can legitimately produce several such rows; only
-    // standalone legacy days are migration anomalies that must block payroll.
-    if (authoritativeDayKeys.has(key)) continue;
-    legacyRowsByEmployeeDay.set(key, [...(legacyRowsByEmployeeDay.get(key) ?? []), row]);
-  }
-  const duplicateLegacyDays = [...legacyRowsByEmployeeDay.entries()]
-    .filter(([, rows]) => rows.length > 1)
-    .map(([key, rows]) => ({ key, recordIds: rows.map((row) => row.id), types: [...new Set(rows.map((row) => row.type))] }));
+  const duplicateLegacyDays = classifyDuplicateLegacyDays(legacyRows, authoritativeDayKeys);
   return {
     blocked: unresolved.length > 0 || missingDocuments > 0 || duplicateLegacyDays.length > 0,
     unresolved,
