@@ -56,7 +56,14 @@ Settings:
 - Build command: `npm run build --workspace=api`
 - Pre-deploy command: `cd apps/api && npm run db:migrate:deploy`
 - Start command: `cd apps/api && npm run start:server`
-- Healthcheck path: `/health`
+- Healthcheck path: `/health/ready`
+
+The API exposes three health endpoints. `/health` and `/health/live` are liveness
+probes that always return `200` while the process is up. `/health/ready` also
+verifies database readiness and returns `503` when the schema is unreachable or
+incompatible. Railway's healthcheck uses `/health/ready` (see
+`apps/api/railway.toml`) so a deployment that cannot reach its database fails the
+health gate instead of serving traffic.
 
 Variables:
 
