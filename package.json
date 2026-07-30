@@ -23,6 +23,7 @@
     "db:push": "npm run db:push --workspace=api",
     "db:seed": "npm run db:seed --workspace=api",
     "db:reset-admin": "npm run db:reset-admin --workspace=api",
+    "db:sync-prod": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync-prod-to-local.ps1",
     "test": "npm run test --workspace=api && npm run test --workspace=web",
     "test:api": "npm run test --workspace=api",
     "test:web": "npm run test --workspace=web"

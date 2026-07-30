@@ -12,6 +12,8 @@ import {
   cancelOrWithdrawLeave,
   amendApprovedLeave,
   accrueConfirmedLeave,
+  getLeavePolicyVersionUsage,
+  runLeaveCycleClose,
   createLeaveApplication,
   createOpeningBalanceAdjustment,
   decideLeaveApplication,
@@ -99,6 +101,9 @@ const policyVersionSchema = z.object({
   sourceAuthority: z.string().min(1).max(250), legalReference: z.string().max(1000).optional(),
   entitlementMinutes: z.number().int().positive().optional(), accrualMethod: z.string().min(1).max(100),
   accrualRateMinutes: z.number().positive().optional(), cycleMonths: z.number().int().min(0).max(120).default(12),
+  // BCEA s20(2)(b) annual leave is one day per 17 days worked; s22(2) sick
+  // leave is one day per 26. Only read by the DAYS_WORKED_RATIO method.
+  accrualRatioDays: z.number().int().positive().max(365).nullable().optional(),
   carryOverLimitMinutes: z.number().int().nonnegative().nullable().optional(), expiryMonths: z.number().int().positive().nullable().optional(),
   noticeDays: z.number().int().nonnegative().nullable().optional(), maxConsecutiveDays: z.number().int().positive().optional(),
   negativeBalanceAllowed: z.boolean().default(false), autoConvertToUnpaid: z.boolean().default(false),
@@ -144,6 +149,10 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
     authMiddleware,
     requireAnyCapability(["/employees/leave", "/payroll"], "export"),
   ];
+  const deleteProtect = [
+    authMiddleware,
+    requireAnyCapability(["/employees/leave", "/payroll"], "delete"),
+  ];
   const editProtect = [
     authMiddleware,
     requireAnyCapability(["/employees/leave", "/payroll"], "edit"),
@@ -165,15 +174,29 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
       include: { versions: { include: { leaveType: true }, orderBy: [{ leaveType: { name: "asc" } }, { version: "desc" }] }, assignments: true },
       orderBy: { name: "asc" },
     });
+    // Usage is resolved here rather than by the client so the buttons a user
+    // sees match what the API will actually allow, in one round trip.
+    const usageByVersion = new Map(
+      await Promise.all(
+        data
+          .flatMap((policy) => policy.versions)
+          .map(async (version) => [
+            version.id,
+            await getLeavePolicyVersionUsage(request.user!.companyId, version.id),
+          ] as const)
+      )
+    );
     return reply.send({
       data: data.map((policy) => ({
         ...policy,
         versions: policy.versions.map((version) => {
           const configurationIssues = leavePolicyConfigurationIssues(version);
+          const usage = usageByVersion.get(version.id) ?? null;
           return {
             ...version,
             configurationReady: configurationIssues.length === 0,
             configurationIssues,
+            usage,
           };
         }),
       })),
@@ -209,8 +232,20 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
       include: { leaveType: true },
     });
     if (!existing) return reply.code(404).send({ error: "Not found", message: "Policy version not found" });
+    if (existing.reviewStatus === "RETIRED") {
+      return reply.code(409).send({ error: "POLICY_STATUS_CONFLICT", message: "A retired policy version is kept as history and cannot be edited" });
+    }
+    // An active version may still be corrected while nothing has relied on it.
+    // Once it has decided an application or posted a balance movement it is
+    // evidence, and the only safe change is a new effective-dated version.
     if (existing.reviewStatus !== "PENDING_HR_LEGAL_CONFIRMATION") {
-      return reply.code(409).send({ error: "POLICY_STATUS_CONFLICT", message: "Only a pending policy version can be edited; create a new effective-dated version instead" });
+      const usage = await getLeavePolicyVersionUsage(request.user!.companyId, existing.id);
+      if (!usage?.canEditInPlace) {
+        return reply.code(409).send({
+          error: "POLICY_IN_USE",
+          message: `This version has already been used and cannot be rewritten. ${usage?.reasons.join(" ") ?? ""} Create a new effective-dated version instead.`.trim(),
+        });
+      }
     }
     if (parsed.data.leaveTypeCode !== existing.leaveType.code) {
       return reply.code(409).send({ error: "POLICY_TYPE_CONFLICT", message: "A policy version's leave type cannot be changed" });
@@ -230,8 +265,10 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
     if (laterVersion) return reply.code(409).send({ error: "POLICY_DATE_CONFLICT", message: "This effective date conflicts with a later policy version" });
     const { leaveTypeCode: _leaveTypeCode, ...data } = parsed.data;
     const updated = await prisma.$transaction(async (tx) => {
+      // Pin the status we validated against so a concurrent confirm or retire
+      // cannot slip a change past the in-use check.
       const changed = await tx.leavePolicyVersion.updateMany({
-        where: { id: existing.id, reviewStatus: "PENDING_HR_LEGAL_CONFIRMATION" },
+        where: { id: existing.id, reviewStatus: existing.reviewStatus },
         data: {
           ...data,
           approvalFlow: data.approvalFlow as Prisma.InputJsonValue,
@@ -243,6 +280,95 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
       });
       if (changed.count !== 1) throw new LeaveManagementError("Policy version changed during editing; refresh and try again", 409, "POLICY_STATUS_CONFLICT");
       await tx.leaveAuditEvent.create({ data: { companyId: request.user!.companyId, userId: request.user!.sub, eventType: "POLICY_VERSION_UPDATED", newValue: { policyVersionId: existing.id, leaveTypeCode: existing.leaveType.code } } });
+      return tx.leavePolicyVersion.findUniqueOrThrow({ where: { id: existing.id } });
+    });
+    return reply.send(updated);
+  });
+
+  // Lets the UI show accurate controls rather than offering an action that will
+  // be refused, and explain why when one is unavailable.
+  app.get("/policies/versions/:id/usage", { preHandler: manageProtect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const usage = await getLeavePolicyVersionUsage(request.user!.companyId, id);
+    if (!usage) return reply.code(404).send({ error: "Not found", message: "Policy version not found" });
+    return reply.send(usage);
+  });
+
+  app.delete("/policies/versions/:id", { preHandler: deleteProtect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const existing = await prisma.leavePolicyVersion.findFirst({
+      where: { id, companyId: request.user!.companyId },
+      include: { leaveType: true },
+    });
+    if (!existing) return reply.code(404).send({ error: "Not found", message: "Policy version not found" });
+
+    const usage = await getLeavePolicyVersionUsage(request.user!.companyId, id);
+    if (!usage?.canDelete) {
+      return reply.code(409).send({
+        error: "POLICY_IN_USE",
+        message: `${usage?.reasons.join(" ") ?? "This version cannot be deleted."} Retire it instead to keep the history.`.trim(),
+      });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // Record what was removed before removing it, so the audit trail still
+      // explains the gap in version numbers.
+      await tx.leaveAuditEvent.create({
+        data: {
+          companyId: request.user!.companyId,
+          userId: request.user!.sub,
+          eventType: "POLICY_VERSION_DELETED",
+          reason: "Unused policy version deleted",
+          previousValue: {
+            policyVersionId: existing.id,
+            leaveTypeCode: existing.leaveType.code,
+            version: existing.version,
+            reviewStatus: existing.reviewStatus,
+            entitlementMinutes: existing.entitlementMinutes,
+            accrualMethod: existing.accrualMethod,
+            effectiveFrom: existing.effectiveFrom,
+          },
+        },
+      });
+      await tx.leavePolicyVersion.delete({ where: { id: existing.id } });
+    });
+    return reply.code(204).send();
+  });
+
+  // Retiring is the safe alternative to deleting: the version stops applying
+  // but survives as the record of what was in force at the time.
+  app.post("/policies/versions/:id/retire", { preHandler: approveProtect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const existing = await prisma.leavePolicyVersion.findFirst({
+      where: { id, companyId: request.user!.companyId },
+      include: { leaveType: true },
+    });
+    if (!existing) return reply.code(404).send({ error: "Not found", message: "Policy version not found" });
+    if (existing.reviewStatus === "RETIRED") return reply.send(existing);
+
+    const usage = await getLeavePolicyVersionUsage(request.user!.companyId, id);
+    if (usage?.isOnlyActiveVersion) {
+      return reply.code(409).send({
+        error: "POLICY_LAST_ACTIVE",
+        message: "This is the only active version for this leave type. Publish a replacement before retiring it, or leave would have no governing policy.",
+      });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const changed = await tx.leavePolicyVersion.updateMany({
+        where: { id: existing.id, reviewStatus: existing.reviewStatus },
+        data: { reviewStatus: "RETIRED" },
+      });
+      if (changed.count !== 1) throw new LeaveManagementError("Policy version changed while retiring; refresh and try again", 409, "POLICY_STATUS_CONFLICT");
+      await tx.leaveAuditEvent.create({
+        data: {
+          companyId: request.user!.companyId,
+          userId: request.user!.sub,
+          eventType: "POLICY_VERSION_RETIRED",
+          previousValue: { reviewStatus: existing.reviewStatus },
+          newValue: { policyVersionId: existing.id, leaveTypeCode: existing.leaveType.code, reviewStatus: "RETIRED" },
+        },
+      });
       return tx.leavePolicyVersion.findUniqueOrThrow({ where: { id: existing.id } });
     });
     return reply.send(updated);
@@ -641,6 +767,25 @@ export async function leaveManagementRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
     try { return reply.send(await accrueConfirmedLeave({ companyId: request.user!.companyId, actorId: request.user!.sub, asOf: parsed.data.asOf })); }
     catch (error) { return sendLeaveError(reply, error); }
+  });
+
+  // Closing a cycle forfeits leave, so it is previewable before it is posted.
+  app.post("/cycles/close", { preHandler: approveProtect }, async (request, reply) => {
+    const parsed = z.object({
+      asOf: z.string().regex(DATE).optional(),
+      employeeId: z.string().min(1).optional(),
+      dryRun: z.boolean().default(true),
+    }).safeParse(request.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
+    try {
+      return reply.send(await runLeaveCycleClose({
+        companyId: request.user!.companyId,
+        actorId: request.user!.sub,
+        asOf: parsed.data.asOf ? normalizeDate(parsed.data.asOf) : undefined,
+        employeeId: parsed.data.employeeId,
+        dryRun: parsed.data.dryRun,
+      }));
+    } catch (error) { return sendLeaveError(reply, error); }
   });
 
   app.get("/audit", { preHandler: manageProtect }, async (request, reply) => {

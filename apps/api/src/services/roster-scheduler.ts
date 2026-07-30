@@ -1,5 +1,12 @@
 import { addDays, differenceInCalendarDays, getDay } from "date-fns";
 import { meetsSiteShiftGenderRule, type CustomBlock } from "./rostering.service.js";
+import {
+  countCoveredDays,
+  daysWithAnyCoverage,
+  isShiftCoveredOn,
+  resolveSiteCoverageDays,
+  type SiteCoverageDays,
+} from "../lib/site-coverage-days.js";
 
 export type RosterDualPattern = "3_on_3_off" | "custom_builder";
 
@@ -104,7 +111,7 @@ function slotDifficulty(requiredGender: "male" | "female" | "any" | null, staffi
   return score;
 }
 
-/** Build required day/night demand slots from posts, staffing, and gender rules. */
+/** Build required day/night demand slots from posts, staffing, gender rules, and weekday cover. */
 export function buildSiteDemandSlots(params: {
   siteId: string;
   calendarDays: Date[];
@@ -112,13 +119,16 @@ export function buildSiteDemandSlots(params: {
   nightPosts: { id: string }[];
   staffing: ShiftStaffingRequirements;
   siteGenderRules: SiteGenderRules;
+  /** Weekdays each shift needs cover. Omit for the legacy seven-day-a-week behaviour. */
+  coverageDays?: SiteCoverageDays;
 }): { slots: RosterDemandSlot[]; warnings: DemandSlotWarning[] } {
   const { siteId, calendarDays, dayPosts, nightPosts, staffing, siteGenderRules } = params;
+  const coverageDays = params.coverageDays ?? resolveSiteCoverageDays({});
   const warnings: DemandSlotWarning[] = [];
   const slots: RosterDemandSlot[] = [];
 
-  const requiredDay = staffing.day;
-  const requiredNight = staffing.night;
+  const requiredDay = coverageDays.day.size > 0 ? staffing.day : 0;
+  const requiredNight = coverageDays.night.size > 0 ? staffing.night : 0;
 
   if (requiredDay > 0 && dayPosts.length === 0) {
     warnings.push({
@@ -150,8 +160,10 @@ export function buildSiteDemandSlots(params: {
 
   for (const day of calendarDays) {
     const dateKey = formatDateKey(day);
+    const needsDay = isShiftCoveredOn(coverageDays, "day", day);
+    const needsNight = isShiftCoveredOn(coverageDays, "night", day);
 
-    for (let i = 0; i < requiredDay; i++) {
+    for (let i = 0; needsDay && i < requiredDay; i++) {
       if (dayPosts.length === 0) continue;
       const post = dayPosts[i % dayPosts.length]!;
       const requiredGender = normalizeRequiredGender(siteGenderRules, "day");
@@ -167,7 +179,7 @@ export function buildSiteDemandSlots(params: {
       });
     }
 
-    for (let i = 0; i < requiredNight; i++) {
+    for (let i = 0; needsNight && i < requiredNight; i++) {
       if (nightPosts.length === 0) continue;
       const post = nightPosts[i % nightPosts.length]!;
       const requiredGender = normalizeRequiredGender(siteGenderRules, "night");
@@ -1342,14 +1354,25 @@ export function computePatternFairnessTargets(
 export function computeFairnessTargets(
   guardCount: number,
   calendarDays: Date[],
-  staffing?: ShiftStaffingRequirements
+  staffing?: ShiftStaffingRequirements,
+  /** Weekdays each shift needs cover. Omit for the legacy seven-day-a-week behaviour. */
+  coverageDays?: SiteCoverageDays
 ): FairnessTargets {
   const numDays = calendarDays.length;
   const g = Math.max(guardCount, 1);
   const st = staffing ?? { day: 1, night: 1 };
-  const { sundayCount, weekendCount } = countSundaysAndWeekends(calendarDays);
+  const coverage = coverageDays ?? resolveSiteCoverageDays({});
 
-  const shiftsPerGuard = (numDays * (st.day + st.night)) / g;
+  // Sunday/weekend fairness only counts days the site is actually worked — on a Mon–Fri
+  // site nobody works a Sunday, so a non-zero Sunday target would skew every guard's score.
+  const { sundayCount, weekendCount } = countSundaysAndWeekends(
+    daysWithAnyCoverage(coverage, calendarDays)
+  );
+
+  const totalDemand =
+    countCoveredDays(coverage, "day", calendarDays) * st.day +
+    countCoveredDays(coverage, "night", calendarDays) * st.night;
+  const shiftsPerGuard = totalDemand / g;
   const equalTypeTarget = shiftsPerGuard / 2;
   const targetOff = Math.max(0, numDays - shiftsPerGuard);
 
@@ -1484,8 +1507,11 @@ export function computeFairnessSpread(
 export function validateDailyCoverage(
   entries: CoverageEntry[],
   calendarDays: Date[],
-  staffing: ShiftStaffingRequirements = { day: 1, night: 1 }
+  staffing: ShiftStaffingRequirements = { day: 1, night: 1 },
+  /** Weekdays each shift needs cover. Omit for the legacy seven-day-a-week behaviour. */
+  coverageDays?: SiteCoverageDays
 ): UncoveredDay[] {
+  const coverage = coverageDays ?? resolveSiteCoverageDays({});
   const requiredDay = staffing.day;
   const requiredNight = staffing.night;
 
@@ -1502,15 +1528,19 @@ export function validateDailyCoverage(
   for (const day of calendarDays) {
     const dateKey = formatDateKey(day);
     const counts = byDate.get(dateKey) ?? { day: 0, night: 0 };
+    // A weekday the site does not need covered is not a gap. Reporting the required
+    // count as 0 keeps downstream warning copy honest about what was actually expected.
+    const needDay = isShiftCoveredOn(coverage, "day", day) ? requiredDay : 0;
+    const needNight = isShiftCoveredOn(coverage, "night", day) ? requiredNight : 0;
     const missing: ("day" | "night")[] = [];
-    if (counts.day < requiredDay) missing.push("day");
-    if (counts.night < requiredNight) missing.push("night");
+    if (counts.day < needDay) missing.push("day");
+    if (counts.night < needNight) missing.push("night");
     if (missing.length > 0) {
       uncovered.push({
         date: dateKey,
         missing,
         counts: { day: counts.day, night: counts.night },
-        required: { day: requiredDay, night: requiredNight },
+        required: { day: needDay, night: needNight },
       });
     }
   }

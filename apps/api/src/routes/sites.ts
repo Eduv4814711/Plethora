@@ -9,6 +9,7 @@ import { runAutoRosterForSite } from "../services/auto-roster.service.js";
 import { mapSiteForApi, siteDetailInclude } from "../lib/site-post-api.js";
 import { syncContractExpiryAlerts } from "../modules/documents/documents.service.js";
 import { reconcileRosterContinuityForSite } from "../modules/rosters/roster-continuity.service.js";
+import { ALL_WEEK_DAYS, normalizeCoverageDays } from "../lib/site-coverage-days.js";
 
 const SERVICE_TYPES = [
   "guarding",
@@ -46,21 +47,54 @@ function refineSiteGeofenceThreeOrNone(data: {
 
 const ROSTER_SHIFT_GENDER = z.enum(["male", "female", "any"]).nullable().optional();
 const ROSTER_SHIFT_GUARDS_REQUIRED = z.number().int().min(0).max(50).optional();
+/** Weekdays a shift needs cover, as JS day-of-week numbers (0=Sunday … 6=Saturday). */
+const ROSTER_SHIFT_DAYS = z
+  .array(z.number().int().min(0).max(6))
+  .max(7)
+  .optional()
+  .transform((v) => (v === undefined ? undefined : normalizeCoverageDays(v)));
+
+/**
+ * A shift only runs when it needs guards *and* has at least one weekday to cover.
+ * Undefined fields fall back to `existing`, so this works for both create (schema
+ * defaults) and update (the site's current values).
+ */
+function shiftRunsWith(
+  guardsRequired: number | undefined,
+  days: number[] | undefined,
+  existing: { guardsRequired: number; days: number[] }
+): boolean {
+  const guards = guardsRequired ?? existing.guardsRequired;
+  const coveredDays = days ?? existing.days;
+  return guards > 0 && coveredDays.length > 0;
+}
+
+const DEFAULT_SHIFT_STATE = { guardsRequired: 1, days: [...ALL_WEEK_DAYS] };
 
 function refineShiftGuardsNotBothZero(
   data: {
     rosterDayShiftGuardsRequired?: number;
     rosterNightShiftGuardsRequired?: number;
+    rosterDayShiftDays?: number[];
+    rosterNightShiftDays?: number[];
   },
   ctx: z.RefinementCtx
 ) {
-  if (
-    data.rosterDayShiftGuardsRequired === 0 &&
-    data.rosterNightShiftGuardsRequired === 0
-  ) {
+  const dayRuns = shiftRunsWith(
+    data.rosterDayShiftGuardsRequired,
+    data.rosterDayShiftDays,
+    DEFAULT_SHIFT_STATE
+  );
+  const nightRuns = shiftRunsWith(
+    data.rosterNightShiftGuardsRequired,
+    data.rosterNightShiftDays,
+    DEFAULT_SHIFT_STATE
+  );
+  if (!dayRuns && !nightRuns) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "At least one shift must require at least 1 guard.",
+      message:
+        "At least one shift must require at least 1 guard on at least one day of the week.",
       path: ["rosterDayShiftGuardsRequired"],
     });
   }
@@ -96,6 +130,8 @@ const createSiteSchema = z
     rosterNightShiftGender: ROSTER_SHIFT_GENDER,
     rosterDayShiftGuardsRequired: ROSTER_SHIFT_GUARDS_REQUIRED,
     rosterNightShiftGuardsRequired: ROSTER_SHIFT_GUARDS_REQUIRED,
+    rosterDayShiftDays: ROSTER_SHIFT_DAYS,
+    rosterNightShiftDays: ROSTER_SHIFT_DAYS,
     autoRosterEnabled: z.boolean().optional(),
     autoRosterMinCoveragePercent: z.number().int().min(0).max(100).optional(),
   })
@@ -138,6 +174,8 @@ const updateSiteSchema = z
     rosterNightShiftGender: ROSTER_SHIFT_GENDER,
     rosterDayShiftGuardsRequired: ROSTER_SHIFT_GUARDS_REQUIRED,
     rosterNightShiftGuardsRequired: ROSTER_SHIFT_GUARDS_REQUIRED,
+    rosterDayShiftDays: ROSTER_SHIFT_DAYS,
+    rosterNightShiftDays: ROSTER_SHIFT_DAYS,
     autoRosterEnabled: z.boolean().optional(),
     autoRosterMinCoveragePercent: z.number().int().min(0).max(100).optional(),
   })
@@ -260,6 +298,8 @@ export async function sitesRoutes(app: FastifyInstance) {
         rosterNightShiftGender: d.rosterNightShiftGender ?? undefined,
         rosterDayShiftGuardsRequired: d.rosterDayShiftGuardsRequired ?? undefined,
         rosterNightShiftGuardsRequired: d.rosterNightShiftGuardsRequired ?? undefined,
+        rosterDayShiftDays: d.rosterDayShiftDays ?? undefined,
+        rosterNightShiftDays: d.rosterNightShiftDays ?? undefined,
         autoRosterEnabled: d.autoRosterEnabled ?? undefined,
         autoRosterMinCoveragePercent: d.autoRosterMinCoveragePercent ?? undefined,
       },
@@ -359,6 +399,8 @@ export async function sitesRoutes(app: FastifyInstance) {
       rosterNightShiftGender,
       rosterDayShiftGuardsRequired,
       rosterNightShiftGuardsRequired,
+      rosterDayShiftDays,
+      rosterNightShiftDays,
       autoRosterEnabled,
       autoRosterMinCoveragePercent,
       ...rest
@@ -388,14 +430,25 @@ export async function sitesRoutes(app: FastifyInstance) {
     if (rosterNightShiftGuardsRequired !== undefined) {
       rosterPatch.rosterNightShiftGuardsRequired = rosterNightShiftGuardsRequired;
     }
-    const effectiveDayGuards =
-      rosterDayShiftGuardsRequired ?? existing.rosterDayShiftGuardsRequired;
-    const effectiveNightGuards =
-      rosterNightShiftGuardsRequired ?? existing.rosterNightShiftGuardsRequired;
-    if (effectiveDayGuards === 0 && effectiveNightGuards === 0) {
+    if (rosterDayShiftDays !== undefined) {
+      rosterPatch.rosterDayShiftDays = rosterDayShiftDays;
+    }
+    if (rosterNightShiftDays !== undefined) {
+      rosterPatch.rosterNightShiftDays = rosterNightShiftDays;
+    }
+    const dayShiftRuns = shiftRunsWith(rosterDayShiftGuardsRequired, rosterDayShiftDays, {
+      guardsRequired: existing.rosterDayShiftGuardsRequired,
+      days: existing.rosterDayShiftDays,
+    });
+    const nightShiftRuns = shiftRunsWith(rosterNightShiftGuardsRequired, rosterNightShiftDays, {
+      guardsRequired: existing.rosterNightShiftGuardsRequired,
+      days: existing.rosterNightShiftDays,
+    });
+    if (!dayShiftRuns && !nightShiftRuns) {
       return reply.code(400).send({
         error: "Invalid shift staffing",
-        message: "At least one shift must require at least 1 guard.",
+        message:
+          "At least one shift must require at least 1 guard on at least one day of the week.",
       });
     }
     if (

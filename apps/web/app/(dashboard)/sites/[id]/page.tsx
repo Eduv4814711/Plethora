@@ -8,6 +8,15 @@ import { authFetch } from "@/lib/api";
 import { hasCapability } from "@/lib/permissions";
 import { rosterSiteRulesLines } from "@/lib/roster-site-rules-defaults";
 import { buildSiteRosterReadinessHints } from "@/lib/roster-readiness-hints";
+import {
+  ALL_WEEK_DAYS,
+  DAY_LABELS,
+  DISPLAY_DAY_ORDER,
+  coverageDaysOrAllWeek,
+  describeCoverageDays,
+  shiftRuns,
+  toggleCoverageDay,
+} from "@/lib/site-coverage-days";
 import { useConfirmDialog } from "@/components/ui";
 import { SiteOperationalActions } from "@/components/site-operational-actions";
 
@@ -59,6 +68,8 @@ interface Site {
   rosterNightShiftGender?: string | null;
   rosterDayShiftGuardsRequired?: number;
   rosterNightShiftGuardsRequired?: number;
+  rosterDayShiftDays?: number[] | null;
+  rosterNightShiftDays?: number[] | null;
   autoRosterEnabled?: boolean;
   autoRosterMinCoveragePercent?: number;
   autoRosterLastRunAt?: string | null;
@@ -85,7 +96,11 @@ const ROSTERABLE_GUARD_STATUSES = ["active", "training", "hired", "reliever"] as
 function validateSiteShiftStaffing(
   dayGuardsRequired: string,
   nightGuardsRequired: string,
-  rosterableCount: number
+  rosterableCount: number,
+  coverage: { dayDays: number[]; nightDays: number[] } = {
+    dayDays: ALL_WEEK_DAYS,
+    nightDays: ALL_WEEK_DAYS,
+  }
 ): { error: string } | { dayCount: number; nightCount: number } {
   const dayCount = parseInt(dayGuardsRequired, 10);
   const nightCount = parseInt(nightGuardsRequired, 10);
@@ -99,16 +114,77 @@ function validateSiteShiftStaffing(
   ) {
     return { error: "Guards per shift must be a whole number from 0 to 50." };
   }
-  if (dayCount === 0 && nightCount === 0) {
-    return { error: "At least one shift must require at least 1 guard." };
+  const dayRuns = shiftRuns(dayCount, coverage.dayDays);
+  const nightRuns = shiftRuns(nightCount, coverage.nightDays);
+  if (!dayRuns && !nightRuns) {
+    return {
+      error: "At least one shift must require at least 1 guard on at least one day of the week.",
+    };
   }
-  const minRosterable = Math.max(dayCount, nightCount);
+  // Only shifts that actually run set the floor: a Mon–Fri day shift and no night shift
+  // needs the day headcount, not the sum.
+  const minRosterable = Math.max(dayRuns ? dayCount : 0, nightRuns ? nightCount : 0);
   if (rosterableCount < minRosterable) {
     return {
       error: `This site has ${rosterableCount} rosterable guard(s) but staffing requires at least ${minRosterable} per day. Assign more guards to the site first.`,
     };
   }
   return { dayCount, nightCount };
+}
+
+/** Mon–Sun toggle row for one shift type's weekday cover. */
+function CoverageDaysPicker({
+  label,
+  days,
+  onChange,
+  canManage,
+  disabled,
+}: {
+  label: string;
+  days: number[];
+  onChange: (next: number[]) => void;
+  canManage: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400 w-24 shrink-0">
+        {label}
+      </span>
+      {canManage ? (
+        <div className="flex flex-wrap gap-1" role="group" aria-label={`${label} days covered`}>
+          {DISPLAY_DAY_ORDER.map((d) => {
+            const active = days.includes(d);
+            return (
+              <button
+                key={d}
+                type="button"
+                disabled={disabled}
+                aria-pressed={active}
+                onClick={() => onChange(toggleCoverageDay(days, d))}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors disabled:opacity-50 ${
+                  active
+                    ? "border-orange-500 bg-orange-50 text-orange-700 dark:border-orange-500 dark:bg-orange-900/30 dark:text-orange-300"
+                    : "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900/50 dark:text-neutral-400 dark:hover:border-neutral-600"
+                }`}
+              >
+                {DAY_LABELS[d]}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <span className="text-xs text-neutral-500 dark:text-neutral-400">
+          {describeCoverageDays(days)}
+        </span>
+      )}
+      {canManage && (
+        <span className="text-[11px] text-neutral-400 dark:text-neutral-500">
+          {describeCoverageDays(days)}
+        </span>
+      )}
+    </div>
+  );
 }
 
 export default function SiteDetailPage() {
@@ -124,6 +200,8 @@ export default function SiteDetailPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [dayGuardsRequired, setDayGuardsRequired] = useState("1");
   const [nightGuardsRequired, setNightGuardsRequired] = useState("1");
+  const [dayCoverDays, setDayCoverDays] = useState<number[]>(ALL_WEEK_DAYS);
+  const [nightCoverDays, setNightCoverDays] = useState<number[]>(ALL_WEEK_DAYS);
   const [staffingSaving, setStaffingSaving] = useState(false);
   const [staffingError, setStaffingError] = useState<string | null>(null);
   const [staffingSavedFlash, setStaffingSavedFlash] = useState(false);
@@ -149,6 +227,8 @@ export default function SiteDetailPage() {
     if (!site) return;
     setDayGuardsRequired(String(site.rosterDayShiftGuardsRequired ?? 1));
     setNightGuardsRequired(String(site.rosterNightShiftGuardsRequired ?? 1));
+    setDayCoverDays(coverageDaysOrAllWeek(site.rosterDayShiftDays));
+    setNightCoverDays(coverageDaysOrAllWeek(site.rosterNightShiftDays));
   }, [site?.id, site?.rosterDayShiftGuardsRequired, site?.rosterNightShiftGuardsRequired]);
 
   const staffingReadinessHints = useMemo(
@@ -165,7 +245,12 @@ export default function SiteDetailPage() {
     const rosterableCount = site.assignedGuards.filter((a) =>
       ROSTERABLE_GUARD_STATUSES.includes(a.employee.status as (typeof ROSTERABLE_GUARD_STATUSES)[number])
     ).length;
-    const validated = validateSiteShiftStaffing(dayGuardsRequired, nightGuardsRequired, rosterableCount);
+    const validated = validateSiteShiftStaffing(
+      dayGuardsRequired,
+      nightGuardsRequired,
+      rosterableCount,
+      { dayDays: dayCoverDays, nightDays: nightCoverDays }
+    );
     if ("error" in validated) {
       setStaffingError(validated.error);
       return;
@@ -178,6 +263,8 @@ export default function SiteDetailPage() {
         body: JSON.stringify({
           rosterDayShiftGuardsRequired: dayCount,
           rosterNightShiftGuardsRequired: nightCount,
+          rosterDayShiftDays: dayCoverDays,
+          rosterNightShiftDays: nightCoverDays,
         }),
       });
       if (!res.ok) {
@@ -488,6 +575,30 @@ export default function SiteDetailPage() {
 
             {(canEdit || site.posts.length > 0 || !hasDayPost || !hasNightPost) && (
               <div className="mt-5 space-y-3 border-t border-neutral-200 dark:border-neutral-700 pt-5">
+                <div className="space-y-2.5">
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+                      Days covered
+                    </h3>
+                    <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-0.5">
+                      Days left off are not rostered and raise no coverage-gap alerts.
+                    </p>
+                  </div>
+                  <CoverageDaysPicker
+                    label="Day shift"
+                    days={dayCoverDays}
+                    onChange={setDayCoverDays}
+                    canManage={canEdit}
+                    disabled={staffingSaving}
+                  />
+                  <CoverageDaysPicker
+                    label="Night shift"
+                    days={nightCoverDays}
+                    onChange={setNightCoverDays}
+                    canManage={canEdit}
+                    disabled={staffingSaving}
+                  />
+                </div>
                 {staffingError && (
                   <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
                     {staffingError}
@@ -1897,7 +2008,10 @@ function AddPostForm({
     const rosterableCount = site.assignedGuards.filter((a) =>
       ROSTERABLE_GUARD_STATUSES.includes(a.employee.status as (typeof ROSTERABLE_GUARD_STATUSES)[number])
     ).length;
-    const validated = validateSiteShiftStaffing(nextDay, nextNight, rosterableCount);
+    const validated = validateSiteShiftStaffing(nextDay, nextNight, rosterableCount, {
+      dayDays: coverageDaysOrAllWeek(site.rosterDayShiftDays),
+      nightDays: coverageDaysOrAllWeek(site.rosterNightShiftDays),
+    });
     if ("error" in validated) {
       setError(validated.error);
       return;

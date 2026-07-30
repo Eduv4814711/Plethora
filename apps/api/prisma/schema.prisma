@@ -98,6 +98,7 @@ model Company {
   leaveAdjustments        LeaveAdjustment[]
   leavePayrollPostings    LeavePayrollPosting[]
   leaveAuditEvents        LeaveAuditEvent[]
+  leaveSettings           LeaveCompanySettings?
   employmentTerms         EmploymentTerm[]
 
   // Management System Review — operational modules
@@ -343,6 +344,10 @@ model Site {
   /// Minimum guards rostered on each day / night shift (auto-roster and coverage checks).
   rosterDayShiftGuardsRequired   Int @default(1)
   rosterNightShiftGuardsRequired Int @default(1)
+  /// Weekdays each shift needs cover, as JS day-of-week numbers (0=Sunday … 6=Saturday).
+  /// Not every site needs 7-day cover; days left out produce no roster demand and no coverage-gap alerts.
+  rosterDayShiftDays             Int[] @default([0, 1, 2, 3, 4, 5, 6])
+  rosterNightShiftDays           Int[] @default([0, 1, 2, 3, 4, 5, 6])
   /// Extra lines on the shift roster sheet / PDF (operational notes).
   rosterSheetNotes           String?  @db.Text
   rosterDayShiftGenderMode     String?
@@ -2047,6 +2052,11 @@ model LeaveTypeDefinition {
   requiresBalance          Boolean               @default(true)
   allowPartialDay          Boolean               @default(false)
   requiresDocument         Boolean               @default(false)
+  /// Whether a public holiday inside a leave period draws down the balance.
+  /// False for paid statutory leave: BCEA s21(3) excludes public holidays from
+  /// annual leave, and an employee cannot be sick on a day they were not due
+  /// to work either.
+  publicHolidayConsumesBalance Boolean           @default(false)
   isActive                 Boolean               @default(true)
   createdAt                DateTime              @default(now())
   updatedAt                DateTime              @updatedAt
@@ -2056,6 +2066,7 @@ model LeaveTypeDefinition {
   applications  LeaveApplication[]
   ledgerEntries LeaveLedgerEntry[]
   adjustments   LeaveAdjustment[]
+  policyAssignments EmployeeLeavePolicyAssignment[]
 
   @@unique([companyId, code])
   @@index([companyId, isActive])
@@ -2092,6 +2103,9 @@ model LeavePolicyVersion {
   entitlementMinutes         Int?
   accrualMethod              String
   accrualRateMinutes         Decimal?                @db.Decimal(12, 6)
+  /// Days worked that earn one day of leave, for the BCEA s20(2)(b) annual
+  /// (17) and s22(2) sick (26) ratio methods. Only read by DAYS_WORKED_RATIO.
+  accrualRatioDays           Int?
   cycleMonths                Int                     @default(12)
   carryOverLimitMinutes      Int?
   expiryMonths               Int?
@@ -2120,15 +2134,38 @@ model EmployeeLeavePolicyAssignment {
   id            String   @id @default(cuid())
   employeeId    String
   policyId      String
+  /// NULL applies the policy to every leave type; a value narrows it to one.
+  /// A type-scoped assignment wins over a company-wide one for that type.
+  leaveTypeId   String?
   effectiveFrom DateTime @db.Date
   effectiveTo   DateTime? @db.Date
   createdAt     DateTime @default(now())
 
-  employee Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  policy   LeavePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  employee  Employee             @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  policy    LeavePolicy          @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  leaveType LeaveTypeDefinition? @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
 
-  @@unique([employeeId, policyId, effectiveFrom])
+  @@unique([employeeId, policyId, leaveTypeId, effectiveFrom], map: "EmployeeLeavePolicyAssignment_scope_effective_key")
   @@index([employeeId, effectiveFrom, effectiveTo])
+  @@index([leaveTypeId])
+}
+
+/// Per-company controls for the statutory leave engine.
+///
+/// Cycle-scoped balances, automatic forfeiture and BCEA statutory defaults
+/// change what an existing tenant's balances say, so they are switched on per
+/// company on an agreed date rather than retroactively for everyone.
+model LeaveCompanySettings {
+  companyId                 String    @id
+  /// Date from which cycle scoping, carry-over and forfeiture apply. NULL keeps
+  /// the pre-cutover flat running-balance behaviour.
+  statutoryEngineEnabledFrom DateTime? @db.Date
+  /// Default BCEA s20(4) grace months for annual-style cycles.
+  defaultGraceMonths        Int       @default(6)
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model LeaveApplication {
@@ -2226,6 +2263,10 @@ model LeaveLedgerEntry {
   effectiveDate DateTime             @db.Date
   minutes       Int
   reason        String
+  /// Entitlement cycle this movement belongs to, e.g. "annual:1:2025-03-01".
+  /// Lets forfeiture and termination payout reason about a single cycle instead
+  /// of one unbounded running total. NULL on rows written before cycle scoping.
+  cycleKey      String?
   createdById   String?
   reversalOfId  String?              @unique
   idempotencyKey String?
@@ -2240,6 +2281,7 @@ model LeaveLedgerEntry {
   reversedBy  LeaveLedgerEntry?   @relation("LeaveLedgerReversal")
 
   @@index([companyId, employeeId, leaveTypeId, effectiveDate])
+  @@index([companyId, employeeId, leaveTypeId, cycleKey], map: "LeaveLedgerEntry_cycle_idx")
   @@index([applicationId])
   @@unique([companyId, idempotencyKey])
 }

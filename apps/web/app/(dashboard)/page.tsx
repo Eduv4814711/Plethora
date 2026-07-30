@@ -55,8 +55,11 @@ interface DashboardData {
   taskStats?: { overdue: number; dueToday: number };
   topPriorityTasks?: TopTask[];
   shiftsOverTime?: { name: string; value: number }[];
+  rosteredGuardsOverTime?: { name: string; value: number }[];
   employeesByStatus?: { name: string; value: number }[];
   shiftsByStatus?: { name: string; value: number }[];
+  /** True when the alert list was capped server-side and more remain. */
+  operationalAlertsTruncated?: boolean;
 }
 
 const defaultGuardsByDay = [
@@ -69,16 +72,9 @@ const defaultGuardsByDay = [
   { name: "Sun", value: 0 },
 ];
 
-const defaultRosteredData = [{ name: "No rostered shifts", value: 1 }];
+const defaultRosteredData = [{ name: "No rostered shifts", value: 0 }];
 
-const defaultStatusData = [{ name: "No attendance records", value: 1 }];
-
-const defaultShiftData = [
-  { name: "Dec", value: 0 },
-  { name: "Jan", value: 0 },
-  { name: "Feb", value: 0 },
-  { name: "Mar", value: 0 },
-];
+const defaultStatusData = [{ name: "No employees", value: 1 }];
 
 const PIE_COLORS = ["#FF9800", "#FFB74D", "#FFCC80", "#F57C00", "#FFA726"];
 
@@ -123,6 +119,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
   const [selectedSiteIds, setSelectedSiteIds] = useState<string[]>([]);
   const [dateRange, setDateRange] = useState<string>("month");
@@ -144,12 +141,16 @@ export default function DashboardPage() {
       )
   );
 
+  // Returns an abort handle so callers can cancel a request that a newer
+  // filter selection has superseded — otherwise a slow earlier response can
+  // land last and overwrite fresher data.
   const fetchDashboard = useCallback(() => {
-    if (!token) return;
+    if (!token) return undefined;
+    const controller = new AbortController();
     const params = new URLSearchParams();
     if (dateRange) params.set("dateRange", dateRange);
     if (selectedSiteIds.length) params.set("siteIds", selectedSiteIds.join(","));
-    authFetch(`/dashboard?${params.toString()}`, token)
+    authFetch(`/dashboard?${params.toString()}`, token, { signal: controller.signal })
       .then(async (r) => {
         if (!r.ok) {
           const body = await r.json().catch(() => ({}));
@@ -161,24 +162,39 @@ export default function DashboardPage() {
         }
         return r.json();
       })
-      .then(setData)
-      .catch((err) => {
-        console.error(err);
-        setData(null);
+      .then((d) => {
+        setData(d);
+        setError(null);
       })
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        // A cancelled request is not a failure — a newer one is already in flight.
+        if (controller.signal.aborted || (err as Error)?.name === "AbortError") return;
+        console.error(err);
+        setError((err as Error)?.message || "Unable to load dashboard");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return controller;
   }, [token, dateRange, selectedSiteIds]);
 
   useEffect(() => {
     if (!token) return;
     setLoading(true);
-    fetchDashboard();
+    const controller = fetchDashboard();
+    return () => controller?.abort();
   }, [token, fetchDashboard]);
 
   useEffect(() => {
     if (!token) return;
-    const interval = setInterval(fetchDashboard, 60_000);
-    return () => clearInterval(interval);
+    let inFlight: AbortController | undefined;
+    const interval = setInterval(() => {
+      inFlight = fetchDashboard();
+    }, 60_000);
+    return () => {
+      clearInterval(interval);
+      inFlight?.abort();
+    };
   }, [token, fetchDashboard]);
 
   useEffect(() => {
@@ -247,13 +263,25 @@ export default function DashboardPage() {
 
   const guardsByDay = data?.guardsOnDutyByDay ?? defaultGuardsByDay;
   const employeesTotal = (data?.employeesByStatus ?? []).reduce((s, e) => s + e.value, 0) || 0;
-  const shiftsOverTimeData = data?.shiftsOverTime?.length ? data.shiftsOverTime : defaultShiftData;
+  const shiftsOverTimeData = data?.shiftsOverTime ?? [];
+  const rosteredGuardsData = data?.rosteredGuardsOverTime?.length
+    ? data.rosteredGuardsOverTime
+    : defaultRosteredData;
   const taskUrgentCount = (data?.taskStats?.overdue ?? 0) + (data?.taskStats?.dueToday ?? 0);
-  const alertTally = (data?.alerts ?? []).reduce((sum, a) => sum + (typeof a.count === "number" ? a.count : 1), 0);
-  const pendingPayrollCount = (data?.payrollStatus?.draft ?? 0) + (data?.payrollStatus?.calculated ?? 0);
   const alertsList = data?.alerts ?? [];
   const alertCounts = data?.alertCounts;
   const operationalAlerts = data?.operationalAlerts ?? [];
+  // `alerts` now carries only derived alerts; persisted ones are counted once
+  // via alertCounts.allOpen. Summing both used to triple-count them.
+  const derivedAlertTally = alertsList.reduce(
+    (sum, a) => sum + (typeof a.count === "number" ? a.count : 1),
+    0
+  );
+  const needsAttentionCount =
+    derivedAlertTally + (alertCounts?.allOpen ?? 0) + taskUrgentCount;
+  const pendingPayrollCount = (data?.payrollStatus?.draft ?? 0) + (data?.payrollStatus?.calculated ?? 0);
+  const siteFilterActive = selectedSiteIds.length > 0;
+  const companyWideHint = siteFilterActive ? " · company-wide" : "";
   const filteredOperationalAlerts =
     priorityTab === "all"
       ? operationalAlerts
@@ -383,12 +411,36 @@ export default function DashboardPage() {
         </div>
       </header>
 
+      {error && (
+        <div
+          role="alert"
+          className="mb-2 mt-2 flex shrink-0 flex-col gap-2 rounded-security-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="min-w-0">
+            <p className="font-semibold text-red-900">Couldn&apos;t load the dashboard</p>
+            <p className="truncate text-xs text-red-800">{error}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true);
+              fetchDashboard();
+            }}
+            className="btn-secondary shrink-0 px-3 py-1.5 text-xs"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {error && !data ? null : (
+      <>
       <section className="grid shrink-0 grid-cols-2 gap-2 py-2 sm:grid-cols-3 lg:grid-cols-5 lg:gap-2.5 lg:py-2.5" aria-label="Key metrics">
-        <KpiTile label="Total employees" value={employeesTotal} hint="All statuses" />
+        <KpiTile label="Total employees" value={employeesTotal} hint={`All statuses${companyWideHint}`} />
         <KpiTile label="Guards on duty" value={data?.guardsOnDuty ?? 0} hint="Right now" />
         <KpiTile label="Active sites" value={data?.activeSitesCount ?? 0} hint="Operational" />
-        <KpiTile label="Pending payroll" value={pendingPayrollCount} hint="Runs not yet paid" accent={pendingPayrollCount > 0 ? "alert" : "default"} />
-        <KpiTile label="Needs attention" value={alertTally + taskUrgentCount} hint="Alerts + urgent tasks" accent={alertTally + taskUrgentCount > 0 ? "alert" : "default"} />
+        <KpiTile label="Pending payroll" value={pendingPayrollCount} hint={`Runs not yet paid${companyWideHint}`} accent={pendingPayrollCount > 0 ? "alert" : "default"} />
+        <KpiTile label="Needs attention" value={needsAttentionCount} hint="Alerts + urgent tasks" accent={needsAttentionCount > 0 ? "alert" : "default"} />
       </section>
 
       {payrollReadinessLabel && (
@@ -551,6 +603,13 @@ export default function DashboardPage() {
                   <li className="py-2 text-sm text-neutral-600">No alerts at this priority level.</li>
                 )}
               </ul>
+              {data?.operationalAlertsTruncated && (
+                <p className="mt-2 text-xs text-neutral-600">
+                  Showing the {operationalAlerts.length} most recent of{" "}
+                  {alertCounts?.allOpen ?? operationalAlerts.length} open alerts — resolve
+                  some, or narrow by site, to see the rest.
+                </p>
+              )}
             </div>
           )}
         </section>
@@ -582,7 +641,7 @@ export default function DashboardPage() {
         className="grid min-h-[28rem] shrink-0 grid-cols-1 gap-2.5 max-lg:auto-rows-auto md:grid-cols-2 md:gap-3 lg:min-h-[32rem] xl:grid-cols-4 xl:grid-rows-2 xl:gap-3"
         aria-label="Dashboard widgets"
       >
-        <DashboardCard title="Guards on duty">
+        <DashboardCard title="Guards on duty — this week">
           <ChartWrap>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={guardsByDay} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
@@ -614,7 +673,7 @@ export default function DashboardPage() {
                   <span className={`font-semibold ${data.activeSitesDelta >= 0 ? "text-security-navy-800" : "text-red-700"}`}>
                     {data.activeSitesDelta >= 0 ? "+" : ""}{data.activeSitesDelta}
                   </span>
-                  {" "}since last month
+                  {" "}added this month
                 </p>
               )}
             </div>
@@ -631,7 +690,7 @@ export default function DashboardPage() {
           <div className="flex flex-1 flex-col">
           <ChartWrap>
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={shiftsOverTimeData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <AreaChart data={rosteredGuardsData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#FF9800" stopOpacity={0.3} />
@@ -848,6 +907,8 @@ export default function DashboardPage() {
           </DashboardCard>
         )}
       </section>
+      </>
+      )}
     </div>
   );
 }

@@ -19,7 +19,7 @@ Production cutover is intentionally **not automatic**. Each company still needs 
 - Approved/paid payroll leave cannot be hard-deleted. Leave in an approved but unpaid payroll run requires that run to be reverted first. Leave already posted to a paid run becomes `ADJUSTMENT_REQUIRED` and can be completed only after an external payroll-correction reference is recorded.
 - Supporting evidence is application-scoped, type/size/content validated, reviewable, auditable, and excluded from the public static-file route. Downloads require authenticated leave-management access, are marked private and non-cacheable, and never expose the storage path. WhatsApp evidence is matched to an application belonging to the verified phone.
 - Reports read applications, ledger balances, adjustments, expiries, and payroll postings rather than treating legacy requests as approved leave.
-- Hard-coded legal entitlement claims were removed from the employee UI. Seed versions are marked `PENDING_HR_LEGAL_CONFIRMATION`.
+- BCEA statutory minimums are seeded ACTIVE and enforced as a floor; a policy version stating less than the Act cannot be confirmed.
 - Leave occurrences distinguish payable/requested minutes from balance-consuming minutes, preventing unpaid, parental, IOD, and other non-balance leave from creating negative entitlement balances.
 - Site-timesheet leave rows are excluded from worked hours and are reconciled against authoritative/legacy leave, preventing the same absence from being paid twice.
 - Exact duplicate legacy leave rows block payroll readiness and are also de-duplicated defensively during calculation.
@@ -44,6 +44,58 @@ The `/leave` API exposes policy/type reads, policy version creation and confirma
 
 Database controls include an active-date overlap exclusion constraint, valid range and minute checks, non-zero ledger/adjustment checks, company-scoped idempotency keys, optimistic application versions, and one non-reversal payroll posting per occurrence.
 
+## Statutory rule engine (BCEA)
+
+The module previously encoded no South African leave law: every entitlement was
+left to per-company manual configuration, and `cycleMonths` was stored but never
+read. Statutory rules are now built in, and act as a **floor** under the
+configured policy — BCEA s4-5 allow an agreement to improve on the Act, never to
+undercut it. The effective entitlement is
+`max(configured policy, statutory minimum for this employee's working pattern)`,
+so a six-day-a-week officer and a Monday-to-Friday administrator each get the
+correct figure rather than a hard-coded day count.
+
+Encoded in `apps/api/src/services/leave-statutory-rules.ts`:
+
+| Rule | Behaviour |
+| --- | --- |
+| s20 annual | Days ordinarily worked in three weeks per 12-month cycle (15 for a five-day week). s20(2)(b) one-day-per-17-days-worked available as `DAYS_WORKED_RATIO`. |
+| s20(4) | Leave stays usable for six months after the cycle ends, then is forfeited — the 18-month window from *Jooste v Kohler Packaging* and *Hartley v SMD Trading*. |
+| s22 sick | Days ordinarily worked in six weeks per 36-month cycle (30 for a five-day week), with no carry-over between cycles. |
+| s22(2) | First six months of employment: one day per 26 days worked. |
+| s27 family responsibility | Three days per 12-month cycle; eligibility helpers for the four-months' service and four-days-a-week tests. |
+| s21(3) | A public holiday inside any leave period is paid but does not draw down the balance, per leave type. |
+
+Supporting machinery:
+
+- `apps/api/src/lib/leave-cycles.ts` — employment-anchored cycles with grace
+  periods, month-clamping date arithmetic, and pro-rata employment fractions.
+- `apps/api/src/lib/leave-allocation.ts` — FIFO attribution of ledger movements
+  to the cycle that funded them, so forfeiture and s40 payout are computable.
+- `apps/api/src/lib/leave-accrual-plan.ts` — the accrual planner.
+- `LeaveLedgerEntry.cycleKey` records the cycle behind every movement.
+
+Accrual is now a **catch-up runner**: it computes every period from the
+employment anchor to `asOf` and posts whatever is missing, so a month nobody ran
+is back-filled rather than lost forever. Re-running it is a no-op. Accrual is
+suspended for months covered by approved unpaid leave, and `PRORATED_CYCLE_GRANT`
+accrues towards the cycle entitlement in proportion to the part of the cycle
+actually worked, so mid-cycle joiners and leavers are correct.
+
+`runLeaveCycleClose` closes cycles whose grace period has lapsed, writing a
+`CARRY_OVER` for whatever the policy permits the employee to keep and an
+`EXPIRY` for the rest, plus an audit event. It is idempotent per employee,
+leave type and cycle. `POST /leave/cycles/close` defaults to a dry run.
+
+Cycle scoping, carry-over and forfeiture are gated per company by
+`LeaveCompanySettings.statutoryEngineEnabledFrom`. Until a company is cut over
+its balances read exactly as before and nothing is ever expired.
+
+New companies are seeded with the BCEA minimums as **ACTIVE** policy versions
+(version 2, effective from the seeding date so history is never re-priced). The
+original empty `PENDING_HR_LEGAL_CONFIRMATION` version 1 is retained for
+provenance and closed the day before.
+
 ## Policy and calculation behaviour
 
 - Policy lookup is effective-dated and honours an employee assignment before the company statutory baseline.
@@ -51,7 +103,7 @@ Database controls include an active-date overlap exclusion constraint, valid ran
 - Once a version is confirmed, negative-balance and maximum-consecutive-day rules are enforced.
 - Opening balances require a reason and are posted as immutable `OPENING_BALANCE` ledger entries.
 - Accrual runs only execute an explicitly confirmed method/rate, use the employee's employment-cycle anchor for annual grants, and are idempotent per employee, leave type, and period. Unsupported or incomplete formulas are reported as skipped rather than inferred.
-- Carry-over, expiry, notice enforcement, and automatic conversion to unpaid fail closed while they are not automated. HR must use an audited adjustment rather than relying on a stored but unenforced field.
+- Carry-over and expiry are executed by the cycle-close engine (see “Statutory rule engine” below). Notice enforcement and automatic conversion to unpaid are accepted as configuration but are not yet enforced at approval.
 - Annual public holidays remain paid and roster-relevant but consume zero annual-leave balance minutes. Rotating/security employees require rostered shifts or an effective executable working pattern; the service does not assume an eight-hour day.
 
 ## Migration and rollout
@@ -110,7 +162,19 @@ npx prisma validate --schema apps/api/prisma/schema.prisma
 - Confirm BCEA/NBCPSS precedence and company-specific more-favourable benefits.
 - Confirm current parental, adoption, commissioning-parent, maternity/birth-parent, and UIF treatment.
 - Confirm family-responsibility entitlement for each covered employee category.
-- Confirm sick-leave proof rules, IOD/COIDA treatment, accrual formulas, carry-over, expiry, pro-rating, termination treatment, and payroll rates.
+- Confirm IOD/COIDA treatment and payroll rates. Accrual formulas, carry-over, expiry and pro-rating are now engine-enforced against the BCEA floor; confirm only where the company intends terms more generous than the Act.
+
+### Still outstanding in the leave engine
+
+- BCEA s40 termination payout is not implemented. `PAYOUT` ledger entries are read but never written, so an offboarded employee's residual balance is still orphaned.
+- BCEA s23 proof-of-incapacity rules are available as helpers but are not yet wired into approval; the blanket per-type `requiresDocument` flag still governs.
+- BCEA s27 eligibility helpers exist but are not yet enforced at application creation, and there is no qualifying-event capture.
+- Parental leave is still four separate uncapped types. The Van Wyk shared pool of four months and ten days, the inter-parent election, and the six weeks reserved to the birth parent are not modelled.
+- Public holidays remain hard-coded for 2025–2026 inside the factory-reset handler, with no Sunday→Monday observance rule and nothing seeded for 2027 onward.
+- Approval is still a single hard-coded step: no multi-level chain, line-manager routing, delegation, escalation, or self-approval bar.
+- There is still no email delivery, and the reviewer notification is skipped when leave is captured inside an outer transaction.
+- The legacy sick-note upload still marks its own document `VERIFIED` without a second reviewer.
+- `EmploymentTerm` has no UI, yet `normalDaysPerWeek` and `normalMinutesPerShift` now drive every statutory entitlement — capture them before cutting a company over.
 - Supply employee working patterns where a roster is not available.
 - Before enabling WhatsApp, reconcile duplicate active employee phone numbers across every tenant. Ambiguous normalized numbers fail closed because an inbound WhatsApp message carries no tenant identifier.
 - Approve opening balances; the system will not infer them.

@@ -20,6 +20,36 @@ import {
   leaveOccurrenceBalanceMinutes,
   leavePolicyConfigurationIssues,
 } from "./leave-policy.service.js";
+import {
+  getLeaveCompanySettings,
+  getLeaveCycleContext,
+  isStatutoryEngineEnabled,
+  resolveEmploymentAnchors,
+  resolveGraceMonths,
+  resolvePolicyCoverageForEmployee,
+  resolvePolicyVersionForEmployee,
+} from "./leave-cycle-context.service.js";
+import {
+  allocateLeaveConsumption,
+  type LeaveLedgerFact,
+} from "../lib/leave-allocation.js";
+import { enumerateLeaveCycles, type LeaveCycleSpec } from "../lib/leave-cycles.js";
+import {
+  DEFAULT_DAYS_PER_WEEK,
+  effectiveEntitlementMinutes,
+  STATUTORY_LEAVE_RULES,
+  statutoryPolicyDefaults,
+} from "./leave-statutory-rules.js";
+import { buildAccrualPlan } from "../lib/leave-accrual-plan.js";
+import {
+  summariseWorkPattern,
+  type ObservedWorkPattern,
+} from "../lib/leave-work-pattern.js";
+import { splitCycleCloseMinutes } from "../lib/leave-allocation.js";
+import { closableLeaveCycles } from "../lib/leave-cycles.js";
+
+/** Leave type codes the BCEA regulates, and which therefore get a seeded floor. */
+const STATUTORY_TYPE_CODES = Object.keys(STATUTORY_LEAVE_RULES);
 
 const ACTIVE_APPLICATION_STATUSES: LeaveApplicationStatus[] = [
   "SUBMITTED",
@@ -125,12 +155,58 @@ const DEFAULT_TYPES: Array<{
   { code: "unpaid", name: "Unpaid leave", description: "Authorised unpaid leave; never treated as paid leave.", isPaid: false, payrollTreatment: "UNPAID_DEDUCTION", durationMode: "SCHEDULED_WORK", requiresBalance: false, allowPartialDay: true, requiresDocument: false, authority: "Agreement/company policy", legalReference: "Written agreement and HR confirmation required", cycleMonths: 0 },
 ];
 
+/** Marks a policy version this service seeded from the BCEA minimums. */
+const STATUTORY_DEFAULT_AUTHORITY = "BCEA_STATUTORY_DEFAULT";
+
+/**
+ * Seed a company's statutory baseline policy.
+ *
+ * Entitlement figures are the BCEA minimum for a standard five-day, eight-hour
+ * week. They are a floor, not a ceiling: the rule engine raises the figure per
+ * employee where their own working pattern is longer, and HR may configure more
+ * generous terms at any time. The statutory version is effective from the
+ * seeding date rather than the BCEA's own 1997 commencement, so switching the
+ * engine on never re-prices leave that has already been taken and paid.
+ *
+ * A company that has already configured its own active policy for a leave type
+ * is left alone: replacing a deliberate HR decision would be worse than leaving
+ * it in place, and the statutory floor check surfaces it at confirmation time
+ * if the configured terms fall below the Act.
+ */
 export async function ensureDefaultLeavePolicy(companyId: string, actorId?: string) {
   const existing = await prisma.leavePolicy.findFirst({
     where: { companyId, category: "STATUTORY_BASELINE" },
     include: { versions: true },
   });
-  if (existing && existing.versions.length >= DEFAULT_TYPES.length) return existing;
+
+  // The guard must count what seeding actually produces, not raw version rows.
+  // A tenant that has hand-created extra versions would otherwise never satisfy
+  // a fixed row count, and this function runs on every balance and preview read.
+  if (existing) {
+    const seededTypeIds = new Set(
+      existing.versions
+        .filter((version) => version.sourceAuthority === STATUTORY_DEFAULT_AUTHORITY)
+        .map((version) => version.leaveTypeId)
+    );
+    const configuredTypeIds = new Set(
+      existing.versions
+        .filter((version) => version.reviewStatus === "ACTIVE")
+        .map((version) => version.leaveTypeId)
+    );
+    const settledTypeIds = new Set([...seededTypeIds, ...configuredTypeIds]);
+    const statutoryTypes = await prisma.leaveTypeDefinition.findMany({
+      where: { companyId, code: { in: STATUTORY_TYPE_CODES } },
+      select: { id: true },
+    });
+    const everyTypeSeeded =
+      existing.versions.length >= DEFAULT_TYPES.length &&
+      statutoryTypes.length === STATUTORY_TYPE_CODES.length &&
+      statutoryTypes.every((type) => settledTypeIds.has(type.id));
+    if (everyTypeSeeded) return existing;
+  }
+
+  const effectiveFrom = normalizeLeaveDate(new Date());
+  const placeholderEffectiveTo = addDays(effectiveFrom, -1);
 
   return prisma.$transaction(async (tx) => {
     const policy = await tx.leavePolicy.upsert({
@@ -139,7 +215,7 @@ export async function ensureDefaultLeavePolicy(companyId: string, actorId?: stri
         companyId,
         name: "South African statutory and private-security baseline",
         category: "STATUTORY_BASELINE",
-        description: "Seeded for review. HR or labour counsel must confirm before entitlement enforcement.",
+        description: "BCEA statutory minimums, seeded active. HR may configure more generous terms; the engine will not accept less.",
       },
       update: {},
     });
@@ -177,6 +253,82 @@ export async function ensureDefaultLeavePolicy(companyId: string, actorId?: stri
           approvalFlow: [{ order: 1, module: "/employees/leave", capability: "approve", required: true }],
           documentRules: { required: definition.requiresDocument },
           calculationRules: { legalReviewRequired: true },
+          createdBy: actorId,
+        },
+        update: {},
+      });
+
+      const statutory = statutoryPolicyDefaults(definition.code);
+      if (!statutory) continue;
+
+      const siblingVersions = await tx.leavePolicyVersion.findMany({
+        where: { policyId: policy.id, leaveTypeId: leaveType.id },
+        select: { id: true, version: true, reviewStatus: true, sourceAuthority: true, effectiveTo: true },
+        orderBy: { version: "desc" },
+      });
+
+      // Never seed twice, and never displace a policy this company deliberately
+      // configured and activated. If their terms fall below the Act, the
+      // statutory floor check reports it at confirmation rather than silently
+      // rewriting an HR decision here.
+      const alreadySeeded = siblingVersions.some(
+        (version) => version.sourceAuthority === STATUTORY_DEFAULT_AUTHORITY
+      );
+      const hasConfiguredActive = siblingVersions.some(
+        (version) =>
+          version.reviewStatus === "ACTIVE" &&
+          version.sourceAuthority !== STATUTORY_DEFAULT_AUTHORITY
+      );
+      if (alreadySeeded || hasConfiguredActive) continue;
+
+      // Close the placeholder so the active-overlap exclusion constraint has
+      // no two ACTIVE versions covering the same day for this leave type.
+      await tx.leavePolicyVersion.updateMany({
+        where: {
+          policyId: policy.id,
+          leaveTypeId: leaveType.id,
+          version: 1,
+          effectiveTo: null,
+        },
+        data: { effectiveTo: placeholderEffectiveTo },
+      });
+
+      // Take the next free version number: a fixed "version 2" collides with
+      // any version a tenant created by hand, and the upsert would then no-op.
+      const nextVersion = (siblingVersions[0]?.version ?? 0) + 1;
+
+      await tx.leavePolicyVersion.upsert({
+        where: {
+          policyId_leaveTypeId_version: {
+            policyId: policy.id,
+            leaveTypeId: leaveType.id,
+            version: nextVersion,
+          },
+        },
+        create: {
+          companyId,
+          policyId: policy.id,
+          leaveTypeId: leaveType.id,
+          version: nextVersion,
+          effectiveFrom,
+          reviewStatus: "ACTIVE",
+          sourceAuthority: STATUTORY_DEFAULT_AUTHORITY,
+          legalReference: statutory.reference,
+          entitlementMinutes: statutory.entitlementMinutes,
+          accrualMethod: statutory.accrualMethod,
+          cycleMonths: statutory.cycleMonths,
+          carryOverLimitMinutes: statutory.carryOverLimitMinutes,
+          expiryMonths: statutory.graceMonths,
+          negativeBalanceAllowed: false,
+          approvalFlow: [{ order: 1, module: "/employees/leave", capability: "approve", required: true }],
+          documentRules: { required: definition.requiresDocument },
+          calculationRules: {
+            statutoryFloor: true,
+            reference: statutory.reference,
+            note: "Entitlement is the BCEA minimum for a five-day, eight-hour week and is raised per employee where their working pattern is longer.",
+          },
+          confirmedBy: actorId,
+          confirmedAt: new Date(),
           createdBy: actorId,
         },
         update: {},
@@ -285,7 +437,7 @@ export async function previewLeave(params: {
 
   for (const date of dates) {
     const key = formatLeaveDateKey(date);
-    const annualPublicHoliday = leaveType.code === "annual" && holidayKeys.has(key);
+    const isPublicHoliday = holidayKeys.has(key);
     const dayShifts = (shiftsByDate.get(key) ?? []).sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
     const payableSegments = dayShifts.length > 0
       ? dayShifts.map((shift) => ({
@@ -308,14 +460,17 @@ export async function previewLeave(params: {
         siteId: segment.siteId,
         scheduledMinutes: segment.scheduledMinutes,
         requestedMinutes,
-        // Public holidays inside annual leave remain paid/roster-relevant but
-        // must not reduce the annual leave balance. Leave types such as unpaid,
-        // parental and IOD never maintain a leave balance.
+        // A public holiday inside a leave period stays paid and roster-relevant
+        // but must not reduce the balance: BCEA s21(3) excludes it from annual
+        // leave, and an employee cannot be sick on a day they were not due to
+        // work. Leave types such as unpaid, parental and IOD never carry a
+        // balance at all.
         balanceMinutes: leaveOccurrenceBalanceMinutes({
           requiresBalance: leaveType.requiresBalance,
           leaveTypeCode: leaveType.code,
-          isPublicHoliday: annualPublicHoliday,
+          isPublicHoliday,
           requestedMinutes,
+          publicHolidayConsumesBalance: leaveType.publicHolidayConsumesBalance,
         }),
         paidMinutes: leaveType.payrollTreatment === "PAID_EMPLOYER" ? requestedMinutes : 0,
         unpaidMinutes: unpaid ? requestedMinutes : 0,
@@ -332,27 +487,18 @@ export async function previewLeave(params: {
   if (!term) warnings.push("No effective-dated employment term exists; legacy employee fields were used where possible.");
   if (conflicts.length > 0) warnings.push("The requested period overlaps another active leave application.");
 
-  const assignment = await prisma.employeeLeavePolicyAssignment.findFirst({
-    where: { employeeId: params.employeeId, policy: { companyId: params.companyId }, effectiveFrom: { lte: start }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: end } }] },
-    orderBy: { effectiveFrom: "desc" },
-  });
-  const policyVersionWhere: Prisma.LeavePolicyVersionWhereInput = {
+  // Resolution honours a leave-type-scoped assignment before a company-wide
+  // one, so an employee can sit on a sector annual-leave policy while their
+  // sick leave stays on the statutory baseline. The version in force on the
+  // first day of the leave governs the application.
+  const policyCoverage = await resolvePolicyCoverageForEmployee({
     companyId: params.companyId,
+    employeeId: params.employeeId,
     leaveTypeId: leaveType.id,
-    ...(assignment
-      ? { policyId: assignment.policyId }
-      : { policy: { category: "STATUTORY_BASELINE" } }),
-    effectiveFrom: { lte: start },
-    OR: [{ effectiveTo: null }, { effectiveTo: { gte: end } }],
-  };
-  const activePolicyVersion = await prisma.leavePolicyVersion.findFirst({
-    where: { ...policyVersionWhere, reviewStatus: "ACTIVE" },
-    orderBy: [{ effectiveFrom: "desc" }, { version: "desc" }],
+    from: start,
+    to: end,
   });
-  const policyVersion = activePolicyVersion ?? await prisma.leavePolicyVersion.findFirst({
-    where: { ...policyVersionWhere, reviewStatus: "PENDING_HR_LEGAL_CONFIRMATION" },
-    orderBy: [{ effectiveFrom: "desc" }, { version: "desc" }],
-  });
+  const policyVersion = policyCoverage.version;
   const [balance, currentApplicationBalance] = await Promise.all([
     prisma.leaveLedgerEntry.aggregate({
       where: { companyId: params.companyId, employeeId: params.employeeId, leaveTypeId: leaveType.id, effectiveDate: { lte: start } },
@@ -371,7 +517,15 @@ export async function previewLeave(params: {
   const currentMinutes = (balance._sum.minutes ?? 0) - (currentApplicationBalance._sum.minutes ?? 0);
   const policyConfigurationIssues = policyVersion
     ? leavePolicyConfigurationIssues({ ...policyVersion, leaveType })
-    : ["No policy version covers the full leave period."];
+    : ["No policy version applies to this leave period."];
+  // A gap in active policy is a real configuration failure. An ordinary version
+  // change part-way through the period is not: the version in force on the
+  // first day governs, so an in-flight application is never stranded.
+  if (policyVersion && !policyCoverage.coversFullPeriod) {
+    policyConfigurationIssues.push(
+      "Active policy does not cover every day of this leave period; close the gap between policy versions before approving."
+    );
+  }
   const policyConfirmed = policyVersion?.reviewStatus === "ACTIVE" && policyConfigurationIssues.length === 0;
   if (!policyConfirmed) {
     warnings.push("The applicable policy version is not active with an executable balance formula; approval is blocked until HR completes policy configuration.");
@@ -1170,11 +1324,41 @@ export async function listLeaveApplications(companyId: string, filter: {
   return { data, total };
 }
 
-export async function getLeaveBalances(companyId: string, employeeId?: string, asOf = new Date(), employeeIds?: string[]) {
+export type LeaveCycleBalance = {
+  cycleKey: string;
+  cycleIndex: number;
+  startDate: string;
+  endDate: string;
+  /** Last day this cycle's leave may still be taken (BCEA s20(4) for annual). */
+  expiresOn: string;
+  credited: number;
+  taken: number;
+  reserved: number;
+  expired: number;
+  paidOut: number;
+  adjusted: number;
+  remaining: number;
+  /** True once the grace period has passed and the remainder is at risk. */
+  closed: boolean;
+};
+
+export async function getLeaveBalances(
+  companyId: string,
+  employeeId?: string,
+  asOf = new Date(),
+  employeeIds?: string[],
+  options?: { includeCycles?: boolean }
+) {
   await ensureDefaultLeavePolicy(companyId);
+  const asOfDate = normalizeLeaveDate(asOf);
+  const employeeFilter = employeeId
+    ? { employeeId }
+    : employeeIds
+      ? { employeeId: { in: employeeIds } }
+      : {};
   const entries = await prisma.leaveLedgerEntry.groupBy({
     by: ["employeeId", "leaveTypeId", "entryType"],
-    where: { companyId, ...(employeeId ? { employeeId } : employeeIds ? { employeeId: { in: employeeIds } } : {}), effectiveDate: { lte: normalizeLeaveDate(asOf) } },
+    where: { companyId, ...employeeFilter, effectiveDate: { lte: asOfDate } },
     _sum: { minutes: true },
   });
   const balanceEmployeeIds = [...new Set(entries.map((entry) => entry.employeeId))];
@@ -1197,7 +1381,131 @@ export async function getLeaveBalances(companyId: string, employeeId?: string, a
     bucket.available = bucket.accrued + bucket.reserved + bucket.taken + bucket.adjustments;
     buckets.set(key, bucket);
   }
-  return [...buckets.values()].map((bucket) => ({ ...bucket, employee: employeeMap.get(bucket.employeeId), leaveType: typeMap.get(bucket.leaveTypeId) }));
+
+  // Cycle scoping is opt-in per company and, because it reads the raw ledger
+  // rather than an aggregate, is only computed when the caller asks for it.
+  // Company-wide listings keep the cheap flat totals.
+  const includeCycles =
+    options?.includeCycles ?? Boolean(employeeId ?? employeeIds);
+  const cyclesByKey = includeCycles
+    ? await buildCycleBalances(companyId, balanceEmployeeIds, typeMap, asOfDate)
+    : new Map<string, LeaveCycleBalance[]>();
+
+  return [...buckets.values()].map((bucket) => ({
+    ...bucket,
+    employee: employeeMap.get(bucket.employeeId),
+    leaveType: typeMap.get(bucket.leaveTypeId),
+    cycles: cyclesByKey.get(`${bucket.employeeId}:${bucket.leaveTypeId}`) ?? [],
+  }));
+}
+
+/**
+ * Bucket each employee/leave-type ledger into entitlement cycles.
+ *
+ * Returns an empty map for a company that has not been cut over to the
+ * statutory engine, so its balances read exactly as they did before.
+ */
+async function buildCycleBalances(
+  companyId: string,
+  employeeIds: string[],
+  typeMap: Map<string, { id: string; code: string; requiresBalance: boolean }>,
+  asOf: Date
+): Promise<Map<string, LeaveCycleBalance[]>> {
+  const result = new Map<string, LeaveCycleBalance[]>();
+  if (employeeIds.length === 0) return result;
+
+  const settings = await getLeaveCompanySettings(companyId);
+  if (
+    !settings.statutoryEngineEnabledFrom ||
+    normalizeLeaveDate(settings.statutoryEngineEnabledFrom) > asOf
+  ) {
+    return result;
+  }
+
+  const [anchors, rows] = await Promise.all([
+    resolveEmploymentAnchors(companyId, employeeIds),
+    prisma.leaveLedgerEntry.findMany({
+      where: {
+        companyId,
+        employeeId: { in: employeeIds },
+        effectiveDate: { lte: asOf },
+      },
+      select: {
+        employeeId: true,
+        leaveTypeId: true,
+        entryType: true,
+        minutes: true,
+        effectiveDate: true,
+        cycleKey: true,
+        createdAt: true,
+      },
+    }),
+  ]);
+
+  const factsByKey = new Map<string, LeaveLedgerFact[]>();
+  for (const row of rows) {
+    const key = `${row.employeeId}:${row.leaveTypeId}`;
+    const list = factsByKey.get(key) ?? [];
+    list.push({
+      entryType: row.entryType,
+      minutes: row.minutes,
+      effectiveDate: row.effectiveDate,
+      createdAt: row.createdAt,
+      cycleKey: row.cycleKey,
+    });
+    factsByKey.set(key, list);
+  }
+
+  for (const [key, facts] of factsByKey) {
+    const [employeeId, leaveTypeId] = key.split(":");
+    const leaveType = typeMap.get(leaveTypeId);
+    const anchor = anchors.get(employeeId);
+    // No entitlement cycle without a leave type that carries a balance and an
+    // employment anchor to hang the cycle on.
+    if (!leaveType?.requiresBalance || !anchor) continue;
+
+    const policyVersion = await resolvePolicyVersionForEmployee({
+      companyId,
+      employeeId,
+      leaveTypeId,
+      from: asOf,
+    });
+    const cycleMonths = policyVersion?.cycleMonths ?? 12;
+    if (cycleMonths <= 0) continue;
+
+    const spec: LeaveCycleSpec = {
+      leaveTypeCode: leaveType.code,
+      anchor,
+      cycleMonths,
+      graceMonths: resolveGraceMonths({
+        leaveTypeCode: leaveType.code,
+        expiryMonths: policyVersion?.expiryMonths ?? null,
+        defaultGraceMonths: settings.defaultGraceMonths,
+      }),
+    };
+    const cycles = enumerateLeaveCycles(spec, anchor, asOf);
+    const allocations = allocateLeaveConsumption(facts, cycles);
+
+    result.set(
+      key,
+      allocations.map((allocation) => ({
+        cycleKey: allocation.cycleKey,
+        cycleIndex: allocation.cycleIndex,
+        startDate: formatLeaveDateKey(allocation.start),
+        endDate: formatLeaveDateKey(allocation.end),
+        expiresOn: formatLeaveDateKey(allocation.graceEnd),
+        credited: allocation.credited,
+        taken: allocation.taken,
+        reserved: allocation.reserved,
+        expired: allocation.expired,
+        paidOut: allocation.paidOut,
+        adjusted: allocation.adjusted,
+        remaining: allocation.remaining,
+        closed: allocation.graceEnd < asOf,
+      }))
+    );
+  }
+  return result;
 }
 
 export async function getLeaveCalendar(companyId: string, start: string, end: string, employeeIds?: string[]) {
@@ -1391,6 +1699,18 @@ export async function resolveLeaveAdjustment(params: {
   return prisma.leaveAdjustment.findUniqueOrThrow({ where: { id: adjustment.id } });
 }
 
+/**
+ * Post every accrual that is due and not yet in the ledger.
+ *
+ * This is a catch-up runner: it works out the complete set of periods from each
+ * employee's anchor to `asOf` and posts whatever is missing. Running it twice
+ * changes nothing; running it after a gap back-fills the gap. The previous
+ * behaviour — posting only for the month it was called with — meant any month
+ * nobody ran was lost permanently.
+ *
+ * Entitlement is resolved per employee against their own working pattern and
+ * raised to the BCEA floor where the configured policy falls short.
+ */
 export async function accrueConfirmedLeave(params: { companyId: string; actorId: string; asOf: string }) {
   const asOf = normalizeLeaveDate(params.asOf);
   if (asOf > normalizeLeaveDate(new Date())) {
@@ -1407,98 +1727,614 @@ export async function accrueConfirmedLeave(params: { companyId: string; actorId:
     include: { leaveType: true, policy: true },
   });
   const [employees, assignments, terms] = await Promise.all([
-    prisma.employee.findMany({ where: { companyId: params.companyId, status: { not: "offboarded" } }, select: { id: true, commencementDate: true } }),
+    prisma.employee.findMany({ where: { companyId: params.companyId, status: { not: "offboarded" } }, select: { id: true, commencementDate: true, employeeType: true } }),
     prisma.employeeLeavePolicyAssignment.findMany({ where: { employee: { companyId: params.companyId }, effectiveFrom: { lte: asOf }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: asOf } }] } }),
-    prisma.employmentTerm.findMany({ where: { companyId: params.companyId }, select: { employeeId: true, effectiveFrom: true, effectiveTo: true } }),
+    prisma.employmentTerm.findMany({ where: { companyId: params.companyId }, orderBy: { effectiveFrom: "asc" } }),
   ]);
-  const assignmentByEmployee = new Map(assignments.map((assignment) => [assignment.employeeId, assignment.policyId]));
-  const employeesWithAnyTerm = new Set(terms.map((term) => term.employeeId));
-  const activeTermByEmployee = new Map(terms
-    .filter((term) => term.effectiveFrom <= asOf && (!term.effectiveTo || term.effectiveTo >= asOf))
-    .map((term) => [term.employeeId, term]));
-  const earliestTermByEmployee = new Map<string, Date>();
+
+  const employeeIds = employees.map((employee) => employee.id);
+  const anchors = await resolveEmploymentAnchors(params.companyId, employeeIds);
+  const settings = await getLeaveCompanySettings(params.companyId);
+
+  const termByEmployee = new Map<string, (typeof terms)[number]>();
   for (const term of terms) {
-    const current = earliestTermByEmployee.get(term.employeeId);
-    if (!current || term.effectiveFrom < current) earliestTermByEmployee.set(term.employeeId, term.effectiveFrom);
+    if (term.effectiveFrom <= asOf && (!term.effectiveTo || term.effectiveTo >= asOf)) {
+      termByEmployee.set(term.employeeId, term);
+    }
   }
+  const employeesWithAnyTerm = new Set(terms.map((term) => term.employeeId));
+
+  const needsDaysWorked = versions.some(
+    (version) => version.accrualMethod.trim().toUpperCase() === "DAYS_WORKED_RATIO"
+  );
+  const [daysWorked, suspensions, rosterPatterns, existingAccruals] = await Promise.all([
+    needsDaysWorked ? loadDaysWorkedByMonth(params.companyId, employeeIds, asOf) : Promise.resolve(new Map<string, Map<string, number>>()),
+    loadUnpaidLeaveMonths(params.companyId, employeeIds, asOf),
+    loadRosterWorkPatterns(params.companyId, employeeIds, asOf),
+    prisma.leaveLedgerEntry.findMany({
+      where: { companyId: params.companyId, employeeId: { in: employeeIds }, entryType: "ACCRUAL" },
+      select: { employeeId: true, leaveTypeId: true, minutes: true, cycleKey: true, metadata: true, idempotencyKey: true },
+    }),
+  ]);
+
+  // Period keys and per-cycle totals already in the ledger, so the planner can
+  // subtract what exists rather than re-granting it.
+  const postedKeys = new Map<string, Set<string>>();
+  const postedMinutes = new Map<string, Map<string, number>>();
+  for (const entry of existingAccruals) {
+    const scope = `${entry.employeeId}:${entry.leaveTypeId}`;
+    const period = (entry.metadata as { periodKey?: string } | null)?.periodKey;
+    if (period) {
+      const keys = postedKeys.get(scope) ?? new Set<string>();
+      keys.add(period);
+      postedKeys.set(scope, keys);
+    }
+    if (entry.cycleKey) {
+      const byCycle = postedMinutes.get(scope) ?? new Map<string, number>();
+      byCycle.set(entry.cycleKey, (byCycle.get(entry.cycleKey) ?? 0) + entry.minutes);
+      postedMinutes.set(scope, byCycle);
+    }
+  }
+
   const posted: Array<{ employeeId: string; leaveTypeCode: string; minutes: number; key: string }> = [];
   const skipped: Array<{ policyVersionId: string; reason: string; employeeId?: string }> = [];
 
   for (const version of versions) {
     const applicableEmployees = employees.filter((employee) => {
-      const assignedPolicyId = assignmentByEmployee.get(employee.id);
-      return assignedPolicyId
-        ? assignedPolicyId === version.policyId
+      const assigned = assignments.find(
+        (item) =>
+          item.employeeId === employee.id &&
+          (item.leaveTypeId === version.leaveTypeId || item.leaveTypeId == null)
+      );
+      return assigned
+        ? assigned.policyId === version.policyId
         : version.policy.category === "STATUTORY_BASELINE";
     });
     if (applicableEmployees.length === 0) continue;
+
     const configurationIssues = leavePolicyConfigurationIssues(version);
     if (configurationIssues.length > 0) {
       skipped.push({ policyVersionId: version.id, reason: configurationIssues.join(" ") });
       continue;
     }
-    const method = version.accrualMethod.toUpperCase();
-    let minutes = 0;
-    if (["MONTHLY_FIXED", "MONTHLY"].includes(method) && version.accrualRateMinutes != null) {
-      minutes = Math.round(Number(version.accrualRateMinutes));
-    } else if (method === "EVEN_MONTHLY" && version.entitlementMinutes && version.cycleMonths > 0) {
-      minutes = Math.round(version.entitlementMinutes / version.cycleMonths);
-    } else if (method === "ANNUAL_GRANT" && version.entitlementMinutes) {
-      minutes = version.entitlementMinutes;
-    } else {
-      skipped.push({ policyVersionId: version.id, reason: `Accrual method ${version.accrualMethod} has no confirmed executable rate` });
-      continue;
-    }
-    if (minutes <= 0) {
-      skipped.push({ policyVersionId: version.id, reason: "Calculated accrual was not positive" });
-      continue;
-    }
+
     for (const employee of applicableEmployees) {
       // Effective terms take precedence. Older tenants may not have migrated
       // terms yet, so a valid commencement date is the controlled fallback.
-      if (employeesWithAnyTerm.has(employee.id) && !activeTermByEmployee.has(employee.id)) continue;
-      const employmentStart = employee.commencementDate ?? earliestTermByEmployee.get(employee.id);
-      if (!employmentStart || normalizeLeaveDate(employmentStart) > asOf) {
+      if (employeesWithAnyTerm.has(employee.id) && !termByEmployee.has(employee.id)) continue;
+      const anchor = anchors.get(employee.id);
+      if (!anchor || anchor > asOf) {
         skipped.push({ policyVersionId: version.id, employeeId: employee.id, reason: "No eligible commencement date or active employment term" });
         continue;
       }
-      let periodKey = formatLeaveDateKey(asOf).slice(0, 7);
-      let effectiveDate = asOf;
-      if (method === "ANNUAL_GRANT") {
-        const anchor = normalizeLeaveDate(employmentStart);
-        let completedMonths = (asOf.getUTCFullYear() - anchor.getUTCFullYear()) * 12 + asOf.getUTCMonth() - anchor.getUTCMonth();
-        if (asOf.getUTCDate() < anchor.getUTCDate()) completedMonths -= 1;
-        const cycleIndex = Math.max(0, Math.floor(completedMonths / version.cycleMonths));
-        effectiveDate = new Date(Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth() + cycleIndex * version.cycleMonths, anchor.getUTCDate()));
-        periodKey = `cycle-${cycleIndex}-${formatLeaveDateKey(effectiveDate)}`;
+
+      // Working pattern, most authoritative first: the HR-captured employment
+      // term, then the employee's observed roster, then the office default.
+      // A twelve-hour guard and an eight-hour administrator each end up with
+      // their own correct statutory entitlement from the same policy.
+      const term = termByEmployee.get(employee.id);
+      const roster = rosterPatterns.get(employee.id);
+      const minutesPerShift =
+        term?.normalMinutesPerShift ??
+        roster?.minutesPerShift ??
+        (employee.employeeType === "office" ? 480 : 0);
+      if (minutesPerShift <= 0) {
+        skipped.push({ policyVersionId: version.id, employeeId: employee.id, reason: "No employment term or rostered shift supplies the employee's ordinary daily hours" });
+        continue;
       }
-      // The period key deliberately excludes the policy version. A mid-period
-      // policy change must not grant the same leave type twice for one employee.
-      const key = `accrual:${version.leaveTypeId}:${employee.id}:${periodKey}`;
-      const existed = await prisma.leaveLedgerEntry.findFirst({
-        where: {
-          companyId: params.companyId,
-          employeeId: employee.id,
-          leaveTypeId: version.leaveTypeId,
-          entryType: "ACCRUAL",
-          OR: [
-            { idempotencyKey: key },
-            { metadata: { path: ["periodKey"], equals: periodKey } },
-          ],
+
+      const ctx = {
+        // A roster span too short to describe a rotation reports zero days a
+        // week, which means "unknown" rather than "never works".
+        normalDaysPerWeek: Number(
+          term?.normalDaysPerWeek ??
+            (roster?.daysPerWeek ? roster.daysPerWeek : DEFAULT_DAYS_PER_WEEK)
+        ),
+        normalMinutesPerShift: minutesPerShift,
+        employedFrom: anchor,
+        asOf,
+      };
+      // BCEA s4-5: the configured policy may improve on the statute, never
+      // undercut it, so the effective entitlement is the more generous figure.
+      const entitlementMinutes = effectiveEntitlementMinutes({
+        leaveTypeCode: version.leaveType.code,
+        configuredMinutes: version.entitlementMinutes,
+        ctx,
+      });
+
+      const scope = `${employee.id}:${version.leaveTypeId}`;
+      const plan = buildAccrualPlan({
+        method: version.accrualMethod,
+        spec: {
+          leaveTypeCode: version.leaveType.code,
+          anchor,
+          cycleMonths: version.cycleMonths,
+          graceMonths: resolveGraceMonths({
+            leaveTypeCode: version.leaveType.code,
+            expiryMonths: version.expiryMonths,
+            defaultGraceMonths: settings.defaultGraceMonths,
+          }),
         },
-        select: { id: true },
+        entitlementMinutes,
+        accrualRateMinutes: version.accrualRateMinutes != null ? Number(version.accrualRateMinutes) : null,
+        accrualRatioDays: version.accrualRatioDays,
+        minutesPerShift,
+        employedFrom: anchor,
+        asOf,
+        postedPeriodKeys: postedKeys.get(scope) ?? new Set<string>(),
+        postedMinutesByCycleKey: postedMinutes.get(scope) ?? new Map<string, number>(),
+        daysWorkedByMonth: daysWorked.get(employee.id),
+        suspendedMonths: suspensions.get(employee.id),
       });
-      if (existed) continue;
-      await prisma.leaveLedgerEntry.upsert({
-        where: { companyId_idempotencyKey: { companyId: params.companyId, idempotencyKey: key } },
-        create: { companyId: params.companyId, employeeId: employee.id, leaveTypeId: version.leaveTypeId, entryType: "ACCRUAL", effectiveDate, minutes, reason: `Confirmed ${version.accrualMethod} accrual`, createdById: params.actorId, idempotencyKey: key, metadata: { policyVersionId: version.id, periodKey } },
-        update: {},
-      });
-      posted.push({ employeeId: employee.id, leaveTypeCode: version.leaveType.code, minutes, key });
+
+      if (plan.length === 0) continue;
+
+      for (const entry of plan) {
+        // The key deliberately excludes the policy version: a mid-period policy
+        // change must not grant the same leave type twice for one employee.
+        const key = `accrual:${version.leaveTypeId}:${employee.id}:${entry.periodKey}`;
+        const created = await prisma.leaveLedgerEntry.upsert({
+          where: { companyId_idempotencyKey: { companyId: params.companyId, idempotencyKey: key } },
+          create: {
+            companyId: params.companyId,
+            employeeId: employee.id,
+            leaveTypeId: version.leaveTypeId,
+            entryType: "ACCRUAL",
+            effectiveDate: entry.effectiveDate,
+            minutes: entry.minutes,
+            cycleKey: entry.cycleKey,
+            reason: entry.reason,
+            createdById: params.actorId,
+            idempotencyKey: key,
+            metadata: { policyVersionId: version.id, periodKey: entry.periodKey, method: version.accrualMethod },
+          },
+          update: {},
+        });
+        if (created.idempotencyKey === key && created.minutes === entry.minutes) {
+          posted.push({ employeeId: employee.id, leaveTypeCode: version.leaveType.code, minutes: entry.minutes, key });
+        }
+      }
     }
   }
   await prisma.leaveAuditEvent.create({ data: { companyId: params.companyId, userId: params.actorId, eventType: "LEAVE_ACCRUAL_RUN", newValue: { asOf: params.asOf, posted: posted.length, skipped } } });
   return { asOf: params.asOf, posted, skipped };
+}
+
+export type LeaveCycleCloseResult = {
+  employeeId: string;
+  leaveTypeCode: string;
+  cycleKey: string;
+  /** Last day the leave could still have been taken. */
+  expiresOn: string;
+  carryOverMinutes: number;
+  expiredMinutes: number;
+};
+
+/**
+ * Close entitlement cycles whose grace period has lapsed.
+ *
+ * This is what makes BCEA s20(4) real: annual leave from a cycle stays usable
+ * for six months after that cycle ends, and whatever is left at the end of that
+ * window is forfeited. Sick leave has no grace period and simply resets on its
+ * 36-month boundary. Both are expressed through the same two ledger entries —
+ * a `CARRY_OVER` for whatever the policy lets the employee keep, and an
+ * `EXPIRY` for the rest.
+ *
+ * Idempotent per employee, leave type and cycle, so it is safe to call on every
+ * balance read. Pass `dryRun` to report what would happen without writing.
+ */
+export async function runLeaveCycleClose(params: {
+  companyId: string;
+  actorId?: string;
+  asOf?: Date;
+  employeeId?: string;
+  dryRun?: boolean;
+}): Promise<{ asOf: string; closed: LeaveCycleCloseResult[] }> {
+  const asOf = normalizeLeaveDate(params.asOf ?? new Date());
+  const closed: LeaveCycleCloseResult[] = [];
+
+  // Forfeiture only applies to companies that have been cut over; before that
+  // the flat running balance stands and nothing is ever expired.
+  if (!(await isStatutoryEngineEnabled(params.companyId, asOf))) {
+    return { asOf: formatLeaveDateKey(asOf), closed };
+  }
+
+  const balances = await getLeaveBalances(
+    params.companyId,
+    params.employeeId,
+    asOf,
+    undefined,
+    { includeCycles: true }
+  );
+
+  for (const balance of balances) {
+    const leaveType = balance.leaveType;
+    if (!leaveType?.requiresBalance) continue;
+
+    const context = await getLeaveCycleContext({
+      companyId: params.companyId,
+      employeeId: balance.employeeId,
+      leaveTypeId: balance.leaveTypeId,
+      leaveTypeCode: leaveType.code,
+      asOf,
+    });
+    if (!context) continue;
+
+    const closable = new Set(
+      closableLeaveCycles(context.spec, asOf).map((cycle) => cycle.cycleKey)
+    );
+    if (closable.size === 0) continue;
+
+    // The statutory rule is the floor: a company may let more carry over, but
+    // not less. Sick leave's floor of zero is what makes the cycle reset.
+    const statutoryLimit =
+      STATUTORY_LEAVE_RULES[leaveType.code]?.carryOverLimitMinutes ?? null;
+    const carryOverLimitMinutes =
+      context.carryOverLimitMinutes != null && statutoryLimit != null
+        ? Math.max(context.carryOverLimitMinutes, statutoryLimit)
+        : (context.carryOverLimitMinutes ?? statutoryLimit);
+
+    for (const cycle of balance.cycles) {
+      if (!closable.has(cycle.cycleKey)) continue;
+      if (cycle.remaining <= 0) continue;
+
+      const { carryOverMinutes, expiredMinutes } = splitCycleCloseMinutes({
+        remainingMinutes: cycle.remaining,
+        carryOverLimitMinutes,
+      });
+      if (carryOverMinutes === 0 && expiredMinutes === 0) continue;
+
+      const result: LeaveCycleCloseResult = {
+        employeeId: balance.employeeId,
+        leaveTypeCode: leaveType.code,
+        cycleKey: cycle.cycleKey,
+        expiresOn: cycle.expiresOn,
+        carryOverMinutes,
+        expiredMinutes,
+      };
+
+      if (params.dryRun) {
+        closed.push(result);
+        continue;
+      }
+
+      const written = await closeSingleLeaveCycle({
+        companyId: params.companyId,
+        actorId: params.actorId,
+        employeeId: balance.employeeId,
+        leaveTypeId: balance.leaveTypeId,
+        leaveTypeCode: leaveType.code,
+        cycleKey: cycle.cycleKey,
+        nextCycleKey: context.current.cycleKey,
+        effectiveDate: normalizeLeaveDate(cycle.expiresOn),
+        carryOverMinutes,
+        expiredMinutes,
+      });
+      if (written) closed.push(result);
+    }
+  }
+
+  return { asOf: formatLeaveDateKey(asOf), closed };
+}
+
+/**
+ * Write the two ledger entries that close one cycle, in a single transaction.
+ *
+ * The `EXPIRY` debit is stamped with the cycle being closed so the allocator
+ * attributes it there, while the `CARRY_OVER` credit is stamped with the cycle
+ * receiving it. Both keys are deterministic, so a concurrent second run is a
+ * no-op rather than a double forfeiture.
+ */
+async function closeSingleLeaveCycle(params: {
+  companyId: string;
+  actorId?: string;
+  employeeId: string;
+  leaveTypeId: string;
+  leaveTypeCode: string;
+  cycleKey: string;
+  nextCycleKey: string;
+  effectiveDate: Date;
+  carryOverMinutes: number;
+  expiredMinutes: number;
+}): Promise<boolean> {
+  const baseKey = `cycle-close:${params.employeeId}:${params.leaveTypeId}:${params.cycleKey}`;
+  const existing = await prisma.leaveLedgerEntry.findFirst({
+    where: {
+      companyId: params.companyId,
+      idempotencyKey: { in: [`${baseKey}:carry`, `${baseKey}:expiry`] },
+    },
+    select: { id: true },
+  });
+  if (existing) return false;
+
+  await prisma.$transaction(async (tx) => {
+    if (params.expiredMinutes > 0) {
+      await tx.leaveLedgerEntry.upsert({
+        where: { companyId_idempotencyKey: { companyId: params.companyId, idempotencyKey: `${baseKey}:expiry` } },
+        create: {
+          companyId: params.companyId,
+          employeeId: params.employeeId,
+          leaveTypeId: params.leaveTypeId,
+          entryType: "EXPIRY",
+          effectiveDate: params.effectiveDate,
+          minutes: -params.expiredMinutes,
+          cycleKey: params.cycleKey,
+          reason: `Entitlement not taken by ${formatLeaveDateKey(params.effectiveDate)} was forfeited at cycle close`,
+          createdById: params.actorId,
+          idempotencyKey: `${baseKey}:expiry`,
+          metadata: { cycleKey: params.cycleKey, reference: params.leaveTypeCode === "annual" ? "BCEA s20(4)" : "Leave cycle reset" },
+        },
+        update: {},
+      });
+    }
+    if (params.carryOverMinutes > 0) {
+      // The carry-over moves the balance forward: a debit out of the closing
+      // cycle and a credit into the current one, so neither cycle's totals lie.
+      await tx.leaveLedgerEntry.upsert({
+        where: { companyId_idempotencyKey: { companyId: params.companyId, idempotencyKey: `${baseKey}:carry-out` } },
+        create: {
+          companyId: params.companyId,
+          employeeId: params.employeeId,
+          leaveTypeId: params.leaveTypeId,
+          entryType: "EXPIRY",
+          effectiveDate: params.effectiveDate,
+          minutes: -params.carryOverMinutes,
+          cycleKey: params.cycleKey,
+          reason: "Balance carried forward to the current cycle",
+          createdById: params.actorId,
+          idempotencyKey: `${baseKey}:carry-out`,
+          metadata: { cycleKey: params.cycleKey, carriedTo: params.nextCycleKey },
+        },
+        update: {},
+      });
+      await tx.leaveLedgerEntry.upsert({
+        where: { companyId_idempotencyKey: { companyId: params.companyId, idempotencyKey: `${baseKey}:carry` } },
+        create: {
+          companyId: params.companyId,
+          employeeId: params.employeeId,
+          leaveTypeId: params.leaveTypeId,
+          entryType: "CARRY_OVER",
+          effectiveDate: params.effectiveDate,
+          minutes: params.carryOverMinutes,
+          cycleKey: params.nextCycleKey,
+          reason: `Balance carried over from ${params.cycleKey}`,
+          createdById: params.actorId,
+          idempotencyKey: `${baseKey}:carry`,
+          metadata: { carriedFrom: params.cycleKey },
+        },
+        update: {},
+      });
+    }
+    await tx.leaveAuditEvent.create({
+      data: {
+        companyId: params.companyId,
+        employeeId: params.employeeId,
+        userId: params.actorId,
+        eventType: "LEAVE_CYCLE_CLOSED",
+        reason: `Cycle ${params.cycleKey} closed on ${formatLeaveDateKey(params.effectiveDate)}`,
+        newValue: {
+          cycleKey: params.cycleKey,
+          leaveTypeCode: params.leaveTypeCode,
+          carryOverMinutes: params.carryOverMinutes,
+          expiredMinutes: params.expiredMinutes,
+        },
+      },
+    });
+  });
+  return true;
+}
+
+export type LeavePolicyVersionUsage = {
+  /** Leave applications whose treatment this version decided. */
+  applicationCount: number;
+  /** Ledger movements posted under this version. */
+  ledgerEntryCount: number;
+  /** True when retiring this version would leave the type with no active policy. */
+  isOnlyActiveVersion: boolean;
+  /** Safe to edit in place: nothing has relied on it yet. */
+  canEditInPlace: boolean;
+  /** Safe to delete outright: unused, and not the last thing holding the type up. */
+  canDelete: boolean;
+  /** Why an edit or delete is refused, for the caller to show the user. */
+  reasons: string[];
+};
+
+/**
+ * Establish what a policy version has already decided.
+ *
+ * Policy versions are effective-dated evidence: the version recorded against an
+ * approved application is the rule that authorised it, and the audit trail is
+ * only worth anything if that record cannot move underneath a decision that has
+ * already been made. So a version that has governed leave may be superseded or
+ * retired, but never rewritten or deleted.
+ *
+ * A version nobody has relied on carries no such history and can be corrected
+ * or removed freely — which is what makes an abandoned draft tidy-up-able.
+ */
+export async function getLeavePolicyVersionUsage(
+  companyId: string,
+  versionId: string
+): Promise<LeavePolicyVersionUsage | null> {
+  const version = await prisma.leavePolicyVersion.findFirst({
+    where: { id: versionId, companyId },
+    select: { id: true, leaveTypeId: true, policyId: true, reviewStatus: true },
+  });
+  if (!version) return null;
+
+  const [applicationCount, ledgerEntryCount, activeSiblingCount] = await Promise.all([
+    prisma.leaveApplication.count({ where: { companyId, policyVersionId: versionId } }),
+    prisma.leaveLedgerEntry.count({
+      where: {
+        companyId,
+        leaveTypeId: version.leaveTypeId,
+        metadata: { path: ["policyVersionId"], equals: versionId },
+      },
+    }),
+    prisma.leavePolicyVersion.count({
+      where: {
+        companyId,
+        policyId: version.policyId,
+        leaveTypeId: version.leaveTypeId,
+        reviewStatus: "ACTIVE",
+        id: { not: versionId },
+      },
+    }),
+  ]);
+
+  const reasons: string[] = [];
+  if (applicationCount > 0) {
+    reasons.push(
+      `${applicationCount} leave application${applicationCount === 1 ? " was" : "s were"} decided under this version, so it must stay unchanged as evidence.`
+    );
+  }
+  if (ledgerEntryCount > 0) {
+    reasons.push(
+      `${ledgerEntryCount} balance movement${ledgerEntryCount === 1 ? " was" : "s were"} posted under this version.`
+    );
+  }
+
+  const isOnlyActiveVersion =
+    version.reviewStatus === "ACTIVE" && activeSiblingCount === 0;
+  if (isOnlyActiveVersion) {
+    reasons.push(
+      "This is the only active version for this leave type; removing it would leave the leave type without a policy."
+    );
+  }
+
+  const unused = applicationCount === 0 && ledgerEntryCount === 0;
+  return {
+    applicationCount,
+    ledgerEntryCount,
+    isOnlyActiveVersion,
+    canEditInPlace: unused,
+    canDelete: unused && !isOnlyActiveVersion,
+    reasons,
+  };
+}
+
+export type RosterWorkPattern = ObservedWorkPattern;
+
+/**
+ * Derive each employee's ordinary working pattern from their actual roster.
+ *
+ * Statutory entitlement is a function of the days and hours a person ordinarily
+ * works — a twelve-hour guard on a six-day roster and an eight-hour
+ * administrator on a five-day week are entitled to different amounts, and both
+ * figures are correct. `EmploymentTerm` is the authoritative source for that
+ * pattern, but most tenants have not captured terms yet, and without them
+ * security staff fall back to zero minutes a day and accrue nothing at all.
+ *
+ * The roster is the honest fallback: it is real observed work rather than an
+ * assumed contract. The median shift length is used rather than the mean so
+ * that one unusual double shift cannot inflate an entitlement.
+ */
+export async function loadRosterWorkPatterns(
+  companyId: string,
+  employeeIds: string[],
+  asOf: Date,
+  lookbackDays = 180
+): Promise<Map<string, RosterWorkPattern>> {
+  const patterns = new Map<string, RosterWorkPattern>();
+  if (employeeIds.length === 0) return patterns;
+
+  const from = addDays(asOf, -lookbackDays);
+  const shifts = await prisma.shift.findMany({
+    where: {
+      companyId,
+      employeeId: { in: employeeIds },
+      startTime: { gte: from, lte: addDays(asOf, 1) },
+      status: { in: ["created", "assigned", "active", "completed", "verified"] },
+    },
+    select: { employeeId: true, startTime: true, endTime: true },
+  });
+
+  const byEmployee = new Map<string, { lengths: number[]; days: Set<string> }>();
+  for (const shift of shifts) {
+    if (!shift.employeeId) continue;
+    const minutes = Math.round(
+      (shift.endTime.getTime() - shift.startTime.getTime()) / 60_000
+    );
+    if (minutes <= 0) continue;
+    const bucket = byEmployee.get(shift.employeeId) ?? { lengths: [], days: new Set<string>() };
+    bucket.lengths.push(minutes);
+    bucket.days.add(formatLeaveDateKey(normalizeLeaveDate(shift.startTime)));
+    byEmployee.set(shift.employeeId, bucket);
+  }
+
+  for (const [employeeId, bucket] of byEmployee) {
+    const pattern = summariseWorkPattern({
+      shiftMinutes: bucket.lengths,
+      workedDayKeys: [...bucket.days],
+    });
+    if (pattern) patterns.set(employeeId, pattern);
+  }
+  return patterns;
+}
+
+/** Distinct days each employee actually worked, keyed by employee then `YYYY-MM`. */
+async function loadDaysWorkedByMonth(
+  companyId: string,
+  employeeIds: string[],
+  asOf: Date
+): Promise<Map<string, Map<string, number>>> {
+  const result = new Map<string, Map<string, number>>();
+  if (employeeIds.length === 0) return result;
+  const shifts = await prisma.shift.findMany({
+    where: {
+      companyId,
+      employeeId: { in: employeeIds },
+      startTime: { lte: addDays(asOf, 1) },
+      status: { in: ["completed", "verified"] },
+    },
+    select: { employeeId: true, startTime: true },
+  });
+  const seen = new Map<string, Set<string>>();
+  for (const shift of shifts) {
+    if (!shift.employeeId) continue;
+    const dayKey = formatLeaveDateKey(normalizeLeaveDate(shift.startTime));
+    // A double shift is still one day worked for BCEA ratio purposes.
+    const days = seen.get(shift.employeeId) ?? new Set<string>();
+    if (days.has(dayKey)) continue;
+    days.add(dayKey);
+    seen.set(shift.employeeId, days);
+
+    const byMonth = result.get(shift.employeeId) ?? new Map<string, number>();
+    const month = dayKey.slice(0, 7);
+    byMonth.set(month, (byMonth.get(month) ?? 0) + 1);
+    result.set(shift.employeeId, byMonth);
+  }
+  return result;
+}
+
+/**
+ * Months in which an employee was on approved unpaid leave.
+ *
+ * Unpaid leave does not earn entitlement, so accrual is suspended for those
+ * months rather than quietly crediting time the employee did not work.
+ */
+async function loadUnpaidLeaveMonths(
+  companyId: string,
+  employeeIds: string[],
+  asOf: Date
+): Promise<Map<string, Set<string>>> {
+  const result = new Map<string, Set<string>>();
+  if (employeeIds.length === 0) return result;
+  const occurrences = await prisma.leaveOccurrence.findMany({
+    where: {
+      companyId,
+      employeeId: { in: employeeIds },
+      leaveDate: { lte: asOf },
+      status: { in: ["APPROVED", "PAYROLL_PROCESSED"] },
+      payrollTreatment: "UNPAID_DEDUCTION",
+    },
+    select: { employeeId: true, leaveDate: true },
+  });
+  for (const occurrence of occurrences) {
+    const months = result.get(occurrence.employeeId) ?? new Set<string>();
+    months.add(formatLeaveDateKey(occurrence.leaveDate).slice(0, 7));
+    result.set(occurrence.employeeId, months);
+  }
+  return result;
 }
 
 export interface LegacyLeaveRowForReadiness {

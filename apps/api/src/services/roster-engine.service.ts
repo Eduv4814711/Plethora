@@ -6,6 +6,10 @@ import { getLeaveDateKeysByEmployee } from "./leave-availability.service.js";
 import { meetsSiteShiftGenderRule, normalizeEmployeeGenderForRoster } from "./rostering.service.js";
 import { auditRosterGeneration } from "../lib/roster-audit.js";
 import {
+  describeCoverageDays,
+  resolveSiteCoverageDays,
+} from "../lib/site-coverage-days.js";
+import {
   buildCalendarDays,
   buildRosterReadinessDiagnostics,
   buildSiteDemandSlots,
@@ -270,6 +274,20 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
       rosterNightShiftGuardsRequired?: number | null;
     }
   );
+  const coverageDays = resolveSiteCoverageDays(site);
+  // A shift only creates demand when it needs guards *and* has at least one weekday to
+  // cover — a Mon–Fri site should not be told it is missing a night post for its weekend.
+  const demandsDayShift = shiftStaffing.day > 0 && coverageDays.day.size > 0;
+  const demandsNightShift = shiftStaffing.night > 0 && coverageDays.night.size > 0;
+  /**
+   * Staffing as the readiness checks and rotation planner should see it: a shift that runs
+   * on *some* weekdays still needs its full headcount on those days, so only a shift with
+   * no covered weekday at all drops to zero.
+   */
+  const effectiveStaffing: ShiftStaffingRequirements = {
+    day: demandsDayShift ? shiftStaffing.day : 0,
+    night: demandsNightShift ? shiftStaffing.night : 0,
+  };
 
   const postsWithAssignments: PostWithAssignments[] = site.posts.map((p) => ({
     id: p.id,
@@ -280,15 +298,18 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
   }));
   const dayPosts = postsWithAssignments.filter((p) => (p.shiftType ?? "day") === "day");
   const nightPosts = postsWithAssignments.filter((p) => p.shiftType === "night");
-  if (shiftStaffing.day === 0 && shiftStaffing.night === 0) {
+  if (!demandsDayShift && !demandsNightShift) {
     return emptyPlan([
       {
         code: "ZERO_STAFFING",
-        message: "At least one shift must require guards for auto-roster.",
+        message:
+          shiftStaffing.day === 0 && shiftStaffing.night === 0
+            ? "At least one shift must require guards for auto-roster."
+            : "At least one shift must be covered on at least one day of the week for auto-roster.",
       },
     ]);
   }
-  if (shiftStaffing.day > 0 && dayPosts.length === 0) {
+  if (demandsDayShift && dayPosts.length === 0) {
     return emptyPlan([
       {
         code: "MISSING_POSTS",
@@ -296,7 +317,7 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
       },
     ]);
   }
-  if (shiftStaffing.night > 0 && nightPosts.length === 0) {
+  if (demandsNightShift && nightPosts.length === 0) {
     return emptyPlan([
       {
         code: "MISSING_POSTS",
@@ -323,11 +344,11 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
   }
 
   const warnings: RosterPlanWarning[] = [];
-  const minGuardsNeeded = minRosterableGuardsForStaffing(shiftStaffing);
+  const minGuardsNeeded = minRosterableGuardsForStaffing(effectiveStaffing);
   if (rosterableGuards.length < minGuardsNeeded) {
     warnings.push({
       code: "INSUFFICIENT_GUARDS",
-      message: `This site requires ${shiftStaffing.day} day and ${shiftStaffing.night} night guard(s) per day. Assign at least ${minGuardsNeeded} rosterable guards to the site.`,
+      message: `This site requires ${shiftStaffing.day} day guard(s) (${describeCoverageDays([...coverageDays.day])}) and ${shiftStaffing.night} night guard(s) (${describeCoverageDays([...coverageDays.night])}). Assign at least ${minGuardsNeeded} rosterable guards to the site.`,
     });
   }
 
@@ -377,6 +398,7 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
     nightPosts,
     staffing: shiftStaffing,
     siteGenderRules,
+    coverageDays,
   });
   for (const w of demandWarnings) {
     warnings.push(w);
@@ -389,7 +411,7 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
     relieverCount,
     dayPostCount: dayPosts.length,
     nightPostCount: nightPosts.length,
-    staffing: shiftStaffing,
+    staffing: effectiveStaffing,
     rosterPeriodStart: startDate,
     rosterPeriodEnd: endDate,
     rotateAllGuards,
@@ -413,7 +435,8 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
   const fairnessTargets = computeFairnessTargets(
     rosterableGuards.length,
     calendarDays,
-    shiftStaffing
+    shiftStaffing,
+    coverageDays
   );
   const rotationPlan =
     rotationRecommendation.blocks.length > 0
@@ -641,7 +664,7 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
   const readiness = buildRosterReadinessDiagnostics({
     dayPostCount: dayPosts.length,
     nightPostCount: nightPosts.length,
-    staffing: shiftStaffing,
+    staffing: effectiveStaffing,
     rosterableGuardCount: rosterableGuards.length,
     relieverCount: rosterableGuards.filter((g) => g.status === "reliever").length,
     guardsMissingGender,
@@ -652,7 +675,7 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
       siteGenderRules.rosterNightShiftGender === "female",
   });
 
-  const uncovered = validateDailyCoverage(entries, calendarDays, shiftStaffing);
+  const uncovered = validateDailyCoverage(entries, calendarDays, shiftStaffing, coverageDays);
   for (const u of uncovered) {
     const alreadyWarned = warnings.some(
       (w) => w.code === "UNCOVERED_DAY" && w.date === u.date

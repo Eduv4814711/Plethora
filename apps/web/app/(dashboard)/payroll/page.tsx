@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { canAccessSensitiveData, hasCapability } from "@/lib/permissions";
 import { PayPeriodSelect } from "@/components/pay-period-select";
+import { attendanceExceptionCopy } from "@/lib/attendance-exception-copy";
 import {
   AlertBanner,
   Badge,
@@ -1132,6 +1133,27 @@ interface DuplicateLegacyLeaveDay {
   records: Array<{ id: string; type: string; hours: number }>;
 }
 
+interface BlockingExceptionGroup {
+  exceptionType: string;
+  label: string;
+  count: number;
+  samples: Array<{
+    id: string;
+    employeeName: string | null;
+    employeeNumber: string | null;
+    siteName: string | null;
+    date: string | null;
+    description: string;
+  }>;
+}
+
+interface BlockingExceptionBreakdown {
+  total: number;
+  groups: BlockingExceptionGroup[];
+  periodStart: string;
+  periodEnd: string;
+}
+
 interface CalculationSnapshotResponse {
   snapshot: {
     inputs: { employeesSkipped: number };
@@ -1198,6 +1220,8 @@ function PayrollRunCard({
   const [actionError, setActionError] = useState<string | null>(null);
   const [sitesNeedingApproval, setSitesNeedingApproval] = useState<{ id: string; name: string }[]>([]);
   const [duplicateLeaveDays, setDuplicateLeaveDays] = useState<DuplicateLegacyLeaveDay[]>([]);
+  const [blockingExceptions, setBlockingExceptions] = useState<BlockingExceptionBreakdown | null>(null);
+  const [expandedExceptionType, setExpandedExceptionType] = useState<string | null>(null);
   const [resolvingDay, setResolvingDay] = useState<string | null>(null);
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [validation, setValidation] = useState<PayrollValidationResponse | null>(null);
@@ -1262,6 +1286,7 @@ function PayrollRunCard({
     setActionError(null);
     setSitesNeedingApproval([]);
     setDuplicateLeaveDays([]);
+    setBlockingExceptions(null);
     try {
       const res = await authFetch(`/payroll/runs/${run.id}/calculate`, token, { method: "POST" });
       if (!res.ok) {
@@ -1273,6 +1298,10 @@ function PayrollRunCard({
         const duplicateDays = err?.leaveReadiness?.duplicateLegacyDays;
         if (Array.isArray(duplicateDays) && duplicateDays.length > 0) {
           setDuplicateLeaveDays(duplicateDays);
+        }
+        const blocking = err?.payrollReadiness?.blockingExceptions;
+        if (blocking?.groups?.length) {
+          setBlockingExceptions(blocking);
         }
         throw new Error(
           typeof err.message === "string" ? err.message : "Payroll calculation failed"
@@ -1350,10 +1379,15 @@ function PayrollRunCard({
 
     setActionLoading(true);
     setActionError(null);
+    setBlockingExceptions(null);
     try {
       const res = await authFetch(`/payroll/runs/${run.id}/approve`, token, { method: "POST" });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
+        const blocking = err?.payrollReadiness?.blockingExceptions;
+        if (blocking?.groups?.length) {
+          setBlockingExceptions(blocking);
+        }
         const validationMsg =
           err.validation?.issues?.length > 0
             ? err.validation.issues
@@ -1609,6 +1643,83 @@ function PayrollRunCard({
                     Approve {s.name} →
                   </Link>
                 ))}
+              </div>
+            )}
+            {blockingExceptions && blockingExceptions.groups.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-neutral-600">
+                  Here is what is blocking this run. Fix each group below, then click
+                  Calculate again.
+                </p>
+                {blockingExceptions.groups.map((group) => {
+                  const copy = attendanceExceptionCopy(group.exceptionType);
+                  const isOpen = expandedExceptionType === group.exceptionType;
+                  const exceptionsHref =
+                    `/attendance/exceptions?status=OPEN&severity=CRITICAL` +
+                    `&start=${blockingExceptions.periodStart.slice(0, 10)}` +
+                    `&end=${blockingExceptions.periodEnd.slice(0, 10)}`;
+                  return (
+                    <div
+                      key={group.exceptionType}
+                      className="rounded-md border border-red-200 bg-white px-3 py-2 text-xs text-neutral-700"
+                    >
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="font-semibold text-neutral-900">{copy.title}</span>
+                        <Badge variant="error">{group.count}</Badge>
+                      </div>
+                      <p className="mt-1 text-neutral-500">{copy.description}</p>
+                      <p className="mt-1.5 font-medium text-neutral-700">
+                        How to fix: <span className="font-normal">{copy.howToFix}</span>
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Link
+                          href={exceptionsHref}
+                          className="inline-flex items-center gap-1 rounded-md bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700"
+                        >
+                          Review these issues →
+                        </Link>
+                        {group.samples.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedExceptionType(isOpen ? null : group.exceptionType)
+                            }
+                            className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                          >
+                            {isOpen ? "Hide examples" : `Show ${group.samples.length} example(s)`}
+                          </button>
+                        )}
+                      </div>
+                      {isOpen && (
+                        <ul className="mt-2 space-y-1 border-t border-red-100 pt-2">
+                          {group.samples.map((sample) => (
+                            <li key={sample.id} className="flex flex-wrap items-center gap-x-2">
+                              <span className="font-medium text-neutral-900">
+                                {sample.employeeName ?? "Unknown employee"}
+                              </span>
+                              {sample.employeeNumber && (
+                                <span className="text-neutral-500">({sample.employeeNumber})</span>
+                              )}
+                              {sample.siteName && (
+                                <span className="text-neutral-500">· {sample.siteName}</span>
+                              )}
+                              {sample.date && (
+                                <span className="text-neutral-500">
+                                  · {format(new Date(`${sample.date}T00:00:00`), "d MMM yyyy")}
+                                </span>
+                              )}
+                            </li>
+                          ))}
+                          {group.count > group.samples.length && (
+                            <li className="text-neutral-400">
+                              …and {group.count - group.samples.length} more
+                            </li>
+                          )}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
             {resolveError && <p className="font-medium">{resolveError}</p>}

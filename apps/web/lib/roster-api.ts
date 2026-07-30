@@ -63,6 +63,9 @@ export type RosterSiteConfig = {
   name: string;
   rosterDayShiftGuardsRequired: number;
   rosterNightShiftGuardsRequired: number;
+  /** Weekdays each shift needs cover (0=Sunday … 6=Saturday). */
+  rosterDayShiftDays?: number[] | null;
+  rosterNightShiftDays?: number[] | null;
   rosterDayShiftGender: string | null;
   rosterNightShiftGender: string | null;
   rosterDayShiftStartTime: string | null;

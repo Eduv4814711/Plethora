@@ -29,6 +29,7 @@ import {
   type RosterSiteConfig,
 } from "@/lib/roster-api";
 import { patternDayIndexForDate, shiftCodeForStaggeredPattern } from "@/lib/roster-pattern-utils";
+import { coverageDaysOrAllWeek, isCoveredOnDateKey } from "@/lib/site-coverage-days";
 import {
   buildShiftSheetRowsFromRosterGrid,
   downloadPdfBlob,
@@ -57,15 +58,32 @@ function recalcRowTotals(cells: { shiftCode: RosterShiftCode }[]) {
   return totals;
 }
 
+/**
+ * Takes the whole site config rather than loose numbers so a call site cannot forget the
+ * weekday cover and re-introduce weekend shortfalls on a Mon–Fri site.
+ */
 function recalcCoverage(
   columnKeys: string[],
   rows: RosterPeriodGrid["rows"],
-  requiredDay: number,
-  requiredNight: number
+  cfg: Pick<
+    RosterSiteConfig,
+    | "rosterDayShiftGuardsRequired"
+    | "rosterNightShiftGuardsRequired"
+    | "rosterDayShiftDays"
+    | "rosterNightShiftDays"
+  >
 ) {
+  const dayDays = coverageDaysOrAllWeek(cfg.rosterDayShiftDays);
+  const nightDays = coverageDaysOrAllWeek(cfg.rosterNightShiftDays);
   const coverageByDay: RosterPeriodGrid["coverageByDay"] = {};
   for (const key of columnKeys) {
-    coverageByDay[key] = { day: 0, night: 0, requiredDay, requiredNight };
+    // Weekdays this site does not need covered require nobody, so no shortfall is reported.
+    coverageByDay[key] = {
+      day: 0,
+      night: 0,
+      requiredDay: isCoveredOnDateKey(dayDays, key) ? cfg.rosterDayShiftGuardsRequired : 0,
+      requiredNight: isCoveredOnDateKey(nightDays, key) ? cfg.rosterNightShiftGuardsRequired : 0,
+    };
   }
   for (const row of rows) {
     for (const cell of row.cells) {
@@ -222,8 +240,7 @@ export const ManualRosteringWorkspace = forwardRef<
           next.coverageByDay = recalcCoverage(
             next.calendarDays,
             rows,
-            cfg.rosterDayShiftGuardsRequired,
-            cfg.rosterNightShiftGuardsRequired
+            cfg
           );
         }
         baselineCellsRef.current = buildBaselineCells(rows);
@@ -299,8 +316,7 @@ export const ManualRosteringWorkspace = forwardRef<
         nextGrid.coverageByDay = recalcCoverage(
           current.calendarDays,
           updatedRows,
-          cfg.rosterDayShiftGuardsRequired,
-          cfg.rosterNightShiftGuardsRequired
+          cfg
         );
       }
       return nextGrid;
@@ -563,8 +579,7 @@ export const ManualRosteringWorkspace = forwardRef<
           nextGrid.coverageByDay = recalcCoverage(
             current.calendarDays,
             updatedRows,
-            cfg.rosterDayShiftGuardsRequired,
-            cfg.rosterNightShiftGuardsRequired
+            cfg
           );
         }
         return nextGrid;
@@ -631,8 +646,7 @@ export const ManualRosteringWorkspace = forwardRef<
           nextGrid.coverageByDay = recalcCoverage(
             current.calendarDays,
             updatedRows,
-            cfg.rosterDayShiftGuardsRequired,
-            cfg.rosterNightShiftGuardsRequired
+            cfg
           );
         }
         return nextGrid;

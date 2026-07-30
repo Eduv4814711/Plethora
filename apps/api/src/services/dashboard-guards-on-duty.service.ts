@@ -1,5 +1,6 @@
 import { addDays, startOfDay } from "date-fns";
 import { prisma } from "../lib/prisma.js";
+import { dateKeyInTimeZone } from "../lib/timezone.js";
 
 /** Attendance statuses that mean a guard was on post (incl. partial capture). */
 export const ON_DUTY_ATTENDANCE_STATUSES = [
@@ -25,11 +26,32 @@ function guardIdFromRow(row: {
   return row.actualGuardId ?? row.plannedGuardId;
 }
 
-function dayIndexInWeek(weekStart: Date, instant: Date): number {
-  const dayStart = startOfDay(instant);
-  const diffMs = dayStart.getTime() - weekStart.getTime();
-  const index = Math.floor(diffMs / (24 * 60 * 60 * 1000));
-  return index >= 0 && index < 7 ? index : -1;
+/**
+ * The seven yyyy-MM-dd keys of the week beginning at `weekStart`.
+ * `weekStart` is the UTC instant of local midnight on the Monday.
+ */
+function weekDayKeys(weekStart: Date, timeZone: string): string[] {
+  return Array.from({ length: 7 }, (_, i) =>
+    dateKeyInTimeZone(addDays(weekStart, i), timeZone)
+  );
+}
+
+/**
+ * Bucket a true instant (clock-in, shift start) by the calendar day it falls
+ * on *in the company's timezone*. Using the server's local day here would
+ * shift evening clock-ins into the wrong column on a UTC-hosted API.
+ */
+function dayIndexForInstant(dayKeys: string[], instant: Date, timeZone: string): number {
+  return dayKeys.indexOf(dateKeyInTimeZone(instant, timeZone));
+}
+
+/**
+ * Bucket a date-only column (`workDate`, stored at UTC midnight). These carry
+ * no time-of-day, so they must be read from their UTC components — converting
+ * them into a timezone would slide them onto the adjacent day.
+ */
+function dayIndexForDateOnly(dayKeys: string[], workDate: Date): number {
+  return dayKeys.indexOf(workDate.toISOString().slice(0, 10));
 }
 
 function isCapturedTimesheetRow(row: {
@@ -116,9 +138,11 @@ export async function getGuardsOnDutyByDay(
   companyId: string,
   weekStart: Date,
   dayNames: string[],
+  timeZone: string,
   { siteIds }: SiteFilter = {}
 ): Promise<{ name: string; value: number }[]> {
   const weekEnd = addDays(weekStart, 7);
+  const dayKeys = weekDayKeys(weekStart, timeZone);
   const guardsByDay = new Map<number, Set<string>>();
   for (let i = 0; i < 7; i++) guardsByDay.set(i, new Set());
 
@@ -143,7 +167,7 @@ export async function getGuardsOnDutyByDay(
     if (!isCapturedTimesheetRow(row)) continue;
     const guardId = guardIdFromRow(row);
     if (!guardId) continue;
-    const index = dayIndexInWeek(weekStart, row.workDate);
+    const index = dayIndexForDateOnly(dayKeys, row.workDate);
     if (index >= 0) guardsByDay.get(index)!.add(guardId);
   }
 
@@ -165,12 +189,12 @@ export async function getGuardsOnDutyByDay(
 
   for (const row of attendanceInWeek) {
     if (!row.clockIn) continue;
-    const index = dayIndexInWeek(weekStart, row.clockIn);
+    const index = dayIndexForInstant(dayKeys, row.clockIn, timeZone);
     if (index >= 0) {
       guardsByDay.get(index)!.add(row.shift.employeeId);
       continue;
     }
-    const shiftIndex = dayIndexInWeek(weekStart, row.shift.startTime);
+    const shiftIndex = dayIndexForInstant(dayKeys, row.shift.startTime, timeZone);
     if (shiftIndex >= 0) guardsByDay.get(shiftIndex)!.add(row.shift.employeeId);
   }
 

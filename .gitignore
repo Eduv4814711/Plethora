@@ -29,3 +29,4 @@ apps/web/.debug-*
 !.env.example
 !.env.railway.api.example
 !.env.railway.web.example
+!.env.sync.example

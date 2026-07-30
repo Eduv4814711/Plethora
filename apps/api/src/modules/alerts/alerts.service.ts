@@ -115,23 +115,31 @@ export async function upsertAlert(input: UpsertAlertInput) {
   }
 }
 
-export async function getAlertCounts(companyId: string) {
+/**
+ * Open/resolved alert tallies for a company.
+ *
+ * `siteIds` must be passed by any caller that also renders a site-filtered
+ * alert *list* — otherwise the counts describe the whole company while the
+ * list below them shows a single site.
+ */
+export async function getAlertCounts(companyId: string, siteIds?: string[]) {
   const openStatuses: AlertStatus[] = ["OPEN", "ACKNOWLEDGED"];
+  const siteFilter = siteIds?.length ? { siteId: { in: siteIds } } : {};
   const [critical, medium, low, allOpen, resolved] = await Promise.all([
     prisma.operationalAlert.count({
-      where: { companyId, priority: "CRITICAL", status: { in: openStatuses } },
+      where: { companyId, ...siteFilter, priority: "CRITICAL", status: { in: openStatuses } },
     }),
     prisma.operationalAlert.count({
-      where: { companyId, priority: "MEDIUM", status: { in: openStatuses } },
+      where: { companyId, ...siteFilter, priority: "MEDIUM", status: { in: openStatuses } },
     }),
     prisma.operationalAlert.count({
-      where: { companyId, priority: "LOW", status: { in: openStatuses } },
+      where: { companyId, ...siteFilter, priority: "LOW", status: { in: openStatuses } },
     }),
     prisma.operationalAlert.count({
-      where: { companyId, status: { in: openStatuses } },
+      where: { companyId, ...siteFilter, status: { in: openStatuses } },
     }),
     prisma.operationalAlert.count({
-      where: { companyId, status: { in: ["RESOLVED", "DISMISSED"] } },
+      where: { companyId, ...siteFilter, status: { in: ["RESOLVED", "DISMISSED"] } },
     }),
   ]);
   return { critical, medium, low, allOpen, resolved, total: allOpen };

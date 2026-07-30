@@ -17,6 +17,10 @@ import {
 } from "../../services/payroll-period.service.js";
 import { getCompanyTimezone, getShiftTimes } from "../../lib/timezone.js";
 import { meetsSiteShiftGenderRule } from "../../services/rostering.service.js";
+import {
+  isShiftCoveredOn,
+  resolveSiteCoverageDays,
+} from "../../lib/site-coverage-days.js";
 import { shiftCodeToType } from "./lib/pattern-parser.js";
 import {
   inferRepeatingRosterPattern,
@@ -605,6 +609,7 @@ export async function reconcileRosterContinuityForSite(
         guardIds,
         start
       );
+      const coverageDays = resolveSiteCoverageDays(site);
       for (let day = start; day <= end; day = addDays(day, 1)) {
         const dayKey = dateKey(day);
         const patternDay = patternDayForDate(pattern.anchorDate, pattern.cycleLengthDays, day);
@@ -652,6 +657,14 @@ export async function reconcileRosterContinuityForSite(
 
           if (WORKING_CODES.has(nextItem.code)) {
             const nextType = nextItem.code === "N" ? "night" : "day";
+            // The guard's cycle pattern is weekday-agnostic, so it will happily land a
+            // working day on a weekday this site does not need covered. Treat that as an
+            // off day rather than an issue — the site simply does not run that shift then.
+            if (!isShiftCoveredOn(coverageDays, nextType, day)) {
+              consecutiveWorkingDaysByGuard.set(guardId, 0);
+              previousWorkingTypeByGuard.delete(guardId);
+              continue;
+            }
             if (!meetsSiteShiftGenderRule(assignment.employee.gender, site, nextType)) {
               issues.push({
                 code: "GENDER_RULE_MISMATCH",
@@ -925,6 +938,8 @@ export async function reconcileRosterContinuityForSite(
         const dayKey = dateKey(day);
         const counts = coverage.result.get(dayKey) ?? { day: 0, night: 0 };
         for (const shiftType of ["day", "night"] as const) {
+          // Weekdays this site does not need covered raise no gap: no demand, no alert.
+          if (!isShiftCoveredOn(coverageDays, shiftType, day)) continue;
           const required = shiftType === "day" ? coverage.requiredDay : coverage.requiredNight;
           const have = counts[shiftType];
           if (have >= required) continue;

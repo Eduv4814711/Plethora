@@ -4,12 +4,19 @@ import { Prisma } from "@prisma/client";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
-import { startOfMonth, subMonths, format } from "date-fns";
+import { startOfMonth, addDays } from "date-fns";
 import { getAlertCounts } from "../modules/alerts/alerts.service.js";
 import { getPayrollReadiness } from "../modules/attendance-exceptions/exceptions.service.js";
 import { syncContractExpiryAlerts } from "../modules/documents/documents.service.js";
 import { parsePayrollCalendarSettings } from "../lib/payroll-calendar-settings.js";
 import { getCurrentPayPeriod } from "../services/payroll-period.service.js";
+import { dateKeyInTimeZone, parseDateOnly } from "../lib/timezone.js";
+import {
+  bucketFormat,
+  enumerateBuckets,
+  resolveDashboardWindow,
+  zonedMidnight,
+} from "../lib/dashboard-window.js";
 import {
   getGuardsOnDutyByDay as computeGuardsOnDutyByDay,
   getGuardsOnDutyNow,
@@ -32,20 +39,35 @@ export async function dashboardRoutes(app: FastifyInstance) {
 
     const now = new Date();
 
+    // Timezone and payroll-calendar settings both come off the company row, so
+    // load it up front: the date window below is company-local, not server-local.
+    const companyRow = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { settings: true },
+    });
+    const companySettings = (companyRow?.settings as Record<string, unknown>) ?? {};
+    const timeZone =
+      (typeof companySettings.timezone === "string" && companySettings.timezone.trim()) ||
+      "Africa/Johannesburg";
+
+    const window = resolveDashboardWindow(q.dateRange, now, timeZone);
+
     const shiftWhereBase = {
       companyId,
       ...(siteIds?.length ? { siteId: { in: siteIds } } : {}),
     };
 
-    // Get start of current week (Monday) and build day boundaries
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-    startOfWeek.setHours(0, 0, 0, 0);
+    // Start of the current week (Monday) in company-local time. The
+    // guards-on-duty chart is always a fixed Mon–Sun view and does not follow
+    // the Today/Week/Month toggle.
+    const todayKey = dateKeyInTimeZone(now, timeZone);
+    const todayDateOnly = parseDateOnly(todayKey);
+    const weekStartKey = addDays(todayDateOnly, -((todayDateOnly.getUTCDay() + 6) % 7))
+      .toISOString()
+      .slice(0, 10);
+    const startOfWeek = zonedMidnight(weekStartKey, timeZone);
 
     const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-    const months = 4;
-    const reportStart = startOfMonth(subMonths(now, months - 1));
 
     const activeSitesWhere = siteIds?.length
       ? { companyId, id: { in: siteIds } }
@@ -53,7 +75,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
 
     const [guardsOnDutyByDay, guardsOnDuty, activeSitesCount, activeSitesLastMonth, payrollStatus, pendingApprovals, employeesByStatus, shiftsByStatus] =
       await Promise.all([
-        computeGuardsOnDutyByDay(companyId, startOfWeek, dayNames, { siteIds }),
+        computeGuardsOnDutyByDay(companyId, startOfWeek, dayNames, timeZone, { siteIds }),
         getGuardsOnDutyNow(companyId, now, { siteIds }),
         prisma.site.count({
           where: {
@@ -68,14 +90,26 @@ export async function dashboardRoutes(app: FastifyInstance) {
             createdAt: { lt: startOfMonth(now) },
           },
         }),
+        // Pay runs whose period *ends* inside the selected window. Without this
+        // the "Pending payroll" KPI is an all-time tally that only ever grows.
+        // PayrollRun has no siteId, so it cannot be site-scoped.
         prisma.payrollRun.groupBy({
           by: ["status"],
-          where: { companyId },
+          where: {
+            companyId,
+            periodEnd: { gte: window.start, lt: window.end },
+          },
           _count: { id: true },
         }),
         prisma.payrollRun.count({
-          where: { companyId, status: "calculated" },
+          where: {
+            companyId,
+            status: "calculated",
+            periodEnd: { gte: window.start, lt: window.end },
+          },
         }),
+        // Employee has no siteId in the schema, so headcount is always
+        // company-wide. The UI labels it as such when a site filter is active.
         prisma.employee.groupBy({
           by: ["status"],
           where: { companyId },
@@ -85,7 +119,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
           by: ["status"],
           where: {
             ...shiftWhereBase,
-            startTime: { gte: reportStart },
+            startTime: { gte: window.start, lt: window.end },
           },
           _count: { id: true },
         }),
@@ -116,9 +150,12 @@ export async function dashboardRoutes(app: FastifyInstance) {
     // Best-effort: refresh contract expiry alerts (non-blocking for dashboard)
     void syncContractExpiryAlerts(companyId).catch(() => undefined);
 
-    const [operationalAlertCounts, payrollReadiness, pendingApprovalsInbox, openCriticalIncidents, companyRow, pendingSiteTimesheetRows] =
+    const [operationalAlertCounts, payrollReadiness, pendingApprovalsInbox, openCriticalIncidents, pendingSiteTimesheetRows] =
       await Promise.all([
-        getAlertCounts(companyId),
+        // Site-scoped to match the operationalAlerts list below — otherwise the
+        // priority tab counts describe the whole company while the list shows
+        // only the selected sites.
+        getAlertCounts(companyId, siteIds),
         getPayrollReadiness(companyId),
         prisma.approvalRequest.count({ where: { companyId, status: "PENDING" } }),
         prisma.incident.count({
@@ -128,7 +165,6 @@ export async function dashboardRoutes(app: FastifyInstance) {
             status: { in: ["SUBMITTED", "UNDER_REVIEW"] },
           },
         }),
-        prisma.company.findUnique({ where: { id: companyId }, select: { settings: true } }),
         prisma.siteTimesheetRow.count({
           where: {
             companyId,
@@ -177,57 +213,60 @@ export async function dashboardRoutes(app: FastifyInstance) {
         b.createdAt.getTime() - a.createdAt.getTime()
     );
 
-    for (const a of persistedAlerts) {
-      alerts.push({
-        type: a.sourceModule.toLowerCase(),
-        message: a.title,
-        priority: a.priority,
-        id: a.id,
-        count: 1,
-      });
-    }
+    // NOTE: persisted alerts are deliberately *not* pushed into `alerts`.
+    // They are returned separately as `operationalAlerts`, and the dashboard
+    // renders that list on its own. Duplicating them here made every alert
+    // count two to three times in the "Needs attention" KPI.
 
     const userId = user.sub;
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const todayEnd = new Date(todayStart);
-    todayEnd.setHours(23, 59, 59, 999);
+    const todayStart = zonedMidnight(todayKey, timeZone);
+    const todayEnd = zonedMidnight(
+      addDays(todayDateOnly, 1).toISOString().slice(0, 10),
+      timeZone
+    );
 
-    const shiftsByMonth = siteIds?.length
-      ? await prisma.$queryRaw<
-          { month: string; count: bigint }[]
-        >(Prisma.sql`
-      SELECT to_char(date_trunc('month', s."startTime")::date, 'YYYY-MM') as month, count(*)::bigint
+    // Shift volume and distinct rostered guards, bucketed across the selected
+    // window. Both `date_trunc` and `to_char` run against the company-local
+    // timestamp so the buckets line up with `enumerateBuckets` below.
+    const truncUnit = Prisma.raw(`'${window.bucket}'`);
+    const keyFormat = Prisma.raw(`'${bucketFormat(window.bucket)}'`);
+    const zone = Prisma.sql`${timeZone}`;
+    const siteClause = siteIds?.length
+      ? Prisma.sql`AND s."siteId" IN (${Prisma.join(siteIds)})`
+      : Prisma.empty;
+
+    const shiftBuckets = await prisma.$queryRaw<
+      { bucket: string; shifts: bigint; guards: bigint }[]
+    >(Prisma.sql`
+      SELECT
+        to_char(date_trunc(${truncUnit}, s."startTime" AT TIME ZONE ${zone}::text), ${keyFormat}) AS bucket,
+        count(*)::bigint AS shifts,
+        count(DISTINCT s."employeeId")::bigint AS guards
       FROM "Shift" s
       WHERE s."companyId" = ${companyId}
-        AND s."siteId" IN (${Prisma.join(siteIds)})
-        AND s."startTime" >= ${reportStart}
-      GROUP BY date_trunc('month', s."startTime")
-      ORDER BY month ASC
-    `)
-      : await prisma.$queryRaw<
-          { month: string; count: bigint }[]
-        >(Prisma.sql`
-      SELECT to_char(date_trunc('month', "startTime")::date, 'YYYY-MM') as month, count(*)::bigint
-      FROM "Shift"
-      WHERE "companyId" = ${companyId}
-        AND "startTime" >= ${reportStart}
-      GROUP BY date_trunc('month', "startTime")
-      ORDER BY month ASC
+        AND s."startTime" >= ${window.start}
+        AND s."startTime" < ${window.end}
+        ${siteClause}
+      GROUP BY 1
+      ORDER BY 1 ASC
     `);
-    const shiftsByMonthMap = new Map<string, number>();
-    for (let i = 0; i < months; i++) {
-      const m = format(subMonths(now, months - 1 - i), "yyyy-MM");
-      shiftsByMonthMap.set(m, 0);
+
+    const shiftCountByBucket = new Map<string, number>();
+    const guardCountByBucket = new Map<string, number>();
+    for (const row of shiftBuckets) {
+      shiftCountByBucket.set(row.bucket, Number(row.shifts));
+      guardCountByBucket.set(row.bucket, Number(row.guards));
     }
-    for (const row of shiftsByMonth) {
-      shiftsByMonthMap.set(row.month, Number(row.count));
-    }
-    const shiftsOverTime = Array.from(shiftsByMonthMap.entries())
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([month, count]) => ({
-        name: format(new Date(month + "-01"), "MMM"),
-        value: count,
-      }));
+
+    const buckets = enumerateBuckets(window, timeZone);
+    const shiftsOverTime = buckets.map(({ key, label }) => ({
+      name: label,
+      value: shiftCountByBucket.get(key) ?? 0,
+    }));
+    const rosteredGuardsOverTime = buckets.map(({ key, label }) => ({
+      name: label,
+      value: guardCountByBucket.get(key) ?? 0,
+    }));
 
     const [tasksOverdue, tasksDueToday, topPriorityTasks] =
       userId
@@ -247,7 +286,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
                 assigneeType: "user",
                 assigneeId: userId,
                 status: { notIn: ["done", "cancelled"] },
-                dueDate: { gte: todayStart, lte: todayEnd },
+                dueDate: { gte: todayStart, lt: todayEnd },
               },
             }),
             prisma.task.findMany({
@@ -277,14 +316,20 @@ export async function dashboardRoutes(app: FastifyInstance) {
     const activeSitesDelta = activeSitesCount - activeSitesLastMonth;
 
     return reply.send({
+      dateRange: window.range,
+      windowStart: window.start.toISOString(),
+      windowEnd: window.end.toISOString(),
       guardsOnDuty,
       guardsOnDutyByDay,
       activeSitesCount,
+      activeSitesAddedThisMonth: activeSitesDelta,
       activeSitesDelta,
       payrollStatus: payrollByStatus,
       alerts,
       alertCounts: operationalAlertCounts,
       operationalAlerts: persistedAlerts,
+      /** persistedAlerts is capped at 30; the UI uses this to say "showing N of M". */
+      operationalAlertsTruncated: operationalAlertCounts.allOpen > persistedAlerts.length,
       payrollReadiness: payrollReadiness
         ? {
             status: payrollReadiness.status,
@@ -310,6 +355,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
         priority: t.priority,
       })),
       shiftsOverTime,
+      rosteredGuardsOverTime,
       employeesByStatus: employeesByStatusData,
       shiftsByStatus: shiftsByStatusData,
     });

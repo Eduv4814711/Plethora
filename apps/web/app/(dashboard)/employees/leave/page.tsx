@@ -100,7 +100,17 @@ type PolicyVersion = {
   negativeBalanceAllowed: boolean;
   configurationReady: boolean;
   configurationIssues: string[];
+  usage?: PolicyVersionUsage | null;
   leaveType: LeaveType & { requiresBalance: boolean };
+};
+/** What a version has already decided, and therefore what may be done to it. */
+type PolicyVersionUsage = {
+  applicationCount: number;
+  ledgerEntryCount: number;
+  isOnlyActiveVersion: boolean;
+  canEditInPlace: boolean;
+  canDelete: boolean;
+  reasons: string[];
 };
 type Policy = { id: string; name: string; category: string; description?: string; versions: PolicyVersion[]; assignments: unknown[] };
 type PolicyEditorSelection = { policyId: string; policyName: string; version: PolicyVersion };
@@ -235,6 +245,11 @@ export default function LeaveManagementPage() {
     user &&
       (hasCapability(user, "/employees/leave", "export") ||
         hasCapability(user, "/payroll", "export"))
+  );
+  const canDelete = Boolean(
+    user &&
+      (hasCapability(user, "/employees/leave", "delete") ||
+        hasCapability(user, "/payroll", "delete"))
   );
   const [tab, setTab] = useState<Tab>("queue");
   const [employees, setEmployees] = useState<GuardPickerOption[]>([]);
@@ -674,7 +689,13 @@ export default function LeaveManagementPage() {
     setBusy(busyKey);
     setError(null);
     try {
-      const configured = selection.version.reviewStatus === "PENDING_HR_LEGAL_CONFIRMATION"
+      // A version nothing has relied on is corrected in place. One that has
+      // already decided leave is evidence, so the change becomes a new
+      // effective-dated version and the original stays as the record.
+      const editInPlace =
+        selection.version.reviewStatus === "PENDING_HR_LEGAL_CONFIRMATION" ||
+        selection.version.usage?.canEditInPlace === true;
+      const configured = editInPlace
         ? await request(`/leave/policies/versions/${selection.version.id}`, {
             method: "PUT",
             body: JSON.stringify(payload),
@@ -691,6 +712,40 @@ export default function LeaveManagementPage() {
       setPolicies(refreshed.data ?? []);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Policy configuration failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function deletePolicyVersion(version: PolicyVersion) {
+    if (!canDelete) return;
+    const label = `${version.leaveType.name} version ${version.version}`;
+    if (!window.confirm(`Delete ${label}? This cannot be undone. Only versions that have never decided leave can be deleted.`)) return;
+    setBusy(`policy-delete:${version.id}`);
+    setError(null);
+    try {
+      await request(`/leave/policies/versions/${version.id}`, { method: "DELETE" });
+      const refreshed = await request("/leave/policies");
+      setPolicies(refreshed.data ?? []);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Policy deletion failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function retirePolicyVersion(version: PolicyVersion) {
+    if (!canApprove) return;
+    const label = `${version.leaveType.name} version ${version.version}`;
+    if (!window.confirm(`Retire ${label}? It stops applying to new leave but stays on record as the policy that was in force.`)) return;
+    setBusy(`policy-retire:${version.id}`);
+    setError(null);
+    try {
+      await request(`/leave/policies/versions/${version.id}/retire`, { method: "POST" });
+      const refreshed = await request("/leave/policies");
+      setPolicies(refreshed.data ?? []);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Retiring the policy version failed");
     } finally {
       setBusy(null);
     }
@@ -1013,7 +1068,7 @@ export default function LeaveManagementPage() {
               {accrualRunResult && <p className={`mt-3 rounded-lg border p-3 text-sm ${accrualRunResult.skipped.length ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>Posted {accrualRunResult.posted.length} new ledger entr{accrualRunResult.posted.length === 1 ? "y" : "ies"}. Skipped {accrualRunResult.skipped.length}; details are recorded in Audit history.</p>}
             </div>
           )}
-          {loading ? <LoadingCards /> : policies.length ? <div className="space-y-4">{policies.map((policy) => <PolicyCard key={policy.id} policy={policy} canCreate={canCreate} canEdit={canEdit} canApprove={canApprove} busy={busy} onConfirm={confirmPolicy} onConfigure={(version) => setPolicyEditor({ policyId: policy.id, policyName: policy.name, version })} />)}</div> : <EmptyState icon="policy" title="No policies configured" text="Default policy seeds are created when this section is loaded." />}
+          {loading ? <LoadingCards /> : policies.length ? <div className="space-y-4">{policies.map((policy) => <PolicyCard key={policy.id} policy={policy} canCreate={canCreate} canEdit={canEdit} canApprove={canApprove} canDelete={canDelete} busy={busy} onConfirm={confirmPolicy} onConfigure={(version) => setPolicyEditor({ policyId: policy.id, policyName: policy.name, version })} onDelete={deletePolicyVersion} onRetire={retirePolicyVersion} />)}</div> : <EmptyState icon="policy" title="No policies configured" text="Default policy seeds are created when this section is loaded." />}
         </SectionShell>
       )}
 
@@ -1183,7 +1238,7 @@ function PreviewMetric({ label, value, tone = "default" }: { label: string; valu
 
 function ImpactCheck({ ok, text }: { ok: boolean; text: string }) { return <div className={`flex items-center gap-2 ${ok ? "text-emerald-700" : "text-amber-700"}`}><span className={`rounded-full p-1 ${ok ? "bg-emerald-50" : "bg-amber-50"}`}><Icon name={ok ? "check" : "warning"} className="h-3.5 w-3.5"/></span><span>{text}</span></div>; }
 
-function PolicyCard({ policy, canCreate, canEdit, canApprove, busy, onConfirm, onConfigure }: { policy: Policy; canCreate: boolean; canEdit: boolean; canApprove: boolean; busy: string | null; onConfirm: (id: string) => void; onConfigure: (version: PolicyVersion) => void }) {
+function PolicyCard({ policy, canCreate, canEdit, canApprove, canDelete, busy, onConfirm, onConfigure, onDelete, onRetire }: { policy: Policy; canCreate: boolean; canEdit: boolean; canApprove: boolean; canDelete: boolean; busy: string | null; onConfirm: (id: string) => void; onConfigure: (version: PolicyVersion) => void; onDelete: (version: PolicyVersion) => void; onRetire: (version: PolicyVersion) => void }) {
   return (
     <article className="rounded-xl border border-neutral-200 bg-white">
       <div className="border-b border-neutral-200 px-5 py-4"><h3 className="font-bold">{policy.name}</h3><p className="mt-1 text-sm text-neutral-500">{policy.description}</p></div>
@@ -1191,13 +1246,22 @@ function PolicyCard({ policy, canCreate, canEdit, canApprove, busy, onConfirm, o
         {policy.versions.map((version) => {
           const display = leavePolicyVersionDisplayState(version, today);
           const configuring = busy === `policy-config:${version.id}`;
-          const canConfigure = !display.isSuperseded && canApprove && (
+          const isRetired = version.reviewStatus === "RETIRED";
+          const canConfigure = !display.isSuperseded && !isRetired && canApprove && (
             version.reviewStatus === "PENDING_HR_LEGAL_CONFIRMATION" ? canEdit : canCreate
           );
-          const showConfigure = display.configurationRequired && canConfigure;
+          // Editing is no longer limited to broken policies: a correct policy
+          // still needs to be changeable when the company's terms change.
+          const showConfigure = canConfigure;
           const showConfirm = !display.isSuperseded
             && version.reviewStatus === "PENDING_HR_LEGAL_CONFIRMATION"
             && canApprove;
+          const usage = version.usage;
+          const showDelete = canDelete && usage?.canDelete === true;
+          const showRetire = canApprove && !isRetired && usage != null
+            && !usage.canDelete && !usage.isOnlyActiveVersion;
+          const editsInPlace = version.reviewStatus === "PENDING_HR_LEGAL_CONFIRMATION"
+            || usage?.canEditInPlace === true;
           return (
             <div key={version.id} className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
@@ -1207,12 +1271,20 @@ function PolicyCard({ policy, canCreate, canEdit, canApprove, busy, onConfirm, o
                 {version.legalReference && <p className="mt-1 text-xs text-neutral-500">{version.legalReference}</p>}
                 {display.isSuperseded && <p className="mt-2 text-xs text-neutral-500">Historical version retained for audit; configure the current version instead.</p>}
                 {display.configurationIssues.length > 0 && <ul className="mt-2 space-y-1 text-xs text-red-700">{display.configurationIssues.map((issue) => <li key={issue}>• {issue}</li>)}</ul>}
+                {usage && usage.reasons.length > 0 && !usage.canDelete && (
+                  <ul className="mt-2 space-y-1 text-xs text-neutral-500">{usage.reasons.map((reason) => <li key={reason}>• {reason}</li>)}</ul>
+                )}
               </div>
-              {(showConfigure || showConfirm) && (
-                <div className="flex shrink-0 gap-2">
-                  {showConfigure ? <button disabled={configuring} onClick={() => onConfigure(version)} className="btn-secondary px-3 py-2 text-sm">{configuring ? "Saving..." : "Configure rules"}</button>
-                    : showConfirm ? <button disabled={busy === version.id} onClick={() => onConfirm(version.id)} className="btn-secondary px-3 py-2 text-sm">{busy === version.id ? "Confirming..." : "Confirm after review"}</button>
-                    : null}
+              {(showConfigure || showConfirm || showDelete || showRetire) && (
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  {showConfigure && (
+                    <button disabled={configuring} onClick={() => onConfigure(version)} className="btn-secondary px-3 py-2 text-sm" title={editsInPlace ? "Updates this version" : "Creates a new effective-dated version; this one is kept as history"}>
+                      {configuring ? "Saving..." : editsInPlace ? "Edit rules" : "Change rules"}
+                    </button>
+                  )}
+                  {showConfirm && <button disabled={busy === version.id} onClick={() => onConfirm(version.id)} className="btn-secondary px-3 py-2 text-sm">{busy === version.id ? "Confirming..." : "Confirm after review"}</button>}
+                  {showRetire && <button disabled={busy === `policy-retire:${version.id}`} onClick={() => onRetire(version)} className="btn-secondary px-3 py-2 text-sm">{busy === `policy-retire:${version.id}` ? "Retiring..." : "Retire"}</button>}
+                  {showDelete && <button disabled={busy === `policy-delete:${version.id}`} onClick={() => onDelete(version)} className="btn-secondary px-3 py-2 text-sm text-red-700">{busy === `policy-delete:${version.id}` ? "Deleting..." : "Delete"}</button>}
                 </div>
               )}
             </div>

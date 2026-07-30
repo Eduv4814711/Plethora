@@ -5,6 +5,10 @@ import { prisma } from "../../lib/prisma.js";
 import { getCompanyTimezone, inferShiftTypeFromStartTime } from "../../lib/timezone.js";
 import { findApprovedLeaveConflict } from "../../services/attendance.service.js";
 import { dateKey, dateOnly } from "./rosters.service.js";
+import {
+  isShiftCoveredOnDateKey,
+  resolveSiteCoverageDays,
+} from "../../lib/site-coverage-days.js";
 
 type Tx = Prisma.TransactionClient | typeof prisma;
 
@@ -501,9 +505,15 @@ type DiscrepancyRow = {
 };
 
 function computeDiscrepancyMap(
-  site: { rosterDayShiftGuardsRequired: number; rosterNightShiftGuardsRequired: number },
+  site: {
+    rosterDayShiftGuardsRequired: number;
+    rosterNightShiftGuardsRequired: number;
+    rosterDayShiftDays?: number[] | null;
+    rosterNightShiftDays?: number[] | null;
+  },
   rows: DiscrepancyRow[]
 ): Map<string, string[]> {
+  const coverage7 = resolveSiteCoverageDays(site);
   const coverageByDate = new Map<string, { actualDay: number; actualNight: number; requiredDay: number; requiredNight: number }>();
   for (const row of rows) {
     const key = dateKey(row.workDate);
@@ -511,8 +521,14 @@ function computeDiscrepancyMap(
       coverageByDate.get(key) ?? {
         actualDay: 0,
         actualNight: 0,
-        requiredDay: site.rosterDayShiftGuardsRequired,
-        requiredNight: site.rosterNightShiftGuardsRequired,
+        // A weekday this site does not need covered requires nobody, so an empty
+        // Saturday on a Mon–Fri site is not a coverage discrepancy.
+        requiredDay: isShiftCoveredOnDateKey(coverage7, "day", key)
+          ? site.rosterDayShiftGuardsRequired
+          : 0,
+        requiredNight: isShiftCoveredOnDateKey(coverage7, "night", key)
+          ? site.rosterNightShiftGuardsRequired
+          : 0,
       };
     const actualWorks =
       PAYABLE_STATUSES.has(row.attendanceStatus) &&

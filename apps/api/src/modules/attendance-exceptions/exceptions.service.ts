@@ -567,12 +567,110 @@ export async function refreshPayrollReadiness(
   return { status, openExceptions: openAny, openCritical };
 }
 
+export interface BlockingExceptionGroup {
+  exceptionType: string;
+  label: string;
+  count: number;
+  /** A few concrete offenders so the operator knows where to start. */
+  samples: {
+    id: string;
+    employeeName: string | null;
+    employeeNumber: string | null;
+    siteName: string | null;
+    date: string | null;
+    description: string;
+  }[];
+}
+
+export interface BlockingExceptionBreakdown {
+  total: number;
+  groups: BlockingExceptionGroup[];
+  periodStart: string;
+  periodEnd: string;
+}
+
+/**
+ * What is actually blocking payroll, grouped by exception type.
+ *
+ * The bare count ("97 critical issues") is not actionable on its own — this
+ * gives the UI enough to explain each category and link straight to it.
+ */
+export async function getBlockingExceptionBreakdown(
+  companyId: string,
+  periodStart: Date,
+  periodEnd: Date,
+  samplesPerGroup = 3
+): Promise<BlockingExceptionBreakdown> {
+  const periodShiftIds = await shiftIdsForWorkedPeriod(companyId, periodStart, periodEnd);
+  const where = {
+    companyId,
+    shiftId: { in: periodShiftIds },
+    severity: "CRITICAL" as const,
+    status: { in: [...PAYROLL_BLOCKING_CRITICAL_STATUSES] },
+  };
+
+  const grouped = await prisma.attendanceException.groupBy({
+    by: ["exceptionType"],
+    where,
+    _count: { id: true },
+  });
+  grouped.sort((a, b) => b._count.id - a._count.id);
+
+  const timeZone = await getCompanyTimezone(companyId);
+
+  const groups = await Promise.all(
+    grouped.map(async (g) => {
+      const samples = await prisma.attendanceException.findMany({
+        where: { ...where, exceptionType: g.exceptionType },
+        orderBy: { detectedAt: "desc" },
+        take: samplesPerGroup,
+        select: {
+          id: true,
+          description: true,
+          detectedAt: true,
+          employee: { select: { firstName: true, lastName: true, employeeNumber: true } },
+          site: { select: { name: true } },
+        },
+      });
+
+      return {
+        exceptionType: g.exceptionType,
+        label: exceptionTypeLabel(g.exceptionType),
+        count: g._count.id,
+        samples: samples.map((s) => ({
+          id: s.id,
+          employeeName: s.employee
+            ? `${s.employee.firstName} ${s.employee.lastName}`.trim()
+            : null,
+          employeeNumber: s.employee?.employeeNumber ?? null,
+          siteName: s.site?.name ?? null,
+          date: s.detectedAt ? dateKeyInTimeZone(s.detectedAt, timeZone) : null,
+          description: s.description,
+        })),
+      };
+    })
+  );
+
+  return {
+    total: groups.reduce((sum, g) => sum + g.count, 0),
+    groups,
+    periodStart: periodStart.toISOString(),
+    periodEnd: periodEnd.toISOString(),
+  };
+}
+
 /** Block payroll calculate/approve when critical attendance exceptions are unresolved for the period. */
 export async function assertPayrollNotBlocked(
   companyId: string,
   periodStart: Date,
   periodEnd: Date
-): Promise<{ blocked: boolean; message?: string; status: string; openExceptions: number }> {
+): Promise<{
+  blocked: boolean;
+  message?: string;
+  status: string;
+  openExceptions: number;
+  blockingExceptions?: BlockingExceptionBreakdown;
+}> {
   const readiness = await refreshPayrollReadiness(companyId, periodStart, periodEnd);
   if (readiness.status === "BLOCKED_BY_EXCEPTIONS") {
     return {
@@ -580,6 +678,11 @@ export async function assertPayrollNotBlocked(
       message: `${readiness.openCritical} critical attendance issue(s) must be corrected or explicitly resolved before payroll can proceed.`,
       status: readiness.status,
       openExceptions: readiness.openExceptions,
+      blockingExceptions: await getBlockingExceptionBreakdown(
+        companyId,
+        periodStart,
+        periodEnd
+      ),
     };
   }
   return {

@@ -9,6 +9,11 @@ import {
   normalizeLeaveDate,
 } from "../../services/leave-availability.service.js";
 import { reconcileRosterContinuityForSite } from "./roster-continuity.service.js";
+import {
+  isShiftCoveredOnDateKey,
+  resolveSiteCoverageDays,
+  type SiteCoverageDays,
+} from "../../lib/site-coverage-days.js";
 
 const ROSTERABLE_STATUSES = ["active", "training", "hired", "reliever"] as const;
 const WORKING_SHIFT_CODES = new Set<SiteRosterShiftCode>(["D", "N"]);
@@ -125,15 +130,25 @@ function mapPatternSummary(pattern: {
   };
 }
 
-function buildCoverage(
+export function buildCoverage(
   calendarDays: string[],
   rows: { cells: { dateKey?: string; patternDayIndex?: number; shiftCode: string }[] }[],
   requiredDay: number,
-  requiredNight: number
+  requiredNight: number,
+  /** Weekdays each shift needs cover. Omit for the legacy seven-day-a-week behaviour. */
+  coverageDays?: SiteCoverageDays
 ) {
+  const coverage = coverageDays ?? resolveSiteCoverageDays({});
   const coverageByDay: Record<string, { day: number; night: number; requiredDay: number; requiredNight: number }> = {};
   for (const day of calendarDays) {
-    coverageByDay[day] = { day: 0, night: 0, requiredDay, requiredNight };
+    // A weekday this site does not need covered requires nobody, so the grid reports no
+    // shortfall for it — the site simply does not run that shift on that day.
+    coverageByDay[day] = {
+      day: 0,
+      night: 0,
+      requiredDay: isShiftCoveredOnDateKey(coverage, "day", day) ? requiredDay : 0,
+      requiredNight: isShiftCoveredOnDateKey(coverage, "night", day) ? requiredNight : 0,
+    };
   }
   for (const row of rows) {
     for (const cell of row.cells) {
@@ -262,6 +277,8 @@ export async function getSiteRosterConfig(companyId: string, siteId: string) {
     name: site.name,
     rosterDayShiftGuardsRequired: site.rosterDayShiftGuardsRequired,
     rosterNightShiftGuardsRequired: site.rosterNightShiftGuardsRequired,
+    rosterDayShiftDays: site.rosterDayShiftDays,
+    rosterNightShiftDays: site.rosterNightShiftDays,
     rosterDayShiftGender: site.rosterDayShiftGender,
     rosterNightShiftGender: site.rosterNightShiftGender,
     rosterDayShiftStartTime: "06:00",
@@ -397,7 +414,8 @@ export async function getPatternGrid(
     columnKeys,
     rows,
     site.rosterDayShiftGuardsRequired,
-    site.rosterNightShiftGuardsRequired
+    site.rosterNightShiftGuardsRequired,
+    resolveSiteCoverageDays(site)
   );
 
   return {
@@ -516,7 +534,8 @@ export async function getLiveRoster(
     calendarDays,
     rows,
     site.rosterDayShiftGuardsRequired,
-    site.rosterNightShiftGuardsRequired
+    site.rosterNightShiftGuardsRequired,
+    resolveSiteCoverageDays(site)
   );
 
   return {
