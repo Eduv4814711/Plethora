@@ -18,8 +18,9 @@ export const employeeListSelect = {
   gender: true,
   gradeId: true,
   groupId: true,
-  psiraNumber: true,
-  psiraExpiryDate: true,
+  psiraRegistrationNumber: true,
+  psiraRegistrationExpiry: true,
+  psiraGrade: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.EmployeeSelect;

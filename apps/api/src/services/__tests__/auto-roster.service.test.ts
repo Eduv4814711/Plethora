@@ -72,9 +72,9 @@ function mockEnabledSite(overrides: Record<string, unknown> = {}) {
       { id: "p-night", coverageRequirements: [{ shiftTypeCode: "night", isEnabled: true }] },
     ],
     assignedGuards: [
-      { employee: { id: "g1", status: "active", employeeType: "security" } },
-      { employee: { id: "g2", status: "active", employeeType: "security" } },
-      { employee: { id: "g3", status: "active", employeeType: "security" } },
+      { employee: { id: "g1", status: "active", employeeType: "security_officer" } },
+      { employee: { id: "g2", status: "active", employeeType: "security_officer" } },
+      { employee: { id: "g3", status: "active", employeeType: "security_officer" } },
     ],
     company: { settings: {}, name: "Co" },
     ...overrides,

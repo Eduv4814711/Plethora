@@ -155,21 +155,22 @@ export async function reportsExtendedRoutes(app: FastifyInstance) {
     } else if (type === "leave") {
       const leaves = await prisma.leaveRequest.findMany({
         where: {
-          date: { gte: start, lte: end },
+          companyId: user.companyId,
+          startDate: { lte: end },
+          endDate: { gte: start },
           ...(employeeId ? { employeeId } : {}),
-          employee: { companyId: user.companyId },
         },
         include: {
           employee: { select: { firstName: true, lastName: true } },
         },
         take: 1000,
       });
-      headers = ["Employee", "Type", "Date", "Hours", "Status", "Reason"];
+      headers = ["Employee", "Type", "Period", "Units", "Status", "Reason"];
       rows = leaves.map((l) => [
         `${l.employee.firstName} ${l.employee.lastName}`,
-        l.type,
-        l.date.toISOString().slice(0, 10),
-        l.hours.toString(),
+        l.leaveType,
+        `${l.startDate.toISOString().slice(0, 10)} - ${l.endDate.toISOString().slice(0, 10)}`,
+        l.unitsRequested.toString(),
         l.status,
         l.reason ?? "",
       ]);

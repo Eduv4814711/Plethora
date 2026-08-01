@@ -190,7 +190,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
     const shiftDate = normalizeLeaveDate(dateKeyInTimeZone(shift.startTime, await getCompanyTimezone(companyId)));
     const leaveConflict = await findApprovedLeaveConflict(companyId, shift.employeeId, shiftDate);
     if (leaveConflict) {
-      const applicationId = leaveConflict.application?.id ?? leaveConflict.occurrence?.applicationId;
+      const applicationId = leaveConflict.requestId;
       return reply.code(409).send({
         error: "Approved leave conflict",
         code: "APPROVED_LEAVE_CONFLICT",
@@ -546,7 +546,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
     const leaveDate = normalizeLeaveDate(dateKeyInTimeZone(clockIn, await getCompanyTimezone(companyId)));
     const leaveConflict = await findApprovedLeaveConflict(companyId, employeeId, leaveDate);
     if (leaveConflict) {
-      const applicationId = leaveConflict.application?.id ?? leaveConflict.occurrence?.applicationId;
+      const applicationId = leaveConflict.requestId;
       return reply.code(409).send({
         error: "Approved leave conflict",
         code: "APPROVED_LEAVE_CONFLICT",

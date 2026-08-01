@@ -161,7 +161,7 @@ export async function getContinuitySetupSuggestion(companyId: string, siteId: st
   const guardIds = site.assignedGuards
     .filter(
       ({ employee }) =>
-        (employee.employeeType ?? "security") === "security" &&
+        (employee.employeeType ?? "security_officer") === "security_officer" &&
         ROSTERABLE_STATUSES.has(employee.status)
     )
     .map(({ employee }) => employee.id);
@@ -547,22 +547,19 @@ export async function reconcileRosterContinuityForSite(
           ...site.assignedGuards.map((assignment) => assignment.employeeId),
         ]),
       ];
-      const [overrides, leaves, leaveApplications, generatedRows, shifts] = await Promise.all([
+      const [overrides, leaveRequests, generatedRows, shifts] = await Promise.all([
         tx.siteRosterManualOverride.findMany({
           where: { companyId, siteId, rosterDate: { gte: start, lte: end } },
         }),
-        tx.leaveRecord.findMany({
-          where: { employeeId: { in: guardIds }, date: { gte: start, lte: end } },
-        }),
-        tx.leaveApplication.findMany({
+        tx.leaveRequest.findMany({
           where: {
             companyId,
             employeeId: { in: guardIds },
+            status: "APPROVED",
             startDate: { lte: end },
             endDate: { gte: start },
-            status: { in: ["APPROVED", "CANCELLATION_REQUESTED", "PAYROLL_PROCESSED", "ADJUSTMENT_REQUIRED", "IMPORTED_APPROVED"] },
           },
-          select: { employeeId: true, startDate: true, endDate: true, leaveType: { select: { code: true } } },
+          select: { employeeId: true, startDate: true, endDate: true, leaveType: true },
         }),
         tx.siteRosterGeneratedShift.findMany({
           where: { companyId, siteId, rosterDate: { gte: start, lte: end } },
@@ -580,14 +577,12 @@ export async function reconcileRosterContinuityForSite(
 
       const assignmentByGuard = new Map(site.assignedGuards.map((assignment) => [assignment.employeeId, assignment]));
       const overrideByKey = new Map(overrides.map((row) => [`${row.guardId}:${dateKey(row.rosterDate)}`, row]));
-      const leaveByKey = new Map<string, { type: string }>(
-        leaves.map((row) => [`${row.employeeId}:${dateKey(row.date)}`, { type: row.type }])
-      );
-      for (const application of leaveApplications) {
-        const applicationStart = application.startDate > start ? dateOnly(application.startDate) : start;
-        const applicationEnd = application.endDate < end ? dateOnly(application.endDate) : end;
-        for (let day = applicationStart; day <= applicationEnd; day = addDays(day, 1)) {
-          leaveByKey.set(`${application.employeeId}:${dateKey(day)}`, { type: application.leaveType.code });
+      const leaveByKey = new Map<string, { type: string }>();
+      for (const request of leaveRequests) {
+        const requestStart = request.startDate > start ? dateOnly(request.startDate) : start;
+        const requestEnd = request.endDate < end ? dateOnly(request.endDate) : end;
+        for (let day = requestStart; day <= requestEnd; day = addDays(day, 1)) {
+          leaveByKey.set(`${request.employeeId}:${dateKey(day)}`, { type: request.leaveType });
         }
       }
       const generatedByKey = new Map(generatedRows.map((row) => [`${row.guardId}:${dateKey(row.rosterDate)}`, row]));
@@ -623,7 +618,7 @@ export async function reconcileRosterContinuityForSite(
             !assignment ||
             !isEffectiveAssignment(assignment, day) ||
             !ROSTERABLE_STATUSES.has(assignment.employee.status) ||
-            (assignment.employee.employeeType ?? "security") !== "security"
+            (assignment.employee.employeeType ?? "security_officer") !== "security_officer"
           ) {
             const unavailableCode = override?.overrideShiftCode ?? patternCell?.shiftCode ?? "blank";
             if (WORKING_CODES.has(unavailableCode)) {
@@ -1497,21 +1492,17 @@ export async function getReplacementSuggestions(
     (assignment) =>
       isEffectiveAssignment(assignment, workDate) &&
       ROSTERABLE_STATUSES.has(assignment.employee.status) &&
-      (assignment.employee.employeeType ?? "security") === "security"
+      (assignment.employee.employeeType ?? "security_officer") === "security_officer"
   );
   const employeeIds = candidateAssignments.map((assignment) => assignment.employeeId);
-  const [leaves, leaveApplications, shifts, attendance] = await Promise.all([
-    prisma.leaveRecord.findMany({
-      where: { employeeId: { in: employeeIds }, date: workDate },
-      select: { employeeId: true },
-    }),
-    prisma.leaveApplication.findMany({
+  const [leaveRequests, shifts, attendance] = await Promise.all([
+    prisma.leaveRequest.findMany({
       where: {
         companyId,
         employeeId: { in: employeeIds },
+        status: "APPROVED",
         startDate: { lte: workDate },
         endDate: { gte: workDate },
-        status: { in: ["APPROVED", "CANCELLATION_REQUESTED", "PAYROLL_PROCESSED", "ADJUSTMENT_REQUIRED", "IMPORTED_APPROVED"] },
       },
       select: { employeeId: true },
     }),
@@ -1531,7 +1522,7 @@ export async function getReplacementSuggestions(
       select: { clockIn: true, shift: { select: { employeeId: true } } },
     }),
   ]);
-  const leaveIds = new Set([...leaves, ...leaveApplications].map((row) => row.employeeId));
+  const leaveIds = new Set(leaveRequests.map((row) => row.employeeId));
   const timeZone = await getCompanyTimezone(companyId);
   const { shiftStart, shiftEnd } = getShiftTimes(workDate, metadata.shiftType, timeZone);
 

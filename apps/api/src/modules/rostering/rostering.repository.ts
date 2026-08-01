@@ -154,7 +154,7 @@ export const rosteringRepository = {
       where: {
         companyId,
         id: { notIn: excludeEmployeeIds },
-        employeeType: "security",
+        employeeType: "security_officer",
         status: { in: ["active", "training", "hired", "reliever"] },
       },
       select: { id: true, firstName: true, lastName: true, gender: true },

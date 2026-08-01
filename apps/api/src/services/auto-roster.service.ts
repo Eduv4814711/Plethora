@@ -148,7 +148,7 @@ export async function runAutoRosterForSite(params: {
   const rosterableGuards = site.assignedGuards.filter((a) => {
     const e = a.employee;
     return (
-      (e.employeeType ?? "security") === "security" &&
+      (e.employeeType ?? "security_officer") === "security_officer" &&
       ["active", "training", "hired", "reliever"].includes(e.status)
     );
   }).length;

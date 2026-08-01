@@ -25,7 +25,7 @@ import {
 } from "../lib/payroll-audit.js";
 import { format } from "date-fns";
 import { canAccessSensitiveData, omitFields } from "../lib/sensitive-data.js";
-import { getLeaveReadiness, postLeaveToPayroll } from "../services/leave-management.service.js";
+import { getLeaveReadiness, postLeaveToPayroll } from "../services/leave-v3.service.js";
 
 function canHandlePayrollPrivateData(user: import("../lib/types.js").AuthenticatedUser) {
   return canAccessSensitiveData(user, "/payroll");

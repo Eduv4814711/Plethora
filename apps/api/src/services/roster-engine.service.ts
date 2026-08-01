@@ -330,7 +330,7 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
     .map((a) => a.employee)
     .filter(
       (e) =>
-        (e.employeeType ?? "security") === "security" &&
+        (e.employeeType ?? "security_officer") === "security_officer" &&
         ROSTERABLE_STATUSES.includes(e.status as (typeof ROSTERABLE_STATUSES)[number])
     );
 
@@ -937,64 +937,26 @@ export async function findApprovedLeaveConflictsForPlan(
   const rangeStart = new Date(Math.min(...dates.map((date) => date.getTime())));
   const rangeEnd = new Date(Math.max(...dates.map((date) => date.getTime())));
 
-  const [occurrences, applications, legacyRecords] = await Promise.all([
-    tx.leaveOccurrence.findMany({
-      where: {
-        companyId,
-        employeeId: { in: employeeIds },
-        leaveDate: { gte: rangeStart, lte: rangeEnd },
-        status: { in: ["APPROVED", "PAYROLL_PROCESSED"] },
-      },
-      select: { employeeId: true, leaveDate: true },
-    }),
-    tx.leaveApplication.findMany({
-      where: {
-        companyId,
-        employeeId: { in: employeeIds },
-        startDate: { lte: rangeEnd },
-        endDate: { gte: rangeStart },
-        status: {
-          in: [
-            "APPROVED",
-            "CANCELLATION_REQUESTED",
-            "PAYROLL_PROCESSED",
-            "ADJUSTMENT_REQUIRED",
-            "IMPORTED_APPROVED",
-          ],
-        },
-      },
-      select: { employeeId: true, startDate: true, endDate: true },
-    }),
-    tx.leaveRecord.findMany({
-      where: {
-        employeeId: { in: employeeIds },
-        employee: { companyId },
-        date: { gte: rangeStart, lte: rangeEnd },
-      },
-      select: { employeeId: true, date: true },
-    }),
-  ]);
+  const requests = await tx.leaveRequest.findMany({
+    where: {
+      companyId,
+      employeeId: { in: employeeIds },
+      status: "APPROVED",
+      startDate: { lte: rangeEnd },
+      endDate: { gte: rangeStart },
+    },
+    select: { employeeId: true, startDate: true, endDate: true },
+  });
 
   const conflicts = new Set<string>();
   for (const planned of plannedDays) {
     const day = new Date(`${planned.dateKey}T00:00:00.000Z`);
-    const hasConflict =
-      occurrences.some(
-        (row) =>
-          row.employeeId === planned.employeeId &&
-          row.leaveDate.getTime() === day.getTime()
-      ) ||
-      applications.some(
-        (row) =>
-          row.employeeId === planned.employeeId &&
-          row.startDate <= day &&
-          row.endDate >= day
-      ) ||
-      legacyRecords.some(
-        (row) =>
-          row.employeeId === planned.employeeId &&
-          row.date.getTime() === day.getTime()
-      );
+    const hasConflict = requests.some(
+      (row) =>
+        row.employeeId === planned.employeeId &&
+        row.startDate <= day &&
+        row.endDate >= day
+    );
     if (hasConflict) {
       conflicts.add(
         `${planned.dateKey}: Employee ${planned.employeeId} is on approved leave`

@@ -10,7 +10,7 @@ const createEarningsRuleSchema = z.object({
   type: z.enum(["fixed", "percentage"]),
   amount: z.number().min(0).optional(),
   rate: z.number().min(0).max(100).optional(),
-  appliesTo: z.enum(["all", "security", "office"]).default("all"),
+  appliesTo: z.enum(["all", "security_officer", "general"]).default("all"),
 });
 
 const updateEarningsRuleSchema = createEarningsRuleSchema.partial();

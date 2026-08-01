@@ -232,7 +232,7 @@ export type SiteTimesheetRow = {
   actualGuardId: string | null;
   actualGuardName: string | null;
   employeeNumber: string | null;
-  psiraNumber: string | null;
+  psiraRegistrationNumber: string | null;
   plannedShiftCode: string | null;
   plannedShiftType: string | null;
   actualShiftCode: string | null;
@@ -280,14 +280,15 @@ export type GuardPickerOption = {
   firstName: string;
   lastName: string;
   employeeNumber?: string | null;
-  psiraNumber?: string | null;
+  psiraRegistrationNumber?: string | null;
+  employeeType?: string | null;
 };
 
 function isSelectableSecurityGuard(
   e: GuardPickerOption & { employeeType?: string; status?: string; jobRole?: string | null }
 ) {
   return (
-    (e.employeeType ?? "security") === "security" &&
+    (e.employeeType ?? "security_officer") === "security_officer" &&
     e.status !== "offboarded" &&
     !(e.jobRole ?? "").startsWith("roster_placeholder:")
   );
@@ -299,7 +300,7 @@ export async function fetchSecurityGuardOptions(token: string): Promise<GuardPic
   let offset = 0;
   const all: GuardPickerOption[] = [];
   for (;;) {
-    const res = await authFetch(`/employees?limit=${limit}&offset=${offset}&employeeType=security`, token);
+    const res = await authFetch(`/employees?limit=${limit}&offset=${offset}&employeeType=security_officer`, token);
     const json = await res.json();
     const batch = (json.data ?? []).filter(isSelectableSecurityGuard);
     all.push(...batch);
@@ -318,7 +319,8 @@ function toGuardPickerOption(e: EmployeeListRow): GuardPickerOption {
     firstName: e.firstName,
     lastName: e.lastName,
     employeeNumber: e.employeeNumber ?? null,
-    psiraNumber: e.psiraNumber ?? null,
+    psiraRegistrationNumber: e.psiraRegistrationNumber ?? null,
+    employeeType: e.employeeType ?? null,
   };
 }
 
@@ -355,7 +357,7 @@ function guardOptionFromTimesheetName(
   id: string | null,
   name: string | null,
   employeeNumber?: string | null,
-  psiraNumber?: string | null
+  psiraRegistrationNumber?: string | null
 ): GuardPickerOption | null {
   if (!id || !name?.trim()) return null;
   const parts = name.trim().split(/\s+/);
@@ -364,7 +366,7 @@ function guardOptionFromTimesheetName(
     firstName: parts[0] ?? name,
     lastName: parts.slice(1).join(" ") || "",
     employeeNumber: employeeNumber ?? null,
-    psiraNumber: psiraNumber ?? null,
+    psiraRegistrationNumber: psiraRegistrationNumber ?? null,
   };
 }
 
@@ -381,9 +383,9 @@ export function mergeTimesheetGuardOptions(
         row.plannedGuardId,
         row.plannedGuardName,
         plannedUsesSharedNumbers ? row.employeeNumber : null,
-        plannedUsesSharedNumbers ? row.psiraNumber : null
+        plannedUsesSharedNumbers ? row.psiraRegistrationNumber : null
       ),
-      guardOptionFromTimesheetName(row.actualGuardId, row.actualGuardName, row.employeeNumber, row.psiraNumber),
+      guardOptionFromTimesheetName(row.actualGuardId, row.actualGuardName, row.employeeNumber, row.psiraRegistrationNumber),
     ]) {
       if (opt && !byId.has(opt.id)) byId.set(opt.id, opt);
     }

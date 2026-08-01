@@ -40,7 +40,7 @@ describe.runIf(dbReady)("dashboard attention alerts (PostgreSQL integration)", (
 
   it("does not surface a stale historical unattended shift as a needs-attention alert", async () => {
     const employee = await prisma.employee.create({
-      data: { companyId, employeeNumber: `DASH-OLD-${runId}`, firstName: "Old", lastName: "Shift", status: "active", employeeType: "security", hourlyRate: 100 },
+      data: { companyId, employeeNumber: `DASH-OLD-${runId}`, firstName: "Old", lastName: "Shift", status: "active", employeeType: "security_officer", hourlyRate: 100 },
     });
     const site = await prisma.site.create({ data: { companyId, name: `Dash Old Site ${runId}` } });
     await prisma.shift.create({
@@ -64,7 +64,7 @@ describe.runIf(dbReady)("dashboard attention alerts (PostgreSQL integration)", (
 
   it("surfaces open attendance exceptions from the current pay period as a needs-attention alert, even after an earlier dashboard read cached a zero-count readiness row", async () => {
     const employee = await prisma.employee.create({
-      data: { companyId, employeeNumber: `DASH-CUR-${runId}`, firstName: "Current", lastName: "Shift", status: "active", employeeType: "security", hourlyRate: 100 },
+      data: { companyId, employeeNumber: `DASH-CUR-${runId}`, firstName: "Current", lastName: "Shift", status: "active", employeeType: "security_officer", hourlyRate: 100 },
     });
     const site = await prisma.site.create({ data: { companyId, name: `Dash Current Site ${runId}` } });
     await prisma.shift.create({
@@ -134,7 +134,7 @@ describe.runIf(dbReady)("dashboard attention alerts (PostgreSQL integration)", (
 
   it("returns a rostered-guards series distinct from the shift-volume series", async () => {
     const employee = await prisma.employee.create({
-      data: { companyId, employeeNumber: `DASH-ROSTER-${runId}`, firstName: "Roster", lastName: "Guard", status: "active", employeeType: "security", hourlyRate: 100 },
+      data: { companyId, employeeNumber: `DASH-ROSTER-${runId}`, firstName: "Roster", lastName: "Guard", status: "active", employeeType: "security_officer", hourlyRate: 100 },
     });
     const site = await prisma.site.create({ data: { companyId, name: `Dash Roster Site ${runId}` } });
     // Two shifts for the same guard on the same day: 2 shifts, 1 distinct guard.

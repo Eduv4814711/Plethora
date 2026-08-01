@@ -66,9 +66,7 @@ describe("rosteringModuleService.bulkCreate", () => {
     ] as never);
     vi.mocked(prisma.$transaction).mockImplementation(async (fn) =>
       fn({
-        leaveOccurrence: { findMany: vi.fn().mockResolvedValue([]) },
-        leaveApplication: { findMany: vi.fn().mockResolvedValue([]) },
-        leaveRecord: { findMany: vi.fn().mockResolvedValue([]) },
+        leaveRequest: { findMany: vi.fn().mockResolvedValue([]) },
         shift: {
           deleteMany: vi.fn().mockResolvedValue({ count: 2 }),
           createMany: vi.fn().mockImplementation(({ data }) =>

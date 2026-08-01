@@ -699,7 +699,7 @@ function useSecurityGuards(token: string) {
       .then((d) => {
         const list = (d.data || []).filter(
           (e: Guard & { employeeType?: string }) =>
-            (e.employeeType ?? "security") === "security" &&
+            (e.employeeType ?? "security_officer") === "security_officer" &&
             ROSTERABLE_GUARD_STATUSES.includes(e.status as (typeof ROSTERABLE_GUARD_STATUSES)[number])
         );
         setGuards(

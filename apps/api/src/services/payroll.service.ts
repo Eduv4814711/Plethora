@@ -23,6 +23,7 @@ import type {
   PayrollCalculationSnapshot,
   PayrollSdlStatusSnapshot,
 } from "./payroll-calculation.types.js";
+import { unpostLeaveFromPayroll } from "./leave-v3.service.js";
 
 export class PayrollServiceError extends Error {
   details?: unknown;
@@ -561,13 +562,6 @@ export async function revertPayrollToDraft(
   }
 
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const leavePostings = await tx.leavePayrollPosting.findMany({
-      where: { companyId, payrollRunId, isReversal: false },
-      select: { occurrenceId: true, applicationId: true },
-    });
-    const leaveOccurrenceIds = [...new Set(leavePostings.map((posting) => posting.occurrenceId))];
-    const leaveApplicationIds = [...new Set(leavePostings.map((posting) => posting.applicationId))];
-
     await tx.payslip.deleteMany({
       where: { payrollItem: { payrollRunId } },
     });
@@ -580,36 +574,10 @@ export async function revertPayrollToDraft(
       data: { payrollRunId: null },
     });
 
-    // An approved-but-unpaid run is still reversible. Its leave postings must
-    // be unwound with the rest of the run so leave can be corrected and posted
-    // again when the payroll is re-approved.
-    if (leavePostings.length > 0) {
-      await tx.leavePayrollPosting.deleteMany({ where: { companyId, payrollRunId } });
-      await tx.leaveOccurrence.updateMany({
-        where: { id: { in: leaveOccurrenceIds }, status: "PAYROLL_PROCESSED" },
-        data: { status: "APPROVED" },
-      });
-      for (const applicationId of leaveApplicationIds) {
-        const remainingPostings = await tx.leavePayrollPosting.count({
-          where: { applicationId, isReversal: false },
-        });
-        if (remainingPostings === 0) {
-          await tx.leaveApplication.updateMany({
-            where: { id: applicationId, status: "PAYROLL_PROCESSED" },
-            data: { status: "APPROVED" },
-          });
-        }
-        await tx.leaveAuditEvent.create({
-          data: {
-            companyId,
-            applicationId,
-            eventType: "PAYROLL_POSTING_REVERTED",
-            reason: trimmedReason,
-            payrollRunId,
-          },
-        });
-      }
-    }
+    // An approved-but-unpaid run is still reversible. Its leave requests must
+    // be unlinked from this run so they can be corrected and posted again
+    // when the payroll is re-approved.
+    await unpostLeaveFromPayroll(companyId, payrollRunId, tx);
 
     const transitioned = await tx.payrollRun.updateMany({
       where: {

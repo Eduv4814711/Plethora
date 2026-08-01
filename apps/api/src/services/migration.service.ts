@@ -43,7 +43,7 @@ function emptyToUndefined(s: string | undefined): string | undefined {
 // --- Zod schemas for CSV rows ---
 
 const employeeStatusEnum = z.enum(["applicant", "hired", "training", "active", "suspended", "offboarded"]);
-const employeeTypeEnum = z.enum(["office", "security"]);
+const employeeTypeEnum = z.enum(["general", "security_officer"]);
 
 /** CSV row shape (shared by strict and relaxed employee import parsers). */
 const employeeRowBaseSchema = z.object({
@@ -55,12 +55,12 @@ const employeeRowBaseSchema = z.object({
   phone: z.string().optional().transform(emptyToUndefined),
   email: z.string().optional().transform(emptyToUndefined),
   status: employeeStatusEnum.default("applicant"),
-  employeeType: employeeTypeEnum.default("security"),
+  employeeType: employeeTypeEnum.default("security_officer"),
   hourlyRate: z.string().optional().transform((v) => parseOptionalNumber(v)),
   monthlySalary: z.string().optional().transform((v) => parseOptionalNumber(v)),
   jobRole: z.string().optional().transform(emptyToUndefined),
   gradeName: z.string().optional().transform(emptyToUndefined),
-  psiraNumber: z.string().optional().transform(emptyToUndefined),
+  psiraRegistrationNumber: z.string().optional().transform(emptyToUndefined),
   securityServiceType: z.string().optional().transform(emptyToUndefined),
   dateOfBirth: z.string().optional().transform((v) => sanitizeDate(v)),
   gender: z.string().optional().transform(emptyToUndefined),
@@ -82,7 +82,7 @@ const employeeRowBaseSchema = z.object({
   leaveEntitlement: z.string().optional().transform(emptyToUndefined),
   noticePeriod: z.string().optional().transform(emptyToUndefined),
   previousService: z.string().optional().transform(emptyToUndefined),
-  psiraExpiryDate: z.string().optional().transform((v) => sanitizeDate(v)),
+  psiraRegistrationExpiry: z.string().optional().transform((v) => sanitizeDate(v)),
   nextOfKin1Name: z.string().optional().transform(emptyToUndefined),
   nextOfKin1Phone: z.string().optional().transform(emptyToUndefined),
   nextOfKin2Name: z.string().optional().transform(emptyToUndefined),
@@ -97,13 +97,13 @@ const employeeRowBaseSchema = z.object({
 });
 
 const employeeRowSchema = employeeRowBaseSchema.superRefine((data, ctx) => {
-  if (data.employeeType === "security" && (!data.psiraNumber || !String(data.psiraNumber).trim())) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["psiraNumber"], message: "PSIRA number is required for security guards" });
+  if (data.employeeType === "security_officer" && (!data.psiraRegistrationNumber || !String(data.psiraRegistrationNumber).trim())) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["psiraRegistrationNumber"], message: "PSIRA number is required for security guards" });
   }
-  if (data.employeeType === "security" && !data.hourlyRate && !data.monthlySalary) {
+  if (data.employeeType === "security_officer" && !data.hourlyRate && !data.monthlySalary) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["hourlyRate"], message: "Security staff need hourlyRate or monthlySalary" });
   }
-  if (data.employeeType === "office" && !data.monthlySalary && !data.hourlyRate) {
+  if (data.employeeType === "general" && !data.monthlySalary && !data.hourlyRate) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["monthlySalary"], message: "Office staff need monthlySalary or hourlyRate" });
   }
 });
@@ -360,7 +360,7 @@ export async function executeSelfImport(
           hourlyRate: e.hourlyRate ?? null,
           monthlySalary: e.monthlySalary ?? null,
           jobRole: e.jobRole ?? null,
-          psiraNumber: e.psiraNumber ?? null,
+          psiraRegistrationNumber: e.psiraRegistrationNumber ?? null,
           securityServiceType: e.securityServiceType ?? null,
           dateOfBirth: e.dateOfBirth ?? null,
           gender: e.gender ?? null,
@@ -382,7 +382,7 @@ export async function executeSelfImport(
           leaveEntitlement: e.leaveEntitlement ?? null,
           noticePeriod: e.noticePeriod ?? null,
           previousService: e.previousService ?? null,
-          psiraExpiryDate: e.psiraExpiryDate ?? null,
+          psiraRegistrationExpiry: e.psiraRegistrationExpiry ?? null,
           nextOfKin1Name: e.nextOfKin1Name ?? null,
           nextOfKin1Phone: e.nextOfKin1Phone ?? null,
           nextOfKin2Name: e.nextOfKin2Name ?? null,
@@ -498,7 +498,7 @@ export async function exportEmployeesToCsv(companyId: string, companyName: strin
     "Commencement Date",
     "Hourly Rate",
     "Monthly Salary",
-    "PSIRA Number",
+    "PSIRA Registration Number",
     "Security Service Type",
   ];
 
@@ -519,7 +519,7 @@ export async function exportEmployeesToCsv(companyId: string, companyName: strin
     csvEscape(formatDate(e.commencementDate)),
     csvEscape(formatDecimal(e.hourlyRate)),
     csvEscape(formatDecimal(e.monthlySalary)),
-    csvEscape(e.psiraNumber),
+    csvEscape(e.psiraRegistrationNumber),
     csvEscape(e.securityServiceType),
   ]);
 

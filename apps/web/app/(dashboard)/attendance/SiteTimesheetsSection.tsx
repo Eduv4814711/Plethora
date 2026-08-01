@@ -290,7 +290,7 @@ export function SiteTimesheetsSection({
         row.actualGuardName,
         row.plannedGuardName,
         row.employeeNumber,
-        row.psiraNumber,
+        row.psiraRegistrationNumber,
       ]
         .filter(Boolean)
         .join(" ")
@@ -1132,8 +1132,8 @@ export function SiteTimesheetsSection({
                       ) : guardChanged ? (
                         <p className="mb-1 text-[10px] leading-tight text-neutral-500">
                           Scheduled: {row.plannedGuardName}
-                          {row.employeeNumber || row.psiraNumber
-                            ? ` (${row.employeeNumber ?? row.psiraNumber})`
+                          {row.employeeNumber || row.psiraRegistrationNumber
+                            ? ` (${row.employeeNumber ?? row.psiraRegistrationNumber})`
                             : ""}
                         </p>
                       ) : null}

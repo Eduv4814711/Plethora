@@ -10,6 +10,7 @@ import { randomBytes } from "node:crypto";
 import jwt from "jsonwebtoken";
 import { config } from "../../lib/config.js";
 import { hashPassword } from "../auth.service.js";
+import { createLeaveRequest, decideLeaveRequest } from "../leave-v3.service.js";
 
 const dbReady = await isIntegrationDatabaseAvailable();
 
@@ -67,7 +68,7 @@ describe.runIf(dbReady)("payroll lifecycle smoke test (integration)", () => {
         firstName: "Office",
         lastName: "Worker",
         status: "active",
-        employeeType: "office",
+        employeeType: "general",
         monthlySalary: 20000,
         idNumber: "9001015800085",
         taxNumber: "TAX001",
@@ -85,10 +86,11 @@ describe.runIf(dbReady)("payroll lifecycle smoke test (integration)", () => {
         firstName: "Guard",
         lastName: "One",
         status: "active",
-        employeeType: "security",
+        employeeType: "security_officer",
         gradeId: grade.id,
         idNumber: "8001015800086",
         dateOfBirth: new Date("1980-01-01"),
+        commencementDate: new Date("2022-01-01"),
         physicalAddress: "2 Guard St",
         bankAccountNumber: "2222222222",
         bankBranchCode: "632005",
@@ -102,7 +104,7 @@ describe.runIf(dbReady)("payroll lifecycle smoke test (integration)", () => {
         firstName: "Reliever",
         lastName: "Guard",
         status: "reliever",
-        employeeType: "security",
+        employeeType: "security_officer",
         gradeId: grade.id,
         idNumber: "8501015800087",
         dateOfBirth: new Date("1985-01-01"),
@@ -182,14 +184,14 @@ describe.runIf(dbReady)("payroll lifecycle smoke test (integration)", () => {
       });
     }
 
-    await prisma.leaveRecord.create({
-      data: {
-        employeeId: guardEmployee.id,
-        date: new Date("2026-06-15T00:00:00.000Z"),
-        type: "annual",
-        hours: 4,
-      },
+    const leaveRequest = await createLeaveRequest(companyId, user.id, {
+      employeeId: guardEmployee.id,
+      leaveType: "ANNUAL",
+      startDate: new Date("2026-06-15T00:00:00.000Z"),
+      endDate: new Date("2026-06-15T00:00:00.000Z"),
+      unitsRequested: 1,
     });
+    await decideLeaveRequest({ companyId, actorUserId: user.id, requestId: leaveRequest.id, decision: "APPROVED" });
 
     void officeEmployee;
 

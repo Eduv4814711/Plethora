@@ -8,8 +8,7 @@ vi.mock("../../lib/prisma.js", () => ({
     siteTimesheetRow: { findMany: vi.fn() },
     site: { findMany: vi.fn() },
     publicHoliday: { findMany: vi.fn() },
-    leaveRecord: { findMany: vi.fn() },
-    leaveOccurrence: { findMany: vi.fn() },
+    leaveRequest: { findMany: vi.fn() },
   },
 }));
 
@@ -116,15 +115,13 @@ describe("aggregateTimesheets per-site behaviour", () => {
     vi.mocked(prisma.siteTimesheetRow.findMany).mockReset();
     vi.mocked(prisma.siteTimesheet.findMany).mockReset();
     vi.mocked(prisma.shift.findMany).mockReset();
-    vi.mocked(prisma.leaveRecord.findMany).mockReset();
-    vi.mocked(prisma.leaveOccurrence.findMany).mockReset();
+    vi.mocked(prisma.leaveRequest.findMany).mockReset();
 
     vi.mocked(prisma.company.findUnique).mockResolvedValue({
       settings: { timezone: "Africa/Johannesburg" },
     } as never);
     vi.mocked(prisma.publicHoliday.findMany).mockResolvedValue([] as never);
-    vi.mocked(prisma.leaveRecord.findMany).mockResolvedValue([] as never);
-    vi.mocked(prisma.leaveOccurrence.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.leaveRequest.findMany).mockResolvedValue([] as never);
   });
 
   it("counts approved rows for one site AND raw shifts for an unapproved site", async () => {
@@ -295,24 +292,29 @@ describe("aggregateTimesheets per-site behaviour", () => {
     );
   });
 
-  it("preserves legacy unpaid, UIF and IOD treatment until authoritative leave is imported", async () => {
+  it("parental leave is unpaid; UIF and IOD buckets are always zero in the simple leave engine", async () => {
     vi.mocked(prisma.siteTimesheetRow.findMany).mockResolvedValue([] as never);
     vi.mocked(prisma.siteTimesheet.findMany).mockResolvedValue([] as never);
     vi.mocked(prisma.shift.findMany).mockResolvedValue([] as never);
-    vi.mocked(prisma.leaveRecord.findMany).mockResolvedValue([
-      { employeeId: "G1", date: new Date("2026-05-05T00:00:00.000Z"), type: "unpaid", hours: 8 },
-      { employeeId: "G2", date: new Date("2026-05-06T00:00:00.000Z"), type: "maternity", hours: 8 },
-      { employeeId: "G3", date: new Date("2026-05-07T00:00:00.000Z"), type: "injury_on_duty", hours: 8 },
+    vi.mocked(prisma.leaveRequest.findMany).mockResolvedValue([
+      {
+        employeeId: "G1",
+        leaveType: "PARENTAL",
+        startDate: new Date("2026-05-05T00:00:00.000Z"),
+        endDate: new Date("2026-05-05T00:00:00.000Z"),
+        unitsRequested: 1,
+        employee: { employeeType: "general" },
+      },
     ] as never);
 
     const result = await aggregateTimesheets(companyId, periodStart, periodEnd);
 
     expect(result.find((row) => row.employeeId === "G1")?.unpaidLeaveHours).toBe(8);
-    expect(result.find((row) => row.employeeId === "G2")?.uifLeaveHours).toBe(8);
-    expect(result.find((row) => row.employeeId === "G3")?.iodLeaveHours).toBe(8);
+    expect(result.find((row) => row.employeeId === "G1")?.uifLeaveHours).toBe(0);
+    expect(result.find((row) => row.employeeId === "G1")?.iodLeaveHours).toBe(0);
   });
 
-  it("does not count a leave site-timesheet row as worked time when an authoritative occurrence exists", async () => {
+  it("does not count a leave site-timesheet row as worked time when an approved leave request exists", async () => {
     vi.mocked(prisma.siteTimesheetRow.findMany).mockResolvedValue([{
       siteId: "A",
       sourceShiftId: null,
@@ -331,13 +333,13 @@ describe("aggregateTimesheets per-site behaviour", () => {
       periodEnd,
     }] as never);
     vi.mocked(prisma.shift.findMany).mockResolvedValue([] as never);
-    vi.mocked(prisma.leaveOccurrence.findMany).mockResolvedValue([{
+    vi.mocked(prisma.leaveRequest.findMany).mockResolvedValue([{
       employeeId: "G1",
-      leaveDate: new Date("2026-05-06T00:00:00.000Z"),
-      paidMinutes: 480,
-      unpaidMinutes: 0,
-      requestedMinutes: 480,
-      payrollTreatment: "PAID_EMPLOYER",
+      leaveType: "SICK",
+      startDate: new Date("2026-05-06T00:00:00.000Z"),
+      endDate: new Date("2026-05-06T00:00:00.000Z"),
+      unitsRequested: 1,
+      employee: { employeeType: "general" },
     }] as never);
 
     const result = await aggregateTimesheets(companyId, periodStart, periodEnd);
@@ -372,19 +374,6 @@ describe("aggregateTimesheets per-site behaviour", () => {
       basicHours: 0,
       leaveHours: 8,
     });
-  });
-
-  it("de-duplicates exact legacy leave rows defensively", async () => {
-    vi.mocked(prisma.siteTimesheetRow.findMany).mockResolvedValue([] as never);
-    vi.mocked(prisma.siteTimesheet.findMany).mockResolvedValue([] as never);
-    vi.mocked(prisma.shift.findMany).mockResolvedValue([] as never);
-    vi.mocked(prisma.leaveRecord.findMany).mockResolvedValue([
-      { id: "L1", employeeId: "G1", date: new Date("2026-05-06T00:00:00.000Z"), type: "annual", hours: 8 },
-      { id: "L2", employeeId: "G1", date: new Date("2026-05-06T00:00:00.000Z"), type: "annual", hours: 8 },
-    ] as never);
-
-    const result = await aggregateTimesheets(companyId, periodStart, periodEnd);
-    expect(result.find((row) => row.employeeId === "G1")?.leaveHours).toBe(8);
   });
 
   it("includes raw shifts that start on the final payroll date", async () => {

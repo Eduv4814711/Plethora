@@ -26,7 +26,7 @@ export type CoreOpsFixture = {
   payrollRunId: string;
   periodStart: Date;
   periodEnd: Date;
-  leaveRecordId: string;
+  leaveRequestId: string;
   teardown: () => Promise<void>;
 };
 
@@ -86,7 +86,7 @@ export async function provisionCoreOpsFixture(): Promise<CoreOpsFixture> {
       firstName: "Permanent",
       lastName: "Guard",
       status: "active",
-      employeeType: "guard",
+      employeeType: "security_officer",
       hourlyRate: 45,
       groupId: group.id,
     },
@@ -99,7 +99,7 @@ export async function provisionCoreOpsFixture(): Promise<CoreOpsFixture> {
       firstName: "Reliever",
       lastName: "Guard",
       status: "active",
-      employeeType: "reliever",
+      employeeType: "security_officer",
       hourlyRate: 40,
       groupId: group.id,
     },
@@ -252,12 +252,16 @@ export async function provisionCoreOpsFixture(): Promise<CoreOpsFixture> {
     },
   });
 
-  const leaveRecord = await prisma.leaveRecord.create({
+  const leaveRequest = await prisma.leaveRequest.create({
     data: {
+      companyId: company.id,
       employeeId: permanentGuard.id,
-      date: new Date("2026-06-12T00:00:00.000Z"),
-      type: "annual",
-      hours: 8,
+      leaveType: "ANNUAL",
+      startDate: new Date("2026-06-12T00:00:00.000Z"),
+      endDate: new Date("2026-06-12T00:00:00.000Z"),
+      unitsRequested: 1,
+      status: "APPROVED",
+      retentionUntil: new Date("2029-06-12T00:00:00.000Z"),
     },
   });
 
@@ -295,7 +299,7 @@ export async function provisionCoreOpsFixture(): Promise<CoreOpsFixture> {
     payrollRunId: payrollRun.id,
     periodStart,
     periodEnd,
-    leaveRecordId: leaveRecord.id,
+    leaveRequestId: leaveRequest.id,
     teardown: async () => {
       await prisma.company.delete({ where: { id: company.id } });
     },

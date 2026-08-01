@@ -3,11 +3,6 @@ import type { Prisma, SiteRosterShiftCode } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { shiftCodeToType, countsTowardCoverage } from "./lib/pattern-parser.js";
 import { getCompanyTimezone, getShiftTimes } from "../../lib/timezone.js";
-import {
-  formatLeaveDateKey,
-  leaveTypeToRosterShiftCode,
-  normalizeLeaveDate,
-} from "../../services/leave-availability.service.js";
 import { reconcileRosterContinuityForSite } from "./roster-continuity.service.js";
 import {
   isShiftCoveredOnDateKey,
@@ -85,7 +80,7 @@ async function loadSiteGuards(siteId: string, companyId: string) {
     .map((a) => a.employee)
     .filter(
       (e) =>
-        (e.employeeType ?? "security") === "security" &&
+        (e.employeeType ?? "security_officer") === "security_officer" &&
         ROSTERABLE_STATUSES.includes(e.status as (typeof ROSTERABLE_STATUSES)[number])
     );
 }
@@ -465,7 +460,7 @@ export async function getLiveRoster(
     calendarDays.push(dateKey(d));
   }
 
-  const [generated, overrides, activePattern, leaveRecords] = await Promise.all([
+  const [generated, overrides, activePattern, leaveRequests] = await Promise.all([
     prisma.siteRosterGeneratedShift.findMany({
       where: { siteId, companyId, rosterDate: { gte: start, lte: end } },
     }),
@@ -476,12 +471,15 @@ export async function getLiveRoster(
       where: { siteId, companyId, status: "active" },
       orderBy: { effectiveFrom: "desc" },
     }),
-    prisma.leaveRecord.findMany({
+    prisma.leaveRequest.findMany({
       where: {
+        companyId,
         employeeId: { in: guards.map((g) => g.id) },
-        date: { gte: start, lte: end },
+        status: "APPROVED",
+        startDate: { lte: end },
+        endDate: { gte: start },
       },
-      select: { employeeId: true, date: true, type: true },
+      select: { employeeId: true, startDate: true, endDate: true, leaveType: true },
     }),
   ]);
 
@@ -499,11 +497,14 @@ export async function getLiveRoster(
   }
 
   // Approved leave marks guards unavailable (L/SL) unless a manual override exists.
-  for (const leave of leaveRecords) {
-    const dayKey = formatLeaveDateKey(normalizeLeaveDate(leave.date));
-    const cellKey = `${leave.employeeId}:${dayKey}`;
-    if (!overrideKeys.has(cellKey)) {
-      cellLookup.set(cellKey, leaveTypeToRosterShiftCode(leave.type));
+  for (const leave of leaveRequests) {
+    const leaveStart = leave.startDate > start ? dateOnly(leave.startDate) : start;
+    const leaveEnd = leave.endDate < end ? dateOnly(leave.endDate) : end;
+    for (let day = leaveStart; day <= leaveEnd; day = addCalendarDays(day, 1)) {
+      const cellKey = `${leave.employeeId}:${dateKey(day)}`;
+      if (!overrideKeys.has(cellKey)) {
+        cellLookup.set(cellKey, leave.leaveType.toLowerCase().includes("sick") ? "SL" : "L");
+      }
     }
   }
 
@@ -1297,11 +1298,11 @@ export async function addPlaceholderGuardToSite(
         firstName,
         lastName,
         status: isReliever ? "reliever" : "hired",
-        employeeType: "security",
+        employeeType: "security_officer",
         jobRole: `${ROSTER_PLACEHOLDER_JOB_ROLE_PREFIX}:${type}`,
         groupId: group.id,
         gradeId: grade.id,
-        psiraNumber: `ROSTER-TBD-${employeeNumber}`,
+        psiraRegistrationNumber: `ROSTER-TBD-${employeeNumber}`,
       },
     });
     await tx.siteAssignment.create({

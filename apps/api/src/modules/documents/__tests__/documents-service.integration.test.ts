@@ -22,7 +22,7 @@ describe.runIf(dbReady)("documents service (PostgreSQL integration)", () => {
     const company = await prisma.company.create({ data: { name: `Documents Test Co ${suffix}` } });
     companyId = company.id;
     const employee = await prisma.employee.create({
-      data: { companyId, employeeNumber: `DOC-${suffix}`, firstName: "Doc", lastName: "Owner", status: "active", employeeType: "security" },
+      data: { companyId, employeeNumber: `DOC-${suffix}`, firstName: "Doc", lastName: "Owner", status: "active", employeeType: "security_officer" },
     });
     employeeId = employee.id;
     const uploader = await prisma.user.create({
@@ -38,7 +38,7 @@ describe.runIf(dbReady)("documents service (PostgreSQL integration)", () => {
     const otherCompany = await prisma.company.create({ data: { name: `Documents Other Co ${suffix}` } });
     otherCompanyId = otherCompany.id;
     const otherEmployee = await prisma.employee.create({
-      data: { companyId: otherCompanyId, employeeNumber: `DOC-OTHER-${suffix}`, firstName: "Other", lastName: "Employee", status: "active", employeeType: "security" },
+      data: { companyId: otherCompanyId, employeeNumber: `DOC-OTHER-${suffix}`, firstName: "Other", lastName: "Employee", status: "active", employeeType: "security_officer" },
     });
     otherCompanyEmployeeId = otherEmployee.id;
   });

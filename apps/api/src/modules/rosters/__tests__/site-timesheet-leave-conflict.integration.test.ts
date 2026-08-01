@@ -3,11 +3,7 @@ import { randomBytes } from "node:crypto";
 import { prisma } from "../../../lib/prisma.js";
 import { hashPassword } from "../../../services/auth.service.js";
 import { isIntegrationDatabaseAvailable } from "../../../test-utils/tenant-harness.js";
-import {
-  createLeaveApplication,
-  createOpeningBalanceAdjustment,
-  decideLeaveApplication,
-} from "../../../services/leave-management.service.js";
+import { createLeaveRequest, decideLeaveRequest } from "../../../services/leave-v3.service.js";
 import { resyncSiteTimesheet } from "../site-timesheets.service.js";
 
 const dbReady = await isIntegrationDatabaseAvailable();
@@ -41,46 +37,28 @@ describe.runIf(dbReady)("site timesheet row seeding respects approved leave (Pos
   });
 
   async function approveLeaveFor(employeeId: string, date: string) {
-    await createOpeningBalanceAdjustment({
-      companyId,
+    const request = await createLeaveRequest(companyId, actorId, {
       employeeId,
-      leaveTypeCode: "annual",
-      minutes: 24 * 60,
-      reason: "Integration test opening balance",
-      actorId,
-    });
-    const application = await createLeaveApplication({
-      companyId,
-      employeeId,
-      leaveTypeCode: "annual",
-      startDate: date,
-      endDate: date,
+      leaveType: "ANNUAL",
+      startDate: new Date(`${date}T00:00:00.000Z`),
+      endDate: new Date(`${date}T00:00:00.000Z`),
+      unitsRequested: 1,
       reason: "Integration test leave",
-      actorId,
-      idempotencyKey: `timesheet-leave:${suffix}:${employeeId}`,
     });
-    await prisma.leavePolicyVersion.updateMany({
-      where: { companyId, leaveType: { code: "annual" }, reviewStatus: "PENDING_HR_LEGAL_CONFIRMATION" },
-      data: {
-        reviewStatus: "ACTIVE",
-        confirmedBy: actorId,
-        confirmedAt: new Date(),
-        accrualMethod: "EVEN_MONTHLY",
-        entitlementMinutes: 180 * 60,
-      },
-    });
-    await decideLeaveApplication({
-      companyId,
-      applicationId: application.id,
-      actorId,
-      decision: "approve",
-      expectedVersion: application.version,
-    });
+    await decideLeaveRequest({ companyId, actorUserId: actorId, requestId: request.id, decision: "APPROVED" });
   }
 
   it("seeds a row as 'leave' instead of stuck 'pending' when the rostered guard has approved leave and no shift exists", async () => {
     const employee = await prisma.employee.create({
-      data: { companyId, employeeNumber: `TS-LEAVE-${suffix}`, firstName: "On", lastName: "Leave", status: "active", employeeType: "security" },
+      data: {
+        companyId,
+        employeeNumber: `TS-LEAVE-${suffix}`,
+        firstName: "On",
+        lastName: "Leave",
+        status: "active",
+        employeeType: "security_officer",
+        commencementDate: new Date("2022-01-01T00:00:00.000Z"),
+      },
     });
     const workDate = "2026-12-15";
     await prisma.siteRosterGeneratedShift.create({
@@ -93,23 +71,10 @@ describe.runIf(dbReady)("site timesheet row seeding respects approved leave (Pos
         shiftType: "day",
       },
     });
-    // A real Shift must exist for createLeaveApplication to compute non-zero paid minutes
-    // for a security-type employee; delete it afterward to reproduce the real trigger —
-    // leave approved against a published shift that's since been cancelled/reassigned,
-    // leaving the roster's planned D/N/R row stale with no live Shift behind it.
-    const tempShift = await prisma.shift.create({
-      data: {
-        companyId,
-        employeeId: employee.id,
-        siteId,
-        startTime: new Date(`${workDate}T06:00:00.000Z`),
-        endTime: new Date(`${workDate}T18:00:00.000Z`),
-        shiftType: "day",
-        status: "assigned",
-      },
-    });
+    // No Shift needs to exist behind the roster row: the new leave engine
+    // doesn't compute paid minutes from a roster/shift lookup, so approving
+    // leave directly reproduces "planned D row, no live Shift behind it".
     await approveLeaveFor(employee.id, workDate);
-    await prisma.shift.delete({ where: { id: tempShift.id } });
 
     await resyncSiteTimesheet(companyId, siteId, workDate, workDate);
 
@@ -121,7 +86,7 @@ describe.runIf(dbReady)("site timesheet row seeding respects approved leave (Pos
 
   it("still seeds a row as 'pending' when there is no leave and no shift yet", async () => {
     const employee = await prisma.employee.create({
-      data: { companyId, employeeNumber: `TS-PENDING-${suffix}`, firstName: "No", lastName: "Leave", status: "active", employeeType: "security" },
+      data: { companyId, employeeNumber: `TS-PENDING-${suffix}`, firstName: "No", lastName: "Leave", status: "active", employeeType: "security_officer" },
     });
     const workDate = "2026-12-16";
     await prisma.siteRosterGeneratedShift.create({

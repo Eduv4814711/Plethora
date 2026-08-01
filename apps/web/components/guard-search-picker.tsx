@@ -7,7 +7,7 @@ export type GuardPickerOption = {
   firstName: string;
   lastName: string;
   employeeNumber?: string | null;
-  psiraNumber?: string | null;
+  psiraRegistrationNumber?: string | null;
 };
 
 function guardName(guard: GuardPickerOption) {
@@ -17,7 +17,7 @@ function guardName(guard: GuardPickerOption) {
 function guardLabel(guard: GuardPickerOption) {
   const name = guardName(guard);
   if (guard.employeeNumber) return `${name} (${guard.employeeNumber})`;
-  if (guard.psiraNumber) return `${name} (${guard.psiraNumber})`;
+  if (guard.psiraRegistrationNumber) return `${name} (${guard.psiraRegistrationNumber})`;
   return name;
 }
 
@@ -28,7 +28,7 @@ function matchesSearch(guard: GuardPickerOption, query: string) {
     guard.firstName,
     guard.lastName,
     guard.employeeNumber,
-    guard.psiraNumber,
+    guard.psiraRegistrationNumber,
     guardName(guard),
     `${guard.firstName ?? ""}${guard.lastName ?? ""}`,
   ]
@@ -190,9 +190,9 @@ export function GuardSearchPicker({
                   }`}
                 >
                   <div className="truncate">{guardName(guard)}</div>
-                  {(guard.employeeNumber || guard.psiraNumber) && (
+                  {(guard.employeeNumber || guard.psiraRegistrationNumber) && (
                     <div className="truncate text-xs text-neutral-500">
-                      {guard.employeeNumber ?? guard.psiraNumber}
+                      {guard.employeeNumber ?? guard.psiraRegistrationNumber}
                     </div>
                   )}
                 </button>

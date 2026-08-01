@@ -7,7 +7,7 @@ vi.mock("../../lib/prisma.js", () => ({
     sitePost: { findFirst: vi.fn() },
     siteAssignment: { findFirst: vi.fn() },
     shift: { findFirst: vi.fn(), findMany: vi.fn() },
-    leaveRecord: { findFirst: vi.fn() },
+    leaveRequest: { findFirst: vi.fn() },
   },
 }));
 
@@ -32,7 +32,7 @@ describe("validateShiftAssignment site assignment", () => {
     vi.mocked(prisma.siteAssignment.findFirst).mockReset();
     vi.mocked(prisma.shift.findFirst).mockReset();
     vi.mocked(prisma.shift.findMany).mockReset();
-    vi.mocked(prisma.leaveRecord.findFirst).mockReset();
+    vi.mocked(prisma.leaveRequest.findFirst).mockReset();
 
     vi.mocked(prisma.company.findUnique).mockResolvedValue({
       settings: { timezone: "Africa/Johannesburg" },
@@ -59,7 +59,7 @@ describe("validateShiftAssignment site assignment", () => {
 
     vi.mocked(prisma.shift.findFirst).mockResolvedValue(null);
     vi.mocked(prisma.shift.findMany).mockResolvedValue([]);
-    vi.mocked(prisma.leaveRecord.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.leaveRequest.findFirst).mockResolvedValue(null);
   });
 
   it("requires SiteAssignment by default", async () => {
@@ -134,7 +134,7 @@ describe("validateShiftAssignment site assignment", () => {
       siteId,
       employeeId,
     } as never);
-    vi.mocked(prisma.leaveRecord.findFirst).mockResolvedValue({ id: "lr-1" } as never);
+    vi.mocked(prisma.leaveRequest.findFirst).mockResolvedValue({ id: "lr-1" } as never);
 
     await expect(
       validateShiftAssignment({

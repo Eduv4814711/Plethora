@@ -161,7 +161,7 @@ export async function tasksRoutes(app: FastifyInstance) {
         id: e.id,
         type: "employee" as const,
         displayName: `${e.firstName} ${e.lastName}`,
-        subtitle: e.employeeType === "office" ? "Office" : "Security",
+        subtitle: e.employeeType === "general" ? "Office" : "Security",
       })),
     });
   });

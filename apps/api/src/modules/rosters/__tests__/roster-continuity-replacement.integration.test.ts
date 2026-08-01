@@ -3,11 +3,7 @@ import { randomBytes } from "node:crypto";
 import { prisma } from "../../../lib/prisma.js";
 import { hashPassword } from "../../../services/auth.service.js";
 import { isIntegrationDatabaseAvailable } from "../../../test-utils/tenant-harness.js";
-import {
-  createLeaveApplication,
-  createOpeningBalanceAdjustment,
-  decideLeaveApplication,
-} from "../../../services/leave-management.service.js";
+import { createLeaveRequest, decideLeaveRequest } from "../../../services/leave-v3.service.js";
 import { reconcileRosterContinuityForSite } from "../roster-continuity.service.js";
 
 const dbReady = await isIntegrationDatabaseAvailable();
@@ -51,11 +47,11 @@ describe.runIf(dbReady)(
       siteId = site.id;
 
       const originalGuard = await prisma.employee.create({
-        data: { companyId, employeeNumber: `RPL-ORIG-${suffix}`, firstName: "Original", lastName: "Guard", status: "active", employeeType: "security" },
+        data: { companyId, employeeNumber: `RPL-ORIG-${suffix}`, firstName: "Original", lastName: "Guard", status: "active", employeeType: "security_officer", commencementDate: new Date("2022-01-01T00:00:00.000Z") },
       });
       originalGuardId = originalGuard.id;
       const replacementGuard = await prisma.employee.create({
-        data: { companyId, employeeNumber: `RPL-NEW-${suffix}`, firstName: "Replacement", lastName: "Guard", status: "active", employeeType: "security" },
+        data: { companyId, employeeNumber: `RPL-NEW-${suffix}`, firstName: "Replacement", lastName: "Guard", status: "active", employeeType: "security_officer" },
       });
       replacementGuardId = replacementGuard.id;
 
@@ -99,41 +95,15 @@ describe.runIf(dbReady)(
 
       // 2. Approve leave for the original guard covering that date (against the real
       // shift just published — mirrors how leave is normally approved for a rostered day).
-      await createOpeningBalanceAdjustment({
-        companyId,
+      const request = await createLeaveRequest(companyId, actorId, {
         employeeId: originalGuardId,
-        leaveTypeCode: "annual",
-        minutes: 24 * 60,
-        reason: "Integration test opening balance",
-        actorId,
-      });
-      const application = await createLeaveApplication({
-        companyId,
-        employeeId: originalGuardId,
-        leaveTypeCode: "annual",
-        startDate: workDate,
-        endDate: workDate,
+        leaveType: "ANNUAL",
+        startDate: new Date(`${workDate}T00:00:00.000Z`),
+        endDate: new Date(`${workDate}T00:00:00.000Z`),
+        unitsRequested: 1,
         reason: "Integration test leave",
-        actorId,
-        idempotencyKey: `roster-replacement:${suffix}`,
       });
-      await prisma.leavePolicyVersion.updateMany({
-        where: { companyId, leaveType: { code: "annual" }, reviewStatus: "PENDING_HR_LEGAL_CONFIRMATION" },
-        data: {
-          reviewStatus: "ACTIVE",
-          confirmedBy: actorId,
-          confirmedAt: new Date(),
-          accrualMethod: "EVEN_MONTHLY",
-          entitlementMinutes: 180 * 60,
-        },
-      });
-      await decideLeaveApplication({
-        companyId,
-        applicationId: application.id,
-        actorId,
-        decision: "approve",
-        expectedVersion: application.version,
-      });
+      await decideLeaveRequest({ companyId, actorUserId: actorId, requestId: request.id, decision: "APPROVED" });
 
       // 3. Manually confirm a replacement for that date/shift (mirrors what
       // confirmReplacement's transaction does, without needing to satisfy its

@@ -310,7 +310,7 @@ export async function sitesRoutes(app: FastifyInstance) {
         where: {
           id: { in: d.assignedGuardIds },
           companyId,
-          employeeType: "security",
+          employeeType: "security_officer",
           status: { in: [...ROSTERABLE_STATUSES] },
         },
       });
@@ -512,7 +512,7 @@ export async function sitesRoutes(app: FastifyInstance) {
           where: {
             id: { in: assignedGuardIds },
             companyId,
-            employeeType: "security",
+            employeeType: "security_officer",
             status: { in: [...ROSTERABLE_STATUSES] },
           },
         });
@@ -868,7 +868,7 @@ export async function sitesRoutes(app: FastifyInstance) {
       where: {
         id: parsed.data.employeeId,
         companyId: user.companyId,
-        employeeType: "security",
+        employeeType: "security_officer",
       },
     });
 

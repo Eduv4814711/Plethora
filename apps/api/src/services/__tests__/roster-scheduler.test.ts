@@ -292,7 +292,7 @@ describe("roster-scheduler", () => {
       id: "g1",
       gender: "M",
       status: "active",
-      employeeType: "security",
+      employeeType: "security_officer",
     };
     const shiftStart = new Date("2026-05-02T04:00:00.000Z");
     const shiftEnd = new Date("2026-05-02T16:00:00.000Z");
@@ -332,7 +332,7 @@ describe("roster-scheduler", () => {
       id: "g1",
       gender: "M",
       status: "active",
-      employeeType: "security",
+      employeeType: "security_officer",
     };
     const calendarDays = buildCalendarDays(
       new Date("2026-05-01T00:00:00.000Z"),
@@ -375,7 +375,7 @@ describe("roster-scheduler", () => {
       id: "g1",
       gender: "M",
       status: "active",
-      employeeType: "security",
+      employeeType: "security_officer",
     };
     const calendarDays = buildCalendarDays(
       new Date("2026-05-01T00:00:00.000Z"),
@@ -419,7 +419,7 @@ describe("roster-scheduler", () => {
       id: "g1",
       gender: "M",
       status: "active",
-      employeeType: "security",
+      employeeType: "security_officer",
     };
     const calendarDays = buildCalendarDays(
       new Date("2026-05-01T00:00:00.000Z"),
@@ -463,7 +463,7 @@ describe("roster-scheduler", () => {
       id: "g1",
       gender: "M",
       status: "active",
-      employeeType: "security",
+      employeeType: "security_officer",
     };
     const calendarDays = buildCalendarDays(
       new Date("2026-05-01T00:00:00.000Z"),
@@ -507,7 +507,7 @@ describe("roster-scheduler", () => {
       id: "g1",
       gender: "M",
       status: "active",
-      employeeType: "security",
+      employeeType: "security_officer",
     };
     const calendarDays = buildCalendarDays(
       new Date("2026-05-01T00:00:00.000Z"),
@@ -560,7 +560,7 @@ describe("roster-scheduler", () => {
       id: "g1",
       gender: "M",
       status: "active",
-      employeeType: "security",
+      employeeType: "security_officer",
     };
     const shiftStart = new Date("2026-07-20T04:00:00.000Z");
     const shiftEnd = new Date("2026-07-20T16:00:00.000Z");
@@ -687,7 +687,7 @@ describe("roster-scheduler", () => {
       requiredGender: null,
       difficultyScore: 0,
     };
-    const guard: GuardCandidate = { id: "g1", gender: "M", status: "active", employeeType: "security" };
+    const guard: GuardCandidate = { id: "g1", gender: "M", status: "active", employeeType: "security_officer" };
     const staffing = { day: 1, night: 1 };
     const low = scoreGuardFairness({
       guard,
@@ -722,8 +722,8 @@ describe("roster-scheduler", () => {
     const start = new Date("2026-05-01T00:00:00.000Z");
     const end = new Date("2026-05-05T23:59:59.999Z");
     const calendarDays = buildCalendarDays(start, end);
-    const guardA: GuardCandidate = { id: "g1", gender: "M", status: "active", employeeType: "security" };
-    const guardB: GuardCandidate = { id: "g2", gender: "F", status: "active", employeeType: "security" };
+    const guardA: GuardCandidate = { id: "g1", gender: "M", status: "active", employeeType: "security_officer" };
+    const guardB: GuardCandidate = { id: "g2", gender: "F", status: "active", employeeType: "security_officer" };
     const statsByGuard = new Map([
       ["g1", { employeeId: "g1", dayCount: 2, nightCount: 0, offCount: 0, sundayCount: 0, weekendCount: 0 }],
       ["g2", { employeeId: "g2", dayCount: 2, nightCount: 3, offCount: 0, sundayCount: 0, weekendCount: 0 }],
@@ -804,13 +804,13 @@ describe("roster-scheduler", () => {
       id: "g-active",
       gender: "M",
       status: "active",
-      employeeType: "security",
+      employeeType: "security_officer",
     };
     const reliever: GuardCandidate = {
       id: "g-reliever",
       gender: "M",
       status: "reliever",
-      employeeType: "security",
+      employeeType: "security_officer",
     };
     const picked = pickBestGuardForDemandSlot({
       candidates: [reliever, active],
@@ -850,7 +850,7 @@ describe("roster-scheduler", () => {
       requiredGender: null,
       difficultyScore: 0,
     };
-    const guard: GuardCandidate = { id: "g1", gender: "M", status: "active", employeeType: "security" };
+    const guard: GuardCandidate = { id: "g1", gender: "M", status: "active", employeeType: "security_officer" };
     const staffing = { day: 1, night: 1 };
     const base = scoreGuardForDemandSlot({
       guard,

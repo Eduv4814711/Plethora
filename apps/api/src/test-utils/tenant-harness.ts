@@ -75,7 +75,7 @@ async function provisionCompany(label: "A" | "B", runId: string): Promise<Tenant
       firstName: "Test",
       lastName: `Employee${label}`,
       status: "active",
-      employeeType: "office",
+      employeeType: "general",
       monthlySalary: 15000,
       groupId: group.id,
     },

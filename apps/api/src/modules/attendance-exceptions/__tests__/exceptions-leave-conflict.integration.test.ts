@@ -4,11 +4,7 @@ import { prisma } from "../../../lib/prisma.js";
 import { hashPassword } from "../../../services/auth.service.js";
 import { isIntegrationDatabaseAvailable } from "../../../test-utils/tenant-harness.js";
 import { dateKeyInTimeZone } from "../../../lib/timezone.js";
-import {
-  createLeaveApplication,
-  createOpeningBalanceAdjustment,
-  decideLeaveApplication,
-} from "../../../services/leave-management.service.js";
+import { createLeaveRequest, decideLeaveRequest } from "../../../services/leave-v3.service.js";
 import { detectAndPersistExceptions } from "../exceptions.service.js";
 
 const dbReady = await isIntegrationDatabaseAvailable();
@@ -49,8 +45,9 @@ describe.runIf(dbReady)("attendance exception scan respects approved leave (Post
         firstName: "Test",
         lastName: `Guard${employeeCounter}`,
         status: "active",
-        employeeType: "security",
+        employeeType: "security_officer",
         hourlyRate: 100,
+        commencementDate: new Date("2022-01-01T00:00:00.000Z"),
       },
     });
     const site = await prisma.site.create({ data: { companyId, name: `Exc Site ${label} ${suffix}` } });
@@ -73,49 +70,23 @@ describe.runIf(dbReady)("attendance exception scan respects approved leave (Post
     return { employee, site, shift, shiftStart };
   }
 
-  async function approveLeaveCoveringDate(employeeId: string, leaveDate: string, key: string) {
-    await createOpeningBalanceAdjustment({
-      companyId,
+  async function approveLeaveCoveringDate(employeeId: string, leaveDate: string) {
+    const request = await createLeaveRequest(companyId, actorId, {
       employeeId,
-      leaveTypeCode: "annual",
-      minutes: 24 * 60,
-      reason: "Integration test opening balance",
-      actorId,
-    });
-    const application = await createLeaveApplication({
-      companyId,
-      employeeId,
-      leaveTypeCode: "annual",
-      startDate: leaveDate,
-      endDate: leaveDate,
+      leaveType: "ANNUAL",
+      startDate: new Date(`${leaveDate}T00:00:00.000Z`),
+      endDate: new Date(`${leaveDate}T00:00:00.000Z`),
+      unitsRequested: 1,
       reason: "Integration test leave",
-      actorId,
-      idempotencyKey: key,
     });
-    await prisma.leavePolicyVersion.updateMany({
-      where: { companyId, leaveType: { code: "annual" }, reviewStatus: "PENDING_HR_LEGAL_CONFIRMATION" },
-      data: {
-        reviewStatus: "ACTIVE",
-        confirmedBy: actorId,
-        confirmedAt: new Date(),
-        accrualMethod: "EVEN_MONTHLY",
-        entitlementMinutes: 180 * 60,
-      },
-    });
-    await decideLeaveApplication({
-      companyId,
-      applicationId: application.id,
-      actorId,
-      decision: "approve",
-      expectedVersion: application.version,
-    });
-    return application;
+    await decideLeaveRequest({ companyId, actorUserId: actorId, requestId: request.id, decision: "APPROVED" });
+    return request;
   }
 
   it("does not flag a shift as an exception when the employee has approved leave that day", async () => {
     const { employee, shift, shiftStart } = await createUnattendedShift("leave");
     const leaveDate = dateKeyInTimeZone(shiftStart, TIMEZONE);
-    await approveLeaveCoveringDate(employee.id, leaveDate, `exc-leave:${suffix}`);
+    await approveLeaveCoveringDate(employee.id, leaveDate);
 
     const result = await detectAndPersistExceptions({ companyId, lookbackHours: 24 });
     expect(result.created).toBe(0);

@@ -284,7 +284,7 @@ export const ManualRosteringWorkspace = forwardRef<
       employees
         .filter(
           (e) =>
-            (e.employeeType ?? "security") === "security" &&
+            (e.employeeType ?? "security_officer") === "security_officer" &&
             ["active", "training", "hired", "reliever"].includes(e.status) &&
             !(e.jobRole ?? "").startsWith("roster_placeholder:")
         )

@@ -2,6 +2,8 @@ import { format } from "date-fns";
 import type { PayrollItem, Employee, Payslip, Company } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import type { PayslipTemplateData } from "./payslip-pdf.service.js";
+import { employeeTypeConfig } from "../lib/leave-rules.config.js";
+import { toLeaveConfigEmployeeType } from "./leave-v3.service.js";
 
 interface PayrollItemWithRelations extends PayrollItem {
   employee: Employee;
@@ -82,7 +84,7 @@ export function buildPayslipTemplateData(input: PayslipDataInput): PayslipTempla
     telephone: company.phone ?? undefined,
     fax: company.fax ?? undefined,
     email: company.email ?? undefined,
-    psiraNumber: emp.psiraNumber ?? undefined,
+    psiraRegistrationNumber: emp.psiraRegistrationNumber ?? undefined,
     identityNumber: emp.idNumber ?? undefined,
     dateOfBirth,
     maritalStatus: emp.maritalStatus ?? undefined,
@@ -131,7 +133,7 @@ export async function fetchPayslipData(
   });
   if (!run) return null;
 
-  const [item, company, timesheet, leaveRecords, shiftWithSite] = await Promise.all([
+  const [item, company, timesheet, leaveRequests, shiftWithSite] = await Promise.all([
     prisma.payrollItem.findFirst({
       where: { id: itemId, payrollRunId },
       include: { employee: { include: { grade: true } }, payslip: true },
@@ -148,11 +150,15 @@ export async function fetchPayslipData(
     ),
     prisma.payrollItem.findUnique({ where: { id: itemId }, select: { employeeId: true } }).then((i) =>
       i
-        ? prisma.leaveRecord.findMany({
+        ? prisma.leaveRequest.findMany({
             where: {
+              companyId,
               employeeId: i.employeeId,
-              date: { gte: run.periodStart, lte: run.periodEnd },
+              status: "APPROVED",
+              startDate: { lte: run.periodEnd },
+              endDate: { gte: run.periodStart },
             },
+            select: { leaveType: true, startDate: true, endDate: true, unitsRequested: true, employee: { select: { employeeType: true } } },
           })
         : []
     ),
@@ -174,12 +180,23 @@ export async function fetchPayslipData(
 
   const siteName = shiftWithSite?.site?.name ?? null;
 
+  // Same proration approach as timesheet.service.ts's aggregateTimesheets:
+  // a request spanning the period boundary only contributes the proportion
+  // of its units that fall within this pay period.
+  const DAY_MS = 24 * 60 * 60 * 1000;
   let annualLeaveHours = 0;
   let sickLeaveHours = 0;
-  for (const lr of leaveRecords) {
-    const h = Number(lr.hours);
-    if (lr.type === "annual") annualLeaveHours += h;
-    else if (lr.type === "sick") sickLeaveHours += h;
+  for (const request of leaveRequests) {
+    const overlapStart = request.startDate > run.periodStart ? request.startDate : run.periodStart;
+    const overlapEnd = request.endDate < run.periodEnd ? request.endDate : run.periodEnd;
+    if (overlapEnd < overlapStart) continue;
+    const totalDays = Math.round((request.endDate.getTime() - request.startDate.getTime()) / DAY_MS) + 1;
+    const overlapDays = Math.round((overlapEnd.getTime() - overlapStart.getTime()) / DAY_MS) + 1;
+    const ratio = totalDays > 0 ? overlapDays / totalDays : 0;
+    const hoursPerUnit = employeeTypeConfig(toLeaveConfigEmployeeType(request.employee.employeeType)).hoursPerUnit;
+    const hours = Number(request.unitsRequested) * ratio * hoursPerUnit;
+    if (request.leaveType === "ANNUAL") annualLeaveHours += hours;
+    else if (request.leaveType === "SICK") sickLeaveHours += hours;
   }
 
   return {

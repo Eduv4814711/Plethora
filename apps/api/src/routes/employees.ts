@@ -142,7 +142,7 @@ const createEmployeeSchema = z.object({
   monthlySalary: z.number().positive().optional(),
   gradeId: z.string().optional().nullable(),
   groupId: z.string().optional().nullable(),
-  employeeType: z.enum(["office", "security"]).default("security"),
+  employeeType: z.enum(["general", "security_officer"]).default("security_officer"),
   jobRole: optionalString,
   // Labour Law (BCEA)
   dateOfBirth: optionalDate,
@@ -170,8 +170,9 @@ const createEmployeeSchema = z.object({
   noticePeriod: optionalString,
   previousService: optionalString,
   // PSIRA
-  psiraNumber: optionalString,
-  psiraExpiryDate: optionalDate,
+  psiraRegistrationNumber: optionalString,
+  psiraRegistrationExpiry: optionalDate,
+  psiraGrade: optionalString,
   securityServiceType: optionalString,
   nextOfKin1Name: optionalString,
   nextOfKin1Phone: optionalString,
@@ -187,16 +188,16 @@ const createEmployeeSchema = z.object({
 });
 
 const createEmployeeSchemaWithRefine = createEmployeeSchema.superRefine((data, ctx) => {
-  if (data.employeeType === "security" && (!data.psiraNumber || !String(data.psiraNumber).trim())) {
-    ctx.addIssue({ code: "custom", path: ["psiraNumber"], message: "PSIRA number is required for security guards" });
+  if (data.employeeType === "security_officer" && (!data.psiraRegistrationNumber || !String(data.psiraRegistrationNumber).trim())) {
+    ctx.addIssue({ code: "custom", path: ["psiraRegistrationNumber"], message: "PSIRA number is required for security guards" });
   }
-  if (data.employeeType === "security" && (!data.gradeId || !String(data.gradeId).trim())) {
+  if (data.employeeType === "security_officer" && (!data.gradeId || !String(data.gradeId).trim())) {
     ctx.addIssue({ code: "custom", path: ["gradeId"], message: "Pay grade is required for security guards" });
   }
   if (!data.groupId || !String(data.groupId).trim()) {
     ctx.addIssue({ code: "custom", path: ["groupId"], message: "Group is required for all employees" });
   }
-  if (data.employeeType === "office" && (!data.monthlySalary || data.monthlySalary <= 0)) {
+  if (data.employeeType === "general" && (!data.monthlySalary || data.monthlySalary <= 0)) {
     ctx.addIssue({ code: "custom", path: ["monthlySalary"], message: "Monthly salary is required for office staff" });
   }
 });
@@ -206,9 +207,9 @@ const updateEmployeeSchema = createEmployeeSchema.omit({ status: true }).partial
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
   // Create defaults must not leak into partial updates. Without this override,
-  // an omitted employeeType is parsed as "security" and an existing office
+  // an omitted employeeType is parsed as "security_officer" and an existing general
   // employee incorrectly fails PSIRA/pay-grade validation.
-  employeeType: z.enum(["office", "security"]).optional(),
+  employeeType: z.enum(["general", "security_officer"]).optional(),
   hourlyRate: z.number().positive().optional().nullable(),
   monthlySalary: z.number().positive().optional().nullable(),
   gradeId: z.string().optional().nullable(),
@@ -367,7 +368,7 @@ export async function employeesRoutes(app: FastifyInstance) {
         monthlySalary: d.monthlySalary,
         gradeId: d.gradeId ?? null,
         groupId: d.groupId ?? null,
-        employeeType: d.employeeType ?? "security",
+        employeeType: d.employeeType ?? "security_officer",
         jobRole: d.jobRole,
         dateOfBirth: d.dateOfBirth,
         gender: d.gender,
@@ -390,8 +391,9 @@ export async function employeesRoutes(app: FastifyInstance) {
         leaveEntitlement: d.leaveEntitlement,
         noticePeriod: d.noticePeriod,
         previousService: d.previousService,
-        psiraNumber: d.psiraNumber,
-        psiraExpiryDate: d.psiraExpiryDate,
+        psiraRegistrationNumber: d.psiraRegistrationNumber,
+        psiraRegistrationExpiry: d.psiraRegistrationExpiry,
+        psiraGrade: d.psiraGrade,
         securityServiceType: d.securityServiceType,
         nextOfKin1Name: d.nextOfKin1Name,
         nextOfKin1Phone: d.nextOfKin1Phone,
@@ -494,15 +496,15 @@ export async function employeesRoutes(app: FastifyInstance) {
 
     const updateData = { ...parsed.data };
     const effectiveType = updateData.employeeType ?? existing.employeeType;
-    const effectivePsira = updateData.psiraNumber !== undefined ? updateData.psiraNumber : existing.psiraNumber;
-    if (effectiveType === "security" && (!effectivePsira || !String(effectivePsira).trim())) {
+    const effectivePsira = updateData.psiraRegistrationNumber !== undefined ? updateData.psiraRegistrationNumber : existing.psiraRegistrationNumber;
+    if (effectiveType === "security_officer" && (!effectivePsira || !String(effectivePsira).trim())) {
       return reply.code(400).send({
         error: "Validation error",
-        message: { psiraNumber: ["PSIRA number is required for security guards"] },
+        message: { psiraRegistrationNumber: ["PSIRA number is required for security guards"] },
       });
     }
     const effectiveGradeId = updateData.gradeId !== undefined ? updateData.gradeId : existing.gradeId;
-    if (effectiveType === "security" && (!effectiveGradeId || !String(effectiveGradeId).trim())) {
+    if (effectiveType === "security_officer" && (!effectiveGradeId || !String(effectiveGradeId).trim())) {
       return reply.code(400).send({
         error: "Validation error",
         message: { gradeId: ["Pay grade is required for security guards"] },
@@ -522,7 +524,7 @@ export async function employeesRoutes(app: FastifyInstance) {
           ? Number(existing.monthlySalary)
           : null;
     if (
-      effectiveType === "office" &&
+      effectiveType === "general" &&
       (effectiveMonthlySalary == null || effectiveMonthlySalary <= 0)
     ) {
       return reply.code(400).send({
@@ -620,7 +622,7 @@ export async function employeesRoutes(app: FastifyInstance) {
     const [payrollItems, shifts, leaveApplications] = await Promise.all([
       prisma.payrollItem.count({ where: { employeeId: id } }),
       prisma.shift.count({ where: { employeeId: id } }),
-      prisma.leaveApplication.count({ where: { employeeId: id, companyId: user.companyId } }),
+      prisma.leaveRequest.count({ where: { employeeId: id, companyId: user.companyId } }),
     ]);
 
     if (employee.status !== "offboarded") {

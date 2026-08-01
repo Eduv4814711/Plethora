@@ -57,11 +57,9 @@ export async function verifyDatabaseReadiness(): Promise<void> {
       u."accountType",
       u."capabilities",
       u."isActive",
-      c."ownerUserId",
-      l."requiredCapability"
+      c."ownerUserId"
     FROM "User" u
     CROSS JOIN "Company" c
-    CROSS JOIN "LeaveApprovalStep" l
     LIMIT 0
   `);
   const state = await withTimeout(prisma.$queryRaw<Array<{

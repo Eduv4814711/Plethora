@@ -2,7 +2,6 @@ import { addDays, differenceInCalendarDays, getDay } from "date-fns";
 import { prisma } from "../lib/prisma.js";
 import { inferPostShiftType } from "../lib/site-post-api.js";
 import { dateKeyInTimeZone, getCompanyTimezone } from "../lib/timezone.js";
-import { isEmployeeOnLeave } from "./leave-availability.service.js";
 import { violatesAdjacentShiftRestRules } from "./roster-scheduler.js";
 
 export class RosteringValidationError extends Error {
@@ -370,7 +369,19 @@ export async function validateShiftAssignment(params: {
 
   assertSiteShiftGenderRule(employee.gender, site, shiftType);
 
-  if (await isEmployeeOnLeave(employeeId, startTime)) {
+  const shiftDateKey = dateKeyInTimeZone(startTime, await getCompanyTimezone(companyId));
+  const shiftDate = new Date(`${shiftDateKey}T00:00:00.000Z`);
+  const approvedLeave = await prisma.leaveRequest.findFirst({
+    where: {
+      companyId,
+      employeeId,
+      status: "APPROVED",
+      startDate: { lte: shiftDate },
+      endDate: { gte: shiftDate },
+    },
+    select: { id: true },
+  });
+  if (approvedLeave) {
     throw new RosteringValidationError(
       "Employee is on approved leave and is not available for work on this date"
     );

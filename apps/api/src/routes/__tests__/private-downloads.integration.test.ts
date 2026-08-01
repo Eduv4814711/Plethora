@@ -227,46 +227,6 @@ describe.runIf(dbReady)("private stored-file access (integration)", () => {
       recordId: ownIncidentAttachment.id,
     });
 
-    const ownSickNote = await prisma.leaveSickNote.create({
-      data: {
-        companyId: fixture.tenantA.companyId,
-        employeeId: fixture.tenantA.employeeId,
-        startDate: new Date("2026-08-01"),
-        endDate: new Date("2026-08-01"),
-        fileName: "sick-a.pdf",
-        mimeType: "application/pdf",
-        fileUrl: await uploadPdf(
-          `leave-sick-notes/${fixture.tenantA.companyId}/${fixture.tenantA.employeeId}/${randomBytes(8).toString("hex")}.pdf`,
-          "sick-a"
-        ),
-      },
-    });
-    const foreignSickNote = await prisma.leaveSickNote.create({
-      data: {
-        companyId: fixture.tenantB.companyId,
-        employeeId: fixture.tenantB.employeeId,
-        startDate: new Date("2026-08-01"),
-        endDate: new Date("2026-08-01"),
-        fileName: "sick-b.pdf",
-        mimeType: "application/pdf",
-        fileUrl: await uploadPdf(
-          `leave-sick-notes/${fixture.tenantB.companyId}/${fixture.tenantB.employeeId}/${randomBytes(8).toString("hex")}.pdf`,
-          "sick-b"
-        ),
-      },
-    });
-    privateFiles.push({
-      label: "legacy leave sick note",
-      ownUrl: `/payroll/leave-records/sick-notes/${ownSickNote.id}/download`,
-      foreignUrl: `/payroll/leave-records/sick-notes/${foreignSickNote.id}/download`,
-    });
-    metadataEndpoints.push({
-      label: "legacy leave sick note",
-      url: "/payroll/leave-records",
-      collection: "sickNotes",
-      recordId: ownSickNote.id,
-    });
-
     const ownStudent = await prisma.student.create({
       data: {
         companyId: fixture.tenantA.companyId,

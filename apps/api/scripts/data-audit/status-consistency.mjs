@@ -6,7 +6,7 @@ import { createPrisma, finding, printFindings, SEVERITY } from "./shared.mjs";
 
 const LEAVE_TYPES = ["annual", "sick", "unpaid"];
 const LEAVE_REQUEST_STATUSES = ["pending", "approved", "rejected"];
-const EMPLOYEE_TYPES = ["guard", "office", "reliever", "training", "hired"];
+const EMPLOYEE_TYPES = ["general", "security_officer"];
 const ATTENDANCE_STATUSES = ["pending", "present", "absent", "late", "verified"];
 
 /** @returns {Promise<import("./shared.mjs").AuditFinding[]>} */
@@ -96,7 +96,7 @@ export async function runStatusConsistencyAudit(prisma) {
   const officeNoSalary = await prisma.$queryRaw`
     SELECT id, "employeeNumber", status
     FROM "Employee"
-    WHERE "employeeType" = 'office'
+    WHERE "employeeType" = 'general'
       AND status = 'active'
       AND ("monthlySalary" IS NULL OR "monthlySalary" = 0)
       AND ("hourlyRate" IS NULL OR "hourlyRate" = 0)

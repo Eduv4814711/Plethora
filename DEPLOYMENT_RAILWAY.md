@@ -245,7 +245,7 @@ verify the custom domain in Railway.
 
 ## Deploy Updates
 
-Railway deploys from GitHub. Before pushing to the connected production branch, confirm that **Wait for CI** is enabled for both services and that the company-specific leave cutover gates in `docs/leave-management-review.md` have been completed. Push the reviewed commit:
+Railway deploys from GitHub. Before pushing to the connected production branch, confirm that **Wait for CI** is enabled for both services and that the flagged assumptions in `docs/LEAVE_MANAGEMENT.md` have been reviewed with labour counsel where relevant. Push the reviewed commit:
 
 ```bash
 git push

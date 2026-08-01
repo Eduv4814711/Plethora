@@ -35,7 +35,7 @@ function createMockContext(overrides?: Partial<ComplianceContext>): ComplianceCo
           idNumber: "8001015001087",
           taxNumber: null,
           status: "active",
-          employeeType: "security",
+          employeeType: "security_officer",
         },
         payslip: {
           tax: 1000,
@@ -91,7 +91,7 @@ describe("PayrollComplianceRules", () => {
               idNumber: null,
               taxNumber: null,
               status: "active",
-              employeeType: "security",
+              employeeType: "security_officer",
             },
           },
         ],

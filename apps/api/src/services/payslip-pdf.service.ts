@@ -21,7 +21,7 @@ export interface PayslipTemplateData {
   telephone?: string;
   fax?: string;
   email?: string;
-  psiraNumber?: string;
+  psiraRegistrationNumber?: string;
   identityNumber?: string;
   dateOfBirth?: string;
   maritalStatus?: string;

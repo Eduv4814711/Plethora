@@ -60,8 +60,9 @@ interface Employee {
   leaveEntitlement?: string | null;
   noticePeriod?: string | null;
   previousService?: string | null;
-  psiraNumber?: string | null;
-  psiraExpiryDate?: string | null;
+  psiraRegistrationNumber?: string | null;
+  psiraRegistrationExpiry?: string | null;
+  psiraGrade?: string | null;
   securityServiceType?: string | null;
   nextOfKin1Name?: string | null;
   nextOfKin1Phone?: string | null;
@@ -538,7 +539,7 @@ function EmployeeTeamCard({
             ID: {emp.employeeNumber}
           </p>
           <p className="text-xs uppercase tracking-wider text-black mt-0.5">
-            {(emp.employeeType === "office" ? "Office" : "Guard")}: {emp.group?.name ?? "—"}
+            {(emp.employeeType === "general" ? "Office" : "Guard")}: {emp.group?.name ?? "—"}
           </p>
         </div>
         <span className={`shrink-0 uppercase ${statusColors[emp.status] ?? "badge-neutral"}`}>
@@ -549,31 +550,31 @@ function EmployeeTeamCard({
       <div className="mt-4 p-4 rounded-[10px] bg-neutral-200 border-2 border-neutral-200">
         <div className="space-y-1.5 text-xs uppercase tracking-wider text-black font-medium">
           {emp.idNumber && <p>ID: {emp.idNumber}</p>}
-          {emp.psiraNumber && <p>PSIRA: {emp.psiraNumber}</p>}
+          {emp.psiraRegistrationNumber && <p>PSIRA: {emp.psiraRegistrationNumber}</p>}
           {emp.phone && <p>PHONE: {emp.phone}</p>}
           {(emp.grade || emp.hourlyRate != null || emp.monthlySalary != null) && (
             <p>
               GRADE: {emp.grade
                 ? `${emp.grade.name} (${Number(emp.grade.hourlyRate).toFixed(2)}/HR)`
-                : emp.employeeType === "office" && emp.monthlySalary != null
+                : emp.employeeType === "general" && emp.monthlySalary != null
                   ? `R${emp.monthlySalary}/MONTH`
                   : emp.hourlyRate != null
                     ? `R${Number(emp.hourlyRate).toFixed(2)}/HR`
                     : "—"}
             </p>
           )}
-          {(emp.employeeType ?? "security") === "security" && (
+          {(emp.employeeType ?? "security_officer") === "security_officer" && (
             <p>
               SITE: {emp.assignedSites && emp.assignedSites.length > 0 ? emp.assignedSites.join(", ") : "Not assigned"}
             </p>
           )}
-          {!emp.idNumber && !emp.psiraNumber && !emp.phone && !emp.grade && emp.hourlyRate == null && emp.monthlySalary == null && (
+          {!emp.idNumber && !emp.psiraRegistrationNumber && !emp.phone && !emp.grade && emp.hourlyRate == null && emp.monthlySalary == null && (
             <p className="text-black/70">No details</p>
           )}
         </div>
       </div>
 
-      {(emp.employeeType ?? "security") === "security" &&
+      {(emp.employeeType ?? "security_officer") === "security_officer" &&
         (!emp.assignedSites || emp.assignedSites.length === 0) &&
         ["active", "training", "hired", "reliever"].includes(emp.status) && (
           <div
@@ -613,8 +614,8 @@ function EmployeeTeamCard({
           {(emp.nextOfKin1Name || emp.nextOfKin1Phone) && (
             <p><span className="text-[10px] uppercase tracking-wider text-black">Next of kin</span><br />{emp.nextOfKin1Name || "—"} {emp.nextOfKin1Phone ? `• ${emp.nextOfKin1Phone}` : ""}</p>
           )}
-          {emp.psiraExpiryDate && (
-            <p><span className="text-[10px] uppercase tracking-wider text-black">PSIRA expiry</span><br />{toDateStr(emp.psiraExpiryDate)}</p>
+          {emp.psiraRegistrationExpiry && (
+            <p><span className="text-[10px] uppercase tracking-wider text-black">PSIRA expiry</span><br />{toDateStr(emp.psiraRegistrationExpiry)}</p>
           )}
           {emp.occupation && (
             <p><span className="text-[10px] uppercase tracking-wider text-black">Occupation</span><br />{emp.occupation}</p>
@@ -879,7 +880,7 @@ function EmployeeForm({
   defaultPlaceOfWork?: string;
   onSuccess: () => void;
 }) {
-  const [employeeType, setEmployeeType] = useState<"office" | "security">("security");
+  const [employeeType, setEmployeeType] = useState<"general" | "security_officer">("security_officer");
   const [employeeNumber, setEmployeeNumber] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -915,8 +916,9 @@ function EmployeeForm({
   const [previousService, setPreviousService] = useState("");
 
   // PSIRA - security staff
-  const [psiraNumber, setPsiraNumber] = useState("");
-  const [psiraExpiryDate, setPsiraExpiryDate] = useState("");
+  const [psiraRegistrationNumber, setPsiraNumber] = useState("");
+  const [psiraRegistrationExpiry, setPsiraExpiryDate] = useState("");
+  const [psiraGrade, setPsiraGrade] = useState("");
   const [securityServiceType, setSecurityServiceType] = useState("");
   const [nextOfKin1Name, setNextOfKin1Name] = useState("");
   const [nextOfKin1Phone, setNextOfKin1Phone] = useState("");
@@ -950,12 +952,12 @@ function EmployeeForm({
       setError("Team member ID is required. Enter it on the Basic details tab.");
       return;
     }
-    if (employeeType === "security" && !psiraNumber.trim()) {
+    if (employeeType === "security_officer" && !psiraRegistrationNumber.trim()) {
       setActiveTab("psira");
       setError("PSIRA number is required for security guards. Enter it on the PSIRA tab.");
       return;
     }
-    if (employeeType === "security" && !gradeId) {
+    if (employeeType === "security_officer" && !gradeId) {
       setActiveTab("basic");
       setError("Pay grade is required for security guards. Choose one on the Basic details tab.");
       return;
@@ -965,7 +967,7 @@ function EmployeeForm({
       setError("Every team member needs a group. Choose one on the Basic details tab.");
       return;
     }
-    if (employeeType === "office" && (!monthlySalary || parseFloat(monthlySalary) <= 0)) {
+    if (employeeType === "general" && (!monthlySalary || parseFloat(monthlySalary) <= 0)) {
       setActiveTab("basic");
       setError("Monthly salary is required for office staff. Enter it on the Basic details tab.");
       return;
@@ -979,8 +981,8 @@ function EmployeeForm({
         idNumber: idNumber || undefined,
         phone: phone.trim() === "" ? "" : phone.trim() || undefined,
         email: email || undefined,
-        monthlySalary: employeeType === "office" && monthlySalary ? parseFloat(monthlySalary) : undefined,
-        gradeId: employeeType === "security" ? gradeId : undefined,
+        monthlySalary: employeeType === "general" && monthlySalary ? parseFloat(monthlySalary) : undefined,
+        gradeId: employeeType === "security_officer" ? gradeId : undefined,
         groupId,
         status,
         employeeType,
@@ -1004,8 +1006,9 @@ function EmployeeForm({
         leaveEntitlement: leaveEntitlement || undefined,
         noticePeriod: noticePeriod || undefined,
         previousService: previousService || undefined,
-        psiraNumber: psiraNumber || undefined,
-        psiraExpiryDate: psiraExpiryDate || undefined,
+        psiraRegistrationNumber: psiraRegistrationNumber || undefined,
+        psiraRegistrationExpiry: psiraRegistrationExpiry || undefined,
+        psiraGrade: psiraGrade || undefined,
         securityServiceType: securityServiceType || undefined,
         nextOfKin1Name: nextOfKin1Name || undefined,
         nextOfKin1Phone: nextOfKin1Phone || undefined,
@@ -1025,7 +1028,7 @@ function EmployeeForm({
       });
       if (!res.ok) {
         const data = await res.json();
-        const msg = data?.message?.psiraNumber?.[0] ?? data?.message?.gradeId?.[0] ?? data?.message?.groupId?.[0] ?? data?.message?.monthlySalary?.[0] ?? data?.message?.employeeNumber?.[0] ?? (typeof data?.message === "string" ? data.message : null) ?? "Could not save the team member. Please check the details and try again.";
+        const msg = data?.message?.psiraRegistrationNumber?.[0] ?? data?.message?.gradeId?.[0] ?? data?.message?.groupId?.[0] ?? data?.message?.monthlySalary?.[0] ?? data?.message?.employeeNumber?.[0] ?? (typeof data?.message === "string" ? data.message : null) ?? "Could not save the team member. Please check the details and try again.";
         throw new Error(msg);
       }
       onSuccess();
@@ -1061,9 +1064,9 @@ function EmployeeForm({
               <input
                 type="radio"
                 name="staffType"
-                value="office"
-                checked={employeeType === "office"}
-                onChange={() => setEmployeeType("office")}
+                value="general"
+                checked={employeeType === "general"}
+                onChange={() => setEmployeeType("general")}
                 className="w-3.5 h-3.5 border-2 border-neutral-200 accent-neutral-900"
               />
               <span className="text-sm font-medium text-neutral-900">Office</span>
@@ -1073,9 +1076,9 @@ function EmployeeForm({
               <input
                 type="radio"
                 name="staffType"
-                value="security"
-                checked={employeeType === "security"}
-                onChange={() => setEmployeeType("security")}
+                value="security_officer"
+                checked={employeeType === "security_officer"}
+                onChange={() => setEmployeeType("security_officer")}
                 className="w-3.5 h-3.5 border-2 border-neutral-200 accent-neutral-900"
               />
               <span className="text-sm font-medium text-neutral-900">Guard</span>
@@ -1177,7 +1180,7 @@ function EmployeeForm({
               </label>
               <input id="new-emp-email" type="email" placeholder="e.g. name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} className="input-compact" />
             </div>
-            {employeeType === "office" ? (
+            {employeeType === "general" ? (
               <div className="flex flex-col gap-1">
                 <label htmlFor="new-emp-salary" className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
                   Monthly salary (R) <span className="text-red-600">*</span>
@@ -1302,11 +1305,22 @@ function EmployeeForm({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-600 mb-1">PSIRA <span className="text-red-600">*</span></label>
-              <input placeholder="PSIRA number" value={psiraNumber} onChange={(e) => setPsiraNumber(e.target.value)} className="input-compact" required={employeeType === "security"} />
+              <input placeholder="PSIRA number" value={psiraRegistrationNumber} onChange={(e) => setPsiraNumber(e.target.value)} className="input-compact" required={employeeType === "security_officer"} />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">PSIRA expiry</label>
-              <DateInput value={psiraExpiryDate} onChange={setPsiraExpiryDate} ariaLabel="PSIRA expiry" futureOnly />
+              <DateInput value={psiraRegistrationExpiry} onChange={setPsiraExpiryDate} ariaLabel="PSIRA expiry" futureOnly />
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-600 mb-1">PSIRA grade</label>
+              <select value={psiraGrade} onChange={(e) => setPsiraGrade(e.target.value)} className="input-compact">
+                <option value="">—</option>
+                <option value="E">E</option>
+                <option value="D">D</option>
+                <option value="C">C</option>
+                <option value="B">B</option>
+                <option value="A">A</option>
+              </select>
             </div>
             <select value={securityServiceType} onChange={(e) => setSecurityServiceType(e.target.value)} className="input-compact sm:col-span-2">
               <option value="">Security service type</option>
@@ -1375,7 +1389,7 @@ function EditModal({
   onSuccess: () => void;
 }) {
   const { confirm, confirmDialog } = useConfirmDialog();
-  const [employeeType, setEmployeeType] = useState<"office" | "security">("security");
+  const [employeeType, setEmployeeType] = useState<"general" | "security_officer">("security_officer");
   const [employeeNumber, setEmployeeNumber] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -1411,8 +1425,9 @@ function EditModal({
   const [noticePeriod, setNoticePeriod] = useState("");
   const [previousService, setPreviousService] = useState("");
 
-  const [psiraNumber, setPsiraNumber] = useState("");
-  const [psiraExpiryDate, setPsiraExpiryDate] = useState("");
+  const [psiraRegistrationNumber, setPsiraNumber] = useState("");
+  const [psiraRegistrationExpiry, setPsiraExpiryDate] = useState("");
+  const [psiraGrade, setPsiraGrade] = useState("");
   const [securityServiceType, setSecurityServiceType] = useState("");
   const [nextOfKin1Name, setNextOfKin1Name] = useState("");
   const [nextOfKin1Phone, setNextOfKin1Phone] = useState("");
@@ -1431,7 +1446,7 @@ function EditModal({
     authFetch(`/employees/${employeeId}`, token)
       .then((r) => r.json())
       .then((emp) => {
-        setEmployeeType((emp.employeeType || "security") as "office" | "security");
+        setEmployeeType((emp.employeeType || "security_officer") as "general" | "security_officer");
         setEmployeeNumber(emp.employeeNumber || "");
         setFirstName(emp.firstName);
         setLastName(emp.lastName);
@@ -1461,8 +1476,9 @@ function EditModal({
         setLeaveEntitlement(emp.leaveEntitlement || "");
         setNoticePeriod(emp.noticePeriod || "");
         setPreviousService(emp.previousService || "");
-        setPsiraNumber(emp.psiraNumber || "");
-        setPsiraExpiryDate(toDateStr(emp.psiraExpiryDate));
+        setPsiraNumber(emp.psiraRegistrationNumber || "");
+        setPsiraExpiryDate(toDateStr(emp.psiraRegistrationExpiry));
+        setPsiraGrade(emp.psiraGrade || "");
         setSecurityServiceType(emp.securityServiceType || "");
         setNextOfKin1Name(emp.nextOfKin1Name || "");
         setNextOfKin1Phone(emp.nextOfKin1Phone || "");
@@ -1483,12 +1499,12 @@ function EditModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (employeeType === "security" && !psiraNumber.trim()) {
+    if (employeeType === "security_officer" && !psiraRegistrationNumber.trim()) {
       setActiveTab("psira");
       setError("PSIRA number is required for security guards. Enter it on the PSIRA tab.");
       return;
     }
-    if (employeeType === "security" && !gradeId) {
+    if (employeeType === "security_officer" && !gradeId) {
       setActiveTab("basic");
       setError("Pay grade is required for security guards. Choose one on the Basic details tab.");
       return;
@@ -1498,7 +1514,7 @@ function EditModal({
       setError("Every team member needs a group. Choose one on the Basic details tab.");
       return;
     }
-    if (employeeType === "office" && (!monthlySalary || parseFloat(monthlySalary) <= 0)) {
+    if (employeeType === "general" && (!monthlySalary || parseFloat(monthlySalary) <= 0)) {
       setActiveTab("basic");
       setError("Monthly salary is required for office staff. Enter it on the Basic details tab.");
       return;
@@ -1512,9 +1528,9 @@ function EditModal({
         idNumber: idNumber || undefined,
         phone: phone.trim() === "" ? "" : phone.trim() || undefined,
         email: email || undefined,
-        hourlyRate: employeeType === "office" ? null : undefined,
-        monthlySalary: employeeType === "office" && monthlySalary ? parseFloat(monthlySalary) : employeeType === "security" ? null : undefined,
-        gradeId: employeeType === "security" ? gradeId : null,
+        hourlyRate: employeeType === "general" ? null : undefined,
+        monthlySalary: employeeType === "general" && monthlySalary ? parseFloat(monthlySalary) : employeeType === "security_officer" ? null : undefined,
+        gradeId: employeeType === "security_officer" ? gradeId : null,
         groupId,
         employeeType,
         dateOfBirth: dateOfBirth || undefined,
@@ -1537,8 +1553,9 @@ function EditModal({
         leaveEntitlement: leaveEntitlement || undefined,
         noticePeriod: noticePeriod || undefined,
         previousService: previousService || undefined,
-        psiraNumber: psiraNumber || undefined,
-        psiraExpiryDate: psiraExpiryDate || undefined,
+        psiraRegistrationNumber: psiraRegistrationNumber || undefined,
+        psiraRegistrationExpiry: psiraRegistrationExpiry || undefined,
+        psiraGrade: psiraGrade || undefined,
         securityServiceType: securityServiceType || undefined,
         nextOfKin1Name: nextOfKin1Name || undefined,
         nextOfKin1Phone: nextOfKin1Phone || undefined,
@@ -1558,7 +1575,7 @@ function EditModal({
       });
       if (!res.ok) {
         const data = await res.json();
-        const msg = data?.message?.psiraNumber?.[0] ?? data?.message?.gradeId?.[0] ?? data?.message?.groupId?.[0] ?? data?.message?.monthlySalary?.[0] ?? data?.message?.employeeNumber?.[0] ?? data?.message ?? "Failed to update";
+        const msg = data?.message?.psiraRegistrationNumber?.[0] ?? data?.message?.gradeId?.[0] ?? data?.message?.groupId?.[0] ?? data?.message?.monthlySalary?.[0] ?? data?.message?.employeeNumber?.[0] ?? data?.message ?? "Failed to update";
         throw new Error(typeof msg === "string" ? msg : "Failed to update");
       }
       onSuccess();
@@ -1603,9 +1620,9 @@ function EditModal({
                   <input
                     type="radio"
                     name="editStaffType"
-                    value="office"
-                    checked={employeeType === "office"}
-                    onChange={() => setEmployeeType("office")}
+                    value="general"
+                    checked={employeeType === "general"}
+                    onChange={() => setEmployeeType("general")}
                     className="w-4 h-4"
                   />
                   <span className="font-medium">Office Staff</span>
@@ -1615,9 +1632,9 @@ function EditModal({
                   <input
                     type="radio"
                     name="editStaffType"
-                    value="security"
-                    checked={employeeType === "security"}
-                    onChange={() => setEmployeeType("security")}
+                    value="security_officer"
+                    checked={employeeType === "security_officer"}
+                    onChange={() => setEmployeeType("security_officer")}
                     className="w-4 h-4"
                   />
                   <span className="font-medium">Guard</span>
@@ -1678,7 +1695,7 @@ function EditModal({
                   <p className="text-xs text-neutral-500 mt-0.5">Saved in WhatsApp-compatible format for clock-in, payslip, and leave commands.</p>
                 </div>
                 <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-modern" />
-                {employeeType === "office" ? (
+                {employeeType === "general" ? (
                   <input
                     type="number"
                     step="0.01"
@@ -1787,11 +1804,22 @@ function EditModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-neutral-600 mb-1">PSIRA number <span className="text-red-600">*</span></label>
-                  <input placeholder="PSIRA number" value={psiraNumber} onChange={(e) => setPsiraNumber(e.target.value)} className="input-modern" required={employeeType === "security"} />
+                  <input placeholder="PSIRA number" value={psiraRegistrationNumber} onChange={(e) => setPsiraNumber(e.target.value)} className="input-modern" required={employeeType === "security_officer"} />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-sm font-medium text-neutral-600">PSIRA expiry</label>
-                  <DateInput value={psiraExpiryDate} onChange={setPsiraExpiryDate} className="input-modern" ariaLabel="PSIRA expiry" futureOnly />
+                  <DateInput value={psiraRegistrationExpiry} onChange={setPsiraExpiryDate} className="input-modern" ariaLabel="PSIRA expiry" futureOnly />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-600 mb-1">PSIRA grade</label>
+                  <select value={psiraGrade} onChange={(e) => setPsiraGrade(e.target.value)} className="input-modern">
+                    <option value="">—</option>
+                    <option value="E">E</option>
+                    <option value="D">D</option>
+                    <option value="C">C</option>
+                    <option value="B">B</option>
+                    <option value="A">A</option>
+                  </select>
                 </div>
                 <select value={securityServiceType} onChange={(e) => setSecurityServiceType(e.target.value)} className="input-modern sm:col-span-2">
                   <option value="">Nature of security service</option>

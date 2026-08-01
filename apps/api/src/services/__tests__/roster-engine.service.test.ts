@@ -8,7 +8,7 @@ vi.mock("../../lib/prisma.js", () => ({
     sitePost: { findMany: vi.fn() },
     siteAssignment: { findMany: vi.fn() },
     company: { findUnique: vi.fn() },
-    leaveRecord: { findMany: vi.fn() },
+    leaveRequest: { findMany: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
@@ -55,7 +55,7 @@ function makeGuards(count: number) {
       lastName: `${i + 1}`,
       status: "active",
       gender: "M",
-      employeeType: "security",
+      employeeType: "security_officer",
     },
   }));
 }
@@ -91,7 +91,7 @@ function mockSite(overrides: Record<string, unknown> = {}) {
           lastName: "One",
           status: "active",
           gender: "M",
-          employeeType: "security",
+          employeeType: "security_officer",
         },
       },
       {
@@ -101,7 +101,7 @@ function mockSite(overrides: Record<string, unknown> = {}) {
           lastName: "Two",
           status: "active",
           gender: "F",
-          employeeType: "security",
+          employeeType: "security_officer",
         },
       },
     ],
@@ -114,10 +114,10 @@ describe("generateRosterPlan", () => {
     vi.mocked(prisma.site.findFirst).mockReset();
     vi.mocked(prisma.shift.findMany).mockReset();
     vi.mocked(prisma.shift.count).mockReset();
-    vi.mocked(prisma.leaveRecord.findMany).mockReset();
+    vi.mocked(prisma.leaveRequest.findMany).mockReset();
     vi.mocked(prisma.shift.findMany).mockResolvedValue([]);
     vi.mocked(prisma.shift.count).mockResolvedValue(0);
-    vi.mocked(prisma.leaveRecord.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.leaveRequest.findMany).mockResolvedValue([]);
   });
 
   it("returns empty plan with warning when no site guards", async () => {
@@ -223,7 +223,7 @@ describe("generateRosterPlan", () => {
               lastName: "Guard",
               status: "active",
               gender: "M",
-              employeeType: "security",
+              employeeType: "security_officer",
             },
           },
         ],
@@ -284,7 +284,7 @@ describe("generateRosterPlan", () => {
               lastName: "One",
               status: "active",
               gender: "M",
-              employeeType: "security",
+              employeeType: "security_officer",
             },
           },
         ],
@@ -677,7 +677,7 @@ describe("generateRosterPlan", () => {
               lastName: "Iever",
               status: "reliever",
               gender: "M",
-              employeeType: "security",
+              employeeType: "security_officer",
             },
           },
         ],
@@ -876,9 +876,7 @@ describe("applyRosterPlan", () => {
 
     vi.mocked(prisma.$transaction).mockImplementation(async (fn) => {
       const tx = {
-        leaveOccurrence: { findMany: vi.fn().mockResolvedValue([]) },
-        leaveApplication: { findMany: vi.fn().mockResolvedValue([]) },
-        leaveRecord: { findMany: vi.fn().mockResolvedValue([]) },
+        leaveRequest: { findMany: vi.fn().mockResolvedValue([]) },
         shift: {
           deleteMany: vi.fn().mockResolvedValue({ count: 2 }),
           createMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -943,16 +941,15 @@ describe("applyRosterPlan", () => {
     const deleteMany = vi.fn();
     vi.mocked(prisma.$transaction).mockImplementation(async (fn) =>
       fn({
-        leaveOccurrence: {
+        leaveRequest: {
           findMany: vi.fn().mockResolvedValue([
             {
               employeeId: "g1",
-              leaveDate: new Date("2026-05-01T00:00:00.000Z"),
+              startDate: new Date("2026-05-01T00:00:00.000Z"),
+              endDate: new Date("2026-05-01T00:00:00.000Z"),
             },
           ]),
         },
-        leaveApplication: { findMany: vi.fn().mockResolvedValue([]) },
-        leaveRecord: { findMany: vi.fn().mockResolvedValue([]) },
         shift: {
           deleteMany,
           createMany: vi.fn(),

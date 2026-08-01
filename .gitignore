@@ -17,11 +17,6 @@ uploads
 pgsql/
 pgsql18/
 apps/web/.debug-*
-.cursor/*
-!.cursor/skills/
-.cursor/skills/*
-!.cursor/skills/plethora-front-end-ui-design/
-!.cursor/skills/plethora-front-end-ui-design/SKILL.md
 
 # Environment files — never commit real secrets. Keep example templates only.
 .env

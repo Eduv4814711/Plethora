@@ -154,7 +154,7 @@ function employeeSnapshot(context: Record<string, unknown>, skipped = false) {
       firstName: "Jane",
       lastName: "Doe",
       status: "active",
-      employeeType: "security",
+      employeeType: "security_officer",
       groupId: null,
       siteId: null,
       postId: null,

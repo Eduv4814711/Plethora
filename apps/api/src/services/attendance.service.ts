@@ -15,32 +15,17 @@ export class AttendanceValidationError extends Error {
 const CLOCK_IN_WINDOW_MS = config.attendance.clockInWindowMinutes * 60 * 1000;
 
 export async function findApprovedLeaveConflict(companyId: string, employeeId: string, leaveDate: Date) {
-  const [occurrence, application, legacyRecord] = await Promise.all([
-    prisma.leaveOccurrence.findFirst({
-      where: {
-        companyId,
-        employeeId,
-        leaveDate,
-        status: { in: ["APPROVED", "PAYROLL_PROCESSED"] },
-      },
-      select: { id: true, applicationId: true },
-    }),
-    prisma.leaveApplication.findFirst({
-      where: {
-        companyId,
-        employeeId,
-        startDate: { lte: leaveDate },
-        endDate: { gte: leaveDate },
-        status: { in: ["APPROVED", "CANCELLATION_REQUESTED", "PAYROLL_PROCESSED", "ADJUSTMENT_REQUIRED", "IMPORTED_APPROVED"] },
-      },
-      select: { id: true },
-    }),
-    prisma.leaveRecord.findFirst({
-      where: { employeeId, employee: { companyId }, date: leaveDate },
-      select: { id: true },
-    }),
-  ]);
-  return occurrence || application || legacyRecord ? { occurrence, application, legacyRecord } : null;
+  const request = await prisma.leaveRequest.findFirst({
+    where: {
+      companyId,
+      employeeId,
+      status: "APPROVED",
+      startDate: { lte: leaveDate },
+      endDate: { gte: leaveDate },
+    },
+    select: { id: true },
+  });
+  return request ? { requestId: request.id } : null;
 }
 
 export async function validateClockIn(

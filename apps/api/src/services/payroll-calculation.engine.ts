@@ -200,7 +200,7 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
 
     if (isFixedMonthly) {
       const periodSalary = monthlySalaryForPayPeriod(monthlySalary, ctx.payPeriod);
-      const standardMonthlyHours = emp.employeeType === "office" ? 195 : 208;
+      const standardMonthlyHours = emp.employeeType === "general" ? 195 : 208;
       const standardPeriodHours =
         (standardMonthlyHours * 12) / PAY_PERIODS_PER_YEAR[ctx.payPeriod];
       const unpaidLeaveReduction = round2(
@@ -240,7 +240,7 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
     } else {
       if (hourlyRate === 0 && monthlySalary === 0) {
         const skipReason =
-          emp.employeeType === "office" ? "missing_monthly_salary" : "missing_pay_rate";
+          emp.employeeType === "general" ? "missing_monthly_salary" : "missing_pay_rate";
         output = {
           hoursWorked: 0,
           overtimeHours: 0,
@@ -335,7 +335,7 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
       if (publicHolidayPay > 0) earningsLines.push({ name: "Public Holiday", amount: publicHolidayPay });
     }
 
-    const empType = emp.employeeType ?? "security";
+    const empType = emp.employeeType ?? "security_officer";
     // Percentage allowances are a proportion of basic pay for everyone. Basing salaried
     // employees on gross instead would inflate the same rule whenever they worked
     // overtime or premium hours.
@@ -343,8 +343,8 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
     for (const er of earningsRules) {
       const applies =
         er.appliesTo === "all" ||
-        (er.appliesTo === "security" && empType !== "office") ||
-        (er.appliesTo === "office" && empType === "office");
+        (er.appliesTo === "security_officer" && empType !== "general") ||
+        (er.appliesTo === "general" && empType === "general");
       if (!applies) continue;
 
       let amount = 0;

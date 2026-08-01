@@ -327,7 +327,7 @@ export async function settingsRoutes(app: FastifyInstance) {
 
     const DEFAULT_DEDUCTION_RULES = [
       // UIF is calculated by tax service (with R17,712 ceiling) - do not add as deduction rule
-      { name: "PSIRA", type: "fixed" as const, amount: 75, appliesTo: "security" as const },
+      { name: "PSIRA", type: "fixed" as const, amount: 75, appliesTo: "security_officer" as const },
     ];
 
     const SA_PUBLIC_HOLIDAYS = [
@@ -449,7 +449,10 @@ export async function settingsRoutes(app: FastifyInstance) {
         await tx.payrollRun.deleteMany({ where: { companyId } });
         await tx.timesheet.deleteMany({ where: { companyId } });
         if (employeeIds.length > 0) {
-          await tx.leaveRecord.deleteMany({ where: { employeeId: { in: employeeIds } } });
+          // MedicalCertificate rows cascade-delete with their LeaveRequest row.
+          await tx.leaveRequest.deleteMany({ where: { companyId } });
+          await tx.leaveAdjustment.deleteMany({ where: { companyId } });
+          await tx.leaveAuditLog.deleteMany({ where: { companyId } });
           await tx.employeeDeduction.deleteMany({ where: { employeeId: { in: employeeIds } } });
         }
         await tx.employee.deleteMany({ where: { companyId } });

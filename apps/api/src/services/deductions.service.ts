@@ -43,7 +43,7 @@ export async function calculateDeductions(
   const lines: DeductionLine[] = [];
   let total = 0;
 
-  const empType = employee.employeeType ?? "security";
+  const empType = employee.employeeType ?? "security_officer";
   const appliesFilter = [
     { appliesTo: "all" as const },
     { appliesTo: empType },

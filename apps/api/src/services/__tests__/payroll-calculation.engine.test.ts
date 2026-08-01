@@ -23,7 +23,7 @@ function baseEmployee(overrides: Partial<Employee> & { grade?: PayGrade | null }
     lastName: "Guard",
     employeeNumber: "G001",
     status: "active",
-    employeeType: "security",
+    employeeType: "security_officer",
     groupId: null,
     siteId: "site-a",
     postId: "post-1",
@@ -122,7 +122,7 @@ describe("computePayrollLines", () => {
 
   it("uses office monthly salary without timesheet hours", () => {
     const emp = baseEmployee({
-      employeeType: "office",
+      employeeType: "general",
       monthlySalary: 25000,
     });
     const { lines } = computePayrollLines(
@@ -137,7 +137,7 @@ describe("computePayrollLines", () => {
 
   it("pays overtime, Sunday, and public holiday premiums on top of a fixed monthly salary", () => {
     const emp = baseEmployee({
-      employeeType: "security",
+      employeeType: "security_officer",
       monthlySalary: 20800,
     });
     const aggregates = new Map([
@@ -176,7 +176,7 @@ describe("computePayrollLines", () => {
     expect(monthlySalaryForPayPeriod(26_000, "biweekly")).toBe(12_000);
 
     const emp = baseEmployee({
-      employeeType: "office",
+      employeeType: "general",
       monthlySalary: 26_000,
     });
     const weekly = computePayrollLines(
@@ -200,7 +200,7 @@ describe("computePayrollLines", () => {
 
   it("uses monthly salary without timesheet hours when employeeType is security", () => {
     const emp = baseEmployee({
-      employeeType: "security",
+      employeeType: "security_officer",
       monthlySalary: 18000,
     });
     const { lines } = computePayrollLines(
@@ -216,7 +216,7 @@ describe("computePayrollLines", () => {
 
   it("skips office employee without monthly salary (missing_monthly_salary)", () => {
     const emp = baseEmployee({
-      employeeType: "office",
+      employeeType: "general",
       monthlySalary: null,
     });
     const { employeeSnapshots } = computePayrollLines(ctx({ employees: [emp] }));
@@ -266,7 +266,7 @@ describe("computePayrollLines", () => {
   it("captures employee site/post context in snapshot", () => {
     const emp = {
       ...baseEmployee({
-        employeeType: "office",
+        employeeType: "general",
         monthlySalary: 10000,
       }),
       siteAssignments: [{ siteId: "site-mid" }],
@@ -302,7 +302,7 @@ describe("computePayrollLines", () => {
 
   it("builds snapshot with totals and default multipliers", () => {
     const emp = baseEmployee({
-      employeeType: "office",
+      employeeType: "general",
       monthlySalary: 5000,
     });
     const calculationCtx = ctx({
@@ -365,7 +365,7 @@ describe("computePayrollLines", () => {
       type: "percentage",
       rate: 10,
       amount: null,
-      appliesTo: "security",
+      appliesTo: "security_officer",
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -464,7 +464,7 @@ describe("computePayrollLines", () => {
 
   it("reduces fixed monthly salary once for authorised unpaid leave", () => {
     const emp = baseEmployee({
-      employeeType: "office",
+      employeeType: "general",
       monthlySalary: 19_500 as unknown as Employee["monthlySalary"],
       hourlyRate: null,
     });
@@ -478,7 +478,7 @@ describe("computePayrollLines", () => {
   });
 
   it("keeps UIF-supported leave distinct from ordinary unpaid leave", () => {
-    const emp = baseEmployee({ employeeType: "office", monthlySalary: 19_500 as unknown as Employee["monthlySalary"], hourlyRate: null });
+    const emp = baseEmployee({ employeeType: "general", monthlySalary: 19_500 as unknown as Employee["monthlySalary"], hourlyRate: null });
     const { lines } = computePayrollLines(ctx({
       employees: [emp],
       aggregates: new Map([["emp-1", agg({ uifLeaveHours: 8 })]]),
@@ -511,7 +511,7 @@ describe("computePayrollLines", () => {
   });
 
   it("records the period salary as base pay on a fixed-monthly line", () => {
-    const emp = baseEmployee({ employeeType: "office", monthlySalary: 25_000 as never });
+    const emp = baseEmployee({ employeeType: "general", monthlySalary: 25_000 as never });
     const { lines } = computePayrollLines(
       ctx({
         employees: [emp],
@@ -524,7 +524,7 @@ describe("computePayrollLines", () => {
   });
 
   it("excludes unpaid leave from a salaried employee's base pay", () => {
-    const emp = baseEmployee({ employeeType: "office", monthlySalary: 19_500 as never });
+    const emp = baseEmployee({ employeeType: "general", monthlySalary: 19_500 as never });
     const { lines } = computePayrollLines(
       ctx({
         employees: [emp],
@@ -565,7 +565,7 @@ describe("computePayrollLines", () => {
     );
     const salaried = computePayrollLines(
       ctx({
-        employees: [baseEmployee({ employeeType: "office", monthlySalary: 20_800 as never })],
+        employees: [baseEmployee({ employeeType: "general", monthlySalary: 20_800 as never })],
         aggregates,
         companyEarningsRules: [rule],
         deductionsByEmployee: new Map([["emp-1", { total: 0, lines: [] }]]),
@@ -578,7 +578,7 @@ describe("computePayrollLines", () => {
   });
 
   it("taxes a run on the tax year of its period, not the current date", () => {
-    const emp = baseEmployee({ employeeType: "office", monthlySalary: 30_000 as never });
+    const emp = baseEmployee({ employeeType: "general", monthlySalary: 30_000 as never });
     const build = (periodStart: Date, periodEnd: Date) => {
       const calculationCtx = ctx({
         periodStart,

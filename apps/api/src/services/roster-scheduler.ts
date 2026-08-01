@@ -533,7 +533,7 @@ export function explainGuardIneligibilityForSlot(params: {
   if (assignedEmployeeIdsForDate?.has(guard.id)) {
     reasons.push("already assigned a shift on this date");
   }
-  if ((guard.employeeType ?? "security") !== "security") {
+  if ((guard.employeeType ?? "security_officer") !== "security_officer") {
     reasons.push("not a security employee");
   }
   if (!ROSTERABLE_STATUSES.includes(guard.status as (typeof ROSTERABLE_STATUSES)[number])) {
@@ -645,7 +645,7 @@ export function isGuardEligibleForSlot(params: {
   if (leaveDateKeysByEmployee?.get(guard.id)?.has(slot.dateKey)) return false;
   if (assignedEmployeeIdsForDate?.has(guard.id)) return false;
 
-  if ((guard.employeeType ?? "security") !== "security") return false;
+  if ((guard.employeeType ?? "security_officer") !== "security_officer") return false;
   if (!ROSTERABLE_STATUSES.includes(guard.status as (typeof ROSTERABLE_STATUSES)[number])) {
     return false;
   }

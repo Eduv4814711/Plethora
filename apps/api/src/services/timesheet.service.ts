@@ -1,6 +1,8 @@
 import { toZonedTime } from "date-fns-tz";
 import { prisma } from "../lib/prisma.js";
 import { dateKeyInTimeZone, getCompanyTimezone } from "../lib/timezone.js";
+import { employeeTypeConfig } from "../lib/leave-rules.config.js";
+import { toLeaveConfigEmployeeType } from "./leave-v3.service.js";
 
 export interface TimesheetAggregate {
   employeeId: string;
@@ -10,15 +12,15 @@ export interface TimesheetAggregate {
   publicHolidayHours: number;
   /** Derived from leave hours (hours / 8) for display and legacy consumers. */
   leaveDays: number;
-  /** Actual paid leave hours from LeaveRecord entries in the period. */
+  /** Paid leave hours (annual/sick/family_responsibility/study) approved in the period. */
   leaveHours: number;
-  /** Authorised unpaid leave hours. */
+  /** Unpaid leave hours — parental leave only; unpaid by statute. */
   unpaidLeaveHours?: number;
-  /** UIF-supported leave, retained separately from ordinary unpaid leave. */
+  /** Always 0 — UIF-supported leave is out of scope for the simple leave engine. */
   uifLeaveHours?: number;
-  /** Injury-on-duty hours, retained for compensation reconciliation. */
+  /** Always 0 — injury-on-duty leave is out of scope for the simple leave engine. */
   iodLeaveHours?: number;
-  /** Information-only leave that must not alter pay automatically. */
+  /** Always 0 — information-only leave treatment does not exist in the simple leave engine. */
   informationLeaveHours?: number;
 }
 
@@ -55,24 +57,6 @@ export function siteTimesheetShiftMatchKey(
   shiftType: string | null | undefined
 ): string {
   return `${siteId}:${employeeId}:${dateKey}:${shiftType ?? "unknown"}`;
-}
-
-/**
- * Sum leave hours from records, ignoring invalid entries.
- */
-export function sumLeaveHoursFromRecords(
-  records: Array<{ employeeId: string; hours: unknown }>
-): Map<string, number> {
-  const employeeLeaveHours = new Map<string, number>();
-  for (const lr of records) {
-    const hours = Number(lr.hours);
-    if (!Number.isFinite(hours) || hours <= 0 || hours > MAX_LEAVE_HOURS_PER_RECORD) {
-      continue;
-    }
-    const current = employeeLeaveHours.get(lr.employeeId) ?? 0;
-    employeeLeaveHours.set(lr.employeeId, current + hours);
-  }
-  return employeeLeaveHours;
 }
 
 /**
@@ -215,78 +199,62 @@ export async function aggregateTimesheets(
       )
   );
 
-  const [leaveOccurrences, legacyLeaveRecords] = await Promise.all([
-    prisma.leaveOccurrence.findMany({
-      where: {
-        companyId,
-        status: { in: ["APPROVED", "PAYROLL_PROCESSED"] },
-        leaveDate: { gte: periodStart, lte: periodEnd },
-      },
-      select: { employeeId: true, leaveDate: true, paidMinutes: true, unpaidMinutes: true, requestedMinutes: true, payrollTreatment: true },
-    }),
-    prisma.leaveRecord.findMany({
-      where: {
-        employee: { companyId },
-        date: { gte: periodStart, lte: periodEnd },
-      },
-    }),
-  ]);
+  // Paid leave types (annual/sick/family_responsibility/study) contribute
+  // leaveHours; parental leave is unpaid by statute and contributes
+  // unpaidLeaveHours instead. UIF/IOD/information-only treatments no longer
+  // exist as leave types in the simple engine, so those buckets always
+  // report zero — out of scope per the leave rebuild (see README).
+  const approvedLeaveRequests = await prisma.leaveRequest.findMany({
+    where: {
+      companyId,
+      status: "APPROVED",
+      startDate: { lte: periodEnd },
+      endDate: { gte: periodStart },
+    },
+    select: {
+      employeeId: true,
+      leaveType: true,
+      startDate: true,
+      endDate: true,
+      unitsRequested: true,
+      employee: { select: { employeeType: true } },
+    },
+  });
 
-  const authoritativeKeys = new Set(
-    leaveOccurrences.map((row) => `${row.employeeId}:${row.leaveDate.toISOString().slice(0, 10)}`)
-  );
-  const legacyWithoutAuthoritativeOccurrence = legacyLeaveRecords.filter(
-    (row) => !authoritativeKeys.has(`${row.employeeId}:${row.date.toISOString().slice(0, 10)}`)
-  );
-  // Exact duplicate legacy rows are a known migration anomaly. Payroll
-  // readiness blocks them for HR resolution; aggregation also de-duplicates
-  // them defensively so a direct calculation can never pay the same day twice.
-  const uniqueLegacyRecords = [...new Map(legacyWithoutAuthoritativeOccurrence.map((row) => [
-    `${row.employeeId}:${row.date.toISOString().slice(0, 10)}:${row.type}:${Number(row.hours)}`,
-    row,
-  ])).values()];
-  // Keep legacy payroll semantics available during the staged per-company
-  // migration. Once an authoritative occurrence exists for a day it wins;
-  // otherwise every legacy treatment is still classified rather than silently
-  // dropping unpaid/UIF/IOD deductions before that tenant is imported.
-  const legacyUifTypes = new Set(["maternity", "parental", "adoption", "commissioning_parental"]);
-  const employeeLeaveHours = sumLeaveHoursFromRecords(
-    uniqueLegacyRecords.filter(
-      (row) => row.type !== "unpaid" && row.type !== "injury_on_duty" && !legacyUifTypes.has(row.type)
-    )
-  );
-  const employeeUnpaidLeaveHours = sumLeaveHoursFromRecords(
-    uniqueLegacyRecords.filter((row) => row.type === "unpaid")
-  );
-  const employeeUifLeaveHours = sumLeaveHoursFromRecords(
-    uniqueLegacyRecords.filter((row) => legacyUifTypes.has(row.type))
-  );
-  const employeeIodLeaveHours = sumLeaveHoursFromRecords(
-    uniqueLegacyRecords.filter((row) => row.type === "injury_on_duty")
-  );
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const employeeLeaveHours = new Map<string, number>();
+  const employeeUnpaidLeaveHours = new Map<string, number>();
+  const employeeUifLeaveHours = new Map<string, number>();
+  const employeeIodLeaveHours = new Map<string, number>();
   const employeeInformationLeaveHours = new Map<string, number>();
-  for (const occurrence of leaveOccurrences) {
-    employeeLeaveHours.set(
-      occurrence.employeeId,
-      (employeeLeaveHours.get(occurrence.employeeId) ?? 0) + occurrence.paidMinutes / 60
-    );
-    const target = occurrence.payrollTreatment === "UIF_NO_EMPLOYER_PAY"
-      ? employeeUifLeaveHours
-      : occurrence.payrollTreatment === "IOD_COMPENSATION"
-        ? employeeIodLeaveHours
-        : occurrence.payrollTreatment === "INFORMATION_ONLY"
-          ? employeeInformationLeaveHours
-          : employeeUnpaidLeaveHours;
-    const minutes = occurrence.payrollTreatment === "IOD_COMPENSATION" || occurrence.payrollTreatment === "INFORMATION_ONLY"
-      ? occurrence.requestedMinutes
-      : occurrence.unpaidMinutes;
-    target.set(occurrence.employeeId, (target.get(occurrence.employeeId) ?? 0) + minutes / 60);
-  }
+  const knownLeaveDayKeys = new Set<string>();
 
-  const knownLeaveDayKeys = new Set([
-    ...authoritativeKeys,
-    ...legacyLeaveRecords.map((row) => `${row.employeeId}:${row.date.toISOString().slice(0, 10)}`),
-  ]);
+  for (const request of approvedLeaveRequests) {
+    const overlapStart = request.startDate > periodStart ? request.startDate : periodStart;
+    const overlapEnd = request.endDate < periodEnd ? request.endDate : periodEnd;
+    if (overlapEnd < overlapStart) continue;
+
+    // A request spanning a pay-period boundary contributes only the
+    // proportion of its units that fall within this period, split evenly
+    // across the calendar days of the request (an approximation, not a
+    // roster-aware day-by-day allocation).
+    const totalDays = Math.round((request.endDate.getTime() - request.startDate.getTime()) / DAY_MS) + 1;
+    const overlapDays = Math.round((overlapEnd.getTime() - overlapStart.getTime()) / DAY_MS) + 1;
+    const ratio = totalDays > 0 ? overlapDays / totalDays : 0;
+    const hoursPerUnit = employeeTypeConfig(toLeaveConfigEmployeeType(request.employee.employeeType)).hoursPerUnit;
+    const hours = Number(request.unitsRequested) * ratio * hoursPerUnit;
+
+    const target = request.leaveType === "PARENTAL" ? employeeUnpaidLeaveHours : employeeLeaveHours;
+    target.set(request.employeeId, (target.get(request.employeeId) ?? 0) + hours);
+
+    for (
+      let day = new Date(overlapStart);
+      day <= overlapEnd;
+      day = new Date(day.getTime() + DAY_MS)
+    ) {
+      knownLeaveDayKeys.add(`${request.employeeId}:${day.toISOString().slice(0, 10)}`);
+    }
+  }
 
   const totals = new Map<
     string,

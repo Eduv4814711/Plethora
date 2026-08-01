@@ -11,7 +11,7 @@ const createDeductionRuleSchema = z.object({
   type: z.enum(["fixed", "percentage"]),
   amount: z.number().finite().positive().optional(),
   rate: z.number().finite().positive().max(100).optional(),
-  appliesTo: z.enum(["all", "security", "office"]).default("all"),
+  appliesTo: z.enum(["all", "security_officer", "general"]).default("all"),
   employeeIds: z.array(z.string().min(1)).max(10_000).optional(),
   isOptional: z.boolean().default(false),
 });

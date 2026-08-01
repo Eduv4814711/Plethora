@@ -18,7 +18,7 @@ type GuardOption = {
   firstName: string;
   lastName: string;
   employeeNumber?: string | null;
-  psiraNumber?: string | null;
+  psiraRegistrationNumber?: string | null;
 };
 
 function label(value: string | null | undefined) {
@@ -121,8 +121,8 @@ export function SiteTimesheetRowCard({
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-1">Scheduled</p>
           <p className="text-sm text-neutral-800 dark:text-neutral-200">{row.plannedGuardName ?? "Unrostered"}</p>
-          {(row.employeeNumber || row.psiraNumber) && (
-            <p className="text-xs text-neutral-500">{row.employeeNumber ?? row.psiraNumber}</p>
+          {(row.employeeNumber || row.psiraRegistrationNumber) && (
+            <p className="text-xs text-neutral-500">{row.employeeNumber ?? row.psiraRegistrationNumber}</p>
           )}
         </div>
         <div>
