@@ -85,12 +85,11 @@ const reviewSchema = z.object({
 });
 
 export async function incidentsRoutes(app: FastifyInstance) {
-  const protect = [
-    authMiddleware,
-    requireCrudCapability({
-      anyOfModules: ["/", "/incidents", "/sites", "/reports"],
-    }),
-  ];
+  // These are the incident CRUD routes, not an aggregate read surface, so they
+  // require the Incidents module itself. Dashboard/Sites/Reports grants used to
+  // reach them (including create and edit); the access migration granted
+  // /incidents explicitly to everyone who relied on that.
+  const protect = [authMiddleware, requireCrudCapability({ module: "/incidents" })];
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;

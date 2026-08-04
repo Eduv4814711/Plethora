@@ -25,6 +25,8 @@
     "db:check": "node scripts/check-database.mjs",
     "db:seed": "tsx prisma/seed.ts",
     "db:reset-admin": "tsx prisma/reset-admin.ts",
+    "db:expand-grants": "tsx prisma/expand-implicit-grants.ts",
+    "gen:catalog": "node scripts/generate-web-catalog.mjs",
     "db:studio": "prisma studio",
     "import:employees": "tsx scripts/import-employees-csv.ts",
     "db:create-site-groups": "tsx scripts/create-site-employee-groups.ts",

@@ -6,6 +6,7 @@ import {
   canManageEmployeeDetails,
   capabilitiesForPath,
   hasCapability,
+  resolveModulePath,
 } from "../permissions";
 
 const subject = (capabilities: CapabilityMap = {}, isOwner = false) => ({
@@ -26,7 +27,18 @@ describe("capability access", () => {
     expect(hasCapability(user, "/employees", "view")).toBe(false);
   });
 
-  it("uses the most-specific submodule assignment", () => {
+  it("resolves a record path to its owning module", () => {
+    expect(resolveModulePath("/sites/abc123")).toBe("/sites");
+    expect(resolveModulePath("/employees/leave/requests")).toBe("/employees/leave");
+  });
+
+  it("does not let a parent module grant reach a sub-module", () => {
+    const user = subject({ "/employees": ["view", "edit"] });
+    expect(hasCapability(user, "/employees/leave", "view")).toBe(false);
+    expect(capabilitiesForPath(user.capabilities, "/employees/leave/requests")).toBeNull();
+  });
+
+  it("uses the sub-module's own assignment when it has one", () => {
     const user = subject({
       "/employees": ["view", "edit"],
       "/employees/leave": ["view"],
@@ -40,18 +52,35 @@ describe("capability access", () => {
     expect(hasCapability({ ...subject({}, true), isActive: false }, "/payroll", "view")).toBe(false);
   });
 
-  it("allows the leave workspace through explicit Leave or Payroll view access", () => {
+  it("opens the leave workspace only through explicit Leave view access", () => {
     expect(canAccessRoute("/employees/leave", subject({ "/employees/leave": ["view"] }))).toBe(true);
-    expect(canAccessRoute("/employees/leave", subject({ "/payroll": ["view"] }))).toBe(true);
-    expect(canAccessRoute("/employees/leave", subject({ "/employees": ["view"], "/employees/leave": ["edit"] }))).toBe(false);
+    // Payroll no longer implies Leave; the access migration granted it explicitly
+    // to everyone who relied on that.
+    expect(canAccessRoute("/employees/leave", subject({ "/payroll": ["view"] }))).toBe(false);
+    expect(
+      canAccessRoute("/employees/leave", subject({ "/employees": ["view"], "/employees/leave": ["edit"] }))
+    ).toBe(false);
   });
 
-  it("opens migration tools only through the affected module actions", () => {
-    const teamExporter = subject({ "/employees": ["export"] });
-    expect(canAccessMigrationTools(teamExporter)).toBe(true);
-    expect(canAccessRoute("/settings/migrate", teamExporter)).toBe(true);
-    expect(canAccessRoute("/settings", teamExporter)).toBe(false);
-    expect(canAccessMigrationTools(subject({ "/settings": ["export"] }))).toBe(false);
+  it("opens Clients only through explicit Clients view access", () => {
+    expect(canAccessRoute("/clients", subject({ "/clients": ["view"] }))).toBe(true);
+    expect(canAccessRoute("/clients", subject({ "/sites": ["view"] }))).toBe(false);
+    expect(canAccessRoute("/clients", subject({ "/settings": ["view"] }))).toBe(false);
+  });
+
+  it("opens migration tools only through the Data Import / Export module", () => {
+    const importer = subject({ "/settings/migrate": ["view", "export"] });
+    expect(canAccessMigrationTools(importer)).toBe(true);
+    expect(canAccessRoute("/settings/migrate", importer)).toBe(true);
+    expect(canAccessRoute("/settings", importer)).toBe(false);
+    // A Team export grant used to be a back door into bulk import/export.
+    expect(canAccessMigrationTools(subject({ "/employees": ["export"] }))).toBe(false);
+  });
+
+  it("does not let a Settings grant open Settings · User Access", () => {
+    const settingsUser = subject({ "/settings": ["view", "edit"] });
+    expect(hasCapability(settingsUser, "/settings/access", "view")).toBe(false);
+    expect(hasCapability(settingsUser, "/settings/access", "manage_access")).toBe(false);
   });
 });
 

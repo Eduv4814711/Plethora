@@ -1,12 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { requireCrudCapability } from "../authorization.js";
+import { requireCrudCapability, __resetDenialDedupe } from "../authorization.js";
 import { SITE_TIMESHEET_MODULES } from "../../modules/rosters/site-timesheet-access.js";
 
+vi.mock("../../lib/audit.js", () => ({
+  auditFromRequest: vi.fn(async () => {}),
+}));
+
 function requestWithCapabilities(capabilities: unknown, method = "GET", isOwner = false) {
+  __resetDenialDedupe();
   return {
-    user: { isOwner, isActive: true, capabilities },
+    user: { sub: "u1", companyId: "c1", isOwner, isActive: true, capabilities },
     method,
+    url: "/rosters/site-timesheets",
+    headers: {},
+    log: { error: vi.fn(), warn: vi.fn() },
   } as unknown as FastifyRequest;
 }
 

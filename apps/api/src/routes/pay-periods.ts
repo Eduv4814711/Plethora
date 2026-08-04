@@ -18,8 +18,12 @@ import {
 export async function payPeriodsRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
+    // Pay and roster periods are a shared calendar reference consumed by
+    // Payroll, Rostering, Attendance and Reports alike, so this union is
+    // deliberate. /settings was dropped: managing company settings is not a
+    // reason to read the payroll calendar.
     requireCrudCapability({
-      anyOfModules: ["/payroll", "/rostering", "/attendance", "/reports", "/settings"],
+      anyOfModules: ["/payroll", "/rostering", "/attendance", "/reports"],
     }),
   ];
 

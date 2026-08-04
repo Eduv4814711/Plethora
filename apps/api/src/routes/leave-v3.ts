@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireAnyCapability, requireCrudCapability } from "../middleware/authorization.js";
+import { requireCapability, requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
 import { sendPrivateStoredFile } from "../lib/private-download.js";
 import { persistWithUploadedFileRollback, readStreamToBuffer, storage } from "../lib/storage.js";
@@ -80,10 +80,12 @@ function sendLeaveV3Error(reply: FastifyReply, error: unknown) {
 }
 
 export async function leaveV3Routes(app: FastifyInstance) {
-  const readProtect = [authMiddleware, requireAnyCapability(["/employees/leave", "/payroll"], "view")];
-  const manageProtect = [authMiddleware, requireCrudCapability({ anyOfModules: ["/employees/leave", "/payroll"] })];
-  const approveProtect = [authMiddleware, requireAnyCapability(["/employees/leave", "/payroll"], "approve")];
-  const exportProtect = [authMiddleware, requireAnyCapability(["/employees/leave", "/payroll"], "export")];
+  // Leave is its own grantable module. A /payroll grant no longer implies it;
+  // the access migration granted /employees/leave explicitly to prior holders.
+  const readProtect = [authMiddleware, requireCapability("/employees/leave", "view")];
+  const manageProtect = [authMiddleware, requireCrudCapability({ module: "/employees/leave" })];
+  const approveProtect = [authMiddleware, requireCapability("/employees/leave", "approve")];
+  const exportProtect = [authMiddleware, requireCapability("/employees/leave", "export")];
 
   app.post("/preview", { preHandler: readProtect }, async (request, reply) => {
     const parsed = requestBodySchema.omit({ reason: true }).safeParse(request.body);

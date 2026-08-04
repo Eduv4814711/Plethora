@@ -15,6 +15,9 @@ const createPayGradeSchema = z.object({
 const updatePayGradeSchema = createPayGradeSchema.partial();
 
 export async function payGradesRoutes(app: FastifyInstance) {
+  // Pay grades are a shared reference list: the Team employee form needs to read
+  // them to assign a grade. Reads are a deliberate union; every write below stays
+  // restricted to the Payroll module.
   const readProtect = [authMiddleware, requireCrudCapability({ anyOfModules: ["/payroll", "/employees"] })];
   const protect = [authMiddleware, requireCrudCapability({ module: "/payroll" })];
 

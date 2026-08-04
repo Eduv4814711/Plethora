@@ -1071,6 +1071,14 @@ model AuditLog {
   entityType String
   entityId   String?
   metadata   Json?
+  /// "success" | "denied" | "failure". Denied rows record refused access attempts.
+  outcome    String   @default("success")
+  /// Request forensics, so an audit row can be correlated with the server logs.
+  ipAddress  String?
+  userAgent  String?
+  requestId  String?
+  /// Set when the actor could not be resolved to a User row (e.g. a failed login).
+  actorLabel String?
   timestamp  DateTime @default(now())
 
   user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -1079,6 +1087,9 @@ model AuditLog {
   @@index([companyId])
   @@index([companyId, timestamp])
   @@index([companyId, entityType, entityId])
+  @@index([companyId, action, timestamp])
+  @@index([companyId, userId, timestamp])
+  @@index([companyId, outcome, timestamp])
   @@index([entityType])
   @@index([entityId])
   @@index([timestamp])

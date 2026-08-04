@@ -13,7 +13,9 @@ import {
   resolveAlert,
 } from "./alerts.service.js";
 
-// Rostering and incidents raise alerts too, so their operators must be able to act on them.
+// Alerts are an aggregate surface with no module of their own in the capability
+// catalog: every module below raises alerts, and its operators must be able to
+// act on them. This union is therefore deliberate, not a legacy fallback.
 const ALERT_MODULES = [
   "/",
   "/attendance",

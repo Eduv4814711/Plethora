@@ -68,9 +68,15 @@ async function collectMultipartFiles(
 }
 
 export async function migrationsRoutes(app: FastifyInstance) {
-  // Migration access follows the records being imported/exported; settings
-  // access alone must not grant bulk access to Team or Sites data.
-  app.get("/templates/:type", { preHandler: authMiddleware }, async (request, reply) => {
+  // Two layers. The outer guard requires the Data Import / Export module itself;
+  // the inner denyMissingMigrationCapabilities check then requires the matching
+  // capability on each record type actually present in the request, so settings
+  // access alone never grants bulk access to Team or Sites data.
+  const viewMigrations = [authMiddleware, requireCapability("/settings/migrate", "view")];
+  const importMigrations = [authMiddleware, requireCapability("/settings/migrate", "create")];
+  const exportMigrations = [authMiddleware, requireCapability("/settings/migrate", "export")];
+
+  app.get("/templates/:type", { preHandler: viewMigrations }, async (request, reply) => {
     const { type } = request.params as { type: string };
     const filename =
       type === "employees"
@@ -102,7 +108,7 @@ export async function migrationsRoutes(app: FastifyInstance) {
   });
 
   // GET /migrations/export/employees - Download employees as CSV
-  app.get("/export/employees", { preHandler: [authMiddleware, requireCapability("/employees", "export")] }, async (request, reply) => {
+  app.get("/export/employees", { preHandler: [...exportMigrations, requireCapability("/employees", "export")] }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const company = await prisma.company.findUnique({
       where: { id: companyId },
@@ -117,7 +123,7 @@ export async function migrationsRoutes(app: FastifyInstance) {
   });
 
   // GET /migrations/export/sites - Download sites as CSV
-  app.get("/export/sites", { preHandler: [authMiddleware, requireCapability("/sites", "export")] }, async (request, reply) => {
+  app.get("/export/sites", { preHandler: [...exportMigrations, requireCapability("/sites", "export")] }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const company = await prisma.company.findUnique({
       where: { id: companyId },
@@ -132,7 +138,7 @@ export async function migrationsRoutes(app: FastifyInstance) {
   });
 
   // GET /migrations/export/groups - Employee groups as CSV (same columns as import template)
-  app.get("/export/groups", { preHandler: [authMiddleware, requireCapability("/employees", "export")] }, async (request, reply) => {
+  app.get("/export/groups", { preHandler: [...exportMigrations, requireCapability("/employees", "export")] }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const csv = await exportEmployeeGroupsToCsv(companyId);
     return reply
@@ -142,7 +148,7 @@ export async function migrationsRoutes(app: FastifyInstance) {
   });
 
   // POST /migrations/preview - Validate upload, return preview + errors (no DB write)
-  app.post("/preview", { preHandler: authMiddleware }, async (request, reply) => {
+  app.post("/preview", { preHandler: importMigrations }, async (request, reply) => {
     const fieldNames = ["employees", "sites", "groups"];
     const filesCollected = await collectMultipartFiles(request, fieldNames);
     if (
@@ -187,7 +193,7 @@ export async function migrationsRoutes(app: FastifyInstance) {
   });
 
   // POST /migrations/import - Company self-migration (employees + sites + employee groups)
-  app.post("/import", { preHandler: authMiddleware }, async (request, reply) => {
+  app.post("/import", { preHandler: importMigrations }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const filesCollected = await collectMultipartFiles(request, ["employees", "sites", "groups"]);
 

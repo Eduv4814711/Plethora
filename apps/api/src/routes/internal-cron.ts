@@ -6,6 +6,12 @@ import { prisma } from "../lib/prisma.js";
 import { detectAndPersistExceptions } from "../modules/attendance-exceptions/exceptions.service.js";
 import { syncContractExpiryAlerts, syncDocumentExpiryAlerts } from "../modules/documents/documents.service.js";
 
+/**
+ * Audit actions that survive retention pruning. These are the accountability
+ * record itself — who was granted what, who signed in, and what was refused.
+ */
+const PERMANENT_AUDIT_ACTION_PREFIXES = ["access.", "auth.", "user.", "company."] as const;
+
 function authorizeCron(request: { headers: { authorization?: string } }): boolean {
   const secret = env.cronSecret?.trim();
   if (!secret) return false;
@@ -72,6 +78,45 @@ export async function internalCronRoutes(app: FastifyInstance) {
       ok: true,
       companiesProcessed: companies.length,
       results,
+    });
+  });
+
+  /**
+   * Prunes operational audit history past the retention window. Access and
+   * authentication history is never pruned: "who could do what, and when did
+   * that change" has to stay answerable for as long as the company exists.
+   */
+  app.post("/cron/audit-retention", async (request, reply) => {
+    if (!authorizeCron(request)) {
+      return reply.code(env.cronSecret ? 401 : 503).send({
+        error: env.cronSecret ? "Unauthorized" : "Cron not configured",
+        message: env.cronSecret
+          ? "Invalid or missing Authorization bearer token"
+          : "Set CRON_SECRET on the API service to enable audit retention",
+      });
+    }
+
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - env.auditRetentionMonths);
+
+    const deleted = await prisma.auditLog.deleteMany({
+      where: {
+        timestamp: { lt: cutoff },
+        NOT: PERMANENT_AUDIT_ACTION_PREFIXES.map((prefix) => ({ action: { startsWith: prefix } })),
+      },
+    });
+
+    request.log.info(
+      { deleted: deleted.count, cutoff, retentionMonths: env.auditRetentionMonths },
+      "audit retention sweep"
+    );
+
+    return reply.send({
+      ok: true,
+      deleted: deleted.count,
+      cutoff,
+      retentionMonths: env.auditRetentionMonths,
+      retainedIndefinitely: PERMANENT_AUDIT_ACTION_PREFIXES,
     });
   });
 }

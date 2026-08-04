@@ -3,20 +3,7 @@ import { authMiddleware } from "../../middleware/auth.js";
 import { requireCapability } from "../../middleware/authorization.js";
 import { prisma } from "../../lib/prisma.js";
 import { getExceptionAnalytics } from "../attendance-exceptions/exceptions.service.js";
-
-function csvEscape(v: unknown): string {
-  const s = v == null ? "" : String(v);
-  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
-
-function toCsv(headers: string[], rows: unknown[][]): string {
-  const lines = [headers.map(csvEscape).join(",")];
-  for (const row of rows) {
-    lines.push(row.map(csvEscape).join(","));
-  }
-  return lines.join("\n");
-}
+import { toCsv } from "../../lib/csv.js";
 
 function parseRange(q: Record<string, string | undefined>) {
   const end = q.endDate ? new Date(q.endDate) : new Date();

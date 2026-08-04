@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  authFetch,
   createUser,
   deleteUser,
   getCapabilityCatalog,
+  getEffectiveAccess,
   listUsers,
   transferCompanyOwnership,
   updateUser,
@@ -13,6 +15,7 @@ import {
   type Capability,
   type CapabilityDefinition,
   type CapabilityMap,
+  type EffectiveAccessResponse,
   type UserListItem,
 } from "@/lib/api";
 import { hasCapability } from "@/lib/permissions";
@@ -125,6 +128,207 @@ function AccessSummary({ user }: { user: UserListItem }) {
   return <span>{moduleCount} module{moduleCount === 1 ? "" : "s"} · {actionCount} allowed action{actionCount === 1 ? "" : "s"}</span>;
 }
 
+const ACCESS_ACTION_LABELS: Record<string, string> = {
+  "user.create": "Account created",
+  "user.access.update": "Access changed",
+  "user.deactivate": "Account deactivated",
+  "user.access.migrated": "Implied access made explicit",
+};
+
+/** Turns a capability diff into a sentence a manager can read at a glance. */
+function summariseGrants(modules: EffectiveAccessResponse["modules"]): string {
+  const granted = modules.filter((module) => module.granted.length > 0);
+  if (!granted.length) return "No access to any module yet.";
+  const verbs: string[] = [];
+  for (const module of granted) {
+    if (module.granted.includes("approve")) verbs.push(`approve ${module.label}`);
+    if (module.granted.includes("delete")) verbs.push(`delete in ${module.label}`);
+    if (module.granted.includes("view_sensitive")) verbs.push(`see private ${module.label} data`);
+    if (module.granted.includes("manage_access")) verbs.push("manage other people's access");
+  }
+  const viewOnly = granted.filter(
+    (module) => module.granted.length === 1 && module.granted[0] === "view"
+  );
+  const lead = `Can open ${granted.length} module${granted.length === 1 ? "" : "s"}`;
+  const powers = verbs.length ? `, and can ${verbs.slice(0, 4).join(", ")}` : "";
+  const readOnly = viewOnly.length ? ` ${viewOnly.length} of them are read-only.` : "";
+  return `${lead}${powers}.${readOnly}`;
+}
+
+function EffectiveAccessPanel({
+  token,
+  userId,
+  onClose,
+}: {
+  token: string;
+  userId: string;
+  onClose: () => void;
+}) {
+  const [data, setData] = useState<EffectiveAccessResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getEffectiveAccess(token, userId)
+      .then((result) => {
+        if (!cancelled) setData(result);
+      })
+      .catch((loadError: unknown) => {
+        if (!cancelled) {
+          setError(loadError instanceof Error ? loadError.message : "Failed to load access");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, userId]);
+
+  const granted = data?.modules.filter((module) => module.granted.length > 0) ?? [];
+  const withheld = data?.modules.filter((module) => module.granted.length === 0) ?? [];
+
+  return (
+    <div className="fixed inset-0 z-[92] flex items-end justify-center bg-slate-900/50 sm:items-center sm:p-4">
+      <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl dark:bg-neutral-900 sm:max-w-3xl sm:rounded-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+              Effective access{data ? ` · ${data.user.name}` : ""}
+            </h2>
+            <p className="text-sm text-neutral-500">
+              Exactly what this person can do, computed by the same rules the server enforces.
+            </p>
+          </div>
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            Close
+          </button>
+        </div>
+
+        {error && (
+          <div role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+        {!data && !error && <div className="mt-5 h-40 animate-pulse rounded-xl bg-neutral-100 dark:bg-neutral-800" />}
+
+        {data && (
+          <div className="mt-5 space-y-5">
+            {data.user.isOwner ? (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                Company owner. Owners bypass the capability matrix entirely and can do everything in
+                every module. Transfer ownership to make their access follow explicit grants.
+              </p>
+            ) : !data.user.isActive ? (
+              <p className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200">
+                This account is deactivated. It cannot sign in and holds no effective access,
+                whatever the matrix below shows.
+              </p>
+            ) : (
+              <p className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                {summariseGrants(data.modules)}
+              </p>
+            )}
+
+            <div>
+              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">
+                Has access to ({granted.length})
+              </h3>
+              <div className="mt-2 space-y-2">
+                {granted.map((module) => (
+                  <div
+                    key={module.path}
+                    className="flex flex-col gap-1.5 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-700 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-neutral-900 dark:text-white">{module.label}</p>
+                      <p className="text-xs text-neutral-500">{module.path}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {module.granted.map((capability) => (
+                        <span
+                          key={capability}
+                          className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                        >
+                          {capabilityLabel(capability)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                {granted.length === 0 && (
+                  <p className="text-sm text-neutral-500">Nothing. This person cannot open any module.</p>
+                )}
+              </div>
+            </div>
+
+            <details>
+              <summary className="cursor-pointer text-sm font-semibold text-neutral-900 dark:text-white">
+                No access to ({withheld.length})
+              </summary>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {withheld.map((module) => (
+                  <span
+                    key={module.path}
+                    className="rounded-md bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
+                  >
+                    {module.label}
+                  </span>
+                ))}
+              </div>
+            </details>
+
+            <div>
+              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">Access history</h3>
+              <ul className="mt-2 space-y-2">
+                {data.history.map((entry) => {
+                  const added = (entry.metadata?.added ?? []) as { label: string; capability: Capability }[];
+                  const removed = (entry.metadata?.removed ?? []) as { label: string; capability: Capability }[];
+                  return (
+                    <li key={entry.id} className="rounded-lg border border-neutral-200 px-3 py-2 text-sm dark:border-neutral-700">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <span className="font-medium text-neutral-900 dark:text-white">
+                          {ACCESS_ACTION_LABELS[entry.action] ?? entry.action}
+                        </span>
+                        <span className="text-xs text-neutral-500">
+                          {new Date(entry.timestamp).toLocaleString()}
+                          {" · "}
+                          {entry.user?.name ?? entry.actorLabel ?? "system"}
+                        </span>
+                      </div>
+                      {(added.length > 0 || removed.length > 0) && (
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {added.map((change, index) => (
+                            <span
+                              key={`a${index}`}
+                              className="rounded bg-emerald-50 px-1.5 py-0.5 text-xs text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                            >
+                              + {change.label} · {capabilityLabel(change.capability)}
+                            </span>
+                          ))}
+                          {removed.map((change, index) => (
+                            <span
+                              key={`r${index}`}
+                              className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-800 dark:bg-red-950/40 dark:text-red-200"
+                            >
+                              − {change.label} · {capabilityLabel(change.capability)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+                {data.history.length === 0 && (
+                  <li className="text-sm text-neutral-500">No recorded access changes.</li>
+                )}
+              </ul>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function CapabilityUsersSection({
   token,
   currentUser,
@@ -147,6 +351,28 @@ export function CapabilityUsersSection({
   const [setupLink, setSetupLink] = useState<string | null>(null);
   const [transferTarget, setTransferTarget] = useState<UserListItem | null>(null);
   const [ownerPassword, setOwnerPassword] = useState("");
+  const [inspecting, setInspecting] = useState<UserListItem | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  const exportAccessReview = async () => {
+    setExporting(true);
+    setError(null);
+    try {
+      const res = await authFetch("/users/access-review?format=csv", token);
+      if (!res.ok) throw new Error("Failed to export the access review");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `access-review-${new Date().toISOString().slice(0, 10)}.csv`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : "Failed to export the access review");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -326,11 +552,16 @@ export function CapabilityUsersSection({
             Access is granted per module action. Job titles and account types never grant permissions.
           </p>
         </div>
-        {canCreateUsers && (
-          <button type="button" className="btn-primary" onClick={() => setAdding((value) => !value)}>
-            {adding ? "Cancel" : "Add user"}
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn-secondary" disabled={exporting} onClick={() => void exportAccessReview()}>
+            {exporting ? "Preparing…" : "Export access review"}
           </button>
-        )}
+          {canCreateUsers && (
+            <button type="button" className="btn-primary" onClick={() => setAdding((value) => !value)}>
+              {adding ? "Cancel" : "Add user"}
+            </button>
+          )}
+        </div>
       </div>
 
       {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
@@ -383,6 +614,9 @@ export function CapabilityUsersSection({
                 <p className="mt-1 text-xs text-neutral-500"><AccessSummary user={user} /></p>
               </div>
               <div className="flex flex-wrap gap-2">
+                <button type="button" className="btn-secondary" onClick={() => setInspecting(user)}>
+                  View access
+                </button>
                 {canEditUsers && canManageTarget(user) && (
                   <button type="button" className="btn-secondary" onClick={() => startEditing(user)}>Edit access</button>
                 )}
@@ -423,6 +657,14 @@ export function CapabilityUsersSection({
             <div className="mt-5 flex justify-end gap-2"><button type="button" className="btn-secondary" onClick={() => setEditing(null)}>Cancel</button><button disabled={busy} className="btn-primary">{busy ? "Saving…" : "Save changes"}</button></div>
           </form>
         </div>
+      )}
+
+      {inspecting && (
+        <EffectiveAccessPanel
+          token={token}
+          userId={inspecting.id}
+          onClose={() => setInspecting(null)}
+        />
       )}
 
       {transferTarget && (

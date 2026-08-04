@@ -215,14 +215,9 @@ export async function sitesRoutes(app: FastifyInstance) {
     authMiddleware,
     requireCrudCapability({ module: "/sites" }),
   ];
-  const readProtect = [
-    authMiddleware,
-    requireCrudCapability({
-      // Attendance work queues and exception filters need site names, while
-      // create/update permissions remain restricted to the Sites module.
-      anyOfModules: ["/sites", "/rostering", "/attendance"],
-    }),
-  ];
+  // Site data requires the Sites module. Rostering/attendance grants no longer
+  // imply it; the access migration made those implied grants explicit instead.
+  const readProtect = [authMiddleware, requireCrudCapability({ module: "/sites" })];
   const manageSites = [
     authMiddleware,
     requireCrudCapability({ module: "/sites" }),

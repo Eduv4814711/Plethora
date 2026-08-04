@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import jwt from "jsonwebtoken";
 import { z } from "zod";
 import {
   login,
@@ -21,6 +22,7 @@ import {
   toPublicAuthResponse,
 } from "../lib/auth-cookies.js";
 import { env } from "../lib/env.js";
+import { auditFromRequest, type AuditOutcome } from "../lib/audit.js";
 
 const AUTH_RATE = { max: 30, timeWindow: "15 minutes" as const };
 
@@ -30,6 +32,62 @@ function refreshMeta(request: FastifyRequest) {
     userAgent: typeof ua === "string" ? ua : undefined,
     ipAddress: request.ip,
   };
+}
+
+/**
+ * Authentication events are recorded against the company they concern. Most of
+ * these routes run before authMiddleware, so the actor is supplied explicitly:
+ * an email for anonymous attempts, a user id once one is known.
+ */
+async function auditAuthEvent(
+  request: FastifyRequest,
+  params: {
+    action: string;
+    companyId: string;
+    userId?: string;
+    actorLabel?: string;
+    outcome?: AuditOutcome;
+    metadata?: Record<string, unknown>;
+  }
+): Promise<void> {
+  await auditFromRequest(request, {
+    action: params.action,
+    entityType: "user",
+    entityId: params.userId,
+    companyId: params.companyId,
+    actorLabel: params.actorLabel,
+    outcome: params.outcome,
+    metadata: params.metadata,
+  });
+}
+
+/**
+ * A failed login has no session, so resolve the company from the email to keep
+ * the attempt visible on that company's audit trail. Returns null for an email
+ * that matches nobody — there is no company to attribute it to, and recording
+ * it against an arbitrary one would be misleading.
+ */
+/**
+ * Reads the claims of a rejected refresh token without trusting them. The token
+ * failed verification, so this is only used to attribute the attempt to a
+ * company — never to grant anything.
+ */
+function decodeRefreshClaims(token: string): { sub: string; email: string; companyId: string } | null {
+  try {
+    const decoded = jwt.decode(token) as { sub?: string; email?: string; companyId?: string } | null;
+    if (!decoded?.sub || !decoded.companyId) return null;
+    return { sub: decoded.sub, email: decoded.email ?? decoded.sub, companyId: decoded.companyId };
+  } catch {
+    return null;
+  }
+}
+
+async function companyForEmail(email: string): Promise<{ companyId: string; userId: string } | null> {
+  const user = await prisma.user.findFirst({
+    where: { email: email.toLowerCase() },
+    select: { id: true, companyId: true },
+  });
+  return user ? { companyId: user.companyId, userId: user.id } : null;
 }
 
 function sendAuthSuccess(
@@ -139,6 +197,13 @@ export async function authRoutes(app: FastifyInstance) {
       });
 
       const result = await issueTokensForUser(adminUser, refreshMeta(request));
+      await auditAuthEvent(request, {
+        action: "company.onboarded",
+        companyId: adminUser.companyId,
+        userId: adminUser.id,
+        actorLabel: adminUser.email,
+        metadata: { companyName: companyInput.name, ownerEmail: adminUser.email },
+      });
       return sendAuthSuccess(reply, result, 201);
     } catch (err: unknown) {
       const prismaErr = err as { code?: string };
@@ -177,11 +242,30 @@ export async function authRoutes(app: FastifyInstance) {
           { email: parsed.data.email, requestId: request.requestId },
           "login failed"
         );
+        const known = await companyForEmail(parsed.data.email);
+        if (known) {
+          await auditAuthEvent(request, {
+            action: "auth.login.failed",
+            companyId: known.companyId,
+            userId: known.userId,
+            actorLabel: parsed.data.email.toLowerCase(),
+            outcome: "failure",
+            metadata: { email: parsed.data.email.toLowerCase(), reason: "invalid_credentials" },
+          });
+        }
         return reply.code(401).send({
           error: "Invalid credentials",
           message: "Invalid email or password",
         });
       }
+
+      await auditAuthEvent(request, {
+        action: "auth.login",
+        companyId: result.user.companyId,
+        userId: result.user.id,
+        actorLabel: result.user.email,
+        metadata: { email: result.user.email, isOwner: result.user.isOwner },
+      });
 
       return sendAuthSuccess(reply, result);
     } catch (err) {
@@ -253,7 +337,7 @@ export async function authRoutes(app: FastifyInstance) {
           passwordSetupTokenConsumedAt: null,
           passwordSetupTokenExpiresAt: { gt: now },
         },
-        select: { id: true },
+        select: { id: true, email: true, companyId: true },
       });
       if (!found) {
         return reply.code(400).send({ error: "Invalid or expired setup link" });
@@ -279,6 +363,14 @@ export async function authRoutes(app: FastifyInstance) {
       if (consumed.count !== 1) {
         return reply.code(400).send({ error: "Invalid or expired setup link" });
       }
+
+      await auditAuthEvent(request, {
+        action: "auth.password.setup",
+        companyId: found.companyId,
+        userId: found.id,
+        actorLabel: found.email,
+        metadata: { email: found.email },
+      });
 
       return reply.send({ success: true });
     }
@@ -307,6 +399,20 @@ export async function authRoutes(app: FastifyInstance) {
 
     const result = await refreshAccessToken(refreshTokenValue, refreshMeta(request));
     if (!result) {
+      // A rejected refresh is how a revoked or reused token shows up. Attribute
+      // it if the token still decodes to a real account; otherwise there is
+      // nothing to attribute it to and the rate limiter is the control.
+      const claimed = decodeRefreshClaims(refreshTokenValue);
+      if (claimed) {
+        await auditAuthEvent(request, {
+          action: "auth.token.refresh.rejected",
+          companyId: claimed.companyId,
+          userId: claimed.sub,
+          actorLabel: claimed.email,
+          outcome: "denied",
+          metadata: { reason: "invalid_expired_or_revoked" },
+        });
+      }
       clearAuthCookies(reply);
       return reply.code(401).send({
         error: "Invalid refresh token",
@@ -340,6 +446,15 @@ export async function authRoutes(app: FastifyInstance) {
 
     if (request.user?.sub || refreshTokenValue) {
       await logoutUser(request.user?.sub, refreshTokenValue);
+    }
+
+    if (request.user) {
+      await auditAuthEvent(request, {
+        action: "auth.logout",
+        companyId: request.user.companyId,
+        userId: request.user.sub,
+        actorLabel: request.user.email,
+      });
     }
 
     clearAuthCookies(reply);

@@ -42,7 +42,7 @@ export default function SettingsPage() {
   const canEditSettings = Boolean(user && hasCapability(user, "/settings", "edit"));
   const canUseMigrationTools = Boolean(user && canAccessMigrationTools(user));
   const canViewAccess = Boolean(user && hasCapability(user, "/settings/access", "view"));
-  const canManageClients = Boolean(user && hasCapability(user, "/sites", "view"));
+  const canManageClients = Boolean(user && hasCapability(user, "/clients", "view"));
   const isOwner = Boolean(user?.isOwner);
   const tabIds: Tab[] = ["profile", "business", "settings", "users", "clients", "migrate", "factory_reset"];
   const [activeTab, setActiveTab] = useState<Tab>(tabParam && tabIds.includes(tabParam) ? tabParam : "profile");

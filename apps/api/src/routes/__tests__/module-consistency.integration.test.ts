@@ -89,7 +89,9 @@ describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
     expect(res.json().message?.gradeId).toBeTruthy();
   });
 
-  it("allows an HR/payroll user with Payroll module access to edit an employee", async () => {
+  it("does not let a Payroll-only user edit an employee", async () => {
+    // Payroll used to reach Team through an anyOfModules fallback. It no longer
+    // does: Team access has to be granted explicitly and show in the matrix.
     const { tenantA } = fixture;
     const res = await app.inject({
       method: "PUT",
@@ -97,13 +99,53 @@ describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
       headers: { ...authHeader(payrollHrToken), "content-type": "application/json" },
       payload: { firstName: "Payroll Edit" },
     });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().firstName).toBe("Payroll Edit");
+    expect(res.statusCode).toBe(403);
+  });
 
-    await prisma.employee.update({
-      where: { id: tenantA.employeeId },
-      data: { firstName: "Test" },
+  it("does not let a Payroll grant reach Client Billing", async () => {
+    // /payroll/billing is its own catalog module; prefix inheritance is gone.
+    const token = await tokenFor({ "/payroll": ["view", "create", "edit", "approve"] });
+    const res = await app.inject({
+      method: "GET",
+      url: "/payroll/billing/invoices",
+      headers: authHeader(token),
     });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("does not let a Settings grant enumerate users through Settings · User Access", async () => {
+    // The escalation this closes: /settings:view used to satisfy
+    // /settings/access:view, exposing every colleague and their full grant map.
+    const token = await tokenFor({ "/settings": ["view", "edit"] });
+    const res = await app.inject({
+      method: "GET",
+      url: "/users",
+      headers: authHeader(token),
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("records a denied attempt in the audit log", async () => {
+    const token = await tokenFor({ "/tasks": ["view"] });
+    const before = new Date();
+    const res = await app.inject({
+      method: "GET",
+      url: "/users",
+      headers: authHeader(token),
+    });
+    expect(res.statusCode).toBe(403);
+
+    const denial = await prisma.auditLog.findFirst({
+      where: {
+        companyId: fixture.tenantA.companyId,
+        action: "access.denied",
+        timestamp: { gte: before },
+      },
+      orderBy: { timestamp: "desc" },
+    });
+    expect(denial).toBeTruthy();
+    expect(denial?.outcome).toBe("denied");
+    expect((denial?.metadata as { capability?: string } | null)?.capability).toBe("view");
   });
 
   it(

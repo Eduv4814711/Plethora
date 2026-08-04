@@ -88,6 +88,17 @@ const rawEnvSchema = z.object({
   ),
   ENCRYPTION_KEY: z.preprocess(emptyToUndefined, z.string().min(16).optional()),
   CRON_SECRET: z.preprocess(emptyToUndefined, z.string().min(16).optional()),
+  // How long operational audit history is kept. Access and authentication
+  // history is exempt and never pruned — see internal-cron.ts.
+  AUDIT_RETENTION_MONTHS: z.preprocess(
+    (value) => {
+      const trimmed = emptyToUndefined(value);
+      if (trimmed === undefined) return undefined;
+      const n = Number(trimmed);
+      return Number.isFinite(n) ? n : trimmed;
+    },
+    z.number().int().min(1).max(240).optional()
+  ),
 });
 
 type RawEnv = z.infer<typeof rawEnvSchema>;
@@ -114,6 +125,7 @@ export type Env = {
   clockInWindowMinutes: number;
   encryptionKey: string | undefined;
   cronSecret: string | undefined;
+  auditRetentionMonths: number;
 };
 
 export function formatEnvValidationError(error: z.ZodError): string {
@@ -144,6 +156,7 @@ function pickRawEnv(source: NodeJS.ProcessEnv): Record<string, unknown> {
     CLOCK_IN_WINDOW_MINUTES: source.CLOCK_IN_WINDOW_MINUTES,
     ENCRYPTION_KEY: source.ENCRYPTION_KEY,
     CRON_SECRET: source.CRON_SECRET,
+    AUDIT_RETENTION_MONTHS: source.AUDIT_RETENTION_MONTHS,
   };
 }
 
@@ -316,6 +329,7 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     clockInWindowMinutes: raw.CLOCK_IN_WINDOW_MINUTES ?? 15,
     encryptionKey: raw.ENCRYPTION_KEY,
     cronSecret: raw.CRON_SECRET,
+    auditRetentionMonths: raw.AUDIT_RETENTION_MONTHS ?? 24,
   };
 }
 

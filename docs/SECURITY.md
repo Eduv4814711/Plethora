@@ -50,6 +50,84 @@ On load, the web app:
 3. Otherwise calls `/auth/refresh` with cookies only.
 4. Stores the new access token in memory and schedules proactive refresh before expiry.
 
+## Authorization
+
+Access is a per-user map of module path → capabilities, stored on `User.capabilities`
+and defined by `CAPABILITY_CATALOG` in `apps/api/src/lib/capabilities.ts`. Job titles
+and account types grant nothing. The company owner bypasses the map entirely.
+
+### Grants are exact
+
+Capability lookup resolves a request path to the catalog module that owns it
+(`resolveModulePath`) and then looks that module up **exactly**. A grant on a parent
+module never confers a sub-module:
+
+- `/settings` does **not** grant `/settings/access` (User Access) or `/settings/migrate`
+- `/payroll` does **not** grant `/payroll/billing` (Client Billing)
+- `/employees` does **not** grant `/employees/leave` (Leave)
+
+Route guards follow the same rule: a route that owns a module's records requires that
+module. A small number of guards deliberately accept a union of modules, and each says
+why in a comment — Alerts and site timesheets (aggregate surfaces with no module of
+their own), pay grades and pay periods (shared reference data), and global search
+(which then filters each result set by its own module capability).
+
+`manage_access` exists only on `/settings/access`, is never inherited, and can never be
+delegated by a non-owner.
+
+### Effective access and review
+
+- `GET /users/:id/effective-access` — what a person can actually do, computed by the
+  same function the guards use. Anyone may read their own; reading another's needs
+  `/settings/access:view`. Surfaced as **View access** in Settings → User Access.
+- `GET /users/access-review?format=csv` — company-wide user × module × capability
+  matrix with last-login and never-logged-in flags, for periodic sign-off.
+
+## Audit trail
+
+`AuditLog` records who did what, when, from where, and whether it succeeded
+(`outcome`: `success` | `denied` | `failure`). Every row written through
+`auditFromRequest` carries the actor, IP address, user agent and request id, so audit
+rows correlate with server logs. Pass a transaction client to write the audit row
+atomically with the change it describes.
+
+Recorded beyond ordinary record changes:
+
+| Event | Action |
+|---|---|
+| Sign-in, failed sign-in, sign-out | `auth.login`, `auth.login.failed`, `auth.logout` |
+| Password setup, rejected refresh, revoked session | `auth.password.setup`, `auth.token.refresh.rejected`, `auth.session.rejected` |
+| Refused access attempt | `access.denied` (module, capability, method, route) |
+| Use of a `view_sensitive` grant | `data.sensitive.view` (module, record count, fields) |
+| Access granted or revoked | `user.create`, `user.access.update`, `user.deactivate` — each with a structured `added` / `removed` capability diff |
+| Ownership transfer | `company.owner.transfer` |
+| Audit and access-review exports | `audit.export`, `user.access_review.export` |
+
+Denied-access rows are de-duplicated per actor + module + capability on a 5-minute
+window so a polling UI cannot flood the table.
+
+### Retention
+
+`POST /internal/cron/audit-retention` prunes operational audit rows older than
+`AUDIT_RETENTION_MONTHS` (default 24). Rows whose action starts with `access.`,
+`auth.`, `user.` or `company.` are **never** pruned — that is the accountability
+record itself.
+
+**Known limitation:** `AuditLog.companyId` cascades on delete, so deleting a company
+still erases its entire audit trail. Export the access review and audit CSV before
+any company deletion.
+
+## Route protection is enforced at the API
+
+The web app has no `middleware.ts` and route gating is client-side, inside
+`DashboardLayout`. This is deliberate: the API and web app are separate origins
+(`NEXT_PUBLIC_API_URL`), and the refresh cookie is `SameSite=Strict` on the API's
+domain, so Next.js middleware cannot read the session at all — a cookie-based gate
+there would either be a no-op or lock out every user. Authorization is therefore
+enforced entirely server-side, where capabilities are re-read from the database on
+every request rather than trusted from the JWT. Client-side gating is a UX
+convenience, never a security boundary.
+
 ## Operational checklist
 
 | Item | Recommendation |
@@ -59,6 +137,9 @@ On load, the web app:
 | HTTPS | Required in production (Secure cookies) |
 | `FRONTEND_URL` | Used for password-setup links |
 | Rate limiting | Auth routes: 10 requests / 15 minutes |
+| `CRON_SECRET` | Required for `/internal/cron/*`, including audit retention |
+| `AUDIT_RETENTION_MONTHS` | Default 24; access and auth history is exempt |
+| Access review | Export `/users/access-review?format=csv` periodically and trim unused grants |
 
 ## Reporting issues
 

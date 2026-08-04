@@ -562,6 +562,59 @@ export interface CapabilityDefinition {
   path: string;
   label: string;
   capabilities: Capability[];
+  parent?: string;
+}
+
+export interface EffectiveModuleAccess {
+  path: string;
+  label: string;
+  parent?: string;
+  granted: Capability[];
+  available: Capability[];
+  source: "owner" | "explicit" | "none";
+}
+
+export interface AccessHistoryEntry {
+  id: string;
+  action: string;
+  timestamp: string;
+  actorLabel: string | null;
+  metadata: Record<string, unknown> | null;
+  user: { id: string; name: string; email: string } | null;
+}
+
+export interface EffectiveAccessResponse {
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    jobTitle: string | null;
+    accountType: AccountType;
+    isActive: boolean;
+    isOwner: boolean;
+  };
+  modules: EffectiveModuleAccess[];
+  history: AccessHistoryEntry[];
+}
+
+/**
+ * What this person can actually do, computed server-side by the same function
+ * the API guards use — so this panel can never overstate someone's access.
+ */
+export async function getEffectiveAccess(
+  token: string,
+  userId: string
+): Promise<EffectiveAccessResponse> {
+  const res = await authFetch(`/users/${userId}/effective-access`, token);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(apiErrorMessage(err, "Failed to load effective access"));
+  }
+  return res.json();
+}
+
+export function accessReviewCsvUrl(): string {
+  return "/users/access-review?format=csv";
 }
 
 export async function listUsers(token: string): Promise<{ data: UserListItem[]; total: number }> {

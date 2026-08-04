@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { EmployeeStatus } from "@prisma/client";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireAnyCapability, requireCapability, requireCrudCapability } from "../middleware/authorization.js";
+import { requireCapability, requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
 import { reconcileContinuityForEmployee } from "../modules/rosters/roster-continuity.service.js";
 import { ROSTER_PLACEHOLDER_JOB_ROLE_PREFIX } from "../modules/rosters/rosters.service.js";
@@ -19,6 +19,7 @@ import {
   canWriteEmployeeSensitiveFields,
 } from "../lib/employee-dto.js";
 import { EMPLOYEE_RESTRICTED_FIELDS, hasRestrictedFields } from "../lib/sensitive-data.js";
+import { recordSensitiveAccess } from "../lib/sensitive-access-audit.js";
 import { hasCapability } from "../lib/capabilities.js";
 
 function rejectEmployeeDetailEdits(request: { user?: import("../lib/types.js").AuthenticatedUser }, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
@@ -229,24 +230,12 @@ const statusTransitionSchema = z.object({
 });
 
 export async function employeesRoutes(app: FastifyInstance) {
-  const protect = [
-    authMiddleware,
-    requireCrudCapability({
-      anyOfModules: ["/employees", "/payroll"],
-    }),
-  ];
-  const readProtect = [
-    authMiddleware,
-    requireCrudCapability({
-      // Attendance controllers need the sanitized employee list for the
-      // "different guard" and reliever pickers in site timesheets.
-      anyOfModules: ["/employees", "/payroll", "/rostering", "/attendance"],
-    }),
-  ];
-  const editProtect = [
-    authMiddleware,
-    requireAnyCapability(["/employees", "/payroll"], "edit"),
-  ];
+  // Team data requires the Team module. Payroll/rostering/attendance grants no
+  // longer imply it: the access migration granted /employees:view explicitly to
+  // everyone who relied on that fallback, so it now shows up in the access matrix.
+  const protect = [authMiddleware, requireCrudCapability({ module: "/employees" })];
+  const readProtect = [authMiddleware, requireCrudCapability({ module: "/employees" })];
+  const editProtect = [authMiddleware, requireCapability("/employees", "edit")];
 
   app.get("/", { preHandler: readProtect }, async (request, reply) => {
     const user = request.user!;
@@ -320,6 +309,16 @@ export async function employeesRoutes(app: FastifyInstance) {
       };
       return sanitizeEmployeeForList(row, user);
     });
+
+    if (canViewEmployeeSensitiveFields(user)) {
+      await recordSensitiveAccess(request, {
+        module: "/employees",
+        entityType: "employee",
+        recordCount: data.length,
+        fields: EMPLOYEE_RESTRICTED_FIELDS,
+        context: { view: "list" },
+      });
+    }
 
     return reply.send({ data, total, limit, offset });
   });
@@ -460,6 +459,17 @@ export async function employeesRoutes(app: FastifyInstance) {
 
     if (!employee) {
       return reply.code(404).send({ error: "Employee not found" });
+    }
+
+    if (canViewEmployeeSensitiveFields(user)) {
+      await recordSensitiveAccess(request, {
+        module: "/employees",
+        entityType: "employee",
+        entityId: id,
+        recordCount: 1,
+        fields: EMPLOYEE_RESTRICTED_FIELDS,
+        context: { view: "detail" },
+      });
     }
 
     return reply.send(sanitizeEmployeeForDetail(employee, user));

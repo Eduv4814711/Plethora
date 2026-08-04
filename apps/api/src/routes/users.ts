@@ -6,12 +6,16 @@ import { requireCapability, requireOwner } from "../middleware/authorization.js"
 import { prisma } from "../lib/prisma.js";
 import {
   CAPABILITY_CATALOG,
+  diffCapabilities,
   findUnassignableCapability,
   hasCapability,
   normalizeCapabilities,
+  resolveEffectiveCapabilities,
   validateCapabilities,
   type CapabilityMap,
 } from "../lib/capabilities.js";
+import { auditFromRequest } from "../lib/audit.js";
+import { toCsv } from "../lib/csv.js";
 import { findManyUsersForCompany, findUniqueUserListRow } from "../lib/user-access.js";
 import {
   generatePasswordSetupToken,
@@ -108,6 +112,109 @@ export async function usersRoutes(app: FastifyInstance) {
     return reply.send({ data: CAPABILITY_CATALOG });
   });
 
+  /**
+   * Company-wide access matrix for periodic sign-off: every user against every
+   * module, with the last login derived from the auth audit trail so accounts
+   * that hold access but never sign in are visible.
+   */
+  app.get("/access-review", { preHandler: viewAccess }, async (request, reply) => {
+    const companyId = request.user!.companyId;
+    const wantsCsv = (request.query as { format?: string }).format === "csv";
+
+    const [users, company, lastLogins] = await Promise.all([
+      prisma.user.findMany({
+        where: { companyId },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          jobTitle: true,
+          accountType: true,
+          isActive: true,
+          capabilities: true,
+          createdAt: true,
+        },
+        orderBy: [{ isActive: "desc" }, { name: "asc" }],
+      }),
+      prisma.company.findUnique({ where: { id: companyId }, select: { ownerUserId: true } }),
+      prisma.auditLog.groupBy({
+        by: ["userId"],
+        where: { companyId, action: "auth.login" },
+        _max: { timestamp: true },
+      }),
+    ]);
+
+    const lastLoginByUser = new Map(
+      lastLogins
+        .filter((row): row is typeof row & { userId: string } => Boolean(row.userId))
+        .map((row) => [row.userId, row._max.timestamp])
+    );
+
+    const rows = users.map((user) => {
+      const isOwner = company?.ownerUserId === user.id;
+      const lastLoginAt = lastLoginByUser.get(user.id) ?? null;
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        jobTitle: user.jobTitle,
+        accountType: user.accountType,
+        isActive: user.isActive,
+        isOwner,
+        createdAt: user.createdAt,
+        lastLoginAt,
+        neverLoggedIn: lastLoginAt === null,
+        modules: resolveEffectiveCapabilities({
+          isOwner,
+          isActive: user.isActive,
+          capabilities: user.capabilities,
+        }),
+      };
+    });
+
+    if (!wantsCsv) {
+      return reply.send({ data: rows, catalog: CAPABILITY_CATALOG, generatedAt: new Date() });
+    }
+
+    const headers = [
+      "Name",
+      "Email",
+      "Job title",
+      "Account type",
+      "Status",
+      "Owner",
+      "Last login",
+      ...CAPABILITY_CATALOG.map((definition) => definition.label),
+    ];
+    const csvRows = rows.map((row) => [
+      row.name,
+      row.email,
+      row.jobTitle ?? "",
+      row.accountType,
+      row.isActive ? "active" : "deactivated",
+      row.isOwner ? "yes" : "no",
+      row.lastLoginAt ? row.lastLoginAt.toISOString() : "never",
+      ...CAPABILITY_CATALOG.map((definition) => {
+        const granted = row.modules.find((module) => module.path === definition.path)?.granted ?? [];
+        return granted.join(" ");
+      }),
+    ]);
+
+    await auditFromRequest(request, {
+      action: "user.access_review.export",
+      entityType: "user",
+      metadata: { userCount: rows.length, format: "csv" },
+    });
+
+    return reply
+      .header("Content-Type", "text/csv; charset=utf-8")
+      .header(
+        "Content-Disposition",
+        `attachment; filename="access-review-${new Date().toISOString().slice(0, 10)}.csv"`
+      )
+      .send(toCsv(headers, csvRows));
+  });
+
   app.get("/", { preHandler: viewAccess }, async (request, reply) => {
     const q = request.query as Record<string, string | undefined>;
     const limit = Math.min(Math.max(Number(q.limit) || 20, 1), 100);
@@ -164,16 +271,22 @@ export async function usersRoutes(app: FastifyInstance) {
           },
           select: userSelect,
         });
-        await tx.auditLog.create({
-          data: {
-            userId: request.user!.sub,
-            companyId: request.user!.companyId,
+        await auditFromRequest(
+          request,
+          {
             action: "user.create",
             entityType: "user",
             entityId: row.id,
-            metadata: { accountType: row.accountType, capabilities: permissions.data },
+            metadata: {
+              targetEmail: row.email,
+              accountType: row.accountType,
+              capabilities: permissions.data,
+              invited: inviteMode,
+              ...diffCapabilities({}, permissions.data),
+            },
           },
-        });
+          tx
+        );
         return row;
       });
       return reply.code(201).send({
@@ -238,6 +351,78 @@ export async function usersRoutes(app: FastifyInstance) {
       request.user!.companyId
     );
     return found ? reply.send(found) : reply.code(404).send({ error: "User not found" });
+  });
+
+  /**
+   * What this person can actually do, computed by the same function the route
+   * guards use. Anyone may read their own; reading someone else's needs
+   * /settings/access:view.
+   */
+  app.get("/:id/effective-access", { preHandler: [authMiddleware] }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const isSelf = id === request.user!.sub;
+    if (!isSelf && !hasCapability(request.user!, "/settings/access", "view")) {
+      return reply.code(403).send({
+        error: "Forbidden",
+        message: "You do not have permission to view another user's access",
+      });
+    }
+    const target = await prisma.user.findFirst({
+      where: { id, companyId: request.user!.companyId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        jobTitle: true,
+        accountType: true,
+        isActive: true,
+        capabilities: true,
+        company: { select: { ownerUserId: true } },
+      },
+    });
+    if (!target) return reply.code(404).send({ error: "User not found" });
+
+    const isOwner = target.company.ownerUserId === target.id;
+    const modules = resolveEffectiveCapabilities({
+      isOwner,
+      isActive: target.isActive,
+      capabilities: target.capabilities,
+    });
+
+    // Recent access-relevant history for this person, so "what can they do" and
+    // "who gave it to them" are answered in one place.
+    const history = await prisma.auditLog.findMany({
+      where: {
+        companyId: request.user!.companyId,
+        entityType: "user",
+        entityId: id,
+        action: { in: ["user.create", "user.access.update", "user.deactivate", "user.access.migrated"] },
+      },
+      orderBy: { timestamp: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        action: true,
+        timestamp: true,
+        metadata: true,
+        actorLabel: true,
+        user: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    return reply.send({
+      user: {
+        id: target.id,
+        name: target.name,
+        email: target.email,
+        jobTitle: target.jobTitle,
+        accountType: target.accountType,
+        isActive: target.isActive,
+        isOwner,
+      },
+      modules,
+      history,
+    });
   });
 
   app.put("/:id", { preHandler: editAccess }, async (request, reply) => {
@@ -320,14 +505,14 @@ export async function usersRoutes(app: FastifyInstance) {
           data: { revokedAt: new Date() },
         });
       }
-      await tx.auditLog.create({
-        data: {
-          userId: request.user!.sub,
-          companyId: request.user!.companyId,
+      await auditFromRequest(
+        request,
+        {
           action: "user.access.update",
           entityType: "user",
           entityId: id,
           metadata: {
+            targetEmail: row.email,
             before: {
               accountType: existing.accountType,
               jobTitle: existing.jobTitle,
@@ -340,9 +525,14 @@ export async function usersRoutes(app: FastifyInstance) {
               isActive: row.isActive,
               capabilities: row.capabilities,
             },
+            // Plain-language view of what actually changed, so the audit page
+            // does not have to diff two JSON blobs to say "granted Payroll · approve".
+            ...diffCapabilities(existing.capabilities, row.capabilities),
+            deactivated: parsed.data.isActive === false ? true : undefined,
           },
         },
-      });
+        tx
+      );
       return row;
     });
     return reply.send({ ...updated, isOwner });
@@ -367,26 +557,31 @@ export async function usersRoutes(app: FastifyInstance) {
           companyId: request.user!.companyId,
           isActive: true,
         },
-        select: { id: true },
+        select: { id: true, email: true },
       });
       if (!target) return badRequest(reply, "The new owner must be an active user in this company");
       if (target.id === request.user!.sub) return badRequest(reply, "This user is already the company owner");
-      await prisma.$transaction([
-        prisma.company.update({
+      await prisma.$transaction(async (tx) => {
+        await tx.company.update({
           where: { id: request.user!.companyId },
           data: { ownerUserId: target.id },
-        }),
-        prisma.auditLog.create({
-          data: {
-            userId: request.user!.sub,
-            companyId: request.user!.companyId,
+        });
+        await auditFromRequest(
+          request,
+          {
             action: "company.owner.transfer",
             entityType: "company",
             entityId: request.user!.companyId,
-            metadata: { previousOwnerUserId: request.user!.sub, newOwnerUserId: target.id },
+            metadata: {
+              previousOwnerUserId: request.user!.sub,
+              previousOwnerEmail: request.user!.email,
+              newOwnerUserId: target.id,
+              newOwnerEmail: target.email,
+            },
           },
-        }),
-      ]);
+          tx
+        );
+      });
       return reply.send({ success: true, ownerUserId: target.id });
     }
   );
@@ -433,16 +628,19 @@ export async function usersRoutes(app: FastifyInstance) {
         where: { userId: id, revokedAt: null },
         data: { revokedAt: new Date() },
       });
-      await tx.auditLog.create({
-        data: {
-          userId: request.user!.sub,
-          companyId,
+      await auditFromRequest(
+        request,
+        {
           action: "user.deactivate",
           entityType: "user",
           entityId: id,
-          metadata: { previousCapabilities: existing.capabilities },
+          metadata: {
+            previousCapabilities: existing.capabilities,
+            ...diffCapabilities(existing.capabilities, {}),
+          },
         },
-      });
+        tx
+      );
     });
     return reply.code(204).send();
   });
