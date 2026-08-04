@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Client statement</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 11px; color: #1a1518; margin: 0; padding: 0;
+  }
+  header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+  .issuer-name { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
+  .muted { color: #6b6166; }
+  .meta { text-align: right; }
+  .doc-type { font-size: 22px; font-weight: 800; letter-spacing: 2px; margin: 0 0 6px; }
+  .logo { max-height: 56px; max-width: 190px; object-fit: contain; margin-bottom: 8px; }
+  .party { border: 1px solid #e5e1e2; border-radius: 6px; padding: 10px 12px; margin-top: 22px; }
+  .party h2 {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
+    margin: 0 0 6px; color: #6b6166; font-weight: 700;
+  }
+  table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+  th {
+    text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 0.6px;
+    padding: 7px 8px; background: #f4f2f3; border-bottom: 1.5px solid #d9d4d6;
+  }
+  td { padding: 6px 8px; border-bottom: 1px solid #eeebec; }
+  .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  tr.balance-row td { background: #f9f8f8; font-weight: 700; }
+  tr.closing td { border-top: 1.5px solid #1a1518; font-weight: 800; font-size: 12px; }
+  .aging { margin-top: 22px; }
+  .aging h2 {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
+    margin: 0 0 6px; color: #6b6166;
+  }
+  .aging table { margin-top: 0; }
+  .aging th, .aging td { text-align: right; }
+  .aging th:first-child, .aging td:first-child { text-align: left; }
+  footer {
+    margin-top: 28px; padding-top: 10px; border-top: 1px solid #e5e1e2;
+    font-size: 9px; color: #6b6166; text-align: center;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  (function () {
+    var d = window.__BILLING_STATEMENT_DATA__ || {};
+    var esc = function (v) {
+      return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    };
+    var money = function (v) { return esc(d.currency || "R") + " " + esc(v == null ? "0.00" : v); };
+    var line = function (v) { return v ? "<div>" + esc(v) + "</div>" : ""; };
+
+    var issuer = d.issuer || {};
+    var billTo = d.billTo || {};
+    var aging = d.aging || {};
+
+    var rows = (d.transactions || []).map(function (t) {
+      return "<tr><td>" + esc(t.date) + "</td>" +
+        "<td>" + esc(t.description) + (t.reference ? " · " + esc(t.reference) : "") + "</td>" +
+        '<td class="num">' + (Number(t.debit) ? money(t.debit) : "") + "</td>" +
+        '<td class="num">' + (Number(t.credit) ? money(t.credit) : "") + "</td>" +
+        '<td class="num">' + money(t.balance) + "</td></tr>";
+    }).join("");
+
+    if (!rows) {
+      rows = '<tr><td colspan="5" class="muted" style="text-align:center;padding:14px">' +
+        "No transactions in this period.</td></tr>";
+    }
+
+    document.getElementById("root").innerHTML =
+      "<header><div>" +
+        (issuer.logoUrl ? '<img class="logo" src="' + esc(issuer.logoUrl) + '" alt="" />' : "") +
+        '<div class="issuer-name">' + esc(issuer.legalName || issuer.name) + "</div>" +
+        '<div class="muted">' + esc(issuer.address || "") + "</div>" +
+        (issuer.vatNumber ? '<div class="muted">VAT: ' + esc(issuer.vatNumber) + "</div>" : "") +
+      '</div><div class="meta">' +
+        '<div class="doc-type">STATEMENT</div>' +
+        "<div>" + esc(d.periodStart) + " to " + esc(d.periodEnd) + "</div>" +
+      "</div></header>" +
+      '<div class="party"><h2>Statement for</h2>' +
+        "<div><strong>" + esc(billTo.legalName || billTo.name) + "</strong></div>" +
+        line(billTo.address) + line(billTo.email) +
+        (billTo.vatNumber ? '<div class="muted">VAT: ' + esc(billTo.vatNumber) + "</div>" : "") +
+      "</div>" +
+      "<table><thead><tr><th>Date</th><th>Description</th>" +
+        '<th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th>' +
+      "</tr></thead><tbody>" +
+        '<tr class="balance-row"><td colspan="4">Opening balance</td>' +
+          '<td class="num">' + money(d.openingBalance) + "</td></tr>" +
+        rows +
+        '<tr class="closing"><td colspan="4">Closing balance</td>' +
+          '<td class="num">' + money(d.closingBalance) + "</td></tr>" +
+      "</tbody></table>" +
+      '<div class="aging"><h2>Outstanding by age</h2><table><thead><tr>' +
+        "<th>Bucket</th><th>Current</th><th>1-30 days</th><th>31-60 days</th>" +
+        "<th>61-90 days</th><th>90+ days</th></tr></thead><tbody><tr>" +
+        "<td>Amount</td>" +
+        "<td>" + money(aging.current) + "</td>" +
+        "<td>" + money(aging.d1_30) + "</td>" +
+        "<td>" + money(aging.d31_60) + "</td>" +
+        "<td>" + money(aging.d61_90) + "</td>" +
+        "<td>" + money(aging.d90_plus) + "</td>" +
+      "</tr></tbody></table></div>" +
+      "<footer>Amounts shown are as at " + esc(d.periodEnd) +
+        ". Please contact us if any detail appears incorrect.</footer>";
+  })();
+</script>
+</body>
+</html>

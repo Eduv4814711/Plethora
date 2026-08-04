@@ -6,5 +6,7 @@ export function triggerPostClockExceptionSync(companyId: string, siteId?: string
     companyId,
     siteId: siteId ?? undefined,
     lookbackHours: 24,
-  }).catch(() => undefined);
+  }).catch((err) => {
+    console.error("[AttendanceExceptions] Post-clock exception sync failed:", { companyId, siteId }, err);
+  });
 }

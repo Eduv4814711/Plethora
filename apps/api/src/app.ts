@@ -34,6 +34,7 @@ import { earningsRulesRoutes } from "./routes/earnings-rules.js";
 import { deductionRulesRoutes } from "./routes/deduction-rules.js";
 import { publicHolidaysRoutes } from "./routes/public-holidays.js";
 import { timesheetsRoutes } from "./routes/timesheets.js";
+import { billingRoutes } from "./modules/billing/billing.routes.js";
 import { leaveV3Routes } from "./routes/leave-v3.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { auditRoutes } from "./routes/audit.js";
@@ -213,6 +214,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(deductionRulesRoutes, { prefix: "/payroll/deduction-rules" });
   await app.register(publicHolidaysRoutes, { prefix: "/payroll/public-holidays" });
   await app.register(timesheetsRoutes, { prefix: "/payroll/timesheets" });
+  await app.register(billingRoutes, { prefix: "/payroll/billing" });
   await app.register(leaveV3Routes, { prefix: "/leave" });
   await app.register(dashboardRoutes, { prefix: "/dashboard" });
   await app.register(auditRoutes, { prefix: "/audit" });

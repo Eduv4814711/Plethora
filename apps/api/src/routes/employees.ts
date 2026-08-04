@@ -5,6 +5,7 @@ import { authMiddleware } from "../middleware/auth.js";
 import { requireAnyCapability, requireCapability, requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
 import { reconcileContinuityForEmployee } from "../modules/rosters/roster-continuity.service.js";
+import { ROSTER_PLACEHOLDER_JOB_ROLE_PREFIX } from "../modules/rosters/rosters.service.js";
 import { transitionEmployeeStatus } from "../services/employee.service.js";
 import { createAuditLog } from "../lib/audit.js";
 import {
@@ -259,6 +260,7 @@ export async function employeesRoutes(app: FastifyInstance) {
 
     const where = {
       companyId: user.companyId,
+      AND: [{ OR: [{ jobRole: null }, { jobRole: { not: { startsWith: `${ROSTER_PLACEHOLDER_JOB_ROLE_PREFIX}:` } } }] }],
       ...(status ? { status } : {}),
       ...(employeeType ? { employeeType } : {}),
       ...(groupId ? { groupId } : {}),

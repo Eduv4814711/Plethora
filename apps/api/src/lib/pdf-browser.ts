@@ -2,6 +2,9 @@
  * Launches a browser for HTML→PDF: puppeteer-core + PUPPETEER_EXECUTABLE_PATH,
  * or bundled puppeteer when installed.
  */
+// /dev/shm is tiny in most containers; without this Chromium crashes on larger documents.
+const LAUNCH_ARGS = ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"];
+
 export async function launchPdfBrowser() {
   const exe = process.env.PUPPETEER_EXECUTABLE_PATH?.trim();
   if (exe) {
@@ -9,7 +12,7 @@ export async function launchPdfBrowser() {
     return puppeteer.launch({
       executablePath: exe,
       headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      args: LAUNCH_ARGS,
     });
   }
 
@@ -17,7 +20,7 @@ export async function launchPdfBrowser() {
     const { default: puppeteer } = await import("puppeteer");
     return await puppeteer.launch({
       headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      args: LAUNCH_ARGS,
     });
   } catch (e) {
     throw new Error(

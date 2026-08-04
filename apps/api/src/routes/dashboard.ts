@@ -202,6 +202,10 @@ export async function dashboardRoutes(app: FastifyInstance) {
         sourceModule: true,
         sourceId: true,
         siteId: true,
+        employeeId: true,
+        // Carries dateKey/shiftType/code etc. — the dashboard needs these to deep-link
+        // an alert to the exact place the underlying problem is fixed.
+        metadata: true,
         createdAt: true,
       },
     });

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Billing document</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 11px;
+    color: #1a1518;
+    margin: 0;
+    padding: 0;
+    position: relative;
+  }
+  .watermark {
+    position: fixed;
+    top: 42%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-28deg);
+    font-size: 90px;
+    font-weight: 800;
+    letter-spacing: 6px;
+    color: rgba(0, 0, 0, 0.07);
+    z-index: 0;
+    white-space: nowrap;
+  }
+  .sheet { position: relative; z-index: 1; }
+  header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+  .issuer-name { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
+  .muted { color: #6b6166; }
+  .meta { text-align: right; }
+  .doc-type { font-size: 22px; font-weight: 800; letter-spacing: 2px; margin: 0 0 6px; }
+  .logo { max-height: 56px; max-width: 190px; object-fit: contain; margin-bottom: 8px; }
+  .parties { display: flex; gap: 24px; margin-top: 22px; }
+  .party { flex: 1; border: 1px solid #e5e1e2; border-radius: 6px; padding: 10px 12px; }
+  .party h2 {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
+    margin: 0 0 6px; color: #6b6166; font-weight: 700;
+  }
+  table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+  th {
+    text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 0.6px;
+    padding: 7px 8px; background: #f4f2f3; border-bottom: 1.5px solid #d9d4d6;
+  }
+  td { padding: 7px 8px; border-bottom: 1px solid #eeebec; vertical-align: top; }
+  .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .totals { margin-top: 14px; margin-left: auto; width: 46%; }
+  .totals td { border: none; padding: 4px 8px; }
+  .totals .grand td {
+    border-top: 1.5px solid #1a1518; font-weight: 800; font-size: 13px; padding-top: 8px;
+  }
+  .notes { margin-top: 26px; }
+  .notes h2 {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
+    margin: 0 0 4px; color: #6b6166;
+  }
+  footer {
+    margin-top: 30px; padding-top: 10px; border-top: 1px solid #e5e1e2;
+    font-size: 9px; color: #6b6166; text-align: center;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  (function () {
+    var d = window.__BILLING_DOC_DATA__ || {};
+    var esc = function (v) {
+      return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    };
+    var money = function (v) { return esc(d.currency || "R") + " " + esc(v == null ? "0.00" : v); };
+    var line = function (v) { return v ? "<div>" + esc(v) + "</div>" : ""; };
+
+    var party = function (title, p) {
+      p = p || {};
+      return '<div class="party"><h2>' + esc(title) + "</h2>" +
+        "<div><strong>" + esc(p.legalName || p.name) + "</strong></div>" +
+        line(p.address) + line(p.email) + line(p.phone) +
+        (p.vatNumber ? '<div class="muted">VAT: ' + esc(p.vatNumber) + "</div>" : "") +
+        (p.registrationNumber ? '<div class="muted">Reg: ' + esc(p.registrationNumber) + "</div>" : "") +
+        "</div>";
+    };
+
+    var rows = (d.lines || []).map(function (l) {
+      return "<tr><td>" + esc(l.description) + "</td>" +
+        '<td class="num">' + esc(l.quantity) + "</td>" +
+        '<td class="num">' + money(l.unitAmount) + "</td>" +
+        '<td class="num">' + money(l.lineTotal) + "</td></tr>";
+    }).join("");
+
+    var totalRow = function (label, value, cls) {
+      return "<tr" + (cls ? ' class="' + cls + '"' : "") + "><td>" + esc(label) +
+        '</td><td class="num">' + money(value) + "</td></tr>";
+    };
+
+    var totals = totalRow("Subtotal", d.subtotal);
+    if (d.discountAmount && Number(d.discountAmount) !== 0) {
+      totals += totalRow("Discount", "-" + d.discountAmount);
+    }
+    totals += totalRow("VAT (" + esc(d.vatRate) + "%)", d.vatAmount);
+    totals += totalRow("Total", d.totalAmount, "grand");
+    if (d.amountPaid != null) totals += totalRow("Paid", d.amountPaid);
+    if (d.amountDue != null) totals += totalRow("Balance due", d.amountDue);
+
+    document.getElementById("root").innerHTML =
+      (d.watermark ? '<div class="watermark">' + esc(d.watermark) + "</div>" : "") +
+      '<div class="sheet"><header><div>' +
+        (d.issuer && d.issuer.logoUrl ? '<img class="logo" src="' + esc(d.issuer.logoUrl) + '" alt="" />' : "") +
+        '<div class="issuer-name">' + esc((d.issuer || {}).legalName || (d.issuer || {}).name) + "</div>" +
+        '<div class="muted">' + esc((d.issuer || {}).address || "") + "</div>" +
+      '</div><div class="meta">' +
+        '<div class="doc-type">' + esc(d.docType) + "</div>" +
+        "<div><strong>" + esc(d.documentNumber) + "</strong></div>" +
+        "<div>" + esc(d.issueDateLabel) + ": " + esc(d.issueDate) + "</div>" +
+        "<div>" + esc(d.dueDateLabel) + ": " + esc(d.dueDate) + "</div>" +
+        (d.reference ? '<div class="muted">Ref: ' + esc(d.reference) + "</div>" : "") +
+      "</div></header>" +
+      '<div class="parties">' + party("From", d.issuer) + party("Bill to", d.billTo) + "</div>" +
+      "<table><thead><tr><th>Description</th>" +
+        '<th class="num">Qty</th><th class="num">Unit</th><th class="num">Amount</th>' +
+      "</tr></thead><tbody>" + rows + "</tbody></table>" +
+      '<table class="totals">' + totals + "</table>" +
+      (d.notes ? '<div class="notes"><h2>Notes</h2><div>' + esc(d.notes) + "</div></div>" : "") +
+      "<footer>" + esc(d.docType === "QUOTE" ? "This quotation is valid until " + esc(d.dueDate) + "." : "Please use " + esc(d.documentNumber) + " as your payment reference.") + "</footer>" +
+      "</div>";
+  })();
+</script>
+</body>
+</html>

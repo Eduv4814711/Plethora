@@ -223,6 +223,7 @@ export default function PayrollPage() {
   const canEditPayroll = Boolean(user && hasCapability(user, "/payroll", "edit"));
   const canApprovePayroll = Boolean(user && hasCapability(user, "/payroll", "approve"));
   const canExportPayroll = Boolean(user && hasCapability(user, "/payroll", "export"));
+  const canViewBilling = Boolean(user && hasCapability(user, "/payroll/billing", "view"));
   const [runs, setRuns] = useState<PayrollRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -353,6 +354,11 @@ export default function PayrollPage() {
             <Link href="/employees/leave" className="btn-secondary text-sm">
               Leave requests
             </Link>
+            {canViewBilling && (
+              <Link href="/payroll/billing" className="btn-secondary text-sm">
+                Client billing
+              </Link>
+            )}
             <Link href="/payroll/configuration" className="btn-secondary text-sm">
               Configuration
             </Link>

@@ -561,6 +561,12 @@ export async function refreshPayrollReadiness(
       priority: "CRITICAL",
       sourceModule: "PAYROLL",
       dedupeKey: `payroll_blocked:${start.toISOString().slice(0, 10)}`,
+      // The fix for this lives in attendance, not payroll — carry the period so the
+      // dashboard can link straight to the exceptions blocking it.
+      metadata: {
+        periodStart: start.toISOString().slice(0, 10),
+        periodEnd: end.toISOString().slice(0, 10),
+      },
     });
   }
 

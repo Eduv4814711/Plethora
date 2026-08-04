@@ -4,7 +4,7 @@ import { createAuditLog } from "../../lib/audit.js";
 import { prisma } from "../../lib/prisma.js";
 import { getCompanyTimezone, inferShiftTypeFromStartTime } from "../../lib/timezone.js";
 import { findApprovedLeaveConflict } from "../../services/attendance.service.js";
-import { dateKey, dateOnly } from "./rosters.service.js";
+import { dateKey, dateOnly, ROSTER_PLACEHOLDER_JOB_ROLE_PREFIX } from "./rosters.service.js";
 import {
   isShiftCoveredOnDateKey,
   resolveSiteCoverageDays,
@@ -280,9 +280,10 @@ async function seedRows(tx: Tx, companyId: string, timesheetId: string, siteId: 
   }
 
   const workingPlanned = planned.filter((p) => WORKING_CODES.has(p.shiftCode));
-  const leaveConflicts = await Promise.all(
-    workingPlanned.map((p) => findApprovedLeaveConflict(companyId, p.guardId, dateOnly(p.rosterDate)))
-  );
+  const [leaveConflicts, placeholderGuardIds] = await Promise.all([
+    Promise.all(workingPlanned.map((p) => findApprovedLeaveConflict(companyId, p.guardId, dateOnly(p.rosterDate)))),
+    getPlaceholderGuardIds(tx, [...new Set(workingPlanned.map((p) => p.guardId))]),
+  ]);
 
   const rows: Prisma.SiteTimesheetRowCreateManyInput[] = [];
   workingPlanned.forEach((p, index) => {
@@ -295,7 +296,7 @@ async function seedRows(tx: Tx, companyId: string, timesheetId: string, siteId: 
       siteId,
       workDate: p.rosterDate,
       plannedGuardId: p.guardId,
-      actualGuardId: p.guardId,
+      actualGuardId: placeholderGuardIds.has(p.guardId) ? null : p.guardId,
       plannedShiftCode: p.shiftCode,
       plannedShiftType: p.shiftType,
       actualShiftCode: shift ? p.shiftCode : null,
@@ -358,6 +359,13 @@ async function resyncRows(tx: Tx, companyId: string, timesheetId: string, siteId
     if (key) rowByPlanned.set(key, row);
   }
 
+  const placeholderGuardIds = await getPlaceholderGuardIds(tx, [
+    ...new Set([
+      ...planned.map((p) => p.guardId),
+      ...existingRows.map((row) => row.plannedGuardId).filter((id): id is string => id != null),
+    ]),
+  ]);
+
   // 1. Add rows for newly published roster cells that have no row yet.
   const newPlanned = planned.filter((p) => {
     if (!WORKING_CODES.has(p.shiftCode)) return false;
@@ -380,7 +388,7 @@ async function resyncRows(tx: Tx, companyId: string, timesheetId: string, siteId
       siteId,
       workDate: p.rosterDate,
       plannedGuardId: p.guardId,
-      actualGuardId: p.guardId,
+      actualGuardId: placeholderGuardIds.has(p.guardId) ? null : p.guardId,
       plannedShiftCode: p.shiftCode,
       plannedShiftType: p.shiftType,
       actualShiftCode: shift ? p.shiftCode : null,
@@ -402,10 +410,13 @@ async function resyncRows(tx: Tx, companyId: string, timesheetId: string, siteId
   });
   if (toCreate.length > 0) await tx.siteTimesheetRow.createMany({ data: toCreate });
 
-  // 2. Default actual worker to scheduled guard on rostered rows still missing one.
+  // 2. Default actual worker to scheduled guard on rostered rows still missing one —
+  // unless the scheduled guard is a roster-planning placeholder, which must be swapped
+  // for a real employee before it can absorb attendance/hours.
   for (const row of existingRows) {
     if (!row.plannedGuardId || row.actualGuardId) continue;
     if (row.approvalStatus !== "pending") continue;
+    if (placeholderGuardIds.has(row.plannedGuardId)) continue;
     await tx.siteTimesheetRow.update({
       where: { id: row.id },
       data: { actualGuardId: row.plannedGuardId },
@@ -442,6 +453,7 @@ async function resyncRows(tx: Tx, companyId: string, timesheetId: string, siteId
     if (!row.plannedGuardId) continue; // manual/reliever row
     if (row.attendanceStatus !== "pending") continue; // already actioned by an operator
     if (row.approvalStatus !== "pending") continue;
+    if (placeholderGuardIds.has(row.plannedGuardId)) continue;
     const rowType = resolveRowShiftType(row);
     const shift = shiftByGuardDateType.get(shiftMatchKey(row.plannedGuardId, row.workDate, rowType));
     if (!shift) continue;
@@ -841,13 +853,28 @@ export async function getSiteTimesheet(companyId: string, siteId: string, startD
   };
 }
 
-/** Guard IDs on timesheet rows must reference employees of the same company (tenant boundary). */
+/**
+ * Guard IDs on timesheet rows must reference real employees of the same company (tenant
+ * boundary), not roster-planning placeholders — those exist only to hold a slot on the
+ * grid and must be swapped for a real employee before any hours can be recorded against them.
+ */
 async function guardBelongsToCompany(guardId: string, companyId: string): Promise<boolean> {
   const employee = await prisma.employee.findFirst({
     where: { id: guardId, companyId },
+    select: { id: true, jobRole: true },
+  });
+  if (!employee) return false;
+  return !(employee.jobRole ?? "").startsWith(`${ROSTER_PLACEHOLDER_JOB_ROLE_PREFIX}:`);
+}
+
+/** Employee IDs among `guardIds` that are roster-planning placeholders, not real staff. */
+async function getPlaceholderGuardIds(tx: Tx, guardIds: string[]): Promise<Set<string>> {
+  if (guardIds.length === 0) return new Set();
+  const placeholders = await tx.employee.findMany({
+    where: { id: { in: guardIds }, jobRole: { startsWith: `${ROSTER_PLACEHOLDER_JOB_ROLE_PREFIX}:` } },
     select: { id: true },
   });
-  return employee != null;
+  return new Set(placeholders.map((p) => p.id));
 }
 
 export function normalizeObNumber(value: string | null | undefined): string | null | undefined {
@@ -1044,7 +1071,7 @@ async function writeSiteTimesheetRow(
   }
 
   if (input.actualGuardId && !(await guardBelongsToCompany(input.actualGuardId, companyId))) {
-    return { error: "Guard not found." };
+    return { error: "Guard not found, or is a roster-planning placeholder. Assign a real employee before recording hours." };
   }
 
   const nextDutyOn =
@@ -1232,7 +1259,7 @@ export async function addSiteTimesheetRow(
     return { error: `Row date must be between ${periodStart} and ${periodEnd}.` };
   }
   if (!(await guardBelongsToCompany(input.actualGuardId, companyId))) {
-    return { error: "Guard not found." };
+    return { error: "Guard not found, or is a roster-planning placeholder. Assign a real employee before recording hours." };
   }
   const dutyOnObNumber =
     normalizeObNumber(input.dutyOnObNumber ?? input.occurrenceBookNumber) ?? null;

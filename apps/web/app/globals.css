@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap');
 @config "../tailwind.config.ts";
 @import "tailwindcss";
 
@@ -8,7 +8,7 @@
   --bg-content: #ffffff;
   --bg-nav: #F57C00;
   --bg-nav-hover: #EF6C00;
-  --text-primary: #000000;
+  --text-primary: #1A1518;
   --text-secondary: #374151;
   --text-muted: #6b7280;
   --accent-primary: #FF9800;
@@ -36,6 +36,19 @@ body {
 html {
   scroll-behavior: smooth;
   -webkit-tap-highlight-color: rgba(245, 124, 0, 0.15);
+}
+
+@layer base {
+  a {
+    color: #F57C00;
+  }
+  a:hover {
+    color: #E65100;
+  }
+}
+
+::selection {
+  background: #FFCC80;
 }
 
 @layer utilities {

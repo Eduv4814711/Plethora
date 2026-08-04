@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Month-end pack</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 11px; color: #1a1518; margin: 0; padding: 0; position: relative;
+  }
+  .watermark {
+    position: fixed; top: 42%; left: 50%;
+    transform: translate(-50%, -50%) rotate(-28deg);
+    font-size: 64px; font-weight: 800; letter-spacing: 5px;
+    color: rgba(0, 0, 0, 0.07); z-index: 0; white-space: nowrap;
+  }
+  .sheet { position: relative; z-index: 1; }
+  header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+  .issuer-name { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
+  .muted { color: #6b6166; }
+  .meta { text-align: right; }
+  .doc-type { font-size: 22px; font-weight: 800; letter-spacing: 2px; margin: 0 0 6px; }
+  .logo { max-height: 72px; max-width: 240px; object-fit: contain; margin-bottom: 8px; }
+  .party { border: 1px solid #e5e1e2; border-radius: 6px; padding: 10px 12px; margin-top: 22px; }
+  .party h2 {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
+    margin: 0 0 6px; color: #6b6166; font-weight: 700;
+  }
+  h3 {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
+    margin: 24px 0 8px; color: #6b6166; font-weight: 700;
+  }
+  .grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tile {
+    flex: 1 1 15%; min-width: 88px; border: 1px solid #e5e1e2; border-radius: 6px;
+    padding: 8px 10px;
+  }
+  .tile .label {
+    font-size: 8px; text-transform: uppercase; letter-spacing: 0.8px; color: #6b6166;
+  }
+  .tile .value { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 0.6px;
+    padding: 7px 8px; background: #f4f2f3; border-bottom: 1.5px solid #d9d4d6;
+  }
+  td { padding: 6px 8px; border-bottom: 1px solid #eeebec; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .status {
+    display: inline-block; padding: 2px 7px; border-radius: 10px;
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    background: #f4f2f3; border: 1px solid #d9d4d6;
+  }
+  .status.ok { background: #e9f5ec; border-color: #b7ddc2; color: #1f6b39; }
+  .status.pending { background: #fdf2e3; border-color: #edcf9d; color: #8a5a12; }
+  .warnings {
+    margin-top: 20px; border: 1px solid #edcf9d; background: #fdf7ee;
+    border-radius: 6px; padding: 10px 12px;
+  }
+  .warnings h2 {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
+    margin: 0 0 6px; color: #8a5a12; font-weight: 700;
+  }
+  .warnings ul { margin: 0; padding-left: 16px; }
+  .recipients { margin-top: 20px; font-size: 10px; }
+  .recipients span { display: inline-block; margin-right: 10px; }
+  footer {
+    margin-top: 28px; padding-top: 10px; border-top: 1px solid #e5e1e2;
+    font-size: 9px; color: #6b6166; text-align: center;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  (function () {
+    var d = window.__MONTH_END_COVER_DATA__ || {};
+    var esc = function (v) {
+      return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    };
+    var line = function (v) { return v ? "<div>" + esc(v) + "</div>" : ""; };
+    var labelled = function (label, v) {
+      return v ? '<div><span class="muted">' + esc(label) + ":</span> " + esc(v) + "</div>" : "";
+    };
+    var tile = function (label, value) {
+      return '<div class="tile"><div class="label">' + esc(label) + "</div>" +
+        '<div class="value">' + esc(value == null ? 0 : value) + "</div></div>";
+    };
+
+    var issuer = d.issuer || {};
+    var client = d.client || {};
+    var contact = d.clientContact || {};
+    var totals = d.totals || {};
+
+    var siteRows = (d.sites || []).map(function (s) {
+      var ok = s.timesheetStatus === "approved" || s.timesheetStatus === "locked";
+      return "<tr><td>" + esc(s.siteName) + "</td>" +
+        '<td><span class="status ' + (ok ? "ok" : "pending") + '">' + esc(s.timesheetStatus) + "</span></td>" +
+        '<td class="num">' + esc(s.rowCount) + "</td>" +
+        '<td class="num">' + esc(s.totalHours) + "</td>" +
+        '<td class="num">' + esc(s.absences) + "</td>" +
+        '<td class="num">' + esc(s.incidentCount) + "</td></tr>";
+    }).join("") ||
+      '<tr><td colspan="6" class="muted" style="text-align:center;padding:14px">' +
+        "No sites are linked to this client.</td></tr>";
+
+    var warnings = (d.warnings || []).length
+      ? '<div class="warnings"><h2>Before you send this</h2><ul>' +
+          d.warnings.map(function (w) { return "<li>" + esc(w) + "</li>"; }).join("") +
+        "</ul></div>"
+      : "";
+
+    var recipients = (d.recipients || []).length
+      ? '<div class="recipients"><span class="muted">Report recipients:</span> ' +
+          d.recipients.map(function (r) { return "<span>" + esc(r) + "</span>"; }).join("") +
+        "</div>"
+      : '<div class="recipients muted">No report recipients captured for this client.</div>';
+
+    document.getElementById("root").innerHTML =
+      (d.watermark ? '<div class="watermark">' + esc(d.watermark) + "</div>" : "") +
+      '<div class="sheet"><header><div>' +
+        (issuer.logoUrl ? '<img class="logo" src="' + esc(issuer.logoUrl) + '" alt="" />' : "") +
+        '<div class="issuer-name">' + esc(issuer.legalName || issuer.name) + "</div>" +
+        '<div class="muted">' + esc(issuer.address || "") + "</div>" +
+        line(issuer.phone) + line(issuer.email) +
+      '</div><div class="meta">' +
+        '<div class="doc-type">MONTH-END PACK</div>' +
+        "<div><strong>" + esc(d.periodLabel) + "</strong></div>" +
+        '<div class="muted">' + esc(d.periodStart) + " to " + esc(d.periodEnd) + "</div>" +
+      "</div></header>" +
+
+      '<div class="party"><h2>Prepared for</h2>' +
+        "<div><strong>" + esc(client.legalName || client.name) + "</strong></div>" +
+        line(contact.physicalAddress || client.address) +
+        labelled("Contact", contact.contactPersonName) +
+        labelled("Role", contact.contactPersonRole) +
+        labelled("Mobile", contact.contactPersonMobile) +
+        line(client.email) +
+      "</div>" +
+
+      "<h3>Period totals</h3><div class=\"grid\">" +
+        tile("Day shifts", totals.dayShifts) +
+        tile("Night shifts", totals.nightShifts) +
+        tile("Absences", totals.absences) +
+        tile("Hours worked", totals.totalHours) +
+        tile("Overtime hours", totals.overtimeHours) +
+        tile("Incidents", totals.incidents) +
+      "</div>" +
+
+      "<h3>Sites included</h3><table><thead><tr><th>Site</th><th>Timesheet</th>" +
+        '<th class="num">Rows</th><th class="num">Hours</th>' +
+        '<th class="num">Absences</th><th class="num">Incidents</th>' +
+      "</tr></thead><tbody>" + siteRows + "</tbody></table>" +
+
+      warnings + recipients +
+
+      "<footer>Generated " + esc(d.generatedAt) +
+        " · A site report and timesheet for each site follow this page.</footer></div>";
+  })();
+</script>
+</body>
+</html>

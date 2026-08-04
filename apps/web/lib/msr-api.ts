@@ -1,4 +1,5 @@
 import { authFetch, buildApiUrl } from "./api";
+import { downloadAttachment } from "./download";
 
 async function parseJson<T>(res: Response, fallback: string): Promise<T> {
   if (!res.ok) {
@@ -26,6 +27,9 @@ export interface OperationalAlert {
   sourceModule: string;
   sourceId?: string | null;
   siteId?: string | null;
+  employeeId?: string | null;
+  /** Source-specific context (dateKey, shiftType, code, periodStart…) used to build fix links. */
+  metadata?: Record<string, unknown> | null;
   createdAt: string;
 }
 
@@ -348,12 +352,66 @@ export interface ClientRecord {
   phone?: string | null;
   userId?: string | null;
   isActive: boolean;
+  billingEmail?: string | null;
+  billingAddress?: string | null;
+  vatNumber?: string | null;
+  registrationNumber?: string | null;
+  paymentTermsDays?: number;
+  contactPersonName?: string | null;
+  contactPersonRole?: string | null;
+  contactPersonMobile?: string | null;
+  physicalAddress?: string | null;
+  notes?: string | null;
+  reportRecipients?: string[];
+  user?: { id: string; name: string; email: string } | null;
   _count?: { sites: number };
 }
+
+export interface ClientSiteSummary {
+  id: string;
+  name: string;
+  siteStatus: string;
+  monthlyRevenue: string | null;
+  physicalAddress?: string | null;
+  serviceType?: string | null;
+  contractStartDate?: string | null;
+  contractEndDate?: string | null;
+  contactPersonName?: string | null;
+}
+
+export interface ClientDetail extends ClientRecord {
+  sites: ClientSiteSummary[];
+}
+
+/** Everything the create and update endpoints accept. */
+export type ClientWritableFields = {
+  name: string;
+  email: string | null;
+  phone: string | null;
+  userId: string | null;
+  isActive: boolean;
+  billingEmail: string | null;
+  billingAddress: string | null;
+  vatNumber: string | null;
+  registrationNumber: string | null;
+  paymentTermsDays: number;
+  contactPersonName: string | null;
+  contactPersonRole: string | null;
+  contactPersonMobile: string | null;
+  physicalAddress: string | null;
+  notes: string | null;
+  /** Replace semantics — always send the whole list. */
+  reportRecipients: string[];
+};
 
 export async function listClients(token: string): Promise<ClientRecord[]> {
   const res = await authFetch("/clients", token);
   return parseJson(res, "Failed to load clients");
+}
+
+export async function getClient(token: string, id: string): Promise<ClientDetail> {
+  const res = await authFetch(`/clients/${id}`, token);
+  return parseJson(res, "Failed to load client");
 }
 
 export interface ClientAccountCandidate {
@@ -375,7 +433,7 @@ export async function listClientAccountCandidates(
 
 export async function createClient(
   token: string,
-  data: { name: string; email?: string; phone?: string; userId?: string }
+  data: Partial<ClientWritableFields> & { name: string }
 ): Promise<ClientRecord> {
   const res = await authFetch("/clients", token, {
     method: "POST",
@@ -387,13 +445,163 @@ export async function createClient(
 export async function updateClient(
   token: string,
   id: string,
-  data: Partial<{ name: string; email: string | null; phone: string | null; userId: string | null; isActive: boolean }>
+  data: Partial<ClientWritableFields>
 ): Promise<ClientRecord> {
   const res = await authFetch(`/clients/${id}`, token, {
     method: "PATCH",
     body: JSON.stringify(data),
   });
   return parseJson(res, "Failed to update client");
+}
+
+export async function linkClientSites(
+  token: string,
+  id: string,
+  siteIds: string[]
+): Promise<{ id: string; name: string; siteStatus: string }[]> {
+  const res = await authFetch(`/clients/${id}/sites`, token, {
+    method: "POST",
+    body: JSON.stringify({ siteIds }),
+  });
+  const body = await parseJson<{ data: { id: string; name: string; siteStatus: string }[] }>(
+    res,
+    "Failed to link sites"
+  );
+  return body.data;
+}
+
+export interface LinkableSite {
+  id: string;
+  name: string;
+  clientId: string | null;
+}
+
+/**
+ * Company sites with just enough shape to offer them for linking.
+ * `GET /sites` is paginated (`{ data, total }`, limit capped at 100), so page through —
+ * otherwise a company with more than one page silently loses sites from the picker.
+ */
+export async function listSitesForLinking(token: string): Promise<LinkableSite[]> {
+  const pageSize = 100;
+  const collected: LinkableSite[] = [];
+  let offset = 0;
+  let total = Number.POSITIVE_INFINITY;
+
+  while (collected.length < total) {
+    const res = await authFetch(`/sites?limit=${pageSize}&offset=${offset}`, token);
+    const body = await parseJson<{
+      data?: { id: string; name: string; clientId?: string | null }[];
+      total?: number;
+    }>(res, "Failed to load sites");
+
+    const page = body.data ?? [];
+    collected.push(
+      ...page.map((site) => ({
+        id: site.id,
+        name: site.name,
+        clientId: site.clientId ?? null,
+      }))
+    );
+    // Stop on a short/empty page too, so a wrong `total` can never spin this forever.
+    if (page.length < pageSize) break;
+    total = body.total ?? collected.length;
+    offset += pageSize;
+  }
+
+  return collected;
+}
+
+export async function unlinkClientSite(token: string, id: string, siteId: string): Promise<void> {
+  const res = await authFetch(`/clients/${id}/sites/${siteId}`, token, { method: "DELETE" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { message?: string }).message || "Failed to unlink site");
+  }
+}
+
+// ——— Month-end client reporting ———
+
+export interface MonthEndSiteRow {
+  siteId: string;
+  siteName: string;
+  timesheetId: string | null;
+  timesheetStatus: string;
+  rowCount: number;
+  totals: {
+    dayShifts: number;
+    nightShifts: number;
+    relieverShifts: number;
+    absences: number;
+    totalHours: number;
+    overtimeHours: number;
+    discrepancies: number;
+  };
+  incidentCount: number;
+  exceptionTotal: number;
+  warnings: string[];
+}
+
+export interface MonthEndSummary {
+  client: {
+    id: string;
+    name: string;
+    contactPersonName: string | null;
+    contactPersonRole: string | null;
+    contactPersonMobile: string | null;
+    email: string | null;
+    physicalAddress: string | null;
+  };
+  period: { month: string | null; periodStart: string; periodEnd: string; label: string };
+  recipients: string[];
+  sites: MonthEndSiteRow[];
+  totals: MonthEndSiteRow["totals"] & { incidents: number; exceptions: number };
+  otherPeriods: { siteId: string; periodStart: string; periodEnd: string; status: string }[];
+  warnings: string[];
+}
+
+export async function getClientMonthEndSummary(
+  token: string,
+  id: string,
+  month: string
+): Promise<MonthEndSummary> {
+  const res = await authFetch(`/clients/${id}/month-end/summary?month=${month}`, token);
+  return parseJson(res, "Failed to load month-end summary");
+}
+
+export function downloadSiteReportPdf(token: string, id: string, siteId: string, month: string) {
+  return downloadAttachment(
+    token,
+    `/clients/${id}/sites/${siteId}/report.pdf?month=${month}`,
+    "site-report.pdf"
+  );
+}
+
+export function downloadSiteTimesheetPdf(token: string, id: string, siteId: string, month: string) {
+  return downloadAttachment(
+    token,
+    `/clients/${id}/sites/${siteId}/timesheet.pdf?month=${month}`,
+    "timesheet.pdf"
+  );
+}
+
+export function downloadMonthEndPackPdf(
+  token: string,
+  id: string,
+  month: string,
+  options: { siteIds?: string[]; includeUnapproved?: boolean } = {}
+) {
+  const q = new URLSearchParams({ month });
+  if (options.siteIds?.length) q.set("siteIds", options.siteIds.join(","));
+  if (options.includeUnapproved) q.set("includeUnapproved", "true");
+  return downloadAttachment(token, `/clients/${id}/month-end/pack.pdf?${q}`, "month-end-pack.pdf");
+}
+
+export function downloadMonthEndTimesheetsCsv(token: string, id: string, month: string) {
+  return downloadAttachment(
+    token,
+    `/clients/${id}/month-end/timesheets.csv?month=${month}`,
+    "timesheets.csv"
+  );
 }
 
 export async function markNotificationRead(token: string, id: string): Promise<void> {

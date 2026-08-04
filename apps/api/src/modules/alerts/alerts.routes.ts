@@ -13,7 +13,17 @@ import {
   resolveAlert,
 } from "./alerts.service.js";
 
-const ALERT_MODULES = ["/", "/attendance", "/sites", "/tasks", "/payroll", "/reports"] as const;
+// Rostering and incidents raise alerts too, so their operators must be able to act on them.
+const ALERT_MODULES = [
+  "/",
+  "/attendance",
+  "/sites",
+  "/tasks",
+  "/payroll",
+  "/reports",
+  "/rostering",
+  "/incidents",
+] as const;
 
 export async function alertsRoutes(app: FastifyInstance) {
   const protect = [

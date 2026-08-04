@@ -32,6 +32,11 @@
     "concurrently": "^10.0.3",
     "typescript": "^5.9.3"
   },
+  "//react": "next hoists to the root, so React must live there too — otherwise npm satisfies Next's peer with its own React 18 while apps/web uses 19, and React 18 cannot render React 19 elements.",
+  "dependencies": {
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
   "engines": {
     "node": "24.x",
     "npm": "11.x"
@@ -41,7 +46,9 @@
     "tar": "7.5.15",
     "postcss": "8.5.20",
     "dompurify": "3.4.12",
-    "vite": "8.1.5"
+    "vite": "8.1.5",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
   },
   "optionalDependencies": {
     "@rolldown/binding-win32-x64-msvc": "1.0.0-rc.16"

@@ -107,6 +107,25 @@ export function calculateHours(
   };
 }
 
+/**
+ * Compute hours for a manual attendance entry, which has no rostered shift to compare against.
+ * Any time worked beyond config.attendance.standardShiftHours is treated as overtime.
+ */
+export function calculateManualEntryHours(
+  clockIn: Date,
+  clockOut: Date
+): { hoursWorked: number; overtimeHours: number } {
+  const msPerHour = 1000 * 60 * 60;
+  const totalHours = (clockOut.getTime() - clockIn.getTime()) / msPerHour;
+  const standardHours = Math.min(totalHours, config.attendance.standardShiftHours);
+  const overtimeHours = Math.max(0, totalHours - standardHours);
+
+  return {
+    hoursWorked: Math.round(standardHours * 100) / 100,
+    overtimeHours: Math.round(overtimeHours * 100) / 100,
+  };
+}
+
 /** Throws if the point is outside the site geofence. No-op if geofence is not configured on the site. */
 export function assertWithinSiteGeofence(site: Site, lat: number, lng: number): void {
   if (!siteHasGeofence(site)) return;

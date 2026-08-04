@@ -226,7 +226,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <img
               src="/plethora-logo-header.svg"
               alt="Plethora"
-              className="h-9 w-auto max-h-10 object-contain object-left opacity-95 sm:h-10"
+              className="h-11 w-auto max-h-12 object-contain object-left opacity-95 sm:h-12"
             />
           </Link>
         </div>
@@ -297,7 +297,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 <button
                   type="button"
                   onClick={() => setSearchOpen(false)}
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center text-white/85 hover:text-white hover:bg-security-navy-800 rounded-security transition-colors touch-manipulation"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center text-white/85 hover:text-white hover:bg-white/10 rounded-security transition-colors touch-manipulation"
                   aria-label="Close search"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -309,7 +309,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 onClick={() => setSearchOpen(true)}
-                className="inline-flex h-11 w-11 items-center justify-center text-white/85 hover:text-white hover:bg-security-navy-800 rounded-security transition-colors touch-manipulation"
+                className="inline-flex h-11 w-11 items-center justify-center text-white/85 hover:text-white hover:bg-white/10 rounded-security transition-colors touch-manipulation"
                 title="Search"
                 aria-label="Search"
               >
@@ -325,7 +325,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           {canAccessSettings && (
             <Link
               href="/settings"
-              className="inline-flex h-11 w-11 items-center justify-center text-security-navy-300 hover:text-white hover:bg-security-navy-800 rounded-security transition-colors touch-manipulation"
+              className="inline-flex h-11 w-11 items-center justify-center text-white/85 hover:text-white hover:bg-white/10 rounded-security transition-colors touch-manipulation"
               title="Settings"
               aria-label="Settings"
             >
@@ -340,7 +340,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               onClick={() => setProfileOpen((o) => !o)}
-              className="flex min-h-11 items-center gap-2 rounded-security py-1.5 pl-1.5 pr-2 text-white/85 hover:text-white hover:bg-security-navy-800 transition-colors touch-manipulation sm:pr-3"
+              className="flex min-h-11 items-center gap-2 rounded-security py-1.5 pl-1.5 pr-2 text-white/85 hover:text-white hover:bg-white/10 transition-colors touch-manipulation sm:pr-3"
               title={user.name ?? "Profile"}
               aria-label={user.name ? `Profile, ${user.name}` : "Profile"}
             >

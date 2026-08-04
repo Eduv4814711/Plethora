@@ -10,9 +10,11 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/employees", label: "Team" },
   { href: "/employees/leave", label: "Leave" },
   { href: "/sites", label: "Sites" },
+  { href: "/clients", label: "Clients" },
   { href: "/rostering", label: "Rostering" },
   { href: "/attendance", label: "Attendance" },
   { href: "/payroll", label: "Payroll" },
+  { href: "/payroll/billing", label: "Client Billing" },
   { href: "/tasks", label: "Tasks" },
   { href: "/whatsapp", label: "WhatsApp" },
   { href: "/reports", label: "Reports" },
@@ -28,6 +30,8 @@ export const NAV_ITEMS: NavItem[] = [
 
 export const MAIN_NAV_HREFS = ["/", "/employees", "/employees/leave", "/sites", "/rostering", "/attendance", "/payroll", "/tasks"];
 export const MORE_NAV_HREFS = [
+  "/clients",
+  "/payroll/billing",
   "/whatsapp",
   "/reports",
   "/approvals",
@@ -98,6 +102,14 @@ export function canAccessRoute(pathname: string, user: AccessSubject): boolean {
   const item = navItemForPath(pathname);
   if (item?.href === "/settings/migrate") {
     return canAccessMigrationTools(user);
+  }
+  // Clients moved out of Settings; existing grants never mention /clients, so keep the old paths working.
+  if (item?.href === "/clients") {
+    return (
+      hasCapability(user, "/clients", "view") ||
+      hasCapability(user, "/sites", "view") ||
+      hasCapability(user, "/settings", "view")
+    );
   }
   if (item?.href === "/employees/leave") {
     return (

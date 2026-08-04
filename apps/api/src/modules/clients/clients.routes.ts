@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authMiddleware } from "../../middleware/auth.js";
 import { requireAnyCapability, requireCapability } from "../../middleware/authorization.js";
+import { SITE_TIMESHEET_MODULES } from "../rosters/site-timesheet-access.js";
+import { registerClientReportRoutes } from "./client-reports.routes.js";
 import type { AuthenticatedUser } from "../../lib/types.js";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
@@ -69,13 +71,78 @@ export async function resolveClientPortalAccess(
   return { ok: false, statusCode: 403, message: "Client portal access only" };
 }
 
+/** Billing details used on quotes, invoices and statements. Shared by create and update. */
+const billingFields = {
+  billingEmail: z.string().email().optional().nullable(),
+  billingAddress: z.string().max(1000).optional().nullable(),
+  vatNumber: z.string().max(50).optional().nullable(),
+  registrationNumber: z.string().max(50).optional().nullable(),
+  paymentTermsDays: z.number().int().min(0).max(365).optional(),
+} as const;
+
+type BillingFieldInput = {
+  billingEmail?: string | null;
+  billingAddress?: string | null;
+  vatNumber?: string | null;
+  registrationNumber?: string | null;
+  paymentTermsDays?: number;
+};
+
+/** Only includes keys the caller actually supplied, so PATCH stays partial. */
+function pickBillingFields(data: BillingFieldInput) {
+  return {
+    ...(data.billingEmail !== undefined ? { billingEmail: data.billingEmail } : {}),
+    ...(data.billingAddress !== undefined ? { billingAddress: data.billingAddress } : {}),
+    ...(data.vatNumber !== undefined ? { vatNumber: data.vatNumber } : {}),
+    ...(data.registrationNumber !== undefined ? { registrationNumber: data.registrationNumber } : {}),
+    ...(data.paymentTermsDays !== undefined ? { paymentTermsDays: data.paymentTermsDays } : {}),
+  };
+}
+
+/** Operational contact and month-end reporting details. Shared by create and update. */
+const contactFields = {
+  contactPersonName: z.string().max(150).optional().nullable(),
+  contactPersonRole: z.string().max(150).optional().nullable(),
+  contactPersonMobile: z.string().max(40).optional().nullable(),
+  physicalAddress: z.string().max(1000).optional().nullable(),
+  notes: z.string().max(5000).optional().nullable(),
+  /** Replace semantics on PATCH — callers send the whole list, `[]` clears it. */
+  reportRecipients: z.array(z.string().email()).max(20).optional(),
+} as const;
+
+type ContactFieldInput = {
+  contactPersonName?: string | null;
+  contactPersonRole?: string | null;
+  contactPersonMobile?: string | null;
+  physicalAddress?: string | null;
+  notes?: string | null;
+  reportRecipients?: string[];
+};
+
+function pickContactFields(data: ContactFieldInput) {
+  return {
+    ...(data.contactPersonName !== undefined ? { contactPersonName: data.contactPersonName } : {}),
+    ...(data.contactPersonRole !== undefined ? { contactPersonRole: data.contactPersonRole } : {}),
+    ...(data.contactPersonMobile !== undefined ? { contactPersonMobile: data.contactPersonMobile } : {}),
+    ...(data.physicalAddress !== undefined ? { physicalAddress: data.physicalAddress } : {}),
+    ...(data.notes !== undefined ? { notes: data.notes } : {}),
+    ...(data.reportRecipients !== undefined ? { reportRecipients: data.reportRecipients } : {}),
+  };
+}
+
 export async function clientsRoutes(app: FastifyInstance) {
+  // `/clients` is the new home for client records; `/settings` and `/sites` stay accepted so
+  // existing capability grants (which predate `/clients`) do not silently lose access.
   const clientViewProtect = [
     authMiddleware,
-    requireAnyCapability(["/settings", "/sites"], "view"),
+    requireAnyCapability(["/clients", "/settings", "/sites"], "view"),
   ];
-  const clientCreateProtect = [authMiddleware, requireCapability("/sites", "create")];
-  const clientEditProtect = [authMiddleware, requireCapability("/sites", "edit")];
+  const clientCreateProtect = [authMiddleware, requireAnyCapability(["/clients", "/sites"], "create")];
+  const clientEditProtect = [authMiddleware, requireAnyCapability(["/clients", "/sites"], "edit")];
+  const clientExportProtect = [
+    authMiddleware,
+    requireAnyCapability(["/clients", ...SITE_TIMESHEET_MODULES], "export"),
+  ];
 
   app.get("/", { preHandler: clientViewProtect }, async (request, reply) => {
     const user = request.user!;
@@ -103,6 +170,40 @@ export async function clientsRoutes(app: FastifyInstance) {
     return reply.send({ data: users });
   });
 
+  app.get("/:id", { preHandler: clientViewProtect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const client = await prisma.client.findFirst({
+      where: { id, companyId: request.user!.companyId },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        sites: {
+          select: {
+            id: true,
+            name: true,
+            siteStatus: true,
+            monthlyRevenue: true,
+            physicalAddress: true,
+            serviceType: true,
+            contractStartDate: true,
+            contractEndDate: true,
+            contactPersonName: true,
+          },
+          orderBy: { name: "asc" },
+        },
+      },
+    });
+    if (!client) {
+      return reply.code(404).send({ error: "Not found", message: "Client not found" });
+    }
+    return reply.send({
+      ...client,
+      sites: client.sites.map((site) => ({
+        ...site,
+        monthlyRevenue: site.monthlyRevenue?.toString() ?? null,
+      })),
+    });
+  });
+
   app.post("/", { preHandler: clientCreateProtect }, async (request, reply) => {
     const user = request.user!;
     const schema = z.object({
@@ -110,6 +211,8 @@ export async function clientsRoutes(app: FastifyInstance) {
       email: z.string().email().optional().nullable(),
       phone: z.string().optional().nullable(),
       userId: z.string().optional().nullable(),
+      ...billingFields,
+      ...contactFields,
     });
     const parsed = schema.safeParse(request.body);
     if (!parsed.success) {
@@ -136,6 +239,8 @@ export async function clientsRoutes(app: FastifyInstance) {
         email: parsed.data.email,
         phone: parsed.data.phone,
         userId: parsed.data.userId,
+        ...pickBillingFields(parsed.data),
+        ...pickContactFields(parsed.data),
       },
     });
     await createAuditLog({
@@ -157,6 +262,8 @@ export async function clientsRoutes(app: FastifyInstance) {
       phone: z.string().optional().nullable(),
       userId: z.string().optional().nullable(),
       isActive: z.boolean().optional(),
+      ...billingFields,
+      ...contactFields,
     });
     const parsed = schema.safeParse(request.body);
     if (!parsed.success) {
@@ -190,6 +297,8 @@ export async function clientsRoutes(app: FastifyInstance) {
         ...(parsed.data.phone !== undefined ? { phone: parsed.data.phone } : {}),
         ...(parsed.data.userId !== undefined ? { userId: parsed.data.userId } : {}),
         ...(parsed.data.isActive !== undefined ? { isActive: parsed.data.isActive } : {}),
+        ...pickBillingFields(parsed.data),
+        ...pickContactFields(parsed.data),
       },
     });
     await createAuditLog({
@@ -201,6 +310,79 @@ export async function clientsRoutes(app: FastifyInstance) {
     });
     return reply.send(client);
   });
+
+  /** Attach sites to a client in bulk. Only writes `Site.clientId`. */
+  app.post("/:id/sites", { preHandler: clientEditProtect }, async (request, reply) => {
+    const user = request.user!;
+    const { id } = request.params as { id: string };
+    const schema = z.object({ siteIds: z.array(z.string().min(1)).min(1).max(100) });
+    const parsed = schema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.issues[0]?.message ?? "Invalid body",
+      });
+    }
+    const client = await prisma.client.findFirst({ where: { id, companyId: user.companyId } });
+    if (!client) {
+      return reply.code(404).send({ error: "Not found", message: "Client not found" });
+    }
+    const siteIds = [...new Set(parsed.data.siteIds)];
+    const sites = await prisma.site.findMany({
+      where: { id: { in: siteIds }, companyId: user.companyId },
+      select: { id: true },
+    });
+    if (sites.length !== siteIds.length) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "One or more sites do not belong to your company",
+      });
+    }
+    await prisma.site.updateMany({
+      where: { id: { in: siteIds }, companyId: user.companyId },
+      data: { clientId: id },
+    });
+    await createAuditLog({
+      userId: user.sub,
+      companyId: user.companyId,
+      action: "client.sites.link",
+      entityType: "Client",
+      entityId: id,
+      metadata: { siteIds },
+    });
+    const linked = await prisma.site.findMany({
+      where: { clientId: id, companyId: user.companyId },
+      select: { id: true, name: true, siteStatus: true },
+      orderBy: { name: "asc" },
+    });
+    return reply.send({ data: linked });
+  });
+
+  app.delete("/:id/sites/:siteId", { preHandler: clientEditProtect }, async (request, reply) => {
+    const user = request.user!;
+    const { id, siteId } = request.params as { id: string; siteId: string };
+    const site = await prisma.site.findFirst({
+      where: { id: siteId, companyId: user.companyId, clientId: id },
+      select: { id: true },
+    });
+    if (!site) {
+      return reply
+        .code(404)
+        .send({ error: "Not found", message: "Site is not linked to this client" });
+    }
+    await prisma.site.update({ where: { id: siteId }, data: { clientId: null } });
+    await createAuditLog({
+      userId: user.sub,
+      companyId: user.companyId,
+      action: "client.sites.unlink",
+      entityType: "Client",
+      entityId: id,
+      metadata: { siteId },
+    });
+    return reply.send({ success: true });
+  });
+
+  await registerClientReportRoutes(app, clientViewProtect, clientExportProtect);
 }
 
 export async function clientPortalRoutes(app: FastifyInstance) {

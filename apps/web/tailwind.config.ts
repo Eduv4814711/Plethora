@@ -52,6 +52,16 @@ const config = {
         },
         "wireframe-bg": "#f8fafc",
         "wireframe-accent": "#f3f4f6",
+        // Plethora brand – ink (from the wordmark) & paper surfaces
+        ink: {
+          DEFAULT: "#1A1518",
+          100: "#E8E4E5",
+          300: "#A79FA3",
+          500: "#6B6166",
+          700: "#3D3438",
+          900: "#1A1518",
+        },
+        paper: "#FAFAF9",
       },
       boxShadow: {
         "security-card": "0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06)",

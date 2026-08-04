@@ -18,6 +18,7 @@ export const config = {
   attendance: {
     clockInWindowMinutes: env.clockInWindowMinutes,
     lateClockInGraceMinutes: 120, // Allow up to 2 hours late
+    standardShiftHours: 12, // Manual entries beyond this span are treated as overtime
   },
   whatsapp: {
     enabled: env.whatsapp.enabled,

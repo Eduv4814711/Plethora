@@ -6,6 +6,7 @@ import { prisma } from "../lib/prisma.js";
 import {
   validateClockIn,
   calculateHours,
+  calculateManualEntryHours,
   assertWithinSiteGeofence,
   findApprovedLeaveConflict,
 } from "../services/attendance.service.js";
@@ -296,6 +297,13 @@ export async function attendanceRoutes(app: FastifyInstance) {
           message: err.message,
         });
       }
+      const code = err && typeof err === "object" && "code" in err ? (err as { code: string }).code : "";
+      if (code === "P2002") {
+        return reply.code(409).send({
+          error: "Clock-in validation failed",
+          message: "Attendance has already been recorded for this shift",
+        });
+      }
       throw err;
     }
   });
@@ -500,6 +508,8 @@ export async function attendanceRoutes(app: FastifyInstance) {
       metadata: { shiftId: parsed.data.shiftId, hoursWorked, overtimeHours },
     });
 
+    triggerPostClockExceptionSync(user.companyId, attendance.shift.siteId);
+
     return reply.send(updated);
   });
 
@@ -555,7 +565,7 @@ export async function attendanceRoutes(app: FastifyInstance) {
       });
     }
 
-    const { hoursWorked, overtimeHours } = calculateHours(clockIn, clockOut, clockIn, clockOut);
+    const { hoursWorked, overtimeHours } = calculateManualEntryHours(clockIn, clockOut);
 
     const { shift, attendance } = await prisma.$transaction(async (tx) => {
       const shift = await tx.shift.create({ data: { companyId, employeeId, siteId: post.siteId, shiftType: post.coverageRequirements[0]?.shiftTypeCode ?? "day", legacyPostName: post.name, startTime: clockIn, endTime: clockOut, status: "completed" } });
@@ -661,7 +671,13 @@ export async function attendanceRoutes(app: FastifyInstance) {
       });
     }
 
-    const updateData: { clockIn?: Date; clockOut?: Date; hoursWorked?: number; overtimeHours?: number; status?: string } = {};
+    const updateData: {
+      clockIn?: Date;
+      clockOut?: Date;
+      hoursWorked?: number | null;
+      overtimeHours?: number | null;
+      status?: string;
+    } = {};
     let newClockIn = attendance.clockIn ? new Date(attendance.clockIn) : null;
     let newClockOut = attendance.clockOut ? new Date(attendance.clockOut) : null;
 
@@ -672,6 +688,13 @@ export async function attendanceRoutes(app: FastifyInstance) {
     if (parsed.data.clockOut) {
       newClockOut = new Date(parsed.data.clockOut);
       updateData.clockOut = newClockOut;
+    }
+
+    if (newClockOut && !newClockIn) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "Cannot set clockOut without clockIn",
+      });
     }
 
     if (newClockIn && newClockOut && newClockOut <= newClockIn) {
@@ -691,6 +714,14 @@ export async function attendanceRoutes(app: FastifyInstance) {
       updateData.hoursWorked = hoursWorked;
       updateData.overtimeHours = overtimeHours;
       updateData.status = "completed";
+    } else if (newClockIn && !newClockOut) {
+      updateData.hoursWorked = null;
+      updateData.overtimeHours = null;
+      updateData.status = "clocked_in";
+    } else {
+      updateData.hoursWorked = null;
+      updateData.overtimeHours = null;
+      updateData.status = "pending";
     }
 
     const updated = await prisma.attendance.update({

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Site report</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 11px; color: #1a1518; margin: 0; padding: 0; position: relative;
+  }
+  .watermark {
+    position: fixed; top: 42%; left: 50%;
+    transform: translate(-50%, -50%) rotate(-28deg);
+    font-size: 64px; font-weight: 800; letter-spacing: 5px;
+    color: rgba(0, 0, 0, 0.07); z-index: 0; white-space: nowrap;
+  }
+  .sheet { position: relative; z-index: 1; }
+  header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+  .issuer-name { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
+  .muted { color: #6b6166; }
+  .meta { text-align: right; }
+  .doc-type { font-size: 22px; font-weight: 800; letter-spacing: 2px; margin: 0 0 6px; }
+  .logo { max-height: 72px; max-width: 240px; object-fit: contain; margin-bottom: 8px; }
+  .cards { display: flex; gap: 12px; margin-top: 22px; }
+  .party { flex: 1; border: 1px solid #e5e1e2; border-radius: 6px; padding: 10px 12px; }
+  .party h2 {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
+    margin: 0 0 6px; color: #6b6166; font-weight: 700;
+  }
+  h3 {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
+    margin: 24px 0 8px; color: #6b6166; font-weight: 700;
+  }
+  .grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tile {
+    flex: 1 1 15%; min-width: 88px; border: 1px solid #e5e1e2; border-radius: 6px;
+    padding: 8px 10px;
+  }
+  .tile .label {
+    font-size: 8px; text-transform: uppercase; letter-spacing: 0.8px; color: #6b6166;
+  }
+  .tile .value { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tile.warn .value { color: #a4341f; }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: 0.6px;
+    padding: 7px 8px; background: #f4f2f3; border-bottom: 1.5px solid #d9d4d6;
+  }
+  td { padding: 6px 8px; border-bottom: 1px solid #eeebec; }
+  tr { break-inside: avoid; }
+  .status {
+    display: inline-block; padding: 2px 7px; border-radius: 10px;
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    background: #f4f2f3; border: 1px solid #d9d4d6;
+  }
+  .status.ok { background: #e9f5ec; border-color: #b7ddc2; color: #1f6b39; }
+  .status.pending { background: #fdf2e3; border-color: #edcf9d; color: #8a5a12; }
+  .empty { color: #6b6166; text-align: center; padding: 12px; }
+  footer {
+    margin-top: 28px; padding-top: 10px; border-top: 1px solid #e5e1e2;
+    font-size: 9px; color: #6b6166; text-align: center;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  (function () {
+    var d = window.__SITE_REPORT_DATA__ || {};
+    var esc = function (v) {
+      return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    };
+    var line = function (v) { return v ? "<div>" + esc(v) + "</div>" : ""; };
+    var labelled = function (label, v) {
+      return v ? '<div><span class="muted">' + esc(label) + ":</span> " + esc(v) + "</div>" : "";
+    };
+    var tile = function (label, value, warn) {
+      return '<div class="tile' + (warn && Number(value) > 0 ? " warn" : "") + '">' +
+        '<div class="label">' + esc(label) + "</div>" +
+        '<div class="value">' + esc(value == null ? 0 : value) + "</div></div>";
+    };
+
+    var issuer = d.issuer || {};
+    var client = d.client || {};
+    var site = d.site || {};
+    var totals = d.totals || {};
+    var exceptions = d.exceptions || {};
+    var approved = d.timesheetStatus === "approved" || d.timesheetStatus === "locked";
+
+    var absenceRows = (d.absences || []).map(function (a) {
+      return "<tr><td>" + esc(a.workDate) + "</td><td>" + esc(a.dayOfWeek) + "</td>" +
+        "<td>" + esc(a.guardName || "—") + "</td><td>" + esc(a.shiftType || "—") + "</td></tr>";
+    }).join("") ||
+      '<tr><td colspan="4" class="empty">No absences recorded for this period.</td></tr>';
+
+    var incidentRows = (d.incidents || []).map(function (i) {
+      return "<tr><td>" + esc(String(i.incidentDateTime).slice(0, 10)) + "</td>" +
+        "<td>" + esc(i.incidentNumber) + "</td><td>" + esc(i.title) + "</td>" +
+        "<td>" + esc(i.incidentType) + "</td><td>" + esc(i.severity) + "</td>" +
+        "<td>" + esc(i.status) + "</td></tr>";
+    }).join("") ||
+      '<tr><td colspan="6" class="empty">No client-visible incidents for this period.</td></tr>';
+
+    document.getElementById("root").innerHTML =
+      (d.watermark ? '<div class="watermark">' + esc(d.watermark) + "</div>" : "") +
+      '<div class="sheet"><header><div>' +
+        (issuer.logoUrl ? '<img class="logo" src="' + esc(issuer.logoUrl) + '" alt="" />' : "") +
+        '<div class="issuer-name">' + esc(issuer.legalName || issuer.name) + "</div>" +
+        '<div class="muted">' + esc(issuer.address || "") + "</div>" +
+        line(issuer.phone) + line(issuer.email) +
+      '</div><div class="meta">' +
+        '<div class="doc-type">SITE REPORT</div>' +
+        "<div><strong>" + esc(d.periodLabel) + "</strong></div>" +
+        '<div class="muted">' + esc(d.periodStart) + " to " + esc(d.periodEnd) + "</div>" +
+        '<div style="margin-top:6px"><span class="status ' + (approved ? "ok" : "pending") + '">' +
+          esc(approved ? "Timesheet " + d.timesheetStatus : "Timesheet not approved") +
+        "</span></div>" +
+      "</div></header>" +
+
+      '<div class="cards">' +
+        '<div class="party"><h2>Prepared for</h2>' +
+          "<div><strong>" + esc(client.legalName || client.name) + "</strong></div>" +
+          line(client.address) + line(client.email) + line(client.phone) +
+        "</div>" +
+        '<div class="party"><h2>Site</h2>' +
+          "<div><strong>" + esc(site.name) + "</strong></div>" +
+          line(site.physicalAddress) +
+          labelled("Service", site.serviceType) +
+          labelled("Site contact", site.contactPersonName) +
+          labelled("Contact number", site.contactPersonPhone) +
+          labelled("Supervisor", site.supervisorName) +
+        "</div>" +
+      "</div>" +
+
+      "<h3>Deployment summary</h3><div class=\"grid\">" +
+        tile("Day shifts", totals.dayShifts) +
+        tile("Night shifts", totals.nightShifts) +
+        tile("Reliever shifts", totals.relieverShifts) +
+        tile("Absences", totals.absences, true) +
+        tile("Hours worked", totals.totalHours) +
+        tile("Overtime hours", totals.overtimeHours) +
+      "</div>" +
+
+      "<h3>Attendance exceptions</h3><div class=\"grid\">" +
+        tile("Total", exceptions.total, true) +
+        tile("Late arrivals", exceptions.lateArrivals) +
+        tile("Missed clock-in", exceptions.missedClockIns) +
+        tile("Missed clock-out", exceptions.missedClockOuts) +
+        tile("Early departures", exceptions.earlyDepartures) +
+        tile("Open critical", exceptions.openCritical, true) +
+      "</div>" +
+
+      "<h3>Absences</h3><table><thead><tr><th>Date</th><th>Day</th>" +
+        "<th>Guard</th><th>Shift</th></tr></thead><tbody>" + absenceRows + "</tbody></table>" +
+
+      "<h3>Incidents</h3><table><thead><tr><th>Date</th><th>Number</th><th>Title</th>" +
+        "<th>Type</th><th>Severity</th><th>Status</th></tr></thead><tbody>" +
+        incidentRows + "</tbody></table>" +
+
+      "<footer>Generated " + esc(d.generatedAt) +
+        " · Timesheet status: " + esc(d.timesheetStatus) +
+        (d.approvedAt ? " (approved " + esc(String(d.approvedAt).slice(0, 10)) + ")" : "") +
+        ". Please contact us if any detail appears incorrect.</footer></div>";
+  })();
+</script>
+</body>
+</html>

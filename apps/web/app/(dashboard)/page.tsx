@@ -12,6 +12,7 @@ import {
   type AlertCounts,
   type OperationalAlert,
 } from "@/lib/msr-api";
+import { alertFixTarget } from "@/lib/alert-links";
 import { canAccessRoute, hasCapability } from "@/lib/permissions";
 import { format } from "date-fns";
 import {
@@ -93,26 +94,8 @@ const PRIORITY_TABS = [
 
 type PriorityTab = (typeof PRIORITY_TABS)[number]["value"];
 
-function alertViewHref(alert: OperationalAlert): string | null {
-  switch (alert.sourceModule) {
-    case "ATTENDANCE":
-      return "/attendance/exceptions";
-    case "TASKS":
-      return alert.sourceId ? `/tasks/${alert.sourceId}` : "/tasks";
-    case "INCIDENTS":
-      return alert.sourceId ? `/incidents/${alert.sourceId}` : "/incidents";
-    case "SITES":
-      return alert.siteId ? `/sites/${alert.siteId}` : "/sites";
-    case "DOCUMENTS":
-      return "/documents";
-    case "APPROVALS":
-      return "/approvals";
-    case "PAYROLL":
-      return "/payroll";
-    default:
-      return null;
-  }
-}
+// Alert -> "where do I fix this" lives in lib/alert-links.ts so the notification
+// links built server-side stay in step with the panel.
 
 export default function DashboardPage() {
   const { token, user } = useAuth();
@@ -550,7 +533,7 @@ export default function DashboardPage() {
               </div>
               <ul className="max-h-72 space-y-2 overflow-y-auto overscroll-y-contain pr-1">
                 {filteredOperationalAlerts.map((alert) => {
-                  const viewHref = alertViewHref(alert);
+                  const fixTarget = alertFixTarget(alert);
                   const isCritical = alert.priority === "CRITICAL";
                   return (
                     <li
@@ -564,9 +547,11 @@ export default function DashboardPage() {
                         <p className="truncate text-xs text-neutral-600">{alert.message}</p>
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-1.5">
-                        {viewHref && (
-                          <Link href={viewHref} className="btn-secondary px-2 py-1 text-xs">
-                            View
+                        {/* Primary action is fixing the underlying problem — marking an
+                            alert resolved without fixing it just lets it reappear. */}
+                        {fixTarget && (
+                          <Link href={fixTarget.href} className="btn-primary px-2 py-1 text-xs">
+                            {fixTarget.label}
                           </Link>
                         )}
                         {canEditAlerts && alert.status === "OPEN" && (
@@ -581,7 +566,7 @@ export default function DashboardPage() {
                         )}
                         {canEditAlerts && <button
                           type="button"
-                          className="btn-primary px-2 py-1 text-xs"
+                          className={`px-2 py-1 text-xs ${fixTarget ? "btn-secondary" : "btn-primary"}`}
                           disabled={alertActionId === alert.id}
                           onClick={() => handleAlertAction(alert.id, "resolve")}
                         >

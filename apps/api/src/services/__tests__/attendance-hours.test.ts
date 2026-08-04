@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateHours } from "../attendance.service.js";
+import { calculateHours, calculateManualEntryHours } from "../attendance.service.js";
 
 describe("calculateHours", () => {
   const shiftStart = new Date("2026-05-06T04:00:00.000Z"); // 06:00 SAST
@@ -52,5 +52,28 @@ describe("calculateHours", () => {
     const clockOut = new Date("2026-05-06T02:00:00.000Z");
     const result = calculateHours(clockIn, clockOut, shiftStart, shiftEnd);
     expect(result).toEqual({ hoursWorked: 0, overtimeHours: 0 });
+  });
+});
+
+describe("calculateManualEntryHours", () => {
+  it("pays all hours as standard when under the standard shift threshold", () => {
+    const clockIn = new Date("2026-05-06T04:00:00.000Z");
+    const clockOut = new Date("2026-05-06T12:00:00.000Z"); // 8h span
+    const result = calculateManualEntryHours(clockIn, clockOut);
+    expect(result).toEqual({ hoursWorked: 8, overtimeHours: 0 });
+  });
+
+  it("pays all hours as standard when exactly at the standard shift threshold", () => {
+    const clockIn = new Date("2026-05-06T04:00:00.000Z");
+    const clockOut = new Date("2026-05-06T16:00:00.000Z"); // 12h span
+    const result = calculateManualEntryHours(clockIn, clockOut);
+    expect(result).toEqual({ hoursWorked: 12, overtimeHours: 0 });
+  });
+
+  it("treats time beyond the standard shift threshold as overtime", () => {
+    const clockIn = new Date("2026-05-06T04:00:00.000Z");
+    const clockOut = new Date("2026-05-06T19:00:00.000Z"); // 15h span
+    const result = calculateManualEntryHours(clockIn, clockOut);
+    expect(result).toEqual({ hoursWorked: 12, overtimeHours: 3 });
   });
 });

@@ -20,8 +20,23 @@ const MODULE_PATH_BY_SOURCE: Partial<Record<AlertSourceModule, string>> = {
   ROSTERING: "/rostering",
 };
 
-function alertLinkUrl(sourceModule: AlertSourceModule, sourceId?: string | null, siteId?: string | null): string | undefined {
+/**
+ * Where a notified user should go to actually fix the alert.
+ * Keep in sync with `alertFixTarget` in apps/web/lib/alert-links.ts, which does the
+ * same job (with more metadata available) for the dashboard alerts panel.
+ */
+function alertLinkUrl(
+  sourceModule: AlertSourceModule,
+  sourceId?: string | null,
+  siteId?: string | null,
+  alertId?: string | null
+): string | undefined {
   switch (sourceModule) {
+    case "ROSTERING":
+      // The site roster page focuses `?issue=<alertId>` and offers a replacement guard.
+      return siteId
+        ? `/rostering/sites/${siteId}${alertId ? `?issue=${alertId}` : ""}`
+        : "/rostering";
     case "ATTENDANCE":
       return "/attendance/exceptions";
     case "TASKS":
@@ -91,7 +106,7 @@ export async function upsertAlert(input: UpsertAlertInput) {
 
     if (input.priority === "CRITICAL") {
       const modulePath = MODULE_PATH_BY_SOURCE[input.sourceModule] ?? "/";
-      const linkUrl = alertLinkUrl(input.sourceModule, input.sourceId, input.siteId);
+      const linkUrl = alertLinkUrl(input.sourceModule, input.sourceId, input.siteId, alert.id);
       void notifyModuleUsers({
         companyId: input.companyId,
         modulePath,
