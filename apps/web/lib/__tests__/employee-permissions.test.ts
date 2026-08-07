@@ -77,6 +77,16 @@ describe("capability access", () => {
     expect(canAccessMigrationTools(subject({ "/employees": ["export"] }))).toBe(false);
   });
 
+  it("treats /overview as the Dashboard module it was split out of", () => {
+    // The charts moved off `/` when it became the module launcher. /overview is
+    // an alias, not a grantable module: Dashboard view is exactly what opens it.
+    const dashboardUser = subject({ "/": ["view"] });
+    expect(resolveModulePath("/overview")).toBe("/");
+    expect(canAccessRoute("/overview", dashboardUser)).toBe(true);
+    expect(canAccessRoute("/overview", subject({ "/tasks": ["view"] }))).toBe(false);
+    expect(canAccessRoute("/overview", subject({}, true))).toBe(true);
+  });
+
   it("does not let a Settings grant open Settings · User Access", () => {
     const settingsUser = subject({ "/settings": ["view", "edit"] });
     expect(hasCapability(settingsUser, "/settings/access", "view")).toBe(false);

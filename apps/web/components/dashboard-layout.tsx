@@ -133,7 +133,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const canAccessSettings = canAccessRoute("/settings", user);
 
   const hasAccess = canAccessRoute(pathname, user);
-  const isDashboardHome = pathname === "/";
+  // The dense chart grid needs a tighter, non-scrolling frame. It moved to
+  // /overview when `/` became the module launcher, which takes standard padding.
+  const isOverviewPage = pathname === "/overview";
   const isWhatsAppPage = pathname === "/whatsapp" || pathname.startsWith("/whatsapp/");
   const isAcademyPage = pathname === "/academy" || (pathname != null && pathname.startsWith("/academy/"));
 
@@ -386,10 +388,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           "flex min-h-0 flex-1 flex-col box-border bg-gradient-to-b from-[var(--bg-canvas)] via-white to-security-navy-50/35",
           /* Reserve space for fixed header: safe area + min-h-14 row + match previous vertical rhythm */
           "pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1rem)] pb-5 pl-4 pr-4 sm:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.5rem)] sm:pb-6 sm:pl-6 sm:pr-6 md:pb-8 md:pl-8 md:pr-8 lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+2.5rem)] lg:pb-10 lg:pl-10 lg:pr-10",
-          isDashboardHome &&
+          isOverviewPage &&
             "lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.25rem)] lg:pb-4 xl:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.5rem)] xl:pb-5 [@media(max-height:860px)]:lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+0.75rem)] [@media(max-height:860px)]:lg:pb-3",
           "overscroll-y-contain",
-          isDashboardHome
+          isOverviewPage
             ? "overflow-y-auto"
             : isWhatsAppPage
               ? "overflow-hidden"
@@ -399,7 +401,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         )}
       >
         {hasAccess ? (
-          isAcademyPage || isDashboardHome ? (
+          isAcademyPage || isOverviewPage ? (
             <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">{children}</div>
           ) : (
             children

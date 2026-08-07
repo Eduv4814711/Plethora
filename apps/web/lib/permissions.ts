@@ -63,12 +63,25 @@ export function normalizeCapabilities(raw: unknown): CapabilityMap {
 }
 
 /**
+ * Client-only routes that belong to a catalog module they cannot reach by prefix.
+ * `/overview` is the Dashboard module's charts view, split out when `/` became the
+ * module launcher. It is not separately grantable, so it has no catalog entry and
+ * no API counterpart — the charts still read GET /dashboard, which the API guards
+ * with the `/` module.
+ */
+const MODULE_PATH_ALIASES: Record<string, string> = {
+  "/overview": "/",
+};
+
+/**
  * Resolves an application path to the catalog module that owns it, mirroring
  * resolveModulePath in apps/api/src/lib/capabilities.ts. `/sites/abc` resolves
  * to `/sites`, but `/payroll/billing` resolves to itself — a parent grant never
  * confers a separately grantable sub-module.
  */
 export function resolveModulePath(path: string): string | null {
+  const alias = MODULE_PATH_ALIASES[path];
+  if (alias) return alias;
   if (CATALOG_PATHS.includes(path)) return path;
   return (
     CATALOG_PATHS
