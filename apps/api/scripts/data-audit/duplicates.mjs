@@ -69,22 +69,30 @@ export async function runDuplicatesAudit(prisma) {
     );
   }
 
-  const leaveDupes = await prisma.$queryRaw`
-    SELECT "employeeId", date, type, COUNT(*)::int AS cnt
-    FROM "LeaveRecord"
-    GROUP BY "employeeId", date, type
-    HAVING COUNT(*) > 1
+  // leave-v3 records a date range per request rather than one row per day, so the duplicate
+  // to look for is two live requests of the same type whose ranges overlap for one employee.
+  const leaveOverlaps = await prisma.$queryRaw`
+    SELECT a.id AS leave_id, b.id AS overlapping_leave_id, a."employeeId", a."leaveType"
+    FROM "LeaveRequest" a
+    JOIN "LeaveRequest" b
+      ON b."employeeId" = a."employeeId"
+      AND b."leaveType" = a."leaveType"
+      AND b.id > a.id
+      AND b."startDate" <= a."endDate"
+      AND b."endDate" >= a."startDate"
+    WHERE a.status IN ('PENDING', 'APPROVED')
+      AND b.status IN ('PENDING', 'APPROVED')
     LIMIT 200
   `;
-  if (leaveDupes.length > 0) {
+  if (leaveOverlaps.length > 0) {
     findings.push(
       finding({
-        id: "duplicate-leave-record",
+        id: "overlapping-leave-request",
         category: "duplicates",
         severity: SEVERITY.MEDIUM,
-        message: "Duplicate LeaveRecord for same employee+date+type",
-        count: leaveDupes.length,
-        sample: leaveDupes.slice(0, 3),
+        message: "Overlapping pending/approved LeaveRequest ranges for same employee+leaveType",
+        count: leaveOverlaps.length,
+        sample: leaveOverlaps.slice(0, 3),
       })
     );
   }

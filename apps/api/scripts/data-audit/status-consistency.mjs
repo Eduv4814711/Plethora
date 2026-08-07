@@ -4,8 +4,6 @@
  */
 import { createPrisma, finding, printFindings, SEVERITY } from "./shared.mjs";
 
-const LEAVE_TYPES = ["annual", "sick", "unpaid"];
-const LEAVE_REQUEST_STATUSES = ["pending", "approved", "rejected"];
 const EMPLOYEE_TYPES = ["general", "security_officer"];
 const ATTENDANCE_STATUSES = ["pending", "present", "absent", "late", "verified"];
 
@@ -13,40 +11,47 @@ const ATTENDANCE_STATUSES = ["pending", "present", "absent", "late", "verified"]
 export async function runStatusConsistencyAudit(prisma) {
   const findings = [];
 
-  const badLeaveTypes = await prisma.$queryRaw`
-    SELECT type, COUNT(*)::int AS cnt
-    FROM "LeaveRecord"
-    WHERE type NOT IN (${LEAVE_TYPES[0]}, ${LEAVE_TYPES[1]}, ${LEAVE_TYPES[2]})
-    GROUP BY type
+  // leave-v3 stores leaveType and status as PostgreSQL enums, so the database itself rejects
+  // an out-of-set value and there is nothing left for a string audit to catch. What the enum
+  // cannot enforce is the cross-field rules, which is what these two checks cover instead.
+  const approvedWithoutApprover = await prisma.$queryRaw`
+    SELECT id, "employeeId", "reviewedBy", "reviewedAt"
+    FROM "LeaveRequest"
+    WHERE status = 'APPROVED'
+      AND ("reviewedBy" IS NULL OR "reviewedAt" IS NULL)
+    LIMIT 200
   `;
-  if (badLeaveTypes.length > 0) {
+  if (approvedWithoutApprover.length > 0) {
     findings.push(
       finding({
-        id: "invalid-leave-record-type",
+        id: "approved-leave-without-approver",
         category: "status-consistency",
-        severity: SEVERITY.MEDIUM,
-        message: "LeaveRecord.type values outside annual/sick/unpaid",
-        count: badLeaveTypes.reduce((s, r) => s + r.cnt, 0),
-        sample: badLeaveTypes,
+        severity: SEVERITY.HIGH,
+        message: "LeaveRequest is APPROVED but has no reviewedBy/reviewedAt audit trail",
+        count: approvedWithoutApprover.length,
+        sample: approvedWithoutApprover.slice(0, 3),
       })
     );
   }
 
-  const badLeaveRequestStatus = await prisma.$queryRaw`
-    SELECT status, COUNT(*)::int AS cnt
+  // The conditional columns are documented as "only when leaveType = X" — a value on the
+  // wrong leave type means a reason was captured against a request it does not describe.
+  const conditionalFieldMismatch = await prisma.$queryRaw`
+    SELECT id, "leaveType", "familyResponsibilityReason", "parentalLeaveScenario"
     FROM "LeaveRequest"
-    WHERE status NOT IN (${LEAVE_REQUEST_STATUSES[0]}, ${LEAVE_REQUEST_STATUSES[1]}, ${LEAVE_REQUEST_STATUSES[2]})
-    GROUP BY status
+    WHERE ("familyResponsibilityReason" IS NOT NULL AND "leaveType" <> 'FAMILY_RESPONSIBILITY')
+       OR ("parentalLeaveScenario" IS NOT NULL AND "leaveType" <> 'PARENTAL')
+    LIMIT 200
   `;
-  if (badLeaveRequestStatus.length > 0) {
+  if (conditionalFieldMismatch.length > 0) {
     findings.push(
       finding({
-        id: "invalid-leave-request-status",
+        id: "leave-conditional-field-mismatch",
         category: "status-consistency",
         severity: SEVERITY.MEDIUM,
-        message: "LeaveRequest.status values outside pending/approved/rejected",
-        count: badLeaveRequestStatus.reduce((s, r) => s + r.cnt, 0),
-        sample: badLeaveRequestStatus,
+        message: "LeaveRequest carries a reason field that does not belong to its leaveType",
+        count: conditionalFieldMismatch.length,
+        sample: conditionalFieldMismatch.slice(0, 3),
       })
     );
   }

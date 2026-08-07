@@ -86,19 +86,40 @@ export async function runDateRangesAudit(prisma) {
     );
   }
 
+  // leave-v3 replaced LeaveSickNote with MedicalCertificate, which books an employee off
+  // across a range. Keep the same invariant on the new columns.
+  const certBadRange = await prisma.$queryRaw`
+    SELECT id, "leaveRequestId", "bookedOffStartDate", "bookedOffEndDate"
+    FROM "MedicalCertificate"
+    WHERE "bookedOffEndDate" < "bookedOffStartDate"
+    LIMIT 200
+  `;
+  if (certBadRange.length > 0) {
+    findings.push(
+      finding({
+        id: "medical-certificate-end-before-start",
+        category: "date-ranges",
+        severity: SEVERITY.HIGH,
+        message: "MedicalCertificate bookedOffEndDate before bookedOffStartDate",
+        count: certBadRange.length,
+        sample: certBadRange.slice(0, 3),
+      })
+    );
+  }
+
   const leaveBadRange = await prisma.$queryRaw`
-    SELECT id, "startDate", "endDate"
-    FROM "LeaveSickNote"
+    SELECT id, "employeeId", "startDate", "endDate"
+    FROM "LeaveRequest"
     WHERE "endDate" < "startDate"
     LIMIT 200
   `;
   if (leaveBadRange.length > 0) {
     findings.push(
       finding({
-        id: "sick-note-end-before-start",
+        id: "leave-request-end-before-start",
         category: "date-ranges",
         severity: SEVERITY.HIGH,
-        message: "LeaveSickNote endDate before startDate",
+        message: "LeaveRequest endDate before startDate",
         count: leaveBadRange.length,
         sample: leaveBadRange.slice(0, 3),
       })
@@ -129,12 +150,14 @@ export async function runDateRangesAudit(prisma) {
     );
   }
 
+  // A leave request now spans a range, so a roster clash is any working shift falling inside it.
   const leaveVsRoster = await prisma.$queryRaw`
-    SELECT lr.id AS leave_id, lr."employeeId", lr.date, g."rosterDate", g."shiftType"
-    FROM "LeaveRecord" lr
+    SELECT lr.id AS leave_id, lr."employeeId", lr."startDate", lr."endDate", g."rosterDate", g."shiftType"
+    FROM "LeaveRequest" lr
     JOIN "SiteRosterGeneratedShift" g ON g."guardId" = lr."employeeId"
-      AND g."rosterDate" = lr.date
-    WHERE g."shiftType" NOT IN ('off', 'leave', 'sick_leave', 'training', 'unassigned')
+      AND g."rosterDate" BETWEEN lr."startDate" AND lr."endDate"
+    WHERE lr.status = 'APPROVED'
+      AND g."shiftType" NOT IN ('off', 'leave', 'sick_leave', 'training', 'unassigned')
     LIMIT 500
   `;
   if (leaveVsRoster.length > 0) {
@@ -143,7 +166,7 @@ export async function runDateRangesAudit(prisma) {
         id: "leave-overlaps-working-roster",
         category: "date-ranges",
         severity: SEVERITY.MEDIUM,
-        message: "LeaveRecord on same date as working roster shift (day/night)",
+        message: "Approved LeaveRequest covers a date with a working roster shift (day/night)",
         count: leaveVsRoster.length,
         sample: leaveVsRoster.slice(0, 3),
       })
