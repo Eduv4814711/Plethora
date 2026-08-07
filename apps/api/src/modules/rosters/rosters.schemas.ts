@@ -183,6 +183,27 @@ export const approveSiteTimesheetRowSchema = z
   .strict()
   .superRefine(validateTimesheetClockPatch);
 
+/**
+ * Confirm many rows as worked-as-scheduled in one request. Capped so a runaway client
+ * cannot ask for an unbounded transaction.
+ */
+export const bulkConfirmSiteTimesheetRowsSchema = z
+  .object({
+    rows: z
+      .array(
+        z
+          .object({
+            rowId: z.string().min(1),
+            dutyOnObNumber: z.string().trim().max(80).optional(),
+            dutyOffObNumber: z.string().trim().max(80).optional(),
+          })
+          .strict()
+      )
+      .min(1)
+      .max(200),
+  })
+  .strict();
+
 export const siteTimesheetRowCreateSchema = z.object({
   workDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Work date must use YYYY-MM-DD"),
   actualGuardId: z.string().min(1),

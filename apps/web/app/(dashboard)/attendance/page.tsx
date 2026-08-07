@@ -9,8 +9,15 @@ import { useAuth } from "@/lib/auth-context";
 import { fetchCurrentPayPeriod, fetchPayPeriods, type PayPeriodOption } from "@/lib/api";
 import { PayPeriodSelect } from "@/components/pay-period-select";
 import { AttendanceCaptureDashboard } from "@/components/attendance-capture-dashboard";
+import { StaffRollCall } from "@/components/staff-rollcall";
+import { fetchStaffAttendanceDay } from "@/lib/staff-attendance-api";
 import type { AttendanceShiftTypeFilter } from "@/lib/roster-api";
-import { attendanceSiteHref, parseAttendanceDateRange } from "@/lib/attendance-navigation";
+import {
+  attendanceSiteHref,
+  parseAttendanceDateRange,
+  parseAttendanceView,
+  type AttendanceView,
+} from "@/lib/attendance-navigation";
 
 const SHIFT_TYPE_OPTIONS: Array<{ value: AttendanceShiftTypeFilter; label: string }> = [
   { value: "day", label: "Day shift" },
@@ -41,6 +48,13 @@ export default function AttendancePage() {
   const [shiftType, setShiftType] = useState<AttendanceShiftTypeFilter>(() =>
     parseShiftTypeParam(searchParams.get("shiftType"))
   );
+  const [view, setView] = useState<AttendanceView>(() => parseAttendanceView(searchParams.get("view")));
+  const [staffDate, setStaffDate] = useState(() => new Date().toISOString().slice(0, 10));
+  /**
+   * Hide the office tab for pure-guarding companies. Starts null (unknown) and is filled
+   * in the first time the roll call loads, so the tab never flickers in and out.
+   */
+  const [officeStaffCount, setOfficeStaffCount] = useState<number | null>(null);
   const [siteQuery, setSiteQuery] = useState(() => searchParams.get("q") ?? "");
   const [dateRange, setDateRange] = useState(emptyDateRange);
   const [periodKey, setPeriodKey] = useState("");
@@ -93,12 +107,30 @@ export default function AttendancePage() {
     params.set("start", format(dateRange.start, "yyyy-MM-dd"));
     params.set("end", format(dateRange.end, "yyyy-MM-dd"));
     params.set("shiftType", shiftType);
+    if (view === "staff") params.set("view", "staff");
+    else params.delete("view");
     if (siteQuery.trim()) params.set("q", siteQuery.trim());
     else params.delete("q");
     if (!searchParams.get("siteId")) params.delete("siteId");
     const next = params.toString();
     if (next !== searchParams.toString()) router.replace(`${pathname}?${next}`, { scroll: false });
-  }, [dateRange, pathname, router, searchParams, shiftType, siteQuery]);
+  }, [dateRange, pathname, router, searchParams, shiftType, siteQuery, view]);
+
+  // Resolve the office headcount once so the tab is right from the first paint rather
+  // than only after someone opens it. A failure leaves the tab visible, which is the
+  // safe default.
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    fetchStaffAttendanceDay(token, new Date().toISOString().slice(0, 10))
+      .then((day) => {
+        if (!cancelled) setOfficeStaffCount(day.totalGeneralEmployees);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   useEffect(() => {
     if (!readyRef.current) return;
@@ -160,7 +192,9 @@ export default function AttendancePage() {
           </p>
           <h1 className="page-title mt-1">Attendance</h1>
           <p className="mt-1 max-w-2xl text-sm text-neutral-600 dark:text-neutral-400">
-            Start with a site that needs attention, confirm who worked, then approve its timesheet for payroll.
+            {view === "staff"
+              ? "Mark who was at the office today. Salaried staff are recorded for leave and reporting only."
+              : "Start with a site that needs attention, confirm who worked, then approve its timesheet for payroll."}
           </p>
         </div>
         <Link
@@ -171,6 +205,48 @@ export default function AttendancePage() {
         </Link>
       </header>
 
+      {/* Two populations, one entry point. Guards keep their existing flow untouched. */}
+      {officeStaffCount !== 0 && (
+        <div
+          className="flex flex-wrap rounded-lg border border-neutral-200 bg-neutral-50 p-1 dark:border-neutral-700 dark:bg-neutral-900"
+          role="group"
+          aria-label="Attendance type"
+        >
+          {(
+            [
+              ["sites", "Guards (by site)"],
+              ["staff", "Office staff (daily)"],
+            ] as const
+          ).map(([value, text]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setView(value)}
+              aria-pressed={view === value}
+              className={clsx(
+                "min-h-11 rounded-md px-4 text-sm font-medium",
+                view === value
+                  ? "bg-security-navy-800 text-white shadow-sm dark:bg-security-navy-600"
+                  : "text-neutral-700 hover:bg-white dark:text-neutral-300 dark:hover:bg-neutral-800"
+              )}
+            >
+              {text}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {view === "staff" && token && (
+        <StaffRollCall
+          token={token}
+          date={staffDate}
+          onDateChange={setStaffDate}
+          onLoaded={(day) => setOfficeStaffCount(day.totalGeneralEmployees)}
+        />
+      )}
+
+      {view === "sites" && (
+        <>
       <section className="sticky top-0 z-20 rounded-xl border border-neutral-200 bg-white/95 p-4 shadow-sm backdrop-blur dark:border-neutral-700 dark:bg-neutral-950/95">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -258,6 +334,8 @@ export default function AttendancePage() {
           onSelectSite={openSite}
           siteQuery={siteQuery}
         />
+      )}
+        </>
       )}
     </main>
   );

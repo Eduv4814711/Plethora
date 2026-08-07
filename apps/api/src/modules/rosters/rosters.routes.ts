@@ -8,6 +8,7 @@ import {
   activateContinuitySchema,
   approveSiteTimesheetRowSchema,
   approveSiteTimesheetSchema,
+  bulkConfirmSiteTimesheetRowsSchema,
   bulkManualOverridesSchema,
   createPatternSchema,
   generateRosterSchema,
@@ -52,6 +53,7 @@ import {
   addSiteTimesheetRow,
   approveSiteTimesheet,
   buildSiteTimesheetCsv,
+  bulkConfirmSiteTimesheetRows,
   confirmSiteTimesheetRow,
   getSiteTimesheet,
   getSiteTimesheetCaptureOverview,
@@ -386,6 +388,32 @@ export async function rostersRoutes(app: FastifyInstance) {
     if ("error" in result) return reply.code(409).send({ error: result.error });
     return reply.send(result);
   });
+
+  app.post(
+    "/site-timesheets/:timesheetId/rows/bulk-confirm",
+    { preHandler: timesheetEditProtect },
+    async (request, reply) => {
+      const { timesheetId } = request.params as { timesheetId: string };
+      const parsed = bulkConfirmSiteTimesheetRowsSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
+      }
+      const result = await bulkConfirmSiteTimesheetRows(
+        request.user!.companyId,
+        timesheetId,
+        parsed.data.rows,
+        {
+          canOverrideObNumbers: hasCapability(request.user!, "/attendance", "approve"),
+          userId: request.user!.sub,
+        }
+      );
+      if (!result) return reply.code(404).send({ error: "Timesheet not found" });
+      // A locked sheet blocks the whole request; individual row problems come back as
+      // `failed` entries alongside whatever succeeded.
+      if ("error" in result) return reply.code(409).send({ error: result.error });
+      return reply.send(result);
+    }
+  );
 
   app.post("/site-timesheets/rows/:rowId/reopen", { preHandler: timesheetEditProtect }, async (request, reply) => {
     const { rowId } = request.params as { rowId: string };

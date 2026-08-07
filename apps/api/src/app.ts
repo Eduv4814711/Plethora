@@ -22,6 +22,7 @@ import { sitesRoutes } from "./routes/sites.js";
 import { rosteringRoutes } from "./modules/rostering/rostering.routes.js";
 import { rostersRoutes } from "./modules/rosters/rosters.routes.js";
 import { attendanceRoutes } from "./routes/attendance.js";
+import { staffAttendanceRoutes } from "./modules/staff-attendance/staff-attendance.routes.js";
 import { payrollRoutes } from "./routes/payroll.js";
 import { payrollIntelligenceRoutes } from "./routes/payroll-intelligence.js";
 import { payRulesRoutes } from "./routes/pay-rules.js";
@@ -202,6 +203,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(rosteringRoutes, { prefix: "/shifts" });
   await app.register(rostersRoutes, { prefix: "/rosters" });
   await app.register(attendanceRoutes, { prefix: "/attendance" });
+  await app.register(staffAttendanceRoutes, { prefix: "/staff-attendance" });
   await app.register(payrollRoutes, { prefix: "/payroll" });
   await app.register(payrollIntelligenceRoutes, { prefix: "/payroll" });
   await app.register(payRulesRoutes, { prefix: "/payroll/pay-rules" });

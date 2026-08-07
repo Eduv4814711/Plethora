@@ -97,6 +97,29 @@ export function resolveAttendanceStatusOnApprove(input: {
   return "present";
 }
 
+/**
+ * Suggest the next occurrence book number in a sequence, preserving any prefix and the
+ * original zero padding ("1042" -> "1043", "OB-0099" -> "OB-0100").
+ *
+ * Returns null when there is no numeric tail to advance. Suggestions only ever prefill an
+ * input the controller can overwrite — nothing is stored until they confirm the row.
+ */
+export function suggestNextObNumber(previous: string | null | undefined): string | null {
+  const trimmed = (previous ?? "").trim();
+  if (!trimmed) return null;
+
+  const match = trimmed.match(/^(.*?)(\d+)$/);
+  if (!match) return null;
+
+  const [, prefix, digits] = match;
+  const next = String(Number.parseInt(digits, 10) + 1);
+  if (!Number.isFinite(Number(next))) return null;
+
+  // Keep the original width when it was zero-padded, but never truncate on roll-over.
+  const padded = next.padStart(digits.length, "0");
+  return `${prefix}${padded}`;
+}
+
 export function rowMatchesShiftTypeFilter(
   row: Pick<
     SiteTimesheetRow,

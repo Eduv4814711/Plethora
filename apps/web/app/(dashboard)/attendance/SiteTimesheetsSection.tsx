@@ -1,169 +1,35 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useMemo, useState } from "react";
 import { clsx } from "clsx";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import { authFetch } from "@/lib/api";
-import { useAuth } from "@/lib/auth-context";
 import Link from "next/link";
-import { GuardSearchPicker } from "@/components/guard-search-picker";
+import { useAuth } from "@/lib/auth-context";
 import { SiteTimesheetRowCard } from "@/components/site-timesheet-row-card";
-import { ShiftTimeSelect } from "@/components/shift-time-select";
-import { defaultShiftTime, displayShiftTime } from "@/lib/shift-times";
+import { SiteTimesheetTable } from "@/components/site-timesheet-table";
+import { SiteTimesheetRelieverForm } from "@/components/site-timesheet-reliever-form";
+import { SiteTimesheetBulkConfirmModal } from "@/components/site-timesheet-bulk-confirm-modal";
 import {
   addSiteTimesheetRow,
-  approveSiteTimesheet,
-  confirmSiteTimesheetRow,
-  fetchSecurityGuardOptions,
-  fetchSiteTimesheet,
-  mergeTimesheetGuardOptions,
-  reopenSiteTimesheetRow,
-  resyncSiteTimesheet,
-  siteTimesheetCsvUrl,
-  type GuardPickerOption,
-  type SiteTimesheet,
-  type SiteTimesheetAttendance,
-  type SiteTimesheetRow,
   type AttendanceShiftTypeFilter,
-  unlockSiteTimesheet,
-  updateSiteTimesheetRow,
+  type SiteTimesheetRow,
 } from "@/lib/roster-api";
-import {
-  formatAttendanceStatus,
-  isRowFullyReviewed,
-  isRowPendingReview,
-  resolveAttendanceStatusOnApprove,
-  resolveDutyOffFromRow,
-  resolveDutyOnFromRow,
-  rowMatchesShiftTypeFilter,
-  rowNeedsObNumbers,
-  sortSiteTimesheetRows,
-} from "@/lib/site-timesheet-utils";
+import { humanizeCode } from "@/lib/site-timesheet-row-patch";
+import { NO_SHIFT_LABEL, noShiftDateKeys } from "@/lib/site-coverage-days";
+import { downloadSiteTimesheetCsv, exportSiteTimesheetPdf } from "@/lib/site-timesheet-export";
 import { hasCapability } from "@/lib/permissions";
 import { ConfirmModal, useConfirmDialog } from "@/components/ui";
+import { useSiteTimesheet } from "@/hooks/use-site-timesheet";
 
-type GuardOption = GuardPickerOption;
-
-type NoticeDialog = {
-  title: string;
-  message: string;
-};
-
-function label(value: string | null | undefined) {
-  return value ? value.replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase()) : "Not set";
-}
-
-function normalizeShiftType(value: string | null | undefined): "day" | "night" | null {
-  if (!value) return null;
-  if (value === "day" || value === "D") return "day";
-  if (value === "night" || value === "N") return "night";
-  return null;
-}
-
-function rowShiftType(row: SiteTimesheetRow): "day" | "night" | null {
-  return normalizeShiftType(
-    row.actualShiftType ?? row.plannedShiftType ?? row.actualShiftCode ?? row.plannedShiftCode
-  );
-}
-
-/** Combine a work date (yyyy-MM-dd) with an HH:mm time into a local-time ISO string. */
-function combineDateTime(workDate: string, time: string): string | null {
-  if (!time) return null;
-  const d = new Date(`${workDate}T${time}:00`);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
-}
-
-function combineClockOut(workDate: string, time: string, clockIn: string | null): string | null {
-  const out = combineDateTime(workDate, time);
-  if (!out || !clockIn) return out;
-  if (new Date(out).getTime() <= new Date(clockIn).getTime()) {
-    const next = new Date(`${workDate}T00:00:00`);
-    next.setDate(next.getDate() + 1);
-    const nextDate = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(next.getDate()).padStart(2, "0")}`;
-    return combineDateTime(nextDate, time);
-  }
-  return out;
-}
-
-function hoursBetween(clockIn: string | null, clockOut: string | null): number | null {
-  if (!clockIn || !clockOut) return null;
-  let start = new Date(clockIn).getTime();
-  let end = new Date(clockOut).getTime();
-  if (Number.isNaN(start) || Number.isNaN(end)) return null;
-  // Night shifts: an end at/earlier than the start rolls over to the next day.
-  if (end <= start) end += 24 * 60 * 60 * 1000;
-  return Math.round(((end - start) / (1000 * 60 * 60)) * 100) / 100;
-}
-
-function shiftTypeTimesPatch(
-  workDate: string,
-  shiftType: "day" | "night" | null
-): { clockIn: string | null; clockOut: string | null; hoursWorked: number | null } {
-  if (!shiftType) return { clockIn: null, clockOut: null, hoursWorked: null };
-  const startTime = defaultShiftTime(shiftType, "start");
-  const clockIn = combineDateTime(workDate, startTime);
-  const endTime = defaultShiftTime(shiftType, "end");
-  const clockOut = combineClockOut(workDate, endTime, clockIn);
-  return { clockIn, clockOut, hoursWorked: hoursBetween(clockIn, clockOut) };
-}
-
-function buildRowApprovalPatch(
-  row: SiteTimesheetRow,
-  dutyOnObNumber: string,
-  dutyOffObNumber: string
-): Partial<SiteTimesheetRow> {
-  const plannedShiftType = normalizeShiftType(row.plannedShiftType ?? row.plannedShiftCode);
-  const explicitNotWorked =
-    row.actualGuardId === null &&
-    (row.actualShiftType === null || row.actualShiftType === "") &&
-    !row.clockIn &&
-    !row.clockOut;
-
-  // If the controller cleared who worked / shift, keep that and mark absent.
-  // Otherwise default missing fields from the rostered plan when approving.
-  const actualGuardId = explicitNotWorked
-    ? null
-    : (row.actualGuardId ?? row.plannedGuardId);
-  const shiftType = explicitNotWorked
-    ? null
-    : normalizeShiftType(row.actualShiftType ?? row.actualShiftCode) ?? plannedShiftType;
-  const actualShiftType = explicitNotWorked ? null : (row.actualShiftType ?? shiftType);
-  const actualShiftCode = explicitNotWorked
-    ? null
-    : (row.actualShiftCode ??
-      (shiftType === "night" ? "N" : shiftType === "day" ? "D" : null));
-
-  const startTime = displayShiftTime(row.clockIn, shiftType, "start");
-  const endTime = displayShiftTime(row.clockOut, shiftType, "end");
-  const clockIn = explicitNotWorked
-    ? null
-    : (row.clockIn ?? (startTime ? combineDateTime(row.workDate, startTime) : null));
-  const clockOut = explicitNotWorked
-    ? null
-    : (row.clockOut ?? (endTime ? combineClockOut(row.workDate, endTime, clockIn) : null));
-
-  return {
-    actualGuardId,
-    clockIn,
-    clockOut,
-    hoursWorked: explicitNotWorked ? null : (row.hoursWorked ?? hoursBetween(clockIn, clockOut)),
-    attendanceStatus: resolveAttendanceStatusOnApprove({
-      plannedGuardId: row.plannedGuardId,
-      actualGuardId,
-      plannedShiftCode: row.plannedShiftCode,
-      actualShiftCode,
-      actualShiftType,
-      clockIn,
-      clockOut,
-    }),
-    actualShiftType,
-    actualShiftCode,
-    dutyOnObNumber,
-    dutyOffObNumber,
-    occurrenceBookNumber: dutyOnObNumber,
-  };
+/** "Sat 8 Aug" — date keys are UTC calendar days, so read them back in UTC. */
+function formatNoShiftDate(dateKey: string): string {
+  const date = new Date(`${dateKey}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return dateKey;
+  return date.toLocaleDateString("en-ZA", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  });
 }
 
 export function SiteTimesheetsSection({
@@ -182,453 +48,125 @@ export function SiteTimesheetsSection({
   shiftType?: AttendanceShiftTypeFilter;
 }) {
   const { user } = useAuth();
-  const canCreate = Boolean(
-    user &&
-      (hasCapability(user, "/attendance", "create") ||
-        hasCapability(user, "/rostering", "create"))
+  // Either module's grant works here on purpose — attendance capture belongs to both the
+  // attendance and rostering workflows.
+  const permission = (action: "create" | "edit" | "approve" | "export") =>
+    Boolean(
+      user && (hasCapability(user, "/attendance", action) || hasCapability(user, "/rostering", action))
+    );
+  const permissions = useMemo(
+    () => ({
+      canCreate: permission("create"),
+      canEdit: permission("edit"),
+      canApprove: permission("approve"),
+      canExport: permission("export"),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user]
   );
-  const canEdit = Boolean(
-    user &&
-      (hasCapability(user, "/attendance", "edit") ||
-        hasCapability(user, "/rostering", "edit"))
-  );
-  const canApprove = Boolean(
-    user &&
-      (hasCapability(user, "/attendance", "approve") ||
-        hasCapability(user, "/rostering", "approve"))
-  );
-  const canExport = Boolean(
-    user &&
-      (hasCapability(user, "/attendance", "export") ||
-        hasCapability(user, "/rostering", "export"))
-  );
-  const canEditLockedOb = canApprove;
-  const [sheet, setSheet] = useState<SiteTimesheet | null>(null);
-  const [guards, setGuards] = useState<GuardOption[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [savingRowId, setSavingRowId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  /** Centered notice so approve blockers are never missed at the top of a long page. */
-  const [notice, setNotice] = useState<NoticeDialog | null>(null);
-  /** Draft Duty ON/OFF OB numbers before Approve. */
-  const [dutyOnDrafts, setDutyOnDrafts] = useState<Record<string, string>>({});
-  const [dutyOffDrafts, setDutyOffDrafts] = useState<Record<string, string>>({});
-  /** Filter timesheet rows by planned/actual guard name. */
-  const [guardFilter, setGuardFilter] = useState("");
-  const [reviewFilter, setReviewFilter] = useState<"pending" | "confirmed" | "all">("pending");
+  const { canCreate, canEdit, canApprove, canExport } = permissions;
+
+  const timesheet = useSiteTimesheet({
+    token,
+    siteId,
+    periodStart,
+    periodEnd,
+    shiftType,
+    permissions,
+  });
+  const {
+    sheet,
+    guardOptions,
+    loading,
+    savingRowId,
+    error,
+    setError,
+    notice,
+    setNotice,
+    showNotice,
+    locked,
+    readOnly,
+    canEditLockedOb,
+    guardFilter,
+    setGuardFilter,
+    reviewFilter,
+    setReviewFilter,
+    shiftScopedRows,
+    displayRows,
+    bulkConfirmableRows,
+    reviewedCount,
+    pendingReviewCount,
+    otherShiftPendingCount,
+    load,
+  } = timesheet;
+
+  const { confirm, confirmDialog } = useConfirmDialog();
   const [showRelieverForm, setShowRelieverForm] = useState(false);
   const [showSecondaryActions, setShowSecondaryActions] = useState(false);
+  const [bulkRows, setBulkRows] = useState<SiteTimesheetRow[] | null>(null);
+  const [bulkSaving, setBulkSaving] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
   const [unlockReason, setUnlockReason] = useState("");
-  const { confirm, confirmDialog } = useConfirmDialog();
-  const [newRow, setNewRow] = useState({
-    workDate: periodStart,
-    actualGuardId: "",
-    actualShiftType: "day",
-    actualShiftCode: "D",
-    attendanceStatus: "reliever" as SiteTimesheetAttendance,
-    dutyOnObNumber: "",
-    dutyOffObNumber: "",
-    comments: "",
-  });
 
-  const locked = sheet?.status === "approved" || sheet?.status === "locked";
-  const readOnly = locked || !canEdit;
-  const loadIdRef = useRef(0);
   const displaySiteName = sheet?.siteName ?? siteName;
-
-  const showNotice = (title: string, message: string) => {
-    setNotice({ title, message });
-    setError(message);
-  };
-
-  const load = async (options?: { silent?: boolean }) => {
-    const silent = options?.silent ?? false;
-    const loadId = ++loadIdRef.current;
-    if (!silent) setLoading(true);
-    setError(null);
-    try {
-      const [nextSheet, guardEmployees] = await Promise.all([
-        fetchSiteTimesheet(token, siteId, periodStart, periodEnd),
-        fetchSecurityGuardOptions(token),
-      ]);
-      if (loadId !== loadIdRef.current) return;
-      setSheet({ ...nextSheet, rows: sortSiteTimesheetRows(nextSheet.rows) });
-      setGuards(guardEmployees);
-    } catch (err) {
-      if (loadId !== loadIdRef.current) return;
-      setError(err instanceof Error ? err.message : "Failed to load site timesheet");
-    } finally {
-      if (loadId === loadIdRef.current && !silent) setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    setGuardFilter("");
-    setReviewFilter("pending");
-    setNewRow((previous) => ({ ...previous, workDate: periodStart }));
-    void load();
-  }, [token, siteId, periodStart, periodEnd]);
-
-  const guardOptions = useMemo(
-    () => mergeTimesheetGuardOptions(guards, sheet?.rows ?? []),
-    [guards, sheet?.rows]
-  );
-  const sortedRows = useMemo(
-    () => (sheet ? sortSiteTimesheetRows(sheet.rows) : []),
-    [sheet?.rows]
-  );
-  const shiftScopedRows = useMemo(
-    () => sortedRows.filter((row) => rowMatchesShiftTypeFilter(row, shiftType)),
-    [sortedRows, shiftType]
-  );
-  const guardFilteredRows = useMemo(() => {
-    const q = guardFilter.trim().toLowerCase();
-    if (!q) return shiftScopedRows;
-    return shiftScopedRows.filter((row) => {
-      const haystack = [
-        row.actualGuardName,
-        row.plannedGuardName,
-        row.employeeNumber,
-        row.psiraRegistrationNumber,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(q);
-    });
-  }, [shiftScopedRows, guardFilter]);
-  const displayRows = useMemo(() => {
-    if (reviewFilter === "all") return guardFilteredRows;
-    if (reviewFilter === "pending") {
-      return guardFilteredRows.filter((row) => isRowPendingReview(row.approvalStatus));
-    }
-    return guardFilteredRows.filter((row) => isRowFullyReviewed(row.approvalStatus));
-  }, [guardFilteredRows, reviewFilter]);
-  const reviewedCount = shiftScopedRows.filter((r) => isRowFullyReviewed(r.approvalStatus)).length;
-  const pendingReviewCount = shiftScopedRows.filter((r) => isRowPendingReview(r.approvalStatus)).length;
-  const otherShiftPendingCount = useMemo(() => {
-    if (shiftType === "all") return 0;
-    const other: AttendanceShiftTypeFilter = shiftType === "day" ? "night" : "day";
-    return sortedRows.filter(
-      (r) => rowMatchesShiftTypeFilter(r, other) && isRowPendingReview(r.approvalStatus)
-    ).length;
-  }, [sortedRows, shiftType]);
   const guardFilterActive = guardFilter.trim().length > 0;
   const shiftFilterActive = shiftType !== "all";
-  const shiftLabel =
-    shiftType === "day" ? "day-shift" : shiftType === "night" ? "night-shift" : "all";
+  const shiftLabel = shiftType === "day" ? "day-shift" : shiftType === "night" ? "night-shift" : "all";
 
-  const updateRow = async (row: SiteTimesheetRow, patch: Partial<SiteTimesheetRow>) => {
-    if (!canEdit) return;
-    setSavingRowId(row.id);
-    setError(null);
-    try {
-      const res = await updateSiteTimesheetRow(token, row.id, patch);
-      setSheet((current) =>
-        current
-          ? {
-              ...current,
-              rows: sortSiteTimesheetRows(
-                current.rows.map((r) => (r.id === row.id ? res.row : r))
-              ),
-            }
-          : current
-      );
-      await load({ silent: true });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to save timesheet row";
-      showNotice("Could not save", message);
-      throw err instanceof Error ? err : new Error(message);
-    } finally {
-      setSavingRowId(null);
+  /**
+   * Days in this period the site does not run, taken from its "Days covered" picker. These
+   * never produce roster shifts, so attendance has nothing to capture — naming them stops a
+   * controller hunting for rows that were never meant to exist.
+   */
+  const noShiftDates = useMemo(() => {
+    if (!sheet?.coverageDays) return [];
+    return noShiftDateKeys(sheet.coverageDays, sheet.periodStart, sheet.periodEnd, shiftType);
+  }, [sheet?.coverageDays, sheet?.periodStart, sheet?.periodEnd, shiftType]);
+
+  /** Bulk-confirmable rows grouped by date, so a controller can do one day at a time. */
+  const bulkByDate = useMemo(() => {
+    const byDate = new Map<string, SiteTimesheetRow[]>();
+    for (const row of bulkConfirmableRows) {
+      byDate.set(row.workDate, [...(byDate.get(row.workDate) ?? []), row]);
     }
-  };
+    return byDate;
+  }, [bulkConfirmableRows]);
 
-  const reopenRow = async (row: SiteTimesheetRow) => {
-    if (!canEdit) return;
-    setSavingRowId(row.id);
-    setError(null);
-    try {
-      const res = await reopenSiteTimesheetRow(token, row.id);
-      setSheet((current) =>
-        current
-          ? {
-              ...current,
-              rows: sortSiteTimesheetRows(
-                current.rows.map((r) => (r.id === row.id ? res.row : r))
-              ),
-            }
-          : current
-      );
-      await load({ silent: true });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to reopen attendance row";
-      showNotice("Could not reopen", message);
-    } finally {
-      setSavingRowId(null);
-    }
-  };
-
-  const getDutyOnDraft = (row: SiteTimesheetRow) =>
-    dutyOnDrafts[row.id] ?? resolveDutyOnFromRow(row);
-
-  const getDutyOffDraft = (row: SiteTimesheetRow) =>
-    dutyOffDrafts[row.id] ?? resolveDutyOffFromRow(row);
-
-  const setDutyOnDraft = (rowId: string, value: string) => {
-    setDutyOnDrafts((prev) => ({ ...prev, [rowId]: value }));
-  };
-
-  const setDutyOffDraft = (rowId: string, value: string) => {
-    setDutyOffDrafts((prev) => ({ ...prev, [rowId]: value }));
-  };
-
-  const saveDutyOnNumber = async (row: SiteTimesheetRow, draftOverride?: string) => {
-    const next = (draftOverride ?? getDutyOnDraft(row)).trim();
-    const current = resolveDutyOnFromRow(row);
-    const needsOb = rowNeedsObNumbers(row.attendanceStatus);
-    const confirmingPartialApproval =
-      Boolean(next) && needsOb && row.approvalStatus === "pending" && next === current;
-    if (next === current) {
-      if (confirmingPartialApproval) {
-        await updateRow(row, { dutyOnObNumber: next });
-      }
-      return;
-    }
-    if (!canEditLockedOb && current && next !== current) {
-      showNotice(
-        "Duty ON locked",
-        "Duty ON OB number can only be changed with Attendance approval access once it has been entered."
-      );
-      setDutyOnDraft(row.id, current);
-      return;
-    }
-    await updateRow(row, { dutyOnObNumber: next || null });
-  };
-
-  const handleDutyOnKeyDown = (
-    e: KeyboardEvent<HTMLInputElement>,
-    row: SiteTimesheetRow
-  ) => {
-    if (e.key !== "Enter") return;
-    e.preventDefault();
-    const value = e.currentTarget.value;
-    setDutyOnDraft(row.id, value);
-    void saveDutyOnNumber(row, value).then(() => {
-      e.currentTarget.blur();
-    });
-  };
-
-  const saveDutyOffNumber = async (row: SiteTimesheetRow, draftOverride?: string) => {
-    const next = (draftOverride ?? getDutyOffDraft(row)).trim();
-    const current = resolveDutyOffFromRow(row);
-    if (next === current) return;
-    if (!canEditLockedOb && current && next !== current) {
-      showNotice(
-        "Duty OFF locked",
-        "Duty OFF OB number can only be changed with Attendance approval access once it has been entered."
-      );
-      setDutyOffDraft(row.id, current);
-      return;
-    }
-    await updateRow(row, { dutyOffObNumber: next || null });
-  };
-
-  const approveRowAttendance = async (row: SiteTimesheetRow) => {
-    const dutyOn = getDutyOnDraft(row).trim();
-    const dutyOff = getDutyOffDraft(row).trim();
-    const needsOb = rowNeedsObNumbers(row.attendanceStatus);
-    if (needsOb && !dutyOn) {
-      showNotice(
-        "Cannot confirm this attendance entry",
-        "Enter the Duty ON OB number first, then Duty OFF OB, then select Confirm attendance again."
-      );
-      return;
-    }
-    if (needsOb && !dutyOff) {
-      showNotice(
-        "Cannot confirm this attendance entry",
-        "Enter the Duty OFF OB number before confirming this attendance entry."
-      );
-      return;
-    }
-    try {
-      setError(null);
-      setSavingRowId(row.id);
-      const res = await confirmSiteTimesheetRow(
-        token,
-        row.id,
-        buildRowApprovalPatch(row, dutyOn, dutyOff)
-      );
-      setSheet((current) =>
-        current
-          ? {
-              ...current,
-              rows: sortSiteTimesheetRows(
-                current.rows.map((r) => (r.id === row.id ? res.row : r))
-              ),
-            }
-          : current
-      );
-      await load({ silent: true });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to confirm this attendance entry";
-      setError(message);
-    } finally {
-      setSavingRowId(null);
-    }
-  };
-
-  const explainSheetApproveBlocked = (): string | null => {
-    if (pendingReviewCount > 0) {
-      const shiftPart =
-        shiftType === "all"
-          ? `${pendingReviewCount} row${pendingReviewCount === 1 ? "" : "s"} still need review`
-          : `${pendingReviewCount} ${shiftLabel} row${pendingReviewCount === 1 ? "" : "s"} still need review`;
-      return (
-        `Cannot approve the timesheet yet.\n\n` +
-        `${shiftPart}.\n\n` +
-        `For each pending row:\n` +
-        `1. Enter Duty ON OB (saves as partial approval)\n` +
-        `2. Enter Duty OFF OB and select Confirm attendance\n\n` +
-        `When every visible row is reviewed, you can approve the timesheet for payroll.`
-      );
-    }
-    return null;
-  };
-
-  const exportPdf = () => {
-    if (!sheet || !canExport) return;
-    const exportRows = shiftScopedRows;
-    const doc = new jsPDF({ orientation: "landscape" });
-    doc.setFontSize(16);
-    doc.text("Site Timesheet", 14, 16);
-    doc.setFontSize(10);
-    const shiftNote = shiftType === "all" ? "All shifts" : `${shiftLabel} only`;
-    doc.text(
-      `${sheet.siteName} | ${sheet.periodStart} to ${sheet.periodEnd} | ${shiftNote} | Generated ${new Date().toLocaleDateString()}`,
-      14,
-      24
-    );
-    doc.text(`Status: ${label(sheet.status)} | Approved: ${sheet.approvedAt ? new Date(sheet.approvedAt).toLocaleString() : "Not approved"}`, 14, 30);
-    autoTable(doc, {
-      startY: 36,
-      head: [["Date", "Day", "Scheduled", "Actual", "Planned", "Actual shift", "Status", "Hours", "Duty ON OB", "Duty OFF OB", "Discrepancies", "Comments"]],
-      body: exportRows.map((row) => [
-        row.workDate,
-        row.dayOfWeek,
-        row.plannedGuardName ?? "",
-        row.actualGuardName ?? "",
-        row.plannedShiftType ?? row.plannedShiftCode ?? "",
-        row.actualShiftType ?? row.actualShiftCode ?? "",
-        label(row.attendanceStatus),
-        row.hoursWorked ?? "",
-        row.dutyOnObNumber ?? row.occurrenceBookNumber ?? "",
-        row.dutyOffObNumber ?? "",
-        row.discrepancyCodes.map(label).join("; "),
-        row.comments ?? "",
-      ]),
-      styles: { fontSize: 7, cellPadding: 1.5 },
-      headStyles: { fillColor: [15, 23, 42] },
-    });
-    const y = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 180;
-    doc.text("Supervisor signature: ____________________    Manager signature: ____________________", 14, y + 12);
-    const suffix = shiftType === "all" ? "" : `-${shiftType}`;
-    doc.save(`site-timesheet-${sheet.siteName}-${sheet.periodStart}${suffix}.pdf`);
-  };
-
-  const refreshFromShifts = async () => {
-    if (!canEdit) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const refreshed = await resyncSiteTimesheet(token, siteId, periodStart, periodEnd);
-      setSheet({ ...refreshed, rows: sortSiteTimesheetRows(refreshed.rows) });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to refresh from shifts");
-    } finally {
-      setLoading(false);
-      setShowSecondaryActions(false);
-    }
-  };
-
-  const exportCsv = async () => {
-    if (!sheet || !canExport) return;
-    try {
-      const res = await authFetch(siteTimesheetCsvUrl(siteId, periodStart, periodEnd, shiftType), token);
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(
-          (body as { message?: string; error?: string }).message ||
-            (body as { error?: string }).error ||
-            "Failed to download CSV"
-        );
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      const suffix = shiftType === "all" ? "" : `-${shiftType}`;
-      anchor.download = `site-timesheet-${sheet.siteName}-${sheet.periodStart}${suffix}.csv`;
-      anchor.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to download CSV");
-    } finally {
-      setShowSecondaryActions(false);
-    }
-  };
-
-  const approveVisibleTimesheet = async () => {
+  const approveTimesheet = async () => {
     if (!sheet || !canApprove) return;
-    const blocked = explainSheetApproveBlocked();
-    if (blocked) {
-      showNotice("Cannot approve timesheet yet", blocked);
+    if (pendingReviewCount > 0) {
+      showNotice(
+        "Cannot approve timesheet yet",
+        `${pendingReviewCount} ${shiftType === "all" ? "row" : `${shiftLabel} row`}${pendingReviewCount === 1 ? "" : "s"} still need confirmation.\n\n` +
+          `For each one: enter both OB numbers and select Confirm attendance. Use "Confirm all as scheduled" for routine shifts.`
+      );
       return;
     }
-    const message =
-      otherShiftPendingCount > 0
-        ? `Approve ${shiftScopedRows.length} confirmed ${shiftLabel} attendance entries? The timesheet will remain open because ${otherShiftPendingCount} other-shift entries still need review.`
-        : `Approve and lock this site timesheet for payroll (${shiftScopedRows.length} ${shiftLabel} attendance entries)?`;
     const accepted = await confirm({
       title: otherShiftPendingCount > 0 ? `Approve ${shiftLabel}` : "Approve timesheet for payroll",
-      message,
+      message:
+        otherShiftPendingCount > 0
+          ? `Approve ${shiftScopedRows.length} confirmed ${shiftLabel} attendance entries? The timesheet will remain open because ${otherShiftPendingCount} other-shift entries still need review.`
+          : `Approve and lock this site timesheet for payroll (${shiftScopedRows.length} ${shiftLabel} attendance entries)?`,
       confirmLabel: "Approve timesheet",
       danger: false,
     });
     if (!accepted) return;
-    try {
-      setError(null);
-      const result = await approveSiteTimesheet(token, sheet.id, { shiftType });
-      if (!result.locked && result.remainingPending > 0) {
-        showNotice(
-          "Shift approved",
-          `${result.approvedRowCount} attendance entries approved. ${result.remainingPending} entries on the other shift still need review before payroll lock.`
-        );
-      }
-      await load();
-    } catch (err) {
-      showNotice("Could not approve timesheet", err instanceof Error ? err.message : "Failed to approve timesheet");
-    }
-  };
-
-  const submitUnlock = async () => {
-    if (!sheet || !unlockReason.trim() || !canApprove) return;
-    try {
-      setError(null);
-      await unlockSiteTimesheet(token, sheet.id, unlockReason.trim());
-      setUnlockOpen(false);
-      setUnlockReason("");
-      setShowSecondaryActions(false);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to unlock timesheet");
+    const result = await timesheet.approveVisibleTimesheet();
+    if (result && !result.locked && result.remainingPending > 0) {
+      showNotice(
+        "Shift approved",
+        `${result.approvedRowCount} attendance entries approved. ${result.remainingPending} entries on the other shift still need review before payroll lock.`
+      );
     }
   };
 
   if (loading && !sheet) {
-    return <div className="rounded-xl border border-neutral-200 bg-white p-4 text-sm text-neutral-500">Loading site timesheet…</div>;
+    return (
+      <div className="rounded-xl border border-neutral-200 bg-white p-4 text-sm text-neutral-500">
+        Loading site timesheet…
+      </div>
+    );
   }
 
   return (
@@ -644,6 +182,33 @@ export function SiteTimesheetsSection({
         onConfirm={() => setNotice(null)}
       />
       {confirmDialog}
+
+      {bulkRows && (
+        <SiteTimesheetBulkConfirmModal
+          rows={bulkRows}
+          saving={bulkSaving}
+          onCancel={() => setBulkRows(null)}
+          onSubmit={async (entries) => {
+            setBulkSaving(true);
+            try {
+              const result = await timesheet.bulkConfirm(entries);
+              if (result) {
+                // Keep only the rows that came back rejected so the controller can see why.
+                const failedIds = new Set(result.failed.map((failure) => failure.rowId));
+                setBulkRows((current) =>
+                  current && failedIds.size > 0
+                    ? current.filter((row) => failedIds.has(row.id))
+                    : current
+                );
+              }
+              return result;
+            } finally {
+              setBulkSaving(false);
+            }
+          }}
+        />
+      )}
+
       {unlockOpen && canApprove && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/45 p-4" role="presentation">
           <form
@@ -651,16 +216,25 @@ export function SiteTimesheetsSection({
             role="dialog"
             aria-modal="true"
             aria-labelledby="unlock-timesheet-title"
-            onSubmit={(event) => {
+            onSubmit={async (event) => {
               event.preventDefault();
-              void submitUnlock();
+              const ok = await timesheet.submitUnlock(unlockReason);
+              if (ok) {
+                setUnlockOpen(false);
+                setUnlockReason("");
+                setShowSecondaryActions(false);
+              }
             }}
           >
-            <h2 id="unlock-timesheet-title" className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Unlock approved timesheet</h2>
+            <h2 id="unlock-timesheet-title" className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+              Unlock approved timesheet
+            </h2>
             <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
               Unlocking allows attendance changes. The reason is saved in the audit trail.
             </p>
-            <label htmlFor="unlock-reason" className="mt-4 block text-sm font-medium text-neutral-700 dark:text-neutral-300">Reason for unlocking</label>
+            <label htmlFor="unlock-reason" className="mt-4 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+              Reason for unlocking
+            </label>
             <textarea
               id="unlock-reason"
               value={unlockReason}
@@ -671,20 +245,25 @@ export function SiteTimesheetsSection({
               required
             />
             <div className="mt-5 flex justify-end gap-2">
-              <button type="button" className="btn-secondary min-h-11" onClick={() => setUnlockOpen(false)}>Cancel</button>
-              <button type="submit" className="btn-primary min-h-11" disabled={!unlockReason.trim()}>Unlock timesheet</button>
+              <button type="button" className="btn-secondary min-h-11" onClick={() => setUnlockOpen(false)}>
+                Cancel
+              </button>
+              <button type="submit" className="btn-primary min-h-11" disabled={!unlockReason.trim()}>
+                Unlock timesheet
+              </button>
             </div>
           </form>
         </div>
       )}
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
             Site Timesheet{displaySiteName ? ` — ${displaySiteName}` : ""}
           </h2>
           <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-            Review and edit who actually worked, then approve. The approved timesheet is the official attendance
-            record and the source for payroll actuals. Download it as audit evidence of who worked each day.
+            Review and edit who actually worked, then approve. The approved timesheet is the official
+            attendance record and the source for payroll actuals.
           </p>
         </div>
         {sheet && (canEdit || canApprove || canExport) && (
@@ -699,19 +278,73 @@ export function SiteTimesheetsSection({
               More actions
             </button>
             {showSecondaryActions && (
-              <div id="timesheet-secondary-actions" className="z-20 grid gap-2 rounded-lg border border-neutral-200 bg-white p-2 shadow-lg dark:border-neutral-700 dark:bg-neutral-900 sm:absolute sm:right-0 sm:top-12 sm:min-w-52">
-                {!locked && canEdit && <button type="button" onClick={() => void refreshFromShifts()} className="btn-secondary min-h-11 text-left">Refresh from shifts</button>}
-                {canExport && <button type="button" onClick={() => { exportPdf(); setShowSecondaryActions(false); }} className="btn-secondary min-h-11 text-left">Download PDF</button>}
-                {canExport && <button type="button" onClick={() => void exportCsv()} className="btn-secondary min-h-11 text-left">Download CSV</button>}
+              <div
+                id="timesheet-secondary-actions"
+                className="z-20 grid gap-2 rounded-lg border border-neutral-200 bg-white p-2 shadow-lg dark:border-neutral-700 dark:bg-neutral-900 sm:absolute sm:right-0 sm:top-12 sm:min-w-52"
+              >
+                {!locked && canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void timesheet.refreshFromShifts();
+                      setShowSecondaryActions(false);
+                    }}
+                    className="btn-secondary min-h-11 text-left"
+                  >
+                    Refresh from shifts
+                  </button>
+                )}
+                {canExport && sheet && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      exportSiteTimesheetPdf({ sheet, rows: shiftScopedRows, shiftType });
+                      setShowSecondaryActions(false);
+                    }}
+                    className="btn-secondary min-h-11 text-left"
+                  >
+                    Download PDF
+                  </button>
+                )}
+                {canExport && sheet && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await downloadSiteTimesheetCsv({
+                          token,
+                          sheet,
+                          siteId,
+                          periodStart,
+                          periodEnd,
+                          shiftType,
+                        });
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : "Failed to download CSV");
+                      } finally {
+                        setShowSecondaryActions(false);
+                      }
+                    }}
+                    className="btn-secondary min-h-11 text-left"
+                  >
+                    Download CSV
+                  </button>
+                )}
                 {locked && canApprove && (
-                  <button type="button" onClick={() => setUnlockOpen(true)} className="btn-secondary min-h-11 text-left">Admin unlock</button>
+                  <button
+                    type="button"
+                    onClick={() => setUnlockOpen(true)}
+                    className="btn-secondary min-h-11 text-left"
+                  >
+                    Admin unlock
+                  </button>
                 )}
               </div>
             )}
             {!locked && canApprove && (
               <button
                 type="button"
-                onClick={() => void approveVisibleTimesheet()}
+                onClick={() => void approveTimesheet()}
                 disabled={pendingReviewCount > 0 || shiftScopedRows.length === 0}
                 className="btn-primary min-h-11 w-full disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                 aria-describedby={pendingReviewCount > 0 ? "timesheet-approval-help" : undefined}
@@ -724,19 +357,27 @@ export function SiteTimesheetsSection({
       </div>
 
       {error && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert" aria-live="assertive">
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          role="alert"
+          aria-live="assertive"
+        >
           <span>{error}</span>
-          <button type="button" className="min-h-11 font-semibold underline" onClick={() => void load()}>Try again</button>
+          <button type="button" className="min-h-11 font-semibold underline" onClick={() => void load()}>
+            Try again
+          </button>
         </div>
       )}
 
       {locked && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
           <span>
-            Attendance {sheet?.status === "locked" ? "locked" : "approved"} for this period. Next step: process payroll
-            from the verified hours.
+            Attendance {sheet?.status === "locked" ? "locked" : "approved"} for this period. Next step:
+            process payroll from the verified hours.
           </span>
-          <Link href="/payroll" className="btn-primary">Go to Payroll</Link>
+          <Link href="/payroll" className="btn-primary">
+            Go to Payroll
+          </Link>
         </div>
       )}
 
@@ -744,7 +385,7 @@ export function SiteTimesheetsSection({
         <>
           <div className="grid gap-2 text-xs sm:grid-cols-7">
             {[
-              ["Status", label(sheet.status)],
+              ["Status", humanizeCode(sheet.status)],
               [
                 shiftType === "all" ? "Confirmed" : `Confirmed (${shiftLabel})`,
                 `${reviewedCount}/${shiftScopedRows.length}`,
@@ -755,7 +396,10 @@ export function SiteTimesheetsSection({
               ["Relievers", sheet.totals.relieverShifts],
               ["Discrepancies", sheet.totals.discrepancies],
             ].map(([title, value]) => (
-              <div key={String(title)} className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
+              <div
+                key={String(title)}
+                className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900"
+              >
                 <p className="text-neutral-500">{title}</p>
                 <p className="mt-1 font-semibold text-neutral-900 dark:text-neutral-100">{value}</p>
               </div>
@@ -763,17 +407,17 @@ export function SiteTimesheetsSection({
           </div>
 
           {!locked && pendingReviewCount > 0 && (
-            <div id="timesheet-approval-help" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-              Confirm each {shiftType === "all" ? "" : `${shiftLabel} `}attendance entry, enter both Occurrence Book (OB) numbers, then
-              select <span className="font-medium">Confirm attendance</span>. Status is set
-              automatically.{" "}
+            <div
+              id="timesheet-approval-help"
+              className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+            >
               <span className="font-medium">{pendingReviewCount}</span>{" "}
-              {shiftType === "all" ? "row" : `${shiftLabel} row`}
-              {pendingReviewCount === 1 ? "" : "s"} still need review
-              {otherShiftPendingCount > 0
-                ? ` · ${otherShiftPendingCount} on the other shift also pending`
-                : ""}
-              .
+              {shiftType === "all" ? "entry" : `${shiftLabel} entry`}
+              {pendingReviewCount === 1 ? "" : "s"} still need confirmation
+              {otherShiftPendingCount > 0 ? ` · ${otherShiftPendingCount} on the other shift` : ""}.{" "}
+              {bulkConfirmableRows.length > 0
+                ? `${bulkConfirmableRows.length} match the roster and can be confirmed together.`
+                : "Confirm each one and enter both Occurrence Book numbers. Status is set automatically."}
             </div>
           )}
 
@@ -786,185 +430,117 @@ export function SiteTimesheetsSection({
           )}
 
           {!locked && canCreate && (
-            <>
-              <div className="flex justify-end">
-                <button type="button" onClick={() => setShowRelieverForm(true)} className="btn-secondary min-h-11">
-                  Add a reliever or unrostered guard
-                </button>
-              </div>
-              {showRelieverForm && (
-                <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-slate-900/45 p-4" role="presentation">
-                  <div className="my-auto w-full max-w-4xl rounded-xl border border-neutral-200 bg-white p-4 shadow-xl dark:border-neutral-700 dark:bg-neutral-950" role="dialog" aria-modal="true" aria-labelledby="add-reliever-title">
-                    <div className="mb-4 flex items-start justify-between gap-3">
-                      <div>
-                        <h2 id="add-reliever-title" className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Add a reliever</h2>
-                        <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">Use this only when someone worked but was not already listed for the day.</p>
-                      </div>
-                      <button type="button" onClick={() => setShowRelieverForm(false)} className="btn-secondary min-h-11" aria-label="Close add reliever dialog">Close</button>
-                    </div>
-                    <div className="grid gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm dark:border-neutral-700 dark:bg-neutral-900 sm:grid-cols-2 lg:grid-cols-7">
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowRelieverForm(true)}
+                className="btn-secondary min-h-11"
+              >
+                Add a reliever or unrostered guard
+              </button>
+            </div>
+          )}
+          {showRelieverForm && sheet && (
+            <SiteTimesheetRelieverForm
+              guardOptions={guardOptions}
+              periodStart={periodStart}
+              periodEnd={periodEnd}
+              onClose={() => setShowRelieverForm(false)}
+              onSubmit={async (draft) => {
+                try {
+                  setError(null);
+                  await addSiteTimesheetRow(token, sheet.id, {
+                    ...draft,
+                    dutyOnObNumber: draft.dutyOnObNumber.trim(),
+                    dutyOffObNumber: draft.dutyOffObNumber.trim() || null,
+                  });
+                  setShowRelieverForm(false);
+                  await load();
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Failed to add reliever row");
+                }
+              }}
+            />
+          )}
+
+          {/* Confirming a routine day is one action; exceptions still go row by row. */}
+          {!locked && canEdit && bulkConfirmableRows.length > 0 && (
+            <div className="flex flex-col gap-3 rounded-lg border border-security-navy-200 bg-security-navy-50/60 p-3 dark:border-security-navy-700 dark:bg-security-navy-950/30 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Date</label>
-                <input
-                  type="date"
-                  value={newRow.workDate}
-                  min={periodStart}
-                  max={periodEnd}
-                  required
-                  onChange={(e) => setNewRow((prev) => ({ ...prev, workDate: e.target.value }))}
-                  className="input-modern mt-1 w-full"
-                />
+                <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                  {bulkConfirmableRows.length} shift{bulkConfirmableRows.length === 1 ? "" : "s"} match
+                  the roster
+                </p>
+                <p className="mt-0.5 text-xs text-neutral-600 dark:text-neutral-400">
+                  Confirm them together — you only need to enter the occurrence book numbers.
+                </p>
               </div>
-              <div className="sm:col-span-2">
-                <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
-                  Guard <span className="text-amber-600">*</span>
-                </label>
-                <GuardSearchPicker
-                  guards={guardOptions}
-                  value={newRow.actualGuardId || null}
-                  onChange={(id) => setNewRow((prev) => ({ ...prev, actualGuardId: id ?? "" }))}
-                  placeholder="Choose reliever or guard…"
-                  className="input-modern mt-1 w-full"
-                  allowClear={false}
-                />
-                {!newRow.actualGuardId && (
-                  <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
-                    Select who worked — required before you can add them to the timesheet.
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Shift</label>
-                <select
-                  value={newRow.actualShiftType}
-                  onChange={(e) =>
-                    setNewRow((prev) => ({
-                      ...prev,
-                      actualShiftType: e.target.value,
-                      actualShiftCode: e.target.value === "night" ? "N" : "D",
-                    }))
-                  }
-                  className="input-modern mt-1 w-full"
-                >
-                  <option value="day">Day shift</option>
-                  <option value="night">Night shift</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
-                  Duty ON OB <span className="text-amber-600">*</span>
-                </label>
-                <input
-                  value={newRow.dutyOnObNumber}
-                  onChange={(e) =>
-                    setNewRow((prev) => ({ ...prev, dutyOnObNumber: e.target.value }))
-                  }
-                  placeholder="Duty ON OB"
-                  className="input-modern mt-1 w-full"
-                  maxLength={80}
-                  autoComplete="off"
-                  required
-                  aria-required="true"
-                />
-                {!newRow.dutyOnObNumber.trim() && (
-                  <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
-                    Duty ON OB is required before adding a reliever.
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
-                  Duty OFF OB
-                </label>
-                <input
-                  value={newRow.dutyOffObNumber}
-                  onChange={(e) =>
-                    setNewRow((prev) => ({ ...prev, dutyOffObNumber: e.target.value }))
-                  }
-                  placeholder="Optional — enter later"
-                  className="input-modern mt-1 w-full"
-                  maxLength={80}
-                  autoComplete="off"
-                />
-              </div>
-              <div className="flex flex-col justify-end gap-2 sm:col-span-2">
-                <input
-                  value={newRow.comments}
-                  onChange={(e) => setNewRow((prev) => ({ ...prev, comments: e.target.value }))}
-                  placeholder="Reason (optional)"
-                  className="input-modern w-full"
-                />
+              <div className="flex flex-wrap gap-2">
+                {bulkByDate.size > 1 &&
+                  [...bulkByDate.entries()].slice(0, 3).map(([date, rows]) => (
+                    <button
+                      key={date}
+                      type="button"
+                      onClick={() => setBulkRows(rows)}
+                      className="btn-secondary min-h-11 text-sm"
+                    >
+                      {date} ({rows.length})
+                    </button>
+                  ))}
                 <button
                   type="button"
-                  disabled={
-                    !newRow.actualGuardId ||
-                    !newRow.dutyOnObNumber.trim() ||
-                    newRow.workDate < periodStart ||
-                    newRow.workDate > periodEnd
-                  }
-                  onClick={async () => {
-                    if (!newRow.actualGuardId) {
-                      setError("Select a guard before adding them to the timesheet.");
-                      return;
-                    }
-                    const dutyOn = newRow.dutyOnObNumber.trim();
-                    if (!dutyOn) {
-                      showNotice(
-                        "Duty ON required",
-                        "Duty ON OB number is required before adding a reliever."
-                      );
-                      return;
-                    }
-                    if (newRow.workDate < periodStart || newRow.workDate > periodEnd) {
-                      showNotice(
-                        "Date outside this timesheet",
-                        `Choose a date from ${periodStart} to ${periodEnd}.`
-                      );
-                      return;
-                    }
-                    try {
-                      setError(null);
-                      await addSiteTimesheetRow(token, sheet.id, {
-                        ...newRow,
-                        dutyOnObNumber: dutyOn,
-                        dutyOffObNumber: newRow.dutyOffObNumber.trim() || null,
-                      });
-                      setNewRow((prev) => ({
-                        ...prev,
-                        actualGuardId: "",
-                        dutyOnObNumber: "",
-                        dutyOffObNumber: "",
-                        comments: "",
-                      }));
-                      setShowRelieverForm(false);
-                      await load();
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : "Failed to add reliever row");
-                    }
-                  }}
-                  className="btn-primary min-h-11 w-full disabled:opacity-50"
+                  onClick={() => setBulkRows(bulkConfirmableRows)}
+                  className="btn-primary min-h-11"
                 >
-                  Add reliever
+                  Confirm all as scheduled ({bulkConfirmableRows.length})
                 </button>
               </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
+            </div>
+          )}
+
+          {noShiftDates.length > 0 && (
+            <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
+              <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                {NO_SHIFT_LABEL} — {noShiftDates.length} day{noShiftDates.length === 1 ? "" : "s"}
+              </p>
+              <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+                This site runs no {shiftType === "all" ? "" : `${shiftLabel} `}shift on these days, so
+                there is nothing to capture. Change it under Days covered on the site.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {noShiftDates.map((date) => (
+                  <span
+                    key={date}
+                    className="rounded-full border border-neutral-200 bg-white px-2 py-0.5 text-[11px] font-medium text-neutral-500 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-400"
+                  >
+                    {formatNoShiftDate(date)}
+                  </span>
+                ))}
+              </div>
+            </div>
           )}
 
           <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Attendance entries</p>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">Pending work is shown first so unfinished attendance is not missed.</p>
+              <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                Attendance entries
+              </p>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                Pending work is shown first so unfinished attendance is not missed.
+              </p>
             </div>
-            <div className="flex flex-wrap gap-1 rounded-lg border border-neutral-200 bg-white p-1 dark:border-neutral-700 dark:bg-neutral-950" role="group" aria-label="Show attendance entries">
-              {([
-                ["pending", `Needs confirmation (${pendingReviewCount})`],
-                ["confirmed", `Confirmed (${reviewedCount})`],
-                ["all", `All (${shiftScopedRows.length})`],
-              ] as const).map(([value, text]) => (
+            <div
+              className="flex flex-wrap gap-1 rounded-lg border border-neutral-200 bg-white p-1 dark:border-neutral-700 dark:bg-neutral-950"
+              role="group"
+              aria-label="Show attendance entries"
+            >
+              {(
+                [
+                  ["pending", `Needs confirmation (${pendingReviewCount})`],
+                  ["confirmed", `Confirmed (${reviewedCount})`],
+                  ["all", `All (${shiftScopedRows.length})`],
+                ] as const
+              ).map(([value, text]) => (
                 <button
                   key={value}
                   type="button"
@@ -1032,13 +608,15 @@ export function SiteTimesheetsSection({
           )}
           {!guardFilterActive && shiftFilterActive && shiftScopedRows.length === 0 && (
             <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-3 text-sm text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
-              No {shiftType === "day" ? "day" : "night"}-shift rows for this site in the selected period. Switch shift
-              type above to review the other shift.
+              No {shiftType === "day" ? "day" : "night"}-shift rows for this site in the selected
+              period. Switch shift type above to review the other shift.
             </div>
           )}
-
           {!guardFilterActive && shiftScopedRows.length > 0 && displayRows.length === 0 && (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200" role="status">
+            <div
+              className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200"
+              role="status"
+            >
               {reviewFilter === "pending"
                 ? "All visible attendance entries are confirmed. Use the approval button below when you are ready."
                 : "No attendance entries match this review status."}
@@ -1046,12 +624,6 @@ export function SiteTimesheetsSection({
           )}
 
           <div className="space-y-3 xl:hidden">
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              Confirm who worked and the shift times, enter Duty ON OB, then Duty OFF OB
-              and tap{" "}
-              <span className="font-medium text-neutral-700 dark:text-neutral-300">Confirm attendance</span>. Status is set
-              automatically.
-            </p>
             {displayRows.map((row) => (
               <SiteTimesheetRowCard
                 key={row.id}
@@ -1059,312 +631,47 @@ export function SiteTimesheetsSection({
                 guards={guardOptions}
                 locked={locked || !canEdit}
                 saving={savingRowId === row.id}
-                dutyOnObNumber={getDutyOnDraft(row)}
-                dutyOffObNumber={getDutyOffDraft(row)}
-                onDutyOnObNumberChange={(value) => setDutyOnDraft(row.id, value)}
-                onDutyOffObNumberChange={(value) => setDutyOffDraft(row.id, value)}
-                onDutyOnObNumberSave={(value?: string) => void saveDutyOnNumber(row, value)}
-                onDutyOffObNumberSave={(value?: string) => void saveDutyOffNumber(row, value)}
+                dutyOnObNumber={timesheet.getDutyOnDraft(row)}
+                dutyOffObNumber={timesheet.getDutyOffDraft(row)}
+                onDutyOnObNumberChange={(value) => timesheet.setDutyOnDraft(row.id, value)}
+                onDutyOffObNumberChange={(value) => timesheet.setDutyOffDraft(row.id, value)}
+                onDutyOnObNumberSave={(value) => void timesheet.saveDutyObNumber(row, "on", value)}
+                onDutyOffObNumberSave={(value) => void timesheet.saveDutyObNumber(row, "off", value)}
                 canEditLockedOb={canEditLockedOb}
-                rowShiftType={rowShiftType}
-                displayShiftTime={displayShiftTime}
-                combineDateTime={combineDateTime}
-                combineClockOut={combineClockOut}
-                hoursBetween={hoursBetween}
-                onUpdate={(r, patch) => void updateRow(r, patch)}
-                onApprove={(r) => void approveRowAttendance(r)}
-                onReopen={(r) => void reopenRow(r)}
+                onUpdate={(r, patch) => void timesheet.updateRow(r, patch)}
+                onApprove={(r) => void timesheet.approveRowAttendance(r)}
+                onReopen={(r) => void timesheet.reopenRow(r)}
               />
             ))}
           </div>
 
-          <div className="hidden xl:block">
-            <div className="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-700">
-            <table className="site-timesheet-table w-full table-fixed text-left text-[11px]">
-              <colgroup>
-                <col className="w-[7%]" />
-                <col className="w-[18%]" />
-                <col className="w-[8%]" />
-                <col className="w-[10%]" />
-                <col className="w-[7%]" />
-                <col className="w-[10%]" />
-                <col className="w-[9%]" />
-                <col className="w-[8%]" />
-                <col className="w-[8%]" />
-                <col className="w-[7%]" />
-              </colgroup>
-              <thead className="bg-neutral-100 text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">
-                <tr>
-                  {["Date", "Who worked", "Shift", "Start / End", "Status", "Issues", "Notes", "Duty ON OB", "Duty OFF OB", "Action"].map((label) => (
-                    <th key={label} className="px-2 py-1.5 font-semibold">{label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
-                {displayRows.map((row) => {
-                  const rowSurfaceClass =
-                    isRowFullyReviewed(row.approvalStatus)
-                      ? "bg-emerald-50/40 dark:bg-emerald-950/15"
-                      : row.approvalStatus === "partially_reviewed"
-                        ? "bg-amber-50/50 dark:bg-amber-950/20"
-                        : row.discrepancyCodes.length
-                          ? "bg-amber-50/60 dark:bg-amber-950/20"
-                          : "bg-white dark:bg-neutral-950";
-                  const cellClass = `px-2 py-1.5 align-top ${rowSurfaceClass}`;
-                  const guardChanged =
-                    !!row.actualGuardId &&
-                    !!row.plannedGuardId &&
-                    row.actualGuardId !== row.plannedGuardId;
-
-                  return (
-                  <tr
-                    key={row.id}
-                    className={rowSurfaceClass}
-                  >
-                    <td className={`${cellClass} font-medium leading-tight`}>
-                      {row.workDate}
-                      <br />
-                      <span className="text-neutral-500">{row.dayOfWeek}</span>
-                    </td>
-                    <td className={cellClass}>
-                      {!row.plannedGuardName ? (
-                        <p className="mb-1 text-[10px] font-medium text-amber-700">Unrostered</p>
-                      ) : guardChanged ? (
-                        <p className="mb-1 text-[10px] leading-tight text-neutral-500">
-                          Scheduled: {row.plannedGuardName}
-                          {row.employeeNumber || row.psiraRegistrationNumber
-                            ? ` (${row.employeeNumber ?? row.psiraRegistrationNumber})`
-                            : ""}
-                        </p>
-                      ) : null}
-                      <GuardSearchPicker
-                        guards={guardOptions}
-                        value={row.actualGuardId}
-                        defaultGuardId={row.plannedGuardId}
-                        defaultGuardLabel={row.plannedGuardName}
-                        disabled={readOnly || savingRowId === row.id}
-                        onChange={(guardId) => void updateRow(row, { actualGuardId: guardId })}
-                        clearLabel="Nobody worked"
-                        truncateLabel
-                        compact
-                        className="input-compact !px-2 !py-1 text-[11px]"
-                      />
-                    </td>
-                    <td className={cellClass}>
-                      <p className="mb-0.5 text-[10px] leading-tight text-neutral-500">
-                        Plan: {label(row.plannedShiftType ?? row.plannedShiftCode)}
-                      </p>
-                      <select
-                        disabled={readOnly}
-                        value={row.actualShiftType ?? ""}
-                        onChange={(e) => {
-                          const shiftType =
-                            e.target.value === "night" ? "night" : e.target.value === "day" ? "day" : null;
-                          void updateRow(row, {
-                            actualShiftType: e.target.value || null,
-                            actualShiftCode: e.target.value === "night" ? "N" : e.target.value === "day" ? "D" : null,
-                            ...shiftTypeTimesPatch(row.workDate, shiftType),
-                          });
-                        }}
-                        className="input-compact w-full !px-2 !py-1 text-[11px]"
-                      >
-                        <option value="">Not worked</option>
-                        <option value="day">Day</option>
-                        <option value="night">Night</option>
-                      </select>
-                    </td>
-                    <td className={cellClass}>
-                      <div className="flex items-center gap-0.5">
-                        <ShiftTimeSelect
-                          value={displayShiftTime(row.clockIn, rowShiftType(row), "start")}
-                          disabled={readOnly || savingRowId === row.id}
-                          onChange={(time) => {
-                            const clockIn = combineDateTime(row.workDate, time);
-                            if (clockIn === (row.clockIn ?? null)) return;
-                            void updateRow(row, { clockIn, hoursWorked: hoursBetween(clockIn, row.clockOut) });
-                          }}
-                          className="input-compact w-[4.25rem] !px-1 !py-1 text-[11px]"
-                          title="Start time"
-                        />
-                        <span className="text-neutral-400">/</span>
-                        <ShiftTimeSelect
-                          value={displayShiftTime(row.clockOut, rowShiftType(row), "end")}
-                          disabled={readOnly || savingRowId === row.id}
-                          onChange={(time) => {
-                            const shiftType = rowShiftType(row);
-                            const clockIn =
-                              row.clockIn ?? combineDateTime(row.workDate, displayShiftTime(null, shiftType, "start"));
-                            const clockOut = combineClockOut(row.workDate, time, clockIn);
-                            if (clockOut === (row.clockOut ?? null)) return;
-                            void updateRow(row, { clockOut, hoursWorked: hoursBetween(clockIn, clockOut) });
-                          }}
-                          className="input-compact w-[4.25rem] !px-1 !py-1 text-[11px]"
-                          title="End time"
-                        />
-                      </div>
-                    </td>
-                    <td className={cellClass}>
-                      <span
-                        className="font-medium text-neutral-800 dark:text-neutral-200"
-                        title="Set automatically when you confirm this attendance entry"
-                      >
-                        {formatAttendanceStatus(row.attendanceStatus)}
-                      </span>
-                    </td>
-                    <td className={cellClass}>
-                      <div className="flex flex-wrap gap-0.5">
-                        {row.discrepancyCodes.length ? row.discrepancyCodes.map((code) => (
-                          <span key={code} className="rounded-full border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium leading-tight text-amber-800">{label(code)}</span>
-                        )) : <span className="text-neutral-400">None</span>}
-                      </div>
-                    </td>
-                    <td className={cellClass}>
-                      <input
-                        disabled={readOnly}
-                        defaultValue={row.comments ?? ""}
-                        onBlur={(e) => void updateRow(row, { comments: e.target.value })}
-                        className="input-compact w-full !px-2 !py-1 text-[11px]"
-                        placeholder="Notes"
-                        title="Supervisor note (optional)"
-                      />
-                    </td>
-                    <td className={cellClass}>
-                      {(() => {
-                        const savedDutyOn = resolveDutyOnFromRow(row);
-                        const dutyOnLocked = Boolean(savedDutyOn) && !canEditLockedOb;
-                        if (readOnly || row.approvalStatus === "approved" || dutyOnLocked) {
-                          return (
-                            <span
-                              className="font-medium text-neutral-800 dark:text-neutral-200"
-                              title={
-                                dutyOnLocked
-                                  ? "Duty ON OB is locked. Attendance approval access is required to change it."
-                                  : "Duty ON OB number"
-                              }
-                            >
-                              {savedDutyOn || "—"}
-                            </span>
-                          );
-                        }
-                        return (
-                          <input
-                            value={getDutyOnDraft(row)}
-                            onChange={(e) => setDutyOnDraft(row.id, e.target.value)}
-                            onBlur={() => void saveDutyOnNumber(row)}
-                            onKeyDown={(e) => handleDutyOnKeyDown(e, row)}
-                            disabled={savingRowId === row.id}
-                            className="input-compact w-full !px-2 !py-1 text-[11px]"
-                            placeholder="Duty ON"
-                            title="Duty ON OB — press Enter to save as partial approval"
-                            aria-label={`Duty ON OB for ${row.workDate}`}
-                          />
-                        );
-                      })()}
-                    </td>
-                    <td className={cellClass}>
-                      {(() => {
-                        const savedDutyOn = resolveDutyOnFromRow(row);
-                        const savedDutyOff = resolveDutyOffFromRow(row);
-                        const dutyOffLocked = Boolean(savedDutyOff) && !canEditLockedOb;
-                        const dutyOffEnabled = Boolean(savedDutyOn) || Boolean(getDutyOnDraft(row).trim());
-                        if (readOnly || row.approvalStatus === "approved" || dutyOffLocked) {
-                          return (
-                            <span
-                              className="font-medium text-neutral-800 dark:text-neutral-200"
-                              title={
-                                dutyOffLocked
-                                  ? "Duty OFF OB is locked. Attendance approval access is required to change it."
-                                  : "Duty OFF OB number"
-                              }
-                            >
-                              {savedDutyOff || "—"}
-                            </span>
-                          );
-                        }
-                        return (
-                          <input
-                            value={getDutyOffDraft(row)}
-                            onChange={(e) => setDutyOffDraft(row.id, e.target.value)}
-                            onBlur={() => void saveDutyOffNumber(row)}
-                            disabled={savingRowId === row.id || !dutyOffEnabled}
-                            className="input-compact w-full !px-2 !py-1 text-[11px] disabled:opacity-50"
-                            placeholder={dutyOffEnabled ? "Duty OFF" : "Duty ON first"}
-                            title="Duty OFF OB — required before confirming attendance"
-                            aria-label={`Duty OFF OB for ${row.workDate}`}
-                          />
-                        );
-                      })()}
-                    </td>
-                    <td className={cellClass}>
-                      {row.approvalStatus === "approved" || locked ? (
-                        <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
-                          Approved
-                        </span>
-                      ) : !canEdit ? (
-                        <span className="inline-flex items-center rounded-full border border-neutral-200 bg-neutral-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-neutral-600">
-                          {formatAttendanceStatus(row.approvalStatus)}
-                        </span>
-                      ) : row.approvalStatus === "reviewed" ? (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="inline-flex w-fit items-center rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
-                            Confirmed
-                          </span>
-                          <button
-                            type="button"
-                            disabled={savingRowId === row.id}
-                            onClick={() => void reopenRow(row)}
-                            className="text-left text-[9px] text-neutral-500 underline-offset-2 hover:text-neutral-700 hover:underline dark:hover:text-neutral-300"
-                          >
-                            Reopen
-                          </button>
-                        </div>
-                      ) : row.approvalStatus === "partially_reviewed" ? (
-                        <div className="flex flex-col gap-1">
-                          <span className="inline-flex w-fit items-center rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
-                            Duty ON saved
-                          </span>
-                          <button
-                            type="button"
-                            disabled={savingRowId === row.id}
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                            }}
-                            onClick={() => void approveRowAttendance(row)}
-                            title="Enter Duty OFF OB, then confirm attendance."
-                            className="w-full rounded-security border-2 border-security-navy bg-security-navy px-2 py-1.5 text-[11px] font-semibold leading-tight text-white hover:bg-security-navy-800 disabled:opacity-50"
-                          >
-                            {savingRowId === row.id ? "…" : "Confirm"}
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={savingRowId === row.id}
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                          }}
-                          onClick={() => void approveRowAttendance(row)}
-                          title="Enter Duty ON and Duty OFF OB numbers, then confirm attendance."
-                          className="w-full rounded-security border-2 border-security-navy bg-security-navy px-2 py-1.5 text-[11px] font-semibold leading-tight text-white hover:bg-security-navy-800 disabled:opacity-50"
-                        >
-                          {savingRowId === row.id ? "…" : "Confirm"}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            </div>
-          </div>
+          <SiteTimesheetTable
+            rows={displayRows}
+            guardOptions={guardOptions}
+            locked={locked}
+            readOnly={readOnly}
+            canEdit={canEdit}
+            canEditLockedOb={canEditLockedOb}
+            savingRowId={savingRowId}
+            getDutyOnDraft={timesheet.getDutyOnDraft}
+            getDutyOffDraft={timesheet.getDutyOffDraft}
+            setDutyOnDraft={timesheet.setDutyOnDraft}
+            setDutyOffDraft={timesheet.setDutyOffDraft}
+            onSaveDutyOb={(row, which) => void timesheet.saveDutyObNumber(row, which)}
+            onUpdate={(row, patch) => void timesheet.updateRow(row, patch)}
+            onApprove={(row) => void timesheet.approveRowAttendance(row)}
+            onReopen={(row) => void timesheet.reopenRow(row)}
+          />
         </>
       )}
+
       {sheet && !locked && (
         <div className="sticky bottom-4 z-20 flex flex-col gap-3 rounded-xl border border-security-navy-200 bg-white/95 p-4 shadow-xl backdrop-blur dark:border-security-navy-700 dark:bg-neutral-950/95 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-              {pendingReviewCount === 0 ? "Visible attendance is ready for approval" : `${pendingReviewCount} attendance ${pendingReviewCount === 1 ? "entry needs" : "entries need"} confirmation`}
+              {pendingReviewCount === 0
+                ? "Visible attendance is ready for approval"
+                : `${pendingReviewCount} attendance ${pendingReviewCount === 1 ? "entry needs" : "entries need"} confirmation`}
             </p>
             <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
               {otherShiftPendingCount > 0
@@ -1372,14 +679,27 @@ export function SiteTimesheetsSection({
                 : "Approving the final shift locks this site timesheet for payroll."}
             </p>
           </div>
-          {canApprove && <button
-            type="button"
-            onClick={() => void approveVisibleTimesheet()}
-            disabled={pendingReviewCount > 0 || shiftScopedRows.length === 0}
-            className="btn-primary min-h-11 w-full disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-          >
-            {shiftType === "all" ? "Approve timesheet" : `Approve ${shiftLabel}`}
-          </button>}
+          <div className="flex flex-wrap gap-2">
+            {canEdit && bulkConfirmableRows.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setBulkRows(bulkConfirmableRows)}
+                className="btn-secondary min-h-11"
+              >
+                Confirm all as scheduled ({bulkConfirmableRows.length})
+              </button>
+            )}
+            {canApprove && (
+              <button
+                type="button"
+                onClick={() => void approveTimesheet()}
+                disabled={pendingReviewCount > 0 || shiftScopedRows.length === 0}
+                className="btn-primary min-h-11 w-full disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+              >
+                {shiftType === "all" ? "Approve timesheet" : `Approve ${shiftLabel}`}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </section>

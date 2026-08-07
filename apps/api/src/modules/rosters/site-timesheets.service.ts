@@ -5,6 +5,7 @@ import { prisma } from "../../lib/prisma.js";
 import { getCompanyTimezone, inferShiftTypeFromStartTime } from "../../lib/timezone.js";
 import { findApprovedLeaveConflict } from "../../services/attendance.service.js";
 import { dateKey, dateOnly, ROSTER_PLACEHOLDER_JOB_ROLE_PREFIX } from "./rosters.service.js";
+import { buildConfirmAsScheduledPatch, type ConfirmAsScheduledPatch } from "./site-timesheet-derive.js";
 import {
   isShiftCoveredOnDateKey,
   resolveSiteCoverageDays,
@@ -814,6 +815,7 @@ export async function getSiteTimesheet(companyId: string, siteId: string, startD
   });
 
   if (!timesheet) return null;
+  const siteCoverage = resolveSiteCoverageDays(site);
   const discrepancyMap = computeDiscrepancyMap(site, timesheet.rows);
   const rows = [...timesheet.rows]
     .sort(compareSiteTimesheetRows)
@@ -844,6 +846,12 @@ export async function getSiteTimesheet(companyId: string, siteId: string, startD
     approvedBy: timesheet.approvedBy,
     approvedAt: timesheet.approvedAt?.toISOString() ?? null,
     approvalNotes: timesheet.approvalNotes,
+    // Attendance has no rows for a weekday the site does not run. Sending the site's cover
+    // lets the capture screen say "No Shift" for those days instead of silently omitting them.
+    coverageDays: {
+      day: [...siteCoverage.day].sort((a, b) => a - b),
+      night: [...siteCoverage.night].sort((a, b) => a - b),
+    },
     rows,
     totals: {
       ...totals,
@@ -1321,6 +1329,294 @@ export async function addSiteTimesheetRow(
   });
   const discrepancyMap = sheetContext ? computeDiscrepancyMap(sheetContext.site, sheetContext.rows) : new Map();
   return { row: serializeRow(row, discrepancyMap.get(row.id) ?? []) };
+}
+
+export type BulkConfirmEntry = {
+  rowId: string;
+  dutyOnObNumber?: string | null;
+  dutyOffObNumber?: string | null;
+};
+
+export type BulkConfirmFailureCode =
+  | "ROW_NOT_FOUND"
+  | "ALREADY_REVIEWED"
+  | "NOT_AS_SCHEDULED"
+  | "PLACEHOLDER_GUARD"
+  | "HAS_DISCREPANCY"
+  | "NO_SHIFT_TYPE"
+  | "ON_APPROVED_LEAVE"
+  | "OB_LOCKED"
+  | "MISSING_OB";
+
+export type BulkConfirmFailure = {
+  rowId: string;
+  code: BulkConfirmFailureCode;
+  message: string;
+};
+
+/**
+ * Discrepancy codes that describe THIS row and so must block confirming it as scheduled.
+ *
+ * DAY_COVERAGE_SHORT / NIGHT_COVERAGE_SHORT are deliberately excluded: they are computed
+ * per site and date and attach to every row on that date, so one genuinely absent guard
+ * would otherwise block bulk confirmation of all the colleagues who did turn up — the
+ * single most common case this feature exists to handle. The shortfall stays visible on
+ * the sheet and still has to be resolved before approval.
+ */
+const ROW_LEVEL_DISCREPANCY_CODES = new Set([
+  "ROSTERED_NOT_WORKED",
+  "UNROSTERED_WORKED",
+  "SHIFT_SWAPPED",
+  "RELIEVER_COVERED",
+  "SHIFT_TYPE_CHANGED",
+  "OVERTIME_OR_EXTRA_SHIFT",
+  "ABSENT_WITHOUT_REPLACEMENT",
+]);
+
+const BULK_CONFIRM_MESSAGES: Record<BulkConfirmFailureCode, string> = {
+  ROW_NOT_FOUND: "This shift is no longer on the timesheet. Refresh and try again.",
+  ALREADY_REVIEWED: "This shift has already been confirmed.",
+  NOT_AS_SCHEDULED:
+    "Someone other than the rostered guard worked this shift. Confirm it individually.",
+  PLACEHOLDER_GUARD:
+    "This shift is still assigned to a roster placeholder. Assign a real employee first.",
+  HAS_DISCREPANCY: "This shift does not match the roster. Review and confirm it individually.",
+  NO_SHIFT_TYPE:
+    "This shift has no day or night shift on the roster, so its times cannot be filled in automatically. Confirm it individually.",
+  ON_APPROVED_LEAVE:
+    "This employee is on approved leave. Cancel or adjust the leave before recording worked time.",
+  OB_LOCKED: "An OB number is already recorded and needs attendance approval access to change.",
+  MISSING_OB: "Duty ON and Duty OFF OB numbers are both required before confirming.",
+};
+
+/**
+ * Confirm many rows as "worked exactly as scheduled" in one request.
+ *
+ * Eligibility is recomputed here rather than trusted from the client: `discrepancyCodes`
+ * arrives in the browser as a serialized snapshot, and a page left open can ask to bulk
+ * confirm a row that has since changed.
+ *
+ * Each row succeeds or fails on its own — one bad row must not block the rest — so this
+ * resolves to a 200 with both lists rather than failing the whole request. The one
+ * exception is a locked sheet, which is a precondition for the whole operation.
+ */
+export async function bulkConfirmSiteTimesheetRows(
+  companyId: string,
+  timesheetId: string,
+  entries: BulkConfirmEntry[],
+  actor: { canOverrideObNumbers: boolean; userId?: string }
+) {
+  const sheet = await prisma.siteTimesheet.findFirst({
+    where: { id: timesheetId, companyId },
+    include: { site: true, rows: true },
+  });
+  if (!sheet) return null;
+  if (sheet.status === "approved" || sheet.status === "locked") {
+    return { error: "Timesheet is approved and locked. Unlock it before making changes." };
+  }
+
+  const timeZone = await getCompanyTimezone(companyId);
+  const rowsById = new Map(sheet.rows.map((row) => [row.id, row]));
+
+  // De-duplicate defensively: a repeated rowId would otherwise be written twice.
+  const requested = new Map<string, BulkConfirmEntry>();
+  for (const entry of entries) requested.set(entry.rowId, entry);
+
+  const candidateGuardIds = [...requested.keys()]
+    .map((rowId) => rowsById.get(rowId)?.plannedGuardId)
+    .filter((id): id is string => typeof id === "string");
+  const placeholderGuardIds = await getPlaceholderGuardIds(prisma, [...new Set(candidateGuardIds)]);
+
+  // One batched leave query for the whole request — never one per row.
+  const leaveConditions = [...requested.keys()]
+    .map((rowId) => rowsById.get(rowId))
+    .filter((row): row is (typeof sheet.rows)[number] => Boolean(row?.plannedGuardId))
+    .map((row) => ({ employeeId: row.plannedGuardId!, leaveDate: dateOnly(row.workDate) }));
+  const leaveRecords =
+    leaveConditions.length > 0
+      ? await prisma.leaveRequest.findMany({
+          where: {
+            companyId,
+            status: "APPROVED",
+            OR: leaveConditions.map((condition) => ({
+              employeeId: condition.employeeId,
+              startDate: { lte: condition.leaveDate },
+              endDate: { gte: condition.leaveDate },
+            })),
+          },
+          select: { employeeId: true, startDate: true, endDate: true },
+        })
+      : [];
+  const isOnApprovedLeave = (employeeId: string, workDate: Date) =>
+    leaveRecords.some(
+      (leave) =>
+        leave.employeeId === employeeId &&
+        leave.startDate <= dateOnly(workDate) &&
+        leave.endDate >= dateOnly(workDate)
+    );
+
+  const failed: BulkConfirmFailure[] = [];
+  const fail = (rowId: string, code: BulkConfirmFailureCode) => {
+    failed.push({ rowId, code, message: BULK_CONFIRM_MESSAGES[code] });
+  };
+
+  const writes: Array<{ rowId: string; data: Prisma.SiteTimesheetRowUpdateInput; workDate: Date }> = [];
+  const patchByRowId = new Map<string, ConfirmAsScheduledPatch>();
+
+  for (const [rowId, entry] of requested) {
+    const row = rowsById.get(rowId);
+    if (!row) {
+      fail(rowId, "ROW_NOT_FOUND");
+      continue;
+    }
+    if (isRowFullyReviewed(row.approvalStatus)) {
+      fail(rowId, "ALREADY_REVIEWED");
+      continue;
+    }
+    if (!row.plannedGuardId || (row.actualGuardId && row.actualGuardId !== row.plannedGuardId)) {
+      fail(rowId, "NOT_AS_SCHEDULED");
+      continue;
+    }
+    if (placeholderGuardIds.has(row.plannedGuardId)) {
+      fail(rowId, "PLACEHOLDER_GUARD");
+      continue;
+    }
+
+    const patch = buildConfirmAsScheduledPatch(row, timeZone);
+    if (!patch) {
+      // Never guess a shift type here — see buildConfirmAsScheduledPatch for why a null
+      // actualShiftType causes payroll to count the underlying Shift twice.
+      fail(rowId, "NO_SHIFT_TYPE");
+      continue;
+    }
+
+    if (isOnApprovedLeave(row.plannedGuardId, row.workDate)) {
+      fail(rowId, "ON_APPROVED_LEAVE");
+      continue;
+    }
+
+    const existingDutyOn = resolveDutyOnFromRow(row);
+    const existingDutyOff = normalizeObNumber(row.dutyOffObNumber) ?? null;
+    const requestedDutyOn =
+      entry.dutyOnObNumber !== undefined ? normalizeObNumber(entry.dutyOnObNumber) : undefined;
+    const requestedDutyOff =
+      entry.dutyOffObNumber !== undefined ? normalizeObNumber(entry.dutyOffObNumber) : undefined;
+
+    const obLocked =
+      (requestedDutyOn !== undefined &&
+        existingDutyOn &&
+        requestedDutyOn !== existingDutyOn &&
+        !actor.canOverrideObNumbers) ||
+      (requestedDutyOff !== undefined &&
+        existingDutyOff &&
+        requestedDutyOff !== existingDutyOff &&
+        !actor.canOverrideObNumbers);
+    if (obLocked) {
+      fail(rowId, "OB_LOCKED");
+      continue;
+    }
+
+    const resolvedDutyOn = requestedDutyOn !== undefined ? requestedDutyOn : existingDutyOn;
+    const resolvedDutyOff = requestedDutyOff !== undefined ? requestedDutyOff : existingDutyOff;
+    if (rowNeedsObNumbers(patch.attendanceStatus) && (!resolvedDutyOn || !resolvedDutyOff)) {
+      fail(rowId, "MISSING_OB");
+      continue;
+    }
+
+    patchByRowId.set(rowId, patch);
+    writes.push({
+      rowId,
+      workDate: row.workDate,
+      data: {
+        actualGuard: { connect: { id: patch.actualGuardId } },
+        actualShiftType: patch.actualShiftType,
+        actualShiftCode: patch.actualShiftCode,
+        clockIn: patch.clockIn,
+        clockOut: patch.clockOut,
+        hoursWorked: patch.hoursWorked,
+        attendanceStatus: patch.attendanceStatus,
+        approvalStatus: "reviewed",
+        dutyOnObNumber: resolvedDutyOn,
+        // Kept in step with dutyOnObNumber for the deprecated single-OB consumers.
+        occurrenceBookNumber: resolvedDutyOn,
+        dutyOffObNumber: resolvedDutyOff,
+      },
+    });
+  }
+
+  // Judge discrepancies on what the sheet WOULD look like once these rows are confirmed,
+  // not on their current state: an uncaptured rostered row has no actual guard or shift
+  // yet, so measured as-is every clean row looks like a coverage shortfall.
+  const projectedRows = sheet.rows.map((row) => {
+    const patch = patchByRowId.get(row.id);
+    if (!patch) return row;
+    return {
+      ...row,
+      actualGuardId: patch.actualGuardId,
+      actualShiftType: patch.actualShiftType,
+      actualShiftCode: patch.actualShiftCode,
+      attendanceStatus: patch.attendanceStatus,
+    };
+  });
+  const projectedDiscrepancies = computeDiscrepancyMap(sheet.site, projectedRows);
+
+  const eligible = writes.filter((write) => {
+    const rowLevel = (projectedDiscrepancies.get(write.rowId) ?? []).filter((code) =>
+      ROW_LEVEL_DISCREPANCY_CODES.has(code)
+    );
+    if (rowLevel.length === 0) return true;
+    fail(write.rowId, "HAS_DISCREPANCY");
+    return false;
+  });
+
+  if (eligible.length > 0) {
+    await prisma.$transaction(async (tx) => {
+      for (const write of eligible) {
+        await tx.siteTimesheetRow.update({ where: { id: write.rowId }, data: write.data });
+      }
+      await tx.siteTimesheet.update({
+        where: { id: timesheetId },
+        data: { status: "draft", reviewedAt: new Date() },
+      });
+    });
+  }
+
+  await createAuditLog({
+    userId: actor.userId,
+    companyId,
+    action: "site_timesheet.rows_bulk_confirm",
+    entityType: "SiteTimesheet",
+    entityId: timesheetId,
+    metadata: {
+      requestedCount: requested.size,
+      confirmedRowIds: eligible.map((write) => write.rowId),
+      failedCodes: failed.map((failure) => ({ rowId: failure.rowId, code: failure.code })),
+    },
+  });
+
+  // Per-row entries too, so the existing row-level audit trail stays complete whether a
+  // row was confirmed one at a time or in a batch.
+  for (const write of eligible) {
+    await createAuditLog({
+      userId: actor.userId,
+      companyId,
+      action: "site_timesheet.row_approve",
+      entityType: "SiteTimesheetRow",
+      entityId: write.rowId,
+      metadata: {
+        siteTimesheetId: timesheetId,
+        workDate: dateKey(write.workDate),
+        approvalStatus: "reviewed",
+        attendanceStatus: write.data.attendanceStatus,
+        via: "bulk_confirm",
+      },
+    });
+  }
+
+  return {
+    confirmed: eligible.map((write) => write.rowId),
+    failed,
+  };
 }
 
 /**

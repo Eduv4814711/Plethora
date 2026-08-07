@@ -29,7 +29,11 @@ import {
   type RosterSiteConfig,
 } from "@/lib/roster-api";
 import { patternDayIndexForDate, shiftCodeForStaggeredPattern } from "@/lib/roster-pattern-utils";
-import { coverageDaysOrAllWeek, isCoveredOnDateKey } from "@/lib/site-coverage-days";
+import {
+  coverageDaysOrAllWeek,
+  isCoveredOnDateKey,
+  resolveShiftCoverageDays,
+} from "@/lib/site-coverage-days";
 import {
   buildShiftSheetRowsFromRosterGrid,
   downloadPdfBlob,
@@ -904,6 +908,7 @@ export const ManualRosteringWorkspace = forwardRef<
           rows={grid.rows}
           columnKeys={columnKeys}
           coverageByDay={grid.coverageByDay}
+          coverageDays={siteConfig ? resolveShiftCoverageDays(siteConfig) : undefined}
           editable={canEditRoster}
           shiftOptions={MANUAL_SHIFT_CODE_OPTIONS}
           onCellChange={handleCellChange}

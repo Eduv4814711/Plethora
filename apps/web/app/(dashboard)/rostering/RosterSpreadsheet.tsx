@@ -3,6 +3,12 @@
 import type { RosterGridRow, RosterShiftCode } from "@/lib/roster-api";
 import { SHIFT_CODE_COLORS } from "@/lib/roster-api";
 import { formatCalendarColumnLabel, isDateColumnKey } from "@/lib/roster-pattern-utils";
+import {
+  NO_SHIFT_LABEL,
+  shiftCoverageOnDateKey,
+  type DateShiftCoverage,
+  type ShiftCoverageDays,
+} from "@/lib/site-coverage-days";
 
 const SHIFT_LABELS: Record<RosterShiftCode, string> = {
   D: "Day",
@@ -17,12 +23,33 @@ const SHIFT_LABELS: Record<RosterShiftCode, string> = {
   blank: "Unassigned",
 };
 
+/** Every column is covered unless the site's weekday picker says otherwise. */
+const FULLY_COVERED: DateShiftCoverage = { day: true, night: true, anyShift: true };
+
+/**
+ * Per-column view of the site's "Days covered" picker. Pattern-mode grids can be keyed by
+ * cycle day index rather than a date; those have no weekday to look up, so they stay covered.
+ */
+export function buildColumnCoverage(
+  columnKeys: string[],
+  coverageDays?: ShiftCoverageDays
+): Record<string, DateShiftCoverage> {
+  const byColumn: Record<string, DateShiftCoverage> = {};
+  for (const key of columnKeys) {
+    byColumn[key] =
+      coverageDays && isDateColumnKey(key) ? shiftCoverageOnDateKey(coverageDays, key) : FULLY_COVERED;
+  }
+  return byColumn;
+}
+
 export function RosterCoverageTotals({
   coverageByDay,
   columnKeys,
+  columnCoverage,
 }: {
   coverageByDay: Record<string, { day: number; night: number; requiredDay: number; requiredNight: number }>;
   columnKeys: string[];
+  columnCoverage: Record<string, DateShiftCoverage>;
 }) {
   return (
     <tr className="bg-neutral-50 dark:bg-neutral-900/80 text-[11px] font-medium">
@@ -32,22 +59,52 @@ export function RosterCoverageTotals({
       {columnKeys.map((key) => {
         const cov = coverageByDay[key];
         if (!cov) return <td key={key} className="px-1 py-1 text-center">—</td>;
+        const runs = columnCoverage[key] ?? FULLY_COVERED;
+        if (!runs.anyShift) {
+          return (
+            <td
+              key={key}
+              className="px-0.5 py-1 text-center leading-tight text-neutral-400 dark:text-neutral-500"
+              title="This site does not run a day or night shift on this weekday"
+            >
+              {NO_SHIFT_LABEL}
+            </td>
+          );
+        }
         const dayOk = cov.day >= cov.requiredDay;
         const nightOk = cov.night >= cov.requiredNight;
         return (
           <td key={key} className="px-0.5 py-1 text-center leading-tight">
-            <span
-              title={`Day: ${cov.day} of ${cov.requiredDay} staffed`}
-              className={dayOk ? "block text-emerald-700 dark:text-emerald-400" : "block text-red-700 dark:text-red-300"}
-            >
-              Day {cov.day}/{cov.requiredDay}
-            </span>
-            <span
-              title={`Night: ${cov.night} of ${cov.requiredNight} staffed`}
-              className={nightOk ? "block text-indigo-700 dark:text-indigo-400" : "block text-red-700 dark:text-red-300"}
-            >
-              Night {cov.night}/{cov.requiredNight}
-            </span>
+            {runs.day ? (
+              <span
+                title={`Day: ${cov.day} of ${cov.requiredDay} staffed`}
+                className={dayOk ? "block text-emerald-700 dark:text-emerald-400" : "block text-red-700 dark:text-red-300"}
+              >
+                Day {cov.day}/{cov.requiredDay}
+              </span>
+            ) : (
+              <span
+                title="No day shift on this weekday"
+                className="block text-neutral-400 dark:text-neutral-500"
+              >
+                Day —
+              </span>
+            )}
+            {runs.night ? (
+              <span
+                title={`Night: ${cov.night} of ${cov.requiredNight} staffed`}
+                className={nightOk ? "block text-indigo-700 dark:text-indigo-400" : "block text-red-700 dark:text-red-300"}
+              >
+                Night {cov.night}/{cov.requiredNight}
+              </span>
+            ) : (
+              <span
+                title="No night shift on this weekday"
+                className="block text-neutral-400 dark:text-neutral-500"
+              >
+                Night —
+              </span>
+            )}
           </td>
         );
       })}
@@ -70,6 +127,7 @@ export function RosterSpreadsheet({
   rows,
   columnKeys,
   coverageByDay,
+  coverageDays,
   editable,
   shiftOptions,
   savingCellKey,
@@ -80,6 +138,8 @@ export function RosterSpreadsheet({
   rows: RosterGridRow[];
   columnKeys: string[];
   coverageByDay: Record<string, { day: number; night: number; requiredDay: number; requiredNight: number }>;
+  /** The site's "Days covered" picker. Omit to treat every day as a seven-day site. */
+  coverageDays?: ShiftCoverageDays;
   editable: boolean;
   shiftOptions: ShiftOption[];
   savingCellKey?: string | null;
@@ -87,6 +147,7 @@ export function RosterSpreadsheet({
   onAddPlaceholderGuard?: (type: "unknown" | "reliever") => void;
   addingPlaceholder?: boolean;
 }) {
+  const columnCoverage = buildColumnCoverage(columnKeys, coverageDays);
   return (
     <div className="overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-700">
       <p className="border-b border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 md:hidden">
@@ -136,14 +197,26 @@ export function RosterSpreadsheet({
                 );
               }
               const { weekday, day, month } = formatCalendarColumnLabel(key);
+              const runs = columnCoverage[key] ?? FULLY_COVERED;
               return (
                 <th
                   key={key}
-                  className="px-0.5 py-1.5 text-center font-medium text-neutral-600 dark:text-neutral-400 min-w-[2.75rem]"
+                  className={`px-0.5 py-1.5 text-center font-medium min-w-[2.75rem] ${
+                    runs.anyShift
+                      ? "text-neutral-600 dark:text-neutral-400"
+                      : "bg-neutral-100 text-neutral-400 dark:bg-neutral-900/60 dark:text-neutral-500"
+                  }`}
+                  title={
+                    runs.anyShift
+                      ? undefined
+                      : "This site does not run a shift on this weekday — set in Days covered on the site"
+                  }
                 >
                   <div className="text-[10px] font-normal text-neutral-400">{weekday}</div>
                   <div className="tabular-nums text-sm">{day}</div>
-                  <div className="text-[9px] font-normal text-neutral-400">{month}</div>
+                  <div className="text-[9px] font-normal text-neutral-400">
+                    {runs.anyShift ? month : NO_SHIFT_LABEL}
+                  </div>
                 </th>
               );
             })}
@@ -179,6 +252,20 @@ export function RosterSpreadsheet({
                   const code = (cell?.shiftCode ?? "blank") as RosterShiftCode;
                   const color = SHIFT_CODE_COLORS[code] ?? SHIFT_CODE_COLORS.blank;
                   const isSaving = savingCellKey === `${row.guardId}:${colKey}`;
+                  const runs = columnCoverage[colKey] ?? FULLY_COVERED;
+                  // The site runs nothing this weekday, so there is no shift to assign.
+                  if (!runs.anyShift) {
+                    return (
+                      <td key={colKey} className="p-0.5">
+                        <div
+                          className="flex h-9 items-center justify-center rounded bg-neutral-100 text-[10px] font-medium text-neutral-400 dark:bg-neutral-900/60 dark:text-neutral-500"
+                          title={`${row.guardName} — this site runs no shift on ${colKey}`}
+                        >
+                          {NO_SHIFT_LABEL}
+                        </div>
+                      </td>
+                    );
+                  }
                   return (
                     <td key={colKey} className="p-0.5">
                       {editable && onCellChange ? (
@@ -218,7 +305,11 @@ export function RosterSpreadsheet({
             ))
           )}
           {rows.length > 0 && (
-            <RosterCoverageTotals coverageByDay={coverageByDay} columnKeys={columnKeys} />
+            <RosterCoverageTotals
+              coverageByDay={coverageByDay}
+              columnKeys={columnKeys}
+              columnCoverage={columnCoverage}
+            />
           )}
         </tbody>
       </table>

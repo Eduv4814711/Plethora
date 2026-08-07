@@ -275,35 +275,78 @@ Rostering is used to schedule guards on shifts.
 
 ## 8. Attendance
 
-### Clock In / Clock Out
+**Attendance** has two tabs, because security officers and office staff are recorded
+differently. The office tab only appears if the company has office staff on record.
 
-When a guard arrives for a shift:
+### Guards (by site)
 
-1. Go to **Attendance**.
-2. In **Clock in / Clock out**, find the shift.
-3. Click **Clock In** when the guard arrives.
-4. Click **Clock Out** when the guard leaves.
+Guards are captured against the site they were rostered to, in two steps.
 
-### Missed Shifts
+**Step 1 — choose the work**
 
-If a guard does not clock in:
+1. Go to **Attendance** and stay on the **Guards (by site)** tab.
+2. Choose the **pay period**, the **shift** (day, night, or all), and optionally search for
+   a site.
+3. Sites needing attention are listed first. Click one to open it.
 
-1. The shift appears under **Missed shifts (no clock-in)**.
-2. Click **Replace**.
-3. Choose an available reliever.
-4. The shift is reassigned to the reliever.
+**Step 2 — confirm who worked**
 
-### Filters
+For a normal day where everyone turned up as rostered:
 
-- **Date range** – Prev/Next month, This month.
-- **Employee** – Filter by employee.
-- **Site** – Filter by site.
-- Click **Apply** to refresh.
+1. Click **Confirm all as scheduled**. Only shifts that match the roster are included —
+   swaps, absences and unrostered work are left out for you to handle individually.
+2. Enter the **Duty ON OB** number for the first shift. The rest fill in automatically by
+   counting up from it; correct any that differ.
+3. Enter the **Duty OFF OB** numbers and click **Confirm**.
 
-### Attendance Records
+Anything that could not be confirmed comes back with the reason against it. A guard being
+absent does not stop their colleagues from being confirmed together.
 
-- **Completed** – Expand a record to see clock in/out times, hours, overtime.
-- **Active** – Guards currently on shift; use **Clock Out** when they finish.
+For a shift that differs from the roster, use the card or table row:
+
+1. Click **Change** to pick a different guard, mark that nobody worked, or adjust the shift
+   type, times and notes.
+2. Enter both **OB numbers** — they can be typed in either order.
+3. Click **Confirm attendance**.
+
+The attendance status (present, absent, shift swapped, reliever) is set automatically from
+what you confirm; you never choose it by hand. Once an OB number is saved it is locked, and
+changing it needs Attendance **approve** access.
+
+**Add a reliever** records someone who worked but was never listed for the day.
+
+**Approve the timesheet** when every visible entry is confirmed. The approved timesheet is
+the official attendance record and the source of payroll hours. **Admin unlock** reopens an
+approved timesheet and requires a typed reason, which is saved to the audit trail.
+
+### Office staff (daily)
+
+Office staff have no site, no roster and no occurrence book, so their attendance is a
+simple daily roll call.
+
+1. Go to **Attendance** and choose the **Office staff (daily)** tab.
+2. Use the date stepper to pick the day.
+3. Tap **Present** or **Absent** for each person. This saves immediately.
+4. Use **Mark all remaining present** to finish everyone who has not been captured.
+5. **Adjust** opens start/end times and a note if a day was not standard.
+
+Anyone with approved leave for that date is shown as **On approved leave** and cannot be
+marked present — cancel or change the leave first.
+
+Office staff are paid a fixed monthly salary, so this record does **not** affect their pay.
+It exists for leave cross-checks and reporting.
+
+### Clocking in from WhatsApp
+
+Where WhatsApp is enabled, employees can send `clock in` and `clock out` from their
+registered phone number. For sites with a geofence they are asked to share their location.
+These clock events feed the site timesheet, where a supervisor still confirms them.
+
+### Attendance issues
+
+**Review attendance issues** lists detected exceptions — late arrivals, missing clock-outs,
+duplicate events and so on. Critical unresolved issues block payroll calculation, so clear
+them before the pay run.
 
 ---
 

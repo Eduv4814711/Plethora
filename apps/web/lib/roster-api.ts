@@ -263,6 +263,11 @@ export type SiteTimesheet = {
   approvedBy: string | null;
   approvedAt: string | null;
   approvalNotes: string | null;
+  /**
+   * Weekdays the site runs each shift (0=Sunday … 6=Saturday), from the site's "Days covered"
+   * picker. Dates outside these lists have no rows to capture and read as "No Shift".
+   */
+  coverageDays?: { day: number[]; night: number[] };
   rows: SiteTimesheetRow[];
   totals: {
     dayShifts: number;
@@ -745,6 +750,43 @@ export async function confirmSiteTimesheetRow(
     body: JSON.stringify(body),
   });
   return parseJson<{ row: SiteTimesheetRow }>(res);
+}
+
+export type BulkConfirmFailureCode =
+  | "ROW_NOT_FOUND"
+  | "ALREADY_REVIEWED"
+  | "NOT_AS_SCHEDULED"
+  | "PLACEHOLDER_GUARD"
+  | "HAS_DISCREPANCY"
+  | "NO_SHIFT_TYPE"
+  | "ON_APPROVED_LEAVE"
+  | "OB_LOCKED"
+  | "MISSING_OB";
+
+export type BulkConfirmResult = {
+  confirmed: string[];
+  failed: Array<{ rowId: string; code: BulkConfirmFailureCode; message: string }>;
+};
+
+/**
+ * Confirm several rows as worked-as-scheduled at once. Resolves even when some rows are
+ * rejected — inspect `failed` rather than relying on a thrown error. Only a locked
+ * timesheet fails the request outright.
+ */
+export async function bulkConfirmSiteTimesheetRows(
+  token: string,
+  timesheetId: string,
+  rows: Array<{ rowId: string; dutyOnObNumber?: string; dutyOffObNumber?: string }>
+) {
+  const res = await authFetch(
+    `/rosters/site-timesheets/${timesheetId}/rows/bulk-confirm`,
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify({ rows }),
+    }
+  );
+  return parseJson<BulkConfirmResult>(res);
 }
 
 export async function reopenSiteTimesheetRow(token: string, rowId: string) {

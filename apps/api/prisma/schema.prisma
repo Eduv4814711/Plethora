@@ -11,8 +11,15 @@ datasource db {
 }
 
 model Company {
-  id          String   @id @default(cuid())
-  name        String
+  id   String @id @default(cuid())
+  name String
+
+  // The database also carries `Company_owner_same_company_fkey`, a composite foreign key on
+  // ("id", "ownerUserId") -> User("companyId", "id") added in 20260723120000_capability_access.
+  // It stops a company being owned by a user from a different tenant. Prisma's schema language
+  // cannot express a composite foreign key, so `prisma migrate diff` always reports it as drift
+  // and `prisma migrate dev` will offer to DROP it. Never accept that — keep the constraint and
+  // ignore this one expected diff entry.
   ownerUserId String?  @unique
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -68,6 +75,7 @@ model Company {
   siteRosterGeneratedShifts SiteRosterGeneratedShift[]
   siteTimesheets            SiteTimesheet[]
   siteTimesheetRows         SiteTimesheetRow[]
+  staffAttendanceDays       StaffAttendanceDay[]
 
   academyBranches            AcademyBranch[]
   academyStudents            Student[]
@@ -279,6 +287,7 @@ model Employee {
   operationalAlerts           OperationalAlert[]
   leaveRequests               LeaveRequest[]
   leaveAdjustments            LeaveAdjustment[]
+  staffAttendanceDays         StaffAttendanceDay[]
 
   @@unique([companyId, employeeNumber])
   @@index([companyId])
@@ -918,6 +927,48 @@ enum SiteTimesheetRowStatus {
   partially_reviewed
   reviewed
   approved
+}
+
+/// Daily attendance for office staff (Employee.employeeType == "general").
+///
+/// Deliberately separate from SiteTimesheet/SiteTimesheetRow: office staff have no site,
+/// no roster and no occurrence book, and they are paid a fixed monthly salary. Putting
+/// them on a site timesheet would make `aggregateTimesheets` treat their hours as payable
+/// on top of that salary, and would drag the mandatory Duty ON/OFF OB rules onto people
+/// the occurrence book has nothing to do with.
+///
+/// This table is for leave cross-checks and reporting only. Nothing in payroll reads it.
+model StaffAttendanceDay {
+  id          String                @id @default(cuid())
+  companyId   String
+  employeeId  String
+  workDate    DateTime              @db.Date
+  status      StaffAttendanceStatus
+  timeIn      DateTime?
+  timeOut     DateTime?
+  /// Derived from timeIn/timeOut for display only — never read by payroll.
+  hoursWorked Decimal?              @db.Decimal(10, 2)
+  notes       String?
+  /// User.id of the supervisor who captured this, for the audit trail.
+  recordedBy  String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, employeeId, workDate])
+  @@index([companyId, workDate])
+  @@index([employeeId, workDate])
+}
+
+enum StaffAttendanceStatus {
+  present
+  absent
+  leave
+  sick_leave
+  public_holiday
+  off
 }
 
 // --- Simple leave rebuild (4-table system) ---
@@ -2536,8 +2587,8 @@ model Client {
   contactPersonRole   String?
   contactPersonMobile String?
   /// Client head office. Site addresses live on Site.physicalAddress.
-  physicalAddress     String? @db.Text
-  notes               String? @db.Text
+  physicalAddress     String?  @db.Text
+  notes               String?  @db.Text
   /// Who the month-end pack is emailed to (manually). Empty falls back to `billingEmail ?? email`.
   reportRecipients    String[] @default([])
 
