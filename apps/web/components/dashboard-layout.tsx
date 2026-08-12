@@ -27,10 +27,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
-  const moreRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -72,7 +70,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     function handlePointerDown(e: PointerEvent) {
       const t = e.target as Node;
       if (profileRef.current && !profileRef.current.contains(t)) setProfileOpen(false);
-      if (moreRef.current && !moreRef.current.contains(t)) setMoreOpen(false);
       if (searchRef.current && !searchRef.current.contains(t)) setSearchOpen(false);
     }
     document.addEventListener("pointerdown", handlePointerDown);
@@ -225,68 +222,25 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </svg>
           </button>
           <Link href="/" className="flex min-w-0 items-center shrink-0 overflow-hidden">
+            {/* The asset is cropped to its artwork, so this height is the height
+                of the visible lockup — it used to sit inside a 2:1 canvas that
+                was mostly empty, rendering the mark at ~40% of the box. */}
             <img
               src="/plethora-logo-header.svg"
               alt="Plethora"
-              className="h-11 w-auto max-h-12 object-contain object-left opacity-95 sm:h-12"
+              className="h-8 w-auto object-contain object-left opacity-95 sm:h-9"
             />
           </Link>
         </div>
 
-        <nav className="hidden lg:flex flex-1 items-center justify-center gap-5 xl:gap-7 min-w-0" aria-label="Primary">
-          <span className="text-sm font-semibold text-white/95 tracking-wide truncate max-w-[12rem] xl:max-w-none">
+        {/* Desktop module links used to live here as pills. They duplicated the
+            launcher at `/`, so the header now carries the company name only —
+            modules are reached from the launcher (logo → `/`) or search. */}
+        <div className="hidden min-w-0 flex-1 items-center justify-center lg:flex">
+          <span className="truncate text-sm font-semibold tracking-wide text-white/95">
             {companyName}
           </span>
-          {mainNavItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={clsx(
-                "text-sm font-medium tracking-wide transition-all py-2 px-3 rounded-full whitespace-nowrap",
-                isActive(item.href)
-                  ? "text-security-navy-900 bg-white/95 shadow-sm"
-                  : "text-white/90 hover:text-white hover:bg-white/10"
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
-          {moreNavItems.length > 0 && (
-            <div ref={moreRef} className="relative">
-              <button
-                type="button"
-                onClick={() => setMoreOpen((o) => !o)}
-                className={clsx(
-                  "text-sm font-medium tracking-wide transition-all py-2 px-3 rounded-full",
-                  moreNavItems.some((i) => isActive(i.href))
-                    ? "text-security-navy-900 bg-white shadow-sm"
-                    : "text-white/90 hover:text-white hover:bg-white/10"
-                )}
-              >
-                More
-              </button>
-              {moreOpen && (
-                <div className="absolute top-full right-0 mt-1 py-1.5 bg-white border border-neutral-200 rounded-security-lg shadow-security-elevated z-50 min-w-[200px]">
-                  {moreNavItems.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setMoreOpen(false)}
-                      className={clsx(
-                        "block px-4 py-2.5 text-sm transition-colors",
-                        isActive(item.href)
-                          ? "bg-security-navy-50 text-security-navy font-semibold"
-                          : "text-security-navy-600 hover:bg-security-navy-50"
-                      )}
-                    >
-                      {item.label}
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </nav>
+        </div>
 
         <div className="flex items-center gap-0.5 sm:gap-2 shrink-0">
           <NotificationBell />
