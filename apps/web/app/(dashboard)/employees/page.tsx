@@ -1,14 +1,42 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { authFetch } from "@/lib/api";
+import { authFetch, downloadPrivateFile } from "@/lib/api";
+import { listDocuments, uploadDocument, type ManagedDocument } from "@/lib/msr-api";
 import { canManageEmployeeDetails, hasCapability } from "@/lib/permissions";
 import { DateInput } from "@/components/date-input";
 import { useConfirmDialog } from "@/components/ui";
 import { clsx } from "clsx";
+
+/**
+ * Mirrors the server's allow-list in apps/api/src/modules/documents/documents.routes.ts.
+ * Checking here too turns a 400 round-trip into an immediate message; the server
+ * stays the authority (it also verifies magic bytes, which the browser cannot).
+ */
+const DOCUMENT_MIME_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "text/plain",
+  "text/csv",
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+];
+const DOCUMENT_ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp";
+const DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 const SA_MAJOR_BANKS = [
   "ABSA",
@@ -934,6 +962,16 @@ function EmployeeForm({
   const [activeTab, setActiveTab] = useState<"basic" | "labour" | "bank" | "psira">("basic");
   const [submitting, setSubmitting] = useState(false);
 
+  // Documents can only be attached to an employee that exists, so the files are
+  // held here and uploaded after the create call returns an id. `savedId` marks
+  // the employee as already created, so a retry after a failed upload cannot
+  // create a second one.
+  const { user: currentUser } = useAuth();
+  const canAttachDocuments = currentUser ? hasCapability(currentUser, "/documents", "create") : false;
+  const [documents, setDocuments] = useState<File[]>([]);
+  const [documentError, setDocumentError] = useState("");
+  const [savedId, setSavedId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!token) return;
     authFetch("/employees/next-number", token)
@@ -944,9 +982,72 @@ function EmployeeForm({
       .catch(() => {});
   }, [token]);
 
+  const addDocuments = (picked: FileList | null) => {
+    if (!picked || picked.length === 0) return;
+    const rejected: string[] = [];
+    const accepted: File[] = [];
+    for (const file of Array.from(picked)) {
+      if (!DOCUMENT_MIME_TYPES.includes(file.type)) {
+        rejected.push(`${file.name} (unsupported type)`);
+      } else if (file.size > DOCUMENT_MAX_BYTES) {
+        rejected.push(`${file.name} (over 10MB)`);
+      } else if (!documents.some((existing) => existing.name === file.name && existing.size === file.size)) {
+        accepted.push(file);
+      }
+    }
+    if (accepted.length > 0) setDocuments((prev) => [...prev, ...accepted]);
+    setDocumentError(rejected.length > 0 ? `Not attached: ${rejected.join(", ")}` : "");
+  };
+
+  const removeDocument = (index: number) => {
+    setDocuments((prev) => prev.filter((_, i) => i !== index));
+    setDocumentError("");
+  };
+
+  /** Uploads each file against a saved employee. Returns the ones that failed. */
+  const uploadDocuments = async (employeeId: string, files: File[]): Promise<File[]> => {
+    const failed: File[] = [];
+    for (const file of files) {
+      try {
+        await uploadDocument(token, file, {
+          title: file.name.replace(/\.[^.]+$/, ""),
+          documentType: "Team member document",
+          category: "EMPLOYEE",
+          employeeId,
+        });
+      } catch {
+        failed.push(file);
+      }
+    }
+    return failed;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    // The team member already exists — this submit is only retrying uploads, so
+    // it must not create a second one.
+    if (savedId) {
+      setSubmitting(true);
+      try {
+        const failed = await uploadDocuments(savedId, documents);
+        setDocuments(failed);
+        if (failed.length === 0) {
+          onSuccess();
+          return;
+        }
+        setError(
+          `Still could not upload ${failed.length} document${failed.length === 1 ? "" : "s"}: ${failed
+            .map((f) => f.name)
+            .join(", ")}. You can add them later from the Documents module.`
+        );
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     if (!employeeNumber.trim()) {
       setActiveTab("basic");
       setError("Team member ID is required. Enter it on the Basic details tab.");
@@ -1031,6 +1132,26 @@ function EmployeeForm({
         const msg = data?.message?.psiraRegistrationNumber?.[0] ?? data?.message?.gradeId?.[0] ?? data?.message?.groupId?.[0] ?? data?.message?.monthlySalary?.[0] ?? data?.message?.employeeNumber?.[0] ?? (typeof data?.message === "string" ? data.message : null) ?? "Could not save the team member. Please check the details and try again.";
         throw new Error(msg);
       }
+
+      if (documents.length > 0) {
+        const created = (await res.json()) as { id?: string };
+        if (created?.id) {
+          const failed = await uploadDocuments(created.id, documents);
+          if (failed.length > 0) {
+            // The team member is saved; only the files are outstanding. Keep the
+            // form open so the user can retry rather than losing the selection.
+            setSavedId(created.id);
+            setDocuments(failed);
+            setError(
+              `Team member saved, but ${failed.length} document${failed.length === 1 ? "" : "s"} did not upload: ${failed
+                .map((f) => f.name)
+                .join(", ")}. Retry below, or add them later from the Documents module.`
+            );
+            return;
+          }
+        }
+      }
+
       onSuccess();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save the team member. Please check the details and try again.");
@@ -1364,10 +1485,98 @@ function EmployeeForm({
         )}
       </div>
 
-      <div className="mt-4 pt-4 border-t-2 border-neutral-200">
+      {canAttachDocuments && (
+        <section className="mt-4 p-4 rounded-lg bg-wireframe-accent border-2 border-neutral-200">
+          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 mb-1">
+            Documents
+          </h4>
+          <p className="mb-3 text-xs text-neutral-600">
+            Optional. Attach a PDF, Word or Excel file, a scan or a photo — ID copy, contract,
+            PSIRA certificate. Files upload once the team member is saved and appear under
+            Documents. Max 10MB each.
+          </p>
+
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-security border-2 border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-800 transition-colors hover:border-neutral-400 hover:bg-neutral-50">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 4v12m0-12l-4 4m4-4l4 4M4 17v1a3 3 0 003 3h10a3 3 0 003-3v-1"
+              />
+            </svg>
+            Choose files
+            <input
+              type="file"
+              multiple
+              accept={DOCUMENT_ACCEPT}
+              className="sr-only"
+              onChange={(e) => {
+                addDocuments(e.target.files);
+                // Clear the input so re-picking the same file still fires change.
+                e.target.value = "";
+              }}
+            />
+          </label>
+
+          {documentError && (
+            <p className="mt-2 text-xs font-medium text-red-700">{documentError}</p>
+          )}
+
+          {documents.length > 0 && (
+            <ul className="mt-3 flex flex-col gap-2">
+              {documents.map((file, index) => (
+                <li
+                  key={`${file.name}-${file.size}-${index}`}
+                  className="flex items-center gap-3 rounded-security border-2 border-neutral-200 bg-white px-3 py-2"
+                >
+                  <svg
+                    className="h-4 w-4 shrink-0 text-neutral-500"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.8}
+                    viewBox="0 0 24 24"
+                    aria-hidden
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                  <span className="min-w-0 flex-1 truncate text-sm text-neutral-900">{file.name}</span>
+                  <span className="shrink-0 text-xs text-neutral-500">{formatFileSize(file.size)}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeDocument(index)}
+                    aria-label={`Remove ${file.name}`}
+                    className="shrink-0 rounded-full p-1 text-neutral-500 transition-colors hover:bg-red-50 hover:text-red-600"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      <div className="mt-4 flex items-center gap-3 pt-4 border-t-2 border-neutral-200">
         <button type="submit" disabled={submitting} className="btn-primary text-sm py-2">
-          {submitting ? "Saving..." : "Save team member"}
+          {submitting
+            ? savedId
+              ? "Uploading..."
+              : "Saving..."
+            : savedId
+              ? "Retry document upload"
+              : "Save team member"}
         </button>
+        {savedId && (
+          <button type="button" onClick={onSuccess} className="btn-secondary text-sm py-2">
+            Skip and close
+          </button>
+        )}
       </div>
     </form>
   );
@@ -1440,7 +1649,69 @@ function EditModal({
   const [criminalInvestigation, setCriminalInvestigation] = useState<boolean | "">("");
   const [mentallyUnstable, setMentallyUnstable] = useState<boolean | "">("");
   const [trainingCompleted, setTrainingCompleted] = useState<boolean | "">("");
-  const [activeTab, setActiveTab] = useState<"basic" | "labour" | "bank" | "psira">("basic");
+  const [activeTab, setActiveTab] = useState<"basic" | "labour" | "bank" | "psira" | "documents">("basic");
+
+  // Documents tab. The team member already exists here, so files upload as soon
+  // as they are chosen rather than waiting for "Save changes" — the tab shows
+  // what is already on file too.
+  const { user: currentUser } = useAuth();
+  const canViewDocuments = Boolean(currentUser && hasCapability(currentUser, "/documents", "view"));
+  const canUploadDocuments = Boolean(currentUser && hasCapability(currentUser, "/documents", "create"));
+  const canDownloadDocuments = Boolean(currentUser && hasCapability(currentUser, "/documents", "export"));
+  const [docs, setDocs] = useState<ManagedDocument[]>([]);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [docsError, setDocsError] = useState("");
+  const [uploadingDocs, setUploadingDocs] = useState(false);
+
+  const refreshDocuments = useCallback(async () => {
+    if (!canViewDocuments) return;
+    setDocsLoading(true);
+    try {
+      const result = await listDocuments(token, { employeeId, limit: 50 });
+      setDocs(result.items);
+      setDocsError("");
+    } catch (err) {
+      setDocsError(err instanceof Error ? err.message : "Could not load documents");
+    } finally {
+      setDocsLoading(false);
+    }
+  }, [token, employeeId, canViewDocuments]);
+
+  useEffect(() => {
+    if (activeTab === "documents") void refreshDocuments();
+  }, [activeTab, refreshDocuments]);
+
+  const handleDocumentUpload = async (picked: FileList | null) => {
+    if (!picked || picked.length === 0) return;
+    const rejected: string[] = [];
+    const queue: File[] = [];
+    for (const file of Array.from(picked)) {
+      if (!DOCUMENT_MIME_TYPES.includes(file.type)) rejected.push(`${file.name} (unsupported type)`);
+      else if (file.size > DOCUMENT_MAX_BYTES) rejected.push(`${file.name} (over 10MB)`);
+      else queue.push(file);
+    }
+    const failed: string[] = [];
+    if (queue.length > 0) {
+      setUploadingDocs(true);
+      for (const file of queue) {
+        try {
+          await uploadDocument(token, file, {
+            title: file.name.replace(/\.[^.]+$/, ""),
+            documentType: "Team member document",
+            category: "EMPLOYEE",
+            employeeId,
+          });
+        } catch (err) {
+          // Keep the server's reason — "upload failed" alone is undiagnosable.
+          failed.push(`${file.name} (${err instanceof Error ? err.message : "upload failed"})`);
+        }
+      }
+      setUploadingDocs(false);
+      await refreshDocuments();
+    }
+    const problems = [...rejected, ...failed];
+    setDocsError(problems.length > 0 ? `Not uploaded: ${problems.join(", ")}` : "");
+  };
 
   useEffect(() => {
     authFetch(`/employees/${employeeId}`, token)
@@ -1644,22 +1915,127 @@ function EditModal({
             </section>
 
             <div className="flex gap-1 border-b-2 border-neutral-200 overflow-x-auto">
-              {(["basic", "labour", "psira", "bank"] as const).map((tab) => (
+              {(["basic", "labour", "psira", "bank", ...(canViewDocuments ? ["documents" as const] : [])] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
                   onClick={() => setActiveTab(tab)}
                   className={clsx(
-                    "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors -mb-px",
+                    "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors -mb-px whitespace-nowrap",
                       activeTab === tab
                         ? "bg-white text-neutral-800 border-2 border-neutral-200 border-b-transparent"
                       : "text-neutral-600 hover:text-neutral-900"
                   )}
                 >
-                  {tab === "basic" ? "Basic details" : tab === "labour" ? "Employment (BCEA)" : tab === "bank" ? "Bank & tax" : "PSIRA"}
+                  {tab === "basic"
+                    ? "Basic details"
+                    : tab === "labour"
+                      ? "Employment (BCEA)"
+                      : tab === "bank"
+                        ? "Bank & tax"
+                        : tab === "documents"
+                          ? "Documents"
+                          : "PSIRA"}
                 </button>
               ))}
             </div>
+
+            {activeTab === "documents" && (
+            <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-neutral-200">
+              <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 mb-1.5">
+                Documents
+              </h4>
+              <p className="mb-3 text-xs text-neutral-600">
+                PDF, Word, Excel, scans or photos — ID copy, contract, PSIRA certificate. Files
+                upload straight away and appear under Documents. Max 10MB each.
+              </p>
+
+              {canUploadDocuments && (
+                <label
+                  className={clsx(
+                    "inline-flex items-center gap-2 rounded-security border-2 px-3 py-2 text-sm font-medium transition-colors",
+                    uploadingDocs
+                      ? "cursor-wait border-neutral-200 bg-neutral-100 text-neutral-500"
+                      : "cursor-pointer border-neutral-300 bg-white text-neutral-800 hover:border-neutral-400 hover:bg-neutral-50"
+                  )}
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 4v12m0-12l-4 4m4-4l4 4M4 17v1a3 3 0 003 3h10a3 3 0 003-3v-1"
+                    />
+                  </svg>
+                  {uploadingDocs ? "Uploading…" : "Upload files"}
+                  <input
+                    type="file"
+                    multiple
+                    accept={DOCUMENT_ACCEPT}
+                    disabled={uploadingDocs}
+                    className="sr-only"
+                    onChange={(e) => {
+                      void handleDocumentUpload(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              )}
+
+              {docsError && <p className="mt-2 text-xs font-medium text-red-700">{docsError}</p>}
+
+              <div className="mt-3">
+                {docsLoading ? (
+                  <p className="text-sm text-neutral-600">Loading documents…</p>
+                ) : docs.length === 0 ? (
+                  <p className="text-sm text-neutral-600">No documents on file yet.</p>
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {docs.map((doc) => (
+                      <li
+                        key={doc.id}
+                        className="flex items-center gap-3 rounded-security border-2 border-neutral-200 bg-white px-3 py-2"
+                      >
+                        <svg
+                          className="h-4 w-4 shrink-0 text-neutral-500"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={1.8}
+                          viewBox="0 0 24 24"
+                          aria-hidden
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm text-neutral-900">{doc.fileName}</span>
+                          <span className="block text-xs text-neutral-500">
+                            {doc.documentType} · {new Date(doc.createdAt).toLocaleDateString()}
+                            {doc.status !== "ACTIVE" && ` · ${doc.status}`}
+                          </span>
+                        </span>
+                        {canDownloadDocuments && doc.downloadUrl && (
+                          <button
+                            type="button"
+                            className="btn-secondary shrink-0 text-xs py-1.5 px-3"
+                            onClick={() => {
+                              void downloadPrivateFile(token, doc.downloadUrl!, doc.fileName).catch((err) =>
+                                setDocsError(err instanceof Error ? err.message : "Download failed")
+                              );
+                            }}
+                          >
+                            Download
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </section>
+            )}
 
             {activeTab === "basic" && (
             <section>

@@ -110,6 +110,25 @@ export async function documentsRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "No file", message: "Please select a file to upload" });
     }
 
+    // Drain the file before reading `data.fields`. Multipart parts arrive in
+    // order, so any field sent after the file part is only parsed once the file
+    // body has been consumed — validating first would reject a valid request
+    // whose metadata simply trails the file, and would also leave the unread
+    // body stalling the connection. Small files hid this: they arrive in a
+    // single chunk, so the trailing fields are already present.
+    let fileBuffer: Buffer;
+    try {
+      fileBuffer = await readStreamToBuffer(data.file, MAX_FILE_SIZE);
+    } catch (err) {
+      if (err instanceof Error && err.message === "FILE_TOO_LARGE") {
+        return reply.code(400).send({
+          error: "File too large",
+          message: "Maximum file size is 10MB",
+        });
+      }
+      return reply.code(500).send({ error: "Upload failed", message: "Could not read the file" });
+    }
+
     const fields: Record<string, string> = {};
     for (const [key, val] of Object.entries(data.fields)) {
       const f = val as { value?: string } | undefined;
@@ -136,18 +155,6 @@ export async function documentsRoutes(app: FastifyInstance) {
       });
     }
 
-    let fileBuffer: Buffer;
-    try {
-      fileBuffer = await readStreamToBuffer(data.file, MAX_FILE_SIZE);
-    } catch (err) {
-      if (err instanceof Error && err.message === "FILE_TOO_LARGE") {
-        return reply.code(400).send({
-          error: "File too large",
-          message: "Maximum file size is 10MB",
-        });
-      }
-      return reply.code(500).send({ error: "Upload failed", message: "Could not read the file" });
-    }
     if (!matchesMagicBytes(fileBuffer, mimetype)) {
       return reply.code(400).send({
         error: "Invalid file",

@@ -212,10 +212,16 @@ export async function uploadDocument(
   meta: Record<string, string>
 ): Promise<ManagedDocument> {
   const form = new FormData();
-  form.append("file", file);
+  // Metadata MUST be appended before the file. The upload route validates
+  // `data.fields` as soon as `request.file()` resolves, which is before the file
+  // body has been consumed — so any field sent after the file part has not been
+  // parsed yet and the request fails validation. A small file hides this (the
+  // whole payload lands in one chunk, so the trailing fields are already there);
+  // anything big enough to arrive in several chunks fails with a 400.
   for (const [k, v] of Object.entries(meta)) {
     if (v) form.append(k, v);
   }
+  form.append("file", file);
   const csrf =
     typeof document !== "undefined"
       ? document.cookie.match(/(?:^|;\s*)plethora_csrf=([^;]*)/)?.[1]
