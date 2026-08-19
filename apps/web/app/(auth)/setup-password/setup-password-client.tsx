@@ -76,7 +76,9 @@ export default function SetupPasswordClient() {
       <div className="card-elevated p-10 md:p-12">
         <h1 className="text-2xl font-semibold text-security-navy mb-1">Set Your Password</h1>
         <p className="text-sm text-security-navy-600 mb-6">
-          Create your password to activate your account.
+          {/* The same link serves a new-account invite and a password reset, so
+              this has to read correctly for both. */}
+          Choose a password for your account. This link can only be used once.
         </p>
 
         {loading ? (

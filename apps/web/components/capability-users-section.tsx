@@ -2,14 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  approveAccessRequest,
   authFetch,
+  cancelAccessRequest,
   createUser,
+  declineAccessRequest,
   deleteUser,
+  issuePasswordResetLink,
   getCapabilityCatalog,
   getEffectiveAccess,
+  listAccessRequests,
   listUsers,
   transferCompanyOwnership,
   updateUser,
+  type AccessChangeRequest,
   type AccountType,
   type AuthUser,
   type Capability,
@@ -133,6 +139,10 @@ const ACCESS_ACTION_LABELS: Record<string, string> = {
   "user.access.update": "Access changed",
   "user.deactivate": "Account deactivated",
   "user.access.migrated": "Implied access made explicit",
+  "user.access.request": "Change proposed",
+  "user.access.request.approved": "Change approved",
+  "user.access.request.declined": "Change declined",
+  "user.access.request.cancelled": "Change withdrawn",
 };
 
 /** Turns a capability diff into a sentence a manager can read at a glance. */
@@ -329,6 +339,217 @@ function EffectiveAccessPanel({
   );
 }
 
+const KIND_LABELS: Record<AccessChangeRequest["kind"], string> = {
+  CREATE_USER: "New account",
+  UPDATE_ACCESS: "Access change",
+  DEACTIVATE_USER: "Deactivate account",
+};
+
+const STATUS_STYLES: Record<AccessChangeRequest["status"], string> = {
+  PENDING: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200",
+  APPROVED: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200",
+  DECLINED: "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-200",
+  CANCELLED: "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300",
+};
+
+/** The +/− capability chips, matching the access-history list below. */
+function GrantDiff({ diff }: { diff: AccessChangeRequest["diff"] }) {
+  if (!diff.added.length && !diff.removed.length) {
+    return <p className="mt-2 text-xs text-neutral-500">No change to module access.</p>;
+  }
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {diff.added.map((change, index) => (
+        <span
+          key={`a${index}`}
+          className="rounded bg-emerald-50 px-1.5 py-0.5 text-xs text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+        >
+          + {change.label} · {capabilityLabel(change.capability)}
+        </span>
+      ))}
+      {diff.removed.map((change, index) => (
+        <span
+          key={`r${index}`}
+          className="rounded bg-red-50 px-1.5 py-0.5 text-xs text-red-800 dark:bg-red-950/40 dark:text-red-200"
+        >
+          − {change.label} · {capabilityLabel(change.capability)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The owner's review desk. Access managers propose changes; nothing here is in
+ * force until the owner approves it, so the panel leads with the diff.
+ */
+function PendingAccessChanges({
+  requests,
+  canReview,
+  busy,
+  onApprove,
+  onDecline,
+  onCancel,
+}: {
+  requests: AccessChangeRequest[];
+  canReview: boolean;
+  busy: boolean;
+  onApprove: (request: AccessChangeRequest, note: string) => void;
+  onDecline: (request: AccessChangeRequest, note: string) => void;
+  onCancel: (request: AccessChangeRequest) => void;
+}) {
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const pending = requests.filter((request) => request.status === "PENDING");
+  const decided = requests.filter((request) => request.status !== "PENDING").slice(0, 5);
+
+  if (!pending.length && !decided.length) return null;
+
+  return (
+    <section className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="font-semibold text-neutral-900 dark:text-white">
+          Access changes awaiting approval
+          {pending.length > 0 && (
+            <span className="ml-2 rounded-full bg-amber-200 px-2 py-0.5 text-xs font-semibold text-amber-900">
+              {pending.length}
+            </span>
+          )}
+        </h3>
+        <p className="text-xs text-neutral-600 dark:text-neutral-300">
+          {canReview
+            ? "Nothing below is in force until you approve it."
+            : "Your proposals are with the company owner. They are not in force yet."}
+        </p>
+      </div>
+
+      <div className="mt-3 space-y-3">
+        {pending.map((request) => (
+          <article
+            key={request.id}
+            className="rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900"
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <div>
+                <span className="text-sm font-semibold text-neutral-900 dark:text-white">
+                  {KIND_LABELS[request.kind]} · {request.targetLabel}
+                </span>
+                <p className="mt-0.5 text-xs text-neutral-500">
+                  Proposed by {request.requestedBy.name} ·{" "}
+                  {new Date(request.requestedAt).toLocaleString()}
+                </p>
+              </div>
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLES[request.status]}`}
+              >
+                Pending
+              </span>
+            </div>
+
+            {request.kind === "DEACTIVATE_USER" ? (
+              <p className="mt-2 text-xs text-red-700 dark:text-red-300">
+                This would revoke every grant and end all active sessions.
+              </p>
+            ) : (
+              <GrantDiff diff={request.diff} />
+            )}
+
+            {request.profileChanges.length > 0 && (
+              <ul className="mt-2 space-y-0.5 text-xs text-neutral-600 dark:text-neutral-300">
+                {request.profileChanges.map((change) => (
+                  <li key={change.field}>
+                    {change.field}: {String(change.from ?? "—")} → {String(change.to ?? "—")}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {request.requestNote && (
+              <p className="mt-2 rounded bg-neutral-50 px-2 py-1 text-xs italic text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+                {request.requestNote}
+              </p>
+            )}
+
+            {canReview ? (
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  className="input-modern flex-1 text-sm"
+                  placeholder="Note for the requester (optional)"
+                  value={notes[request.id] ?? ""}
+                  onChange={(event) =>
+                    setNotes((current) => ({ ...current, [request.id]: event.target.value }))
+                  }
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    disabled={busy}
+                    onClick={() => onApprove(request, notes[request.id] ?? "")}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-destructive"
+                    disabled={busy}
+                    onClick={() => onDecline(request, notes[request.id] ?? "")}
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={busy}
+                  onClick={() => onCancel(request)}
+                >
+                  Withdraw
+                </button>
+              </div>
+            )}
+          </article>
+        ))}
+        {pending.length === 0 && (
+          <p className="text-sm text-neutral-600 dark:text-neutral-300">
+            Nothing awaiting a decision.
+          </p>
+        )}
+      </div>
+
+      {decided.length > 0 && (
+        <details className="mt-3">
+          <summary className="cursor-pointer text-xs font-semibold text-neutral-700 dark:text-neutral-200">
+            Recently decided ({decided.length})
+          </summary>
+          <ul className="mt-2 space-y-1.5">
+            {decided.map((request) => (
+              <li
+                key={request.id}
+                className="flex flex-wrap items-baseline justify-between gap-2 rounded border border-neutral-200 bg-white px-2.5 py-1.5 text-xs dark:border-neutral-700 dark:bg-neutral-900"
+              >
+                <span className="text-neutral-700 dark:text-neutral-200">
+                  {KIND_LABELS[request.kind]} · {request.targetLabel}
+                </span>
+                <span className="flex items-center gap-2 text-neutral-500">
+                  {request.reviewedBy?.name ?? "—"}
+                  <span
+                    className={`rounded-full px-2 py-0.5 font-semibold ${STATUS_STYLES[request.status]}`}
+                  >
+                    {request.status.toLowerCase()}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </section>
+  );
+}
+
 export function CapabilityUsersSection({
   token,
   currentUser,
@@ -348,11 +569,20 @@ export function CapabilityUsersSection({
   const [addForm, setAddForm] = useState<UserForm>(EMPTY_FORM);
   const [editing, setEditing] = useState<UserListItem | null>(null);
   const [editForm, setEditForm] = useState<UserForm>(EMPTY_FORM);
-  const [setupLink, setSetupLink] = useState<string | null>(null);
+  /** A one-time link (new-account invite or password reset) to hand to someone. */
+  const [issuedLink, setIssuedLink] = useState<
+    { title: string; message: string; url: string } | null
+  >(null);
+  const [copied, setCopied] = useState(false);
   const [transferTarget, setTransferTarget] = useState<UserListItem | null>(null);
   const [ownerPassword, setOwnerPassword] = useState("");
   const [inspecting, setInspecting] = useState<UserListItem | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [requests, setRequests] = useState<AccessChangeRequest[]>([]);
+  const [canReview, setCanReview] = useState(false);
+
+  // The owner applies changes directly; everyone else proposes them.
+  const needsApproval = !currentUser.isOwner;
 
   const exportAccessReview = async () => {
     setExporting(true);
@@ -378,12 +608,15 @@ export function CapabilityUsersSection({
     setLoading(true);
     setError(null);
     try {
-      const [userResult, permissionCatalog] = await Promise.all([
+      const [userResult, permissionCatalog, requestResult] = await Promise.all([
         listUsers(token),
         getCapabilityCatalog(token),
+        listAccessRequests(token),
       ]);
       setUsers(userResult.data);
       setCatalog(permissionCatalog);
+      setRequests(requestResult.data);
+      setCanReview(requestResult.canReview);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Failed to load access settings");
     } finally {
@@ -398,6 +631,16 @@ export function CapabilityUsersSection({
   const activeTransferTargets = useMemo(
     () => users.filter((user) => user.isActive && !user.isOwner),
     [users]
+  );
+  /** Users with a proposal already queued — editing them again would 409. */
+  const pendingByUserId = useMemo(
+    () =>
+      new Set(
+        requests
+          .filter((request) => request.status === "PENDING" && request.targetUserId)
+          .map((request) => request.targetUserId as string)
+      ),
+    [requests]
   );
   const canCreateUsers =
     hasCapability(currentUser, "/settings/access", "create") &&
@@ -441,7 +684,7 @@ export function CapabilityUsersSection({
     setError(null);
     setNotice(null);
     try {
-      const created = await createUser(token, {
+      const result = await createUser(token, {
         name: addForm.name,
         email: addForm.email,
         accountType: addForm.accountType,
@@ -450,10 +693,25 @@ export function CapabilityUsersSection({
         capabilities: addForm.capabilities,
         sendSetupLink: true,
       });
-      setUsers((current) => [created, ...current]);
-      setSetupLink(created.setupLink ?? null);
       setAddForm(EMPTY_FORM);
       setAdding(false);
+      if (result.pending) {
+        setRequests((current) => [result.request, ...current]);
+        setNotice(
+          "Sent to the company owner for approval. The account is not created until they approve it."
+        );
+        return;
+      }
+      setUsers((current) => [result.user, ...current]);
+      setIssuedLink(
+        result.user.setupLink
+          ? {
+              title: "Password setup link",
+              message: `Send this to ${result.user.email}. It expires in 24 hours.`,
+              url: result.user.setupLink,
+            }
+          : null
+      );
       setNotice("User created. Their assigned access applies as soon as they sign in.");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Failed to create user");
@@ -469,7 +727,7 @@ export function CapabilityUsersSection({
     setError(null);
     setNotice(null);
     try {
-      const updated = await updateUser(token, editing.id, {
+      const result = await updateUser(token, editing.id, {
         name: editForm.name,
         email: editForm.email,
         accountType: editForm.accountType,
@@ -477,9 +735,18 @@ export function CapabilityUsersSection({
         isActive: editForm.isActive,
         capabilities: editForm.capabilities,
       });
-      setUsers((current) => current.map((user) => (user.id === updated.id ? updated : user)));
       setEditing(null);
-      if (updated.id === currentUser.id) await refreshUser();
+      if (result.pending) {
+        setRequests((current) => [result.request, ...current]);
+        setNotice(
+          "Sent to the company owner for approval. Nothing changes until they approve it."
+        );
+        return;
+      }
+      setUsers((current) =>
+        current.map((user) => (user.id === result.user.id ? result.user : user))
+      );
+      if (result.user.id === currentUser.id) await refreshUser();
       setNotice("Access updated. The change is effective immediately.");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Failed to update user");
@@ -491,16 +758,23 @@ export function CapabilityUsersSection({
   const deactivateUserAccount = async (user: UserListItem) => {
     if (user.id === currentUser.id || user.isOwner) return;
     const accepted = await confirm({
-      title: "Deactivate user account?",
-      message: `${user.name} will no longer be able to sign in. Their historical company records will be retained.`,
-      confirmLabel: "Deactivate user",
+      title: needsApproval ? "Request deactivation?" : "Deactivate user account?",
+      message: needsApproval
+        ? `${user.name} keeps their access until the company owner approves this. Their historical company records will be retained either way.`
+        : `${user.name} will no longer be able to sign in. Their historical company records will be retained.`,
+      confirmLabel: needsApproval ? "Send for approval" : "Deactivate user",
       danger: true,
     });
     if (!accepted) return;
     setBusy(true);
     setError(null);
     try {
-      await deleteUser(token, user.id);
+      const result = await deleteUser(token, user.id);
+      if (result.pending && result.request) {
+        setRequests((current) => [result.request!, ...current]);
+        setNotice("Sent to the company owner for approval. This account is still active.");
+        return;
+      }
       setUsers((current) =>
         current.map((candidate) =>
           candidate.id === user.id
@@ -511,6 +785,95 @@ export function CapabilityUsersSection({
       setNotice("User deactivated and active sessions revoked.");
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Failed to deactivate user");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Issues a link the person uses to set their own password. Their current
+   * password keeps working until they use it, so nobody is locked out — but any
+   * link issued earlier stops working, which is worth confirming first.
+   */
+  const sendPasswordResetLink = async (user: UserListItem) => {
+    const accepted = await confirm({
+      title: "Create a password reset link?",
+      message: `${user.name} can use the link to set a new password. Their current password keeps working until they do. Any reset link issued to them earlier will stop working.`,
+      confirmLabel: "Create link",
+    });
+    if (!accepted) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await issuePasswordResetLink(token, user.id);
+      setIssuedLink({
+        title: "Password reset link",
+        message: `Send this to ${result.email}. It expires ${new Date(result.expiresAt).toLocaleString()} and can be used once.`,
+        url: result.setupLink,
+      });
+    } catch (resetError) {
+      setError(
+        resetError instanceof Error ? resetError.message : "Failed to create a password reset link"
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Approving is the only place a proposal is applied, so it always reloads:
+   * the target's grants, the request list and possibly the signed-in user's own
+   * access all move at once.
+   */
+  const reviewRequest = async (
+    request: AccessChangeRequest,
+    decision: "approve" | "decline" | "cancel",
+    note: string
+  ) => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      if (decision === "approve") {
+        let result;
+        try {
+          result = await approveAccessRequest(token, request.id, { reviewNote: note || undefined });
+        } catch (approveError) {
+          // The target moved on since the request was raised — make the owner
+          // confirm rather than silently re-granting revoked access.
+          if ((approveError as { code?: string }).code !== "stale") throw approveError;
+          const accepted = await confirm({
+            title: "Access changed since this was requested",
+            message: `${request.targetLabel} was edited after ${request.requestedBy.name} raised this. Applying it now will overwrite the current grants with what was proposed.`,
+            confirmLabel: "Apply anyway",
+            danger: true,
+          });
+          if (!accepted) return;
+          result = await approveAccessRequest(token, request.id, {
+            reviewNote: note || undefined,
+            acknowledgeDrift: true,
+          });
+        }
+        if (result.setupLink) {
+          setIssuedLink({
+            title: "Password setup link",
+            message: `Send this to ${request.targetLabel}. It expires in 24 hours.`,
+            url: result.setupLink,
+          });
+        }
+        setNotice("Approved. The change is now in force.");
+        if (request.targetUserId === currentUser.id) await refreshUser();
+      } else if (decision === "decline") {
+        await declineAccessRequest(token, request.id, note || undefined);
+        setNotice("Declined. Nothing changed.");
+      } else {
+        await cancelAccessRequest(token, request.id);
+        setNotice("Request withdrawn.");
+      }
+      await load();
+    } catch (reviewError) {
+      setError(reviewError instanceof Error ? reviewError.message : "Failed to review the request");
     } finally {
       setBusy(false);
     }
@@ -550,6 +913,9 @@ export function CapabilityUsersSection({
           <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">User access</h2>
           <p className="mt-1 max-w-3xl text-sm text-neutral-500">
             Access is granted per module action. Job titles and account types never grant permissions.
+            {needsApproval
+              ? " Your changes go to the company owner for approval before they take effect."
+              : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -566,23 +932,48 @@ export function CapabilityUsersSection({
 
       {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
       {notice && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</div>}
-      {setupLink && (
+      {issuedLink && (
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-          <p className="font-semibold">Password setup link</p>
-          <p className="mt-1 break-all">{setupLink}</p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold">{issuedLink.title}</p>
+              <p className="mt-0.5 text-xs text-blue-800">{issuedLink.message}</p>
+            </div>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setIssuedLink(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+          <p className="mt-2 break-all font-mono text-xs">{issuedLink.url}</p>
           <button
             type="button"
             className="btn-secondary mt-3"
-            onClick={() => void navigator.clipboard.writeText(setupLink)}
+            onClick={() => {
+              void navigator.clipboard.writeText(issuedLink.url);
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 2000);
+            }}
           >
-            Copy link
+            {copied ? "Copied" : "Copy link"}
           </button>
         </div>
       )}
 
+      <PendingAccessChanges
+        requests={requests}
+        canReview={canReview}
+        busy={busy}
+        onApprove={(request, note) => void reviewRequest(request, "approve", note)}
+        onDecline={(request, note) => void reviewRequest(request, "decline", note)}
+        onCancel={(request) => void reviewRequest(request, "cancel", "")}
+      />
+
       {adding && canCreateUsers && (
         <form onSubmit={submitNewUser} className="space-y-4 rounded-xl border border-neutral-200 p-4 dark:border-neutral-700">
-          <h3 className="font-semibold text-neutral-900 dark:text-white">New user</h3>
+          <h3 className="font-semibold text-neutral-900 dark:text-white">{needsApproval ? "Propose a new user" : "New user"}</h3>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-medium">Name<input required className="input-modern mt-1 w-full" value={addForm.name} onChange={(event) => setAddForm((form) => ({ ...form, name: event.target.value }))} /></label>
             <label className="text-sm font-medium">Email<input required type="email" className="input-modern mt-1 w-full" value={addForm.email} onChange={(event) => setAddForm((form) => ({ ...form, email: event.target.value }))} /></label>
@@ -595,7 +986,7 @@ export function CapabilityUsersSection({
             onChange={(capabilities) => setAddForm((form) => ({ ...form, capabilities }))}
             canToggle={canDelegateCapability}
           />
-          <div className="flex justify-end"><button disabled={busy} className="btn-primary">{busy ? "Creating…" : "Create and generate setup link"}</button></div>
+          <div className="flex justify-end"><button disabled={busy} className="btn-primary">{busy ? "Creating…" : needsApproval ? "Submit for approval" : "Create and generate setup link"}</button></div>
         </form>
       )}
 
@@ -608,6 +999,11 @@ export function CapabilityUsersSection({
                   <h3 className="font-semibold text-neutral-900 dark:text-white">{user.name}</h3>
                   {user.isOwner && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Owner</span>}
                   {!user.isActive && <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600">Inactive</span>}
+                  {pendingByUserId.has(user.id) && (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                      Change pending approval
+                    </span>
+                  )}
                   <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">{user.accountType}</span>
                 </div>
                 <p className="mt-1 text-sm text-neutral-500">{user.email}{user.jobTitle ? ` · ${user.jobTitle}` : ""}</p>
@@ -618,13 +1014,23 @@ export function CapabilityUsersSection({
                   View access
                 </button>
                 {canEditUsers && canManageTarget(user) && (
-                  <button type="button" className="btn-secondary" onClick={() => startEditing(user)}>Edit access</button>
+                  <button type="button" className="btn-secondary" disabled={pendingByUserId.has(user.id)} onClick={() => startEditing(user)}>Edit access</button>
+                )}
+                {canEditUsers && canManageTarget(user) && user.isActive && (
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={busy}
+                    onClick={() => void sendPasswordResetLink(user)}
+                  >
+                    Reset password
+                  </button>
                 )}
                 {currentUser.isOwner && !user.isOwner && user.isActive && (
                   <button type="button" className="btn-secondary" onClick={() => setTransferTarget(user)}>Make owner</button>
                 )}
                 {canDeleteUsers && canManageTarget(user) && !user.isOwner && user.id !== currentUser.id && (
-                  <button type="button" className="btn-destructive" disabled={busy || !user.isActive} onClick={() => void deactivateUserAccount(user)}>Deactivate</button>
+                  <button type="button" className="btn-destructive" disabled={busy || !user.isActive || pendingByUserId.has(user.id)} onClick={() => void deactivateUserAccount(user)}>{needsApproval ? "Request deactivation" : "Deactivate"}</button>
                 )}
               </div>
             </div>
@@ -636,7 +1042,7 @@ export function CapabilityUsersSection({
         <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-900/50 sm:items-center sm:p-4">
           <form onSubmit={saveUser} className="max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl dark:bg-neutral-900 sm:max-w-4xl sm:rounded-2xl">
             <div className="flex items-start justify-between gap-3">
-              <div><h2 className="text-lg font-semibold">Edit {editing.name}</h2><p className="text-sm text-neutral-500">{editing.isOwner ? "The owner has full access now; these assignments take effect if ownership is transferred." : "Changes apply immediately."}</p></div>
+              <div><h2 className="text-lg font-semibold">Edit {editing.name}</h2><p className="text-sm text-neutral-500">{editing.isOwner ? "The owner has full access now; these assignments take effect if ownership is transferred." : needsApproval ? "Changes are sent to the company owner for approval before they take effect." : "Changes apply immediately."}</p></div>
               <button type="button" className="btn-secondary" onClick={() => setEditing(null)}>Close</button>
             </div>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -654,7 +1060,7 @@ export function CapabilityUsersSection({
                 canToggle={canDelegateCapability}
               />
             </div>
-            <div className="mt-5 flex justify-end gap-2"><button type="button" className="btn-secondary" onClick={() => setEditing(null)}>Cancel</button><button disabled={busy} className="btn-primary">{busy ? "Saving…" : "Save changes"}</button></div>
+            <div className="mt-5 flex justify-end gap-2"><button type="button" className="btn-secondary" onClick={() => setEditing(null)}>Cancel</button><button disabled={busy} className="btn-primary">{busy ? "Saving…" : needsApproval ? "Submit for approval" : "Save changes"}</button></div>
           </form>
         </div>
       )}

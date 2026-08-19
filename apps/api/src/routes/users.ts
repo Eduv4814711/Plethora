@@ -1,15 +1,11 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireCapability, requireOwner } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
 import {
   CAPABILITY_CATALOG,
-  diffCapabilities,
-  findUnassignableCapability,
   hasCapability,
-  normalizeCapabilities,
   resolveEffectiveCapabilities,
   validateCapabilities,
   type CapabilityMap,
@@ -18,14 +14,28 @@ import { auditFromRequest } from "../lib/audit.js";
 import { toCsv } from "../lib/csv.js";
 import { findManyUsersForCompany, findUniqueUserListRow } from "../lib/user-access.js";
 import {
-  generatePasswordSetupToken,
-  hashPassword,
-  hashPasswordSetupToken,
-  verifyPassword,
-} from "../services/auth.service.js";
+  applyUserCreate,
+  applyUserDeactivate,
+  applyUserUpdate,
+  checkPasswordResetAllowed,
+  checkUserCreateAllowed,
+  checkUserDeactivateAllowed,
+  checkUserUpdateAllowed,
+  issuePasswordResetToken,
+  loadAccessTarget,
+  type AccessActor,
+  type AccessGuardError,
+  type UserUpdatePayload,
+} from "../services/user-access.service.js";
+import {
+  PendingRequestExistsError,
+  beforeStateOf,
+  submitAccessChangeRequest,
+} from "../services/access-change.service.js";
+import { verifyPassword } from "../services/auth.service.js";
 import { validatePassword, PASSWORD_MIN_LENGTH } from "../lib/password-policy.js";
 import { badRequest } from "../lib/api-response.js";
-import { env } from "../lib/env.js";
+import { buildPasswordSetupLink } from "../lib/setup-link.js";
 
 const capabilitiesSchema = z.record(z.string(), z.array(z.string())).default({});
 const accountTypeSchema = z.enum(["staff", "client"]);
@@ -38,19 +48,20 @@ function parseCapabilities(raw: unknown):
   return validateCapabilities(parsed.data);
 }
 
-function buildPasswordSetupLink(request: FastifyRequest, token: string): string {
-  const configuredWebUrl =
-    env.frontendUrl ?? (env.corsOrigins.length > 0 ? env.corsOrigins[0] : undefined);
-  if (configuredWebUrl) {
-    return `${configuredWebUrl.replace(/\/+$/, "")}/setup-password?token=${encodeURIComponent(token)}`;
-  }
-  const protoRaw = request.headers["x-forwarded-proto"];
-  const hostRaw = request.headers["x-forwarded-host"] ?? request.headers.host;
-  const proto = Array.isArray(protoRaw) ? protoRaw[0] : protoRaw;
-  const host = Array.isArray(hostRaw) ? hostRaw[0] : hostRaw;
-  return proto && host
-    ? `${proto}://${host}/setup-password?token=${encodeURIComponent(token)}`
-    : `http://localhost:3000/setup-password?token=${encodeURIComponent(token)}`;
+/** The request's actor in the shape the access guards expect. */
+function actorOf(request: FastifyRequest): AccessActor {
+  return {
+    id: request.user!.sub,
+    isOwner: Boolean(request.user!.isOwner),
+    isActive: request.user!.isActive !== false,
+    capabilities: request.user!.capabilities,
+  };
+}
+
+function sendGuardError(reply: FastifyReply, guard: AccessGuardError) {
+  return guard.status === 400
+    ? badRequest(reply, guard.message)
+    : reply.code(403).send({ error: "Forbidden", message: guard.message });
 }
 
 const createUserSchema = z.object({
@@ -62,6 +73,8 @@ const createUserSchema = z.object({
   jobTitle: z.string().trim().max(120).nullable().optional(),
   isActive: z.boolean().optional().default(true),
   capabilities: capabilitiesSchema,
+  /** Optional note to the owner, used only when the change needs approval. */
+  requestNote: z.string().trim().max(500).optional(),
 });
 
 const updateUserSchema = z.object({
@@ -71,24 +84,13 @@ const updateUserSchema = z.object({
   jobTitle: z.string().trim().max(120).nullable().optional(),
   isActive: z.boolean().optional(),
   capabilities: capabilitiesSchema.optional(),
+  requestNote: z.string().trim().max(500).optional(),
 });
 
 const transferOwnershipSchema = z.object({
   newOwnerUserId: z.string().min(1),
   currentPassword: z.string().min(1),
 });
-
-const userSelect = {
-  id: true,
-  name: true,
-  email: true,
-  accountType: true,
-  jobTitle: true,
-  isActive: true,
-  companyId: true,
-  capabilities: true,
-  createdAt: true,
-} as const;
 
 export async function usersRoutes(app: FastifyInstance) {
   const viewAccess = [authMiddleware, requireCapability("/settings/access", "view")];
@@ -233,13 +235,10 @@ export async function usersRoutes(app: FastifyInstance) {
     }
     const permissions = parseCapabilities(parsed.data.capabilities);
     if (!permissions.success) return badRequest(reply, permissions.message);
-    const unassignable = findUnassignableCapability(request.user!, permissions.data);
-    if (unassignable) {
-      return reply.code(403).send({
-        error: "Forbidden",
-        message: `You cannot assign ${unassignable.capability} access for ${unassignable.path}`,
-      });
-    }
+    const guard = checkUserCreateAllowed(actorOf(request), permissions.data);
+    if (guard) return sendGuardError(reply, guard);
+
+    const isOwner = Boolean(request.user!.isOwner);
     const inviteMode = parsed.data.sendSetupLink;
     if (!inviteMode && !parsed.data.password) {
       return badRequest(reply, "Password is required when setup link is disabled");
@@ -248,51 +247,73 @@ export async function usersRoutes(app: FastifyInstance) {
       const check = validatePassword(parsed.data.password);
       if (!check.valid) return badRequest(reply, check.message ?? "Password does not meet policy");
     }
+    const email = parsed.data.email.toLowerCase();
 
-    const setupToken = inviteMode ? generatePasswordSetupToken() : null;
-    const passwordHash = parsed.data.password
-      ? await hashPassword(parsed.data.password)
-      : await hashPassword(generatePasswordSetupToken());
-    try {
-      const created = await prisma.$transaction(async (tx) => {
-        const row = await tx.user.create({
-          data: {
-            companyId: request.user!.companyId,
+    if (!isOwner) {
+      // A proposal is stored until the owner decides, so it must never carry a
+      // password: invited accounts set their own once the account exists.
+      if (!inviteMode || parsed.data.password) {
+        return badRequest(
+          reply,
+          "New accounts that need owner approval must use the setup-link invite, not a password"
+        );
+      }
+      const clash = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+      if (clash) {
+        return reply.code(409).send({ error: "Email already registered", message: "This email is already in use." });
+      }
+      try {
+        const pendingRequest = await submitAccessChangeRequest(request, {
+          kind: "CREATE_USER",
+          targetUserId: null,
+          targetLabel: `${parsed.data.name} (${email})`,
+          payload: {
             name: parsed.data.name,
-            email: parsed.data.email.toLowerCase(),
-            passwordHash,
-            passwordSetupRequired: inviteMode,
-            passwordSetupTokenHash: setupToken ? hashPasswordSetupToken(setupToken) : null,
-            passwordSetupTokenExpiresAt: setupToken ? new Date(Date.now() + 24 * 60 * 60 * 1000) : null,
+            email,
             accountType: parsed.data.accountType,
             jobTitle: parsed.data.jobTitle || null,
             isActive: parsed.data.isActive,
             capabilities: permissions.data,
+            sendSetupLink: true,
           },
-          select: userSelect,
+          beforeState: beforeStateOf(null),
+          requestNote: parsed.data.requestNote,
         });
-        await auditFromRequest(
-          request,
-          {
-            action: "user.create",
-            entityType: "user",
-            entityId: row.id,
-            metadata: {
-              targetEmail: row.email,
-              accountType: row.accountType,
-              capabilities: permissions.data,
-              invited: inviteMode,
-              ...diffCapabilities({}, permissions.data),
-            },
+        return reply.code(202).send({ pending: true, request: pendingRequest });
+      } catch (error) {
+        if (error instanceof PendingRequestExistsError) {
+          return reply.code(409).send({
+            error: "Conflict",
+            message: error.message,
+            existingRequestId: error.existingId,
+          });
+        }
+        throw error;
+      }
+    }
+
+    try {
+      const created = await prisma.$transaction(async (tx) =>
+        applyUserCreate(request, tx, {
+          companyId: request.user!.companyId,
+          payload: {
+            name: parsed.data.name,
+            email,
+            accountType: parsed.data.accountType,
+            jobTitle: parsed.data.jobTitle || null,
+            isActive: parsed.data.isActive,
+            capabilities: permissions.data,
+            sendSetupLink: inviteMode,
+            password: parsed.data.password,
           },
-          tx
-        );
-        return row;
-      });
+        })
+      );
       return reply.code(201).send({
-        ...created,
+        ...created.user,
         isOwner: false,
-        ...(setupToken ? { setupLink: buildPasswordSetupLink(request, setupToken) } : {}),
+        ...(created.setupToken
+          ? { setupLink: buildPasswordSetupLink(request, created.setupToken) }
+          : {}),
       });
     } catch (error) {
       if ((error as { code?: string }).code === "P2002") {
@@ -389,14 +410,25 @@ export async function usersRoutes(app: FastifyInstance) {
       capabilities: target.capabilities,
     });
 
-    // Recent access-relevant history for this person, so "what can they do" and
-    // "who gave it to them" are answered in one place.
+    // Recent access-relevant history for this person, so "what can they do",
+    // "who asked for it" and "who allowed it" are answered in one place.
     const history = await prisma.auditLog.findMany({
       where: {
         companyId: request.user!.companyId,
         entityType: "user",
         entityId: id,
-        action: { in: ["user.create", "user.access.update", "user.deactivate", "user.access.migrated"] },
+        action: {
+          in: [
+            "user.create",
+            "user.access.update",
+            "user.deactivate",
+            "user.access.migrated",
+            "user.access.request",
+            "user.access.request.approved",
+            "user.access.request.declined",
+            "user.access.request.cancelled",
+          ],
+        },
       },
       orderBy: { timestamp: "desc" },
       take: 10,
@@ -431,65 +463,15 @@ export async function usersRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten().fieldErrors });
     }
-    const existing = await prisma.user.findFirst({
-      where: { id, companyId: request.user!.companyId },
-      select: { ...userSelect, company: { select: { ownerUserId: true } } },
-    });
+    const existing = await loadAccessTarget(request.user!.companyId, id);
     if (!existing) return reply.code(404).send({ error: "User not found" });
-    const isOwner = existing.company.ownerUserId === id;
-    if (isOwner && request.user!.sub !== id) {
-      return reply.code(403).send({
-        error: "Forbidden",
-        message: "Only the company owner may update the owner account",
-      });
-    }
-    if (isOwner && parsed.data.isActive === false) {
-      return badRequest(reply, "Transfer ownership before deactivating the company owner");
-    }
-    const targetManagesAccess = hasCapability(
-      { capabilities: existing.capabilities, isActive: existing.isActive },
-      "/settings/access",
-      "manage_access"
-    );
-    if (!request.user!.isOwner && targetManagesAccess) {
-      return reply.code(403).send({
-        error: "Forbidden",
-        message: "Only the company owner may update another access manager",
-      });
-    }
-    if (
-      !request.user!.isOwner &&
-      id === request.user!.sub &&
-      parsed.data.capabilities !== undefined
-    ) {
-      return reply.code(403).send({
-        error: "Forbidden",
-        message: "Access managers cannot change their own capabilities",
-      });
-    }
+
     const permissions = parsed.data.capabilities === undefined
       ? null
       : parseCapabilities(parsed.data.capabilities);
     if (permissions && !permissions.success) return badRequest(reply, permissions.message);
-    if (permissions?.success) {
-      const previous = normalizeCapabilities(existing.capabilities);
-      const additions: CapabilityMap = {};
-      for (const [path, capabilities] of Object.entries(permissions.data)) {
-        const newlyGranted = capabilities.filter(
-          (capability) => !(previous[path] ?? []).includes(capability)
-        );
-        if (newlyGranted.length) additions[path] = newlyGranted;
-      }
-      const unassignable = findUnassignableCapability(request.user!, additions);
-      if (unassignable) {
-        return reply.code(403).send({
-          error: "Forbidden",
-          message: `You cannot assign ${unassignable.capability} access for ${unassignable.path}`,
-        });
-      }
-    }
 
-    const updateData: Prisma.UserUpdateInput = {
+    const payload: UserUpdatePayload = {
       ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
       ...(parsed.data.email !== undefined ? { email: parsed.data.email.toLowerCase() } : {}),
       ...(parsed.data.accountType !== undefined ? { accountType: parsed.data.accountType } : {}),
@@ -497,45 +479,61 @@ export async function usersRoutes(app: FastifyInstance) {
       ...(parsed.data.isActive !== undefined ? { isActive: parsed.data.isActive } : {}),
       ...(permissions?.success ? { capabilities: permissions.data } : {}),
     };
-    const updated = await prisma.$transaction(async (tx) => {
-      const row = await tx.user.update({ where: { id }, data: updateData, select: userSelect });
-      if (parsed.data.isActive === false) {
-        await tx.refreshToken.updateMany({
-          where: { userId: id, revokedAt: null },
-          data: { revokedAt: new Date() },
+
+    const guard = checkUserUpdateAllowed(actorOf(request), existing, payload);
+    if (guard) return sendGuardError(reply, guard);
+
+    if (!request.user!.isOwner) {
+      try {
+        const pendingRequest = await submitAccessChangeRequest(request, {
+          kind: "UPDATE_ACCESS",
+          targetUserId: id,
+          targetLabel: existing.email,
+          payload: payload as Record<string, unknown>,
+          beforeState: beforeStateOf(existing),
+          requestNote: parsed.data.requestNote,
         });
+        return reply.code(202).send({ pending: true, request: pendingRequest });
+      } catch (error) {
+        if (error instanceof PendingRequestExistsError) {
+          return reply.code(409).send({
+            error: "Conflict",
+            message: error.message,
+            existingRequestId: error.existingId,
+          });
+        }
+        throw error;
       }
-      await auditFromRequest(
-        request,
-        {
-          action: "user.access.update",
-          entityType: "user",
-          entityId: id,
-          metadata: {
-            targetEmail: row.email,
-            before: {
-              accountType: existing.accountType,
-              jobTitle: existing.jobTitle,
-              isActive: existing.isActive,
-              capabilities: existing.capabilities,
-            },
-            after: {
-              accountType: row.accountType,
-              jobTitle: row.jobTitle,
-              isActive: row.isActive,
-              capabilities: row.capabilities,
-            },
-            // Plain-language view of what actually changed, so the audit page
-            // does not have to diff two JSON blobs to say "granted Payroll · approve".
-            ...diffCapabilities(existing.capabilities, row.capabilities),
-            deactivated: parsed.data.isActive === false ? true : undefined,
-          },
-        },
-        tx
-      );
-      return row;
+    }
+
+    const updated = await prisma.$transaction(async (tx) =>
+      applyUserUpdate(request, tx, { id, existing, payload })
+    );
+    return reply.send({ ...updated, isOwner: existing.isOwner });
+  });
+
+  /**
+   * Hands back a single-use link the person can use to set their own password.
+   * Not an access change, so it applies immediately rather than queueing for the
+   * owner — a locked-out user should not have to wait on an approval.
+   */
+  app.post("/:id/password-reset-link", { preHandler: editAccess }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const existing = await loadAccessTarget(request.user!.companyId, id);
+    if (!existing) return reply.code(404).send({ error: "User not found" });
+
+    const guard = checkPasswordResetAllowed(actorOf(request), existing);
+    if (guard) return sendGuardError(reply, guard);
+
+    const issued = await prisma.$transaction(async (tx) =>
+      issuePasswordResetToken(request, tx, { id, targetEmail: existing.email })
+    );
+
+    return reply.send({
+      email: existing.email,
+      setupLink: buildPasswordSetupLink(request, issued.token),
+      expiresAt: issued.expiresAt,
     });
-    return reply.send({ ...updated, isOwner });
   });
 
   app.post(
@@ -588,60 +586,37 @@ export async function usersRoutes(app: FastifyInstance) {
 
   app.delete("/:id", { preHandler: deleteAccess }, async (request, reply) => {
     const id = (request.params as { id: string }).id;
-    const companyId = request.user!.companyId;
-    const existing = await prisma.user.findFirst({
-      where: { id, companyId },
-      select: {
-        id: true,
-        isActive: true,
-        capabilities: true,
-        company: { select: { ownerUserId: true } },
-      },
-    });
+    const existing = await loadAccessTarget(request.user!.companyId, id);
     if (!existing) return reply.code(404).send({ error: "User not found" });
-    if (existing.company.ownerUserId === id) {
-      return badRequest(reply, "Transfer ownership before deleting the company owner");
-    }
-    if (id === request.user!.sub) return badRequest(reply, "You cannot delete your own account");
-    if (
-      !request.user!.isOwner &&
-      hasCapability(existing, "/settings/access", "manage_access")
-    ) {
-      return reply.code(403).send({
-        error: "Forbidden",
-        message: "Only the company owner may delete another access manager",
-      });
+
+    const guard = checkUserDeactivateAllowed(actorOf(request), existing);
+    if (guard) return sendGuardError(reply, guard);
+
+    if (!request.user!.isOwner) {
+      try {
+        const pendingRequest = await submitAccessChangeRequest(request, {
+          kind: "DEACTIVATE_USER",
+          targetUserId: id,
+          targetLabel: existing.email,
+          payload: {},
+          beforeState: beforeStateOf(existing),
+        });
+        return reply.code(202).send({ pending: true, request: pendingRequest });
+      } catch (error) {
+        if (error instanceof PendingRequestExistsError) {
+          return reply.code(409).send({
+            error: "Conflict",
+            message: error.message,
+            existingRequestId: error.existingId,
+          });
+        }
+        throw error;
+      }
     }
 
-    await prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id },
-        data: {
-          isActive: false,
-          capabilities: {},
-          passwordSetupRequired: false,
-          passwordSetupTokenHash: null,
-          passwordSetupTokenExpiresAt: null,
-        },
-      });
-      await tx.refreshToken.updateMany({
-        where: { userId: id, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-      await auditFromRequest(
-        request,
-        {
-          action: "user.deactivate",
-          entityType: "user",
-          entityId: id,
-          metadata: {
-            previousCapabilities: existing.capabilities,
-            ...diffCapabilities(existing.capabilities, {}),
-          },
-        },
-        tx
-      );
-    });
+    await prisma.$transaction(async (tx) =>
+      applyUserDeactivate(request, tx, { id, existing })
+    );
     return reply.code(204).send();
   });
 }

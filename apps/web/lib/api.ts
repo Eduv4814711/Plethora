@@ -662,6 +662,100 @@ export async function searchTeamMemberCandidates(
   return body.data ?? [];
 }
 
+
+export type AccessChangeKind = "CREATE_USER" | "UPDATE_ACCESS" | "DEACTIVATE_USER";
+export type AccessChangeStatus = "PENDING" | "APPROVED" | "DECLINED" | "CANCELLED";
+
+export interface CapabilityGrantChange {
+  path: string;
+  label: string;
+  capability: Capability;
+}
+
+/** A user-access change proposed by an access manager, awaiting the owner. */
+export interface AccessChangeRequest {
+  id: string;
+  kind: AccessChangeKind;
+  status: AccessChangeStatus;
+  targetUserId: string | null;
+  targetLabel: string;
+  requestNote: string | null;
+  reviewNote: string | null;
+  requestedAt: string;
+  reviewedAt: string | null;
+  requestedBy: { id: string; name: string; email: string };
+  reviewedBy: { id: string; name: string; email: string } | null;
+  targetUser: { id: string; name: string; email: string; isActive: boolean } | null;
+  diff: { added: CapabilityGrantChange[]; removed: CapabilityGrantChange[] };
+  profileChanges: { field: string; from: unknown; to: unknown }[];
+}
+
+export interface AccessChangeRequestList {
+  data: AccessChangeRequest[];
+  pendingCount: number;
+  /** True only for the company owner — the only person who may approve. */
+  canReview: boolean;
+}
+
+/**
+ * An access mutation either applied (the owner) or queued for approval (anyone
+ * else with manage_access). Callers must handle both.
+ */
+export type AccessMutationResult<T> =
+  | { pending: false; user: T }
+  | { pending: true; request: AccessChangeRequest };
+
+export async function listAccessRequests(
+  token: string,
+  status?: AccessChangeStatus
+): Promise<AccessChangeRequestList> {
+  const query = status ? `?status=${status}` : "";
+  const res = await authFetch(`/access-requests${query}`, token);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(apiErrorMessage(err, "Failed to load access change requests"));
+  }
+  return res.json();
+}
+
+async function reviewAccessRequest(
+  token: string,
+  id: string,
+  action: "approve" | "decline" | "cancel",
+  body: { reviewNote?: string; acknowledgeDrift?: boolean } = {}
+): Promise<{ request: AccessChangeRequest; setupLink?: string }> {
+  const res = await authFetch(`/access-requests/${id}/${action}`, token, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const error = new Error(
+      apiErrorMessage(payload, `Failed to ${action} the access change`)
+    ) as Error & { code?: string };
+    // "stale" is recoverable: the caller re-sends with acknowledgeDrift.
+    error.code = (payload as { code?: string }).code;
+    throw error;
+  }
+  return payload;
+}
+
+export function approveAccessRequest(
+  token: string,
+  id: string,
+  options: { reviewNote?: string; acknowledgeDrift?: boolean } = {}
+) {
+  return reviewAccessRequest(token, id, "approve", options);
+}
+
+export function declineAccessRequest(token: string, id: string, reviewNote?: string) {
+  return reviewAccessRequest(token, id, "decline", { reviewNote });
+}
+
+export function cancelAccessRequest(token: string, id: string) {
+  return reviewAccessRequest(token, id, "cancel");
+}
+
 export async function createUser(
   token: string,
   data: {
@@ -673,8 +767,9 @@ export async function createUser(
     jobTitle?: string | null;
     isActive?: boolean;
     capabilities: CapabilityMap;
+    requestNote?: string;
   }
-): Promise<UserListItem> {
+): Promise<AccessMutationResult<UserListItem>> {
   const res = await authFetch("/users", token, {
     method: "POST",
     body: JSON.stringify(data),
@@ -684,7 +779,10 @@ export async function createUser(
     const msg = err?.message?.email?.[0] ?? err?.message ?? "Failed to create user";
     throw new Error(typeof msg === "string" ? msg : "Failed to create user");
   }
-  return res.json();
+  const body = await res.json();
+  // 202 means the change needs the company owner's approval before it applies.
+  if (res.status === 202) return { pending: true, request: body.request };
+  return { pending: false, user: body };
 }
 
 export async function updateUser(
@@ -698,8 +796,9 @@ export async function updateUser(
     jobTitle: string | null;
     isActive: boolean;
     capabilities: CapabilityMap;
+    requestNote: string;
   }>
-): Promise<UserListItem> {
+): Promise<AccessMutationResult<UserListItem>> {
   const res = await authFetch(`/users/${id}`, token, {
     method: "PUT",
     body: JSON.stringify(data),
@@ -708,15 +807,47 @@ export async function updateUser(
     const err = await res.json().catch(() => ({}));
     throw new Error(apiErrorMessage(err, "Failed to update user"));
   }
-  return res.json();
+  const body = await res.json();
+  if (res.status === 202) return { pending: true, request: body.request };
+  return { pending: false, user: body };
 }
 
-export async function deleteUser(token: string, id: string): Promise<void> {
+export async function deleteUser(
+  token: string,
+  id: string
+): Promise<{ pending: boolean; request?: AccessChangeRequest }> {
   const res = await authFetch(`/users/${id}`, token, { method: "DELETE" });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || "Failed to deactivate user");
   }
+  if (res.status === 202) {
+    const body = await res.json();
+    return { pending: true, request: body.request };
+  }
+  return { pending: false };
+}
+
+export interface PasswordResetLink {
+  email: string;
+  setupLink: string;
+  expiresAt: string;
+}
+
+/**
+ * Issues a single-use link the person uses to set their own password. Their
+ * current password keeps working until they use it, so this never locks anyone out.
+ */
+export async function issuePasswordResetLink(
+  token: string,
+  id: string
+): Promise<PasswordResetLink> {
+  const res = await authFetch(`/users/${id}/password-reset-link`, token, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(apiErrorMessage(err, "Failed to create a password reset link"));
+  }
+  return res.json();
 }
 
 export async function transferCompanyOwnership(

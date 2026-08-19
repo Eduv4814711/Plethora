@@ -118,7 +118,16 @@ describeWithDatabase("user capability delegation", () => {
       headers: auth(managerToken),
       payload: { capabilities: { "/employees": ["view"] } },
     });
-    expect(subset.statusCode).toBe(200);
+    // A subset is within the manager's ceiling, so it is accepted — but as a
+    // proposal for the owner, not as a grant. Nothing is in force yet.
+    expect(subset.statusCode).toBe(202);
+    expect(subset.json().pending).toBe(true);
+    const untouched = await prisma.user.findUniqueOrThrow({
+      where: { id: targetId },
+      select: { capabilities: true },
+    });
+    expect(untouched.capabilities).toEqual({});
+    await prisma.accessChangeRequest.deleteMany({ where: { companyId } });
 
     const accessManager = await app.inject({
       method: "PUT",

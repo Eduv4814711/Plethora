@@ -115,6 +115,7 @@ model Company {
   clientPayments         ClientPayment[]
   clientReceipts         ClientReceipt[]
   payrollPeriodReadiness PayrollPeriodReadiness[]
+  accessChangeRequests   AccessChangeRequest[]
 }
 
 model User {
@@ -166,6 +167,11 @@ model User {
   clientQuotesDecided    ClientQuote[]         @relation("ClientQuoteDecidedBy")
   clientPaymentsRecorded ClientPayment[]       @relation("ClientPaymentRecordedBy")
   clientReceiptsIssued   ClientReceipt[]       @relation("ClientReceiptIssuedBy")
+
+  // Access change requests (maker-checker on user access)
+  accessChangesTargeting AccessChangeRequest[] @relation("AccessChangeTarget")
+  accessChangesRequested AccessChangeRequest[] @relation("AccessChangeRequestedBy")
+  accessChangesReviewed  AccessChangeRequest[] @relation("AccessChangeReviewedBy")
 
   @@unique([companyId, id])
   @@index([companyId])
@@ -2796,4 +2802,56 @@ model PayrollPeriodReadiness {
 
   @@unique([companyId, periodStart, periodEnd])
   @@index([companyId, status])
+}
+
+enum AccessChangeStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  CANCELLED
+}
+
+enum AccessChangeKind {
+  CREATE_USER
+  UPDATE_ACCESS
+  DEACTIVATE_USER
+}
+
+/// A user-access change proposed by an access manager and awaiting the company
+/// owner's decision. Nothing recorded here is in force: User.capabilities is only
+/// written when the owner approves.
+model AccessChangeRequest {
+  id        String             @id @default(cuid())
+  companyId String
+  kind      AccessChangeKind
+  status    AccessChangeStatus @default(PENDING)
+
+  /// Null for CREATE_USER — the account does not exist until the change is approved.
+  targetUserId String?
+  /// Name/email snapshot so a decided request still reads correctly later.
+  targetLabel  String
+
+  /// Full proposed state (profile fields + capability map). Applied verbatim on approval.
+  payload     Json
+  /// The target's profile and capabilities at submit time, used to detect drift
+  /// before a stale proposal is applied.
+  beforeState Json
+
+  requestedById String
+  requestedAt   DateTime  @default(now())
+  requestNote   String?
+  reviewedById  String?
+  reviewedAt    DateTime?
+  reviewNote    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  targetUser  User?   @relation("AccessChangeTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  requestedBy User    @relation("AccessChangeRequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
+  reviewedBy  User?   @relation("AccessChangeReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status, requestedAt])
+  @@index([companyId, targetUserId, status])
+  @@index([requestedById, status])
 }

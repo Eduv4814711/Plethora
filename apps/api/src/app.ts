@@ -16,6 +16,7 @@ import { uploadsRoot } from "./lib/uploads-root.js";
 import { registerRequestId } from "./lib/request-id.js";
 import { authRoutes } from "./routes/auth.js";
 import { usersRoutes } from "./routes/users.js";
+import { accessRequestsRoutes } from "./routes/access-requests.js";
 import { companiesRoutes } from "./routes/companies.js";
 import { employeesRoutes } from "./routes/employees.js";
 import { sitesRoutes } from "./routes/sites.js";
@@ -197,6 +198,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(registerWhatsApp);
   await app.register(authRoutes, { prefix: "/auth" });
   await app.register(usersRoutes, { prefix: "/users" });
+  await app.register(accessRequestsRoutes, { prefix: "/access-requests" });
   await app.register(companiesRoutes, { prefix: "/companies" });
   await app.register(employeesRoutes, { prefix: "/employees" });
   await app.register(sitesRoutes, { prefix: "/sites" });
