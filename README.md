@@ -421,6 +421,10 @@ server starts.
 Plethora ERP is deployed on Railway. See `DEPLOYMENT_RAILWAY.md` for production
 deployment instructions and environment variables.
 
+`DEPLOYMENT_AZURE.md` is a research proposal for migrating that deployment to
+Azure (Container Apps + PostgreSQL Flexible Server). It is not provisioned;
+Railway remains production.
+
 ## Additional Documentation
 
 - `docs/PLETHORA-USER-MANUAL.md`
