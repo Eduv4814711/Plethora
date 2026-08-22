@@ -103,13 +103,13 @@ export function ClientMonthEndTab({ clientId, token }: { clientId: string; token
       {notice && <AlertBanner variant="success">{notice}</AlertBanner>}
 
       {loading ? (
-        <div className="h-40 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-700" aria-label="Loading summary" />
+        <div className="h-40 animate-pulse rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700" aria-label="Loading summary" />
       ) : !summary ? (
-        <p className="text-sm text-neutral-600">No summary available for this month.</p>
+        <p className="text-sm text-security-navy-600">No summary available for this month.</p>
       ) : (
         <>
           {summary.warnings.length > 0 && (
-            <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            <div className="rounded-lg border border-security-amber-300 bg-security-amber-50 px-3 py-2 text-sm text-security-amber-900">
               <p className="font-medium">Check before sending</p>
               <ul className="mt-1 list-disc pl-5">
                 {summary.warnings.map((warning) => (
@@ -128,17 +128,17 @@ export function ClientMonthEndTab({ clientId, token }: { clientId: string; token
               ["Overtime", summary.totals.overtimeHours],
               ["Incidents", summary.totals.incidents],
             ].map(([label, value]) => (
-              <div key={String(label)} className="rounded-xl border border-neutral-200 p-3 dark:border-neutral-700">
-                <p className="text-[10px] uppercase tracking-wider text-neutral-500">{label}</p>
-                <p className="text-lg font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">{value}</p>
+              <div key={String(label)} className="rounded-security-lg border border-security-navy-100 p-3 dark:border-security-navy-700">
+                <p className="text-[10px] uppercase tracking-wider text-security-navy-500">{label}</p>
+                <p className="text-lg font-semibold tabular-nums text-security-navy-900 dark:text-security-navy-100">{value}</p>
               </div>
             ))}
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-700">
-            <table className="min-w-full divide-y divide-neutral-200 text-sm dark:divide-neutral-700">
-              <thead className="bg-neutral-50 dark:bg-neutral-900">
-                <tr className="text-left text-[10px] uppercase tracking-wider text-neutral-500">
+          <div className="overflow-x-auto rounded-security-lg border border-security-navy-100 dark:border-security-navy-700">
+            <table className="min-w-full divide-y divide-security-navy-100 text-sm dark:divide-security-navy-700">
+              <thead className="bg-security-navy-50 dark:bg-security-navy-900">
+                <tr className="text-left text-[10px] uppercase tracking-wider text-security-navy-500">
                   <th className="px-3 py-2">Site</th>
                   <th className="px-3 py-2">Timesheet</th>
                   <th className="px-3 py-2 text-right">Rows</th>
@@ -149,16 +149,16 @@ export function ClientMonthEndTab({ clientId, token }: { clientId: string; token
                   {canExport && <th className="px-3 py-2" />}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+              <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
                 {summary.sites.map((site) => (
                   <tr key={site.siteId}>
-                    <td className="px-3 py-2 font-medium text-neutral-900 dark:text-neutral-100">{site.siteName}</td>
+                    <td className="px-3 py-2 font-medium text-security-navy-900 dark:text-security-navy-100">{site.siteName}</td>
                     <td className="px-3 py-2">
                       <span
                         className={
                           isApproved(site.timesheetStatus)
-                            ? "rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700"
-                            : "rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800"
+                            ? "rounded-full bg-security-emerald-50 px-2 py-0.5 text-xs font-medium text-security-emerald-700"
+                            : "rounded-full bg-security-amber-50 px-2 py-0.5 text-xs font-medium text-security-amber-800"
                         }
                       >
                         {site.timesheetStatus}
@@ -201,7 +201,7 @@ export function ClientMonthEndTab({ clientId, token }: { clientId: string; token
                 ))}
                 {summary.sites.length === 0 && (
                   <tr>
-                    <td colSpan={canExport ? 8 : 7} className="px-3 py-8 text-center text-sm text-neutral-600">
+                    <td colSpan={canExport ? 8 : 7} className="px-3 py-8 text-center text-sm text-security-navy-600">
                       No sites linked to this client — attach them on the Sites tab first.
                     </td>
                   </tr>
@@ -213,7 +213,7 @@ export function ClientMonthEndTab({ clientId, token }: { clientId: string; token
           {canExport && summary.sites.length > 0 && (
             <div className="card-dashboard space-y-3 p-4">
               {unapproved.length > 0 && (
-                <label className="flex items-start gap-2 text-sm text-amber-900">
+                <label className="flex items-start gap-2 text-sm text-security-amber-900">
                   <input
                     type="checkbox"
                     checked={includeUnapproved}
@@ -250,7 +250,7 @@ export function ClientMonthEndTab({ clientId, token }: { clientId: string; token
                   Download timesheets (CSV)
                 </button>
               </div>
-              <p className="text-xs text-neutral-500">
+              <p className="text-xs text-security-navy-500">
                 The pack renders one report and one timesheet per site — with several sites this can take
                 a minute.
               </p>
@@ -258,17 +258,17 @@ export function ClientMonthEndTab({ clientId, token }: { clientId: string; token
           )}
 
           <div className="card-dashboard space-y-2 p-4">
-            <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Send it</h2>
-            <p className="text-xs text-neutral-500">
+            <h2 className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">Send it</h2>
+            <p className="text-xs text-security-navy-500">
               Nothing is emailed automatically. Download the pack, then send it to:
             </p>
             {recipients.length === 0 ? (
-              <p className="text-sm text-neutral-600">
+              <p className="text-sm text-security-navy-600">
                 No recipients captured — add them on the Details tab.
               </p>
             ) : (
               <div className="flex flex-wrap items-center gap-2">
-                <code className="rounded bg-neutral-100 px-2 py-1 text-sm dark:bg-neutral-800">
+                <code className="rounded bg-security-navy-50 px-2 py-1 text-sm dark:bg-security-navy-800">
                   {recipients.join(", ")}
                 </code>
                 <button

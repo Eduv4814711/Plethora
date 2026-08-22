@@ -2,18 +2,18 @@ import Link from "next/link";
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-security-navy-50">
-      <div className="flex flex-col items-center gap-8 animate-fade-in">
-        <div className="flex items-center gap-4">
-          <span className="text-6xl font-bold text-security-navy">404</span>
-          <div className="h-14 w-px bg-security-navy-300 shrink-0" aria-hidden />
-          <p className="text-lg font-normal text-security-navy-600">This page could not be found.</p>
-        </div>
-        <Link
-          href="/"
-          className="btn-secondary"
-        >
-          Back to Dashboard
+    <div className="flex min-h-screen items-center justify-center bg-[var(--bg-canvas)] px-6">
+      <div className="w-full max-w-md animate-fade-in">
+        <p className="eyebrow">404</p>
+        {/* An empty screen is an instruction, not an apology: say what happened
+            and hand back the one route that always works. */}
+        <h1 className="page-title mt-2">There is nothing at this address</h1>
+        <p className="mt-3 text-sm leading-relaxed text-security-navy-500">
+          The link may be out of date, or the module may have been renamed. Everything you have access to is on
+          the launcher.
+        </p>
+        <Link href="/" className="btn-primary mt-6 inline-flex no-underline">
+          Go to all modules
         </Link>
       </div>
     </div>

@@ -56,7 +56,7 @@ export default function IncidentDetailPage() {
   };
 
   if (loading) {
-    return <div className="animate-pulse h-48 bg-neutral-200 rounded-lg" />;
+    return <div className="animate-pulse h-48 bg-security-navy-100 rounded-lg" />;
   }
 
   if (!incident) {
@@ -93,29 +93,29 @@ export default function IncidentDetailPage() {
 
       <article className="card-dashboard p-4 space-y-4">
         <div>
-          <h2 className="text-sm font-semibold text-neutral-700">When</h2>
-          <p className="text-neutral-900">{new Date(incident.incidentDateTime).toLocaleString()}</p>
+          <h2 className="text-sm font-semibold text-security-navy-700">When</h2>
+          <p className="text-security-navy-900">{new Date(incident.incidentDateTime).toLocaleString()}</p>
         </div>
         <div>
-          <h2 className="text-sm font-semibold text-neutral-700">Description</h2>
-          <p className="text-neutral-900 whitespace-pre-wrap">{incident.description}</p>
+          <h2 className="text-sm font-semibold text-security-navy-700">Description</h2>
+          <p className="text-security-navy-900 whitespace-pre-wrap">{incident.description}</p>
         </div>
         {incident.peopleInvolved && (
           <div>
-            <h2 className="text-sm font-semibold text-neutral-700">People involved</h2>
-            <p className="text-neutral-900 whitespace-pre-wrap">{incident.peopleInvolved}</p>
+            <h2 className="text-sm font-semibold text-security-navy-700">People involved</h2>
+            <p className="text-security-navy-900 whitespace-pre-wrap">{incident.peopleInvolved}</p>
           </div>
         )}
         {incident.witnesses && (
           <div>
-            <h2 className="text-sm font-semibold text-neutral-700">Witnesses</h2>
-            <p className="text-neutral-900 whitespace-pre-wrap">{incident.witnesses}</p>
+            <h2 className="text-sm font-semibold text-security-navy-700">Witnesses</h2>
+            <p className="text-security-navy-900 whitespace-pre-wrap">{incident.witnesses}</p>
           </div>
         )}
         {incident.reportedBy && (
           <div>
-            <h2 className="text-sm font-semibold text-neutral-700">Reported by</h2>
-            <p className="text-neutral-900">{incident.reportedBy.name}</p>
+            <h2 className="text-sm font-semibold text-security-navy-700">Reported by</h2>
+            <p className="text-security-navy-900">{incident.reportedBy.name}</p>
           </div>
         )}
       </article>

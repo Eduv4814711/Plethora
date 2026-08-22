@@ -110,8 +110,8 @@ export default function IncidentsPage() {
   if (loading) {
     return (
       <div className="animate-pulse space-y-4">
-        <div className="h-8 w-48 bg-neutral-200 rounded-lg" />
-        <div className="h-32 bg-neutral-200 rounded-lg" />
+        <div className="h-8 w-48 bg-security-navy-100 rounded-lg" />
+        <div className="h-32 bg-security-navy-100 rounded-lg" />
       </div>
     );
   }
@@ -214,7 +214,7 @@ export default function IncidentsPage() {
               <label htmlFor="inc-desc" className="label-text block mb-1">What happened? *</label>
               <textarea id="inc-desc" value={formDescription} onChange={(e) => setFormDescription(e.target.value)} className="input-modern w-full" rows={4} required />
             </div>
-            <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-security-navy-700 cursor-pointer">
               <input type="checkbox" checked={formClientVisible} onChange={(e) => setFormClientVisible(e.target.checked)} className="rounded" />
               Visible to client in portal
             </label>
@@ -237,9 +237,9 @@ export default function IncidentsPage() {
           >
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-xs font-mono text-neutral-500">{item.incidentNumber}</p>
-                <h2 className="font-semibold text-neutral-900 truncate">{item.title}</h2>
-                <p className="mt-1 text-sm text-neutral-600">
+                <p className="text-xs font-mono text-security-navy-500">{item.incidentNumber}</p>
+                <h2 className="font-semibold text-security-navy-900 truncate">{item.title}</h2>
+                <p className="mt-1 text-sm text-security-navy-600">
                   {item.site?.name ?? "Unknown site"} · {new Date(item.incidentDateTime).toLocaleString()}
                 </p>
               </div>

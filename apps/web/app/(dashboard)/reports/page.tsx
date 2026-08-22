@@ -24,6 +24,7 @@ import {
   LineChart,
   Line,
 } from "recharts";
+import { CHART_PRIMARY, CHART_SERIES } from "@/lib/chart-theme";
 
 interface ReportsData {
   payrollByStatus: { name: string; value: number }[];
@@ -34,7 +35,7 @@ interface ReportsData {
   hoursBySite: { name: string; hours: number }[];
 }
 
-const COLORS = ["#F57C00", "#f59e0b", "#10b981", "#ef4444", "#64748b", "#92400e"];
+const COLORS = CHART_SERIES;
 
 export default function ReportsPage() {
   const { token, user } = useAuth();
@@ -132,7 +133,7 @@ export default function ReportsPage() {
         <h1 className="page-title mb-6">Reports</h1>
         <div className="animate-pulse grid grid-cols-1 lg:grid-cols-2 gap-6">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="h-80 bg-neutral-200 dark:bg-neutral-700 rounded-lg" />
+            <div key={i} className="h-80 bg-security-navy-100 dark:bg-security-navy-700 rounded-lg" />
           ))}
         </div>
       </div>
@@ -144,12 +145,12 @@ export default function ReportsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <h1 className="page-title">Reports</h1>
-          <p className="text-neutral-600 dark:text-neutral-400 mt-0.5 text-sm">
+          <p className="text-security-navy-600 dark:text-security-navy-400 mt-0.5 text-sm">
             Charts showing your team, shifts, attendance, and payroll over time.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <label htmlFor="reports-period" className="text-sm text-neutral-600 dark:text-neutral-400">Show:</label>
+          <label htmlFor="reports-period" className="text-sm text-security-navy-600 dark:text-security-navy-400">Show:</label>
           <select
             id="reports-period"
             value={payPeriodCount}
@@ -171,8 +172,8 @@ export default function ReportsPage() {
       )}
 
       {canExport && <div className="card-dashboard mb-8 p-5">
-        <h2 className="section-title text-neutral-900 mb-1">Export operational reports</h2>
-        <p className="text-sm text-neutral-600 mb-4">
+        <h2 className="section-title text-security-navy-900 mb-1">Export operational reports</h2>
+        <p className="text-sm text-security-navy-600 mb-4">
           Download attendance, incidents, and performance reports for sharing or records.
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
@@ -252,7 +253,7 @@ export default function ReportsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Payroll by status - Pie */}
         <div className="card-elevated p-6">
-          <h2 className="section-title text-neutral-900 dark:text-neutral-100 mb-4">Payroll Runs by Status</h2>
+          <h2 className="section-title text-security-navy-900 dark:text-security-navy-100 mb-4">Payroll Runs by Status</h2>
           {data?.payrollByStatus?.length ? (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
@@ -277,13 +278,13 @@ export default function ReportsPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-neutral-500 dark:text-neutral-400 py-12 text-center">No payroll runs have been calculated for this period.</p>
+            <p className="text-security-navy-500 dark:text-security-navy-400 py-12 text-center">No payroll runs have been calculated for this period.</p>
           )}
         </div>
 
         {/* Employees by status - Pie */}
         <div className="card-elevated p-6">
-          <h2 className="section-title text-neutral-900 dark:text-neutral-100 mb-4">Team Members by Status</h2>
+          <h2 className="section-title text-security-navy-900 dark:text-security-navy-100 mb-4">Team Members by Status</h2>
           {data?.employeesByStatus?.length ? (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
@@ -308,18 +309,18 @@ export default function ReportsPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-neutral-500 dark:text-neutral-400 py-12 text-center">No team status data is available for this period.</p>
+            <p className="text-security-navy-500 dark:text-security-navy-400 py-12 text-center">No team status data is available for this period.</p>
           )}
         </div>
 
         {/* Shifts over time - Bar */}
         <div className="card-elevated p-6 lg:col-span-2">
-          <h2 className="section-title text-neutral-900 dark:text-neutral-100 mb-4">Shifts Scheduled Over Time</h2>
+          <h2 className="section-title text-security-navy-900 dark:text-security-navy-100 mb-4">Shifts Scheduled Over Time</h2>
           {data?.shiftsOverTime?.length ? (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.shiftsOverTime} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-neutral-200 dark:stroke-neutral-700" />
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-security-navy-200 dark:stroke-security-navy-700" />
                   <XAxis dataKey="month" className="text-xs" stroke="currentColor" />
                   <YAxis className="text-xs" stroke="currentColor" />
                   <Tooltip
@@ -329,23 +330,23 @@ export default function ReportsPage() {
                       borderRadius: "4px",
                     }}
                   />
-                  <Bar dataKey="shifts" fill="#F57C00" name="Shifts" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="shifts" fill={CHART_PRIMARY} name="Shifts" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-neutral-500 dark:text-neutral-400 py-12 text-center">No shifts were scheduled during this period.</p>
+            <p className="text-security-navy-500 dark:text-security-navy-400 py-12 text-center">No shifts were scheduled during this period.</p>
           )}
         </div>
 
         {/* Payroll over time - Line */}
         <div className="card-elevated p-6 lg:col-span-2">
-          <h2 className="section-title text-neutral-900 dark:text-neutral-100 mb-4">Payroll Totals Over Time</h2>
+          <h2 className="section-title text-security-navy-900 dark:text-security-navy-100 mb-4">Payroll Totals Over Time</h2>
           {data?.payrollOverTime?.length ? (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={data.payrollOverTime} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-neutral-200 dark:stroke-neutral-700" />
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-security-navy-200 dark:stroke-security-navy-700" />
                   <XAxis dataKey="month" className="text-xs" stroke="currentColor" />
                   <YAxis className="text-xs" stroke="currentColor" tickFormatter={(v) => `R${(v / 1000).toFixed(0)}k`} />
                   <Tooltip
@@ -357,24 +358,24 @@ export default function ReportsPage() {
                     }}
                   />
                   <Legend />
-                  <Line type="monotone" dataKey="gross" stroke="#F57C00" name="Gross Pay" strokeWidth={2} dot={{ r: 4 }} />
+                  <Line type="monotone" dataKey="gross" stroke={CHART_PRIMARY} name="Gross Pay" strokeWidth={2} dot={{ r: 3 }} />
                   <Line type="monotone" dataKey="net" stroke="#22c55e" name="Net Pay" strokeWidth={2} dot={{ r: 4 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-neutral-500 dark:text-neutral-400 py-12 text-center">No payroll totals are available for this period.</p>
+            <p className="text-security-navy-500 dark:text-security-navy-400 py-12 text-center">No payroll totals are available for this period.</p>
           )}
         </div>
 
         {/* Shifts by status - Bar */}
         <div className="card-elevated p-6">
-          <h2 className="section-title text-neutral-900 dark:text-neutral-100 mb-4">Shifts by Status</h2>
+          <h2 className="section-title text-security-navy-900 dark:text-security-navy-100 mb-4">Shifts by Status</h2>
           {data?.shiftsByStatus?.length ? (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.shiftsByStatus} layout="vertical" margin={{ top: 5, right: 30, left: 80, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-neutral-200 dark:stroke-neutral-700" />
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-security-navy-200 dark:stroke-security-navy-700" />
                   <XAxis type="number" className="text-xs" stroke="currentColor" />
                   <YAxis type="category" dataKey="name" width={70} className="text-xs" stroke="currentColor" />
                   <Tooltip
@@ -384,23 +385,23 @@ export default function ReportsPage() {
                       borderRadius: "4px",
                     }}
                   />
-                  <Bar dataKey="value" fill="#F57C00" name="Shifts" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="value" fill={CHART_PRIMARY} name="Shifts" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-neutral-500 dark:text-neutral-400 py-12 text-center">No site hour totals are available for this period.</p>
+            <p className="text-security-navy-500 dark:text-security-navy-400 py-12 text-center">No site hour totals are available for this period.</p>
           )}
         </div>
 
         {/* Hours by site - Bar */}
         <div className="card-elevated p-6">
-          <h2 className="section-title text-neutral-900 dark:text-neutral-100 mb-4">Hours Worked by Site (Top 10)</h2>
+          <h2 className="section-title text-security-navy-900 dark:text-security-navy-100 mb-4">Hours Worked by Site (Top 10)</h2>
           {data?.hoursBySite?.length ? (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.hoursBySite} layout="vertical" margin={{ top: 5, right: 30, left: 80, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-neutral-200 dark:stroke-neutral-700" />
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-security-navy-200 dark:stroke-security-navy-700" />
                   <XAxis type="number" className="text-xs" stroke="currentColor" />
                   <YAxis type="category" dataKey="name" width={70} className="text-xs" stroke="currentColor" tick={{ fontSize: 10 }} />
                   <Tooltip
@@ -416,7 +417,7 @@ export default function ReportsPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-neutral-500 dark:text-neutral-400 py-12 text-center">No attendance trend data is available for this period.</p>
+            <p className="text-security-navy-500 dark:text-security-navy-400 py-12 text-center">No attendance trend data is available for this period.</p>
           )}
         </div>
       </div>

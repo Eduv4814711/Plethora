@@ -68,7 +68,7 @@ export function SiteTimesheetTable({
 }) {
   return (
     <div className="hidden xl:block">
-      <div className="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-700">
+      <div className="overflow-x-auto rounded-lg border border-security-navy-100 dark:border-security-navy-700">
         <table className="site-timesheet-table w-full table-fixed text-left text-[11px]">
           <colgroup>
             <col className="w-[7%]" />
@@ -82,7 +82,7 @@ export function SiteTimesheetTable({
             <col className="w-[8%]" />
             <col className="w-[7%]" />
           </colgroup>
-          <thead className="bg-neutral-100 text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">
+          <thead className="bg-security-navy-50 text-security-navy-600 dark:bg-security-navy-900 dark:text-security-navy-300">
             <tr>
               {COLUMNS.map((column) => (
                 <th key={column} className="px-2 py-1.5 font-semibold">
@@ -91,15 +91,15 @@ export function SiteTimesheetTable({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+          <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
             {rows.map((row) => {
               const rowSurfaceClass = isRowFullyReviewed(row.approvalStatus)
-                ? "bg-emerald-50/40 dark:bg-emerald-950/15"
+                ? "bg-security-emerald-50/40 dark:bg-security-emerald-700/15"
                 : row.approvalStatus === "partially_reviewed"
-                  ? "bg-amber-50/50 dark:bg-amber-950/20"
+                  ? "bg-security-amber-50/50 dark:bg-security-amber-950/20"
                   : row.discrepancyCodes.length
-                    ? "bg-amber-50/60 dark:bg-amber-950/20"
-                    : "bg-white dark:bg-neutral-950";
+                    ? "bg-security-amber-50/60 dark:bg-security-amber-950/20"
+                    : "bg-white dark:bg-security-navy-900";
               const cellClass = `px-2 py-1.5 align-top ${rowSurfaceClass}`;
               const guardChanged =
                 !!row.actualGuardId && !!row.plannedGuardId && row.actualGuardId !== row.plannedGuardId;
@@ -113,13 +113,13 @@ export function SiteTimesheetTable({
                   <td className={`${cellClass} font-medium leading-tight`}>
                     {row.workDate}
                     <br />
-                    <span className="text-neutral-500">{row.dayOfWeek}</span>
+                    <span className="text-security-navy-500">{row.dayOfWeek}</span>
                   </td>
                   <td className={cellClass}>
                     {!row.plannedGuardName ? (
-                      <p className="mb-1 text-[10px] font-medium text-amber-700">Unrostered</p>
+                      <p className="mb-1 text-[10px] font-medium text-security-amber-700">Unrostered</p>
                     ) : guardChanged ? (
-                      <p className="mb-1 text-[10px] leading-tight text-neutral-500">
+                      <p className="mb-1 text-[10px] leading-tight text-security-navy-500">
                         Scheduled: {row.plannedGuardName}
                         {row.employeeNumber || row.psiraRegistrationNumber
                           ? ` (${row.employeeNumber ?? row.psiraRegistrationNumber})`
@@ -140,7 +140,7 @@ export function SiteTimesheetTable({
                     />
                   </td>
                   <td className={cellClass}>
-                    <p className="mb-0.5 text-[10px] leading-tight text-neutral-500">
+                    <p className="mb-0.5 text-[10px] leading-tight text-security-navy-500">
                       Plan: {humanizeCode(row.plannedShiftType ?? row.plannedShiftCode)}
                     </p>
                     <select
@@ -176,7 +176,7 @@ export function SiteTimesheetTable({
                         className="input-compact w-[4.25rem] !px-1 !py-1 text-[11px]"
                         title="Start time"
                       />
-                      <span className="text-neutral-400">/</span>
+                      <span className="text-security-navy-400">/</span>
                       <ShiftTimeSelect
                         value={displayShiftTime(row.clockOut, rowShiftType(row), "end")}
                         disabled={readOnly || savingRowId === row.id}
@@ -196,7 +196,7 @@ export function SiteTimesheetTable({
                   </td>
                   <td className={cellClass}>
                     <span
-                      className="font-medium text-neutral-800 dark:text-neutral-200"
+                      className="font-medium text-security-navy-900 dark:text-security-navy-200"
                       title="Set automatically when you confirm this attendance entry"
                     >
                       {formatAttendanceStatus(row.attendanceStatus)}
@@ -208,13 +208,13 @@ export function SiteTimesheetTable({
                         row.discrepancyCodes.map((code) => (
                           <span
                             key={code}
-                            className="rounded-full border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium leading-tight text-amber-800"
+                            className="rounded-full border border-security-amber-200 bg-security-amber-100 px-1.5 py-0.5 text-[9px] font-medium leading-tight text-security-amber-800"
                           >
                             {humanizeCode(code)}
                           </span>
                         ))
                       ) : (
-                        <span className="text-neutral-400">None</span>
+                        <span className="text-security-navy-400">None</span>
                       )}
                     </div>
                   </td>
@@ -231,7 +231,7 @@ export function SiteTimesheetTable({
                   <td className={cellClass}>
                     {readOnly || row.approvalStatus === "approved" || dutyOnLocked ? (
                       <span
-                        className="font-medium text-neutral-800 dark:text-neutral-200"
+                        className="font-medium text-security-navy-900 dark:text-security-navy-200"
                         title={
                           dutyOnLocked
                             ? "Duty ON OB is locked. Attendance approval access is required to change it."
@@ -258,7 +258,7 @@ export function SiteTimesheetTable({
                   <td className={cellClass}>
                     {readOnly || row.approvalStatus === "approved" || dutyOffLocked ? (
                       <span
-                        className="font-medium text-neutral-800 dark:text-neutral-200"
+                        className="font-medium text-security-navy-900 dark:text-security-navy-200"
                         title={
                           dutyOffLocked
                             ? "Duty OFF OB is locked. Attendance approval access is required to change it."
@@ -284,23 +284,23 @@ export function SiteTimesheetTable({
                   </td>
                   <td className={cellClass}>
                     {row.approvalStatus === "approved" || locked ? (
-                      <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                      <span className="inline-flex items-center rounded-full border border-security-emerald-200 bg-security-emerald-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-security-emerald-700 dark:border-security-emerald-700 dark:bg-security-emerald-700/40 dark:text-security-emerald-300">
                         Approved
                       </span>
                     ) : !canEdit ? (
-                      <span className="inline-flex items-center rounded-full border border-neutral-200 bg-neutral-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-neutral-600">
+                      <span className="inline-flex items-center rounded-full border border-security-navy-100 bg-security-navy-50 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-security-navy-600">
                         {formatAttendanceStatus(row.approvalStatus)}
                       </span>
                     ) : row.approvalStatus === "reviewed" ? (
                       <div className="flex flex-col gap-0.5">
-                        <span className="inline-flex w-fit items-center rounded-full border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                        <span className="inline-flex w-fit items-center rounded-full border border-security-emerald-200 bg-security-emerald-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-security-emerald-700 dark:border-security-emerald-700 dark:bg-security-emerald-700/40 dark:text-security-emerald-300">
                           Confirmed
                         </span>
                         <button
                           type="button"
                           disabled={savingRowId === row.id}
                           onClick={() => onReopen(row)}
-                          className="text-left text-[9px] text-neutral-500 underline-offset-2 hover:text-neutral-700 hover:underline dark:hover:text-neutral-300"
+                          className="text-left text-[9px] text-security-navy-500 underline-offset-2 hover:text-security-navy-700 hover:underline dark:hover:text-security-navy-300"
                         >
                           Reopen
                         </button>

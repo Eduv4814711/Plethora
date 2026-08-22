@@ -46,11 +46,11 @@ export function SiteTimesheetRelieverForm({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-slate-900/45 p-4"
+      className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-security-navy-900/45 p-4"
       role="presentation"
     >
       <div
-        className="my-auto w-full max-w-4xl rounded-xl border border-neutral-200 bg-white p-4 shadow-xl dark:border-neutral-700 dark:bg-neutral-950"
+        className="my-auto w-full max-w-4xl rounded-security-lg border border-security-navy-100 bg-white p-4 shadow-xl dark:border-security-navy-700 dark:bg-security-navy-900"
         role="dialog"
         aria-modal="true"
         aria-labelledby="add-reliever-title"
@@ -59,11 +59,11 @@ export function SiteTimesheetRelieverForm({
           <div>
             <h2
               id="add-reliever-title"
-              className="text-lg font-semibold text-neutral-900 dark:text-neutral-100"
+              className="text-lg font-semibold text-security-navy-900 dark:text-security-navy-100"
             >
               Add a reliever
             </h2>
-            <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+            <p className="mt-1 text-sm text-security-navy-500 dark:text-security-navy-400">
               Use this only when someone worked but was not already listed for the day.
             </p>
           </div>
@@ -76,9 +76,9 @@ export function SiteTimesheetRelieverForm({
             Close
           </button>
         </div>
-        <div className="grid gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3 text-sm dark:border-neutral-700 dark:bg-neutral-900 sm:grid-cols-2 lg:grid-cols-7">
+        <div className="grid gap-3 rounded-lg border border-security-navy-100 bg-security-navy-50 p-3 text-sm dark:border-security-navy-700 dark:bg-security-navy-900 sm:grid-cols-2 lg:grid-cols-7">
           <div>
-            <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
               Date
             </label>
             <input
@@ -92,8 +92,8 @@ export function SiteTimesheetRelieverForm({
             />
           </div>
           <div className="sm:col-span-2">
-            <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
-              Guard <span className="text-amber-600">*</span>
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
+              Guard <span className="text-security-amber-600">*</span>
             </label>
             <GuardSearchPicker
               guards={guardOptions}
@@ -104,13 +104,13 @@ export function SiteTimesheetRelieverForm({
               allowClear={false}
             />
             {!newRow.actualGuardId && (
-              <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+              <p className="mt-1 text-xs text-security-amber-700 dark:text-security-amber-400">
                 Select who worked — required before you can add them to the timesheet.
               </p>
             )}
           </div>
           <div>
-            <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
               Shift
             </label>
             <select
@@ -129,8 +129,8 @@ export function SiteTimesheetRelieverForm({
             </select>
           </div>
           <div>
-            <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
-              Duty ON OB <span className="text-amber-600">*</span>
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
+              Duty ON OB <span className="text-security-amber-600">*</span>
             </label>
             <input
               value={newRow.dutyOnObNumber}
@@ -144,13 +144,13 @@ export function SiteTimesheetRelieverForm({
               aria-required="true"
             />
             {!newRow.dutyOnObNumber.trim() && (
-              <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+              <p className="mt-1 text-xs text-security-amber-700 dark:text-security-amber-400">
                 Duty ON OB is required before adding a reliever.
               </p>
             )}
           </div>
           <div>
-            <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
               Duty OFF OB
             </label>
             <input

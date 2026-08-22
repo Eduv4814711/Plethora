@@ -174,7 +174,7 @@ export default function AcademyIntakePage() {
 
   const stepClass = (n: Step) =>
     `flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
-      step >= n ? "bg-security-navy text-white" : "bg-neutral-200 text-neutral-500"
+      step >= n ? "bg-security-navy text-white" : "bg-security-navy-100 text-security-navy-500"
     }`;
 
   return (
@@ -184,7 +184,7 @@ export default function AcademyIntakePage() {
           ← Academy
         </Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">New student intake</h1>
-        <p className="mt-1 text-sm text-neutral-600">
+        <p className="mt-1 text-sm text-security-navy-600">
           Capture details, record the admin fee, then enrol into available course runs.
         </p>
       </div>
@@ -192,17 +192,17 @@ export default function AcademyIntakePage() {
       <ol className="flex flex-wrap items-center gap-3 text-sm">
         <li className="flex items-center gap-2">
           <span className={stepClass(1)}>1</span>
-          <span className={step === 1 ? "font-medium" : "text-neutral-600"}>Details</span>
+          <span className={step === 1 ? "font-medium" : "text-security-navy-600"}>Details</span>
         </li>
-        <span className="text-black/30">→</span>
+        <span className="text-security-navy-900/30">→</span>
         <li className="flex items-center gap-2">
           <span className={stepClass(2)}>2</span>
-          <span className={step === 2 ? "font-medium" : "text-neutral-600"}>Admin fee</span>
+          <span className={step === 2 ? "font-medium" : "text-security-navy-600"}>Admin fee</span>
         </li>
-        <span className="text-black/30">→</span>
+        <span className="text-security-navy-900/30">→</span>
         <li className="flex items-center gap-2">
           <span className={stepClass(3)}>3</span>
-          <span className={step === 3 ? "font-medium" : "text-neutral-600"}>Enrol</span>
+          <span className={step === 3 ? "font-medium" : "text-security-navy-600"}>Enrol</span>
         </li>
       </ol>
 
@@ -211,7 +211,7 @@ export default function AcademyIntakePage() {
       )}
 
       {step === 1 && canCreate && (
-        <form onSubmit={submitProfile} className="space-y-4 rounded-lg border border-neutral-300 bg-white p-5 shadow-sm">
+        <form onSubmit={submitProfile} className="space-y-4 rounded-lg border border-security-navy-200 bg-white p-5 shadow-security-card">
           <h2 className="text-lg font-medium">Personal details</h2>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="First name *" value={firstName} onChange={setFirstName} required />
@@ -249,7 +249,7 @@ export default function AcademyIntakePage() {
       )}
 
       {step === 2 && studentId && !canEdit && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <div className="rounded-lg border border-security-amber-200 bg-security-amber-50 p-4 text-sm text-security-amber-900">
           Your account can create the student but cannot record or waive the admin fee. Ask a user with Academy edit access to continue from the student profile.
           <Link href={`/academy/students/${studentId}`} className="ml-2 font-semibold underline">Open profile</Link>
         </div>
@@ -257,7 +257,7 @@ export default function AcademyIntakePage() {
 
       {step === 2 && studentId && canEdit && (
         <div className="space-y-6">
-          <div className="rounded-lg border border-neutral-300 bg-white p-5 shadow-sm">
+          <div className="rounded-lg border border-security-navy-200 bg-white p-5 shadow-security-card">
             <h2 className="text-lg font-medium">Record admin fee (paid)</h2>
             <form onSubmit={recordPaid} className="mt-3 grid gap-3 sm:grid-cols-2">
               <Field label="Amount *" value={feeAmount} onChange={setFeeAmount} placeholder="e.g. 350" required />
@@ -278,9 +278,9 @@ export default function AcademyIntakePage() {
               </div>
             </form>
           </div>
-          <div className="rounded-lg border border-neutral-300 bg-white p-5 shadow-sm">
+          <div className="rounded-lg border border-security-navy-200 bg-white p-5 shadow-security-card">
             <h2 className="text-lg font-medium">Or waive the admin fee</h2>
-            <p className="mt-1 text-xs text-neutral-500">A short reason is required for audit.</p>
+            <p className="mt-1 text-xs text-security-navy-500">A short reason is required for audit.</p>
             <form onSubmit={recordWaived} className="mt-3 space-y-3">
               <div>
                 <label className="label-text mb-1 block">Reason *</label>
@@ -300,15 +300,15 @@ export default function AcademyIntakePage() {
       )}
 
       {step === 3 && studentId && canCreate && (
-        <div className="rounded-lg border border-neutral-300 bg-white p-5 shadow-sm">
+        <div className="rounded-lg border border-security-navy-200 bg-white p-5 shadow-security-card">
           <h2 className="text-lg font-medium">Enrol in course runs</h2>
-          <p className="mt-1 text-sm text-neutral-600">
+          <p className="mt-1 text-sm text-security-navy-600">
             Only runs that are open for intake and have capacity are listed.
           </p>
           {loadingRuns ? (
-            <p className="mt-4 text-sm text-neutral-500">Loading runs…</p>
+            <p className="mt-4 text-sm text-security-navy-500">Loading runs…</p>
           ) : runs.length === 0 ? (
-            <p className="mt-4 text-sm text-amber-800">
+            <p className="mt-4 text-sm text-security-amber-800">
               No enrolable course runs right now. Create a run with status planned or open and available seats, then
               return to this student&apos;s profile to enrol.
             </p>
@@ -318,14 +318,14 @@ export default function AcademyIntakePage() {
                 const checked = selectedRunIds.has(r.id);
                 return (
                   <li key={r.id}>
-                    <label className="flex cursor-pointer gap-3 rounded-md border border-neutral-200 p-3 hover:bg-neutral-100/40">
-                      <input type="checkbox" className="h-4 w-4 rounded border-neutral-300 text-security-navy-600 focus:ring-security-navy-500 mt-0.5" checked={checked} onChange={() => toggleRun(r.id)} />
+                    <label className="flex cursor-pointer gap-3 rounded-md border border-security-navy-100 p-3 hover:bg-security-navy-50/40">
+                      <input type="checkbox" className="h-4 w-4 rounded border-security-navy-200 text-security-navy-600 focus:ring-security-navy-500 mt-0.5" checked={checked} onChange={() => toggleRun(r.id)} />
                       <span className="min-w-0 flex-1 text-sm">
                         <span className="font-mono text-xs font-semibold">{r.runCode}</span>
-                        <span className="ml-2 text-neutral-700">
+                        <span className="ml-2 text-security-navy-700">
                           {r.course.code} — {r.course.title}
                         </span>
-                        <span className="mt-0.5 block text-xs text-neutral-500">
+                        <span className="mt-0.5 block text-xs text-security-navy-500">
                           {r.branch.name} · {formatDate(r.startDate)} – {formatDate(r.endDate)} · {r.status} ·{" "}
                           {seatsLeft(r)}
                         </span>

@@ -31,7 +31,7 @@ export function ConversationView({
 
   if (isLoading && messages.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-neutral-500 text-sm">
+      <div className="flex-1 flex items-center justify-center text-security-navy-500 text-sm">
         Loading messages...
       </div>
     );
@@ -39,7 +39,7 @@ export function ConversationView({
 
   if (messages.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-neutral-500 text-sm p-4">
+      <div className="flex-1 flex items-center justify-center text-security-navy-500 text-sm p-4">
         No messages yet. Send a message to start the conversation.
       </div>
     );
@@ -56,7 +56,7 @@ export function ConversationView({
             className={`max-w-[80%] rounded-security px-3 py-2 ${
               m.direction === "outbound"
                 ? "bg-security-navy-700 text-white"
-                : "bg-neutral-100 text-black"
+                : "bg-security-navy-50 text-security-navy-900"
             }`}
           >
             <p className="text-sm whitespace-pre-wrap break-words">{m.text ?? ""}</p>

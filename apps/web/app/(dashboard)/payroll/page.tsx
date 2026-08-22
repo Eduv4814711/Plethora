@@ -100,7 +100,7 @@ function SarsExportsDropdown({ token }: { token: string }) {
         </svg>
       </Button>
       {open && (
-        <div className="absolute right-0 mt-1 w-72 p-3 bg-white border border-neutral-200 rounded-security-lg shadow-security-elevated z-20">
+        <div className="absolute right-0 mt-1 w-72 p-3 bg-white border border-security-navy-100 rounded-security-lg shadow-security-elevated z-20">
           <p className="text-xs text-security-navy-600 mb-3">Export for SARS eFiling</p>
           <div className="space-y-3">
             <div>
@@ -213,7 +213,7 @@ function workflowStepClass(highlight?: "amber" | "emerald") {
   if (highlight === "emerald") {
     return "border-security-emerald-300 bg-security-emerald-50 text-security-emerald-800";
   }
-  return "border-neutral-200 bg-white text-security-navy";
+  return "border-security-navy-100 bg-white text-security-navy";
 }
 
 export default function PayrollPage() {
@@ -368,17 +368,17 @@ export default function PayrollPage() {
 
       {/* Payroll workflow */}
       <section className="card-wireframe overflow-hidden" aria-label="Payroll workflow steps">
-        <div className="border-b border-neutral-200 px-5 py-4 sm:px-6">
+        <div className="border-b border-security-navy-100 px-5 py-4 sm:px-6">
           <p className="section-title mb-1">Process guide</p>
-          <h2 className="text-base font-semibold text-black">Payroll workflow</h2>
-          <p className="mt-1 max-w-2xl text-sm text-neutral-600">
+          <h2 className="text-base font-semibold text-security-navy-900">Payroll workflow</h2>
+          <p className="mt-1 max-w-2xl text-sm text-security-navy-600">
             Follow these stages in order for every period: capture guard attendance, create the run, calculate pay and statutory amounts, approve, then mark as paid. Office staff are paid a fixed monthly salary and do not need attendance.
           </p>
         </div>
 
         <div className="px-5 py-5 sm:px-6">
           <div className="relative hidden md:block">
-            <div className="absolute left-[10%] right-[10%] top-5 h-px bg-neutral-200" aria-hidden />
+            <div className="absolute left-[10%] right-[10%] top-5 h-px bg-security-navy-100" aria-hidden />
             <ol className="relative grid grid-cols-5 gap-2">
               {PAYROLL_WORKFLOW_STEPS.map((s) => (
                 <li key={s.step} className="flex flex-col items-center text-center">
@@ -391,14 +391,14 @@ export default function PayrollPage() {
                     {s.step}
                   </div>
                   <p className="mt-3 text-xs font-semibold text-security-navy">{s.title}</p>
-                  <p className="mt-1 max-w-[9rem] text-[11px] leading-snug text-neutral-600">{s.caption}</p>
+                  <p className="mt-1 max-w-[9rem] text-[11px] leading-snug text-security-navy-600">{s.caption}</p>
                 </li>
               ))}
             </ol>
           </div>
 
           <div className="relative md:hidden">
-            <div className="absolute left-[19px] top-3 bottom-3 w-px bg-neutral-200" aria-hidden />
+            <div className="absolute left-[19px] top-3 bottom-3 w-px bg-security-navy-100" aria-hidden />
             <ol className="relative m-0 list-none space-y-0 p-0">
               {PAYROLL_WORKFLOW_STEPS.map((s) => (
                 <li key={s.step} className="relative flex gap-4 pb-6 last:pb-0">
@@ -412,7 +412,7 @@ export default function PayrollPage() {
                   </div>
                   <div className="min-w-0 pt-1">
                     <p className="text-sm font-semibold text-security-navy">{s.title}</p>
-                    <p className="mt-0.5 text-xs leading-relaxed text-neutral-600">{s.caption}</p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-security-navy-600">{s.caption}</p>
                   </div>
                 </li>
               ))}
@@ -448,9 +448,9 @@ export default function PayrollPage() {
               {metricsLoading ? (
                 <SkeletonBlock className="mt-2 h-8 w-16" />
               ) : (
-                <p className="mt-1 text-2xl font-bold text-black">{metrics.pendingApprovals}</p>
+                <p className="mt-1 text-2xl font-bold text-security-navy-900">{metrics.pendingApprovals}</p>
               )}
-              <p className="mt-0.5 text-xs text-neutral-600">Runs awaiting approval</p>
+              <p className="mt-0.5 text-xs text-security-navy-600">Runs awaiting approval</p>
             </div>
             <div className="w-10 h-10 rounded-security-lg bg-security-amber-100 flex items-center justify-center">
               <svg className="w-5 h-5 text-security-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -467,11 +467,11 @@ export default function PayrollPage() {
               {metricsLoading ? (
                 <SkeletonBlock className="mt-2 h-8 w-24" />
               ) : metrics.reserve && metrics.reserve.periodsUsed > 0 ? (
-                <p className="mt-1 font-mono text-xl font-bold text-black">{formatCurrency(metrics.reserve.oneMonthReserve)}</p>
+                <p className="mt-1 font-mono text-xl font-bold text-security-navy-900">{formatCurrency(metrics.reserve.oneMonthReserve)}</p>
               ) : (
-                <p className="mt-1 text-sm text-neutral-600">—</p>
+                <p className="mt-1 text-sm text-security-navy-600">—</p>
               )}
-              <p className="mt-0.5 text-xs text-neutral-600">Recommended reserve</p>
+              <p className="mt-0.5 text-xs text-security-navy-600">Recommended reserve</p>
             </div>
             <div className="w-10 h-10 rounded-security-lg bg-security-emerald-50 flex items-center justify-center">
               <svg className="w-5 h-5 text-security-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -487,11 +487,11 @@ export default function PayrollPage() {
               <p className="section-title">Latest run</p>
               {metrics.latestRunSummary ? (
                 <>
-                  <p className="mt-1 font-mono text-xl font-bold text-black">{formatCurrency(metrics.latestRunSummary.totalGrossPay)}</p>
-                  <p className="mt-0.5 text-xs text-neutral-600">{metrics.latestRunSummary.employeeCount} employees</p>
+                  <p className="mt-1 font-mono text-xl font-bold text-security-navy-900">{formatCurrency(metrics.latestRunSummary.totalGrossPay)}</p>
+                  <p className="mt-0.5 text-xs text-security-navy-600">{metrics.latestRunSummary.employeeCount} employees</p>
                 </>
               ) : (
-                <p className="mt-1 text-sm text-neutral-600">No calculated run</p>
+                <p className="mt-1 text-sm text-security-navy-600">No calculated run</p>
               )}
             </div>
             <div className="w-10 h-10 rounded-security-lg bg-security-navy-100 flex items-center justify-center">
@@ -514,16 +514,16 @@ export default function PayrollPage() {
                       ? "text-red-600"
                       : metrics.latestRunSummary.warningComplianceCount > 0
                         ? "text-security-amber-600"
-                        : "text-black"
+                        : "text-security-navy-900"
                   )}>
                     {metrics.latestRunSummary.complianceIssueCount} issues
                   </p>
-                  <p className="mt-0.5 text-xs text-neutral-600">
+                  <p className="mt-0.5 text-xs text-security-navy-600">
                     {metrics.latestRunSummary.criticalComplianceCount} critical
                   </p>
                 </>
               ) : (
-                <p className="mt-1 text-sm text-neutral-600">No compliance checks yet</p>
+                <p className="mt-1 text-sm text-security-navy-600">No compliance checks yet</p>
               )}
             </div>
             <div className={`w-10 h-10 rounded-security-lg flex items-center justify-center ${
@@ -541,7 +541,7 @@ export default function PayrollPage() {
         <section className="space-y-4">
           <div className="flex items-center justify-between gap-3">
             <h2 className="section-title">Payroll runs</h2>
-            <p className="text-sm text-neutral-600">{runs.length} run{runs.length === 1 ? "" : "s"}</p>
+            <p className="text-sm text-security-navy-600">{runs.length} run{runs.length === 1 ? "" : "s"}</p>
           </div>
           {runs.map((run) => (
             <PayrollRunCard
@@ -624,7 +624,7 @@ function PayrollIntelligenceSection({
 
   return (
     <div className="card-wireframe overflow-hidden">
-      <div className="flex gap-1 overflow-x-auto border-b border-neutral-200 px-2 pt-2">
+      <div className="flex gap-1 overflow-x-auto border-b border-security-navy-100 px-2 pt-2">
         {INTELLIGENCE_TABS.map((tab) => (
           <button
             key={tab.id}
@@ -633,8 +633,8 @@ function PayrollIntelligenceSection({
             className={clsx(
               "-mb-px rounded-t-sm px-4 py-2.5 text-sm font-medium transition-colors",
               activeTab === tab.id
-                ? "border border-neutral-200 border-b-transparent bg-white text-black"
-                : "text-neutral-600 hover:text-black"
+                ? "border border-security-navy-100 border-b-transparent bg-white text-security-navy-900"
+                : "text-security-navy-600 hover:text-security-navy-900"
             )}
           >
             {tab.label}
@@ -707,7 +707,7 @@ function ReserveSummaryPanel({ token, onRefresh }: { token: string; onRefresh: (
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h3 className="text-sm font-semibold text-black">Payroll reserve summary</h3>
+        <h3 className="text-sm font-semibold text-security-navy-900">Payroll reserve summary</h3>
         <div className="flex flex-wrap items-center gap-2">
           <input
             type="number"
@@ -730,21 +730,21 @@ function ReserveSummaryPanel({ token, onRefresh }: { token: string; onRefresh: (
         </AlertBanner>
       )}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div className="rounded-security border border-neutral-200 bg-neutral-50 p-3">
+        <div className="rounded-security border border-security-navy-100 bg-security-navy-50 p-3">
           <p className="label-text">Monthly burden</p>
-          <p className="mt-1 font-mono text-lg font-bold text-black">{formatCurrency(data.monthlyPayrollBurden)}</p>
+          <p className="mt-1 font-mono text-lg font-bold text-security-navy-900">{formatCurrency(data.monthlyPayrollBurden)}</p>
         </div>
-        <div className="rounded-security border border-neutral-200 bg-neutral-50 p-3">
+        <div className="rounded-security border border-security-navy-100 bg-security-navy-50 p-3">
           <p className="label-text">1-month reserve</p>
-          <p className="mt-1 font-mono text-lg font-bold text-black">{formatCurrency(data.oneMonthReserve)}</p>
+          <p className="mt-1 font-mono text-lg font-bold text-security-navy-900">{formatCurrency(data.oneMonthReserve)}</p>
         </div>
-        <div className="rounded-security border border-neutral-200 bg-neutral-50 p-3">
+        <div className="rounded-security border border-security-navy-100 bg-security-navy-50 p-3">
           <p className="label-text">3-month reserve</p>
-          <p className="mt-1 font-mono text-lg font-bold text-black">{formatCurrency(data.threeMonthReserve)}</p>
+          <p className="mt-1 font-mono text-lg font-bold text-security-navy-900">{formatCurrency(data.threeMonthReserve)}</p>
         </div>
-        <div className="rounded-security border border-neutral-200 bg-neutral-50 p-3">
+        <div className="rounded-security border border-security-navy-100 bg-security-navy-50 p-3">
           <p className="label-text">Statutory reserve</p>
-          <p className="mt-1 font-mono text-lg font-bold text-black">{formatCurrency(data.statutoryReserve)}</p>
+          <p className="mt-1 font-mono text-lg font-bold text-security-navy-900">{formatCurrency(data.statutoryReserve)}</p>
         </div>
       </div>
       {data.reserveGap != null && (
@@ -813,25 +813,25 @@ function ContractLabourCostPanel({ token }: { token: string }) {
       {loaded && data && (
         <>
           {data.contracts.length === 0 && data.unallocatedCost === 0 ? (
-            <p className="text-sm text-neutral-600">No contract labour data for this period. Ensure payroll runs exist and employees have shifts at sites.</p>
+            <p className="text-sm text-security-navy-600">No contract labour data for this period. Ensure payroll runs exist and employees have shifts at sites.</p>
           ) : (
             <>
               <TableShell title="Contract labour by site">
-                <thead className="bg-neutral-50">
+                <thead className="bg-security-navy-50">
                   <tr>
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-neutral-600">Site</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Employees</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Labour cost</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Overtime</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Revenue</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Labour %</th>
-                    <th className="px-4 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-neutral-600">Health</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-security-navy-600">Site</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-security-navy-600">Employees</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-security-navy-600">Labour cost</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-security-navy-600">Overtime</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-security-navy-600">Revenue</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-security-navy-600">Labour %</th>
+                    <th className="px-4 py-2.5 text-center text-xs font-semibold uppercase tracking-wider text-security-navy-600">Health</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-neutral-100">
+                <tbody className="divide-y divide-security-navy-100">
                   {data.contracts.map((c) => (
                     <tr key={c.siteId}>
-                      <td className="px-4 py-2.5 font-medium text-black">{c.siteName}</td>
+                      <td className="px-4 py-2.5 font-medium text-security-navy-900">{c.siteName}</td>
                       <td className="px-4 py-2.5 text-right">{c.employeeCount}</td>
                       <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(c.totalLabourCost)}</td>
                       <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(c.overtimeCost)}</td>
@@ -853,14 +853,14 @@ function ContractLabourCostPanel({ token }: { token: string }) {
                             {c.healthIndicator}
                           </Badge>
                         )}
-                        {c.insufficientData && <span className="text-xs text-neutral-500">No revenue</span>}
+                        {c.insufficientData && <span className="text-xs text-security-navy-500">No revenue</span>}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </TableShell>
               {data.unallocatedCost > 0 && (
-                <p className="text-sm text-neutral-600">Unallocated cost: <span className="font-mono font-medium">{formatCurrency(data.unallocatedCost)}</span> (e.g. office staff)</p>
+                <p className="text-sm text-security-navy-600">Unallocated cost: <span className="font-mono font-medium">{formatCurrency(data.unallocatedCost)}</span> (e.g. office staff)</p>
               )}
             </>
           )}
@@ -923,28 +923,28 @@ function EmployeeCostSummaryPanel({ token, runs }: { token: string; runs: Payrol
       {loaded && data && (
         <>
           {data.employees.length === 0 ? (
-            <p className="text-sm text-neutral-600">No employee cost data for this run.</p>
+            <p className="text-sm text-security-navy-600">No employee cost data for this run.</p>
           ) : (
             <>
               <TableShell title="Employee cost summary">
-                <thead className="bg-neutral-50">
+                <thead className="bg-security-navy-50">
                   <tr>
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-neutral-600">Employee</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Base pay</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Overtime</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Allowances</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Deductions</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Gross</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Net</th>
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Total cost</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-security-navy-600">Employee</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-security-navy-600">Base pay</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-security-navy-600">Overtime</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-security-navy-600">Allowances</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-security-navy-600">Deductions</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-security-navy-600">Gross</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-security-navy-600">Net</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-security-navy-600">Total cost</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-neutral-100">
+                <tbody className="divide-y divide-security-navy-100">
                   {data.employees.map((c) => (
                     <tr key={c.employeeId}>
                       <td className="px-4 py-2.5">
-                        <span className="font-medium text-black">{c.employeeName ?? "—"}</span>
-                        {c.employeeNumber && <span className="ml-1 font-mono text-xs text-neutral-500">({c.employeeNumber})</span>}
+                        <span className="font-medium text-security-navy-900">{c.employeeName ?? "—"}</span>
+                        {c.employeeNumber && <span className="ml-1 font-mono text-xs text-security-navy-500">({c.employeeNumber})</span>}
                       </td>
                       <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(c.basePay)}</td>
                       <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(c.overtimePay)}</td>
@@ -957,7 +957,7 @@ function EmployeeCostSummaryPanel({ token, runs }: { token: string; runs: Payrol
                   ))}
                 </tbody>
               </TableShell>
-              <p className="text-xs text-neutral-500">Total cost includes gross pay + employer UIF + SDL</p>
+              <p className="text-xs text-security-navy-500">Total cost includes gross pay + employer UIF + SDL</p>
             </>
           )}
         </>
@@ -1025,7 +1025,7 @@ function PayrollRunForm({ token, onSuccess }: { token: string; onSuccess: () => 
           }}
         />
         {periodLabel && (
-          <p className="text-xs text-neutral-600">
+          <p className="text-xs text-security-navy-600">
             {periodLabel}: {periodStart} – {periodEnd}
           </p>
         )}
@@ -1496,7 +1496,7 @@ function PayrollRunCard({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div>
-            <span className="font-semibold text-black">
+            <span className="font-semibold text-security-navy-900">
               {format(new Date(run.periodStart), "d MMM yyyy")} – {format(new Date(run.periodEnd), "d MMM yyyy")}
             </span>
             <Badge variant={status.variant} className="ml-2">
@@ -1504,9 +1504,9 @@ function PayrollRunCard({
             </Badge>
           </div>
           {summary && (
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-neutral-600">
-              <span>Gross: <span className="font-mono font-medium text-black">{formatCurrency(summary.totalGrossPay)}</span></span>
-              <span>Net: <span className="font-mono font-medium text-black">{formatCurrency(summary.totalNetPay)}</span></span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-security-navy-600">
+              <span>Gross: <span className="font-mono font-medium text-security-navy-900">{formatCurrency(summary.totalGrossPay)}</span></span>
+              <span>Net: <span className="font-mono font-medium text-security-navy-900">{formatCurrency(summary.totalNetPay)}</span></span>
               <span>{summary.employeeCount} employees</span>
               {summary.complianceIssueCount > 0 && (
                 <span className={summary.criticalComplianceCount > 0 ? "font-medium text-red-600" : "font-medium text-security-amber-600"}>
@@ -1593,7 +1593,7 @@ function PayrollRunCard({
             )}
             {blockingExceptions && blockingExceptions.groups.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs text-neutral-600">
+                <p className="text-xs text-security-navy-600">
                   Here is what is blocking this run. Fix each group below, then click
                   Calculate again.
                 </p>
@@ -1607,14 +1607,14 @@ function PayrollRunCard({
                   return (
                     <div
                       key={group.exceptionType}
-                      className="rounded-md border border-red-200 bg-white px-3 py-2 text-xs text-neutral-700"
+                      className="rounded-md border border-red-200 bg-white px-3 py-2 text-xs text-security-navy-700"
                     >
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className="font-semibold text-neutral-900">{copy.title}</span>
+                        <span className="font-semibold text-security-navy-900">{copy.title}</span>
                         <Badge variant="error">{group.count}</Badge>
                       </div>
-                      <p className="mt-1 text-neutral-500">{copy.description}</p>
-                      <p className="mt-1.5 font-medium text-neutral-700">
+                      <p className="mt-1 text-security-navy-500">{copy.description}</p>
+                      <p className="mt-1.5 font-medium text-security-navy-700">
                         How to fix: <span className="font-normal">{copy.howToFix}</span>
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -1640,24 +1640,24 @@ function PayrollRunCard({
                         <ul className="mt-2 space-y-1 border-t border-red-100 pt-2">
                           {group.samples.map((sample) => (
                             <li key={sample.id} className="flex flex-wrap items-center gap-x-2">
-                              <span className="font-medium text-neutral-900">
+                              <span className="font-medium text-security-navy-900">
                                 {sample.employeeName ?? "Unknown employee"}
                               </span>
                               {sample.employeeNumber && (
-                                <span className="text-neutral-500">({sample.employeeNumber})</span>
+                                <span className="text-security-navy-500">({sample.employeeNumber})</span>
                               )}
                               {sample.siteName && (
-                                <span className="text-neutral-500">· {sample.siteName}</span>
+                                <span className="text-security-navy-500">· {sample.siteName}</span>
                               )}
                               {sample.date && (
-                                <span className="text-neutral-500">
+                                <span className="text-security-navy-500">
                                   · {format(new Date(`${sample.date}T00:00:00`), "d MMM yyyy")}
                                 </span>
                               )}
                             </li>
                           ))}
                           {group.count > group.samples.length && (
-                            <li className="text-neutral-400">
+                            <li className="text-security-navy-400">
                               …and {group.count - group.samples.length} more
                             </li>
                           )}
@@ -1673,7 +1673,7 @@ function PayrollRunCard({
       )}
 
       {showItems && (
-        <div className="mt-5 border-t border-neutral-200 pt-5">
+        <div className="mt-5 border-t border-security-navy-100 pt-5">
           {actionError && (
             <AlertBanner variant="error" className="mb-4">
               {actionError}
@@ -1760,19 +1760,19 @@ function PayrollRunCard({
           )}
           {items.length > 0 ? (
             <TableShell title="Payroll run items">
-              <thead className="bg-neutral-50">
+              <thead className="bg-security-navy-50">
                 <tr>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-neutral-600">Team member</th>
-                  <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Net pay</th>
-                  <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-neutral-600">Actions</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-security-navy-600">Team member</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-security-navy-600">Net pay</th>
+                  <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-security-navy-600">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100">
+              <tbody className="divide-y divide-security-navy-100">
                 {groupPayrollItemsByTeam(items).map((group) => {
                   const isCollapsed = collapsedGroups.has(group.key);
                   return (
                   <Fragment key={group.key}>
-                    <tr className="bg-neutral-50/80">
+                    <tr className="bg-security-navy-50/80">
                       <td className="px-4 py-2.5">
                         <button
                           type="button"
@@ -1793,12 +1793,12 @@ function PayrollRunCard({
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                           </svg>
                           <span className="text-sm font-semibold text-security-navy">{group.name}</span>
-                          <span className="text-xs font-normal text-neutral-500">
+                          <span className="text-xs font-normal text-security-navy-500">
                             {group.items.length} member{group.items.length === 1 ? "" : "s"}
                           </span>
                         </button>
                       </td>
-                      <td className="px-4 py-2.5 text-right font-mono text-sm font-semibold text-neutral-700">
+                      <td className="px-4 py-2.5 text-right font-mono text-sm font-semibold text-security-navy-700">
                         {formatCurrency(group.totalNetPay)}
                       </td>
                       <td className="px-4 py-2.5 text-right">
@@ -1818,7 +1818,7 @@ function PayrollRunCard({
                     {!isCollapsed &&
                       group.items.map((item) => (
                       <tr key={item.id}>
-                        <td className="px-4 py-2.5 pl-8 text-black">
+                        <td className="px-4 py-2.5 pl-8 text-security-navy-900">
                           {item.employee.firstName} {item.employee.lastName}
                         </td>
                         <td className="px-4 py-2.5 text-right font-mono font-medium">
@@ -1843,7 +1843,7 @@ function PayrollRunCard({
               </tbody>
             </TableShell>
           ) : (
-            <p className="text-sm text-neutral-500">No items yet. Run calculate to generate payroll lines.</p>
+            <p className="text-sm text-security-navy-500">No items yet. Run calculate to generate payroll lines.</p>
           )}
         </div>
       )}
@@ -1851,16 +1851,16 @@ function PayrollRunCard({
       {showRevertModal && canEdit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-security-lg bg-white p-5 shadow-security-card">
-            <h3 className="text-lg font-semibold text-black">Revert to draft</h3>
-            <p className="mt-2 text-sm text-neutral-600">
+            <h3 className="text-lg font-semibold text-security-navy-900">Revert to draft</h3>
+            <p className="mt-2 text-sm text-security-navy-600">
               This clears calculated payroll items so you can fix inputs and recalculate. Paid runs cannot be reverted.
             </p>
-            <label className="mt-4 block text-sm font-medium text-neutral-700" htmlFor={`revert-reason-${run.id}`}>
+            <label className="mt-4 block text-sm font-medium text-security-navy-700" htmlFor={`revert-reason-${run.id}`}>
               Reason for revert
             </label>
             <textarea
               id={`revert-reason-${run.id}`}
-              className="mt-1 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-security-navy-200 px-3 py-2 text-sm"
               rows={3}
               value={revertReason}
               onChange={(e) => setRevertReason(e.target.value)}

@@ -291,8 +291,8 @@ export default function TaskDetailPage() {
   if (loading) {
     return (
       <div className="animate-pulse space-y-6">
-        <div className="h-9 w-64 bg-gray-200 rounded-lg" />
-        <div className="h-48 bg-gray-200 rounded-lg" />
+        <div className="h-9 w-64 bg-security-navy-100 rounded-lg" />
+        <div className="h-48 bg-security-navy-100 rounded-lg" />
       </div>
     );
   }
@@ -313,7 +313,7 @@ export default function TaskDetailPage() {
     <div className="animate-fade-in max-w-4xl mx-auto">
       {confirmDialog}
       <div className="mb-4">
-        <Link href="/tasks" className="text-sm text-gray-600 hover:text-black">
+        <Link href="/tasks" className="text-sm text-security-navy-600 hover:text-security-navy-900">
           ← Back to Tasks
         </Link>
       </div>
@@ -324,7 +324,7 @@ export default function TaskDetailPage() {
         </div>
       )}
 
-      <div className="bg-gray-100 border border-gray-300 rounded-lg p-6 mb-6">
+      <div className="bg-security-navy-50 border border-security-navy-200 rounded-lg p-6 mb-6">
         {editing && canEdit ? (
           <div className="space-y-4">
             <input
@@ -341,7 +341,7 @@ export default function TaskDetailPage() {
               rows={3}
             />
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
+              <label className="block text-sm font-medium text-security-navy-700 mb-1">Project</label>
               <select
                 value={editProjectId}
                 onChange={(e) => setEditProjectId(e.target.value)}
@@ -435,7 +435,7 @@ export default function TaskDetailPage() {
                     }
                     className="input-compact w-20"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-security-navy-600">
                     {editRecurrence.frequency === "daily"
                       ? "day(s)"
                       : editRecurrence.frequency === "weekly"
@@ -465,16 +465,16 @@ export default function TaskDetailPage() {
           <>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-bold text-black">{task.title}</h1>
+                <h1 className="text-2xl font-bold text-security-navy-900">{task.title}</h1>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <span className="px-2 py-0.5 bg-gray-200 rounded text-sm">
+                  <span className="px-2 py-0.5 bg-security-navy-100 rounded text-sm">
                     {STATUS_LABELS[task.status]}
                   </span>
                   <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-sm">
                     {PRIORITY_LABELS[task.priority]}
                   </span>
                   {task.project && (
-                    <span className="px-2 py-0.5 bg-gray-200 rounded text-sm">
+                    <span className="px-2 py-0.5 bg-security-navy-100 rounded text-sm">
                       {task.project.name}
                     </span>
                   )}
@@ -500,10 +500,10 @@ export default function TaskDetailPage() {
             </div>
 
             {task.description && (
-              <p className="mt-4 text-gray-700 whitespace-pre-wrap">{task.description}</p>
+              <p className="mt-4 text-security-navy-700 whitespace-pre-wrap">{task.description}</p>
             )}
 
-            <div className="mt-4 text-sm text-gray-600">
+            <div className="mt-4 text-sm text-security-navy-600">
               {task.dueDate && (
                 <p>Due: {new Date(task.dueDate).toLocaleString()}</p>
               )}
@@ -516,8 +516,8 @@ export default function TaskDetailPage() {
       </div>
 
       {/* Comments */}
-      <div className="bg-gray-100 border border-gray-300 rounded-lg p-4 mb-6">
-        <h2 className="font-bold text-black mb-3">Comments</h2>
+      <div className="bg-security-navy-50 border border-security-navy-200 rounded-lg p-4 mb-6">
+        <h2 className="font-bold text-security-navy-900 mb-3">Comments</h2>
         {canCreate && <form onSubmit={handleAddComment} className="mb-4">
           <textarea
             value={commentBody}
@@ -532,19 +532,19 @@ export default function TaskDetailPage() {
         </form>}
         <div className="space-y-3">
           {(task.comments || []).map((c) => (
-            <div key={c.id} className="bg-white rounded p-3 border border-gray-200">
-              <p className="text-sm text-gray-600">
+            <div key={c.id} className="bg-white rounded p-3 border border-security-navy-100">
+              <p className="text-sm text-security-navy-600">
                 {c.user?.name ?? "Unknown"} • {new Date(c.createdAt).toLocaleString()}
               </p>
-              <p className="mt-1 text-black">{c.body}</p>
+              <p className="mt-1 text-security-navy-900">{c.body}</p>
             </div>
           ))}
         </div>
       </div>
 
       {/* Attachments */}
-      <div className="bg-gray-100 border border-gray-300 rounded-lg p-4 mb-6">
-        <h2 className="font-bold text-black mb-3">Attachments</h2>
+      <div className="bg-security-navy-50 border border-security-navy-200 rounded-lg p-4 mb-6">
+        <h2 className="font-bold text-security-navy-900 mb-3">Attachments</h2>
         {canCreate && <label className="btn-secondary text-sm inline-block cursor-pointer">
           {uploading ? "Uploading..." : "Upload file"}
           <input
@@ -556,7 +556,7 @@ export default function TaskDetailPage() {
         </label>}
         <div className="mt-3 space-y-2">
           {(task.attachments || []).map((a) => (
-            <div key={a.id} className="flex items-center justify-between bg-white rounded p-2 border border-gray-200">
+            <div key={a.id} className="flex items-center justify-between bg-white rounded p-2 border border-security-navy-100">
               {canExport && token && a.downloadUrl ? (
                 <button
                   type="button"
@@ -584,8 +584,8 @@ export default function TaskDetailPage() {
       </div>
 
       {/* Reminders */}
-      <div className="bg-gray-100 border border-gray-300 rounded-lg p-4">
-        <h2 className="font-bold text-black mb-3">Reminders</h2>
+      <div className="bg-security-navy-50 border border-security-navy-200 rounded-lg p-4">
+        <h2 className="font-bold text-security-navy-900 mb-3">Reminders</h2>
         {canCreate && <form onSubmit={handleAddReminder} className="mb-4 flex gap-2 items-end">
           <input
             type="datetime-local"
@@ -599,7 +599,7 @@ export default function TaskDetailPage() {
         </form>}
         <div className="space-y-2">
           {(task.reminders || []).map((r) => (
-            <div key={r.id} className="flex items-center justify-between bg-white rounded p-2 border border-gray-200">
+            <div key={r.id} className="flex items-center justify-between bg-white rounded p-2 border border-security-navy-100">
               <span className="text-sm">
                 {new Date(r.remindAt).toLocaleString()}
               </span>

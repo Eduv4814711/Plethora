@@ -58,7 +58,7 @@ export function NotificationBell() {
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
         </svg>
         {unreadCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-security-amber-500 px-1 text-[10px] font-bold text-white">
+          <span className="absolute top-1.5 right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-security-amber-500 px-1 font-mono text-[10px] font-semibold text-security-navy-900">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
@@ -71,9 +71,9 @@ export function NotificationBell() {
             aria-label="Close notifications"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute right-0 top-full mt-2 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-security-lg border border-neutral-200 bg-white shadow-security-elevated py-2">
+          <div className="absolute right-0 top-full mt-2 z-50 w-80 max-w-[calc(100vw-2rem)] rounded-security-lg border border-security-navy-100 bg-white shadow-security-elevated py-2">
             <div className="flex items-center justify-between px-4 py-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Notifications</p>
+              <p className="font-mono text-[0.625rem] font-medium uppercase tracking-[0.14em] text-security-navy-500">Notifications</p>
               {unreadCount > 0 && (
                 <button
                   type="button"
@@ -85,28 +85,28 @@ export function NotificationBell() {
               )}
             </div>
             {items.length === 0 ? (
-              <p className="px-4 py-6 text-sm text-neutral-600 text-center">No notifications yet</p>
+              <p className="px-4 py-6 text-sm text-security-navy-600 text-center">No notifications yet</p>
             ) : (
               <ul className="max-h-72 overflow-y-auto">
                 {items.map((n) => (
-                  <li key={n.id} className="border-t border-neutral-100 first:border-0">
+                  <li key={n.id} className="border-t border-security-navy-100 first:border-0">
                     {n.linkUrl ? (
                       <Link
                         href={n.linkUrl}
                         onClick={() => handleOpenNotification(n.id, n.linkUrl)}
-                        className="block px-4 py-3 hover:bg-neutral-50"
+                        className="block px-4 py-3 hover:bg-security-navy-50"
                       >
-                        <p className="text-sm font-medium text-neutral-900">{n.title}</p>
-                        <p className="text-xs text-neutral-600 mt-0.5 line-clamp-2">{n.message}</p>
+                        <p className="text-sm font-medium text-security-navy-900">{n.title}</p>
+                        <p className="text-xs text-security-navy-600 mt-0.5 line-clamp-2">{n.message}</p>
                       </Link>
                     ) : (
                       <button
                         type="button"
                         onClick={() => handleOpenNotification(n.id)}
-                        className="block w-full px-4 py-3 text-left hover:bg-neutral-50"
+                        className="block w-full px-4 py-3 text-left hover:bg-security-navy-50"
                       >
-                        <p className="text-sm font-medium text-neutral-900">{n.title}</p>
-                        <p className="text-xs text-neutral-600 mt-0.5 line-clamp-2">{n.message}</p>
+                        <p className="text-sm font-medium text-security-navy-900">{n.title}</p>
+                        <p className="text-xs text-security-navy-600 mt-0.5 line-clamp-2">{n.message}</p>
                       </button>
                     )}
                   </li>

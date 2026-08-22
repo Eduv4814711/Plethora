@@ -149,7 +149,7 @@ export default function ClientDetailPage() {
   if (loading) {
     return (
       <main className="animate-fade-in space-y-4 pb-16">
-        <div className="h-40 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-700" aria-label="Loading client" />
+        <div className="h-40 animate-pulse rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700" aria-label="Loading client" />
       </main>
     );
   }
@@ -176,8 +176,8 @@ export default function ClientDetailPage() {
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">{client.name}</h1>
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">
+            <h1 className="text-xl font-semibold text-security-navy-900 dark:text-security-navy-100">{client.name}</h1>
+            <p className="text-sm text-security-navy-500 dark:text-security-navy-400">
               {client.sites.length} linked site(s) · {client.isActive ? "Active" : "Inactive"}
             </p>
           </div>
@@ -193,7 +193,7 @@ export default function ClientDetailPage() {
       {error && <AlertBanner variant="error">{error}</AlertBanner>}
       {notice && <AlertBanner variant="success">{notice}</AlertBanner>}
 
-      <nav className="flex gap-1 border-b border-neutral-200 dark:border-neutral-700" aria-label="Client sections">
+      <nav className="flex gap-1 border-b border-security-navy-100 dark:border-security-navy-700" aria-label="Client sections">
         {TABS.map((item) => (
           <button
             key={item.id}
@@ -202,7 +202,7 @@ export default function ClientDetailPage() {
             className={`min-h-11 px-4 text-sm font-medium ${
               tab === item.id
                 ? "border-b-2 border-security-navy-700 text-security-navy-800 dark:text-security-navy-300"
-                : "text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
+                : "text-security-navy-500 hover:text-security-navy-900 dark:hover:text-security-navy-200"
             }`}
             aria-current={tab === item.id ? "page" : undefined}
           >
@@ -237,7 +237,7 @@ export default function ClientDetailPage() {
             </select>
           </div>
 
-          <p className="pt-1 text-xs font-semibold uppercase tracking-wider text-neutral-500 sm:col-span-2">
+          <p className="pt-1 text-xs font-semibold uppercase tracking-wider text-security-navy-500 sm:col-span-2">
             Contact person
           </p>
           <div>
@@ -257,7 +257,7 @@ export default function ClientDetailPage() {
             <textarea rows={2} className="input-modern w-full" value={form.physicalAddress} onChange={(e) => set("physicalAddress", e.target.value)} disabled={!canEdit} />
           </div>
 
-          <p className="pt-1 text-xs font-semibold uppercase tracking-wider text-neutral-500 sm:col-span-2">
+          <p className="pt-1 text-xs font-semibold uppercase tracking-wider text-security-navy-500 sm:col-span-2">
             Billing details — printed on quotes, invoices and statements
           </p>
           <div>
@@ -345,7 +345,7 @@ function RecipientsEditor({
   return (
     <div>
       <label className="label-text mb-1 block">Email the month-end pack to (sent manually)</label>
-      <p className="mb-2 text-xs text-neutral-500">
+      <p className="mb-2 text-xs text-security-navy-500">
         Nothing is emailed automatically — these are the addresses to send the downloaded pack to.
         Leave empty to fall back to the billing email.
       </p>
@@ -353,14 +353,14 @@ function RecipientsEditor({
         {value.map((email) => (
           <span
             key={email}
-            className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-3 py-1 text-sm dark:bg-neutral-800"
+            className="inline-flex items-center gap-2 rounded-full bg-security-navy-50 px-3 py-1 text-sm dark:bg-security-navy-800"
           >
             {email}
             {!disabled && (
               <button
                 type="button"
                 onClick={() => onChange(value.filter((item) => item !== email))}
-                className="text-neutral-500 hover:text-red-600"
+                className="text-security-navy-500 hover:text-red-600"
                 aria-label={`Remove ${email}`}
               >
                 ×
@@ -368,7 +368,7 @@ function RecipientsEditor({
             )}
           </span>
         ))}
-        {value.length === 0 && <span className="text-sm text-neutral-500">No recipients captured.</span>}
+        {value.length === 0 && <span className="text-sm text-security-navy-500">No recipients captured.</span>}
       </div>
       {!disabled && (
         <div className="flex gap-2">
@@ -449,10 +449,10 @@ function SitesTab({
 
   return (
     <div className="space-y-4">
-      <div className="overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-700">
-        <table className="min-w-full divide-y divide-neutral-200 text-sm dark:divide-neutral-700">
-          <thead className="bg-neutral-50 dark:bg-neutral-900">
-            <tr className="text-left text-[10px] uppercase tracking-wider text-neutral-500">
+      <div className="overflow-x-auto rounded-security-lg border border-security-navy-100 dark:border-security-navy-700">
+        <table className="min-w-full divide-y divide-security-navy-100 text-sm dark:divide-security-navy-700">
+          <thead className="bg-security-navy-50 dark:bg-security-navy-900">
+            <tr className="text-left text-[10px] uppercase tracking-wider text-security-navy-500">
               <th className="px-3 py-2">Site</th>
               <th className="px-3 py-2">Address</th>
               <th className="px-3 py-2">Service</th>
@@ -461,7 +461,7 @@ function SitesTab({
               {canEdit && <th className="px-3 py-2" />}
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+          <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
             {client.sites.map((site) => (
               <tr key={site.id}>
                 <td className="px-3 py-2">
@@ -469,13 +469,13 @@ function SitesTab({
                     {site.name}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-neutral-600 dark:text-neutral-400">{site.physicalAddress || "—"}</td>
-                <td className="px-3 py-2 text-neutral-600 dark:text-neutral-400">{site.serviceType || "—"}</td>
-                <td className="px-3 py-2 text-neutral-600 dark:text-neutral-400">
+                <td className="px-3 py-2 text-security-navy-600 dark:text-security-navy-400">{site.physicalAddress || "—"}</td>
+                <td className="px-3 py-2 text-security-navy-600 dark:text-security-navy-400">{site.serviceType || "—"}</td>
+                <td className="px-3 py-2 text-security-navy-600 dark:text-security-navy-400">
                   {site.contractStartDate ? String(site.contractStartDate).slice(0, 10) : "—"}
                   {site.contractEndDate ? ` → ${String(site.contractEndDate).slice(0, 10)}` : ""}
                 </td>
-                <td className="px-3 py-2 text-neutral-600 dark:text-neutral-400">{site.siteStatus}</td>
+                <td className="px-3 py-2 text-security-navy-600 dark:text-security-navy-400">{site.siteStatus}</td>
                 {canEdit && (
                   <td className="px-3 py-2 text-right">
                     <button type="button" className="btn-secondary py-1 text-sm" onClick={() => unlink(site.id)} disabled={busy}>
@@ -487,7 +487,7 @@ function SitesTab({
             ))}
             {client.sites.length === 0 && (
               <tr>
-                <td colSpan={canEdit ? 6 : 5} className="px-3 py-8 text-center text-sm text-neutral-600">
+                <td colSpan={canEdit ? 6 : 5} className="px-3 py-8 text-center text-sm text-security-navy-600">
                   No sites linked yet. Attach them below so their timesheets appear in the month-end pack.
                 </td>
               </tr>
@@ -498,9 +498,9 @@ function SitesTab({
 
       {canEdit && (
         <div className="card-dashboard space-y-3 p-4">
-          <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Attach sites</h2>
+          <h2 className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">Attach sites</h2>
           {unlinked.length === 0 ? (
-            <p className="text-sm text-neutral-600">
+            <p className="text-sm text-security-navy-600">
               Every site is already linked to a client. Detach it from its current client first, or set the
               client on the <Link href="/sites" className="text-security-navy-700 hover:underline">site itself</Link>.
             </p>

@@ -46,8 +46,8 @@ export default function BillingClientsPage() {
         >
           ← Back to billing
         </Link>
-        <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">Clients & statements</h1>
-        <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+        <h1 className="text-xl font-semibold text-security-navy-900 dark:text-security-navy-100">Clients & statements</h1>
+        <p className="mt-1 text-sm text-security-navy-500 dark:text-security-navy-400">
           Open a client to see their purchase history and print an account statement.
         </p>
       </header>
@@ -67,18 +67,18 @@ export default function BillingClientsPage() {
       />
 
       {loading ? (
-        <div className="h-40 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-700" aria-label="Loading clients" />
+        <div className="h-40 animate-pulse rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700" aria-label="Loading clients" />
       ) : filtered.length === 0 ? (
-        <p className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-10 text-center text-sm text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900">
+        <p className="rounded-security-lg border border-security-navy-100 bg-security-navy-50 px-4 py-10 text-center text-sm text-security-navy-600 dark:border-security-navy-700 dark:bg-security-navy-900">
           {clients.length === 0
             ? "No clients yet. Add them under Settings, then link their sites."
             : "No clients match that search."}
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-700">
-          <table className="min-w-full divide-y divide-neutral-200 text-sm dark:divide-neutral-700">
-            <thead className="bg-neutral-50 dark:bg-neutral-900">
-              <tr className="text-left text-[10px] uppercase tracking-wider text-neutral-500">
+        <div className="overflow-x-auto rounded-security-lg border border-security-navy-100 dark:border-security-navy-700">
+          <table className="min-w-full divide-y divide-security-navy-100 text-sm dark:divide-security-navy-700">
+            <thead className="bg-security-navy-50 dark:bg-security-navy-900">
+              <tr className="text-left text-[10px] uppercase tracking-wider text-security-navy-500">
                 <th className="px-3 py-2">Client</th>
                 <th className="px-3 py-2 text-right">Sites</th>
                 <th className="px-3 py-2 text-right">Quotes</th>
@@ -86,9 +86,9 @@ export default function BillingClientsPage() {
                 <th className="px-3 py-2 text-right">Outstanding</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+            <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
               {filtered.map((client) => (
-                <tr key={client.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-900">
+                <tr key={client.id} className="hover:bg-security-navy-50 dark:hover:bg-security-navy-900">
                   <td className="px-3 py-2">
                     <Link
                       href={`/payroll/billing/clients/${client.id}`}
@@ -96,7 +96,7 @@ export default function BillingClientsPage() {
                     >
                       {client.name}
                     </Link>
-                    {!client.isActive && <span className="ml-2 text-xs text-neutral-500">(inactive)</span>}
+                    {!client.isActive && <span className="ml-2 text-xs text-security-navy-500">(inactive)</span>}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{client.siteCount}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{client.quoteCount}</td>

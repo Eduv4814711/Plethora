@@ -169,9 +169,9 @@ export default function AttendancePage() {
   if (loading) {
     return (
       <div className="animate-pulse space-y-4" aria-label="Loading attendance">
-        <div className="h-8 w-48 rounded bg-neutral-200 dark:bg-neutral-700" />
-        <div className="h-32 rounded-xl bg-neutral-200 dark:bg-neutral-700" />
-        <div className="h-72 rounded-xl bg-neutral-200 dark:bg-neutral-700" />
+        <div className="h-8 w-48 rounded bg-security-navy-100 dark:bg-security-navy-700" />
+        <div className="h-32 rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700" />
+        <div className="h-72 rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700" />
       </div>
     );
   }
@@ -191,7 +191,7 @@ export default function AttendancePage() {
             Daily operations
           </p>
           <h1 className="page-title mt-1">Attendance</h1>
-          <p className="mt-1 max-w-2xl text-sm text-neutral-600 dark:text-neutral-400">
+          <p className="mt-1 max-w-2xl text-sm text-security-navy-600 dark:text-security-navy-400">
             {view === "staff"
               ? "Mark who was at the office today. Salaried staff are recorded for leave and reporting only."
               : "Start with a site that needs attention, confirm who worked, then approve its timesheet for payroll."}
@@ -208,7 +208,7 @@ export default function AttendancePage() {
       {/* Two populations, one entry point. Guards keep their existing flow untouched. */}
       {officeStaffCount !== 0 && (
         <div
-          className="flex flex-wrap rounded-lg border border-neutral-200 bg-neutral-50 p-1 dark:border-neutral-700 dark:bg-neutral-900"
+          className="flex flex-wrap rounded-lg border border-security-navy-100 bg-security-navy-50 p-1 dark:border-security-navy-700 dark:bg-security-navy-900"
           role="group"
           aria-label="Attendance type"
         >
@@ -226,8 +226,8 @@ export default function AttendancePage() {
               className={clsx(
                 "min-h-11 rounded-md px-4 text-sm font-medium",
                 view === value
-                  ? "bg-security-navy-800 text-white shadow-sm dark:bg-security-navy-600"
-                  : "text-neutral-700 hover:bg-white dark:text-neutral-300 dark:hover:bg-neutral-800"
+                  ? "bg-security-navy-800 text-white shadow-security-card dark:bg-security-navy-600"
+                  : "text-security-navy-700 hover:bg-white dark:text-security-navy-300 dark:hover:bg-security-navy-800"
               )}
             >
               {text}
@@ -247,11 +247,11 @@ export default function AttendancePage() {
 
       {view === "sites" && (
         <>
-      <section className="sticky top-0 z-20 rounded-xl border border-neutral-200 bg-white/95 p-4 shadow-sm backdrop-blur dark:border-neutral-700 dark:bg-neutral-950/95">
+      <section className="sticky top-0 z-20 rounded-security-lg border border-security-navy-100 bg-white/95 p-4 shadow-security-card backdrop-blur dark:border-security-navy-700 dark:bg-security-navy-900/95">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Choose the work to review</h2>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">{periodLabel || "Selected pay period"} · {dateLabel}</p>
+            <h2 className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">Choose the work to review</h2>
+            <p className="text-xs text-security-navy-500 dark:text-security-navy-400">{periodLabel || "Selected pay period"} · {dateLabel}</p>
           </div>
           <span className="rounded-full bg-security-navy-50 px-3 py-1 text-xs font-medium text-security-navy-700 dark:bg-security-navy-950/40 dark:text-security-navy-200">
             Step 1 of 2 · Select a site
@@ -260,7 +260,7 @@ export default function AttendancePage() {
 
         <div className="grid gap-4 lg:grid-cols-[minmax(16rem,1fr)_auto_minmax(14rem,0.8fr)] lg:items-end">
           <div>
-            <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">Pay period</label>
+            <label className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">Pay period</label>
             {token && (
               <PayPeriodSelect
                 token={token}
@@ -287,8 +287,8 @@ export default function AttendancePage() {
           </div>
 
           <fieldset>
-            <legend className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">Shift</legend>
-            <div className="mt-1 flex flex-wrap rounded-lg border border-neutral-200 bg-neutral-50 p-1 dark:border-neutral-700 dark:bg-neutral-900">
+            <legend className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">Shift</legend>
+            <div className="mt-1 flex flex-wrap rounded-lg border border-security-navy-100 bg-security-navy-50 p-1 dark:border-security-navy-700 dark:bg-security-navy-900">
               {SHIFT_TYPE_OPTIONS.map((option) => (
                 <button
                   key={option.value}
@@ -298,8 +298,8 @@ export default function AttendancePage() {
                   className={clsx(
                     "min-h-11 rounded-md px-3 text-sm font-medium",
                     shiftType === option.value
-                      ? "bg-security-navy-800 text-white shadow-sm dark:bg-security-navy-600"
-                      : "text-neutral-700 hover:bg-white dark:text-neutral-300 dark:hover:bg-neutral-800"
+                      ? "bg-security-navy-800 text-white shadow-security-card dark:bg-security-navy-600"
+                      : "text-security-navy-700 hover:bg-white dark:text-security-navy-300 dark:hover:bg-security-navy-800"
                   )}
                 >
                   {option.label}
@@ -309,7 +309,7 @@ export default function AttendancePage() {
           </fieldset>
 
           <div>
-            <label htmlFor="attendance-site-search" className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+            <label htmlFor="attendance-site-search" className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">
               Find a site
             </label>
             <input

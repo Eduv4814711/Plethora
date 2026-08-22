@@ -52,8 +52,8 @@ export function RosterCoverageTotals({
   columnCoverage: Record<string, DateShiftCoverage>;
 }) {
   return (
-    <tr className="bg-neutral-50 dark:bg-neutral-900/80 text-[11px] font-medium">
-      <td colSpan={2} className="px-2 py-1.5 text-neutral-500 dark:text-neutral-400 sticky left-0 z-10 bg-inherit">
+    <tr className="bg-security-navy-50 dark:bg-security-navy-900/80 text-[11px] font-medium">
+      <td colSpan={2} className="px-2 py-1.5 text-security-navy-500 dark:text-security-navy-400 sticky left-0 z-10 bg-inherit">
         Coverage
       </td>
       {columnKeys.map((key) => {
@@ -64,7 +64,7 @@ export function RosterCoverageTotals({
           return (
             <td
               key={key}
-              className="px-0.5 py-1 text-center leading-tight text-neutral-400 dark:text-neutral-500"
+              className="px-0.5 py-1 text-center leading-tight text-security-navy-400 dark:text-security-navy-500"
               title="This site does not run a day or night shift on this weekday"
             >
               {NO_SHIFT_LABEL}
@@ -78,14 +78,14 @@ export function RosterCoverageTotals({
             {runs.day ? (
               <span
                 title={`Day: ${cov.day} of ${cov.requiredDay} staffed`}
-                className={dayOk ? "block text-emerald-700 dark:text-emerald-400" : "block text-red-700 dark:text-red-300"}
+                className={dayOk ? "block text-security-emerald-700 dark:text-security-emerald-300" : "block text-red-700 dark:text-red-300"}
               >
                 Day {cov.day}/{cov.requiredDay}
               </span>
             ) : (
               <span
                 title="No day shift on this weekday"
-                className="block text-neutral-400 dark:text-neutral-500"
+                className="block text-security-navy-400 dark:text-security-navy-500"
               >
                 Day —
               </span>
@@ -100,7 +100,7 @@ export function RosterCoverageTotals({
             ) : (
               <span
                 title="No night shift on this weekday"
-                className="block text-neutral-400 dark:text-neutral-500"
+                className="block text-security-navy-400 dark:text-security-navy-500"
               >
                 Night —
               </span>
@@ -149,13 +149,13 @@ export function RosterSpreadsheet({
 }) {
   const columnCoverage = buildColumnCoverage(columnKeys, coverageDays);
   return (
-    <div className="overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-700">
-      <p className="border-b border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 md:hidden">
+    <div className="overflow-x-auto rounded-security-lg border border-security-navy-100 dark:border-security-navy-700">
+      <p className="border-b border-security-navy-100 bg-security-navy-50 px-3 py-2 text-xs text-security-navy-500 dark:border-security-navy-700 dark:bg-security-navy-900 md:hidden">
         Swipe sideways to see all days →
       </p>
       {editable && onAddPlaceholderGuard && (
-        <div className="flex flex-wrap items-center gap-2 border-b border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900/80">
-          <span className="text-xs text-neutral-500 dark:text-neutral-400">
+        <div className="flex flex-wrap items-center gap-2 border-b border-security-navy-100 bg-security-navy-50 px-3 py-2 dark:border-security-navy-700 dark:bg-security-navy-900/80">
+          <span className="text-xs text-security-navy-500 dark:text-security-navy-400">
             Need a slot before you know who will work?
           </span>
           <button
@@ -174,24 +174,24 @@ export function RosterSpreadsheet({
           >
             + Reliever slot
           </button>
-          <span className="text-[10px] text-neutral-400">
+          <span className="text-[10px] text-security-navy-400">
             Planning only — assign the real guard in attendance/timesheets later.
           </span>
         </div>
       )}
       <table className="w-full min-w-[720px] border-collapse text-[13px]">
         <thead>
-          <tr className="border-b border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900">
-            <th className="sticky left-0 z-20 bg-neutral-50 dark:bg-neutral-900 px-2 py-2 text-left font-semibold w-10">
+          <tr className="border-b border-security-navy-100 dark:border-security-navy-700 bg-security-navy-50 dark:bg-security-navy-900">
+            <th className="sticky left-0 z-20 bg-security-navy-50 dark:bg-security-navy-900 px-2 py-2 text-left font-semibold w-10">
               #
             </th>
-            <th className="sticky left-10 z-20 bg-neutral-50 dark:bg-neutral-900 px-2 py-2 text-left font-semibold min-w-[10rem]">
+            <th className="sticky left-10 z-20 bg-security-navy-50 dark:bg-security-navy-900 px-2 py-2 text-left font-semibold min-w-[10rem]">
               Guard
             </th>
             {columnKeys.map((key) => {
               if (!isDateColumnKey(key)) {
                 return (
-                  <th key={key} className="px-1 py-2 text-center font-medium text-neutral-600">
+                  <th key={key} className="px-1 py-2 text-center font-medium text-security-navy-600">
                     {key}
                   </th>
                 );
@@ -203,8 +203,8 @@ export function RosterSpreadsheet({
                   key={key}
                   className={`px-0.5 py-1.5 text-center font-medium min-w-[2.75rem] ${
                     runs.anyShift
-                      ? "text-neutral-600 dark:text-neutral-400"
-                      : "bg-neutral-100 text-neutral-400 dark:bg-neutral-900/60 dark:text-neutral-500"
+                      ? "text-security-navy-600 dark:text-security-navy-400"
+                      : "bg-security-navy-50 text-security-navy-400 dark:bg-security-navy-900/60 dark:text-security-navy-500"
                   }`}
                   title={
                     runs.anyShift
@@ -212,21 +212,21 @@ export function RosterSpreadsheet({
                       : "This site does not run a shift on this weekday — set in Days covered on the site"
                   }
                 >
-                  <div className="text-[10px] font-normal text-neutral-400">{weekday}</div>
+                  <div className="text-[10px] font-normal text-security-navy-400">{weekday}</div>
                   <div className="tabular-nums text-sm">{day}</div>
-                  <div className="text-[9px] font-normal text-neutral-400">
+                  <div className="text-[9px] font-normal text-security-navy-400">
                     {runs.anyShift ? month : NO_SHIFT_LABEL}
                   </div>
                 </th>
               );
             })}
-            <th className="px-2 py-2 text-left font-medium text-neutral-500 text-[11px]">Totals</th>
+            <th className="px-2 py-2 text-left font-medium text-security-navy-500 text-[11px]">Totals</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={columnKeys.length + 3} className="px-4 py-12 text-center text-neutral-500">
+              <td colSpan={columnKeys.length + 3} className="px-4 py-12 text-center text-security-navy-500">
                 No guards assigned to this site. Add guards using the dropdown above.
               </td>
             </tr>
@@ -234,15 +234,15 @@ export function RosterSpreadsheet({
             rows.map((row, rowIdx) => (
               <tr
                 key={row.guardId}
-                className={rowIdx % 2 === 0 ? "" : "bg-neutral-50/50 dark:bg-neutral-900/30"}
+                className={rowIdx % 2 === 0 ? "" : "bg-security-navy-50/50 dark:bg-security-navy-900/30"}
               >
-                <td className="sticky left-0 z-10 bg-inherit px-2 py-1 text-neutral-400">{rowIdx + 1}</td>
+                <td className="sticky left-0 z-10 bg-inherit px-2 py-1 text-security-navy-400">{rowIdx + 1}</td>
                 <td className="sticky left-10 z-10 bg-inherit px-2 py-1 font-medium whitespace-nowrap">
-                  <div className={row.isPlaceholder ? "italic text-neutral-600 dark:text-neutral-300" : ""}>
+                  <div className={row.isPlaceholder ? "italic text-security-navy-600 dark:text-security-navy-300" : ""}>
                     {row.guardName}
                   </div>
                   {row.isPlaceholder && (
-                    <div className="text-[10px] font-normal text-amber-700 dark:text-amber-300">
+                    <div className="text-[10px] font-normal text-security-amber-700 dark:text-security-amber-300">
                       {row.placeholderType === "reliever" ? "Reliever TBD" : "Unknown — fill in at attendance"}
                     </div>
                   )}
@@ -258,7 +258,7 @@ export function RosterSpreadsheet({
                     return (
                       <td key={colKey} className="p-0.5">
                         <div
-                          className="flex h-9 items-center justify-center rounded bg-neutral-100 text-[10px] font-medium text-neutral-400 dark:bg-neutral-900/60 dark:text-neutral-500"
+                          className="flex h-9 items-center justify-center rounded bg-security-navy-50 text-[10px] font-medium text-security-navy-400 dark:bg-security-navy-900/60 dark:text-security-navy-500"
                           title={`${row.guardName} — this site runs no shift on ${colKey}`}
                         >
                           {NO_SHIFT_LABEL}
@@ -295,7 +295,7 @@ export function RosterSpreadsheet({
                     </td>
                   );
                 })}
-                <td className="px-2 py-1 text-[11px] text-neutral-500 whitespace-nowrap">
+                <td className="px-2 py-1 text-[11px] text-security-navy-500 whitespace-nowrap">
                   {Object.entries(row.totals)
                     .filter(([k, v]) => v > 0 && k !== "blank")
                     .map(([k, v]) => `${SHIFT_LABELS[k as RosterShiftCode]}:${v}`)

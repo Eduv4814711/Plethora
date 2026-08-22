@@ -24,7 +24,7 @@ function AdminFeeBadge({ status }: { status?: string }) {
       ? "badge-success"
       : s === "waived"
         ? "badge-info"
-        : "badge-neutral border border-neutral-300";
+        : "badge-neutral border border-security-navy-200";
   return <span className={`badge-neutral ${cls}`}>{s}</span>;
 }
 
@@ -88,7 +88,7 @@ export default function AcademyStudentsPage() {
             ← Academy
           </Link>
           <h1 className="mt-1 text-2xl font-semibold">Students</h1>
-          <p className="text-sm text-neutral-600">{total} total</p>
+          <p className="text-sm text-security-navy-600">{total} total</p>
         </div>
         {canCreate && <Link href="/academy/intake" className="btn-primary px-3 py-1.5 text-xs">
           New intake
@@ -99,7 +99,7 @@ export default function AcademyStudentsPage() {
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
-      {canCreate && <form onSubmit={create} className="flex flex-wrap items-end gap-2 rounded-lg border border-neutral-300 p-4">
+      {canCreate && <form onSubmit={create} className="flex flex-wrap items-end gap-2 rounded-lg border border-security-navy-200 p-4">
         <div>
           <label className="label-text mb-1 block">First name</label>
           <input
@@ -132,12 +132,12 @@ export default function AcademyStudentsPage() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-neutral-500">Loading…</p>
+        <p className="text-sm text-security-navy-500">Loading…</p>
       ) : students.length === 0 ? (
-        <p className="text-sm text-neutral-500">No students match.</p>
+        <p className="text-sm text-security-navy-500">No students match.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-neutral-300">
-          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+        <div className="overflow-x-auto rounded-lg border border-security-navy-200">
+          <table className="min-w-full divide-y divide-security-navy-100 text-sm">
             <thead>
               <tr>
                 <th>Number</th>

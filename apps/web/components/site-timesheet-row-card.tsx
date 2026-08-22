@@ -109,44 +109,44 @@ export function SiteTimesheetRowCard({
 
   return (
     <article
-      className={`rounded-xl border p-4 space-y-3 ${
+      className={`rounded-security-lg border p-4 space-y-3 ${
         pendingReview
           ? row.discrepancyCodes.length
-            ? "border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20"
+            ? "border-security-amber-200 bg-security-amber-50/50 dark:border-security-amber-900 dark:bg-security-amber-950/20"
             : partiallyReviewed
-              ? "border-amber-200 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/15"
-              : "border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-950"
-          : "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900 dark:bg-emerald-950/15"
+              ? "border-security-amber-200 bg-security-amber-50/40 dark:border-security-amber-900 dark:bg-security-amber-950/15"
+              : "border-security-navy-100 bg-white dark:border-security-navy-700 dark:bg-security-navy-900"
+          : "border-security-emerald-200 bg-security-emerald-50/40 dark:border-security-emerald-700 dark:bg-security-emerald-700/15"
       }`}
     >
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">{row.workDate}</p>
-          <p className="text-xs text-neutral-500">{row.dayOfWeek}</p>
+          <p className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">{row.workDate}</p>
+          <p className="text-xs text-security-navy-500">{row.dayOfWeek}</p>
         </div>
         {reviewed ? (
-          <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+          <span className="shrink-0 rounded-full border border-security-emerald-200 bg-security-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-security-emerald-700 dark:border-security-emerald-700 dark:bg-security-emerald-700/40 dark:text-security-emerald-300">
             {locked ? "Approved" : "Confirmed"}
           </span>
         ) : partiallyReviewed ? (
-          <span className="shrink-0 rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+          <span className="shrink-0 rounded-full border border-security-amber-200 bg-security-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-security-amber-800 dark:border-security-amber-900 dark:bg-security-amber-950/40 dark:text-security-amber-300">
             Duty ON saved
           </span>
         ) : (
-          <span className="shrink-0 rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+          <span className="shrink-0 rounded-full border border-security-amber-200 bg-security-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-security-amber-800 dark:border-security-amber-900 dark:bg-security-amber-950/40 dark:text-security-amber-300">
             Needs confirmation
           </span>
         )}
       </div>
 
-      <div className="flex items-start justify-between gap-3 rounded-lg border border-neutral-200 bg-white/70 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-950/40">
+      <div className="flex items-start justify-between gap-3 rounded-lg border border-security-navy-100 bg-white/70 px-3 py-2 dark:border-security-navy-700 dark:bg-security-navy-900/40">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
             Who worked
           </p>
-          <p className="mt-0.5 truncate text-sm text-neutral-800 dark:text-neutral-200">{summary}</p>
+          <p className="mt-0.5 truncate text-sm text-security-navy-900 dark:text-security-navy-200">{summary}</p>
           {(row.employeeNumber || row.psiraRegistrationNumber) && (
-            <p className="text-xs text-neutral-500">
+            <p className="text-xs text-security-navy-500">
               {row.employeeNumber ?? row.psiraRegistrationNumber}
             </p>
           )}
@@ -165,7 +165,7 @@ export function SiteTimesheetRowCard({
       </div>
 
       {showDetails && (
-        <div className="space-y-3 rounded-lg border border-neutral-200 bg-white/70 p-3 dark:border-neutral-700 dark:bg-neutral-950/40">
+        <div className="space-y-3 rounded-lg border border-security-navy-100 bg-white/70 p-3 dark:border-security-navy-700 dark:bg-security-navy-900/40">
           <div className="grid gap-2">
             <button
               type="button"
@@ -220,7 +220,7 @@ export function SiteTimesheetRowCard({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
                 Shift worked
               </label>
               <select
@@ -254,11 +254,11 @@ export function SiteTimesheetRowCard({
               </select>
             </div>
             <div>
-              <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
                 Status
               </label>
               <p
-                className="mt-1 text-sm font-medium text-neutral-800 dark:text-neutral-200"
+                className="mt-1 text-sm font-medium text-security-navy-900 dark:text-security-navy-200"
                 title="Set automatically when you confirm this attendance entry"
               >
                 {formatAttendanceStatus(row.attendanceStatus)}
@@ -267,7 +267,7 @@ export function SiteTimesheetRowCard({
           </div>
 
           <div>
-            <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
               Start / end time
             </label>
             <div className="mt-1 flex items-center gap-2">
@@ -282,7 +282,7 @@ export function SiteTimesheetRowCard({
                 className="input-modern flex-1"
                 title="Start time"
               />
-              <span className="text-neutral-400">to</span>
+              <span className="text-security-navy-400">to</span>
               <ShiftTimeSelect
                 value={displayShiftTime(row.clockOut, shiftType, "end")}
                 disabled={locked || saving}
@@ -300,7 +300,7 @@ export function SiteTimesheetRowCard({
           </div>
 
           <div>
-            <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
               Notes
             </label>
             <input
@@ -319,7 +319,7 @@ export function SiteTimesheetRowCard({
           {row.discrepancyCodes.map((code) => (
             <span
               key={code}
-              className="rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800"
+              className="rounded-full border border-security-amber-200 bg-security-amber-100 px-2 py-0.5 text-[10px] font-medium text-security-amber-800"
             >
               {humanizeCode(code)}
             </span>
@@ -334,16 +334,16 @@ export function SiteTimesheetRowCard({
       */}
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
             Duty ON OB
           </label>
           {locked || row.approvalStatus === "approved" || dutyOnLocked ? (
             <div className="mt-1">
-              <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+              <p className="text-sm font-medium text-security-navy-900 dark:text-security-navy-200">
                 {savedDutyOn || "—"}
               </p>
               {dutyOnLocked && !locked && row.approvalStatus !== "approved" && (
-                <p className="mt-0.5 text-[11px] text-neutral-500">
+                <p className="mt-0.5 text-[11px] text-security-navy-500">
                   Locked — attendance approval access is required to change this.
                 </p>
               )}
@@ -368,16 +368,16 @@ export function SiteTimesheetRowCard({
           )}
         </div>
         <div>
-          <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
             Duty OFF OB
           </label>
           {locked || row.approvalStatus === "approved" || dutyOffLocked ? (
             <div className="mt-1">
-              <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+              <p className="text-sm font-medium text-security-navy-900 dark:text-security-navy-200">
                 {savedDutyOff || "—"}
               </p>
               {dutyOffLocked && !locked && row.approvalStatus !== "approved" && (
-                <p className="mt-0.5 text-[11px] text-neutral-500">
+                <p className="mt-0.5 text-[11px] text-security-navy-500">
                   Locked — attendance approval access is required to change this.
                 </p>
               )}

@@ -52,12 +52,12 @@ export default function BillingHubPage() {
   }, [load]);
 
   const tile = (label: string, value: string, hint?: string) => (
-    <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-950">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">{label}</p>
-      <p className="mt-1 font-mono text-xl font-bold tabular-nums text-neutral-900 dark:text-neutral-100">
+    <div className="rounded-security-lg border border-security-navy-100 bg-white p-4 dark:border-security-navy-700 dark:bg-security-navy-900">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">{label}</p>
+      <p className="mt-1 font-mono text-xl font-bold tabular-nums text-security-navy-900 dark:text-security-navy-100">
         {value}
       </p>
-      {hint && <p className="mt-0.5 text-xs text-neutral-500">{hint}</p>}
+      {hint && <p className="mt-0.5 text-xs text-security-navy-500">{hint}</p>}
     </div>
   );
 
@@ -70,8 +70,8 @@ export default function BillingHubPage() {
         >
           ← Back to payroll
         </Link>
-        <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">Client billing</h1>
-        <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+        <h1 className="text-xl font-semibold text-security-navy-900 dark:text-security-navy-100">Client billing</h1>
+        <p className="mt-1 text-sm text-security-navy-500 dark:text-security-navy-400">
           Quotes, invoices, receipts and client statements.
         </p>
       </header>
@@ -91,7 +91,7 @@ export default function BillingHubPage() {
       {loading ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Loading summary">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-20 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-700" />
+            <div key={i} className="h-20 animate-pulse rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700" />
           ))}
         </div>
       ) : summary ? (
@@ -108,7 +108,7 @@ export default function BillingHubPage() {
           </section>
 
           <section>
-            <h2 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+            <h2 className="mb-2 text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">
               Outstanding by age
             </h2>
             <div className="grid gap-2 sm:grid-cols-5">
@@ -123,10 +123,10 @@ export default function BillingHubPage() {
               ).map(([label, value]) => (
                 <div
                   key={label}
-                  className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900"
+                  className="rounded-lg border border-security-navy-100 bg-security-navy-50 px-3 py-2 dark:border-security-navy-700 dark:bg-security-navy-900"
                 >
-                  <p className="text-[10px] uppercase tracking-wider text-neutral-500">{label}</p>
-                  <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
+                  <p className="text-[10px] uppercase tracking-wider text-security-navy-500">{label}</p>
+                  <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-security-navy-900 dark:text-security-navy-100">
                     {formatCurrency(value, { currency })}
                   </p>
                 </div>
@@ -141,10 +141,10 @@ export default function BillingHubPage() {
           <Link
             key={section.href}
             href={section.href}
-            className="rounded-xl border border-neutral-200 bg-white p-4 transition-colors hover:border-security-navy-400 dark:border-neutral-700 dark:bg-neutral-950"
+            className="rounded-security-lg border border-security-navy-100 bg-white p-4 transition-colors hover:border-security-navy-400 dark:border-security-navy-700 dark:bg-security-navy-900"
           >
-            <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">{section.title}</h2>
-            <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">{section.description}</p>
+            <h2 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-100">{section.title}</h2>
+            <p className="mt-1 text-sm text-security-navy-500 dark:text-security-navy-400">{section.description}</p>
           </Link>
         ))}
       </section>

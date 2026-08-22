@@ -41,7 +41,7 @@ function statusBadgeClass(status: string): string {
     case "void":
       return "badge-error";
     default:
-      return "badge-neutral border border-neutral-300";
+      return "badge-neutral border border-security-navy-200";
   }
 }
 
@@ -167,22 +167,22 @@ export default function AcademyCertificatesPage() {
       {confirmDialog}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-security-navy-900">Certificates</h1>
-        <p className="mt-1 text-sm text-neutral-600">Issue and manage learner certificate lifecycle with verification codes.</p>
+        <p className="mt-1 text-sm text-security-navy-600">Issue and manage learner certificate lifecycle with verification codes.</p>
       </div>
 
       {!canCreate && !canApprove && !canDelete && (
-        <div className="rounded-lg border border-neutral-300 bg-neutral-100/50 px-3 py-2 text-sm">
+        <div className="rounded-lg border border-security-navy-200 bg-security-navy-50/50 px-3 py-2 text-sm">
           Read-only: certificate changes have not been granted for your account.
         </div>
       )}
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
-      <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Issue certificate</h2>
+      <div className="rounded-2xl border border-security-navy-100 bg-white p-5 shadow-security-card">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-security-navy-500">Issue certificate</h2>
         <form onSubmit={create} className="mt-3 grid gap-2 md:grid-cols-4">
           <select
-            className="input-modern rounded-xl"
+            className="input-modern rounded-security-lg"
             value={learnerId}
             onChange={(e) => setLearnerId(e.target.value)}
             disabled={!canCreate || saving}
@@ -195,7 +195,7 @@ export default function AcademyCertificatesPage() {
             ))}
           </select>
           <select
-            className="input-modern rounded-xl"
+            className="input-modern rounded-security-lg"
             value={courseId}
             onChange={(e) => setCourseId(e.target.value)}
             disabled={!canCreate || saving}
@@ -215,21 +215,21 @@ export default function AcademyCertificatesPage() {
             disabled={!canCreate || saving}
             ariaLabel="Certificate issue date"
           />
-          <button className="btn-primary rounded-xl" disabled={!canCreate || saving || !learnerId || !courseId || !issueDate}>
+          <button className="btn-primary rounded-security-lg" disabled={!canCreate || saving || !learnerId || !courseId || !issueDate}>
             Issue
           </button>
         </form>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-        <div className="border-b border-neutral-200/80 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">Certificate register</h2></div>
+      <div className="overflow-hidden rounded-2xl border border-security-navy-100 bg-white shadow-security-card">
+        <div className="border-b border-security-navy-100/80 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">Certificate register</h2></div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-neutral-200 text-sm">
-            <thead><tr className="text-[11px] uppercase tracking-wide text-neutral-500"><th>Certificate #</th><th>Learner</th><th>Status</th><th>Verification</th><th className="text-right">Actions</th></tr></thead>
+          <table className="min-w-full divide-y divide-security-navy-100 text-sm">
+            <thead><tr className="text-[11px] uppercase tracking-wide text-security-navy-500"><th>Certificate #</th><th>Learner</th><th>Status</th><th>Verification</th><th className="text-right">Actions</th></tr></thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-sm text-neutral-500">
+                  <td colSpan={5} className="py-8 text-center text-sm text-security-navy-500">
                     Loading certificates...
                   </td>
                 </tr>
@@ -252,7 +252,7 @@ export default function AcademyCertificatesPage() {
               ))}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-sm text-neutral-500">
+                  <td colSpan={5} className="py-8 text-center text-sm text-security-navy-500">
                     No certificates yet.
                   </td>
                 </tr>

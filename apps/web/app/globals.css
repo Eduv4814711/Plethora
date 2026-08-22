@@ -1,29 +1,59 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap');
 @config "../tailwind.config.ts";
 @import "tailwindcss";
 
-/* Plethora – Orange Brand Design System */
+/* ─────────────────────────────────────────────────────────────────────────────
+   Plethora — the duty board
+
+   Graphite chrome, paper work surface, orange as a signal. The palette rule:
+   saturation is reserved for state. A live shift, a waiting approval, or a
+   focused control is orange; structure and chrome are graphite. Orange only
+   keeps its meaning if it is not also the wallpaper.
+   ──────────────────────────────────────────────────────────────────────────── */
 :root {
-  --bg-canvas: #f8fafc;
+  /* Surfaces */
+  --bg-canvas: #f5f6f8;
   --bg-content: #ffffff;
-  --bg-nav: #F57C00;
-  --bg-nav-hover: #EF6C00;
-  --text-primary: #1A1518;
-  --text-secondary: #374151;
-  --text-muted: #6b7280;
-  --accent-primary: #FF9800;
-  --accent-amber: #f59e0b;
-  --accent-emerald: #FF9800;
-  --accent-red: #dc2626;
-  --border-light: #e5e7eb;
-  --border-medium: #d1d5db;
+  --bg-sunken: #eef0f4;
+  --bg-nav: #171a1f;
+  --bg-nav-hover: #2e343d;
+
+  /* Text */
+  --text-primary: #171a1f;
+  --text-secondary: #434a55;
+  --text-muted: #5a626e;
+  --text-faint: #7c8593;
+
+  /* Signals */
+  --accent-primary: #f97a08;
+  --accent-signal: #f97a08;
+  --accent-signal-deep: #a8480a;
+  --accent-signal-wash: #fff6ec;
+  --accent-amber: #f97a08;
+  --accent-emerald: #0e8a5f;
+  --accent-red: #c42b1c;
+
+  /* Structure */
+  --border-light: #e8eaee;
+  --border-medium: #d3d7de;
+  --border-strong: #afb6c1;
+
   --radius: 0.5rem;
-  --radius-lg: 0.75rem;
-  --transition: 150ms ease;
+  --radius-lg: 0.875rem;
+  --transition: 150ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Chrome height, shared by the fixed header and every page that has to
+     reserve space beneath it. */
+  --chrome-h: 3.5rem;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: rgba(249, 122, 8, 0.14);
 }
 
 body {
-  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-family: 'Archivo', system-ui, sans-serif;
   color: var(--text-primary);
   background: var(--bg-canvas);
   -webkit-font-smoothing: antialiased;
@@ -33,129 +63,225 @@ body {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-html {
-  scroll-behavior: smooth;
-  -webkit-tap-highlight-color: rgba(245, 124, 0, 0.15);
-}
-
 @layer base {
+  h1, h2, h3 {
+    font-family: 'Space Grotesk', 'Archivo', system-ui, sans-serif;
+    letter-spacing: -0.018em;
+  }
   a {
-    color: #F57C00;
+    color: var(--accent-signal-deep);
+    text-underline-offset: 0.2em;
   }
   a:hover {
-    color: #E65100;
+    color: #7c360b;
+  }
+  /* Figures line up in every table and total without opting in per cell. */
+  table, output, time, .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  /* One focus treatment for the whole product: an orange ring legible on
+     graphite chrome and on paper alike. */
+  :focus-visible {
+    outline: 2px solid var(--accent-signal);
+    outline-offset: 2px;
+    border-radius: 0.25rem;
   }
 }
 
 ::selection {
-  background: #FFCC80;
+  background: #ffe8ce;
+  color: #171a1f;
+}
+
+/* Quieter scrollbars — a dense operations screen has a lot of them. */
+@supports (scrollbar-width: thin) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd1da transparent;
+  }
+}
+
+/* These live in the `components` layer, not `utilities`, so a caller can still
+   reach past them: `className="btn-amber py-3"` gets a taller button instead of
+   silently losing to the base rule. */
+@layer components {
+  /* ── Actions ──────────────────────────────────────────────────────────────
+     Primary is graphite, not orange. In a tool where orange means "this needs
+     you", an orange Save button on every screen would drown the signal out.
+     The orange button (.btn-amber) is kept for the one action on a screen that
+     is the signal — dispatch, approve, confirm — and carries ink text so it can
+     run at full brand saturation and still clear AA contrast. */
+  .btn-primary,
+  .btn-secondary,
+  .btn-ghost,
+  .btn-amber,
+  .btn-destructive {
+    @apply inline-flex items-center justify-center gap-2 min-h-10 whitespace-nowrap rounded-security border px-4 py-2.5 text-sm font-semibold leading-none outline-none transition-all duration-150 active:scale-[0.985] disabled:pointer-events-none disabled:opacity-45 disabled:active:scale-100;
+  }
+  .btn-primary {
+    @apply border-security-navy-900 bg-security-navy-900 text-white shadow-security-card hover:border-security-navy-700 hover:bg-security-navy-700;
+  }
+  .btn-secondary {
+    @apply border-security-navy-200 bg-white text-security-navy-900 shadow-security-card hover:border-security-navy-300 hover:bg-security-navy-50;
+  }
+  .btn-ghost {
+    @apply border-transparent bg-transparent font-medium text-security-navy-600 hover:bg-security-navy-100 hover:text-security-navy-900;
+  }
+  .btn-amber {
+    @apply border-security-amber-500 bg-security-amber-500 text-security-navy-900 shadow-security-card hover:border-security-amber-400 hover:bg-security-amber-400;
+  }
+  .btn-destructive {
+    @apply border-red-700 bg-red-700 text-white shadow-security-card hover:border-red-800 hover:bg-red-800;
+  }
+
+  /* ── Fields ───────────────────────────────────────────────────────────────
+     Hairline borders instead of the old 2px: at the density of a roster or a
+     timesheet, doubled borders between adjacent fields read as a cage. Focus
+     does the shouting instead. */
+  .input-modern,
+  .input-compact {
+    @apply w-full rounded-security border border-security-navy-200 bg-white text-sm text-security-navy-900 shadow-[inset_0_1px_2px_rgb(23_26_31/0.04)] outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-security-navy-400 hover:border-security-navy-300 focus:border-security-amber-500 focus:shadow-[0_0_0_3px_rgb(249_122_8/0.18)] disabled:cursor-not-allowed disabled:bg-security-navy-50 disabled:text-security-navy-500;
+    font-family: inherit;
+  }
+  .input-modern {
+    @apply px-3.5 py-2.5;
+  }
+  select.input-modern {
+    padding-block: 0.625rem;
+  }
+  .input-compact {
+    @apply px-3 py-1.5;
+  }
+
+  /* ── Surfaces ─────────────────────────────────────────────────────────── */
+  .card-wireframe {
+    @apply rounded-security-lg border border-security-navy-100 bg-white;
+  }
+  .card-elevated {
+    @apply rounded-security-lg border border-security-navy-100 bg-white shadow-security-elevated;
+  }
+  .card-dashboard {
+    @apply rounded-security-lg border border-security-navy-100 bg-white shadow-security-card transition-[box-shadow,border-color] duration-200 hover:border-security-navy-200 hover:shadow-security-card-hover;
+  }
+
+  /* ── The status spine ─────────────────────────────────────────────────────
+     The signature device. Anything standing for a live thing — a shift, an
+     approval, an incident, the module you are in — carries a bar on its left
+     edge whose colour is its state. One vocabulary, used on cards, rows, and
+     the nav rail, so state is readable before any text is. */
+  .spine {
+    @apply relative overflow-hidden;
+  }
+  .spine::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 3px;
+    background: var(--border-medium);
+    transition: background var(--transition);
+  }
+  .spine-live::before { background: var(--accent-signal); }
+  .spine-good::before { background: var(--accent-emerald); }
+  .spine-warn::before { background: var(--accent-signal-deep); }
+  .spine-bad::before  { background: var(--accent-red); }
+  .spine-idle::before { background: var(--border-medium); }
+
+  /* ── Typography ───────────────────────────────────────────────────────── */
+  .page-title {
+    font-family: 'Space Grotesk', 'Archivo', system-ui, sans-serif;
+    @apply text-[1.6rem] font-semibold leading-tight tracking-[-0.02em] text-security-navy-900 sm:text-[1.8rem];
+  }
+  .section-title {
+    @apply font-mono text-[0.6875rem] font-medium uppercase tracking-[0.14em] text-security-navy-500;
+  }
+  .label-text {
+    @apply text-xs font-semibold tracking-[0.01em] text-security-navy-700;
+  }
+  .eyebrow {
+    @apply font-mono text-[0.6875rem] font-medium uppercase tracking-[0.16em] text-security-amber-700;
+  }
+  .metric {
+    font-family: 'Space Grotesk', 'Archivo', system-ui, sans-serif;
+    @apply text-3xl font-semibold tabular-nums tracking-[-0.03em] text-security-navy-900;
+  }
+
+  /* ── Badges ───────────────────────────────────────────────────────────────
+     Tinted fills, no borders: at four badges per table row the borders were
+     doing more visual work than the words inside them. */
+  .badge,
+  .badge-neutral,
+  .badge-success,
+  .badge-warning,
+  .badge-error,
+  .badge-on-duty,
+  .badge-off-duty,
+  .badge-live {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.6875rem] font-semibold leading-none;
+  }
+  .badge-neutral {
+    @apply bg-security-navy-100 text-security-navy-700;
+  }
+  .badge-success {
+    @apply bg-security-emerald-50 text-security-emerald-700;
+  }
+  .badge-warning {
+    @apply bg-security-amber-50 text-security-amber-700;
+  }
+  .badge-error {
+    @apply bg-red-50 text-red-800;
+  }
+  .badge-on-duty {
+    @apply bg-security-emerald-50 text-security-emerald-700;
+  }
+  .badge-off-duty {
+    @apply bg-security-navy-100 text-security-navy-600;
+  }
+  /* A live badge earns the one piece of ambient motion on the screen. */
+  .badge-live {
+    @apply bg-security-amber-50 text-security-amber-700;
+  }
+  .badge-live::before {
+    content: "";
+    @apply h-1.5 w-1.5 shrink-0 animate-signal-pulse rounded-full bg-security-amber-500 motion-reduce:animate-none;
+  }
+
 }
 
 @layer utilities {
-  /* Primary action - navy, professional */
-  .btn-primary {
-    @apply px-5 py-2.5 font-semibold rounded-security border-2 border-security-navy bg-security-navy text-white hover:bg-security-navy-800 active:scale-[0.98] transition-all duration-150 outline-none focus:ring-2 focus:ring-security-navy focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
-  }
-  .btn-secondary {
-    @apply px-5 py-2.5 font-medium rounded-security border-2 border-neutral-300 bg-white text-black hover:bg-neutral-50 hover:border-neutral-400 active:scale-[0.98] transition-all duration-150 outline-none focus:ring-2 focus:ring-security-navy focus:ring-offset-2;
-  }
-  .btn-ghost {
-    @apply px-4 py-2 font-medium rounded-security text-black border border-transparent hover:border-neutral-300 hover:bg-neutral-50 transition-colors duration-150 outline-none focus:ring-2 focus:ring-security-navy focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
-  }
-  .btn-amber {
-    @apply px-5 py-2.5 font-semibold rounded-security border-2 border-security-amber-500 bg-security-amber-500 text-white hover:bg-security-amber-600 active:scale-[0.98] transition-all duration-150 outline-none focus:ring-2 focus:ring-security-amber focus:ring-offset-2;
-  }
-  .btn-destructive {
-    @apply px-5 py-2.5 font-semibold rounded-security border-2 border-red-600 bg-red-600 text-white hover:bg-red-700 active:scale-[0.98] transition-all duration-150 outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
-  }
-
-  /* Inputs - clean, readable */
-  .input-modern {
-    @apply w-full px-4 py-2.5 rounded-security border-2 border-neutral-300 bg-white text-black placeholder-neutral-500 focus:border-security-navy-500 focus:ring-2 focus:ring-security-navy-200 transition-all duration-150 outline-none;
-    font-family: inherit;
-  }
-  select.input-modern {
-    @apply leading-relaxed;
-    padding-block: 0.5rem;
-    font-family: inherit;
-  }
-  .input-compact {
-    @apply w-full px-3 py-2 text-sm rounded-security border-2 border-neutral-300 bg-white text-black placeholder-neutral-500 focus:border-security-navy-500 transition-all duration-150 outline-none;
-  }
-
-  /* Cards - subtle shadow, professional */
-  .card-wireframe {
-    @apply bg-white rounded-security-lg border border-neutral-200 shadow-security-card;
-  }
-  .card-elevated {
-    @apply bg-white rounded-security-lg border border-neutral-200 shadow-security-elevated;
-  }
-  .card-dashboard {
-    @apply bg-white rounded-security-lg border border-neutral-200 shadow-security-card hover:shadow-security-card-hover transition-shadow duration-200;
-  }
-
-  /* Typography */
-  .page-title {
-    @apply text-2xl font-bold text-black tracking-tight;
-  }
-  .section-title {
-    @apply text-sm font-semibold text-black uppercase tracking-wider;
-  }
-  .label-text {
-    @apply text-xs font-semibold uppercase tracking-wider text-black;
-  }
-
-  /* Badges - status indicators */
-  .badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium;
-  }
-  .badge-neutral {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-neutral-100 text-black border border-neutral-200;
-  }
-  .badge-success {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200;
-  }
-  .badge-warning {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-security-amber-100 text-security-amber-700 border border-security-amber-200;
-  }
-  .badge-error {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-red-50 text-red-700 border border-red-200;
-  }
-  .badge-on-duty {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200;
-  }
-  .badge-off-duty {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-neutral-100 text-black border border-neutral-200;
-  }
-
-  /* Borders */
+  /* ── Structure helpers kept for the pages that already use them ────────── */
   .border-wireframe-thin {
     border-width: 1px;
     border-color: var(--border-light);
   }
   .border-wireframe-thick {
-    border-width: 2px;
+    border-width: 1px;
     border-color: var(--border-medium);
   }
   .bg-wireframe-accent {
-    background-color: var(--border-light);
+    background-color: var(--bg-sunken);
   }
   .bg-wireframe-grid {
     background-color: var(--bg-canvas);
     background-image:
-      linear-gradient(to right, rgba(255, 152, 0, 0.06) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(255, 152, 0, 0.06) 1px, transparent 1px);
-    background-size: 40px 40px;
+      linear-gradient(to right, rgba(23, 26, 31, 0.035) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(23, 26, 31, 0.035) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+  /* Chrome surface: the graphite shared by the header, rail, and drawer. */
+  .surface-chrome {
+    background-color: var(--bg-nav);
+    color: rgb(255 255 255 / 0.92);
   }
 }
 
-/* Date picker – orange brand styling (@daypicker/react) */
+/* Date picker — signal-orange selection on paper (@daypicker/react) */
 .rdp-root {
-  --rdp-accent-color: #FF9800;
-  --rdp-accent-background-color: #FFE0B2;
-  --rdp-today-color: #EF6C00;
-  --rdp-selected-border: 2px solid #FF9800;
-  --rdp-day_button-border-radius: 0.375rem;
+  --rdp-accent-color: #f97a08;
+  --rdp-accent-background-color: #fff6ec;
+  --rdp-today-color: #a8480a;
+  --rdp-selected-border: 2px solid #f97a08;
+  --rdp-day_button-border-radius: 0.5rem;
   --rdp-day_button-width: 36px;
   --rdp-day_button-height: 36px;
   --rdp-day-height: 38px;
@@ -164,72 +290,47 @@ html {
   --rdp-nav_button-width: 32px;
 }
 
-.dark .rdp-root,
-[data-theme="dark"] .rdp-root {
-  --rdp-accent-color: #FFA726;
-  --rdp-accent-background-color: rgba(255, 152, 0, 0.22);
-  --rdp-today-color: #FFB74D;
-  --rdp-selected-border: 2px solid #FFA726;
-}
-
 .rdp-root .rdp-month_caption {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0.5rem;
   margin-bottom: 0.5rem;
-  background: #FFF3E0;
-  border: 1px solid #FFCC80;
+  background: #f5f6f8;
+  border: 1px solid #e8eaee;
   border-radius: 0.5rem;
+  font-family: 'Space Grotesk', 'Archivo', system-ui, sans-serif;
   font-weight: 600;
   font-size: 0.9375rem;
   color: var(--text-primary);
 }
 
-.dark .rdp-root .rdp-month_caption,
-[data-theme="dark"] .rdp-root .rdp-month_caption {
-  background: rgba(255, 152, 0, 0.12);
-  border-color: rgba(255, 152, 0, 0.35);
-}
-
 .rdp-root .rdp-button_previous,
 .rdp-root .rdp-button_next {
-  border: 2px solid #FFCC80;
+  border: 1px solid #d3d7de;
   border-radius: 0.5rem;
-  background: #FFF3E0;
-  color: #EF6C00;
+  background: #ffffff;
+  color: #434a55;
 }
 
 .rdp-root .rdp-button_previous:hover,
 .rdp-root .rdp-button_next:hover {
-  background: #FFE0B2;
-  border-color: #FF9800;
-}
-
-.dark .rdp-root .rdp-button_previous,
-.dark .rdp-root .rdp-button_next,
-[data-theme="dark"] .rdp-root .rdp-button_previous,
-[data-theme="dark"] .rdp-root .rdp-button_next {
-  background: rgba(255, 152, 0, 0.15);
-  border-color: rgba(255, 152, 0, 0.4);
-  color: #FFB74D;
-}
-
-.dark .rdp-root .rdp-button_previous:hover,
-.dark .rdp-root .rdp-button_next:hover,
-[data-theme="dark"] .rdp-root .rdp-button_previous:hover,
-[data-theme="dark"] .rdp-root .rdp-button_next:hover {
-  background: rgba(255, 152, 0, 0.28);
-  border-color: #FFA726;
+  background: #fff6ec;
+  border-color: #f97a08;
+  color: #a8480a;
 }
 
 .rdp-root .rdp-chevron {
-  fill: #EF6C00;
+  fill: currentColor;
 }
 
-.dark .rdp-root .rdp-chevron,
-[data-theme="dark"] .rdp-root .rdp-chevron {
-  fill: #FFB74D;
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
-
-/* Keep semantic Tailwind text utilities available for helper text, badges, and status states. */

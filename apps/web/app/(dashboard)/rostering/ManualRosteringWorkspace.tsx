@@ -724,21 +724,21 @@ export const ManualRosteringWorkspace = forwardRef<
   return (
     <div className="space-y-4">
       {siteConfig && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50/60 dark:bg-neutral-900/40 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-security-lg border border-security-navy-100 dark:border-security-navy-700 bg-security-navy-50/60 dark:bg-security-navy-900/40 px-4 py-3">
           <div>
-            <p className="font-medium text-neutral-800 dark:text-neutral-100">{siteConfig.name}</p>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+            <p className="font-medium text-security-navy-900 dark:text-security-navy-100">{siteConfig.name}</p>
+            <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-0.5">
               {siteConfig.assignedGuardIds.length} guards assigned · {columnKeys.length} days in period
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {pendingChanges.size > 0 ? (
-              <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+              <p className="text-xs font-medium text-security-amber-700 dark:text-security-amber-300">
                 {pendingChanges.size} unsaved change{pendingChanges.size === 1 ? "" : "s"} — save before
                 distributing
               </p>
             ) : (
-              <p className="text-xs text-neutral-500 dark:text-neutral-400 hidden sm:block">
+              <p className="text-xs text-security-navy-500 dark:text-security-navy-400 hidden sm:block">
                 Assign shifts in the grid, then save when ready
               </p>
             )}
@@ -792,7 +792,7 @@ export const ManualRosteringWorkspace = forwardRef<
               {exporting ? "Preparing…" : "Download PDF"}
             </button>}
             {!exportReady && (
-              <p className="basis-full text-[11px] text-neutral-500 dark:text-neutral-400 sm:text-right">
+              <p className="basis-full text-[11px] text-security-navy-500 dark:text-security-navy-400 sm:text-right">
                 {pendingChanges.size > 0
                   ? "Save the draft before previewing or downloading."
                   : "Add guards and shifts before sharing the roster."}
@@ -806,7 +806,7 @@ export const ManualRosteringWorkspace = forwardRef<
         {MANUAL_SHIFT_CODE_OPTIONS.map((o) => (
           <span
             key={o.code}
-            className="px-2 py-1 rounded-md bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300"
+            className="px-2 py-1 rounded-md bg-white dark:bg-security-navy-800 border border-security-navy-100 dark:border-security-navy-700 text-security-navy-600 dark:text-security-navy-300"
           >
             <strong>{o.code === "blank" ? "—" : o.code}</strong> {o.label}
           </span>
@@ -814,20 +814,20 @@ export const ManualRosteringWorkspace = forwardRef<
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-300 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm text-red-800 dark:text-red-200">
+        <div className="rounded-security-lg border border-red-300 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm text-red-800 dark:text-red-200">
           {error}
         </div>
       )}
       {statusMsg && (
-        <div className="rounded-xl border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200">
+        <div className="rounded-security-lg border border-security-emerald-300 bg-security-emerald-50 dark:bg-security-emerald-700/30 px-4 py-3 text-sm text-security-emerald-700 dark:text-security-emerald-200">
           {statusMsg}
         </div>
       )}
       {publishSummary && (
         <div
-          className={`rounded-xl border px-4 py-3 text-sm ${
+          className={`rounded-security-lg border px-4 py-3 text-sm ${
             publishSummary.success
-              ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200"
+              ? "border-security-emerald-300 bg-security-emerald-50 text-security-emerald-700 dark:border-security-emerald-700 dark:bg-security-emerald-700/30 dark:text-security-emerald-200"
               : "border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200"
           }`}
         >
@@ -857,13 +857,13 @@ export const ManualRosteringWorkspace = forwardRef<
         <section className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Review roster</p>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              <p className="text-xs font-semibold uppercase tracking-wider text-security-navy-500">Review roster</p>
+              <p className="text-xs text-security-navy-500 dark:text-security-navy-400">
                 Fix red issues before publishing shifts. Amber notes are helpful checks.
               </p>
             </div>
             {pendingChanges.size > 0 && (
-              <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:ring-amber-800">
+              <span className="rounded-full bg-security-amber-50 px-2.5 py-1 text-[11px] font-medium text-security-amber-700 ring-1 ring-security-amber-200 dark:bg-security-amber-950/30 dark:text-security-amber-300 dark:ring-security-amber-800">
                 Save draft before review is final
               </span>
             )}
@@ -873,11 +873,11 @@ export const ManualRosteringWorkspace = forwardRef<
       )}
 
       {canEditSite && availableGuards.some((g) => !g.onSite) && (
-        <div className="flex flex-wrap items-end gap-2 rounded-xl border border-dashed border-neutral-300 dark:border-neutral-600 bg-neutral-50/50 dark:bg-neutral-900/30 p-3">
+        <div className="flex flex-wrap items-end gap-2 rounded-security-lg border border-dashed border-security-navy-200 dark:border-security-navy-600 bg-security-navy-50/50 dark:bg-security-navy-900/30 p-3">
           <label className="flex-1 min-w-[12rem] space-y-1">
-            <span className="text-xs font-medium text-neutral-500">Add guard to this site</span>
+            <span className="text-xs font-medium text-security-navy-500">Add guard to this site</span>
             <select
-              className="w-full rounded-lg border border-neutral-300 dark:border-neutral-600 px-3 py-2 text-sm bg-white dark:bg-neutral-900"
+              className="w-full rounded-lg border border-security-navy-200 dark:border-security-navy-600 px-3 py-2 text-sm bg-white dark:bg-security-navy-900"
               defaultValue=""
               onChange={(e) => {
                 const id = e.target.value;
@@ -902,7 +902,7 @@ export const ManualRosteringWorkspace = forwardRef<
       )}
 
       {loading && !grid ? (
-        <div className="h-64 flex items-center justify-center text-neutral-500">Loading roster…</div>
+        <div className="h-64 flex items-center justify-center text-security-navy-500">Loading roster…</div>
       ) : grid ? (
         <RosterSpreadsheet
           rows={grid.rows}
@@ -916,7 +916,7 @@ export const ManualRosteringWorkspace = forwardRef<
           addingPlaceholder={addingPlaceholder}
         />
       ) : (
-        <div className="h-64 flex items-center justify-center text-neutral-500">No roster data.</div>
+        <div className="h-64 flex items-center justify-center text-security-navy-500">No roster data.</div>
       )}
 
       {siteConfig && grid && (

@@ -210,33 +210,33 @@ export default function AttendanceExceptionsPage() {
             ["Attendance complete", `${summary.completionRate ?? 100}%`],
           ].map(([label, value]) => (
             <div key={String(label)} className="card-dashboard p-3">
-              <p className="text-xs font-semibold uppercase text-neutral-500">{label}</p>
+              <p className="text-xs font-semibold uppercase text-security-navy-500">{label}</p>
               <p className="mt-1 text-2xl font-bold tabular-nums">{value}</p>
             </div>
           ))}
         </section>
       )}
 
-      <section className="sticky top-0 z-20 grid gap-3 rounded-xl border border-neutral-200 bg-white/95 p-4 shadow-sm backdrop-blur dark:border-neutral-700 dark:bg-neutral-950/95 sm:grid-cols-2 lg:grid-cols-4" aria-label="Filter attendance issues">
-        <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+      <section className="sticky top-0 z-20 grid gap-3 rounded-security-lg border border-security-navy-100 bg-white/95 p-4 shadow-security-card backdrop-blur dark:border-security-navy-700 dark:bg-security-navy-900/95 sm:grid-cols-2 lg:grid-cols-4" aria-label="Filter attendance issues">
+        <label className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">
           Status
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="input-modern mt-1 min-h-11 w-full">
             <option value="OPEN">Open</option><option value="UNDER_REVIEW">Follow up later</option><option value="all">All statuses</option><option value="RESOLVED">Resolved</option><option value="APPROVED">Confirmed</option><option value="REJECTED">Dismissed</option>
           </select>
         </label>
-        <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+        <label className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">
           Priority
           <select value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value)} className="input-modern mt-1 min-h-11 w-full">
             <option value="">All priorities</option><option value="CRITICAL">Critical</option><option value="MEDIUM">Medium</option><option value="LOW">Low</option>
           </select>
         </label>
-        <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+        <label className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">
           Site
           <select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)} className="input-modern mt-1 min-h-11 w-full">
             <option value="">All sites</option>{sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}
           </select>
         </label>
-        <label className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+        <label className="text-xs font-semibold text-security-navy-700 dark:text-security-navy-300">
           Shift
           <select value={shiftFilter} onChange={(event) => setShiftFilter(validShift(event.target.value))} className="input-modern mt-1 min-h-11 w-full">
             <option value="all">All shifts</option><option value="day">Day shift</option><option value="night">Night shift</option>
@@ -246,7 +246,7 @@ export default function AttendanceExceptionsPage() {
 
       {loading ? (
         <div className="animate-pulse space-y-3" aria-label="Loading attendance issues">
-          {[1, 2, 3].map((item) => <div key={item} className="h-36 rounded-xl bg-neutral-200 dark:bg-neutral-700" />)}
+          {[1, 2, 3].map((item) => <div key={item} className="h-36 rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700" />)}
         </div>
       ) : (
         <div className="space-y-3">
@@ -258,14 +258,14 @@ export default function AttendanceExceptionsPage() {
               <article key={exception.id} className="card-dashboard p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <h2 className="font-semibold text-neutral-900 dark:text-neutral-100">{copy.title}</h2>
-                    <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{copy.description}</p>
-                    <p className="mt-2 text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                    <h2 className="font-semibold text-security-navy-900 dark:text-security-navy-100">{copy.title}</h2>
+                    <p className="mt-1 text-sm text-security-navy-600 dark:text-security-navy-400">{copy.description}</p>
+                    <p className="mt-2 text-sm font-medium text-security-navy-900 dark:text-security-navy-200">
                       {exception.employee ? `${exception.employee.firstName} ${exception.employee.lastName}` : "Unknown guard"}
                       {exception.site ? ` · ${exception.site.name}` : ""}{shift ? ` · ${shift} shift` : ""}
                     </p>
-                    {exception.shift && <p className="mt-1 text-xs text-neutral-500">{new Date(exception.shift.startTime).toLocaleString()} – {new Date(exception.shift.endTime).toLocaleTimeString()}</p>}
-                    {exception.reviewNote && <p className="mt-2 rounded-lg bg-neutral-50 px-3 py-2 text-sm text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">Previous note: {exception.reviewNote}</p>}
+                    {exception.shift && <p className="mt-1 text-xs text-security-navy-500">{new Date(exception.shift.startTime).toLocaleString()} – {new Date(exception.shift.endTime).toLocaleTimeString()}</p>}
+                    {exception.reviewNote && <p className="mt-2 rounded-lg bg-security-navy-50 px-3 py-2 text-sm text-security-navy-700 dark:bg-security-navy-900 dark:text-security-navy-300">Previous note: {exception.reviewNote}</p>}
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
                     <Badge variant={exception.severity === "CRITICAL" ? "error" : "warning"}>{exception.severity}</Badge>
@@ -274,7 +274,7 @@ export default function AttendanceExceptionsPage() {
                 </div>
 
                 {canApprove && ["OPEN", "UNDER_REVIEW"].includes(exception.status) && (
-                  <div className="mt-4 border-t border-neutral-100 pt-3 dark:border-neutral-800">
+                  <div className="mt-4 border-t border-security-navy-100 pt-3 dark:border-security-navy-800">
                     <button
                       type="button"
                       className="btn-primary min-h-11 w-full sm:w-auto"
@@ -284,9 +284,9 @@ export default function AttendanceExceptionsPage() {
                       Choose outcome
                     </button>
                     {actionsOpen && (
-                      <div className="mt-3 rounded-xl border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900">
-                        <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                          Supervisor note <span className="font-normal text-neutral-500">(optional)</span>
+                      <div className="mt-3 rounded-security-lg border border-security-navy-100 bg-security-navy-50 p-3 dark:border-security-navy-700 dark:bg-security-navy-900">
+                        <label className="text-sm font-medium text-security-navy-700 dark:text-security-navy-300">
+                          Supervisor note <span className="font-normal text-security-navy-500">(optional)</span>
                           <textarea
                             rows={2}
                             value={notes[exception.id] ?? ""}

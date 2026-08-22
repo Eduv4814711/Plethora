@@ -101,7 +101,7 @@ export default function AcademyCourseRunsPage() {
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
-      {canCreate && <form onSubmit={create} className="grid gap-3 rounded-lg border border-neutral-300 p-4 sm:grid-cols-2 lg:grid-cols-3">
+      {canCreate && <form onSubmit={create} className="grid gap-3 rounded-lg border border-security-navy-200 p-4 sm:grid-cols-2 lg:grid-cols-3">
         <div>
           <label className="label-text mb-1 block">Run code</label>
           <input className="input-compact w-full" value={runCode} onChange={(e) => setRunCode(e.target.value)} />
@@ -146,12 +146,12 @@ export default function AcademyCourseRunsPage() {
       </form>}
 
       {loading ? (
-        <p className="text-sm text-neutral-500">Loading…</p>
+        <p className="text-sm text-security-navy-500">Loading…</p>
       ) : runs.length === 0 ? (
-        <p className="text-sm text-neutral-500">No course runs yet.</p>
+        <p className="text-sm text-security-navy-500">No course runs yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-neutral-300">
-          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+        <div className="overflow-x-auto rounded-lg border border-security-navy-200">
+          <table className="min-w-full divide-y divide-security-navy-100 text-sm">
             <thead>
               <tr>
                 <th>Run</th>

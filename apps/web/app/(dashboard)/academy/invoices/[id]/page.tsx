@@ -136,7 +136,7 @@ export default function AcademyInvoiceDetailPage() {
   if (!invoice && !error) {
     return (
       <div className="p-6">
-        <p className="text-sm text-neutral-500">Loading…</p>
+        <p className="text-sm text-security-navy-500">Loading…</p>
       </div>
     );
   }
@@ -160,7 +160,7 @@ export default function AcademyInvoiceDetailPage() {
           ← Invoices
         </Link>
         <h1 className="mt-1 font-mono text-2xl font-semibold">{invoice.invoiceNumber}</h1>
-        <p className="text-sm text-neutral-600">
+        <p className="text-sm text-security-navy-600">
           {invoice.student.firstName} {invoice.student.lastName} · {invoice.student.studentNumber}
         </p>
       </div>
@@ -192,7 +192,7 @@ export default function AcademyInvoiceDetailPage() {
         )}
       </div>
 
-      <div className="rounded-lg border border-neutral-300 p-4 text-sm">
+      <div className="rounded-lg border border-security-navy-200 p-4 text-sm">
         <p>
           Dates: {String(invoice.invoiceDate).slice(0, 10)} → due {String(invoice.dueDate).slice(0, 10)}
         </p>
@@ -208,7 +208,7 @@ export default function AcademyInvoiceDetailPage() {
         </ul>
       </div>
 
-      {canCreate && <section className="rounded-lg border border-neutral-300 p-4">
+      {canCreate && <section className="rounded-lg border border-security-navy-200 p-4">
         <h2 className="font-medium">Record payment</h2>
         <form onSubmit={addPayment} className="mt-3 flex flex-wrap items-end gap-2">
           <div>
@@ -231,18 +231,18 @@ export default function AcademyInvoiceDetailPage() {
             Add payment (pending)
           </button>
         </form>
-        <p className="mt-2 text-xs text-neutral-500">
+        <p className="mt-2 text-xs text-security-navy-500">
           Upload proof of payment from the student profile (Documents → payment_proof), then optionally link the document id via API later.
         </p>
       </section>}
 
-      <section className="rounded-lg border border-neutral-300 p-4">
+      <section className="rounded-lg border border-security-navy-200 p-4">
         <h2 className="font-medium">Payments</h2>
         {invoice.payments.length === 0 ? (
-          <p className="mt-2 text-sm text-neutral-500">None.</p>
+          <p className="mt-2 text-sm text-security-navy-500">None.</p>
         ) : (
           <div className="mt-2 overflow-x-auto">
-            <table className="min-w-full divide-y divide-neutral-200 text-sm">
+            <table className="min-w-full divide-y divide-security-navy-100 text-sm">
               <thead>
                 <tr>
                   <th>Date</th>

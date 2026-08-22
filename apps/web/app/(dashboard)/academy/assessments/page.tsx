@@ -109,22 +109,22 @@ export default function AcademyAssessmentsPage() {
       {confirmDialog}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-security-navy-900">Assessments</h1>
-        <p className="mt-1 text-sm text-neutral-600">Capture assessment outcomes, attempts, and result statuses.</p>
+        <p className="mt-1 text-sm text-security-navy-600">Capture assessment outcomes, attempts, and result statuses.</p>
       </div>
 
       {!canCreate && !canDelete && (
-        <div className="rounded-lg border border-neutral-300 bg-neutral-100/50 px-3 py-2 text-sm">
+        <div className="rounded-lg border border-security-navy-200 bg-security-navy-50/50 px-3 py-2 text-sm">
           Read-only: assessment changes have not been granted for your account.
         </div>
       )}
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
 
-      <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">New assessment</h2>
+      <div className="rounded-2xl border border-security-navy-100 bg-white p-5 shadow-security-card">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-security-navy-500">New assessment</h2>
         <form onSubmit={create} className="mt-3 grid gap-2 md:grid-cols-5">
           <select
-            className="input-modern rounded-xl"
+            className="input-modern rounded-security-lg"
             value={learnerId}
             onChange={(e) => setLearnerId(e.target.value)}
             disabled={!canCreate || saving}
@@ -137,7 +137,7 @@ export default function AcademyAssessmentsPage() {
             ))}
           </select>
           <select
-            className="input-modern rounded-xl"
+            className="input-modern rounded-security-lg"
             value={courseId}
             onChange={(e) => setCourseId(e.target.value)}
             disabled={!canCreate || saving}
@@ -150,7 +150,7 @@ export default function AcademyAssessmentsPage() {
             ))}
           </select>
           <input
-            className="input-modern rounded-xl"
+            className="input-modern rounded-security-lg"
             placeholder="Type"
             value={assessmentType}
             onChange={(e) => setAssessmentType(e.target.value)}
@@ -164,24 +164,24 @@ export default function AcademyAssessmentsPage() {
             disabled={!canCreate || saving}
             ariaLabel="Assessment date"
           />
-          <button className="btn-primary rounded-xl" disabled={!canCreate || saving}>Add</button>
+          <button className="btn-primary rounded-security-lg" disabled={!canCreate || saving}>Add</button>
         </form>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-        <div className="border-b border-neutral-200/80 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">Assessment register</h2></div>
+      <div className="overflow-hidden rounded-2xl border border-security-navy-100 bg-white shadow-security-card">
+        <div className="border-b border-security-navy-100/80 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">Assessment register</h2></div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-neutral-200 text-sm">
-            <thead><tr className="text-[11px] uppercase tracking-wide text-neutral-500"><th>Learner</th><th>Type</th><th>Date</th><th>Result</th><th className="text-right">Action</th></tr></thead>
+          <table className="min-w-full divide-y divide-security-navy-100 text-sm">
+            <thead><tr className="text-[11px] uppercase tracking-wide text-security-navy-500"><th>Learner</th><th>Type</th><th>Date</th><th>Result</th><th className="text-right">Action</th></tr></thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-sm text-neutral-500">Loading assessments...</td>
+                  <td colSpan={5} className="py-8 text-center text-sm text-security-navy-500">Loading assessments...</td>
                 </tr>
-              ) : rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{r.learner ? `${r.learner.firstName} ${r.learner.lastName}` : r.learnerId}</td><td>{r.assessmentType}</td><td>{String(r.assessmentDate).slice(0,10)}</td><td><span className={`badge-neutral ${r.result === "pass" || r.result === "competent" ? "badge-success" : r.result ? "badge-warning" : "badge-neutral border border-neutral-300"}`}>{r.result ?? "pending"}</span></td><td className="text-right">{canDelete && <button className="btn-destructive px-2 py-1 text-xs" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}</td></tr>)}
+              ) : rows.map((r)=><tr key={r.id} className="text-sm"><td className="font-medium text-security-navy-900">{r.learner ? `${r.learner.firstName} ${r.learner.lastName}` : r.learnerId}</td><td>{r.assessmentType}</td><td>{String(r.assessmentDate).slice(0,10)}</td><td><span className={`badge-neutral ${r.result === "pass" || r.result === "competent" ? "badge-success" : r.result ? "badge-warning" : "badge-neutral border border-security-navy-200"}`}>{r.result ?? "pending"}</span></td><td className="text-right">{canDelete && <button className="btn-destructive px-2 py-1 text-xs" onClick={() => remove(r.id)} disabled={saving}>Delete</button>}</td></tr>)}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-sm text-neutral-500">No assessments yet.</td>
+                  <td colSpan={5} className="py-8 text-center text-sm text-security-navy-500">No assessments yet.</td>
                 </tr>
               )}
             </tbody>

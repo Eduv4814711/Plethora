@@ -68,7 +68,7 @@ export default function SettingsPage() {
   if (loading && !settings) {
     return (
       <div className="flex items-center justify-center min-h-[200px]">
-        <div className="w-10 h-10 rounded-sm bg-neutral-100 dark:bg-neutral-900/30 animate-pulse" />
+        <div className="w-10 h-10 rounded-sm bg-security-navy-50 dark:bg-security-navy-900/30 animate-pulse" />
       </div>
     );
   }
@@ -77,7 +77,7 @@ export default function SettingsPage() {
     <div className="animate-fade-in">
       <div className="mb-6">
         <h1 className="page-title">Settings</h1>
-        <p className="mt-1 text-sm text-neutral-600">
+        <p className="mt-1 text-sm text-security-navy-600">
           Manage your profile, company details, users, and system options.
         </p>
       </div>
@@ -89,12 +89,12 @@ export default function SettingsPage() {
       )}
 
       {!canEditSettings && activeTab !== "profile" && activeTab !== "users" && (
-        <div className="mb-4 p-3 text-sm text-neutral-700 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 rounded-sm border border-neutral-200 dark:border-neutral-600">
+        <div className="mb-4 p-3 text-sm text-security-navy-700 dark:text-security-navy-400 bg-security-navy-50 dark:bg-security-navy-900/20 rounded-sm border border-security-navy-100 dark:border-security-navy-600">
           Your current access is read-only for company settings.
         </div>
       )}
 
-      <div className="flex gap-1 mb-6 border-b border-neutral-200 dark:border-neutral-700 overflow-x-auto">
+      <div className="flex gap-1 mb-6 border-b border-security-navy-100 dark:border-security-navy-700 overflow-x-auto">
         {tabs
           .filter((t) => t.visible !== false)
           .map((tab) => {
@@ -102,8 +102,8 @@ export default function SettingsPage() {
               className: clsx(
                 "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors",
                 activeTab === tab.id
-                  ? "bg-white dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-neutral-200 dark:border-neutral-700 border-b-transparent -mb-px"
-                  : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
+                  ? "bg-white dark:bg-security-navy-800 text-security-navy-900 dark:text-security-navy-200 border border-security-navy-100 dark:border-security-navy-700 border-b-transparent -mb-px"
+                  : "text-security-navy-600 dark:text-security-navy-400 hover:text-security-navy-900 dark:hover:text-white"
               ),
             };
             return tab.href ? (
@@ -182,19 +182,19 @@ export default function SettingsPage() {
 function ProfileSection({ user }: { user: AuthUser | null }) {
   return (
     <div className="text-left">
-      <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Profile</h3>
+      <h3 className="font-semibold text-security-navy-900 dark:text-white mb-4">Profile</h3>
       <dl className="space-y-3 text-sm text-left">
         <div>
-          <dt className="text-neutral-500 dark:text-neutral-400">Name</dt>
-          <dd className="text-neutral-900 dark:text-white">{user?.name}</dd>
+          <dt className="text-security-navy-500 dark:text-security-navy-400">Name</dt>
+          <dd className="text-security-navy-900 dark:text-white">{user?.name}</dd>
         </div>
         <div>
-          <dt className="text-neutral-500 dark:text-neutral-400">Email</dt>
-          <dd className="text-neutral-900 dark:text-white">{user?.email}</dd>
+          <dt className="text-security-navy-500 dark:text-security-navy-400">Email</dt>
+          <dd className="text-security-navy-900 dark:text-white">{user?.email}</dd>
         </div>
         <div>
-          <dt className="text-neutral-500 dark:text-neutral-400">Account</dt>
-          <dd className="text-neutral-900 dark:text-white">
+          <dt className="text-security-navy-500 dark:text-security-navy-400">Account</dt>
+          <dd className="text-security-navy-900 dark:text-white">
             {user?.isOwner ? "Company owner" : user?.jobTitle || (user?.accountType === "client" ? "Client" : "Staff")}
           </dd>
         </div>
@@ -259,13 +259,13 @@ function BusinessDetailsSection({
 
   return (
     <div>
-      <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Business Details</h3>
-      <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-6">
+      <h3 className="font-semibold text-security-navy-900 dark:text-white mb-4">Business Details</h3>
+      <p className="text-sm text-security-navy-500 dark:text-security-navy-400 mb-6">
         Configure your company information. This is used across the system (invoices, reports, etc.).
       </p>
       <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
         <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Company Name</label>
+          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Company Name</label>
           <input
             type="text"
             value={form.name}
@@ -276,7 +276,7 @@ function BusinessDetailsSection({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Legal Name</label>
+          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Legal Name</label>
           <input
             type="text"
             value={form.legalName}
@@ -286,19 +286,19 @@ function BusinessDetailsSection({
             readOnly={readOnly}
           />
         </div>
-        <div className="border-t border-neutral-200 dark:border-neutral-700 pt-6 mt-6">
-          <h4 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-4">Payslip & Compliance</h4>
-          <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4">
+        <div className="border-t border-security-navy-100 dark:border-security-navy-700 pt-6 mt-6">
+          <h4 className="text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-4">Payslip & Compliance</h4>
+          <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mb-4">
             These details appear on payslips and reports. Used for PSIRA, UIF, PAYE, SDL, and tax compliance.
           </p>
           {settings?.sdlLiableFrom && (
-            <p className="text-xs text-amber-600 dark:text-amber-400 mb-4">
+            <p className="text-xs text-security-amber-600 dark:text-security-amber-400 mb-4">
               SDL liable from {new Date(settings.sdlLiableFrom).toLocaleDateString()}. Add SDL reference when registering with SARS.
             </p>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">PSIRA Registration</label>
+              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">PSIRA Registration</label>
               <input
                 type="text"
                 value={form.psiraRegistration}
@@ -309,7 +309,7 @@ function BusinessDetailsSection({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Company Registration</label>
+              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Company Registration</label>
               <input
                 type="text"
                 value={form.registrationNumber}
@@ -320,7 +320,7 @@ function BusinessDetailsSection({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Tax Number</label>
+              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Tax Number</label>
               <input
                 type="text"
                 value={form.taxNumber}
@@ -330,7 +330,7 @@ function BusinessDetailsSection({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">UIF Reference</label>
+              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">UIF Reference</label>
               <input
                 type="text"
                 value={form.uifReference}
@@ -341,7 +341,7 @@ function BusinessDetailsSection({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">PAYE Reference</label>
+              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">PAYE Reference</label>
               <input
                 type="text"
                 value={form.payeReference}
@@ -352,7 +352,7 @@ function BusinessDetailsSection({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">SDL Reference</label>
+              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">SDL Reference</label>
               <input
                 type="text"
                 value={form.sdlReference}
@@ -363,7 +363,7 @@ function BusinessDetailsSection({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Telephone</label>
+              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Telephone</label>
               <input
                 type="text"
                 value={form.phone}
@@ -373,7 +373,7 @@ function BusinessDetailsSection({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Fax</label>
+              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Fax</label>
               <input
                 type="text"
                 value={form.fax}
@@ -384,7 +384,7 @@ function BusinessDetailsSection({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Email</label>
+              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Email</label>
               <input
                 type="email"
                 value={form.email}
@@ -396,7 +396,7 @@ function BusinessDetailsSection({
           </div>
         </div>
         <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Address</label>
+          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Address</label>
           <textarea
             value={form.address}
             onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
@@ -406,7 +406,7 @@ function BusinessDetailsSection({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Website</label>
+          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Website</label>
           <input
             type="url"
             value={form.website}
@@ -516,13 +516,13 @@ function BusinessSettingsSection({
 
   return (
     <div>
-      <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Business Settings</h3>
-      <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-6">
+      <h3 className="font-semibold text-security-navy-900 dark:text-white mb-4">Business Settings</h3>
+      <p className="text-sm text-security-navy-500 dark:text-security-navy-400 mb-6">
         Configure defaults used for payroll, dates, and reporting.
       </p>
       <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
         <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Currency</label>
+          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Currency</label>
           <select
             value={form.currency}
             onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
@@ -536,7 +536,7 @@ function BusinessSettingsSection({
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Date Format</label>
+          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Date Format</label>
           <select
             value={form.dateFormat}
             onChange={(e) => setForm((f) => ({ ...f, dateFormat: e.target.value }))}
@@ -549,7 +549,7 @@ function BusinessSettingsSection({
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Timezone</label>
+          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Timezone</label>
           <input
             type="text"
             value={form.timezone}
@@ -560,7 +560,7 @@ function BusinessSettingsSection({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">PAYE calculation frequency</label>
+          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">PAYE calculation frequency</label>
           <select
             value={form.payrollPeriod}
             onChange={(e) => setForm((f) => ({ ...f, payrollPeriod: e.target.value }))}
@@ -571,19 +571,19 @@ function BusinessSettingsSection({
             <option value="biweekly">Bi-weekly</option>
             <option value="monthly">Monthly</option>
           </select>
-          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+          <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-1">
             Used for PAYE tax calculations only. Pay and roster period dates are configured below.
           </p>
         </div>
-        <div className="rounded-xl border border-orange-200/80 dark:border-orange-800/40 bg-orange-50/40 dark:bg-orange-950/20 p-4 space-y-3">
-          <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100">Pay & roster period calendar</p>
-          <p className="text-xs text-neutral-500 dark:text-neutral-400">
+        <div className="rounded-security-lg border border-security-amber-200/80 dark:border-security-amber-800/40 bg-security-amber-50/40 dark:bg-security-amber-950/20 p-4 space-y-3">
+          <p className="text-sm font-medium text-security-navy-900 dark:text-security-navy-100">Pay & roster period calendar</p>
+          <p className="text-xs text-security-navy-500 dark:text-security-navy-400">
             Example: start 26, end 25 → 26 Jun–25 Jul is labelled <strong>July</strong> pay/roster period.
             Auto-roster maintains shifts through N pay periods ahead.
           </p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
                 Period start day (1–31)
               </label>
               <input
@@ -597,7 +597,7 @@ function BusinessSettingsSection({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+              <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
                 Period end day (1–31)
               </label>
               <input
@@ -612,7 +612,7 @@ function BusinessSettingsSection({
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
               Roster horizon (pay periods)
             </label>
             <input
@@ -626,10 +626,10 @@ function BusinessSettingsSection({
             />
           </div>
         </div>
-        <div className="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50/60 dark:bg-neutral-900/40 p-4 space-y-3">
+        <div className="rounded-security-lg border border-security-navy-100 dark:border-security-navy-700 bg-security-navy-50/60 dark:bg-security-navy-900/40 p-4 space-y-3">
           <div>
-            <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100">Roster period calendars</p>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+            <p className="text-sm font-medium text-security-navy-900 dark:text-security-navy-100">Roster period calendars</p>
+            <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-1">
               Add different period date ranges for roster planning. Use start ≤ end for one calendar month
               (e.g. 1–31). Use start &gt; end for cross-month periods (e.g. 26–25). Payroll still uses the pay
               period dates above.
@@ -639,7 +639,7 @@ function BusinessSettingsSection({
             {form.rosterPeriodCalendars.map((calendar, index) => (
               <div
                 key={calendar.id}
-                className="rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-950 p-3 space-y-2"
+                className="rounded-lg border border-security-navy-100 dark:border-security-navy-700 bg-white dark:bg-security-navy-900 p-3 space-y-2"
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <input
@@ -657,7 +657,7 @@ function BusinessSettingsSection({
                     placeholder="Calendar name"
                     disabled={readOnly}
                   />
-                  <label className="inline-flex items-center gap-1.5 text-xs text-neutral-600 dark:text-neutral-300">
+                  <label className="inline-flex items-center gap-1.5 text-xs text-security-navy-600 dark:text-security-navy-300">
                     <input
                       type="radio"
                       name="defaultRosterCalendar"
@@ -694,7 +694,7 @@ function BusinessSettingsSection({
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+                    <label className="block text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-1">
                       Start day
                     </label>
                     <input
@@ -717,7 +717,7 @@ function BusinessSettingsSection({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+                    <label className="block text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-1">
                       End day
                     </label>
                     <input
@@ -771,7 +771,7 @@ function BusinessSettingsSection({
           )}
         </div>
         <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">Team Member ID Prefix</label>
+          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Team Member ID Prefix</label>
           <input
             type="text"
             value={form.employeeIdPrefix}
@@ -781,7 +781,7 @@ function BusinessSettingsSection({
             maxLength={20}
             disabled={readOnly}
           />
-          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+          <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-1">
             Prefix for auto-generated team member IDs (e.g. EMP-0001, STAFF-0001)
           </p>
         </div>
@@ -907,7 +907,7 @@ function FactoryResetSection({
 
   return (
     <div className="text-center">
-      <h3 className="font-semibold text-neutral-800 dark:text-white mb-4">Factory Reset</h3>
+      <h3 className="font-semibold text-security-navy-900 dark:text-white mb-4">Factory Reset</h3>
       <div className="max-w-3xl mx-auto space-y-5">
         <div className="p-4 rounded-sm border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20">
           <p className="text-sm text-red-800 dark:text-red-200 font-medium mb-2">
@@ -928,11 +928,11 @@ function FactoryResetSection({
               checked={resetAll}
               onChange={(e) => setResetAll(e.target.checked)}
               disabled={resetting}
-              className="rounded border-neutral-300 dark:border-neutral-600"
+              className="rounded border-security-navy-200 dark:border-security-navy-600"
             />
             <label
               htmlFor="reset-all"
-              className="text-sm font-medium text-neutral-800 dark:text-neutral-200 cursor-pointer"
+              className="text-sm font-medium text-security-navy-900 dark:text-security-navy-200 cursor-pointer"
             >
               Reset all modules (full factory reset)
             </label>
@@ -944,14 +944,14 @@ function FactoryResetSection({
                 <button
                   type="button"
                   onClick={selectAll}
-                  className="text-xs text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 underline"
+                  className="text-xs text-security-navy-600 dark:text-security-navy-400 hover:text-security-navy-900 dark:hover:text-security-navy-200 underline"
                 >
                   Select all
                 </button>
                 <button
                   type="button"
                   onClick={deselectAll}
-                  className="text-xs text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 underline"
+                  className="text-xs text-security-navy-600 dark:text-security-navy-400 hover:text-security-navy-900 dark:hover:text-security-navy-200 underline"
                 >
                   Deselect all
                 </button>
@@ -961,7 +961,7 @@ function FactoryResetSection({
                   <div
                     key={mod.id}
                     className={clsx(
-                      "flex items-start gap-2 p-2 rounded-sm border border-neutral-200 dark:border-neutral-700",
+                      "flex items-start gap-2 p-2 rounded-sm border border-security-navy-100 dark:border-security-navy-700",
                       mod.id === "attendance" && "sm:col-span-2"
                     )}
                   >
@@ -971,24 +971,24 @@ function FactoryResetSection({
                       checked={selectedModules.has(mod.id)}
                       onChange={() => toggleModule(mod.id)}
                       disabled={resetting}
-                      className="mt-0.5 rounded border-neutral-300 dark:border-neutral-600"
+                      className="mt-0.5 rounded border-security-navy-200 dark:border-security-navy-600"
                     />
                     <div className="flex-1 min-w-0">
                       <label
                         htmlFor={`mod-${mod.id}`}
                         className="text-sm cursor-pointer block"
                       >
-                        <span className="font-medium text-neutral-800 dark:text-neutral-200">
+                        <span className="font-medium text-security-navy-900 dark:text-security-navy-200">
                           {mod.label}
                         </span>
-                        <span className="block text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                        <span className="block text-xs text-security-navy-500 dark:text-security-navy-400 mt-0.5">
                           {mod.description}
                         </span>
                       </label>
                       {mod.id === "attendance" && selectedModules.has("attendance") && (
                         <div className="mt-2 space-y-3">
                           <div>
-                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+                            <label className="block text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-1">
                               Reset from date (optional)
                             </label>
                             <DateInput
@@ -998,12 +998,12 @@ function FactoryResetSection({
                               showToday
                               disabled={resetting}
                             />
-                            <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                            <p className="text-[11px] text-security-navy-500 dark:text-security-navy-400 mt-0.5">
                               Leave empty to reset all attendance. Set a date to reset only from that date onwards.
                             </p>
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+                            <label className="block text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-1">
                               Reset for person (optional)
                             </label>
                             <select
@@ -1019,7 +1019,7 @@ function FactoryResetSection({
                                 </option>
                               ))}
                             </select>
-                            <p className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">
+                            <p className="text-[11px] text-security-navy-500 dark:text-security-navy-400 mt-0.5">
                               Leave as &quot;All people&quot; to reset everyone&apos;s attendance.
                             </p>
                           </div>
@@ -1034,7 +1034,7 @@ function FactoryResetSection({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
             Type <strong>{CONFIRM_PHRASE}</strong> to confirm
           </label>
           <input
@@ -1048,7 +1048,7 @@ function FactoryResetSection({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
             Confirm your current password
           </label>
           <input
@@ -1076,7 +1076,7 @@ function FactoryResetSection({
             type="button"
             onClick={handleReset}
             disabled={!canReset}
-            className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-neutral-400 disabled:cursor-not-allowed rounded-sm transition-colors"
+            className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-security-navy-300 disabled:cursor-not-allowed rounded-sm transition-colors"
           >
             {resetting ? "Resetting..." : "Factory Reset"}
           </button>

@@ -46,8 +46,8 @@ function NavGroup({
       className={clsx(
         "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors",
         isActive
-          ? "bg-security-navy-50 text-security-navy-700 shadow-sm"
-          : "text-security-navy-600 hover:bg-neutral-100 hover:text-security-navy-800"
+          ? "bg-security-navy-50 text-security-navy-700 shadow-security-card"
+          : "text-security-navy-600 hover:bg-security-navy-50 hover:text-security-navy-800"
       )}
     >
       {children}
@@ -168,8 +168,8 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
       <aside
         id="academy-side-nav"
         className={clsx(
-          "flex w-full shrink-0 flex-col border border-neutral-200 bg-white/90 shadow-[0_1px_2px_rgba(15,23,42,0.06)]",
-          "rounded-xl p-3",
+          "flex w-full shrink-0 flex-col border border-security-navy-100 bg-white/90 shadow-[0_1px_2px_rgba(15,23,42,0.06)]",
+          "rounded-security-lg p-3",
           "max-lg:max-h-[min(32rem,70vh)] max-lg:overflow-y-auto",
           "lg:h-full lg:min-h-0 lg:max-w-[15rem] lg:overflow-hidden lg:self-stretch",
           !mobileOpen && "hidden",
@@ -177,7 +177,7 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
         )}
       >
         <div className="shrink-0">
-          <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Academy</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-security-navy-500">Academy</p>
         </div>
         <nav className="mt-2 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-0.5 lg:min-h-0" aria-label="Academy">
           {navItems.map((item) => {
@@ -213,10 +213,10 @@ export default function AcademyLayout({ children }: { children: React.ReactNode 
             </NavGroup>
           )}
         </nav>
-        <div className="mt-3 shrink-0 rounded-lg border border-neutral-200 bg-gradient-to-b from-security-navy-50 to-white p-2.5 lg:mt-auto">
+        <div className="mt-3 shrink-0 rounded-lg border border-security-navy-100 bg-gradient-to-b from-security-navy-50 to-white p-2.5 lg:mt-auto">
           <p className="text-sm font-medium text-security-navy-800">Need help?</p>
-          <p className="mt-1 text-xs text-neutral-500">Module access and billing questions? Contact the company owner or an access manager.</p>
-          <p className="mt-2 rounded-security border border-neutral-200 bg-white px-3 py-2 text-xs text-neutral-600">
+          <p className="mt-1 text-xs text-security-navy-500">Module access and billing questions? Contact the company owner or an access manager.</p>
+          <p className="mt-2 rounded-security border border-security-navy-100 bg-white px-3 py-2 text-xs text-security-navy-600">
             Ask the company owner or an access manager to update module access or billing details.
           </p>
         </div>

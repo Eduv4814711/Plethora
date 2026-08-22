@@ -55,10 +55,10 @@ export default function TaskProjectDetailPage() {
   if (loading) {
     return (
       <div className="animate-pulse space-y-6">
-        <div className="h-9 w-48 bg-gray-200 rounded-lg" />
+        <div className="h-9 w-48 bg-security-navy-100 rounded-lg" />
         <div className="space-y-3">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-16 bg-gray-200 rounded-lg" />
+            <div key={i} className="h-16 bg-security-navy-100 rounded-lg" />
           ))}
         </div>
       </div>
@@ -79,16 +79,16 @@ export default function TaskProjectDetailPage() {
   return (
     <div className="animate-fade-in max-w-4xl mx-auto">
       <div className="mb-4">
-        <Link href="/tasks/projects" className="text-sm text-gray-600 hover:text-black">
+        <Link href="/tasks/projects" className="text-sm text-security-navy-600 hover:text-security-navy-900">
           ← Back to Projects
         </Link>
       </div>
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-black">{project.name}</h1>
+          <h1 className="text-2xl font-bold text-security-navy-900">{project.name}</h1>
           {project.description && (
-            <p className="text-gray-600 mt-1">{project.description}</p>
+            <p className="text-security-navy-600 mt-1">{project.description}</p>
           )}
         </div>
         {canCreate && <button onClick={() => setShowForm(true)} className="btn-primary">
@@ -103,7 +103,7 @@ export default function TaskProjectDetailPage() {
       )}
 
       {showForm && canCreate && (
-        <div className="mb-6 bg-gray-100 border border-gray-300 rounded-lg p-4">
+        <div className="mb-6 bg-security-navy-50 border border-security-navy-200 rounded-lg p-4">
           <form onSubmit={handleCreateTask} className="flex gap-2">
             <input
               type="text"
@@ -132,16 +132,16 @@ export default function TaskProjectDetailPage() {
           <Link
             key={task.id}
             href={`/tasks/${task.id}`}
-            className="block bg-gray-100 border border-gray-300 rounded-lg p-4 hover:border-gray-400 transition-colors"
+            className="block bg-security-navy-50 border border-security-navy-200 rounded-lg p-4 hover:border-security-navy-300 transition-colors"
           >
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-black">{task.title}</h3>
-              <span className="text-sm text-gray-600">
+              <h3 className="font-semibold text-security-navy-900">{task.title}</h3>
+              <span className="text-sm text-security-navy-600">
                 {task.status === "done" ? "Done" : task.status === "in_progress" ? "In Progress" : "To Do"}
               </span>
             </div>
             {task.dueDate && (
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-security-navy-500 mt-1">
                 Due {new Date(task.dueDate).toLocaleDateString()}
               </p>
             )}
@@ -150,7 +150,7 @@ export default function TaskProjectDetailPage() {
       </div>
 
       {project.tasks.length === 0 && !showForm && (
-        <div className="text-center py-12 text-gray-500">
+        <div className="text-center py-12 text-security-navy-500">
           No tasks in this project yet.
         </div>
       )}

@@ -112,7 +112,7 @@ export default function InvoiceDetailPage() {
   };
 
   if (loading) {
-    return <div className="h-72 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-700" aria-label="Loading invoice" />;
+    return <div className="h-72 animate-pulse rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700" aria-label="Loading invoice" />;
   }
 
   if (!invoice) {
@@ -142,10 +142,10 @@ export default function InvoiceDetailPage() {
             ← Back to invoices
           </Link>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">{invoice.invoiceNumber}</h1>
+            <h1 className="text-xl font-semibold text-security-navy-900 dark:text-security-navy-100">{invoice.invoiceNumber}</h1>
             <StatusBadge status={invoice.status} />
           </div>
-          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+          <p className="mt-1 text-sm text-security-navy-500 dark:text-security-navy-400">
             {invoice.client?.name} · issued {invoice.invoiceDate?.slice(0, 10)} · due {invoice.dueDate?.slice(0, 10)}
             {invoice.quote ? ` · from quote ${invoice.quote.quoteNumber}` : ""}
           </p>
@@ -201,7 +201,7 @@ export default function InvoiceDetailPage() {
       )}
 
       {invoice.status === "draft" && (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+        <p className="rounded-lg border border-security-amber-200 bg-security-amber-50 px-3 py-2 text-sm text-security-amber-900 dark:border-security-amber-900 dark:bg-security-amber-950/30 dark:text-security-amber-200">
           This invoice is still a draft. Issue it before recording payments — drafts are not sent to the client.
         </p>
       )}
@@ -209,10 +209,10 @@ export default function InvoiceDetailPage() {
       {showPayment && canCreate && (
         <form
           onSubmit={submitPayment}
-          className="grid gap-3 rounded-xl border border-neutral-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-5 dark:border-neutral-700 dark:bg-neutral-950"
+          className="grid gap-3 rounded-security-lg border border-security-navy-100 bg-white p-4 sm:grid-cols-2 lg:grid-cols-5 dark:border-security-navy-700 dark:bg-security-navy-900"
         >
           <label className="block">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Date</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">Date</span>
             <input
               type="date"
               value={paymentDate}
@@ -222,7 +222,7 @@ export default function InvoiceDetailPage() {
             />
           </label>
           <label className="block">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Amount</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">Amount</span>
             <input
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
@@ -233,7 +233,7 @@ export default function InvoiceDetailPage() {
             />
           </label>
           <label className="block">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Method</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">Method</span>
             <select value={method} onChange={(e) => setMethod(e.target.value)} className="input-modern mt-1 w-full">
               {METHODS.map((m) => (
                 <option key={m.value} value={m.value}>
@@ -243,7 +243,7 @@ export default function InvoiceDetailPage() {
             </select>
           </label>
           <label className="block">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Reference</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">Reference</span>
             <input
               value={paymentRef}
               onChange={(e) => setPaymentRef(e.target.value)}
@@ -259,17 +259,17 @@ export default function InvoiceDetailPage() {
         </form>
       )}
 
-      <section className="overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-700">
-        <table className="min-w-full divide-y divide-neutral-200 text-sm dark:divide-neutral-700">
-          <thead className="bg-neutral-50 dark:bg-neutral-900">
-            <tr className="text-left text-[10px] uppercase tracking-wider text-neutral-500">
+      <section className="overflow-x-auto rounded-security-lg border border-security-navy-100 dark:border-security-navy-700">
+        <table className="min-w-full divide-y divide-security-navy-100 text-sm dark:divide-security-navy-700">
+          <thead className="bg-security-navy-50 dark:bg-security-navy-900">
+            <tr className="text-left text-[10px] uppercase tracking-wider text-security-navy-500">
               <th className="px-3 py-2">Description</th>
               <th className="px-3 py-2 text-right">Qty</th>
               <th className="px-3 py-2 text-right">Unit price</th>
               <th className="px-3 py-2 text-right">Amount</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+          <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
             {invoice.items.map((item, i) => (
               <tr key={item.id ?? i}>
                 <td className="px-3 py-2">{item.description}</td>
@@ -287,29 +287,29 @@ export default function InvoiceDetailPage() {
       </section>
 
       <section className="ml-auto w-full max-w-xs space-y-1.5">
-        <div className="flex justify-between text-sm text-neutral-700 dark:text-neutral-300">
+        <div className="flex justify-between text-sm text-security-navy-700 dark:text-security-navy-300">
           <span>Subtotal</span>
           <span className="font-mono tabular-nums">{formatCurrency(invoice.subtotal, { currency })}</span>
         </div>
         {Number(invoice.discountAmount) !== 0 && (
-          <div className="flex justify-between text-sm text-neutral-700 dark:text-neutral-300">
+          <div className="flex justify-between text-sm text-security-navy-700 dark:text-security-navy-300">
             <span>Discount</span>
             <span className="font-mono tabular-nums">-{formatCurrency(invoice.discountAmount, { currency })}</span>
           </div>
         )}
-        <div className="flex justify-between text-sm text-neutral-700 dark:text-neutral-300">
+        <div className="flex justify-between text-sm text-security-navy-700 dark:text-security-navy-300">
           <span>VAT ({invoice.vatRate}%)</span>
           <span className="font-mono tabular-nums">{formatCurrency(invoice.vatAmount, { currency })}</span>
         </div>
-        <div className="flex justify-between border-t border-neutral-300 pt-2 text-base font-bold text-neutral-900 dark:border-neutral-600 dark:text-neutral-100">
+        <div className="flex justify-between border-t border-security-navy-200 pt-2 text-base font-bold text-security-navy-900 dark:border-security-navy-600 dark:text-security-navy-100">
           <span>Total</span>
           <span className="font-mono tabular-nums">{formatCurrency(invoice.totalAmount, { currency })}</span>
         </div>
-        <div className="flex justify-between text-sm text-neutral-700 dark:text-neutral-300">
+        <div className="flex justify-between text-sm text-security-navy-700 dark:text-security-navy-300">
           <span>Paid</span>
           <span className="font-mono tabular-nums">{formatCurrency(invoice.amountPaid ?? "0", { currency })}</span>
         </div>
-        <div className="flex justify-between text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+        <div className="flex justify-between text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">
           <span>Balance due</span>
           <span className="font-mono tabular-nums">
             {formatCurrency(invoice.amountDue ?? invoice.totalAmount, { currency })}
@@ -318,16 +318,16 @@ export default function InvoiceDetailPage() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-100">Payments & receipts</h2>
+        <h2 className="mb-2 text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">Payments & receipts</h2>
         {payments.length === 0 ? (
-          <p className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-6 text-center text-sm text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900">
+          <p className="rounded-security-lg border border-security-navy-100 bg-security-navy-50 px-4 py-6 text-center text-sm text-security-navy-600 dark:border-security-navy-700 dark:bg-security-navy-900">
             No payments recorded yet.
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-700">
-            <table className="min-w-full divide-y divide-neutral-200 text-sm dark:divide-neutral-700">
-              <thead className="bg-neutral-50 dark:bg-neutral-900">
-                <tr className="text-left text-[10px] uppercase tracking-wider text-neutral-500">
+          <div className="overflow-x-auto rounded-security-lg border border-security-navy-100 dark:border-security-navy-700">
+            <table className="min-w-full divide-y divide-security-navy-100 text-sm dark:divide-security-navy-700">
+              <thead className="bg-security-navy-50 dark:bg-security-navy-900">
+                <tr className="text-left text-[10px] uppercase tracking-wider text-security-navy-500">
                   <th className="px-3 py-2">Date</th>
                   <th className="px-3 py-2">Method</th>
                   <th className="px-3 py-2">Reference</th>
@@ -336,7 +336,7 @@ export default function InvoiceDetailPage() {
                   <th className="px-3 py-2" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+              <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
                 {payments.map((payment) => (
                   <tr key={payment.id}>
                     <td className="px-3 py-2">{payment.paymentDate?.slice(0, 10)}</td>
@@ -392,9 +392,9 @@ export default function InvoiceDetailPage() {
       </section>
 
       {invoice.notes && (
-        <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm dark:border-neutral-700 dark:bg-neutral-900">
-          <h2 className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Notes</h2>
-          <p className="whitespace-pre-wrap text-neutral-800 dark:text-neutral-200">{invoice.notes}</p>
+        <section className="rounded-security-lg border border-security-navy-100 bg-security-navy-50 p-4 text-sm dark:border-security-navy-700 dark:bg-security-navy-900">
+          <h2 className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">Notes</h2>
+          <p className="whitespace-pre-wrap text-security-navy-900 dark:text-security-navy-200">{invoice.notes}</p>
         </section>
       )}
     </main>

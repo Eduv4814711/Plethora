@@ -42,10 +42,10 @@ export function RosterSheetPreviewModal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm sm:items-center">
       <div className="card-wireframe my-4 w-full max-w-[1400px] shadow-xl">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 px-4 py-3 dark:border-neutral-700 sm:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-security-navy-100 px-4 py-3 dark:border-security-navy-700 sm:px-6">
           <div>
-            <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Roster preview</h3>
-            <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
+            <h3 className="text-lg font-semibold text-security-navy-900 dark:text-security-navy-100">Roster preview</h3>
+            <p className="text-sm text-security-navy-500 dark:text-security-navy-400 mt-0.5">
               {siteName} · {periodLabel}
             </p>
           </div>

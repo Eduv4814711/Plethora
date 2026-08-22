@@ -93,17 +93,17 @@ function SummaryCard({
   tone?: "neutral" | "success" | "warning" | "danger";
 }) {
   const toneClasses = {
-    neutral: "border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/80",
-    success: "border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/80 dark:bg-emerald-950/30",
-    warning: "border-amber-200 dark:border-amber-800/60 bg-amber-50/80 dark:bg-amber-950/30",
+    neutral: "border-security-navy-100 dark:border-security-navy-700 bg-white dark:bg-security-navy-900/80",
+    success: "border-security-emerald-200 dark:border-security-emerald-700/60 bg-security-emerald-50/80 dark:bg-security-emerald-700/30",
+    warning: "border-security-amber-200 dark:border-security-amber-800/60 bg-security-amber-50/80 dark:bg-security-amber-950/30",
     danger: "border-red-200 dark:border-red-800/60 bg-red-50/80 dark:bg-red-950/30",
   };
   return (
-    <div className={`rounded-xl border p-3 ${toneClasses[tone]}`}>
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500 dark:text-neutral-400">
+    <div className={`rounded-security-lg border p-3 ${toneClasses[tone]}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-security-navy-500 dark:text-security-navy-400">
         {label}
       </p>
-      <p className="mt-1 text-xl font-bold text-neutral-900 dark:text-neutral-100 tabular-nums">{value}</p>
+      <p className="mt-1 text-xl font-bold text-security-navy-900 dark:text-security-navy-100 tabular-nums">{value}</p>
     </div>
   );
 }
@@ -202,11 +202,11 @@ export function RosterPlanPreview({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 border-b border-neutral-200 dark:border-neutral-700 px-6 py-5">
+      <div className="shrink-0 border-b border-security-navy-100 dark:border-security-navy-700 px-6 py-5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Roster plan preview</h3>
-            <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+            <h3 className="text-lg font-semibold text-security-navy-900 dark:text-security-navy-100">Roster plan preview</h3>
+            <p className="mt-1 text-sm text-security-navy-600 dark:text-security-navy-400">
               {siteName} · {periodLabel}
             </p>
           </div>
@@ -214,7 +214,7 @@ export function RosterPlanPreview({
             type="button"
             onClick={onCancel}
             disabled={applying}
-            className="shrink-0 p-2 rounded-[10px] text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 border-2 border-transparent hover:border-neutral-300 dark:hover:border-neutral-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="shrink-0 p-2 rounded-[10px] text-security-navy-600 dark:text-security-navy-400 hover:bg-security-navy-50 dark:hover:bg-security-navy-800 border-2 border-transparent hover:border-security-navy-200 dark:hover:border-security-navy-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Close"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
@@ -225,7 +225,7 @@ export function RosterPlanPreview({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain [scrollbar-width:thin] [scrollbar-color:theme(colors.neutral.400)_transparent] dark:[scrollbar-color:theme(colors.neutral.600)_transparent]">
-      <div className="px-6 py-4 border-b border-neutral-200/80 dark:border-neutral-700">
+      <div className="px-6 py-4 border-b border-security-navy-100/80 dark:border-security-navy-700">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <SummaryCard
             label="Coverage"
@@ -326,7 +326,7 @@ export function RosterPlanPreview({
             </div>
             <p className="mt-2 text-xs text-blue-800 dark:text-blue-200">{rotationRec.reason}</p>
             {rotationRec.warnings.length > 0 && (
-              <ul className="mt-2 space-y-1 text-xs text-amber-800 dark:text-amber-200">
+              <ul className="mt-2 space-y-1 text-xs text-security-amber-800 dark:text-security-amber-200">
                 {rotationRec.warnings.map((w, i) => (
                   <li key={`rot-warn-${i}`}>• {w}</li>
                 ))}
@@ -334,12 +334,12 @@ export function RosterPlanPreview({
             )}
           </div>
         ) : rotationPattern ? (
-          <p className="mt-3 text-xs text-neutral-600 dark:text-neutral-400">
+          <p className="mt-3 text-xs text-security-navy-600 dark:text-security-navy-400">
             Rotation pattern: <span className="font-medium">{rotationPattern}</span>
           </p>
         ) : null}
         {coveragePercent != null && coveragePercent < 100 && (
-          <p className="mt-3 text-xs text-amber-800 dark:text-amber-200 rounded-lg border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
+          <p className="mt-3 text-xs text-security-amber-800 dark:text-security-amber-200 rounded-lg border border-security-amber-200 dark:border-security-amber-800/60 bg-security-amber-50 dark:bg-security-amber-950/30 px-3 py-2">
             Coverage is below 100%. See uncovered slots below for per-guard blocking reasons (rest, gender,
             overlap, or staffing rules).
           </p>
@@ -371,8 +371,8 @@ export function RosterPlanPreview({
           </div>
         )}
         {(plan.readiness?.length ?? 0) > 0 && (
-          <div className="mt-3 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50/80 dark:bg-neutral-900/50 px-3 py-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-500 dark:text-neutral-400 mb-1.5">
+          <div className="mt-3 rounded-lg border border-security-navy-100 dark:border-security-navy-700 bg-security-navy-50/80 dark:bg-security-navy-900/50 px-3 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-security-navy-500 dark:text-security-navy-400 mb-1.5">
               Site readiness
             </p>
             <ul className="space-y-1 text-xs">
@@ -383,8 +383,8 @@ export function RosterPlanPreview({
                     d.level === "error"
                       ? "text-red-800 dark:text-red-200"
                       : d.level === "warning"
-                        ? "text-amber-800 dark:text-amber-200"
-                        : "text-neutral-600 dark:text-neutral-400"
+                        ? "text-security-amber-800 dark:text-security-amber-200"
+                        : "text-security-navy-600 dark:text-security-navy-400"
                   }
                 >
                   • {d.message}
@@ -394,7 +394,7 @@ export function RosterPlanPreview({
           </div>
         )}
         {plan.warnings.length > 0 && (
-          <ul className="mt-3 space-y-1 text-xs text-amber-800 dark:text-amber-200">
+          <ul className="mt-3 space-y-1 text-xs text-security-amber-800 dark:text-security-amber-200">
             {plan.warnings.map((w, i) => (
               <li
                 key={`${w.code}-${w.date ?? ""}-${i}`}
@@ -420,7 +420,7 @@ export function RosterPlanPreview({
       <div className="px-6 py-4">
         <table className="w-full text-sm border-collapse">
           <thead>
-            <tr className="text-left text-[11px] uppercase tracking-wider text-neutral-500 dark:text-neutral-400 border-b border-neutral-200 dark:border-neutral-700">
+            <tr className="text-left text-[11px] uppercase tracking-wider text-security-navy-500 dark:text-security-navy-400 border-b border-security-navy-100 dark:border-security-navy-700">
               <th className="py-2 pr-3 font-semibold w-[40%]">Guard</th>
               <th className="py-2 pr-3 font-semibold">Shifts</th>
               <th className="py-2 font-semibold w-16" />
@@ -433,11 +433,11 @@ export function RosterPlanPreview({
               return (
                 <Fragment key={row.employeeId}>
                   <tr
-                    className={`border-b border-neutral-100 dark:border-neutral-800 ${
+                    className={`border-b border-security-navy-100 dark:border-security-navy-800 ${
                       hasConflict ? "bg-red-50/50 dark:bg-red-950/20" : ""
                     }`}
                   >
-                    <td className="py-2.5 pr-3 font-medium text-neutral-900 dark:text-neutral-100">
+                    <td className="py-2.5 pr-3 font-medium text-security-navy-900 dark:text-security-navy-100">
                       {row.name}
                       {hasConflict && (
                         <span className="ml-2 text-[10px] font-semibold uppercase text-red-600 dark:text-red-400">
@@ -445,7 +445,7 @@ export function RosterPlanPreview({
                         </span>
                       )}
                     </td>
-                    <td className="py-2.5 pr-3 text-neutral-600 dark:text-neutral-400 tabular-nums">
+                    <td className="py-2.5 pr-3 text-security-navy-600 dark:text-security-navy-400 tabular-nums">
                       {row.entries.length} planned
                     </td>
                     <td className="py-2.5 text-right">
@@ -454,14 +454,14 @@ export function RosterPlanPreview({
                         onClick={() =>
                           setExpandedGuardId(expanded ? null : row.employeeId)
                         }
-                        className="text-xs font-medium text-orange-700 dark:text-orange-300 hover:underline"
+                        className="text-xs font-medium text-security-amber-700 dark:text-security-amber-300 hover:underline"
                       >
                         {expanded ? "Hide" : "Details"}
                       </button>
                     </td>
                   </tr>
                   {expanded && (
-                    <tr key={`${row.employeeId}-detail`} className="border-b border-neutral-100 dark:border-neutral-800">
+                    <tr key={`${row.employeeId}-detail`} className="border-b border-security-navy-100 dark:border-security-navy-800">
                       <td colSpan={3} className="py-3 pl-2">
                         <div className="flex flex-wrap gap-1.5 mb-2">
                           {row.entries.map((e) => (
@@ -470,7 +470,7 @@ export function RosterPlanPreview({
                               className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium border ${
                                 e.shiftType === "night"
                                   ? "border-indigo-200 bg-indigo-50 text-indigo-900 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200"
-                                  : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
+                                  : "border-security-amber-200 bg-security-amber-50 text-security-amber-900 dark:border-security-amber-800 dark:bg-security-amber-950/50 dark:text-security-amber-200"
                               }`}
                             >
                               {format(parseISO(e.startTime), "d MMM")} · {postName(e.postId)} ({e.shiftType})
@@ -494,7 +494,7 @@ export function RosterPlanPreview({
             })}
             {guardRows.length === 0 && (
               <tr>
-                <td colSpan={3} className="py-8 text-center text-sm text-neutral-500">
+                <td colSpan={3} className="py-8 text-center text-sm text-security-navy-500">
                   No shifts in this plan.
                 </td>
               </tr>
@@ -504,13 +504,13 @@ export function RosterPlanPreview({
       </div>
       </div>
 
-      <div className="shrink-0 border-t border-neutral-200 dark:border-neutral-700 px-6 py-4 space-y-3">
+      <div className="shrink-0 border-t border-security-navy-100 dark:border-security-navy-700 px-6 py-4 space-y-3">
         {applyError && (
           <p className="text-xs text-red-700 dark:text-red-300 rounded-lg border border-red-200 dark:border-red-800/60 bg-red-50 dark:bg-red-950/30 px-3 py-2">
             {applyError}
           </p>
         )}
-        <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+        <p className="text-[11px] text-security-navy-500 dark:text-security-navy-400">
           Applying replaces existing created/assigned shifts on this site for the selected period, then creates the
           planned shifts.
         </p>
@@ -523,7 +523,7 @@ export function RosterPlanPreview({
             onClick={onApply}
             disabled={!canApply}
             className={`flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed ${
-              hasUncoveredDays ? "ring-2 ring-amber-400/60 dark:ring-amber-600/50" : ""
+              hasUncoveredDays ? "ring-2 ring-security-amber-400/60 dark:ring-security-amber-600/50" : ""
             }`}
           >
             {applying

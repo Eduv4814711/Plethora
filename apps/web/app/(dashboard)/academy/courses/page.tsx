@@ -143,7 +143,7 @@ export default function AcademyCoursesPage() {
       </div>
 
       {!canCreate && !canEdit && !canDelete && (
-        <div className="rounded-lg border border-neutral-300 bg-neutral-100/50 px-3 py-2 text-sm">
+        <div className="rounded-lg border border-security-navy-200 bg-security-navy-50/50 px-3 py-2 text-sm">
           Read-only: course changes have not been granted for your account.
         </div>
       )}
@@ -152,7 +152,7 @@ export default function AcademyCoursesPage() {
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
-      <form onSubmit={create} className="flex flex-wrap items-end gap-2 rounded-lg border border-neutral-300 p-4">
+      <form onSubmit={create} className="flex flex-wrap items-end gap-2 rounded-lg border border-security-navy-200 p-4">
         <div>
           <label className="label-text mb-1 block">Code</label>
           <input
@@ -192,12 +192,12 @@ export default function AcademyCoursesPage() {
       </form>
 
       {loading ? (
-        <p className="text-sm text-neutral-500">Loading…</p>
+        <p className="text-sm text-security-navy-500">Loading…</p>
       ) : courses.length === 0 ? (
-        <p className="text-sm text-neutral-500">No courses yet.</p>
+        <p className="text-sm text-security-navy-500">No courses yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-neutral-300">
-          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+        <div className="overflow-x-auto rounded-lg border border-security-navy-200">
+          <table className="min-w-full divide-y divide-security-navy-100 text-sm">
             <thead>
               <tr>
                 <th>Code</th>
@@ -243,7 +243,7 @@ export default function AcademyCoursesPage() {
                       className={`badge-neutral ${
                         (editId === c.id ? editActive : c.active)
                           ? "badge-success"
-                          : "badge-neutral border border-neutral-300"
+                          : "badge-neutral border border-security-navy-200"
                       }`}
                     >
                       {(editId === c.id ? editActive : c.active) ? "active" : "inactive"}

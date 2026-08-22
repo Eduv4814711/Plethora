@@ -130,13 +130,13 @@ export function StaffRollCall({
   const remainingCount = day ? remainingToCapture(day.rows).length : 0;
 
   return (
-    <section className="space-y-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-neutral-950">
+    <section className="space-y-4 rounded-security-lg border border-security-navy-100 bg-white p-4 shadow-security-card dark:border-security-navy-700 dark:bg-security-navy-900">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
+          <h2 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-100">
             Office staff roll call
           </h2>
-          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+          <p className="mt-1 text-sm text-security-navy-500 dark:text-security-navy-400">
             Tap Present or Absent for each person. Office staff are on a fixed salary, so this
             record is for leave and reporting — it does not change anyone&rsquo;s pay.
           </p>
@@ -188,8 +188,8 @@ export function StaffRollCall({
       )}
 
       {day && (
-        <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-neutral-700 dark:text-neutral-300" aria-live="polite">
+        <div className="flex flex-col gap-3 rounded-lg border border-security-navy-100 bg-security-navy-50 p-3 dark:border-security-navy-700 dark:bg-security-navy-900 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-security-navy-700 dark:text-security-navy-300" aria-live="polite">
             <span className="font-semibold">{day.counts.present} present</span> ·{" "}
             {day.counts.absent} absent · {day.counts.onLeave} on leave ·{" "}
             {day.counts.notCaptured} not captured
@@ -222,17 +222,17 @@ export function StaffRollCall({
       </div>
 
       {loading && !day && (
-        <p className="text-sm text-neutral-500">Loading office attendance…</p>
+        <p className="text-sm text-security-navy-500">Loading office attendance…</p>
       )}
 
       {day && day.totalGeneralEmployees === 0 && (
-        <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-4 text-sm text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
+        <div className="rounded-lg border border-security-navy-100 bg-security-navy-50 px-3 py-4 text-sm text-security-navy-600 dark:border-security-navy-700 dark:bg-security-navy-900 dark:text-security-navy-300">
           No office staff on record. Employees with an employee type of “general” appear here.
         </div>
       )}
 
       {day && day.totalGeneralEmployees > 0 && visibleRows.length === 0 && (
-        <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-3 text-sm text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
+        <div className="rounded-lg border border-security-navy-100 bg-security-navy-50 px-3 py-3 text-sm text-security-navy-600 dark:border-security-navy-700 dark:bg-security-navy-900 dark:text-security-navy-300">
           Nobody matches “{query.trim()}”.
         </div>
       )}
@@ -246,22 +246,22 @@ export function StaffRollCall({
             <li
               key={row.employeeId}
               className={clsx(
-                "rounded-xl border p-3",
+                "rounded-security-lg border p-3",
                 state === "present"
-                  ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20"
+                  ? "border-security-emerald-200 bg-security-emerald-50/50 dark:border-security-emerald-700 dark:bg-security-emerald-700/20"
                   : state === "absent"
-                    ? "border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20"
+                    ? "border-security-amber-200 bg-security-amber-50/50 dark:border-security-amber-900 dark:bg-security-amber-950/20"
                     : state === "leave"
                       ? "border-sky-200 bg-sky-50/50 dark:border-sky-900 dark:bg-sky-950/20"
-                      : "border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-950"
+                      : "border-security-navy-100 bg-white dark:border-security-navy-700 dark:bg-security-navy-900"
               )}
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                  <p className="truncate text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">
                     {formatStaffName(row)}
                   </p>
-                  <p className="text-xs text-neutral-500">
+                  <p className="text-xs text-security-navy-500">
                     {[row.employeeNumber, row.jobRole].filter(Boolean).join(" · ") || "Office staff"}
                     {state === "present" && row.timeIn
                       ? ` · ${formatTimeOfDay(row.timeIn)}–${formatTimeOfDay(row.timeOut)}`
@@ -284,8 +284,8 @@ export function StaffRollCall({
                       className={clsx(
                         "min-h-11 rounded-security border-2 px-5 text-sm font-semibold disabled:opacity-50",
                         state === "present"
-                          ? "border-emerald-600 bg-emerald-600 text-white"
-                          : "border-neutral-300 bg-white text-neutral-700 hover:border-emerald-500 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-200"
+                          ? "border-security-emerald-600 bg-security-emerald-600 text-white"
+                          : "border-security-navy-200 bg-white text-security-navy-700 hover:border-security-emerald-500 dark:border-security-navy-600 dark:bg-security-navy-900 dark:text-security-navy-200"
                       )}
                     >
                       Present
@@ -298,8 +298,8 @@ export function StaffRollCall({
                       className={clsx(
                         "min-h-11 rounded-security border-2 px-5 text-sm font-semibold disabled:opacity-50",
                         state === "absent"
-                          ? "border-amber-600 bg-amber-600 text-white"
-                          : "border-neutral-300 bg-white text-neutral-700 hover:border-amber-500 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-200"
+                          ? "border-security-amber-600 bg-security-amber-600 text-white"
+                          : "border-security-navy-200 bg-white text-security-navy-700 hover:border-security-amber-500 dark:border-security-navy-600 dark:bg-security-navy-900 dark:text-security-navy-200"
                       )}
                     >
                       Absent
@@ -317,9 +317,9 @@ export function StaffRollCall({
               </div>
 
               {expanded && (
-                <div className="mt-3 grid gap-3 border-t border-neutral-200 pt-3 dark:border-neutral-700 sm:grid-cols-3">
+                <div className="mt-3 grid gap-3 border-t border-security-navy-100 pt-3 dark:border-security-navy-700 sm:grid-cols-3">
                   <div>
-                    <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                    <label className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
                       Start
                     </label>
                     <input
@@ -335,7 +335,7 @@ export function StaffRollCall({
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                    <label className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
                       End
                     </label>
                     <input
@@ -351,7 +351,7 @@ export function StaffRollCall({
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                    <label className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
                       Note
                     </label>
                     <input

@@ -28,6 +28,7 @@ import {
   AreaChart,
   Area,
 } from "recharts";
+import { CHART_PRIMARY, CHART_SECONDARY, CHART_SERIES } from "@/lib/chart-theme";
 
 interface Site {
   id: string;
@@ -77,7 +78,7 @@ const defaultRosteredData = [{ name: "No rostered shifts", value: 0 }];
 
 const defaultStatusData = [{ name: "No employees", value: 1 }];
 
-const PIE_COLORS = ["#FF9800", "#FFB74D", "#FFCC80", "#F57C00", "#FFA726"];
+const PIE_COLORS = CHART_SERIES;
 
 const DATE_RANGES = [
   { value: "today", label: "Today" },
@@ -220,24 +221,24 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="mx-auto flex min-h-0 w-full max-w-[1600px] animate-pulse flex-col">
-        <div className="flex shrink-0 flex-col gap-3 border-b border-neutral-200/80 pb-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex shrink-0 flex-col gap-3 border-b border-security-navy-100/80 pb-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
             <div className="h-3 w-32 rounded-full bg-security-navy-200/80" />
-            <div className="h-8 w-44 rounded-xl bg-neutral-200" />
+            <div className="h-8 w-44 rounded-security-lg bg-security-navy-100" />
           </div>
           <div className="flex gap-2">
-            <div className="h-9 w-36 rounded-xl bg-neutral-200" />
-            <div className="h-9 w-48 rounded-full bg-neutral-200" />
+            <div className="h-9 w-36 rounded-security-lg bg-security-navy-100" />
+            <div className="h-9 w-48 rounded-full bg-security-navy-100" />
           </div>
         </div>
         <div className="grid shrink-0 grid-cols-2 gap-2 py-2 sm:grid-cols-3 lg:grid-cols-5">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={`kpi-${i}`} className="h-[4.25rem] rounded-security-lg border border-neutral-200/80 bg-white shadow-sm" />
+            <div key={`kpi-${i}`} className="h-[4.25rem] rounded-security-lg border border-security-navy-100/80 bg-white shadow-security-card" />
           ))}
         </div>
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-4 xl:grid-rows-2 xl:gap-3">
           {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-            <div key={i} className="min-h-0 rounded-security-lg border border-neutral-200/80 bg-white shadow-sm" />
+            <div key={i} className="min-h-0 rounded-security-lg border border-security-navy-100/80 bg-white shadow-security-card" />
           ))}
         </div>
       </div>
@@ -296,7 +297,7 @@ export default function DashboardPage() {
   const DashboardCard = ({ title, children, className = "", action }: { title: string; children: React.ReactNode; className?: string; action?: React.ReactNode }) => (
     <article className={`card-dashboard flex h-full min-h-0 flex-col overflow-hidden p-3 lg:p-3.5 ${className}`}>
       <div className="mb-2 flex shrink-0 items-center justify-between gap-2">
-        <h2 className="truncate text-xs font-semibold uppercase tracking-wide text-neutral-800">{title}</h2>
+        <h2 className="section-title truncate">{title}</h2>
         {action}
       </div>
       <div className="flex min-h-0 flex-1 flex-col">{children}</div>
@@ -304,10 +305,10 @@ export default function DashboardPage() {
   );
 
   const KpiTile = ({ label, value, hint, accent }: { label: string; value: string | number; hint?: string; accent?: "default" | "alert" }) => (
-    <div className={`card-dashboard min-w-0 px-3 py-2.5 lg:py-2 ${accent === "alert" && Number(value) > 0 ? "border-security-navy-200 bg-security-navy-50/40" : ""}`}>
-      <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-neutral-500">{label}</p>
-      <p className="mt-0.5 text-xl font-bold tabular-nums tracking-tight text-neutral-900 lg:text-lg">{value}</p>
-      {hint ? <p className="mt-0.5 truncate text-[10px] text-neutral-500">{hint}</p> : null}
+    <div className={`card-dashboard spine min-w-0 py-2.5 pl-4 pr-3 lg:py-2 ${accent === "alert" && Number(value) > 0 ? "spine-live" : "spine-idle before:bg-transparent"}`}>
+      <p className="truncate font-mono text-[0.625rem] font-medium uppercase tracking-[0.12em] text-security-navy-500">{label}</p>
+      <p className="mt-1 font-display text-xl font-semibold tabular-nums tracking-[-0.02em] text-security-navy-900 lg:text-lg">{value}</p>
+      {hint ? <p className="mt-0.5 truncate text-[10px] text-security-navy-500">{hint}</p> : null}
     </div>
   );
 
@@ -317,13 +318,13 @@ export default function DashboardPage() {
 
   return (
     <div className="animate-fade-in mx-auto flex min-h-0 w-full min-w-0 max-w-[1600px] flex-col pb-6">
-      <header className="flex shrink-0 flex-col gap-3 border-b border-neutral-200/80 pb-3 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:pb-2.5">
+      <header className="flex shrink-0 flex-col gap-3 border-b border-security-navy-100/80 pb-3 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:pb-2.5">
         <div className="min-w-0 shrink-0 lg:flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-security-navy-700 lg:text-xs">
             {format(new Date(), "EEEE, MMMM d, yyyy")}
           </p>
-          <h1 className="text-xl font-bold tracking-tight text-neutral-900 lg:text-2xl">Dashboard</h1>
-          <p className="mt-1 hidden text-sm text-neutral-600 max-lg:block">
+          <h1 className="text-xl font-bold tracking-tight text-security-navy-900 lg:text-2xl">Dashboard</h1>
+          <p className="mt-1 hidden text-sm text-security-navy-600 max-lg:block">
             Live snapshot of guards, sites, shifts, and tasks.
           </p>
         </div>
@@ -333,7 +334,7 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={() => setSiteFilterOpen((o) => !o)}
-                className="flex w-full min-w-0 items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-left text-sm font-medium text-neutral-900 shadow-sm transition-all hover:border-security-navy-300 hover:shadow-md sm:min-w-[200px] sm:w-auto"
+                className="flex w-full min-w-0 items-center gap-2 rounded-security-lg border border-security-navy-100 bg-white px-3 py-2 text-left text-sm font-medium text-security-navy-900 shadow-security-card transition-all hover:border-security-navy-300 hover:shadow-md sm:min-w-[200px] sm:w-auto"
               >
                 <span className="truncate">
                   {selectedSiteIds.length === 0
@@ -347,7 +348,7 @@ export default function DashboardPage() {
                 </svg>
               </button>
               {siteFilterOpen && (
-                <div className="absolute top-full left-0 mt-2 z-20 w-72 max-h-64 overflow-auto rounded-xl border border-neutral-200/80 bg-white shadow-security-elevated py-1.5">
+                <div className="absolute top-full left-0 mt-2 z-20 w-72 max-h-64 overflow-auto rounded-security-lg border border-security-navy-100/80 bg-white shadow-security-elevated py-1.5">
                   {selectedSiteIds.length > 0 && (
                     <button
                       type="button"
@@ -362,21 +363,21 @@ export default function DashboardPage() {
                       key={s.id}
                       type="button"
                       onClick={() => toggleSite(s.id)}
-                      className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 rounded-lg mx-1 w-[calc(100%-0.5rem)] ${selectedSiteIds.includes(s.id) ? "bg-security-navy-50 text-neutral-900 font-semibold" : "hover:bg-neutral-50 text-neutral-700"}`}
+                      className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 rounded-lg mx-1 w-[calc(100%-0.5rem)] ${selectedSiteIds.includes(s.id) ? "bg-security-navy-50 text-security-navy-900 font-semibold" : "hover:bg-security-navy-50 text-security-navy-700"}`}
                     >
                       {selectedSiteIds.includes(s.id) && <span className="text-security-navy-700">✓</span>}
                       {s.name}
                     </button>
                   ))}
                   {sites.length === 0 && (
-                    <p className="px-4 py-3 text-sm text-neutral-600">No sites</p>
+                    <p className="px-4 py-3 text-sm text-security-navy-600">No sites</p>
                   )}
                 </div>
               )}
             </div>
           )}
           <div
-            className="flex w-full min-w-0 rounded-full border border-neutral-200/90 bg-neutral-100/80 p-1 shadow-inner sm:inline-flex sm:w-auto"
+            className="flex w-full min-w-0 rounded-full border border-security-navy-100/90 bg-security-navy-50/80 p-1 shadow-inner sm:inline-flex sm:w-auto"
             role="group"
             aria-label="Date range"
           >
@@ -385,7 +386,7 @@ export default function DashboardPage() {
                 key={r.value}
                 type="button"
                 onClick={() => setDateRange(r.value)}
-                className={`min-w-0 flex-1 px-3 py-1.5 text-sm font-semibold rounded-full transition-all sm:flex-none sm:px-4 ${dateRange === r.value ? "bg-security-navy-700 text-white shadow-md" : "text-neutral-700 hover:text-neutral-900 hover:bg-white/80"}`}
+                className={`min-w-0 flex-1 px-3 py-1.5 text-sm font-semibold rounded-full transition-all sm:flex-none sm:px-4 ${dateRange === r.value ? "bg-security-navy-700 text-white shadow-md" : "text-security-navy-700 hover:text-security-navy-900 hover:bg-white/80"}`}
               >
                 {r.label}
               </button>
@@ -431,10 +432,10 @@ export default function DashboardPage() {
           <span
             className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
               payrollReadinessLabel.variant === "success"
-                ? "bg-emerald-100 text-emerald-800"
+                ? "bg-security-emerald-100 text-security-emerald-700"
                 : payrollReadinessLabel.variant === "error"
                   ? "bg-red-100 text-red-800"
-                  : "bg-amber-100 text-amber-800"
+                  : "bg-security-amber-100 text-security-amber-800"
             }`}
           >
             {payrollReadinessLabel.text}
@@ -449,10 +450,10 @@ export default function DashboardPage() {
         {(data?.pendingApprovalsInbox ?? 0) > 0 && (
           <Link
             href="/approvals"
-            className="flex items-center justify-between rounded-security-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm hover:bg-amber-100"
+            className="flex items-center justify-between rounded-security-lg border border-security-amber-200 bg-security-amber-50 px-3 py-2 text-sm hover:bg-security-amber-100"
           >
-            <span className="font-medium text-neutral-900">Pending approvals</span>
-            <span className="font-bold tabular-nums text-amber-800">{data?.pendingApprovalsInbox}</span>
+            <span className="font-medium text-security-navy-900">Pending approvals</span>
+            <span className="font-bold tabular-nums text-security-amber-800">{data?.pendingApprovalsInbox}</span>
           </Link>
         )}
         {(data?.openCriticalIncidents ?? 0) > 0 && (
@@ -460,13 +461,13 @@ export default function DashboardPage() {
             href="/incidents?severity=CRITICAL"
             className="flex items-center justify-between rounded-security-lg border border-red-200 bg-red-50 px-3 py-2 text-sm hover:bg-red-100"
           >
-            <span className="font-medium text-neutral-900">Critical incidents</span>
+            <span className="font-medium text-security-navy-900">Critical incidents</span>
             <span className="font-bold tabular-nums text-red-800">{data?.openCriticalIncidents}</span>
           </Link>
         )}
         {(data?.topPriorityTasks?.length ?? 0) > 0 && (
-          <div className="rounded-security-lg border border-neutral-200 bg-white px-3 py-2 text-sm">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-600">Tasks needing attention</p>
+          <div className="rounded-security-lg border border-security-navy-100 bg-white px-3 py-2 text-sm">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-security-navy-600">Tasks needing attention</p>
             <ul className="space-y-1">
               {data!.topPriorityTasks!.slice(0, 3).map((t) => (
                 <li key={t.id}>
@@ -481,7 +482,7 @@ export default function DashboardPage() {
       </section>
 
       {(operationalAlerts.length > 0 || alertCounts) && (
-        <section className="mb-2 shrink-0 rounded-security-lg border border-neutral-200 bg-white px-3 py-3 shadow-sm" aria-label="Operational alerts">
+        <section className="mb-2 shrink-0 rounded-security-lg border border-security-navy-100 bg-white px-3 py-3 shadow-security-card" aria-label="Operational alerts">
           <button
             type="button"
             onClick={() => setAlertsSectionOpen((open) => !open)}
@@ -490,15 +491,15 @@ export default function DashboardPage() {
             aria-controls="dashboard-operational-alerts"
           >
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-800">Operational alerts</h2>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-security-navy-900">Operational alerts</h2>
               {!alertsSectionOpen && (
-                <span className="text-xs text-neutral-600">
+                <span className="text-xs text-security-navy-600">
                   {alertCounts?.allOpen ?? operationalAlerts.length} open
                 </span>
               )}
             </div>
             <svg
-              className={`h-4 w-4 shrink-0 text-neutral-600 transition-transform ${alertsSectionOpen ? "rotate-180" : ""}`}
+              className={`h-4 w-4 shrink-0 text-security-navy-600 transition-transform ${alertsSectionOpen ? "rotate-180" : ""}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -523,7 +524,7 @@ export default function DashboardPage() {
                       className={`rounded-full px-2.5 py-1 text-xs font-semibold transition-colors ${
                         priorityTab === tab.value
                           ? "bg-security-navy-700 text-white"
-                          : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+                          : "bg-security-navy-50 text-security-navy-700 hover:bg-security-navy-100"
                       }`}
                     >
                       {tab.label} ({count})
@@ -539,12 +540,12 @@ export default function DashboardPage() {
                     <li
                       key={alert.id}
                       className={`flex flex-col gap-2 rounded-security border px-3 py-2 sm:flex-row sm:items-center sm:justify-between ${
-                        isCritical ? "border-red-200 bg-red-50/60" : "border-neutral-100 bg-neutral-50/80"
+                        isCritical ? "border-red-200 bg-red-50/60" : "border-security-navy-100 bg-security-navy-50/80"
                       }`}
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-neutral-900">{alert.title}</p>
-                        <p className="truncate text-xs text-neutral-600">{alert.message}</p>
+                        <p className="truncate text-sm font-medium text-security-navy-900">{alert.title}</p>
+                        <p className="truncate text-xs text-security-navy-600">{alert.message}</p>
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-1.5">
                         {/* Primary action is fixing the underlying problem — marking an
@@ -585,11 +586,11 @@ export default function DashboardPage() {
                   );
                 })}
                 {filteredOperationalAlerts.length === 0 && (
-                  <li className="py-2 text-sm text-neutral-600">No alerts at this priority level.</li>
+                  <li className="py-2 text-sm text-security-navy-600">No alerts at this priority level.</li>
                 )}
               </ul>
               {data?.operationalAlertsTruncated && (
-                <p className="mt-2 text-xs text-neutral-600">
+                <p className="mt-2 text-xs text-security-navy-600">
                   Showing the {operationalAlerts.length} most recent of{" "}
                   {alertCounts?.allOpen ?? operationalAlerts.length} open alerts — resolve
                   some, or narrow by site, to see the rest.
@@ -605,7 +606,7 @@ export default function DashboardPage() {
           className="mb-2 shrink-0 rounded-security-lg border border-security-amber-200 bg-security-amber-50/70 px-3 py-2"
           aria-label="Items needing attention"
         >
-          <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-800 lg:text-sm">
+          <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-security-navy-900 lg:text-sm">
             {alertsList.slice(0, 4).map((alert, i) => (
               <li key={`${alert.type}-${i}`} className="flex min-w-0 items-center gap-1.5">
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-security-amber-500" aria-hidden />
@@ -616,7 +617,7 @@ export default function DashboardPage() {
               </li>
             ))}
             {alertsList.length > 4 && (
-              <li className="text-neutral-600">+{alertsList.length - 4} more</li>
+              <li className="text-security-navy-600">+{alertsList.length - 4} more</li>
             )}
           </ul>
         </section>
@@ -633,7 +634,7 @@ export default function DashboardPage() {
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis dataKey="name" tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis domain={[0, "auto"]} tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Bar dataKey="value" fill="#FF9800" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="value" fill={CHART_PRIMARY} radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
           </ChartWrap>
@@ -651,10 +652,10 @@ export default function DashboardPage() {
         >
           <div className="flex flex-1 flex-col justify-between gap-2">
             <div>
-              <p className="text-3xl font-bold tabular-nums tracking-tight text-neutral-900 lg:text-2xl">{data?.activeSitesCount ?? 0}</p>
-              <p className="mt-0.5 text-xs text-neutral-600 lg:text-sm">Sites active</p>
+              <p className="text-3xl font-bold tabular-nums tracking-tight text-security-navy-900 lg:text-2xl">{data?.activeSitesCount ?? 0}</p>
+              <p className="mt-0.5 text-xs text-security-navy-600 lg:text-sm">Sites active</p>
               {typeof data?.activeSitesDelta === "number" && (
-                <p className="mt-1 text-xs text-neutral-600">
+                <p className="mt-1 text-xs text-security-navy-600">
                   <span className={`font-semibold ${data.activeSitesDelta >= 0 ? "text-security-navy-800" : "text-red-700"}`}>
                     {data.activeSitesDelta >= 0 ? "+" : ""}{data.activeSitesDelta}
                   </span>
@@ -678,14 +679,14 @@ export default function DashboardPage() {
                 <AreaChart data={rosteredGuardsData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#FF9800" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="#FF9800" stopOpacity={0} />
+                      <stop offset="0%" stopColor={CHART_PRIMARY} stopOpacity={0.28} />
+                      <stop offset="100%" stopColor={CHART_PRIMARY} stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                   <XAxis dataKey="name" tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <Area type="monotone" dataKey="value" stroke="#FF9800" strokeWidth={2} fill="url(#areaFill)" />
+                  <Area type="monotone" dataKey="value" stroke={CHART_PRIMARY} strokeWidth={2} fill="url(#areaFill)" />
                 </AreaChart>
               </ResponsiveContainer>
           </ChartWrap>
@@ -707,12 +708,12 @@ export default function DashboardPage() {
         >
           <div className="flex flex-1 flex-col gap-2">
             <div className="flex items-center justify-between rounded-security border border-red-100 bg-red-50/80 px-3 py-2">
-              <span className="text-xs font-medium text-neutral-900 lg:text-sm">Overdue</span>
-              <span className="text-base font-bold tabular-nums text-neutral-900">{data?.taskStats?.overdue ?? 0}</span>
+              <span className="text-xs font-medium text-security-navy-900 lg:text-sm">Overdue</span>
+              <span className="text-base font-bold tabular-nums text-security-navy-900">{data?.taskStats?.overdue ?? 0}</span>
             </div>
             <div className="flex items-center justify-between rounded-security border border-security-navy-100 bg-security-navy-50/80 px-3 py-2">
-              <span className="text-xs font-medium text-neutral-900 lg:text-sm">Due today</span>
-              <span className="text-base font-bold tabular-nums text-neutral-900">{data?.taskStats?.dueToday ?? 0}</span>
+              <span className="text-xs font-medium text-security-navy-900 lg:text-sm">Due today</span>
+              <span className="text-base font-bold tabular-nums text-security-navy-900">{data?.taskStats?.dueToday ?? 0}</span>
             </div>
           </div>
           <Link href="/tasks" className="btn-secondary mt-auto w-full shrink-0 py-1.5 text-center text-xs lg:text-sm">
@@ -749,10 +750,10 @@ export default function DashboardPage() {
                 </PieChart>
               </ResponsiveContainer>
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <span className="text-lg font-bold text-neutral-900">{employeesTotal || 0}</span>
+                <span className="text-lg font-bold text-security-navy-900">{employeesTotal || 0}</span>
               </div>
             </ChartWrap>
-            <div className="grid shrink-0 grid-cols-2 gap-x-2 gap-y-1 border-t border-neutral-100 pt-1.5 text-[10px] lg:text-xs">
+            <div className="grid shrink-0 grid-cols-2 gap-x-2 gap-y-1 border-t border-security-navy-100 pt-1.5 text-[10px] lg:text-xs">
               {(() => {
                 const raw = data?.employeesByStatus ?? [];
                 const chartData = raw.some((d) => d.value > 0) ? raw : defaultStatusData;
@@ -762,8 +763,8 @@ export default function DashboardPage() {
                       className="h-2.5 w-2.5 shrink-0 rounded-full"
                       style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
                     />
-                    <span className="truncate text-neutral-600">{item.name}</span>
-                    <span className="ml-auto shrink-0 font-medium tabular-nums text-neutral-900">{item.value}</span>
+                    <span className="truncate text-security-navy-600">{item.name}</span>
+                    <span className="ml-auto shrink-0 font-medium tabular-nums text-security-navy-900">{item.value}</span>
                   </div>
                 ));
               })()}
@@ -778,7 +779,7 @@ export default function DashboardPage() {
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis dataKey="name" tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Bar dataKey="value" fill="#F57C00" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="value" fill={CHART_SECONDARY} radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
           </ChartWrap>
@@ -805,14 +806,14 @@ export default function DashboardPage() {
                   <Link
                     key={row.key}
                     href={row.href}
-                    className={`flex shrink-0 items-center justify-between rounded-security border px-3 py-1.5 transition-colors hover:shadow-sm lg:py-2 ${
+                    className={`flex shrink-0 items-center justify-between rounded-security border px-3 py-1.5 transition-colors hover:shadow-security-card lg:py-2 ${
                       row.highlight
                         ? "border-security-navy-100 bg-security-navy-50/60 hover:bg-security-navy-50"
-                        : "border-neutral-200 bg-neutral-50 hover:bg-white"
+                        : "border-security-navy-100 bg-security-navy-50 hover:bg-white"
                     }`}
                   >
-                    <span className="text-xs font-medium text-neutral-900 lg:text-sm">{row.label}</span>
-                    <span className="text-base font-bold tabular-nums text-neutral-900">{data?.payrollStatus?.[row.key as keyof typeof data.payrollStatus] ?? 0}</span>
+                    <span className="text-xs font-medium text-security-navy-900 lg:text-sm">{row.label}</span>
+                    <span className="text-base font-bold tabular-nums text-security-navy-900">{data?.payrollStatus?.[row.key as keyof typeof data.payrollStatus] ?? 0}</span>
                   </Link>
                 ))}
                 <Link href="/payroll" className="btn-primary mt-auto w-full shrink-0 py-1.5 text-center text-xs lg:text-sm">
@@ -822,9 +823,9 @@ export default function DashboardPage() {
             ) : (
               <div className="space-y-2 text-sm">
                 {(["draft", "calculated", "paid"] as const).map((key) => (
-                  <div key={key} className="flex justify-between border-b border-neutral-100 py-2 last:border-0">
-                    <span className="capitalize text-neutral-600">{key}</span>
-                    <span className="font-bold tabular-nums text-neutral-900">{data?.payrollStatus?.[key] ?? 0}</span>
+                  <div key={key} className="flex justify-between border-b border-security-navy-100 py-2 last:border-0">
+                    <span className="capitalize text-security-navy-600">{key}</span>
+                    <span className="font-bold tabular-nums text-security-navy-900">{data?.payrollStatus?.[key] ?? 0}</span>
                   </div>
                 ))}
               </div>
@@ -843,7 +844,7 @@ export default function DashboardPage() {
               ) : undefined
             }
           >
-            <p className="mb-1.5 shrink-0 text-[10px] text-neutral-600 lg:text-xs">Message team directly</p>
+            <p className="mb-1.5 shrink-0 text-[10px] text-security-navy-600 lg:text-xs">Message team directly</p>
             <div className="min-h-0 flex-1 overflow-hidden">
               {whatsappContacts.length > 0 ? (
                 whatsappContacts.slice(0, 2).map((contact) => (
@@ -851,17 +852,17 @@ export default function DashboardPage() {
                     key={contact.id}
                     type="button"
                     onClick={() => router.push(`/whatsapp?contact=${contact.id}`)}
-                    className="flex w-full items-center gap-2 rounded-security border border-transparent px-1 py-1 text-left transition-colors hover:bg-neutral-50 lg:gap-2.5 lg:py-1.5"
+                    className="flex w-full items-center gap-2 rounded-security border border-transparent px-1 py-1 text-left transition-colors hover:bg-security-navy-50 lg:gap-2.5 lg:py-1.5"
                   >
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-security-navy-100 text-[10px] font-semibold text-security-navy-900 lg:h-8 lg:w-8">
                       {contact.firstName?.charAt(0)}
                       {contact.lastName?.charAt(0)}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-xs font-medium text-neutral-900">
+                      <span className="block truncate text-xs font-medium text-security-navy-900">
                         {contact.firstName} {contact.lastName}
                       </span>
-                      <span className="block truncate text-[10px] text-neutral-500">
+                      <span className="block truncate text-[10px] text-security-navy-500">
                         {contact.phone
                           ? (() => {
                               const digits = contact.phone!.replace(/\D/g, "");
@@ -874,7 +875,7 @@ export default function DashboardPage() {
                   </button>
                 ))
               ) : (
-                <p className="py-3 text-center text-xs text-neutral-500">No contacts yet</p>
+                <p className="py-3 text-center text-xs text-security-navy-500">No contacts yet</p>
               )}
             </div>
             <Link href="/whatsapp" className="btn-primary mt-auto flex w-full shrink-0 items-center justify-center gap-1.5 py-1.5 text-xs lg:text-sm">
@@ -886,7 +887,7 @@ export default function DashboardPage() {
           </DashboardCard>
         ) : (
           <DashboardCard title="WhatsApp">
-            <p className="rounded-security border border-dashed border-neutral-200 bg-neutral-50 py-6 text-center text-xs text-neutral-600 lg:text-sm">
+            <p className="rounded-security border border-dashed border-security-navy-100 bg-security-navy-50 py-6 text-center text-xs text-security-navy-600 lg:text-sm">
               No WhatsApp access
             </p>
           </DashboardCard>

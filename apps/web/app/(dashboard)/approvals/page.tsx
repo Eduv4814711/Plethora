@@ -81,9 +81,9 @@ export default function ApprovalsPage() {
   if (loading) {
     return (
       <div className="animate-pulse space-y-4">
-        <div className="h-8 w-48 bg-neutral-200 rounded-lg" />
-        <div className="h-24 bg-neutral-200 rounded-lg" />
-        <div className="h-24 bg-neutral-200 rounded-lg" />
+        <div className="h-8 w-48 bg-security-navy-100 rounded-lg" />
+        <div className="h-24 bg-security-navy-100 rounded-lg" />
+        <div className="h-24 bg-security-navy-100 rounded-lg" />
       </div>
     );
   }
@@ -118,17 +118,17 @@ export default function ApprovalsPage() {
           <article key={item.id} className="card-dashboard p-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
-                <h2 className="font-semibold text-neutral-900">
+                <h2 className="font-semibold text-security-navy-900">
                   {TYPE_LABELS[item.approvalType] ?? item.approvalType.replace(/_/g, " ")}
                 </h2>
-                <p className="mt-1 text-sm text-neutral-600">
+                <p className="mt-1 text-sm text-security-navy-600">
                   Requested by {item.requestedBy.name}
                   {item.approver ? ` · Assigned to ${item.approver.name}` : ""}
                 </p>
                 {item.comment && (
-                  <p className="mt-2 text-sm text-neutral-700">{item.comment}</p>
+                  <p className="mt-2 text-sm text-security-navy-700">{item.comment}</p>
                 )}
-                <p className="mt-1 text-xs text-neutral-500">
+                <p className="mt-1 text-xs text-security-navy-500">
                   {new Date(item.requestedAt).toLocaleString()}
                 </p>
               </div>
@@ -136,7 +136,7 @@ export default function ApprovalsPage() {
             </div>
 
             {canApprove && item.status === "PENDING" && (
-              <div className="mt-4 flex flex-wrap gap-2 border-t border-neutral-100 pt-3">
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-security-navy-100 pt-3">
                 {approvalEntityHref(item) && (
                   <Link href={approvalEntityHref(item)!} className="btn-secondary text-sm py-1.5">
                     View record

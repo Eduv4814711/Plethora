@@ -16,10 +16,10 @@ const DOCUMENT_TYPES = [
 ];
 
 function statusTone(status: string): string {
-  if (status === "verified") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (status === "pending_review") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (status === "verified") return "border-security-emerald-200 bg-security-emerald-50 text-security-emerald-700";
+  if (status === "pending_review") return "border-security-amber-200 bg-security-amber-50 text-security-amber-700";
   if (status === "expired") return "border-red-200 bg-red-50 text-red-700";
-  return "border-slate-200 bg-slate-100 text-slate-700";
+  return "border-security-navy-100 bg-security-navy-50 text-security-navy-700";
 }
 
 function statusLabel(status: string): string {
@@ -76,12 +76,12 @@ export function InstructorDocumentsManager({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <div className="rounded-security-lg border border-security-navy-100 bg-security-navy-50 p-4">
         <div className="grid gap-3 md:grid-cols-5">
           <label className="md:col-span-2">
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">Document Type</span>
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-security-navy-500">Document Type</span>
             <select
-              className="input-modern w-full rounded-xl"
+              className="input-modern w-full rounded-security-lg"
               value={documentType}
               onChange={(e) => setDocumentType(e.target.value)}
               disabled={!canEdit || uploading}
@@ -94,7 +94,7 @@ export function InstructorDocumentsManager({
             </select>
           </label>
           <label>
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">Issue Date</span>
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-security-navy-500">Issue Date</span>
             <DateInput
               value={issueDate}
               onChange={setIssueDate}
@@ -105,7 +105,7 @@ export function InstructorDocumentsManager({
             />
           </label>
           <label>
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">Expiry Date</span>
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-security-navy-500">Expiry Date</span>
             <DateInput
               value={expiryDate}
               onChange={setExpiryDate}
@@ -116,19 +116,19 @@ export function InstructorDocumentsManager({
             />
           </label>
           <label>
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">File</span>
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-security-navy-500">File</span>
             <input
               type="file"
-              className="block w-full rounded-security border-2 border-neutral-300 bg-white text-sm text-neutral-700 file:mr-3 file:rounded-security file:border-0 file:bg-security-navy file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-security-navy-800"
+              className="block w-full rounded-security border-2 border-security-navy-200 bg-white text-sm text-security-navy-700 file:mr-3 file:rounded-security file:border-0 file:bg-security-navy file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-security-navy-800"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               disabled={!canEdit || uploading}
             />
           </label>
         </div>
         <label className="mt-3 block">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">Notes</span>
+          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-security-navy-500">Notes</span>
           <textarea
-            className="input-modern w-full rounded-xl"
+            className="input-modern w-full rounded-security-lg"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             disabled={!canEdit || uploading}
@@ -138,7 +138,7 @@ export function InstructorDocumentsManager({
         <div className="mt-3">
           <button
             type="button"
-            className="btn-primary px-3 py-1.5 text-xs rounded-xl"
+            className="btn-primary px-3 py-1.5 text-xs rounded-security-lg"
             disabled={!canEdit || uploading || !file}
             onClick={upload}
           >
@@ -147,10 +147,10 @@ export function InstructorDocumentsManager({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200">
-        <table className="min-w-full divide-y divide-neutral-200 text-sm">
+      <div className="overflow-x-auto rounded-security-lg border border-security-navy-100">
+        <table className="min-w-full divide-y divide-security-navy-100 text-sm">
           <thead>
-            <tr className="text-[11px] uppercase tracking-wide text-neutral-500">
+            <tr className="text-[11px] uppercase tracking-wide text-security-navy-500">
               <th>File Name</th>
               <th>Type</th>
               <th>Upload Date</th>
@@ -163,7 +163,7 @@ export function InstructorDocumentsManager({
           <tbody>
             {documents.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-6 text-center text-sm text-neutral-500">
+                <td colSpan={7} className="py-6 text-center text-sm text-security-navy-500">
                   No supporting documents uploaded yet.
                 </td>
               </tr>

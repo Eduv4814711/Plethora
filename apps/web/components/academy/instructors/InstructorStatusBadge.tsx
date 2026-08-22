@@ -11,12 +11,12 @@ const LABELS: Record<string, string> = {
 };
 
 function tone(status: string): string {
-  if (status === "active") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "active") return "border-security-emerald-200 bg-security-emerald-50 text-security-emerald-700";
   if (status === "suspended" || status === "contract_ended") {
     return "border-red-200 bg-red-50 text-red-700";
   }
-  if (status === "inactive") return "border-slate-300 bg-slate-100 text-slate-700";
-  return "border-slate-300 bg-slate-100 text-slate-700";
+  if (status === "inactive") return "border-security-navy-200 bg-security-navy-50 text-security-navy-700";
+  return "border-security-navy-200 bg-security-navy-50 text-security-navy-700";
 }
 
 export function statusLabel(value: string | InstructorStatus | null | undefined): string {

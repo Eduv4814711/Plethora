@@ -97,10 +97,10 @@ export default function TaskProjectsPage() {
   if (loading) {
     return (
       <div className="animate-pulse space-y-6">
-        <div className="h-9 w-48 bg-gray-200 rounded-lg" />
+        <div className="h-9 w-48 bg-security-navy-100 rounded-lg" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-24 bg-gray-200 rounded-lg" />
+            <div key={i} className="h-24 bg-security-navy-100 rounded-lg" />
           ))}
         </div>
       </div>
@@ -111,13 +111,13 @@ export default function TaskProjectsPage() {
     <div className="animate-fade-in max-w-4xl mx-auto">
       {confirmDialog}
       <div className="mb-4">
-        <Link href="/tasks" className="text-sm text-gray-600 hover:text-black">
+        <Link href="/tasks" className="text-sm text-security-navy-600 hover:text-security-navy-900">
           ← Back to Tasks
         </Link>
       </div>
 
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-black">Task Projects</h1>
+        <h1 className="text-2xl font-bold text-security-navy-900">Task Projects</h1>
         {canCreate && <button onClick={() => setShowForm(true)} className="btn-primary">
           New Project
         </button>}
@@ -130,8 +130,8 @@ export default function TaskProjectsPage() {
       )}
 
       {showForm && canCreate && (
-        <div className="mb-6 bg-gray-100 border border-gray-300 rounded-lg p-4">
-          <h2 className="font-bold text-black mb-3">Create Project</h2>
+        <div className="mb-6 bg-security-navy-50 border border-security-navy-200 rounded-lg p-4">
+          <h2 className="font-bold text-security-navy-900 mb-3">Create Project</h2>
           <form onSubmit={handleCreate} className="space-y-3">
             <input
               type="text"
@@ -171,7 +171,7 @@ export default function TaskProjectsPage() {
         {projects.map((p) => (
           <div
             key={p.id}
-            className="bg-gray-100 border border-gray-300 rounded-lg p-4 flex items-center justify-between"
+            className="bg-security-navy-50 border border-security-navy-200 rounded-lg p-4 flex items-center justify-between"
           >
               {canEdit && editingId === p.id ? (
               <div className="flex-1 flex gap-2">
@@ -199,9 +199,9 @@ export default function TaskProjectsPage() {
             ) : (
               <>
                 <Link href={`/tasks/projects/${p.id}`} className="flex-1">
-                  <h3 className="font-semibold text-black">{p.name}</h3>
+                  <h3 className="font-semibold text-security-navy-900">{p.name}</h3>
                   {p._count && (
-                    <p className="text-sm text-gray-600">{p._count.tasks} tasks</p>
+                    <p className="text-sm text-security-navy-600">{p._count.tasks} tasks</p>
                   )}
                 </Link>
                 <div className="flex gap-2">
@@ -228,7 +228,7 @@ export default function TaskProjectsPage() {
       </div>
 
       {projects.length === 0 && !showForm && (
-        <div className="text-center py-12 text-gray-500">
+        <div className="text-center py-12 text-security-navy-500">
           No projects yet. Create one to organize your tasks.
         </div>
       )}

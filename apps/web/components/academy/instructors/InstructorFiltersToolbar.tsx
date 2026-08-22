@@ -33,7 +33,7 @@ export function InstructorFiltersToolbar({
 }: Props) {
   if (rowStyle) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white/90 p-2 shadow-sm">
+      <div className="rounded-security-lg border border-security-navy-100 bg-white/90 p-2 shadow-security-card">
         <div className="overflow-x-auto">
           <div className="flex flex-col gap-2 xl:flex-row xl:min-w-0 xl:flex-nowrap xl:items-center">
             <input
@@ -103,14 +103,14 @@ export function InstructorFiltersToolbar({
   }
 
   return (
-    <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="space-y-3 rounded-2xl border border-security-navy-100 bg-white p-4 shadow-security-card">
       <div className={`grid gap-3 ${compact ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-[1.3fr_repeat(6,minmax(0,1fr))_auto]"}`}>
         <label className="w-full">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">
+          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-security-navy-500">
             Search
           </span>
           <input
-            className="input-modern w-full rounded-xl"
+            className="input-modern w-full rounded-security-lg"
             placeholder="Name, PSIRA no, ID no, email, phone"
             value={filters.search}
             onChange={(e) => onChange({ search: e.target.value })}
@@ -185,7 +185,7 @@ export function InstructorFiltersToolbar({
         />
 
         <div className="flex items-end">
-          <button type="button" className="btn-secondary w-full rounded-xl" onClick={onReset}>
+          <button type="button" className="btn-secondary w-full rounded-security-lg" onClick={onReset}>
             Reset Filters
           </button>
         </div>
@@ -231,8 +231,8 @@ function SelectField({
 }) {
   return (
     <label className="w-full">
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">{label}</span>
-      <select className="input-modern w-full rounded-xl" value={value} onChange={(e) => onChange(e.target.value)}>
+      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-security-navy-500">{label}</span>
+      <select className="input-modern w-full rounded-security-lg" value={value} onChange={(e) => onChange(e.target.value)}>
         {options.map((option) => (
           <option key={option.value || `opt-${option.label}`} value={option.value}>
             {option.label}

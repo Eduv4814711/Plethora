@@ -72,7 +72,7 @@ export default function ClientPortalPage() {
   }, [token, user, previewClientId, loadPortal]);
 
   if (loading) {
-    return <div className="animate-pulse h-48 bg-neutral-200 rounded-lg" />;
+    return <div className="animate-pulse h-48 bg-security-navy-100 rounded-lg" />;
   }
 
   const client = dashboard?.client as { name?: string } | undefined;
@@ -109,24 +109,24 @@ export default function ClientPortalPage() {
       {error && <AlertBanner variant="error" className="mb-4">{error}</AlertBanner>}
 
       {client && (
-        <p className="text-lg font-semibold text-neutral-900 mb-4">{client.name}</p>
+        <p className="text-lg font-semibold text-security-navy-900 mb-4">{client.name}</p>
       )}
 
       <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <div className="card-dashboard p-3">
-          <p className="text-xs text-neutral-500 uppercase font-semibold">Sites</p>
+          <p className="text-xs text-security-navy-500 uppercase font-semibold">Sites</p>
           <p className="text-2xl font-bold tabular-nums">{sitesCount}</p>
         </div>
         <div className="card-dashboard p-3">
-          <p className="text-xs text-neutral-500 uppercase font-semibold">Guards deployed</p>
+          <p className="text-xs text-security-navy-500 uppercase font-semibold">Guards deployed</p>
           <p className="text-2xl font-bold tabular-nums">{guardsDeployed}</p>
         </div>
         <div className="card-dashboard p-3">
-          <p className="text-xs text-neutral-500 uppercase font-semibold">Open incidents</p>
+          <p className="text-xs text-security-navy-500 uppercase font-semibold">Open incidents</p>
           <p className="text-2xl font-bold tabular-nums">{openIncidents}</p>
         </div>
         <div className="card-dashboard p-3">
-          <p className="text-xs text-neutral-500 uppercase font-semibold">Attendance completion</p>
+          <p className="text-xs text-security-navy-500 uppercase font-semibold">Attendance completion</p>
           <p className="text-2xl font-bold tabular-nums">
             {(attendance?.completionRate as number) ?? "—"}%
           </p>
@@ -138,9 +138,9 @@ export default function ClientPortalPage() {
         <div className="space-y-3">
           {sites.map((site) => (
             <article key={site.id} className="card-dashboard p-4">
-              <h3 className="font-semibold text-neutral-900">{site.name}</h3>
+              <h3 className="font-semibold text-security-navy-900">{site.name}</h3>
               {site.physicalAddress && (
-                <p className="text-sm text-neutral-600 mt-1">{site.physicalAddress}</p>
+                <p className="text-sm text-security-navy-600 mt-1">{site.physicalAddress}</p>
               )}
               <div className="mt-2 flex gap-2">
                 {site.siteStatus && <Badge variant="neutral">{site.siteStatus}</Badge>}
@@ -153,7 +153,7 @@ export default function ClientPortalPage() {
             </article>
           ))}
           {sites.length === 0 && (
-            <p className="text-sm text-neutral-600">No sites linked to this client account.</p>
+            <p className="text-sm text-security-navy-600">No sites linked to this client account.</p>
           )}
         </div>
       </section>
@@ -163,9 +163,9 @@ export default function ClientPortalPage() {
         <div className="space-y-3">
           {incidents.slice(0, 10).map((inc) => (
             <article key={inc.id} className="card-dashboard p-4">
-              <p className="text-xs font-mono text-neutral-500">{inc.incidentNumber}</p>
-              <h3 className="font-semibold text-neutral-900">{inc.title}</h3>
-              <p className="text-sm text-neutral-600 mt-1">
+              <p className="text-xs font-mono text-security-navy-500">{inc.incidentNumber}</p>
+              <h3 className="font-semibold text-security-navy-900">{inc.title}</h3>
+              <p className="text-sm text-security-navy-600 mt-1">
                 {inc.site?.name} · {new Date(inc.incidentDateTime).toLocaleDateString()}
               </p>
               <div className="mt-2 flex gap-2">
@@ -175,7 +175,7 @@ export default function ClientPortalPage() {
             </article>
           ))}
           {incidents.length === 0 && (
-            <p className="text-sm text-neutral-600">No incidents shared with this client.</p>
+            <p className="text-sm text-security-navy-600">No incidents shared with this client.</p>
           )}
         </div>
       </section>

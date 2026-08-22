@@ -73,7 +73,7 @@ export default function SetupPasswordClient() {
 
   return (
     <div className="w-full animate-fade-in">
-      <div className="card-elevated p-10 md:p-12">
+      <div className="animate-fade-in">
         <h1 className="text-2xl font-semibold text-security-navy mb-1">Set Your Password</h1>
         <p className="text-sm text-security-navy-600 mb-6">
           {/* The same link serves a new-account invite and a password reset, so
@@ -93,7 +93,7 @@ export default function SetupPasswordClient() {
             </Link>
           </div>
         ) : success ? (
-          <div className="p-4 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-security">
+          <div className="p-4 text-sm text-security-emerald-700 bg-security-emerald-50 border border-security-emerald-200 rounded-security">
             Password set successfully. Redirecting to login...
           </div>
         ) : (

@@ -9,7 +9,7 @@ import { onboardCompany } from "@/lib/api";
 function RegisterFallback() {
   return (
     <div className="w-full animate-fade-in">
-      <div className="card-elevated p-10 md:p-12">
+      <div className="animate-fade-in">
         <div className="h-6 w-48 bg-security-navy-200 rounded-security mb-4 animate-pulse" />
         <div className="space-y-4">
           <div className="h-11 bg-security-navy-200 rounded-security animate-pulse" />
@@ -100,8 +100,8 @@ function RegisterFormContent() {
 
   return (
     <div className="w-full animate-fade-in">
-      <div className="card-elevated p-10 md:p-12">
-        <div className="text-center mb-8 pb-8 border-b-2 border-neutral-200">
+      <div className="animate-fade-in">
+        <div className="text-center mb-8 pb-8 border-b-2 border-security-navy-100">
           <div className="inline-flex items-center justify-center mb-4">
             <img src="/plethora-logo.svg" alt="Plethora" className="h-[7.5rem] w-auto object-contain" />
           </div>

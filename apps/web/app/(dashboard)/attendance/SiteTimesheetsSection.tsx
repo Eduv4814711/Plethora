@@ -163,14 +163,14 @@ export function SiteTimesheetsSection({
 
   if (loading && !sheet) {
     return (
-      <div className="rounded-xl border border-neutral-200 bg-white p-4 text-sm text-neutral-500">
+      <div className="rounded-security-lg border border-security-navy-100 bg-white p-4 text-sm text-security-navy-500">
         Loading site timesheet…
       </div>
     );
   }
 
   return (
-    <section className="space-y-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-neutral-950">
+    <section className="space-y-4 rounded-security-lg border border-security-navy-100 bg-white p-4 shadow-security-card dark:border-security-navy-700 dark:bg-security-navy-900">
       <ConfirmModal
         open={Boolean(notice)}
         title={notice?.title ?? ""}
@@ -210,9 +210,9 @@ export function SiteTimesheetsSection({
       )}
 
       {unlockOpen && canApprove && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/45 p-4" role="presentation">
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-security-navy-900/45 p-4" role="presentation">
           <form
-            className="w-full max-w-md rounded-xl border border-neutral-200 bg-white p-6 shadow-xl dark:border-neutral-700 dark:bg-neutral-950"
+            className="w-full max-w-md rounded-security-lg border border-security-navy-100 bg-white p-6 shadow-xl dark:border-security-navy-700 dark:bg-security-navy-900"
             role="dialog"
             aria-modal="true"
             aria-labelledby="unlock-timesheet-title"
@@ -226,13 +226,13 @@ export function SiteTimesheetsSection({
               }
             }}
           >
-            <h2 id="unlock-timesheet-title" className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+            <h2 id="unlock-timesheet-title" className="text-lg font-semibold text-security-navy-900 dark:text-security-navy-100">
               Unlock approved timesheet
             </h2>
-            <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+            <p className="mt-2 text-sm text-security-navy-600 dark:text-security-navy-400">
               Unlocking allows attendance changes. The reason is saved in the audit trail.
             </p>
-            <label htmlFor="unlock-reason" className="mt-4 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+            <label htmlFor="unlock-reason" className="mt-4 block text-sm font-medium text-security-navy-700 dark:text-security-navy-300">
               Reason for unlocking
             </label>
             <textarea
@@ -258,10 +258,10 @@ export function SiteTimesheetsSection({
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
+          <h2 className="text-base font-semibold text-security-navy-900 dark:text-security-navy-100">
             Site Timesheet{displaySiteName ? ` — ${displaySiteName}` : ""}
           </h2>
-          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+          <p className="mt-1 text-sm text-security-navy-500 dark:text-security-navy-400">
             Review and edit who actually worked, then approve. The approved timesheet is the official
             attendance record and the source for payroll actuals.
           </p>
@@ -280,7 +280,7 @@ export function SiteTimesheetsSection({
             {showSecondaryActions && (
               <div
                 id="timesheet-secondary-actions"
-                className="z-20 grid gap-2 rounded-lg border border-neutral-200 bg-white p-2 shadow-lg dark:border-neutral-700 dark:bg-neutral-900 sm:absolute sm:right-0 sm:top-12 sm:min-w-52"
+                className="z-20 grid gap-2 rounded-lg border border-security-navy-100 bg-white p-2 shadow-lg dark:border-security-navy-700 dark:bg-security-navy-900 sm:absolute sm:right-0 sm:top-12 sm:min-w-52"
               >
                 {!locked && canEdit && (
                   <button
@@ -370,7 +370,7 @@ export function SiteTimesheetsSection({
       )}
 
       {locked && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-security-emerald-200 bg-security-emerald-50 px-3 py-2 text-sm text-security-emerald-700 dark:border-security-emerald-700 dark:bg-security-emerald-700/30 dark:text-security-emerald-300">
           <span>
             Attendance {sheet?.status === "locked" ? "locked" : "approved"} for this period. Next step:
             process payroll from the verified hours.
@@ -398,10 +398,10 @@ export function SiteTimesheetsSection({
             ].map(([title, value]) => (
               <div
                 key={String(title)}
-                className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900"
+                className="rounded-lg border border-security-navy-100 bg-security-navy-50 px-3 py-2 dark:border-security-navy-700 dark:bg-security-navy-900"
               >
-                <p className="text-neutral-500">{title}</p>
-                <p className="mt-1 font-semibold text-neutral-900 dark:text-neutral-100">{value}</p>
+                <p className="text-security-navy-500">{title}</p>
+                <p className="mt-1 font-semibold text-security-navy-900 dark:text-security-navy-100">{value}</p>
               </div>
             ))}
           </div>
@@ -409,7 +409,7 @@ export function SiteTimesheetsSection({
           {!locked && pendingReviewCount > 0 && (
             <div
               id="timesheet-approval-help"
-              className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+              className="rounded-lg border border-security-amber-200 bg-security-amber-50 px-3 py-2 text-sm text-security-amber-900 dark:border-security-amber-900 dark:bg-security-amber-950/30 dark:text-security-amber-200"
             >
               <span className="font-medium">{pendingReviewCount}</span>{" "}
               {shiftType === "all" ? "entry" : `${shiftLabel} entry`}
@@ -467,11 +467,11 @@ export function SiteTimesheetsSection({
           {!locked && canEdit && bulkConfirmableRows.length > 0 && (
             <div className="flex flex-col gap-3 rounded-lg border border-security-navy-200 bg-security-navy-50/60 p-3 dark:border-security-navy-700 dark:bg-security-navy-950/30 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                <p className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">
                   {bulkConfirmableRows.length} shift{bulkConfirmableRows.length === 1 ? "" : "s"} match
                   the roster
                 </p>
-                <p className="mt-0.5 text-xs text-neutral-600 dark:text-neutral-400">
+                <p className="mt-0.5 text-xs text-security-navy-600 dark:text-security-navy-400">
                   Confirm them together — you only need to enter the occurrence book numbers.
                 </p>
               </div>
@@ -499,11 +499,11 @@ export function SiteTimesheetsSection({
           )}
 
           {noShiftDates.length > 0 && (
-            <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
-              <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+            <div className="rounded-lg border border-security-navy-100 bg-security-navy-50 px-3 py-2 dark:border-security-navy-700 dark:bg-security-navy-900">
+              <p className="text-sm font-semibold text-security-navy-700 dark:text-security-navy-300">
                 {NO_SHIFT_LABEL} — {noShiftDates.length} day{noShiftDates.length === 1 ? "" : "s"}
               </p>
-              <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+              <p className="mt-0.5 text-xs text-security-navy-500 dark:text-security-navy-400">
                 This site runs no {shiftType === "all" ? "" : `${shiftLabel} `}shift on these days, so
                 there is nothing to capture. Change it under Days covered on the site.
               </p>
@@ -511,7 +511,7 @@ export function SiteTimesheetsSection({
                 {noShiftDates.map((date) => (
                   <span
                     key={date}
-                    className="rounded-full border border-neutral-200 bg-white px-2 py-0.5 text-[11px] font-medium text-neutral-500 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-400"
+                    className="rounded-full border border-security-navy-100 bg-white px-2 py-0.5 text-[11px] font-medium text-security-navy-500 dark:border-security-navy-700 dark:bg-security-navy-900 dark:text-security-navy-400"
                   >
                     {formatNoShiftDate(date)}
                   </span>
@@ -520,17 +520,17 @@ export function SiteTimesheetsSection({
             </div>
           )}
 
-          <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-900 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 rounded-lg border border-security-navy-100 bg-security-navy-50 p-3 dark:border-security-navy-700 dark:bg-security-navy-900 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+              <p className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">
                 Attendance entries
               </p>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              <p className="text-xs text-security-navy-500 dark:text-security-navy-400">
                 Pending work is shown first so unfinished attendance is not missed.
               </p>
             </div>
             <div
-              className="flex flex-wrap gap-1 rounded-lg border border-neutral-200 bg-white p-1 dark:border-neutral-700 dark:bg-neutral-950"
+              className="flex flex-wrap gap-1 rounded-lg border border-security-navy-100 bg-white p-1 dark:border-security-navy-700 dark:bg-security-navy-900"
               role="group"
               aria-label="Show attendance entries"
             >
@@ -550,7 +550,7 @@ export function SiteTimesheetsSection({
                     "min-h-11 rounded-md px-3 text-sm font-medium",
                     reviewFilter === value
                       ? "bg-security-navy-800 text-white dark:bg-security-navy-600"
-                      : "text-neutral-700 hover:bg-neutral-50 dark:text-neutral-300 dark:hover:bg-neutral-900"
+                      : "text-security-navy-700 hover:bg-security-navy-50 dark:text-security-navy-300 dark:hover:bg-security-navy-900"
                   )}
                 >
                   {text}
@@ -559,11 +559,11 @@ export function SiteTimesheetsSection({
             </div>
           </div>
 
-          <div className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-950 sm:flex-row sm:items-end">
+          <div className="flex flex-col gap-2 rounded-lg border border-security-navy-100 bg-white p-3 dark:border-security-navy-700 dark:bg-security-navy-900 sm:flex-row sm:items-end">
             <div className="min-w-0 flex-1">
               <label
                 htmlFor="site-timesheet-guard-filter"
-                className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500"
+                className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500"
               >
                 Search / filter by guard
               </label>
@@ -579,13 +579,13 @@ export function SiteTimesheetsSection({
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {guardFilterActive && (
-                <p className="text-xs text-neutral-500">
+                <p className="text-xs text-security-navy-500">
                   Showing {displayRows.length} of {shiftScopedRows.length} day
                   {shiftScopedRows.length === 1 ? "" : "s"}
                 </p>
               )}
               {!guardFilterActive && shiftFilterActive && (
-                <p className="text-xs text-neutral-500">
+                <p className="text-xs text-security-navy-500">
                   Showing {displayRows.length} of {shiftScopedRows.length}{" "}
                   {shiftType === "day" ? "day" : "night"}-shift attendance entries
                 </p>
@@ -602,19 +602,19 @@ export function SiteTimesheetsSection({
           </div>
 
           {guardFilterActive && displayRows.length === 0 && (
-            <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-3 text-sm text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
+            <div className="rounded-lg border border-security-navy-100 bg-security-navy-50 px-3 py-3 text-sm text-security-navy-600 dark:border-security-navy-700 dark:bg-security-navy-900 dark:text-security-navy-300">
               No timesheet days match “{guardFilter.trim()}”. Clear the filter to see all guards again.
             </div>
           )}
           {!guardFilterActive && shiftFilterActive && shiftScopedRows.length === 0 && (
-            <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-3 text-sm text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
+            <div className="rounded-lg border border-security-navy-100 bg-security-navy-50 px-3 py-3 text-sm text-security-navy-600 dark:border-security-navy-700 dark:bg-security-navy-900 dark:text-security-navy-300">
               No {shiftType === "day" ? "day" : "night"}-shift rows for this site in the selected
               period. Switch shift type above to review the other shift.
             </div>
           )}
           {!guardFilterActive && shiftScopedRows.length > 0 && displayRows.length === 0 && (
             <div
-              className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200"
+              className="rounded-lg border border-security-emerald-200 bg-security-emerald-50 px-4 py-4 text-sm text-security-emerald-700 dark:border-security-emerald-700 dark:bg-security-emerald-700/30 dark:text-security-emerald-200"
               role="status"
             >
               {reviewFilter === "pending"
@@ -666,14 +666,14 @@ export function SiteTimesheetsSection({
       )}
 
       {sheet && !locked && (
-        <div className="sticky bottom-4 z-20 flex flex-col gap-3 rounded-xl border border-security-navy-200 bg-white/95 p-4 shadow-xl backdrop-blur dark:border-security-navy-700 dark:bg-neutral-950/95 sm:flex-row sm:items-center sm:justify-between">
+        <div className="sticky bottom-4 z-20 flex flex-col gap-3 rounded-security-lg border border-security-navy-200 bg-white/95 p-4 shadow-xl backdrop-blur dark:border-security-navy-700 dark:bg-security-navy-900/95 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+            <p className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">
               {pendingReviewCount === 0
                 ? "Visible attendance is ready for approval"
                 : `${pendingReviewCount} attendance ${pendingReviewCount === 1 ? "entry needs" : "entries need"} confirmation`}
             </p>
-            <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+            <p className="mt-0.5 text-xs text-security-navy-500 dark:text-security-navy-400">
               {otherShiftPendingCount > 0
                 ? `${otherShiftPendingCount} entries on the other shift will still need attention before payroll lock.`
                 : "Approving the final shift locks this site timesheet for payroll."}

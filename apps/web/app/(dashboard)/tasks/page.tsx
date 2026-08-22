@@ -63,27 +63,27 @@ function TaskCard({ task }: { task: Task }) {
       className="card-dashboard block p-4 transition-colors hover:border-security-navy-200"
     >
       <div className="flex items-start justify-between gap-2">
-        <h3 className="font-semibold text-black truncate flex-1">{task.title}</h3>
+        <h3 className="font-semibold text-security-navy-900 truncate flex-1">{task.title}</h3>
         <span className={`shrink-0 ${PRIORITY_COLORS[task.priority] ?? "badge-neutral"}`}>
           {PRIORITY_LABELS[task.priority] ?? task.priority}
         </span>
       </div>
-      <div className="mt-2 flex flex-wrap gap-2 text-sm text-neutral-600">
+      <div className="mt-2 flex flex-wrap gap-2 text-sm text-security-navy-600">
         <span>{STATUS_LABELS[task.status] ?? task.status}</span>
         {task.project && (
-          <span className="text-neutral-500">• {task.project.name}</span>
+          <span className="text-security-navy-500">• {task.project.name}</span>
         )}
         {task.assigneeDisplayName && (
-          <span className="text-neutral-500">• {task.assigneeDisplayName}</span>
+          <span className="text-security-navy-500">• {task.assigneeDisplayName}</span>
         )}
       </div>
       {typeof task.completionPercentage === "number" && task.status !== "done" && task.status !== "cancelled" && (
         <div className="mt-2">
-          <div className="flex justify-between text-xs text-neutral-500 mb-0.5">
+          <div className="flex justify-between text-xs text-security-navy-500 mb-0.5">
             <span>Progress</span>
             <span>{task.completionPercentage}%</span>
           </div>
-          <div className="h-1.5 rounded-full bg-neutral-200 overflow-hidden">
+          <div className="h-1.5 rounded-full bg-security-navy-100 overflow-hidden">
             <div
               className="h-full bg-security-navy-600 rounded-full"
               style={{ width: `${Math.min(100, Math.max(0, task.completionPercentage))}%` }}
@@ -92,7 +92,7 @@ function TaskCard({ task }: { task: Task }) {
         </div>
       )}
       {dueStr && (
-        <p className={`mt-1 text-xs ${isOverdue ? "text-red-600 font-medium" : "text-neutral-500"}`}>
+        <p className={`mt-1 text-xs ${isOverdue ? "text-red-600 font-medium" : "text-security-navy-500"}`}>
           Due {dueStr}
         </p>
       )}
@@ -189,10 +189,10 @@ export default function TasksPage() {
   if (loading) {
     return (
       <div className="animate-pulse space-y-6">
-        <div className="h-9 w-48 bg-neutral-200 rounded-lg" />
+        <div className="h-9 w-48 bg-security-navy-100 rounded-lg" />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="h-32 bg-neutral-200 rounded-lg" />
+            <div key={i} className="h-32 bg-security-navy-100 rounded-lg" />
           ))}
         </div>
       </div>
@@ -204,7 +204,7 @@ export default function TasksPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="page-title">Tasks</h1>
-          <p className="mt-1 text-sm text-neutral-600">Track operational work, assignments, and follow-ups.</p>
+          <p className="mt-1 text-sm text-security-navy-600">Track operational work, assignments, and follow-ups.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <label htmlFor="tasks-project-filter" className="sr-only">Filter tasks by project</label>
@@ -258,7 +258,7 @@ export default function TasksPage() {
             className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
               quickFilter === f.value
                 ? "bg-security-navy-700 text-white"
-                : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+                : "bg-security-navy-50 text-security-navy-700 hover:bg-security-navy-100"
             }`}
           >
             {f.label}

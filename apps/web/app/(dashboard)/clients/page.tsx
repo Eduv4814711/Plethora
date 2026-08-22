@@ -150,7 +150,7 @@ export default function ClientsPage() {
             <button type="submit" className="btn-primary" disabled={saving}>
               {saving ? "Saving…" : "Add client"}
             </button>
-            <span className="ml-3 text-sm text-neutral-500">
+            <span className="ml-3 text-sm text-security-navy-500">
               Billing details, sites and report recipients are set on the client page.
             </span>
           </div>
@@ -159,18 +159,18 @@ export default function ClientsPage() {
 
       {loading ? (
         <div
-          className="h-40 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-700"
+          className="h-40 animate-pulse rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700"
           aria-label="Loading clients"
         />
       ) : filtered.length === 0 ? (
-        <p className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-10 text-center text-sm text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900">
+        <p className="rounded-security-lg border border-security-navy-100 bg-security-navy-50 px-4 py-10 text-center text-sm text-security-navy-600 dark:border-security-navy-700 dark:bg-security-navy-900">
           {clients.length === 0 ? "No clients yet. Add your first one above." : "No clients match that search."}
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-700">
-          <table className="min-w-full divide-y divide-neutral-200 text-sm dark:divide-neutral-700">
-            <thead className="bg-neutral-50 dark:bg-neutral-900">
-              <tr className="text-left text-[10px] uppercase tracking-wider text-neutral-500">
+        <div className="overflow-x-auto rounded-security-lg border border-security-navy-100 dark:border-security-navy-700">
+          <table className="min-w-full divide-y divide-security-navy-100 text-sm dark:divide-security-navy-700">
+            <thead className="bg-security-navy-50 dark:bg-security-navy-900">
+              <tr className="text-left text-[10px] uppercase tracking-wider text-security-navy-500">
                 <th className="px-3 py-2">Client</th>
                 <th className="px-3 py-2">Contact person</th>
                 <th className="px-3 py-2">Email</th>
@@ -178,9 +178,9 @@ export default function ClientsPage() {
                 <th className="px-3 py-2">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+            <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
               {filtered.map((client) => (
-                <tr key={client.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-900">
+                <tr key={client.id} className="hover:bg-security-navy-50 dark:hover:bg-security-navy-900">
                   <td className="px-3 py-2">
                     <Link
                       href={`/clients/${client.id}`}
@@ -189,11 +189,11 @@ export default function ClientsPage() {
                       {client.name}
                     </Link>
                   </td>
-                  <td className="px-3 py-2 text-neutral-600 dark:text-neutral-400">
+                  <td className="px-3 py-2 text-security-navy-600 dark:text-security-navy-400">
                     {client.contactPersonName || "—"}
                     {client.contactPersonMobile ? ` · ${client.contactPersonMobile}` : ""}
                   </td>
-                  <td className="px-3 py-2 text-neutral-600 dark:text-neutral-400">
+                  <td className="px-3 py-2 text-security-navy-600 dark:text-security-navy-400">
                     {client.email || "—"}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{client._count?.sites ?? 0}</td>
@@ -201,8 +201,8 @@ export default function ClientsPage() {
                     <span
                       className={
                         client.isActive
-                          ? "rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700"
-                          : "rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600"
+                          ? "rounded-full bg-security-emerald-50 px-2 py-0.5 text-xs font-medium text-security-emerald-700"
+                          : "rounded-full bg-security-navy-50 px-2 py-0.5 text-xs font-medium text-security-navy-600"
                       }
                     >
                       {client.isActive ? "Active" : "Inactive"}

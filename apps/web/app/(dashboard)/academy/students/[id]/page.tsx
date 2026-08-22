@@ -185,7 +185,7 @@ export default function AcademyStudentDetailPage() {
   if (loading && !student) {
     return (
       <div className="p-6">
-        <p className="text-sm text-neutral-500">Loading…</p>
+        <p className="text-sm text-security-navy-500">Loading…</p>
       </div>
     );
   }
@@ -211,58 +211,58 @@ export default function AcademyStudentDetailPage() {
         <h1 className="mt-1 text-2xl font-semibold">
           {student.firstName} {student.lastName}
         </h1>
-        <p className="font-mono text-sm text-neutral-600">{student.studentNumber}</p>
+        <p className="font-mono text-sm text-security-navy-600">{student.studentNumber}</p>
       </div>
 
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
-      <section className="rounded-lg border border-neutral-300 p-4">
+      <section className="rounded-lg border border-security-navy-200 p-4">
         <h2 className="font-medium">Admin fee</h2>
-        <p className="mt-1 text-xs text-neutral-500">
+        <p className="mt-1 text-xs text-security-navy-500">
           Students must have the admin fee <strong>paid</strong> or <strong>waived</strong> before they can be enrolled
           in course runs.
         </p>
         {student && (
           <dl className="mt-3 grid gap-1 text-sm sm:grid-cols-2">
             <div>
-              <dt className="text-xs text-neutral-500">Status</dt>
+              <dt className="text-xs text-security-navy-500">Status</dt>
               <dd className="font-medium capitalize">{student.adminFeeStatus ?? "unpaid"}</dd>
             </div>
             {student.adminFeePaidAt ? (
               <div>
-                <dt className="text-xs text-neutral-500">Paid at</dt>
+                <dt className="text-xs text-security-navy-500">Paid at</dt>
                 <dd>{new Date(student.adminFeePaidAt).toLocaleString()}</dd>
               </div>
             ) : null}
             {student.adminFeeAmount ? (
               <div>
-                <dt className="text-xs text-neutral-500">Amount</dt>
+                <dt className="text-xs text-security-navy-500">Amount</dt>
                 <dd>{student.adminFeeAmount}</dd>
               </div>
             ) : null}
             {student.adminFeeMethod ? (
               <div>
-                <dt className="text-xs text-neutral-500">Method</dt>
+                <dt className="text-xs text-security-navy-500">Method</dt>
                 <dd>{student.adminFeeMethod}</dd>
               </div>
             ) : null}
             {student.adminFeeReference ? (
               <div>
-                <dt className="text-xs text-neutral-500">Reference</dt>
+                <dt className="text-xs text-security-navy-500">Reference</dt>
                 <dd className="break-all">{student.adminFeeReference}</dd>
               </div>
             ) : null}
             {student.adminFeeNotes ? (
               <div className="sm:col-span-2">
-                <dt className="text-xs text-neutral-500">Notes</dt>
+                <dt className="text-xs text-security-navy-500">Notes</dt>
                 <dd>{student.adminFeeNotes}</dd>
               </div>
             ) : null}
           </dl>
         )}
-        {canEdit && <div className="mt-4 grid gap-4 border-t border-neutral-200 pt-4 md:grid-cols-2">
+        {canEdit && <div className="mt-4 grid gap-4 border-t border-security-navy-100 pt-4 md:grid-cols-2">
           <form
             className="space-y-2"
             onSubmit={async (e) => {
@@ -287,7 +287,7 @@ export default function AcademyStudentDetailPage() {
               }
             }}
           >
-            <p className="text-xs font-medium text-neutral-700">Record payment</p>
+            <p className="text-xs font-medium text-security-navy-700">Record payment</p>
             <input
               className="input-compact w-full"
               placeholder="Amount"
@@ -331,7 +331,7 @@ export default function AcademyStudentDetailPage() {
               }
             }}
           >
-            <p className="text-xs font-medium text-neutral-700">Waive fee</p>
+            <p className="text-xs font-medium text-security-navy-700">Waive fee</p>
             <textarea
               className="input-modern w-full min-h-[72px]"
               placeholder="Reason (required)"
@@ -346,7 +346,7 @@ export default function AcademyStudentDetailPage() {
         {canEdit && <div className="mt-3">
           <button
             type="button"
-            className="btn-ghost px-2 py-1 text-xs text-neutral-500"
+            className="btn-ghost px-2 py-1 text-xs text-security-navy-500"
             disabled={feeSaving || !token}
             onClick={async () => {
               if (!token) return;
@@ -373,7 +373,7 @@ export default function AcademyStudentDetailPage() {
         </div>}
       </section>
 
-      <form onSubmit={save} className="space-y-4 rounded-lg border border-neutral-300 p-4">
+      <form onSubmit={save} className="space-y-4 rounded-lg border border-security-navy-200 p-4">
         <h2 className="font-medium">Profile</h2>
         <fieldset disabled={!canEdit}>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -433,7 +433,7 @@ export default function AcademyStudentDetailPage() {
         </fieldset>
       </form>
 
-      <section className="rounded-lg border border-neutral-300 p-4">
+      <section className="rounded-lg border border-security-navy-200 p-4">
         <h2 className="font-medium">Documents</h2>
         {canCreate && <div className="mt-3 flex flex-wrap items-end gap-2">
           <div>
@@ -454,21 +454,21 @@ export default function AcademyStudentDetailPage() {
             <label className="label-text mb-1 block">File</label>
             <input
               type="file"
-              className="block w-full text-sm text-neutral-700 file:mr-3 file:rounded-security file:border-0 file:bg-security-navy file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-security-navy-800"
+              className="block w-full text-sm text-security-navy-700 file:mr-3 file:rounded-security file:border-0 file:bg-security-navy file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-security-navy-800"
               disabled={uploading}
               onChange={onUpload}
             />
           </div>
         </div>}
         {documents.length === 0 ? (
-          <p className="mt-3 text-sm text-neutral-500">No documents uploaded.</p>
+          <p className="mt-3 text-sm text-security-navy-500">No documents uploaded.</p>
         ) : (
-          <ul className="mt-3 divide-y divide-neutral-200">
+          <ul className="mt-3 divide-y divide-security-navy-100">
             {documents.map((d) => (
               <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
                 <span>
                   <span className="font-medium">{d.documentType}</span> — {d.fileName}{" "}
-                  <span className="text-neutral-500">({Math.round(d.sizeBytes / 1024)} KB)</span>
+                  <span className="text-security-navy-500">({Math.round(d.sizeBytes / 1024)} KB)</span>
                 </span>
                 <span className="flex items-center gap-1">
                   {canExport && token && d.downloadUrl && (

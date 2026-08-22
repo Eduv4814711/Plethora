@@ -38,12 +38,12 @@ function complianceHealth(status: string | null | undefined): {
   label: string;
   cls: string;
 } {
-  if (status === "compliant") return { label: "Healthy", cls: "bg-emerald-500" };
+  if (status === "compliant") return { label: "Healthy", cls: "bg-security-emerald-500" };
   if (status === "attention_needed" || status === "pending_review") {
-    return { label: "Watch", cls: "bg-amber-500" };
+    return { label: "Watch", cls: "bg-security-amber-500" };
   }
   if (status === "high_risk") return { label: "Critical", cls: "bg-red-500" };
-  return { label: "Pending", cls: "bg-slate-400" };
+  return { label: "Pending", cls: "bg-security-navy-300" };
 }
 
 function formatDate(value?: string | null): string {
@@ -57,10 +57,10 @@ function contractWarning(daysRemaining?: number | null): {
   tone: string;
   text: string;
 } {
-  if (daysRemaining == null) return { tone: "border-slate-200 bg-slate-50 text-slate-700", text: "Contract date missing" };
+  if (daysRemaining == null) return { tone: "border-security-navy-100 bg-security-navy-50 text-security-navy-700", text: "Contract date missing" };
   if (daysRemaining < 0) return { tone: "border-red-200 bg-red-50 text-red-700", text: `Expired ${Math.abs(daysRemaining)} day(s) ago` };
-  if (daysRemaining <= 30) return { tone: "border-amber-200 bg-amber-50 text-amber-700", text: `${daysRemaining} day(s) remaining` };
-  return { tone: "border-emerald-200 bg-emerald-50 text-emerald-700", text: `${daysRemaining} day(s) remaining` };
+  if (daysRemaining <= 30) return { tone: "border-security-amber-200 bg-security-amber-50 text-security-amber-700", text: `${daysRemaining} day(s) remaining` };
+  return { tone: "border-security-emerald-200 bg-security-emerald-50 text-security-emerald-700", text: `${daysRemaining} day(s) remaining` };
 }
 
 export function InstructorDrawer({
@@ -150,35 +150,35 @@ export function InstructorDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-[80] bg-slate-900/35">
+    <div className="fixed inset-0 z-[80] bg-security-navy-900/35">
       <div className="ml-auto flex h-full w-full max-w-[980px] flex-col bg-white shadow-2xl">
-        <div className="sticky top-0 z-20 border-b border-slate-200 bg-white px-4 py-3 md:px-6">
+        <div className="sticky top-0 z-20 border-b border-security-navy-100 bg-white px-4 py-3 md:px-6">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-security-navy-900">
                 {mode === "create" ? "Add Instructor" : instructor?.fullName || "Instructor details"}
               </h2>
-              <p className="text-sm text-neutral-600">
+              <p className="text-sm text-security-navy-600">
                 Manage accredited instructors, contracts, certificates, compliance, and assignments.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {mode === "view" && canEdit && (
-                <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-xl" onClick={onStartEdit}>
+                <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-security-lg" onClick={onStartEdit}>
                   Edit
                 </button>
               )}
               {editable && (
                 <>
-                  <button type="button" className="btn-ghost px-3 py-1.5 text-xs rounded-xl" onClick={onSaveDraft} disabled={saving}>
+                  <button type="button" className="btn-ghost px-3 py-1.5 text-xs rounded-security-lg" onClick={onSaveDraft} disabled={saving}>
                     Save Draft
                   </button>
-                  <button type="button" className="btn-primary px-3 py-1.5 text-xs rounded-xl" onClick={onSave} disabled={saving}>
+                  <button type="button" className="btn-primary px-3 py-1.5 text-xs rounded-security-lg" onClick={onSave} disabled={saving}>
                     {saving ? "Saving..." : mode === "create" ? "Create Instructor" : "Save Changes"}
                   </button>
                 </>
               )}
-              <button type="button" className="btn-ghost px-3 py-1.5 text-xs rounded-xl" onClick={onClose}>
+              <button type="button" className="btn-ghost px-3 py-1.5 text-xs rounded-security-lg" onClick={onClose}>
                 Close
               </button>
             </div>
@@ -192,7 +192,7 @@ export function InstructorDrawer({
                   className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
                     activeTab === tab.key
                       ? "bg-security-navy-900 text-white"
-                      : "bg-slate-100 text-neutral-700 hover:bg-slate-200"
+                      : "bg-security-navy-50 text-security-navy-700 hover:bg-security-navy-100"
                   }`}
                   onClick={() => onTabChange(tab.key)}
                 >
@@ -206,7 +206,7 @@ export function InstructorDrawer({
         <div className="flex-1 overflow-y-auto p-4 md:p-6">
           {activeTab === "overview" && (
             <div className="space-y-4">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="rounded-2xl border border-security-navy-100 bg-security-navy-50 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h3 className="text-xl font-semibold text-security-navy-900">{instructor?.fullName || form.fullName || "New instructor"}</h3>
@@ -220,39 +220,39 @@ export function InstructorDrawer({
                       </span>
                     </div>
                   </div>
-                  <div className="grid gap-2 text-xs text-neutral-700">
+                  <div className="grid gap-2 text-xs text-security-navy-700">
                     <div>PSIRA No: {instructor?.psiraInstructorNumber || form.psiraInstructorNumber || "—"}</div>
                     <div>Branch: {instructor?.assignedBranch?.name || branchName(form.assignedBranchId, branches) || "—"}</div>
                     <div>Courses: {instructor?.assignedCourses.length || form.assignedCourseIds.length || 0}</div>
                     <div>Contract End: {formatDate(instructor?.contractEndDate || form.contractEndDate)}</div>
                   </div>
                 </div>
-                <div className={`mt-3 rounded-xl border px-3 py-2 text-xs font-medium ${warning.tone}`}>
-                  <span className={`inline-flex rounded-xl border px-2 py-1 text-xs ${warning.tone}`}>{warning.text}</span>
+                <div className={`mt-3 rounded-security-lg border px-3 py-2 text-xs font-medium ${warning.tone}`}>
+                  <span className={`inline-flex rounded-security-lg border px-2 py-1 text-xs ${warning.tone}`}>{warning.text}</span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {canEdit && (
-                    <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-xl" onClick={onStartEdit}>
+                    <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-security-lg" onClick={onStartEdit}>
                       Edit
                     </button>
                   )}
                   {canEditCompliance && (
-                    <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-xl" onClick={() => onTabChange("documents")}>
+                    <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-security-lg" onClick={() => onTabChange("documents")}>
                       Upload Document
                     </button>
                   )}
                   {canEdit && (
-                    <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-xl" onClick={onRenewContract}>
+                    <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-security-lg" onClick={onRenewContract}>
                       Renew Contract
                     </button>
                   )}
                   {canArchive && (
-                    <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-xl" onClick={onSuspend}>
+                    <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-security-lg" onClick={onSuspend}>
                       Suspend Instructor
                     </button>
                   )}
                   {canArchive && (
-                    <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-xl" onClick={onArchive}>
+                    <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-security-lg" onClick={onArchive}>
                       Archive Instructor
                     </button>
                   )}
@@ -344,11 +344,11 @@ export function InstructorDrawer({
 
           {activeTab === "compliance" && (
             <div className="space-y-4">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="rounded-2xl border border-security-navy-100 bg-security-navy-50 p-4">
                 <div className="text-sm font-medium">Compliance Health Indicator</div>
                 <div className="mt-2 flex items-center gap-2">
                   <span className={`h-3 w-3 rounded-full ${health.cls}`} />
-                  <span className="text-sm text-neutral-700">{health.label}</span>
+                  <span className="text-sm text-security-navy-700">{health.label}</span>
                 </div>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
@@ -499,9 +499,9 @@ export function InstructorDrawer({
                   disabled
                 />
               </div>
-              <div className="rounded-xl border border-slate-200 p-4">
+              <div className="rounded-security-lg border border-security-navy-100 p-4">
                 <h4 className="text-sm font-semibold text-security-navy-900">Assigned Courses</h4>
-                <p className="mt-1 text-xs text-neutral-600">
+                <p className="mt-1 text-xs text-security-navy-600">
                   Assign courses, remove courses, and rebalance instructor allocation.
                 </p>
                 <div className="mt-3 grid gap-2 md:grid-cols-2">
@@ -511,12 +511,12 @@ export function InstructorDrawer({
                       className={`flex items-center gap-2 rounded-lg border p-2 text-sm ${
                         form.assignedCourseIds.includes(course.id)
                           ? "border-security-navy-200 bg-security-navy-50/50"
-                          : "border-slate-200 bg-white"
+                          : "border-security-navy-100 bg-white"
                       }`}
                     >
                       <input
                         type="checkbox"
-                        className="h-4 w-4 rounded border-neutral-300 text-security-navy-600 focus:ring-security-navy-500"
+                        className="h-4 w-4 rounded border-security-navy-200 text-security-navy-600 focus:ring-security-navy-500"
                         checked={form.assignedCourseIds.includes(course.id)}
                         disabled={!editable}
                         onChange={() => toggleCourse(course.id)}
@@ -547,18 +547,18 @@ export function InstructorDrawer({
           )}
 
           {activeTab === "activity" && (
-            <div className="rounded-2xl border border-slate-200 bg-white">
+            <div className="rounded-2xl border border-security-navy-100 bg-white">
               {activity.length === 0 ? (
-                <div className="p-6 text-sm text-neutral-500">No activity recorded yet.</div>
+                <div className="p-6 text-sm text-security-navy-500">No activity recorded yet.</div>
               ) : (
-                <ul className="divide-y divide-slate-100">
+                <ul className="divide-y divide-security-navy-100">
                   {activity.map((item) => (
                     <li key={item.id} className="flex items-start justify-between gap-3 p-4">
                       <div>
                         <div className="text-sm font-medium text-security-navy-900">{prettyAction(item.action)}</div>
-                        <div className="text-xs text-neutral-600">{item.userName || "System user"}</div>
+                        <div className="text-xs text-security-navy-600">{item.userName || "System user"}</div>
                       </div>
-                      <div className="text-xs text-neutral-500">{new Date(item.at).toLocaleString()}</div>
+                      <div className="text-xs text-security-navy-500">{new Date(item.at).toLocaleString()}</div>
                     </li>
                   ))}
                 </ul>
@@ -568,20 +568,20 @@ export function InstructorDrawer({
         </div>
 
         {(canArchive || canDelete) && (
-          <div className="border-t border-slate-200 bg-white px-4 py-3 md:px-6">
+          <div className="border-t border-security-navy-100 bg-white px-4 py-3 md:px-6">
             <div className="flex flex-wrap items-center justify-end gap-2">
               {canArchive && (
-                <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-xl" onClick={onArchive}>
+                <button type="button" className="btn-secondary px-3 py-1.5 text-xs rounded-security-lg" onClick={onArchive}>
                   Archive
                 </button>
               )}
               {canDelete && (
-                <button type="button" className="btn-destructive px-3 py-1.5 text-xs rounded-xl" onClick={() => onDelete(false)}>
+                <button type="button" className="btn-destructive px-3 py-1.5 text-xs rounded-security-lg" onClick={() => onDelete(false)}>
                   Delete
                 </button>
               )}
               {canPermanentDelete && (
-                <button type="button" className="btn-destructive px-3 py-1.5 text-xs rounded-xl" onClick={() => onDelete(true)}>
+                <button type="button" className="btn-destructive px-3 py-1.5 text-xs rounded-security-lg" onClick={() => onDelete(true)}>
                   Permanent Delete
                 </button>
               )}
@@ -612,11 +612,11 @@ function TextField({
 }) {
   return (
     <label className="w-full">
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">
+      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-security-navy-500">
         {label} {required ? "*" : ""}
       </span>
       <input
-        className={`input-modern w-full rounded-xl ${error ? "input-error" : ""}`}
+        className={`input-modern w-full rounded-security-lg ${error ? "input-error" : ""}`}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
@@ -644,7 +644,7 @@ function DateField({
 }) {
   return (
     <label className="w-full">
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">
+      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-security-navy-500">
         {label} {required ? "*" : ""}
       </span>
       <DateInput
@@ -680,11 +680,11 @@ function SelectField({
 }) {
   return (
     <label className="w-full">
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">
+      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-security-navy-500">
         {label} {required ? "*" : ""}
       </span>
       <select
-        className={`input-modern w-full rounded-xl ${error ? "select-error" : ""}`}
+        className={`input-modern w-full rounded-security-lg ${error ? "select-error" : ""}`}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
@@ -715,9 +715,9 @@ function TextAreaField({
 }) {
   return (
     <label className={className}>
-      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">{label}</span>
+      <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-security-navy-500">{label}</span>
       <textarea
-        className="input-modern min-h-[90px] w-full rounded-xl"
+        className="input-modern min-h-[90px] w-full rounded-security-lg"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
@@ -728,8 +728,8 @@ function TextAreaField({
 
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-      <div className="text-xs uppercase tracking-wide text-neutral-500">{label}</div>
+    <div className="rounded-security-lg border border-security-navy-100 bg-security-navy-50 p-3">
+      <div className="text-xs uppercase tracking-wide text-security-navy-500">{label}</div>
       <div className="mt-1 text-sm font-medium text-security-navy-900">{value}</div>
     </div>
   );

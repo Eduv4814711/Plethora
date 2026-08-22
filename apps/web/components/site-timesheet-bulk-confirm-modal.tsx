@@ -98,24 +98,24 @@ export function SiteTimesheetBulkConfirmModal({
 
   return (
     <div
-      className="fixed inset-0 z-[85] flex items-center justify-center overflow-y-auto bg-slate-900/45 p-4"
+      className="fixed inset-0 z-[85] flex items-center justify-center overflow-y-auto bg-security-navy-900/45 p-4"
       role="presentation"
     >
       <div
-        className="my-auto flex max-h-[90vh] w-full max-w-3xl flex-col rounded-xl border border-neutral-200 bg-white shadow-xl dark:border-neutral-700 dark:bg-neutral-950"
+        className="my-auto flex max-h-[90vh] w-full max-w-3xl flex-col rounded-security-lg border border-security-navy-100 bg-white shadow-xl dark:border-security-navy-700 dark:bg-security-navy-900"
         role="dialog"
         aria-modal="true"
         aria-labelledby="bulk-confirm-title"
       >
-        <div className="flex items-start justify-between gap-3 border-b border-neutral-200 p-4 dark:border-neutral-700">
+        <div className="flex items-start justify-between gap-3 border-b border-security-navy-100 p-4 dark:border-security-navy-700">
           <div>
             <h2
               id="bulk-confirm-title"
-              className="text-lg font-semibold text-neutral-900 dark:text-neutral-100"
+              className="text-lg font-semibold text-security-navy-900 dark:text-security-navy-100"
             >
               Confirm {rows.length} shift{rows.length === 1 ? "" : "s"} as scheduled
             </h2>
-            <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+            <p className="mt-1 text-sm text-security-navy-500 dark:text-security-navy-400">
               These shifts match the roster. Enter the occurrence book numbers and confirm them
               all at once. Anything that differs from the roster is not listed here — confirm
               those individually.
@@ -133,7 +133,7 @@ export function SiteTimesheetBulkConfirmModal({
 
         {failures.length > 0 && (
           <div
-            className="mx-4 mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
+            className="mx-4 mt-4 rounded-lg border border-security-amber-200 bg-security-amber-50 px-3 py-2 text-sm text-security-amber-900 dark:border-security-amber-900 dark:bg-security-amber-950/30 dark:text-security-amber-200"
             role="alert"
           >
             {failures.length} shift{failures.length === 1 ? " was" : "s were"} not confirmed. The
@@ -143,7 +143,7 @@ export function SiteTimesheetBulkConfirmModal({
 
         <div className="flex-1 overflow-y-auto p-4">
           <table className="w-full text-left text-sm">
-            <thead className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+            <thead className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
               <tr>
                 <th className="pb-2">Date</th>
                 <th className="pb-2">Guard</th>
@@ -152,30 +152,30 @@ export function SiteTimesheetBulkConfirmModal({
                 <th className="pb-2 w-28">Duty OFF OB</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+            <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
               {rows.map((row, index) => {
                 const draft = draftFor(row.id);
                 const failure = failureByRowId.get(row.id);
                 return (
-                  <tr key={row.id} className={failure ? "bg-amber-50/60 dark:bg-amber-950/20" : ""}>
+                  <tr key={row.id} className={failure ? "bg-security-amber-50/60 dark:bg-security-amber-950/20" : ""}>
                     <td className="py-2 pr-2 align-top">
-                      <span className="font-medium text-neutral-900 dark:text-neutral-100">
+                      <span className="font-medium text-security-navy-900 dark:text-security-navy-100">
                         {row.workDate}
                       </span>
                       <br />
-                      <span className="text-xs text-neutral-500">{row.dayOfWeek}</span>
+                      <span className="text-xs text-security-navy-500">{row.dayOfWeek}</span>
                     </td>
                     <td className="py-2 pr-2 align-top">
-                      <span className="text-neutral-800 dark:text-neutral-200">
+                      <span className="text-security-navy-900 dark:text-security-navy-200">
                         {row.plannedGuardName ?? "—"}
                       </span>
                       {failure && (
-                        <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-300">
+                        <p className="mt-0.5 text-xs text-security-amber-800 dark:text-security-amber-300">
                           {failure.message}
                         </p>
                       )}
                     </td>
-                    <td className="py-2 pr-2 align-top text-neutral-600 dark:text-neutral-400">
+                    <td className="py-2 pr-2 align-top text-security-navy-600 dark:text-security-navy-400">
                       {humanizeCode(row.plannedShiftType ?? row.plannedShiftCode)}
                     </td>
                     <td className="py-2 pr-2 align-top">
@@ -215,8 +215,8 @@ export function SiteTimesheetBulkConfirmModal({
           </table>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-neutral-200 p-4 dark:border-neutral-700 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-neutral-600 dark:text-neutral-400" aria-live="polite">
+        <div className="flex flex-col gap-3 border-t border-security-navy-100 p-4 dark:border-security-navy-700 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-security-navy-600 dark:text-security-navy-400" aria-live="polite">
             {complete.length} of {rows.length} ready — both OB numbers are required for each shift.
           </p>
           <div className="flex gap-2">

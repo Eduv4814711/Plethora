@@ -165,16 +165,16 @@ export default function MigratePage() {
       <div className="mb-6 flex items-center gap-4">
         <Link
           href="/settings"
-          className="text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
+          className="text-sm text-security-navy-600 dark:text-security-navy-400 hover:text-security-navy-900 dark:hover:text-white"
         >
           ← Settings
         </Link>
       </div>
 
-      <h1 className="text-2xl font-bold text-neutral-800 dark:text-white mb-2">
+      <h1 className="text-2xl font-bold text-security-navy-900 dark:text-white mb-2">
         Bulk Import / Export
       </h1>
-      <p className="text-neutral-600 dark:text-neutral-400 mb-6">
+      <p className="text-security-navy-600 dark:text-security-navy-400 mb-6">
         Export team, sites, and employee groups to CSV, or upload CSV files to
         import into your company. Download templates, validate, then import.
       </p>
@@ -186,11 +186,11 @@ export default function MigratePage() {
       )}
 
       <div className="space-y-6">
-        {canExportAny && <section className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-600 p-6">
-          <h2 className="text-lg font-semibold text-neutral-800 dark:text-white mb-4">
+        {canExportAny && <section className="bg-white dark:bg-security-navy-800 rounded-sm border border-security-navy-100 dark:border-security-navy-600 p-6">
+          <h2 className="text-lg font-semibold text-security-navy-900 dark:text-white mb-4">
             Export
           </h2>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+          <p className="text-sm text-security-navy-600 dark:text-security-navy-400 mb-4">
             Download your team members, sites, and employee groups as CSV files. Exported files match the import format for round-trip compatibility.
           </p>
           <div className="flex flex-wrap gap-3">
@@ -198,7 +198,7 @@ export default function MigratePage() {
               type="button"
               onClick={handleExportEmployees}
               disabled={exportEmployeesLoading}
-              className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm font-medium bg-security-navy-50 dark:bg-security-navy-700 text-security-navy-900 dark:text-white rounded-sm border border-security-navy-100 dark:border-security-navy-600 hover:bg-security-navy-100 dark:hover:bg-security-navy-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {exportEmployeesLoading ? "Exporting..." : "Export team members (employees.csv)"}
             </button>}
@@ -206,7 +206,7 @@ export default function MigratePage() {
               type="button"
               onClick={handleExportSites}
               disabled={exportSitesLoading}
-              className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm font-medium bg-security-navy-50 dark:bg-security-navy-700 text-security-navy-900 dark:text-white rounded-sm border border-security-navy-100 dark:border-security-navy-600 hover:bg-security-navy-100 dark:hover:bg-security-navy-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {exportSitesLoading ? "Exporting..." : "Export sites (sites.csv)"}
             </button>}
@@ -214,49 +214,49 @@ export default function MigratePage() {
               type="button"
               onClick={handleExportGroups}
               disabled={exportGroupsLoading}
-              className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 text-sm font-medium bg-security-navy-50 dark:bg-security-navy-700 text-security-navy-900 dark:text-white rounded-sm border border-security-navy-100 dark:border-security-navy-600 hover:bg-security-navy-100 dark:hover:bg-security-navy-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {exportGroupsLoading ? "Exporting..." : "Export employee groups (CSV)"}
             </button>}
           </div>
         </section>}
 
-        {canImportAny && <section className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-600 p-6">
-          <h2 className="text-lg font-semibold text-neutral-800 dark:text-white mb-4">
+        {canImportAny && <section className="bg-white dark:bg-security-navy-800 rounded-sm border border-security-navy-100 dark:border-security-navy-600 p-6">
+          <h2 className="text-lg font-semibold text-security-navy-900 dark:text-white mb-4">
             Step 1: Download templates
           </h2>
           <div className="flex flex-wrap gap-3">
             {canCreateTeam && <button
               type="button"
               onClick={() => handleDownloadTemplate("employees")}
-              className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors"
+              className="px-4 py-2 text-sm font-medium bg-security-navy-50 dark:bg-security-navy-700 text-security-navy-900 dark:text-white rounded-sm border border-security-navy-100 dark:border-security-navy-600 hover:bg-security-navy-100 dark:hover:bg-security-navy-600 transition-colors"
             >
               Download team template (employees.csv)
             </button>}
             {canCreateSites && <button
               type="button"
               onClick={() => handleDownloadTemplate("sites")}
-              className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors"
+              className="px-4 py-2 text-sm font-medium bg-security-navy-50 dark:bg-security-navy-700 text-security-navy-900 dark:text-white rounded-sm border border-security-navy-100 dark:border-security-navy-600 hover:bg-security-navy-100 dark:hover:bg-security-navy-600 transition-colors"
             >
               Download sites.csv
             </button>}
             {canCreateTeam && <button
               type="button"
               onClick={() => handleDownloadTemplate("groups")}
-              className="px-4 py-2 text-sm font-medium bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-white rounded-sm border border-neutral-200 dark:border-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors"
+              className="px-4 py-2 text-sm font-medium bg-security-navy-50 dark:bg-security-navy-700 text-security-navy-900 dark:text-white rounded-sm border border-security-navy-100 dark:border-security-navy-600 hover:bg-security-navy-100 dark:hover:bg-security-navy-600 transition-colors"
             >
               Download employee groups template
             </button>}
           </div>
-          <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
+          <p className="mt-3 text-xs text-security-navy-500 dark:text-security-navy-400">
             The team template includes an instruction row under the headers. Enter names in separate{" "}
             <span className="font-medium">First Name</span> and <span className="font-medium">Last Name</span> columns for
             clean imports.
           </p>
         </section>}
 
-        {canImportAny && <section className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-600 p-6">
-          <h2 className="text-lg font-semibold text-neutral-800 dark:text-white mb-4">
+        {canImportAny && <section className="bg-white dark:bg-security-navy-800 rounded-sm border border-security-navy-100 dark:border-security-navy-600 p-6">
+          <h2 className="text-lg font-semibold text-security-navy-900 dark:text-white mb-4">
             Step 2: Upload your CSV files
           </h2>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -279,14 +279,14 @@ export default function MigratePage() {
               onChange={setGroupsFile}
             />}
           </div>
-          <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+          <p className="mt-2 text-xs text-security-navy-500 dark:text-security-navy-400">
             Max 5MB per file. Max 1000 team members, 200 sites, 500 employee groups per import. Groups CSV columns: Name
             (required), Description (optional), Sort Order (optional). Existing group names are skipped on import.
           </p>
         </section>}
 
-        {canImportAny && <section className="bg-white dark:bg-neutral-800 rounded-sm border border-neutral-200 dark:border-neutral-600 p-6">
-          <h2 className="text-lg font-semibold text-neutral-800 dark:text-white mb-4">
+        {canImportAny && <section className="bg-white dark:bg-security-navy-800 rounded-sm border border-security-navy-100 dark:border-security-navy-600 p-6">
+          <h2 className="text-lg font-semibold text-security-navy-900 dark:text-white mb-4">
             Step 3: Validate and import
           </h2>
           <div className="flex gap-3 mb-4">
@@ -294,7 +294,7 @@ export default function MigratePage() {
               type="button"
               onClick={handleValidate}
               disabled={!hasFiles || previewLoading}
-              className="px-4 py-2 text-sm font-medium bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 rounded-sm border border-neutral-200 dark:border-neutral-600 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+              className="px-4 py-2 text-sm font-medium bg-security-navy-900 dark:bg-white text-white dark:text-security-navy-900 rounded-sm border border-security-navy-100 dark:border-security-navy-600 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
             >
               {previewLoading ? "Validating..." : "Validate"}
             </button>
@@ -302,7 +302,7 @@ export default function MigratePage() {
               type="button"
               onClick={handleImport}
               disabled={!canImport || importLoading}
-              className="px-4 py-2 text-sm font-medium bg-green-600 dark:bg-green-500 text-white rounded-sm border border-green-700 dark:border-green-400 hover:bg-green-700 dark:hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-4 py-2 text-sm font-medium bg-security-emerald-600 dark:bg-security-emerald-500 text-white rounded-sm border border-security-emerald-700 dark:border-security-emerald-300 hover:bg-security-emerald-700 dark:hover:bg-security-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {importLoading ? "Importing..." : "Import"}
             </button>
@@ -323,7 +323,7 @@ export default function MigratePage() {
           {preview && (
             <div className="space-y-4">
               <div className="flex flex-wrap gap-4 text-sm">
-                <span className="text-neutral-600 dark:text-neutral-400">
+                <span className="text-security-navy-600 dark:text-security-navy-400">
                   Team: {preview.employees.validCount} valid
                   {preview.employees.errors.length > 0 && (
                     <span className="text-red-600 dark:text-red-400 ml-1">
@@ -331,7 +331,7 @@ export default function MigratePage() {
                     </span>
                   )}
                 </span>
-                <span className="text-neutral-600 dark:text-neutral-400">
+                <span className="text-security-navy-600 dark:text-security-navy-400">
                   Sites: {preview.sites.validCount} valid
                   {preview.sites.errors.length > 0 && (
                     <span className="text-red-600 dark:text-red-400 ml-1">
@@ -339,7 +339,7 @@ export default function MigratePage() {
                     </span>
                   )}
                 </span>
-                <span className="text-neutral-600 dark:text-neutral-400">
+                <span className="text-security-navy-600 dark:text-security-navy-400">
                   Employee groups: {preview.groups.validCount} valid
                   {preview.groups.errors.length > 0 && (
                     <span className="text-red-600 dark:text-red-400 ml-1">
@@ -350,9 +350,9 @@ export default function MigratePage() {
               </div>
 
               {totalErrors > 0 && (
-                <div className="max-h-48 overflow-y-auto rounded-sm border border-neutral-200 dark:border-neutral-600">
+                <div className="max-h-48 overflow-y-auto rounded-sm border border-security-navy-100 dark:border-security-navy-600">
                   <table className="w-full text-sm">
-                    <thead className="bg-neutral-100 dark:bg-neutral-800 sticky top-0">
+                    <thead className="bg-security-navy-50 dark:bg-security-navy-800 sticky top-0">
                       <tr>
                         <th className="text-left px-3 py-2">Row</th>
                         <th className="text-left px-3 py-2">Field</th>
@@ -365,7 +365,7 @@ export default function MigratePage() {
                         ...preview.sites.errors.map((e) => ({ ...e, entity: "Site" })),
                         ...preview.groups.errors.map((e) => ({ ...e, entity: "Employee group" })),
                       ].map((e, i) => (
-                        <tr key={i} className="border-t border-neutral-200 dark:border-neutral-600">
+                        <tr key={i} className="border-t border-security-navy-100 dark:border-security-navy-600">
                           <td className="px-3 py-2">{e.row}</td>
                           <td className="px-3 py-2">{e.entity}.{e.field}</td>
                           <td className="px-3 py-2 text-red-600 dark:text-red-400">{e.message}</td>
@@ -379,7 +379,7 @@ export default function MigratePage() {
           )}
 
           {importResult && (
-            <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-sm border border-green-200 dark:border-green-800/50">
+            <div className="mt-4 p-4 bg-security-emerald-50 dark:bg-security-emerald-700/20 rounded-sm border border-security-emerald-200 dark:border-security-emerald-700/50">
               <h3 className="font-medium text-security-navy-800 dark:text-security-navy-200 mb-2">Import complete</h3>
               <ul className="text-sm text-security-navy-700 dark:text-security-navy-300 space-y-1">
                 <li>Team members created: {importResult.employeesCreated}</li>
@@ -392,7 +392,7 @@ export default function MigratePage() {
                 </li>
               </ul>
               {importResult.errors.length > 0 && (
-                <ul className="mt-2 text-sm text-amber-700 dark:text-amber-300 space-y-1">
+                <ul className="mt-2 text-sm text-security-amber-700 dark:text-security-amber-300 space-y-1">
                   {importResult.errors.map((e, i) => (
                     <li key={i}>{e.message}</li>
                   ))}
@@ -402,7 +402,7 @@ export default function MigratePage() {
           )}
         </section>}
         {!canImportAny && !canExportAny && (
-          <div className="rounded-sm border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <div className="rounded-sm border border-security-amber-200 bg-security-amber-50 p-4 text-sm text-security-amber-900">
             Team or Sites create/export access is required for bulk migration tools.
           </div>
         )}
@@ -424,17 +424,17 @@ function FileInput({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+      <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
         {label}
       </label>
       <input
         type="file"
         accept={accept}
         onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-        className="block w-full text-sm text-neutral-600 dark:text-neutral-400 file:mr-4 file:py-2 file:px-4 file:rounded-sm file:border-0 file:text-sm file:font-medium file:bg-neutral-100 dark:file:bg-neutral-700 file:text-neutral-800 dark:file:text-white hover:file:bg-neutral-200 dark:hover:file:bg-neutral-600"
+        className="block w-full text-sm text-security-navy-600 dark:text-security-navy-400 file:mr-4 file:py-2 file:px-4 file:rounded-sm file:border-0 file:text-sm file:font-medium file:bg-security-navy-50 dark:file:bg-security-navy-700 file:text-security-navy-900 dark:file:text-white hover:file:bg-security-navy-100 dark:hover:file:bg-security-navy-600"
       />
       {file && (
-        <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400 truncate">
+        <p className="mt-1 text-xs text-security-navy-500 dark:text-security-navy-400 truncate">
           {file.name}
         </p>
       )}

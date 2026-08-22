@@ -15,14 +15,14 @@ export function ClientsSettingsSection(_props: { token: string }) {
         description="Client records have moved to their own page."
       />
       <div className="card-dashboard space-y-3 p-4">
-        <p className="text-sm text-neutral-700 dark:text-neutral-300">
+        <p className="text-sm text-security-navy-700 dark:text-security-navy-300">
           Capture client details, link their sites, and download the month-end site report and
           timesheets from the Clients page.
         </p>
         <Link href="/clients" className="btn-primary inline-flex">
           Open Clients
         </Link>
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+        <p className="text-sm text-security-navy-600 dark:text-security-navy-400">
           Sites can also be linked from{" "}
           <Link href="/sites" className="text-security-navy-800 hover:underline">
             Sites

@@ -33,25 +33,25 @@ export function WhatsAppWidget({ contacts, onSend, compact = true }: WhatsAppWid
   const displayContacts = compact ? contacts.slice(0, 5) : contacts;
 
   return (
-    <div className="card-dashboard w-full p-5 flex flex-col border-neutral-200 overflow-hidden flex-1 min-h-0 h-[400px]">
-      <h2 className="font-semibold text-sm text-black uppercase tracking-wider mb-3 flex items-center gap-2 shrink-0">
+    <div className="card-dashboard w-full p-5 flex flex-col border-security-navy-100 overflow-hidden flex-1 min-h-0 h-[400px]">
+      <h2 className="font-semibold text-sm text-security-navy-900 uppercase tracking-wider mb-3 flex items-center gap-2 shrink-0">
         <span className="w-1 h-4 bg-security-navy-500 rounded-full" />
         WhatsApp
       </h2>
-      <p className="text-xs text-neutral-500 mb-3 shrink-0">Message team members directly</p>
+      <p className="text-xs text-security-navy-500 mb-3 shrink-0">Message team members directly</p>
       <div className="space-y-2 overflow-y-auto min-h-0 flex-1">
         {displayContacts.length > 0 ? (
           displayContacts.map((contact) => (
-            <div key={contact.id} className="rounded-security border border-neutral-200 bg-white overflow-hidden">
+            <div key={contact.id} className="rounded-security border border-security-navy-100 bg-white overflow-hidden">
               <div className="flex items-center gap-2 px-3 py-2.5">
-                <div className="w-9 h-9 rounded-full bg-neutral-200 flex items-center justify-center text-black font-semibold text-sm shrink-0">
+                <div className="w-9 h-9 rounded-full bg-security-navy-100 flex items-center justify-center text-security-navy-900 font-semibold text-sm shrink-0">
                   {contact.firstName?.charAt(0) ?? ""}{contact.lastName?.charAt(0) ?? ""}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-black truncate">
+                  <p className="text-sm font-medium text-security-navy-900 truncate">
                     {contact.firstName} {contact.lastName}
                   </p>
-                  <p className="text-xs text-neutral-500 truncate">
+                  <p className="text-xs text-security-navy-500 truncate">
                     {contact.phone ? `+${contact.phone}` : "No phone"}
                   </p>
                 </div>
@@ -63,7 +63,7 @@ export function WhatsAppWidget({ contacts, onSend, compact = true }: WhatsAppWid
                       setMessage("");
                       setError(null);
                     }}
-                    className="p-1.5 rounded-security text-neutral-500 hover:bg-neutral-100 hover:text-black transition-colors"
+                    className="p-1.5 rounded-security text-security-navy-500 hover:bg-security-navy-50 hover:text-security-navy-900 transition-colors"
                     title="Send message"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -75,7 +75,7 @@ export function WhatsAppWidget({ contacts, onSend, compact = true }: WhatsAppWid
                       href={contact.whatsappUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-1.5 rounded-security text-neutral-500 hover:bg-neutral-100 hover:text-security-navy-600 transition-colors"
+                      className="p-1.5 rounded-security text-security-navy-500 hover:bg-security-navy-50 hover:text-security-navy-600 transition-colors"
                       title="Open in WhatsApp"
                     >
                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -86,13 +86,13 @@ export function WhatsAppWidget({ contacts, onSend, compact = true }: WhatsAppWid
                 </div>
               </div>
               {expandedId === contact.id && (
-                <div className="px-3 pb-3 pt-0 border-t border-neutral-100">
+                <div className="px-3 pb-3 pt-0 border-t border-security-navy-100">
                   <textarea
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder="Type your message..."
                     rows={2}
-                    className="w-full mt-2 px-3 py-2 text-sm border border-neutral-300 rounded-security resize-none focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                    className="w-full mt-2 px-3 py-2 text-sm border border-security-navy-200 rounded-security resize-none focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
                     disabled={!!sending}
                   />
                   {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
@@ -109,7 +109,7 @@ export function WhatsAppWidget({ contacts, onSend, compact = true }: WhatsAppWid
             </div>
           ))
         ) : (
-          <div className="px-3 py-4 text-center text-sm text-neutral-500 border border-dashed border-neutral-200 rounded-security">
+          <div className="px-3 py-4 text-center text-sm text-security-navy-500 border border-dashed border-security-navy-100 rounded-security">
             No team members with WhatsApp numbers yet. Add phone numbers in Team.
           </div>
         )}
@@ -117,14 +117,14 @@ export function WhatsAppWidget({ contacts, onSend, compact = true }: WhatsAppWid
       {compact && contacts.length > 5 && (
         <Link
           href="/whatsapp"
-          className="mt-2 text-sm text-neutral-600 hover:text-black font-medium shrink-0"
+          className="mt-2 text-sm text-security-navy-600 hover:text-security-navy-900 font-medium shrink-0"
         >
           View all ({contacts.length}) →
         </Link>
       )}
       <Link
         href="/whatsapp"
-        className="mt-3 flex items-center justify-center gap-1 w-full px-5 py-2.5 font-medium rounded-security border-2 border-neutral-300 bg-white text-black hover:bg-neutral-50 text-sm transition-colors shrink-0"
+        className="mt-3 flex items-center justify-center gap-1 w-full px-5 py-2.5 font-medium rounded-security border-2 border-security-navy-200 bg-white text-security-navy-900 hover:bg-security-navy-50 text-sm transition-colors shrink-0"
       >
         WhatsApp
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -37,7 +37,7 @@ export default function AcademyProfilePage() {
   const formReadOnly = !canEdit || !isEditing || saving;
   const fieldLabelClass = "text-xs font-medium text-[#35383f]";
   const fieldClass =
-    "h-10 w-full rounded-lg border border-[#dde1e6] bg-white px-3 text-sm text-black placeholder:text-[#8d8f95] outline-none transition focus:border-[#ff9b4a] focus:ring-2 focus:ring-[#ff9b4a]/20 disabled:cursor-not-allowed disabled:bg-[#f7f8fa]";
+    "h-10 w-full rounded-lg border border-[#dde1e6] bg-white px-3 text-sm text-security-navy-900 placeholder:text-[#8d8f95] outline-none transition focus:border-[#ff9b4a] focus:ring-2 focus:ring-[#ff9b4a]/20 disabled:cursor-not-allowed disabled:bg-[#f7f8fa]";
 
   const load = () => {
     if (!token) return;
@@ -106,14 +106,14 @@ export default function AcademyProfilePage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h1 className="text-3xl font-semibold tracking-tight text-black">Profile</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-security-navy-900">Profile</h1>
           <p className="text-sm text-[#6e7480]">Manage your training provider and organisation information.</p>
         </div>
         {canEdit && isEditing && (
           <button
             type="submit"
             form="academy-profile-form"
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#ff7a00] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#e86f00] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#ff7a00] px-4 text-sm font-semibold text-white shadow-security-card transition hover:bg-[#e86f00] disabled:cursor-not-allowed disabled:opacity-60"
             disabled={saving}
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -126,14 +126,14 @@ export default function AcademyProfilePage() {
       </div>
 
       {!canEdit && (
-        <div className="rounded-lg border border-neutral-300 bg-neutral-100/50 px-3 py-2 text-sm">
+        <div className="rounded-lg border border-security-navy-200 bg-security-navy-50/50 px-3 py-2 text-sm">
           Read-only: academy edit access is required to update the profile.
         </div>
       )}
 
       {error && <div className="rounded-lg border border-error/30 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
       {saveMessage && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-300/80 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-security-emerald-300/80 bg-security-emerald-50 px-3 py-2 text-sm text-security-emerald-700">
           <span>{saveMessage}</span>
           {canEdit && !isEditing && (
             <button
@@ -142,7 +142,7 @@ export default function AcademyProfilePage() {
                 setSaveMessage(null);
                 setIsEditing(true);
               }}
-              className="inline-flex h-8 items-center rounded-md border border-emerald-300 bg-white px-3 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100"
+              className="inline-flex h-8 items-center rounded-md border border-security-emerald-300 bg-white px-3 text-xs font-semibold text-security-emerald-700 transition hover:bg-security-emerald-100"
             >
               Edit profile
             </button>
@@ -165,7 +165,7 @@ export default function AcademyProfilePage() {
               />
             </svg>
           </span>
-          <h2 className="text-base font-semibold text-black">Organisation details</h2>
+          <h2 className="text-base font-semibold text-security-navy-900">Organisation details</h2>
         </div>
 
         {isEditing || !canEdit ? (
@@ -285,14 +285,14 @@ export default function AcademyProfilePage() {
             <span className={fieldLabelClass}>Phone number</span>
             <div className="flex h-10 items-center rounded-lg border border-[#dde1e6] bg-white pl-2 pr-1">
               <select
-                className="h-full min-h-0 w-[84px] border-0 bg-transparent text-sm text-black outline-none"
+                className="h-full min-h-0 w-[84px] border-0 bg-transparent text-sm text-security-navy-900 outline-none"
                 disabled={formReadOnly}
                 defaultValue="+27"
               >
                 <option value="+27">+27</option>
               </select>
               <input
-                className="h-full w-full border-0 bg-transparent px-2 text-sm text-black placeholder:text-[#8d8f95] outline-none"
+                className="h-full w-full border-0 bg-transparent px-2 text-sm text-security-navy-900 placeholder:text-[#8d8f95] outline-none"
                 type="text"
                 placeholder="Enter phone number"
                 value={form.phoneNumber}
@@ -366,7 +366,7 @@ export default function AcademyProfilePage() {
           <label className="space-y-1.5">
             <span className={fieldLabelClass}>Note Notes</span>
             <textarea
-              className="min-h-[110px] w-full resize-y rounded-lg border border-[#dde1e6] bg-white px-3 py-2.5 text-sm text-black placeholder:text-[#8d8f95] outline-none transition focus:border-[#ff9b4a] focus:ring-2 focus:ring-[#ff9b4a]/20 disabled:cursor-not-allowed disabled:bg-[#f7f8fa]"
+              className="min-h-[110px] w-full resize-y rounded-lg border border-[#dde1e6] bg-white px-3 py-2.5 text-sm text-security-navy-900 placeholder:text-[#8d8f95] outline-none transition focus:border-[#ff9b4a] focus:ring-2 focus:ring-[#ff9b4a]/20 disabled:cursor-not-allowed disabled:bg-[#f7f8fa]"
               placeholder="Enter any additional notes"
               value={form.notes}
               disabled={formReadOnly}
@@ -397,7 +397,7 @@ export default function AcademyProfilePage() {
             }}
           >
             <p className="text-xs font-medium uppercase tracking-wide text-[#6e7480]">Training centre name</p>
-            <p className="mt-1 text-sm font-semibold text-black">{form.trainingCentreName || "—"}</p>
+            <p className="mt-1 text-sm font-semibold text-security-navy-900">{form.trainingCentreName || "—"}</p>
             {canEdit && <p className="mt-1 text-xs text-[#6e7480]">Click to edit profile</p>}
           </div>
         )}

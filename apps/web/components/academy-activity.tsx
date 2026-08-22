@@ -22,7 +22,7 @@ export function AcademyActivityRow({ item, compact }: { item: AcademyActivityIte
   const inner = (
     <>
       <p className={compact ? "text-security-navy-800 line-clamp-2" : "text-security-navy-800"}>{item.label}</p>
-      <p className="mt-0.5 text-xs text-neutral-500">
+      <p className="mt-0.5 text-xs text-security-navy-500">
         {timeAgo(item.at)}
         {item.userName ? ` · ${item.userName}` : ""}
       </p>
@@ -32,11 +32,11 @@ export function AcademyActivityRow({ item, compact }: { item: AcademyActivityIte
     return (
       <Link
         href={item.link}
-        className="block rounded-xl border border-transparent bg-white/60 p-2.5 text-sm transition hover:border-neutral-300"
+        className="block rounded-security-lg border border-transparent bg-white/60 p-2.5 text-sm transition hover:border-security-navy-200"
       >
         {inner}
       </Link>
     );
   }
-  return <div className="rounded-xl border border-neutral-200/80 bg-white/60 p-2.5 text-sm">{inner}</div>;
+  return <div className="rounded-security-lg border border-security-navy-100/80 bg-white/60 p-2.5 text-sm">{inner}</div>;
 }

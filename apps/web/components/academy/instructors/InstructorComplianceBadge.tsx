@@ -15,9 +15,9 @@ const LABELS: Record<string, string> = {
 };
 
 function tone(status: string): string {
-  if (status === "compliant") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "compliant") return "border-security-emerald-200 bg-security-emerald-50 text-security-emerald-700";
   if (status === "attention_needed" || status === "pending_review") {
-    return "border-amber-200 bg-amber-50 text-amber-700";
+    return "border-security-amber-200 bg-security-amber-50 text-security-amber-700";
   }
   if (
     status === "high_risk" ||
@@ -28,7 +28,7 @@ function tone(status: string): string {
   ) {
     return "border-red-200 bg-red-50 text-red-700";
   }
-  return "border-slate-200 bg-slate-50 text-slate-700";
+  return "border-security-navy-100 bg-security-navy-50 text-security-navy-700";
 }
 
 export function complianceLabel(value: string | ComplianceStatus | null | undefined): string {

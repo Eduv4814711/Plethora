@@ -80,15 +80,15 @@ export default function AttendanceSitePage() {
   if (!start || !end || loadingPeriod) {
     return (
       <div className="animate-pulse space-y-4" aria-label="Loading site attendance">
-        <div className="h-20 rounded-xl bg-neutral-200 dark:bg-neutral-700" />
-        <div className="h-72 rounded-xl bg-neutral-200 dark:bg-neutral-700" />
+        <div className="h-20 rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700" />
+        <div className="h-72 rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700" />
       </div>
     );
   }
 
   return (
     <main className="animate-fade-in space-y-4 pb-24">
-      <header className="sticky top-0 z-30 rounded-xl border border-neutral-200 bg-white/95 p-4 shadow-sm backdrop-blur dark:border-neutral-700 dark:bg-neutral-950/95">
+      <header className="sticky top-0 z-30 rounded-security-lg border border-security-navy-100 bg-white/95 p-4 shadow-security-card backdrop-blur dark:border-security-navy-700 dark:bg-security-navy-900/95">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <Link
@@ -98,17 +98,17 @@ export default function AttendanceSitePage() {
               ← Back to attendance overview
             </Link>
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">{siteName}</h1>
-              <span className="text-sm text-neutral-500 dark:text-neutral-400">
+              <h1 className="text-xl font-semibold text-security-navy-900 dark:text-security-navy-100">{siteName}</h1>
+              <span className="text-sm text-security-navy-500 dark:text-security-navy-400">
                 {format(parseISO(start), "d MMM yyyy")} – {format(parseISO(end), "d MMM yyyy")}
               </span>
             </div>
-            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">Step 2 of 2 · Confirm attendance and approve the timesheet</p>
+            <p className="mt-1 text-xs text-security-navy-500 dark:text-security-navy-400">Step 2 of 2 · Confirm attendance and approve the timesheet</p>
           </div>
 
           <fieldset>
             <legend className="sr-only">Filter attendance by shift</legend>
-            <div className="flex flex-wrap rounded-lg border border-neutral-200 bg-neutral-50 p-1 dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="flex flex-wrap rounded-lg border border-security-navy-100 bg-security-navy-50 p-1 dark:border-security-navy-700 dark:bg-security-navy-900">
               {SHIFT_OPTIONS.map((option) => (
                 <button
                   key={option.value}
@@ -118,8 +118,8 @@ export default function AttendanceSitePage() {
                   className={clsx(
                     "min-h-11 rounded-md px-3 text-sm font-medium",
                     shiftType === option.value
-                      ? "bg-security-navy-800 text-white shadow-sm dark:bg-security-navy-600"
-                      : "text-neutral-700 hover:bg-white dark:text-neutral-300 dark:hover:bg-neutral-800"
+                      ? "bg-security-navy-800 text-white shadow-security-card dark:bg-security-navy-600"
+                      : "text-security-navy-700 hover:bg-white dark:text-security-navy-300 dark:hover:bg-security-navy-800"
                   )}
                 >
                   {option.label}

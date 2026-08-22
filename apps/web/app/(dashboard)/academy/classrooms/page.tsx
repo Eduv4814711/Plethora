@@ -89,38 +89,38 @@ export default function AcademyClassroomsPage() {
 
       {error && <AlertBanner variant="error">{error}</AlertBanner>}
 
-      <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">New classroom</h2>
+      <div className="rounded-2xl border border-security-navy-100 bg-white p-5 shadow-security-card">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-security-navy-500">New classroom</h2>
         <form onSubmit={create} className="mt-3 grid gap-3 md:grid-cols-[1fr_auto_auto_auto] md:items-end">
           <label className="min-w-0" htmlFor="classroom-name">
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">Classroom name</span>
-            <input id="classroom-name" className="input-modern w-full rounded-xl" value={name} onChange={(e) => setName(e.target.value)} />
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-security-navy-500">Classroom name</span>
+            <input id="classroom-name" className="input-modern w-full rounded-security-lg" value={name} onChange={(e) => setName(e.target.value)} />
           </label>
           <label htmlFor="classroom-site">
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">Site</span>
-            <select id="classroom-site" className="input-modern rounded-xl" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-security-navy-500">Site</span>
+            <select id="classroom-site" className="input-modern rounded-security-lg" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
               ))}
             </select>
           </label>
           <label htmlFor="classroom-capacity">
-            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-neutral-500">Capacity</span>
-            <input id="classroom-capacity" className="input-modern w-24 rounded-xl" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
+            <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-security-navy-500">Capacity</span>
+            <input id="classroom-capacity" className="input-modern w-24 rounded-security-lg" value={capacity} onChange={(e) => setCapacity(e.target.value)} />
           </label>
           <Button type="submit" disabled={!canCreate} loading={saving}>Add classroom</Button>
         </form>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-        <div className="border-b border-neutral-200/80 px-5 py-4">
+      <div className="overflow-hidden rounded-2xl border border-security-navy-100 bg-white shadow-security-card">
+        <div className="border-b border-security-navy-100/80 px-5 py-4">
           <h2 className="text-base font-semibold text-security-navy-900">All classrooms</h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-neutral-200 text-sm" aria-busy={loading}>
+          <table className="min-w-full divide-y divide-security-navy-100 text-sm" aria-busy={loading}>
             <caption className="sr-only">Academy classrooms</caption>
             <thead>
-              <tr className="text-[11px] uppercase tracking-wide text-neutral-500">
+              <tr className="text-[11px] uppercase tracking-wide text-security-navy-500">
                 <th scope="col">Classroom</th>
                 <th scope="col">Site</th>
                 <th scope="col">Capacity</th>

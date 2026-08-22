@@ -145,7 +145,7 @@ export default function QuotesPage() {
           >
             ← Back to billing
           </Link>
-          <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">Quotes</h1>
+          <h1 className="text-xl font-semibold text-security-navy-900 dark:text-security-navy-100">Quotes</h1>
         </div>
         {canCreate && (
           <button
@@ -167,11 +167,11 @@ export default function QuotesPage() {
       {showForm && canCreate && (
         <form
           onSubmit={submit}
-          className="space-y-4 rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-950"
+          className="space-y-4 rounded-security-lg border border-security-navy-100 bg-white p-4 dark:border-security-navy-700 dark:bg-security-navy-900"
         >
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className="block">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Client</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">Client</span>
               <select
                 value={clientId}
                 onChange={(e) => setClientId(e.target.value)}
@@ -187,7 +187,7 @@ export default function QuotesPage() {
               </select>
             </label>
             <label className="block">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Quote date</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">Quote date</span>
               <input
                 type="date"
                 value={quoteDate}
@@ -197,7 +197,7 @@ export default function QuotesPage() {
               />
             </label>
             <label className="block">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Valid until</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">Valid until</span>
               <input
                 type="date"
                 value={validUntil}
@@ -207,7 +207,7 @@ export default function QuotesPage() {
               />
             </label>
             <label className="block">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Reference</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">Reference</span>
               <input
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
@@ -230,7 +230,7 @@ export default function QuotesPage() {
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
                     Discount
                   </span>
                   <input
@@ -241,7 +241,7 @@ export default function QuotesPage() {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
                     VAT rate %
                   </span>
                   <input
@@ -253,7 +253,7 @@ export default function QuotesPage() {
                 </label>
               </div>
               <label className="block">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Notes</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">Notes</span>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
@@ -287,7 +287,7 @@ export default function QuotesPage() {
             className={
               status === s
                 ? "min-h-11 rounded-lg bg-security-navy-800 px-3 text-sm font-medium text-white"
-                : "min-h-11 rounded-lg px-3 text-sm font-medium text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                : "min-h-11 rounded-lg px-3 text-sm font-medium text-security-navy-700 hover:bg-security-navy-50 dark:text-security-navy-300 dark:hover:bg-security-navy-800"
             }
           >
             {s === "all" ? "All" : s.replace(/_/g, " ")}
@@ -296,16 +296,16 @@ export default function QuotesPage() {
       </div>
 
       {loading ? (
-        <div className="h-40 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-700" aria-label="Loading quotes" />
+        <div className="h-40 animate-pulse rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700" aria-label="Loading quotes" />
       ) : quotes.length === 0 ? (
-        <p className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-10 text-center text-sm text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900">
+        <p className="rounded-security-lg border border-security-navy-100 bg-security-navy-50 px-4 py-10 text-center text-sm text-security-navy-600 dark:border-security-navy-700 dark:bg-security-navy-900">
           No quotes yet.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-700">
-          <table className="min-w-full divide-y divide-neutral-200 text-sm dark:divide-neutral-700">
-            <thead className="bg-neutral-50 dark:bg-neutral-900">
-              <tr className="text-left text-[10px] uppercase tracking-wider text-neutral-500">
+        <div className="overflow-x-auto rounded-security-lg border border-security-navy-100 dark:border-security-navy-700">
+          <table className="min-w-full divide-y divide-security-navy-100 text-sm dark:divide-security-navy-700">
+            <thead className="bg-security-navy-50 dark:bg-security-navy-900">
+              <tr className="text-left text-[10px] uppercase tracking-wider text-security-navy-500">
                 <th className="px-3 py-2">Number</th>
                 <th className="px-3 py-2">Client</th>
                 <th className="px-3 py-2">Date</th>
@@ -314,9 +314,9 @@ export default function QuotesPage() {
                 <th className="px-3 py-2">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+            <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
               {quotes.map((quote) => (
-                <tr key={quote.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-900">
+                <tr key={quote.id} className="hover:bg-security-navy-50 dark:hover:bg-security-navy-900">
                   <td className="px-3 py-2">
                     <Link
                       href={`/payroll/billing/quotes/${quote.id}`}

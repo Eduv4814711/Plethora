@@ -1141,11 +1141,11 @@ export default function AcademyInstructorsPage() {
 
   return (
     <div className="w-full min-w-0 space-y-3 bg-[var(--bg-canvas)] pb-4">
-      <section className="rounded-xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm">
+      <section className="rounded-security-lg border border-security-navy-100 bg-white/90 px-4 py-3 shadow-security-card">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-security-navy-900">Instructors</h1>
-            <p className="mt-0.5 text-sm text-neutral-600">
+            <p className="mt-0.5 text-sm text-security-navy-600">
               Manage accredited instructors, contracts, certificates, compliance, and assignments.
             </p>
           </div>
@@ -1159,7 +1159,7 @@ export default function AcademyInstructorsPage() {
             </button>}
             <details className="dropdown dropdown-end">
               <summary className="btn-secondary px-3 py-1.5 text-xs rounded-lg">Actions</summary>
-              <ul className="menu dropdown-content z-[50] mt-1 w-52 rounded-box border border-slate-200 bg-white p-2 shadow">
+              <ul className="menu dropdown-content z-[50] mt-1 w-52 rounded-box border border-security-navy-100 bg-white p-2 shadow">
                 {canExportRecords && <li>
                   <button type="button" onClick={() => exportCurrent(false)}>
                     Export CSV
@@ -1219,7 +1219,7 @@ export default function AcademyInstructorsPage() {
       </section>
 
       {!canCreateRecords && !canEditRecords && (
-        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-neutral-700">
+        <div className="rounded-lg border border-security-navy-100 bg-white px-3 py-2 text-sm text-security-navy-700">
           Your access is read-only. You can review instructor data but cannot create or update records.
         </div>
       )}
@@ -1230,7 +1230,7 @@ export default function AcademyInstructorsPage() {
         </div>
       )}
       {notice && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+        <div className="rounded-lg border border-security-emerald-200 bg-security-emerald-50 px-3 py-2 text-sm text-security-emerald-700">
           {notice}
         </div>
       )}
@@ -1255,7 +1255,7 @@ export default function AcademyInstructorsPage() {
         onPendingClick={() => applyFilterPatch({ complianceStatus: "pending_review" })}
       />
 
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="rounded-security-lg border border-security-navy-100 bg-white shadow-security-card">
         {tableEmpty ? (
           <div className="flex min-h-[320px] items-center justify-center p-4">
             {!hasActiveFilters ? (
@@ -1309,8 +1309,8 @@ export default function AcademyInstructorsPage() {
               onAction={handleTableAction}
             />
 
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2">
-              <div className="text-sm text-neutral-600">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-security-navy-100 bg-security-navy-50/70 px-3 py-2">
+              <div className="text-sm text-security-navy-600">
                 Page {currentPage} of {totalPages} · {total} records
               </div>
               <div className="flex gap-2">
@@ -1360,7 +1360,7 @@ export default function AcademyInstructorsPage() {
       </button>}
 
       {mobileFiltersOpen && (
-        <div className="fixed inset-0 z-[85] bg-slate-900/35 lg:hidden">
+        <div className="fixed inset-0 z-[85] bg-security-navy-900/35 lg:hidden">
           <div className="ml-auto h-full w-full max-w-sm overflow-y-auto bg-white p-4 shadow-xl">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-semibold text-security-navy-900">Filters</h3>
@@ -1448,7 +1448,7 @@ function CompactAlertsStrip({
   onPendingClick: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white/90 px-2 py-2 shadow-sm">
+    <div className="rounded-security-lg border border-security-navy-100 bg-white/90 px-2 py-2 shadow-security-card">
       <div className="flex flex-wrap gap-2">
         <AlertPill
           tone="amber"
@@ -1494,12 +1494,12 @@ function AlertPill({
     tone === "red"
       ? "border-red-200 bg-red-50 text-red-700"
       : tone === "amber"
-        ? "border-amber-200 bg-amber-50 text-amber-700"
-        : "border-slate-200 bg-slate-50 text-slate-700";
+        ? "border-security-amber-200 bg-security-amber-50 text-security-amber-700"
+        : "border-security-navy-100 bg-security-navy-50 text-security-navy-700";
   return (
     <button
       type="button"
-      className={`max-w-full rounded-lg border px-3 py-1.5 text-left transition hover:shadow-sm ${className}`}
+      className={`max-w-full rounded-lg border px-3 py-1.5 text-left transition hover:shadow-security-card ${className}`}
       onClick={onClick}
     >
       <div className="text-xs font-semibold">{title}</div>

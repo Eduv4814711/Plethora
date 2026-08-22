@@ -140,13 +140,15 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => debouncedQuery.length >= 2 && setOpen(true)}
         onKeyDown={handleKeyDown}
-        className="w-[min(18rem,calc(100vw-10rem))] min-w-0 max-w-[calc(100vw-2rem)] pl-10 pr-3 py-2 sm:w-72 sm:max-w-none rounded-security border-2 border-security-navy-300 bg-white text-sm text-security-navy placeholder-security-navy-400 focus:border-security-navy-500 outline-none transition-all"
+        /* Sits on graphite chrome, so the resting state is a translucent well
+           rather than a white box punched into the header. */
+        className="peer w-[min(18rem,calc(100vw-10rem))] min-w-0 max-w-[calc(100vw-2rem)] rounded-security border border-white/15 bg-white/10 py-2 pl-10 pr-3 text-sm text-white outline-none transition-[background-color,border-color,width] duration-200 placeholder:text-white/65 hover:border-white/25 hover:bg-white/[0.14] focus:border-security-amber-500 focus:bg-white focus:text-security-navy-900 focus:placeholder:text-security-navy-400 sm:w-64 sm:max-w-none lg:focus:w-80 [&::-webkit-search-cancel-button]:appearance-none"
         aria-label="Search"
         aria-expanded={open}
         aria-autocomplete="list"
       />
       <svg
-        className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-security-navy-500"
+        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/65 peer-focus:text-security-navy-500"
         fill="none"
         stroke="currentColor"
         strokeWidth={1.5}
@@ -158,7 +160,7 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
       {open && (
         <div
           ref={listRef}
-          className="absolute top-full left-0 right-0 mt-1 py-1 bg-white border-2 border-neutral-200 rounded-security-lg shadow-security-elevated z-50 max-h-80 overflow-y-auto"
+          className="absolute left-0 right-0 top-full z-50 mt-2 max-h-80 min-w-[18rem] animate-slide-up overflow-y-auto rounded-security-lg border border-security-navy-100 bg-white py-1 shadow-security-elevated motion-reduce:animate-none"
           role="listbox"
         >
           {loading ? (
@@ -168,7 +170,7 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
           ) : (
             <>
               {employees.length > 0 && (
-                <div className="px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-security-navy-500 bg-security-navy-50 border-b border-neutral-200">
+                <div className="bg-security-navy-50 px-4 py-2 font-mono text-[0.625rem] font-medium uppercase tracking-[0.14em] text-security-navy-500">
                   Team
                 </div>
               )}
@@ -191,7 +193,7 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
                 </button>
               ))}
               {sites.length > 0 && (
-                <div className="px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-security-navy-500 bg-security-navy-50 border-t border-neutral-200 mt-1 pt-1">
+                <div className="mt-1 bg-security-navy-50 px-4 py-2 font-mono text-[0.625rem] font-medium uppercase tracking-[0.14em] text-security-navy-500">
                   Sites
                 </div>
               )}

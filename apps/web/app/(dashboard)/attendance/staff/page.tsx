@@ -31,7 +31,7 @@ function StaffAttendancePageInner() {
             Daily operations
           </p>
           <h1 className="page-title mt-1">Office staff attendance</h1>
-          <p className="mt-1 max-w-2xl text-sm text-neutral-600 dark:text-neutral-400">
+          <p className="mt-1 max-w-2xl text-sm text-security-navy-600 dark:text-security-navy-400">
             Mark who was at the office today. Security officers are captured against their site
             instead.
           </p>
@@ -48,7 +48,7 @@ function StaffAttendancePageInner() {
 
 export default function StaffAttendancePage() {
   return (
-    <Suspense fallback={<div className="h-32 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-700" />}>
+    <Suspense fallback={<div className="h-32 animate-pulse rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700" />}>
       <StaffAttendancePageInner />
     </Suspense>
   );

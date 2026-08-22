@@ -33,8 +33,8 @@ const EMPTY_FILTERS: Filters = { action: "", userId: "", outcome: "", from: "", 
 const PAGE_SIZE = 50;
 
 const OUTCOME_STYLES: Record<string, string> = {
-  success: "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200",
-  denied: "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200",
+  success: "bg-security-emerald-50 text-security-emerald-700 dark:bg-security-emerald-700/40 dark:text-security-emerald-200",
+  denied: "bg-security-amber-50 text-security-amber-800 dark:bg-security-amber-950/40 dark:text-security-amber-200",
   failure: "bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200",
 };
 
@@ -146,7 +146,7 @@ export default function AuditPage() {
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="page-title">Audit Logs</h1>
-          <p className="mt-1 text-sm text-neutral-600">
+          <p className="mt-1 text-sm text-security-navy-600">
             Who did what, when, and from where — including sign-ins and refused access attempts.
           </p>
         </div>
@@ -158,7 +158,7 @@ export default function AuditPage() {
       </div>
 
       <div className="card-wireframe mb-4 grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-6">
-        <label className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
+        <label className="text-xs font-medium text-security-navy-600 dark:text-security-navy-300">
           Actor
           <select
             className="input-modern mt-1 w-full"
@@ -173,7 +173,7 @@ export default function AuditPage() {
             ))}
           </select>
         </label>
-        <label className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
+        <label className="text-xs font-medium text-security-navy-600 dark:text-security-navy-300">
           Activity
           <select
             className="input-modern mt-1 w-full"
@@ -188,7 +188,7 @@ export default function AuditPage() {
             ))}
           </select>
         </label>
-        <label className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
+        <label className="text-xs font-medium text-security-navy-600 dark:text-security-navy-300">
           Outcome
           <select
             className="input-modern mt-1 w-full"
@@ -201,7 +201,7 @@ export default function AuditPage() {
             <option value="failure">Failed</option>
           </select>
         </label>
-        <label className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
+        <label className="text-xs font-medium text-security-navy-600 dark:text-security-navy-300">
           From
           <input
             type="date"
@@ -210,7 +210,7 @@ export default function AuditPage() {
             onChange={(event) => updateFilter({ from: event.target.value })}
           />
         </label>
-        <label className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
+        <label className="text-xs font-medium text-security-navy-600 dark:text-security-navy-300">
           To
           <input
             type="date"
@@ -219,7 +219,7 @@ export default function AuditPage() {
             onChange={(event) => updateFilter({ to: event.target.value })}
           />
         </label>
-        <label className="text-xs font-medium text-neutral-600 dark:text-neutral-300">
+        <label className="text-xs font-medium text-security-navy-600 dark:text-security-navy-300">
           Search
           <input
             className="input-modern mt-1 w-full"
@@ -231,7 +231,7 @@ export default function AuditPage() {
       </div>
 
       {error && (
-        <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div role="alert" className="mb-4 rounded-security-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           {error}
         </div>
       )}
@@ -239,7 +239,7 @@ export default function AuditPage() {
       <div className="card-wireframe overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-neutral-50 dark:bg-neutral-700">
+            <thead className="bg-security-navy-50 dark:bg-security-navy-700">
               <tr>
                 <th className="px-4 py-2.5 text-left font-semibold">Date &amp; time</th>
                 <th className="px-4 py-2.5 text-left font-semibold">User</th>
@@ -252,9 +252,9 @@ export default function AuditPage() {
             <tbody>
               {loading &&
                 [1, 2, 3, 4, 5].map((row) => (
-                  <tr key={row} className="border-t border-neutral-200 dark:border-neutral-700">
+                  <tr key={row} className="border-t border-security-navy-100 dark:border-security-navy-700">
                     <td colSpan={6} className="px-4 py-3">
-                      <div className="h-4 animate-pulse rounded bg-neutral-200 dark:bg-neutral-700" />
+                      <div className="h-4 animate-pulse rounded bg-security-navy-100 dark:bg-security-navy-700" />
                     </td>
                   </tr>
                 ))}
@@ -262,10 +262,10 @@ export default function AuditPage() {
                 logs.map((log) => (
                   <Fragment key={log.id}>
                     <tr
-                      className="cursor-pointer border-t border-neutral-200 hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                      className="cursor-pointer border-t border-security-navy-100 hover:bg-security-navy-50 dark:border-security-navy-700 dark:hover:bg-security-navy-800"
                       onClick={() => setExpanded(expanded === log.id ? null : log.id)}
                     >
-                      <td className="whitespace-nowrap px-4 py-2.5 text-neutral-600 dark:text-neutral-400">
+                      <td className="whitespace-nowrap px-4 py-2.5 text-security-navy-600 dark:text-security-navy-400">
                         {new Date(log.timestamp).toLocaleString()}
                       </td>
                       <td className="px-4 py-2.5">{log.user?.name ?? log.actorLabel ?? "—"}</td>
@@ -282,38 +282,38 @@ export default function AuditPage() {
                       <td className="px-4 py-2.5">
                         {log.entityType}
                         {log.entityId && (
-                          <span className="font-mono text-xs text-neutral-500"> #{log.entityId.slice(0, 8)}</span>
+                          <span className="font-mono text-xs text-security-navy-500"> #{log.entityId.slice(0, 8)}</span>
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-neutral-500">
+                      <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-security-navy-500">
                         {log.ipAddress ?? "—"}
                       </td>
                     </tr>
                     {expanded === log.id && (
-                      <tr className="border-t border-neutral-200 dark:border-neutral-700">
-                        <td colSpan={6} className="bg-neutral-50 px-4 py-3 dark:bg-neutral-800/60">
+                      <tr className="border-t border-security-navy-100 dark:border-security-navy-700">
+                        <td colSpan={6} className="bg-security-navy-50 px-4 py-3 dark:bg-security-navy-800/60">
                           <dl className="grid gap-2 text-xs sm:grid-cols-3">
                             <div>
-                              <dt className="font-semibold text-neutral-500">User agent</dt>
-                              <dd className="break-all text-neutral-700 dark:text-neutral-300">
+                              <dt className="font-semibold text-security-navy-500">User agent</dt>
+                              <dd className="break-all text-security-navy-700 dark:text-security-navy-300">
                                 {log.userAgent ?? "—"}
                               </dd>
                             </div>
                             <div>
-                              <dt className="font-semibold text-neutral-500">Request id</dt>
-                              <dd className="font-mono text-neutral-700 dark:text-neutral-300">
+                              <dt className="font-semibold text-security-navy-500">Request id</dt>
+                              <dd className="font-mono text-security-navy-700 dark:text-security-navy-300">
                                 {log.requestId ?? "—"}
                               </dd>
                             </div>
                             <div>
-                              <dt className="font-semibold text-neutral-500">Record id</dt>
-                              <dd className="font-mono break-all text-neutral-700 dark:text-neutral-300">
+                              <dt className="font-semibold text-security-navy-500">Record id</dt>
+                              <dd className="font-mono break-all text-security-navy-700 dark:text-security-navy-300">
                                 {log.entityId ?? "—"}
                               </dd>
                             </div>
                           </dl>
                           {log.metadata && (
-                            <pre className="mt-3 max-h-64 overflow-auto rounded-lg bg-white p-3 text-xs text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300">
+                            <pre className="mt-3 max-h-64 overflow-auto rounded-lg bg-white p-3 text-xs text-security-navy-700 dark:bg-security-navy-900 dark:text-security-navy-300">
                               {JSON.stringify(log.metadata, null, 2)}
                             </pre>
                           )}
@@ -324,7 +324,7 @@ export default function AuditPage() {
                 ))}
               {!loading && logs.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-neutral-600">
+                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-security-navy-600">
                     Nothing matches these filters.
                   </td>
                 </tr>
@@ -334,7 +334,7 @@ export default function AuditPage() {
         </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-between text-sm text-neutral-600">
+      <div className="mt-4 flex items-center justify-between text-sm text-security-navy-600">
         <span>
           {total === 0
             ? "No entries"

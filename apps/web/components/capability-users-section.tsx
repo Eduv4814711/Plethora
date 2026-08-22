@@ -81,20 +81,20 @@ function CapabilityEditor({
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-700">
-      <div className="grid grid-cols-[minmax(11rem,1fr)_minmax(16rem,2fr)] bg-neutral-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:bg-neutral-900">
+    <div className="overflow-hidden rounded-security-lg border border-security-navy-100 dark:border-security-navy-700">
+      <div className="grid grid-cols-[minmax(11rem,1fr)_minmax(16rem,2fr)] bg-security-navy-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-security-navy-500 dark:bg-security-navy-900">
         <span>Module</span>
         <span>Allowed actions</span>
       </div>
-      <div className="max-h-80 divide-y divide-neutral-200 overflow-y-auto dark:divide-neutral-700">
+      <div className="max-h-80 divide-y divide-security-navy-100 overflow-y-auto dark:divide-security-navy-700">
         {catalog.map((definition) => (
           <div
             key={definition.path}
             className="grid gap-2 px-3 py-3 sm:grid-cols-[minmax(11rem,1fr)_minmax(16rem,2fr)]"
           >
             <div>
-              <p className="text-sm font-medium text-neutral-900 dark:text-white">{definition.label}</p>
-              <p className="text-xs text-neutral-500">{definition.path}</p>
+              <p className="text-sm font-medium text-security-navy-900 dark:text-white">{definition.label}</p>
+              <p className="text-xs text-security-navy-500">{definition.path}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               {definition.capabilities.map((capability) => {
@@ -105,7 +105,7 @@ function CapabilityEditor({
                     className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${
                       checked
                         ? "border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-700 dark:bg-blue-950/30 dark:text-blue-200"
-                        : "border-neutral-200 bg-white text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300"
+                        : "border-security-navy-100 bg-white text-security-navy-600 dark:border-security-navy-700 dark:bg-security-navy-900 dark:text-security-navy-300"
                     }`}
                   >
                     <input
@@ -113,7 +113,7 @@ function CapabilityEditor({
                       checked={checked}
                       disabled={disabled || (canToggle ? !canToggle(definition.path, capability) : false)}
                       onChange={() => toggle(definition.path, capability)}
-                      className="h-3.5 w-3.5 rounded border-neutral-300"
+                      className="h-3.5 w-3.5 rounded border-security-navy-200"
                     />
                     {capabilityLabel(capability)}
                   </label>
@@ -197,14 +197,14 @@ function EffectiveAccessPanel({
   const withheld = data?.modules.filter((module) => module.granted.length === 0) ?? [];
 
   return (
-    <div className="fixed inset-0 z-[92] flex items-end justify-center bg-slate-900/50 sm:items-center sm:p-4">
-      <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl dark:bg-neutral-900 sm:max-w-3xl sm:rounded-2xl">
+    <div className="fixed inset-0 z-[92] flex items-end justify-center bg-security-navy-900/50 sm:items-center sm:p-4">
+      <div className="max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl dark:bg-security-navy-900 sm:max-w-3xl sm:rounded-2xl">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
+            <h2 className="text-lg font-semibold text-security-navy-900 dark:text-white">
               Effective access{data ? ` · ${data.user.name}` : ""}
             </h2>
-            <p className="text-sm text-neutral-500">
+            <p className="text-sm text-security-navy-500">
               Exactly what this person can do, computed by the same rules the server enforces.
             </p>
           </div>
@@ -214,49 +214,49 @@ function EffectiveAccessPanel({
         </div>
 
         {error && (
-          <div role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div role="alert" className="mt-4 rounded-security-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             {error}
           </div>
         )}
-        {!data && !error && <div className="mt-5 h-40 animate-pulse rounded-xl bg-neutral-100 dark:bg-neutral-800" />}
+        {!data && !error && <div className="mt-5 h-40 animate-pulse rounded-security-lg bg-security-navy-50 dark:bg-security-navy-800" />}
 
         {data && (
           <div className="mt-5 space-y-5">
             {data.user.isOwner ? (
-              <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              <p className="rounded-security-lg border border-security-amber-200 bg-security-amber-50 p-3 text-sm text-security-amber-900">
                 Company owner. Owners bypass the capability matrix entirely and can do everything in
                 every module. Transfer ownership to make their access follow explicit grants.
               </p>
             ) : !data.user.isActive ? (
-              <p className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-700 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200">
+              <p className="rounded-security-lg border border-security-navy-100 bg-security-navy-50 p-3 text-sm text-security-navy-700 dark:border-security-navy-700 dark:bg-security-navy-800 dark:text-security-navy-200">
                 This account is deactivated. It cannot sign in and holds no effective access,
                 whatever the matrix below shows.
               </p>
             ) : (
-              <p className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+              <p className="rounded-security-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
                 {summariseGrants(data.modules)}
               </p>
             )}
 
             <div>
-              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">
+              <h3 className="text-sm font-semibold text-security-navy-900 dark:text-white">
                 Has access to ({granted.length})
               </h3>
               <div className="mt-2 space-y-2">
                 {granted.map((module) => (
                   <div
                     key={module.path}
-                    className="flex flex-col gap-1.5 rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-700 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-1.5 rounded-lg border border-security-navy-100 px-3 py-2 dark:border-security-navy-700 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div>
-                      <p className="text-sm font-medium text-neutral-900 dark:text-white">{module.label}</p>
-                      <p className="text-xs text-neutral-500">{module.path}</p>
+                      <p className="text-sm font-medium text-security-navy-900 dark:text-white">{module.label}</p>
+                      <p className="text-xs text-security-navy-500">{module.path}</p>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {module.granted.map((capability) => (
                         <span
                           key={capability}
-                          className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                          className="rounded-md bg-security-emerald-50 px-2 py-0.5 text-xs font-medium text-security-emerald-700 dark:bg-security-emerald-700/40 dark:text-security-emerald-200"
                         >
                           {capabilityLabel(capability)}
                         </span>
@@ -265,20 +265,20 @@ function EffectiveAccessPanel({
                   </div>
                 ))}
                 {granted.length === 0 && (
-                  <p className="text-sm text-neutral-500">Nothing. This person cannot open any module.</p>
+                  <p className="text-sm text-security-navy-500">Nothing. This person cannot open any module.</p>
                 )}
               </div>
             </div>
 
             <details>
-              <summary className="cursor-pointer text-sm font-semibold text-neutral-900 dark:text-white">
+              <summary className="cursor-pointer text-sm font-semibold text-security-navy-900 dark:text-white">
                 No access to ({withheld.length})
               </summary>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {withheld.map((module) => (
                   <span
                     key={module.path}
-                    className="rounded-md bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
+                    className="rounded-md bg-security-navy-50 px-2 py-0.5 text-xs text-security-navy-600 dark:bg-security-navy-800 dark:text-security-navy-300"
                   >
                     {module.label}
                   </span>
@@ -287,18 +287,18 @@ function EffectiveAccessPanel({
             </details>
 
             <div>
-              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">Access history</h3>
+              <h3 className="text-sm font-semibold text-security-navy-900 dark:text-white">Access history</h3>
               <ul className="mt-2 space-y-2">
                 {data.history.map((entry) => {
                   const added = (entry.metadata?.added ?? []) as { label: string; capability: Capability }[];
                   const removed = (entry.metadata?.removed ?? []) as { label: string; capability: Capability }[];
                   return (
-                    <li key={entry.id} className="rounded-lg border border-neutral-200 px-3 py-2 text-sm dark:border-neutral-700">
+                    <li key={entry.id} className="rounded-lg border border-security-navy-100 px-3 py-2 text-sm dark:border-security-navy-700">
                       <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <span className="font-medium text-neutral-900 dark:text-white">
+                        <span className="font-medium text-security-navy-900 dark:text-white">
                           {ACCESS_ACTION_LABELS[entry.action] ?? entry.action}
                         </span>
-                        <span className="text-xs text-neutral-500">
+                        <span className="text-xs text-security-navy-500">
                           {new Date(entry.timestamp).toLocaleString()}
                           {" · "}
                           {entry.user?.name ?? entry.actorLabel ?? "system"}
@@ -309,7 +309,7 @@ function EffectiveAccessPanel({
                           {added.map((change, index) => (
                             <span
                               key={`a${index}`}
-                              className="rounded bg-emerald-50 px-1.5 py-0.5 text-xs text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                              className="rounded bg-security-emerald-50 px-1.5 py-0.5 text-xs text-security-emerald-700 dark:bg-security-emerald-700/40 dark:text-security-emerald-200"
                             >
                               + {change.label} · {capabilityLabel(change.capability)}
                             </span>
@@ -328,7 +328,7 @@ function EffectiveAccessPanel({
                   );
                 })}
                 {data.history.length === 0 && (
-                  <li className="text-sm text-neutral-500">No recorded access changes.</li>
+                  <li className="text-sm text-security-navy-500">No recorded access changes.</li>
                 )}
               </ul>
             </div>
@@ -346,23 +346,23 @@ const KIND_LABELS: Record<AccessChangeRequest["kind"], string> = {
 };
 
 const STATUS_STYLES: Record<AccessChangeRequest["status"], string> = {
-  PENDING: "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200",
-  APPROVED: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200",
+  PENDING: "bg-security-amber-100 text-security-amber-800 dark:bg-security-amber-950/40 dark:text-security-amber-200",
+  APPROVED: "bg-security-emerald-100 text-security-emerald-700 dark:bg-security-emerald-700/40 dark:text-security-emerald-200",
   DECLINED: "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-200",
-  CANCELLED: "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300",
+  CANCELLED: "bg-security-navy-50 text-security-navy-600 dark:bg-security-navy-800 dark:text-security-navy-300",
 };
 
 /** The +/− capability chips, matching the access-history list below. */
 function GrantDiff({ diff }: { diff: AccessChangeRequest["diff"] }) {
   if (!diff.added.length && !diff.removed.length) {
-    return <p className="mt-2 text-xs text-neutral-500">No change to module access.</p>;
+    return <p className="mt-2 text-xs text-security-navy-500">No change to module access.</p>;
   }
   return (
     <div className="mt-2 flex flex-wrap gap-1.5">
       {diff.added.map((change, index) => (
         <span
           key={`a${index}`}
-          className="rounded bg-emerald-50 px-1.5 py-0.5 text-xs text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+          className="rounded bg-security-emerald-50 px-1.5 py-0.5 text-xs text-security-emerald-700 dark:bg-security-emerald-700/40 dark:text-security-emerald-200"
         >
           + {change.label} · {capabilityLabel(change.capability)}
         </span>
@@ -405,17 +405,17 @@ function PendingAccessChanges({
   if (!pending.length && !decided.length) return null;
 
   return (
-    <section className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
+    <section className="rounded-security-lg border border-security-amber-200 bg-security-amber-50/60 p-4 dark:border-security-amber-900/50 dark:bg-security-amber-950/20">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="font-semibold text-neutral-900 dark:text-white">
+        <h3 className="font-semibold text-security-navy-900 dark:text-white">
           Access changes awaiting approval
           {pending.length > 0 && (
-            <span className="ml-2 rounded-full bg-amber-200 px-2 py-0.5 text-xs font-semibold text-amber-900">
+            <span className="ml-2 rounded-full bg-security-amber-200 px-2 py-0.5 text-xs font-semibold text-security-amber-900">
               {pending.length}
             </span>
           )}
         </h3>
-        <p className="text-xs text-neutral-600 dark:text-neutral-300">
+        <p className="text-xs text-security-navy-600 dark:text-security-navy-300">
           {canReview
             ? "Nothing below is in force until you approve it."
             : "Your proposals are with the company owner. They are not in force yet."}
@@ -426,14 +426,14 @@ function PendingAccessChanges({
         {pending.map((request) => (
           <article
             key={request.id}
-            className="rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900"
+            className="rounded-lg border border-security-navy-100 bg-white p-3 dark:border-security-navy-700 dark:bg-security-navy-900"
           >
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <div>
-                <span className="text-sm font-semibold text-neutral-900 dark:text-white">
+                <span className="text-sm font-semibold text-security-navy-900 dark:text-white">
                   {KIND_LABELS[request.kind]} · {request.targetLabel}
                 </span>
-                <p className="mt-0.5 text-xs text-neutral-500">
+                <p className="mt-0.5 text-xs text-security-navy-500">
                   Proposed by {request.requestedBy.name} ·{" "}
                   {new Date(request.requestedAt).toLocaleString()}
                 </p>
@@ -454,7 +454,7 @@ function PendingAccessChanges({
             )}
 
             {request.profileChanges.length > 0 && (
-              <ul className="mt-2 space-y-0.5 text-xs text-neutral-600 dark:text-neutral-300">
+              <ul className="mt-2 space-y-0.5 text-xs text-security-navy-600 dark:text-security-navy-300">
                 {request.profileChanges.map((change) => (
                   <li key={change.field}>
                     {change.field}: {String(change.from ?? "—")} → {String(change.to ?? "—")}
@@ -464,7 +464,7 @@ function PendingAccessChanges({
             )}
 
             {request.requestNote && (
-              <p className="mt-2 rounded bg-neutral-50 px-2 py-1 text-xs italic text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+              <p className="mt-2 rounded bg-security-navy-50 px-2 py-1 text-xs italic text-security-navy-600 dark:bg-security-navy-800 dark:text-security-navy-300">
                 {request.requestNote}
               </p>
             )}
@@ -513,7 +513,7 @@ function PendingAccessChanges({
           </article>
         ))}
         {pending.length === 0 && (
-          <p className="text-sm text-neutral-600 dark:text-neutral-300">
+          <p className="text-sm text-security-navy-600 dark:text-security-navy-300">
             Nothing awaiting a decision.
           </p>
         )}
@@ -521,19 +521,19 @@ function PendingAccessChanges({
 
       {decided.length > 0 && (
         <details className="mt-3">
-          <summary className="cursor-pointer text-xs font-semibold text-neutral-700 dark:text-neutral-200">
+          <summary className="cursor-pointer text-xs font-semibold text-security-navy-700 dark:text-security-navy-200">
             Recently decided ({decided.length})
           </summary>
           <ul className="mt-2 space-y-1.5">
             {decided.map((request) => (
               <li
                 key={request.id}
-                className="flex flex-wrap items-baseline justify-between gap-2 rounded border border-neutral-200 bg-white px-2.5 py-1.5 text-xs dark:border-neutral-700 dark:bg-neutral-900"
+                className="flex flex-wrap items-baseline justify-between gap-2 rounded border border-security-navy-100 bg-white px-2.5 py-1.5 text-xs dark:border-security-navy-700 dark:bg-security-navy-900"
               >
-                <span className="text-neutral-700 dark:text-neutral-200">
+                <span className="text-security-navy-700 dark:text-security-navy-200">
                   {KIND_LABELS[request.kind]} · {request.targetLabel}
                 </span>
-                <span className="flex items-center gap-2 text-neutral-500">
+                <span className="flex items-center gap-2 text-security-navy-500">
                   {request.reviewedBy?.name ?? "—"}
                   <span
                     className={`rounded-full px-2 py-0.5 font-semibold ${STATUS_STYLES[request.status]}`}
@@ -903,15 +903,15 @@ export function CapabilityUsersSection({
     }
   };
 
-  if (loading) return <div className="h-40 animate-pulse rounded-xl bg-neutral-100 dark:bg-neutral-800" />;
+  if (loading) return <div className="h-40 animate-pulse rounded-security-lg bg-security-navy-50 dark:bg-security-navy-800" />;
 
   return (
     <section className="space-y-5">
       {confirmDialog}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">User access</h2>
-          <p className="mt-1 max-w-3xl text-sm text-neutral-500">
+          <h2 className="text-lg font-semibold text-security-navy-900 dark:text-white">User access</h2>
+          <p className="mt-1 max-w-3xl text-sm text-security-navy-500">
             Access is granted per module action. Job titles and account types never grant permissions.
             {needsApproval
               ? " Your changes go to the company owner for approval before they take effect."
@@ -930,10 +930,10 @@ export function CapabilityUsersSection({
         </div>
       </div>
 
-      {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
-      {notice && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</div>}
+      {error && <div role="alert" className="rounded-security-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+      {notice && <div role="status" className="rounded-security-lg border border-security-emerald-200 bg-security-emerald-50 p-3 text-sm text-security-emerald-700">{notice}</div>}
       {issuedLink && (
-        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+        <div className="rounded-security-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="font-semibold">{issuedLink.title}</p>
@@ -972,8 +972,8 @@ export function CapabilityUsersSection({
       />
 
       {adding && canCreateUsers && (
-        <form onSubmit={submitNewUser} className="space-y-4 rounded-xl border border-neutral-200 p-4 dark:border-neutral-700">
-          <h3 className="font-semibold text-neutral-900 dark:text-white">{needsApproval ? "Propose a new user" : "New user"}</h3>
+        <form onSubmit={submitNewUser} className="space-y-4 rounded-security-lg border border-security-navy-100 p-4 dark:border-security-navy-700">
+          <h3 className="font-semibold text-security-navy-900 dark:text-white">{needsApproval ? "Propose a new user" : "New user"}</h3>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="text-sm font-medium">Name<input required className="input-modern mt-1 w-full" value={addForm.name} onChange={(event) => setAddForm((form) => ({ ...form, name: event.target.value }))} /></label>
             <label className="text-sm font-medium">Email<input required type="email" className="input-modern mt-1 w-full" value={addForm.email} onChange={(event) => setAddForm((form) => ({ ...form, email: event.target.value }))} /></label>
@@ -992,22 +992,22 @@ export function CapabilityUsersSection({
 
       <div className="space-y-3">
         {users.map((user) => (
-          <article key={user.id} className="rounded-xl border border-neutral-200 p-4 dark:border-neutral-700">
+          <article key={user.id} className="rounded-security-lg border border-security-navy-100 p-4 dark:border-security-navy-700">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-semibold text-neutral-900 dark:text-white">{user.name}</h3>
-                  {user.isOwner && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Owner</span>}
-                  {!user.isActive && <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600">Inactive</span>}
+                  <h3 className="font-semibold text-security-navy-900 dark:text-white">{user.name}</h3>
+                  {user.isOwner && <span className="rounded-full bg-security-amber-100 px-2 py-0.5 text-xs font-semibold text-security-amber-800">Owner</span>}
+                  {!user.isActive && <span className="rounded-full bg-security-navy-50 px-2 py-0.5 text-xs font-semibold text-security-navy-600">Inactive</span>}
                   {pendingByUserId.has(user.id) && (
-                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                    <span className="rounded-full bg-security-amber-100 px-2 py-0.5 text-xs font-semibold text-security-amber-800">
                       Change pending approval
                     </span>
                   )}
                   <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">{user.accountType}</span>
                 </div>
-                <p className="mt-1 text-sm text-neutral-500">{user.email}{user.jobTitle ? ` · ${user.jobTitle}` : ""}</p>
-                <p className="mt-1 text-xs text-neutral-500"><AccessSummary user={user} /></p>
+                <p className="mt-1 text-sm text-security-navy-500">{user.email}{user.jobTitle ? ` · ${user.jobTitle}` : ""}</p>
+                <p className="mt-1 text-xs text-security-navy-500"><AccessSummary user={user} /></p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" className="btn-secondary" onClick={() => setInspecting(user)}>
@@ -1039,10 +1039,10 @@ export function CapabilityUsersSection({
       </div>
 
       {editing && canEditUsers && (
-        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-900/50 sm:items-center sm:p-4">
-          <form onSubmit={saveUser} className="max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl dark:bg-neutral-900 sm:max-w-4xl sm:rounded-2xl">
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-security-navy-900/50 sm:items-center sm:p-4">
+          <form onSubmit={saveUser} className="max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl dark:bg-security-navy-900 sm:max-w-4xl sm:rounded-2xl">
             <div className="flex items-start justify-between gap-3">
-              <div><h2 className="text-lg font-semibold">Edit {editing.name}</h2><p className="text-sm text-neutral-500">{editing.isOwner ? "The owner has full access now; these assignments take effect if ownership is transferred." : needsApproval ? "Changes are sent to the company owner for approval before they take effect." : "Changes apply immediately."}</p></div>
+              <div><h2 className="text-lg font-semibold">Edit {editing.name}</h2><p className="text-sm text-security-navy-500">{editing.isOwner ? "The owner has full access now; these assignments take effect if ownership is transferred." : needsApproval ? "Changes are sent to the company owner for approval before they take effect." : "Changes apply immediately."}</p></div>
               <button type="button" className="btn-secondary" onClick={() => setEditing(null)}>Close</button>
             </div>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -1074,10 +1074,10 @@ export function CapabilityUsersSection({
       )}
 
       {transferTarget && (
-        <div className="fixed inset-0 z-[95] flex items-end justify-center bg-slate-900/50 sm:items-center sm:p-4">
-          <form onSubmit={transferOwner} className="w-full rounded-t-2xl bg-white p-5 shadow-xl dark:bg-neutral-900 sm:max-w-md sm:rounded-2xl">
+        <div className="fixed inset-0 z-[95] flex items-end justify-center bg-security-navy-900/50 sm:items-center sm:p-4">
+          <form onSubmit={transferOwner} className="w-full rounded-t-2xl bg-white p-5 shadow-xl dark:bg-security-navy-900 sm:max-w-md sm:rounded-2xl">
             <h2 className="text-lg font-semibold">Transfer company ownership</h2>
-            <p className="mt-2 text-sm text-neutral-500">After transfer, {transferTarget.name} receives the owner bypass and your account follows its explicit capabilities.</p>
+            <p className="mt-2 text-sm text-security-navy-500">After transfer, {transferTarget.name} receives the owner bypass and your account follows its explicit capabilities.</p>
             <label className="mt-4 block text-sm font-medium">Your current password<input required type="password" autoComplete="current-password" className="input-modern mt-1 w-full" value={ownerPassword} onChange={(event) => setOwnerPassword(event.target.value)} /></label>
             <div className="mt-5 flex justify-end gap-2"><button type="button" className="btn-secondary" onClick={() => setTransferTarget(null)}>Cancel</button><button disabled={busy} className="btn-primary">{busy ? "Transferring…" : "Transfer ownership"}</button></div>
           </form>
@@ -1085,7 +1085,7 @@ export function CapabilityUsersSection({
       )}
 
       {currentUser.isOwner && activeTransferTargets.length === 0 && (
-        <p className="text-xs text-neutral-500">Create another active user before ownership can be transferred.</p>
+        <p className="text-xs text-security-navy-500">Create another active user before ownership can be transferred.</p>
       )}
     </section>
   );

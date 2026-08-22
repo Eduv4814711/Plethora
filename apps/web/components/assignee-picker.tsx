@@ -62,7 +62,7 @@ export function AssigneePicker({
         onClick={() => setOpen((o) => !o)}
         className={`w-full text-left ${className} flex items-center justify-between`}
       >
-        <span className={!displayValue ? "text-gray-500" : ""}>
+        <span className={!displayValue ? "text-security-navy-500" : ""}>
           {displayValue || placeholder}
         </span>
         <svg
@@ -76,13 +76,13 @@ export function AssigneePicker({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 min-w-[240px] rounded-lg border border-gray-300 bg-white shadow-lg">
-          <div className="flex border-b border-gray-200">
+        <div className="absolute left-0 top-full z-50 mt-1 min-w-[240px] rounded-lg border border-security-navy-200 bg-white shadow-lg">
+          <div className="flex border-b border-security-navy-100">
             <button
               type="button"
               onClick={() => setTab("user")}
               className={`flex-1 px-3 py-2 text-sm font-medium ${
-                tab === "user" ? "bg-gray-100 text-black border-b-2 border-neutral-200" : "text-gray-600"
+                tab === "user" ? "bg-security-navy-50 text-security-navy-900 border-b-2 border-security-navy-100" : "text-security-navy-600"
               }`}
             >
               Users
@@ -91,7 +91,7 @@ export function AssigneePicker({
               type="button"
               onClick={() => setTab("employee")}
               className={`flex-1 px-3 py-2 text-sm font-medium ${
-                tab === "employee" ? "bg-gray-100 text-black border-b-2 border-neutral-200" : "text-gray-600"
+                tab === "employee" ? "bg-security-navy-50 text-security-navy-900 border-b-2 border-security-navy-100" : "text-security-navy-600"
               }`}
             >
               Employees
@@ -99,7 +99,7 @@ export function AssigneePicker({
           </div>
           <div className="max-h-48 overflow-y-auto p-1">
             {loading ? (
-              <p className="p-3 text-sm text-gray-500">Loading...</p>
+              <p className="p-3 text-sm text-security-navy-500">Loading...</p>
             ) : (
               <>
                 <button
@@ -108,7 +108,7 @@ export function AssigneePicker({
                     onChange({ type: null, id: null });
                     setOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded"
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-security-navy-50 rounded"
                 >
                   Unassigned
                 </button>
@@ -120,13 +120,13 @@ export function AssigneePicker({
                       onChange({ type: o.type, id: o.id });
                       setOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded ${
-                      value.type === o.type && value.id === o.id ? "bg-gray-100 font-medium" : ""
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-security-navy-50 rounded ${
+                      value.type === o.type && value.id === o.id ? "bg-security-navy-50 font-medium" : ""
                     }`}
                   >
                     <div>{o.displayName}</div>
                     {o.subtitle && (
-                      <div className="text-xs text-gray-500">{o.subtitle}</div>
+                      <div className="text-xs text-security-navy-500">{o.subtitle}</div>
                     )}
                   </button>
                 ))}

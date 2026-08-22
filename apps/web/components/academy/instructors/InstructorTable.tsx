@@ -34,10 +34,10 @@ function initials(name: string): string {
 
 function certificateBadge(status: string | null | undefined) {
   const normalized = (status ?? "missing").toString();
-  if (normalized === "valid") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (normalized === "expiring_soon") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (normalized === "valid") return "border-security-emerald-200 bg-security-emerald-50 text-security-emerald-700";
+  if (normalized === "expiring_soon") return "border-security-amber-200 bg-security-amber-50 text-security-amber-700";
   if (normalized === "expired") return "border-red-200 bg-red-50 text-red-700";
-  return "border-slate-200 bg-slate-100 text-slate-700";
+  return "border-security-navy-100 bg-security-navy-50 text-security-navy-700";
 }
 
 function certificateLabel(status: string | null | undefined): string {
@@ -71,15 +71,15 @@ export function InstructorTable({
 
   return (
     <div className="space-y-3">
-      <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:block">
+      <div className="hidden overflow-hidden rounded-2xl border border-security-navy-100 bg-white shadow-security-card lg:block">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+          <table className="min-w-full divide-y divide-security-navy-100 text-sm">
             <thead>
-              <tr className="text-[11px] uppercase tracking-wide text-neutral-500">
+              <tr className="text-[11px] uppercase tracking-wide text-security-navy-500">
                 <th className="w-8">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded border-neutral-300 text-security-navy-600 focus:ring-security-navy-500 rounded-md"
+                    className="h-4 w-4 rounded border-security-navy-200 text-security-navy-600 focus:ring-security-navy-500 rounded-md"
                     aria-label="Select all instructors"
                     checked={allSelected}
                     onChange={(e) => onToggleSelectAll(e.target.checked)}
@@ -102,23 +102,23 @@ export function InstructorTable({
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={13} className="py-10 text-center text-sm text-neutral-500">
+                  <td colSpan={13} className="py-10 text-center text-sm text-security-navy-500">
                     Loading instructors...
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="py-10 text-center text-sm text-neutral-500">
+                  <td colSpan={13} className="py-10 text-center text-sm text-security-navy-500">
                     No instructors match the selected filters.
                   </td>
                 </tr>
               ) : (
                 rows.map((row) => (
-                  <tr key={row.id} className="cursor-pointer hover:bg-slate-50/70" onClick={() => onRowClick(row.id)}>
+                  <tr key={row.id} className="cursor-pointer hover:bg-security-navy-50/70" onClick={() => onRowClick(row.id)}>
                     <td onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
-                        className="h-4 w-4 rounded border-neutral-300 text-security-navy-600 focus:ring-security-navy-500 rounded-md"
+                        className="h-4 w-4 rounded border-security-navy-200 text-security-navy-600 focus:ring-security-navy-500 rounded-md"
                         aria-label={`Select ${row.fullName}`}
                         checked={selectedIds.has(row.id)}
                         onChange={(e) => onToggleSelect(row.id, e.target.checked)}
@@ -126,12 +126,12 @@ export function InstructorTable({
                     </td>
                     <td>
                       <div className="flex items-center gap-2">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-security-navy-50 text-xs font-semibold text-security-navy-700">
                           {initials(row.fullName)}
                         </div>
                         <div>
                           <div className="font-medium text-security-navy-900">{row.fullName}</div>
-                          <div className="text-xs text-neutral-600">
+                          <div className="text-xs text-security-navy-600">
                             {row.email || "No email"} · {row.phone || "No phone"}
                           </div>
                         </div>
@@ -142,12 +142,12 @@ export function InstructorTable({
                     <td>
                       <div className="text-xs">
                         <div>{row.qualification || "—"}</div>
-                        <div className="text-neutral-500">{row.instructorGrade || "—"}</div>
+                        <div className="text-security-navy-500">{row.instructorGrade || "—"}</div>
                       </div>
                     </td>
                     <td>{row.assignedBranch?.name || "—"}</td>
                     <td>
-                      <div className="max-w-[220px] text-xs text-neutral-700">
+                      <div className="max-w-[220px] text-xs text-security-navy-700">
                         {row.assignedCourses.length
                           ? row.assignedCourses
                               .slice(0, 2)
@@ -176,7 +176,7 @@ export function InstructorTable({
                     <td>
                       <InstructorStatusBadge status={row.archivedAt ? "archived" : row.status} />
                     </td>
-                    <td className="text-xs text-neutral-600">
+                    <td className="text-xs text-security-navy-600">
                       {new Date(row.updatedAt).toLocaleDateString()}
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
@@ -209,25 +209,25 @@ export function InstructorTable({
 
       <div className="space-y-3 lg:hidden">
         {loading ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-neutral-600 shadow-sm">
+          <div className="rounded-2xl border border-security-navy-100 bg-white p-6 text-sm text-security-navy-600 shadow-security-card">
             Loading instructors...
           </div>
         ) : rows.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-neutral-600 shadow-sm">
+          <div className="rounded-2xl border border-security-navy-100 bg-white p-6 text-sm text-security-navy-600 shadow-security-card">
             No instructors match the selected filters.
           </div>
         ) : (
           rows.map((row) => (
             <div
               key={row.id}
-              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+              className="rounded-2xl border border-security-navy-100 bg-white p-4 shadow-security-card"
               onClick={() => onRowClick(row.id)}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded border-neutral-300 text-security-navy-600 focus:ring-security-navy-500 rounded-md"
+                    className="h-4 w-4 rounded border-security-navy-200 text-security-navy-600 focus:ring-security-navy-500 rounded-md"
                     aria-label={`Select ${row.fullName}`}
                     checked={selectedIds.has(row.id)}
                     onClick={(e) => e.stopPropagation()}
@@ -235,18 +235,18 @@ export function InstructorTable({
                   />
                   <div>
                     <div className="font-medium text-security-navy-900">{row.fullName}</div>
-                    <div className="text-xs text-neutral-600">{row.psiraInstructorNumber || "No PSIRA number"}</div>
+                    <div className="text-xs text-security-navy-600">{row.psiraInstructorNumber || "No PSIRA number"}</div>
                   </div>
                 </div>
                 <InstructorStatusBadge status={row.archivedAt ? "archived" : row.status} />
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <span className="text-neutral-500">Branch</span>
+                  <span className="text-security-navy-500">Branch</span>
                   <div>{row.assignedBranch?.name || "—"}</div>
                 </div>
                 <div>
-                  <span className="text-neutral-500">Courses</span>
+                  <span className="text-security-navy-500">Courses</span>
                   <div>{row.assignedCourses.length || 0}</div>
                 </div>
                 <div className="col-span-2">
@@ -266,7 +266,7 @@ export function InstructorTable({
               </div>
               <div className="mt-3" onClick={(e) => e.stopPropagation()}>
                 <select
-                  className="input-compact w-full rounded-xl"
+                  className="input-compact w-full rounded-security-lg"
                   aria-label={`Actions for ${row.fullName}`}
                   value=""
                   onChange={(e) => {

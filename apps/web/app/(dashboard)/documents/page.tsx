@@ -88,7 +88,7 @@ export default function DocumentsPage() {
   };
 
   if (loading) {
-    return <div className="animate-pulse h-48 bg-neutral-200 rounded-lg" />;
+    return <div className="animate-pulse h-48 bg-security-navy-100 rounded-lg" />;
   }
 
   return (
@@ -170,11 +170,11 @@ export default function DocumentsPage() {
         {items.map((doc) => (
           <article key={doc.id} className="card-dashboard p-4 flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="font-semibold text-neutral-900">{doc.title}</h2>
-              <p className="text-sm text-neutral-600 mt-0.5">
+              <h2 className="font-semibold text-security-navy-900">{doc.title}</h2>
+              <p className="text-sm text-security-navy-600 mt-0.5">
                 {doc.documentType} · {doc.category.replace(/_/g, " ")}
               </p>
-              <p className="text-xs text-neutral-500 mt-1">
+              <p className="text-xs text-security-navy-500 mt-1">
                 Uploaded {new Date(doc.createdAt).toLocaleDateString()}
                 {doc.expiryDate && ` · Expires ${new Date(doc.expiryDate).toLocaleDateString()}`}
               </p>

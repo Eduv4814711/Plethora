@@ -42,9 +42,9 @@ function statusBadgeClass(status: string): string {
     case "overdue":
       return "badge-error";
     case "cancelled":
-      return "badge-neutral border border-neutral-300";
+      return "badge-neutral border border-security-navy-200";
     default:
-      return "badge-neutral border border-neutral-300";
+      return "badge-neutral border border-security-navy-200";
   }
 }
 
@@ -140,7 +140,7 @@ export default function AcademyInvoicesPage() {
       </div>
 
       {!canCreate && (
-        <div className="rounded-lg border border-neutral-300 bg-neutral-100/50 px-3 py-2 text-sm">
+        <div className="rounded-lg border border-security-navy-200 bg-security-navy-50/50 px-3 py-2 text-sm">
           Read-only: invoice creation has not been granted for your account.
         </div>
       )}
@@ -149,7 +149,7 @@ export default function AcademyInvoicesPage() {
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
-      <form onSubmit={create} className="grid gap-3 rounded-lg border border-neutral-300 p-4 sm:grid-cols-2 lg:grid-cols-3">
+      <form onSubmit={create} className="grid gap-3 rounded-lg border border-security-navy-200 p-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="sm:col-span-2">
           <label className="label-text mb-1 block">Student</label>
           <select
@@ -238,7 +238,7 @@ export default function AcademyInvoicesPage() {
         </div>
       </form>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-300 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-security-navy-200 p-3">
         <div className="text-sm">
           <span className="font-medium">{total}</span> invoice{total === 1 ? "" : "s"} found
         </div>
@@ -263,8 +263,8 @@ export default function AcademyInvoicesPage() {
         </label>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-neutral-300">
-        <table className="min-w-full divide-y divide-neutral-200 text-sm">
+      <div className="overflow-x-auto rounded-lg border border-security-navy-200">
+        <table className="min-w-full divide-y divide-security-navy-100 text-sm">
           <thead>
             <tr>
               <th>Number</th>
@@ -278,7 +278,7 @@ export default function AcademyInvoicesPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-sm text-neutral-500">
+                <td colSpan={6} className="py-8 text-center text-sm text-security-navy-500">
                   Loading invoices...
                 </td>
               </tr>
@@ -304,7 +304,7 @@ export default function AcademyInvoicesPage() {
             ))}
           </tbody>
         </table>
-        {!loading && invoices.length === 0 && <p className="p-4 text-sm text-neutral-500">No invoices yet.</p>}
+        {!loading && invoices.length === 0 && <p className="p-4 text-sm text-security-navy-500">No invoices yet.</p>}
       </div>
 
       <div className="flex items-center justify-end gap-2">

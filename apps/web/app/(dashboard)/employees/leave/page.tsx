@@ -190,9 +190,9 @@ function friendly(value: string): string {
 }
 
 function statusClass(status: string): string {
-  if (status === "APPROVED") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "APPROVED") return "border-security-emerald-200 bg-security-emerald-50 text-security-emerald-700";
   if (status === "REJECTED" || status === "CANCELLED") return "border-red-200 bg-red-50 text-red-700";
-  return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-security-amber-200 bg-security-amber-50 text-security-amber-700";
 }
 
 export default function LeaveManagementPage() {
@@ -497,42 +497,42 @@ export default function LeaveManagementPage() {
     <div className="mx-auto max-w-[1500px] animate-fade-in pb-12">
       <header className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-start gap-3">
-          <Link href="/employees" className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-sm transition hover:border-neutral-300 hover:text-black" aria-label="Back to team">
+          <Link href="/employees" className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-security-lg border border-security-navy-100 bg-white text-security-navy-600 shadow-security-card transition hover:border-security-navy-200 hover:text-security-navy-900" aria-label="Back to team">
             <Icon name="arrow" />
           </Link>
           <div>
-            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">Team workspace</p>
-            <h1 className="text-3xl font-bold tracking-tight text-neutral-950">Leave management</h1>
-            <p className="mt-1 max-w-2xl text-sm text-neutral-600">Annual, sick, family responsibility, parental, and study leave for general staff and NBCPSS security officers.</p>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-security-amber-600">Team workspace</p>
+            <h1 className="text-3xl font-bold tracking-tight text-security-navy-900">Leave management</h1>
+            <p className="mt-1 max-w-2xl text-sm text-security-navy-600">Annual, sick, family responsibility, parental, and study leave for general staff and NBCPSS security officers.</p>
           </div>
         </div>
         {canCreate && (
-          <button onClick={() => setTab("add")} className="btn-primary inline-flex items-center justify-center gap-2 shadow-sm">
+          <button onClick={() => setTab("add")} className="btn-primary inline-flex items-center justify-center gap-2 shadow-security-card">
             <Icon name="plus" className="h-4 w-4" /> New leave request
           </button>
         )}
       </header>
 
-      <nav className="mb-6 overflow-x-auto rounded-xl border border-neutral-200 bg-white p-1.5 shadow-sm" aria-label="Leave sections">
+      <nav className="mb-6 overflow-x-auto rounded-security-lg border border-security-navy-100 bg-white p-1.5 shadow-security-card" aria-label="Leave sections">
         <div className="flex min-w-max gap-1">
           {tabs.map((item) => (
             <button
               key={item.key}
               onClick={() => setTab(item.key)}
               aria-current={tab === item.key ? "page" : undefined}
-              className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2.5 text-sm font-medium transition ${tab === item.key ? "bg-neutral-950 text-white shadow-sm" : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950"}`}
+              className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2.5 text-sm font-medium transition ${tab === item.key ? "bg-security-navy-900 text-white shadow-security-card" : "text-security-navy-600 hover:bg-security-navy-50 hover:text-security-navy-900"}`}
             >
               <Icon name={item.icon} className="h-4 w-4" />
               <span className="hidden lg:inline">{item.label}</span>
               <span className="lg:hidden">{item.shortLabel}</span>
-              {item.key === "queue" && pendingCount > 0 && <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${tab === item.key ? "bg-white text-neutral-900" : "bg-orange-100 text-orange-700"}`}>{pendingCount}</span>}
+              {item.key === "queue" && pendingCount > 0 && <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${tab === item.key ? "bg-white text-security-navy-900" : "bg-security-amber-100 text-security-amber-700"}`}>{pendingCount}</span>}
             </button>
           ))}
         </div>
       </nav>
 
       {error && (
-        <div role="alert" className="mb-5 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">
+        <div role="alert" className="mb-5 flex items-start gap-3 rounded-security-lg border border-red-200 bg-red-50 p-4 text-red-800">
           <span className="mt-0.5 rounded-full bg-red-100 p-1"><Icon name="warning" className="h-4 w-4" /></span>
           <div className="min-w-0 flex-1"><p className="text-sm font-semibold">We could not complete that action</p><p className="mt-0.5 break-words text-sm text-red-700">{error}</p></div>
           <button onClick={() => setError(null)} aria-label="Dismiss error" className="rounded p-1 hover:bg-red-100"><Icon name="close" className="h-4 w-4" /></button>
@@ -568,9 +568,9 @@ export default function LeaveManagementPage() {
           {loading ? <LoadingCards /> : requests.length ? (
             <div className="space-y-3">
               {requests.map((leaveRequest) => (
-                <div key={leaveRequest.id} className="rounded-xl border border-neutral-200 bg-white">
+                <div key={leaveRequest.id} className="rounded-security-lg border border-security-navy-100 bg-white">
                   <RecordRow leaveRequest={leaveRequest} />
-                  <div className="flex flex-wrap justify-end gap-2 border-t border-neutral-200 bg-neutral-50 p-3">
+                  <div className="flex flex-wrap justify-end gap-2 border-t border-security-navy-100 bg-security-navy-50 p-3">
                     {(canCreate || canEdit) && <button type="button" disabled={busy === leaveRequest.id} onClick={() => { setActionReason(""); setActionDialog({ kind: "cancel", request: leaveRequest }); }} className="btn-ghost px-3 py-2 text-sm">Cancel leave</button>}
                     {leaveRequest.leaveType === "SICK" && !leaveRequest.medicalCertificate && (canCreate || canEdit) && (
                       <button type="button" onClick={() => { setCertForm({ practitionerName: "", practitionerRegistrationNumber: "", consultationDate: today, bookedOffStartDate: leaveRequest.startDate.slice(0, 10), bookedOffEndDate: leaveRequest.endDate.slice(0, 10) }); setCertFile(null); setCertDialog(leaveRequest); }} className="btn-ghost px-3 py-2 text-sm">Attach medical certificate</button>
@@ -586,7 +586,7 @@ export default function LeaveManagementPage() {
 
       {tab === "records" && (
         <SectionShell title="Leave records" description="Search every leave request regardless of status.">
-          <div className="mb-5 flex flex-col gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-3 lg:flex-row lg:items-end">
+          <div className="mb-5 flex flex-col gap-3 rounded-security-lg border border-security-navy-100 bg-security-navy-50 p-3 lg:flex-row lg:items-end">
             <div className="min-w-52 flex-1"><EmployeeSelect value={employeeFilter} onChange={setEmployeeFilter} employees={employees} allLabel="All employees" /></div>
             <label className="relative block"><span className="sr-only">Status</span>
               <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as LeaveStatus | "")} className="input-modern">
@@ -600,14 +600,14 @@ export default function LeaveManagementPage() {
             <button className="btn-secondary h-[46px] shrink-0" onClick={loadTab}>Refresh</button>
           </div>
           {loading ? <LoadingTable /> : requests.length ? (
-            <div className="space-y-3">{requests.map((leaveRequest) => <div key={leaveRequest.id} className="rounded-xl border border-neutral-200 bg-white"><RecordRow leaveRequest={leaveRequest} /></div>)}</div>
+            <div className="space-y-3">{requests.map((leaveRequest) => <div key={leaveRequest.id} className="rounded-security-lg border border-security-navy-100 bg-white"><RecordRow leaveRequest={leaveRequest} /></div>)}</div>
           ) : <EmptyState icon="records" title="No leave records found" text="Try a different employee or status filter." />}
         </SectionShell>
       )}
 
       {tab === "calendar" && (
         <SectionShell title="Leave calendar" description="Approved leave falling within a date range.">
-          <div className="mb-5 flex flex-col gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-3 lg:flex-row lg:items-end">
+          <div className="mb-5 flex flex-col gap-3 rounded-security-lg border border-security-navy-100 bg-security-navy-50 p-3 lg:flex-row lg:items-end">
             <div className="min-w-52 flex-1"><EmployeeSelect value={employeeFilter} onChange={setEmployeeFilter} employees={employees} allLabel="All employees" /></div>
             <div className="grid grid-cols-2 gap-2">
               <Field label="From"><DateInput value={range.start} onChange={(start) => setRange((old) => ({ ...old, start }))} className="input-modern mt-1" /></Field>
@@ -616,7 +616,7 @@ export default function LeaveManagementPage() {
             <button className="btn-secondary h-[46px] shrink-0" onClick={loadTab}>Refresh</button>
           </div>
           {loading ? <LoadingCards /> : requests.length ? (
-            <div className="space-y-3">{requests.map((leaveRequest) => <div key={leaveRequest.id} className="rounded-xl border border-neutral-200 bg-white"><RecordRow leaveRequest={leaveRequest} /></div>)}</div>
+            <div className="space-y-3">{requests.map((leaveRequest) => <div key={leaveRequest.id} className="rounded-security-lg border border-security-navy-100 bg-white"><RecordRow leaveRequest={leaveRequest} /></div>)}</div>
           ) : <EmptyState icon="calendar" title="No approved leave in this period" text="Try a wider date range." />}
         </SectionShell>
       )}
@@ -635,8 +635,8 @@ export default function LeaveManagementPage() {
       {tab === "add" && canCreate && (
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
           <form onSubmit={createRequest} className="card-wireframe overflow-hidden">
-            <div className="border-b border-neutral-200 px-5 py-5 sm:px-7">
-              <div className="flex items-center gap-3"><span className="rounded-xl bg-orange-100 p-2 text-orange-700"><Icon name="plus" /></span><div><h2 className="text-xl font-bold">New leave request</h2><p className="text-sm text-neutral-500">Complete the details, preview the balance impact, then submit.</p></div></div>
+            <div className="border-b border-security-navy-100 px-5 py-5 sm:px-7">
+              <div className="flex items-center gap-3"><span className="rounded-security-lg bg-security-amber-100 p-2 text-security-amber-700"><Icon name="plus" /></span><div><h2 className="text-xl font-bold">New leave request</h2><p className="text-sm text-security-navy-500">Complete the details, preview the balance impact, then submit.</p></div></div>
             </div>
             <div className="space-y-7 p-5 sm:p-7">
               <FormSection number="1" title="Employee and leave type">
@@ -660,9 +660,9 @@ export default function LeaveManagementPage() {
                   <Field label="Scenario" required>
                     <div className="mt-1 space-y-2">
                       {PARENTAL_SCENARIOS.map((scenario) => (
-                        <label key={scenario.code} className="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200 p-3 hover:bg-neutral-50">
-                          <input type="radio" name="parentalScenario" checked={form.parentalLeaveScenario === scenario.code} onChange={() => setForm((old) => ({ ...old, parentalLeaveScenario: scenario.code }))} className="mt-1 h-4 w-4 accent-orange-600" />
-                          <span><span className="block text-sm font-semibold">{scenario.label}</span><span className="block text-xs text-neutral-500">{scenario.hint}</span></span>
+                        <label key={scenario.code} className="flex cursor-pointer items-start gap-3 rounded-security-lg border border-security-navy-100 p-3 hover:bg-security-navy-50">
+                          <input type="radio" name="parentalScenario" checked={form.parentalLeaveScenario === scenario.code} onChange={() => setForm((old) => ({ ...old, parentalLeaveScenario: scenario.code }))} className="mt-1 h-4 w-4 accent-security-amber-600" />
+                          <span><span className="block text-sm font-semibold">{scenario.label}</span><span className="block text-xs text-security-navy-500">{scenario.hint}</span></span>
                         </label>
                       ))}
                     </div>
@@ -679,9 +679,9 @@ export default function LeaveManagementPage() {
                   <input required type="number" min="0.5" step="0.5" value={form.unitsRequested} onChange={(event) => { setForm((old) => ({ ...old, unitsRequested: event.target.value })); resetPreview(); }} className="input-modern mt-1" />
                 </Field>
                 {form.leaveType === "ANNUAL" && (
-                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200 p-3 hover:bg-neutral-50">
-                    <input type="checkbox" checked={form.workedPublicHoliday} onChange={(event) => { setForm((old) => ({ ...old, workedPublicHoliday: event.target.checked })); resetPreview(); }} className="mt-1 h-4 w-4 accent-orange-600" />
-                    <span><span className="block text-sm font-semibold">A public holiday falls within this period</span><span className="block text-xs text-neutral-500">Public holidays inside annual leave are not deducted from the balance.</span></span>
+                  <label className="flex cursor-pointer items-start gap-3 rounded-security-lg border border-security-navy-100 p-3 hover:bg-security-navy-50">
+                    <input type="checkbox" checked={form.workedPublicHoliday} onChange={(event) => { setForm((old) => ({ ...old, workedPublicHoliday: event.target.checked })); resetPreview(); }} className="mt-1 h-4 w-4 accent-security-amber-600" />
+                    <span><span className="block text-sm font-semibold">A public holiday falls within this period</span><span className="block text-xs text-security-navy-500">Public holidays inside annual leave are not deducted from the balance.</span></span>
                   </label>
                 )}
               </FormSection>
@@ -690,15 +690,15 @@ export default function LeaveManagementPage() {
                 <Field label="Reason or note" hint="Optional internal context for the approver"><textarea value={form.reason} onChange={(event) => setForm((old) => ({ ...old, reason: event.target.value }))} className="input-modern mt-1 min-h-24 resize-y" placeholder="Add any context HR should know" /></Field>
               </FormSection>
             </div>
-            <div className="flex flex-col-reverse gap-3 border-t border-neutral-200 bg-neutral-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-end sm:px-7">
+            <div className="flex flex-col-reverse gap-3 border-t border-security-navy-100 bg-security-navy-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-end sm:px-7">
               <button type="button" onClick={() => setTab("queue")} className="btn-ghost">Cancel</button>
               <button type="button" disabled={!form.employeeId || busy === "preview"} onClick={previewRequest} className="btn-secondary inline-flex items-center justify-center gap-2"><Icon name="search" className="h-4 w-4" />{busy === "preview" ? "Calculating..." : "Preview impact"}</button>
               <button type="submit" disabled={!form.employeeId || busy === "create" || (preview !== null && preview.exceedsBalance)} className="btn-primary inline-flex items-center justify-center gap-2"><Icon name="check" className="h-4 w-4" />{busy === "create" ? "Submitting..." : "Submit request"}</button>
             </div>
           </form>
           <aside className="card-wireframe overflow-hidden xl:sticky xl:top-5">
-            <div className="border-b border-neutral-200 px-5 py-4"><h3 className="font-bold">Impact summary</h3><p className="text-xs text-neutral-500">Calculated from the employee's leave rules and current cycle.</p></div>
-            {preview ? <PreviewCard preview={preview} employeeType={selectedEmployee?.employeeType} /> : <div className="flex min-h-72 flex-col items-center justify-center px-6 py-10 text-center"><span className="mb-3 rounded-full bg-neutral-100 p-3 text-neutral-500"><Icon name="search" /></span><p className="font-semibold">Preview before submitting</p><p className="mt-1 text-sm leading-6 text-neutral-500">Select an employee, leave type, and dates, then preview to check the balance impact.</p></div>}
+            <div className="border-b border-security-navy-100 px-5 py-4"><h3 className="font-bold">Impact summary</h3><p className="text-xs text-security-navy-500">Calculated from the employee's leave rules and current cycle.</p></div>
+            {preview ? <PreviewCard preview={preview} employeeType={selectedEmployee?.employeeType} /> : <div className="flex min-h-72 flex-col items-center justify-center px-6 py-10 text-center"><span className="mb-3 rounded-full bg-security-navy-50 p-3 text-security-navy-500"><Icon name="search" /></span><p className="font-semibold">Preview before submitting</p><p className="mt-1 text-sm leading-6 text-security-navy-500">Select an employee, leave type, and dates, then preview to check the balance impact.</p></div>}
           </aside>
         </div>
       )}
@@ -708,8 +708,8 @@ export default function LeaveManagementPage() {
           <div className="space-y-8">
             {canApprove && (
               <section className="max-w-2xl">
-                <h3 className="mb-3 font-bold text-neutral-950">Post an adjustment</h3>
-                <form onSubmit={postAdjustment} className="space-y-5 rounded-xl border border-neutral-200 bg-neutral-50 p-5">
+                <h3 className="mb-3 font-bold text-security-navy-900">Post an adjustment</h3>
+                <form onSubmit={postAdjustment} className="space-y-5 rounded-security-lg border border-security-navy-100 bg-security-navy-50 p-5">
                   <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800"><strong>Use carefully.</strong> Positive units grant extra balance; negative units deduct. Every change is permanently audited.</div>
                   <Field label="Employee" required><GuardSearchPicker guards={employees} value={adjustmentForm.employeeId} onChange={(employeeId) => setAdjustmentForm((old) => ({ ...old, employeeId: employeeId ?? "" }))} placeholder="Search employee" /></Field>
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -725,23 +725,23 @@ export default function LeaveManagementPage() {
                 </form>
               </section>
             )}
-            <section className="border-t border-neutral-200 pt-8">
+            <section className="border-t border-security-navy-100 pt-8">
               <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                <h3 className="font-bold text-neutral-950">Adjustment history</h3>
+                <h3 className="font-bold text-security-navy-900">Adjustment history</h3>
                 <div className="w-full sm:w-72"><EmployeeSelect value={employeeFilter} onChange={setEmployeeFilter} employees={employees} allLabel="All employees" /></div>
               </div>
               {loading ? <LoadingTable /> : adjustments.length ? (
-                <div className="overflow-x-auto rounded-xl border border-neutral-200">
+                <div className="overflow-x-auto rounded-security-lg border border-security-navy-100">
                   <table className="w-full text-sm">
-                    <thead className="bg-neutral-50 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500"><tr><th className="px-4 py-3">Employee</th><th className="px-4 py-3">Leave type</th><th className="px-4 py-3">Units</th><th className="px-4 py-3">Reason</th><th className="px-4 py-3">Date</th></tr></thead>
-                    <tbody className="divide-y divide-neutral-100">
+                    <thead className="bg-security-navy-50 text-left text-xs font-semibold uppercase tracking-wide text-security-navy-500"><tr><th className="px-4 py-3">Employee</th><th className="px-4 py-3">Leave type</th><th className="px-4 py-3">Units</th><th className="px-4 py-3">Reason</th><th className="px-4 py-3">Date</th></tr></thead>
+                    <tbody className="divide-y divide-security-navy-100">
                       {adjustments.map((adjustment) => (
                         <tr key={adjustment.id}>
                           <td className="px-4 py-3">{employees.find((e) => e.id === adjustment.employeeId) ? `${employees.find((e) => e.id === adjustment.employeeId)!.firstName} ${employees.find((e) => e.id === adjustment.employeeId)!.lastName}` : adjustment.employeeId}</td>
                           <td className="px-4 py-3">{leaveTypeLabel(adjustment.leaveType)}</td>
-                          <td className={`px-4 py-3 font-semibold ${units(adjustment.units) < 0 ? "text-red-700" : "text-emerald-700"}`}>{units(adjustment.units) > 0 ? "+" : ""}{units(adjustment.units)}</td>
-                          <td className="px-4 py-3 text-neutral-600">{adjustment.reason}</td>
-                          <td className="px-4 py-3 text-neutral-500">{dateLabel(adjustment.createdAt)}</td>
+                          <td className={`px-4 py-3 font-semibold ${units(adjustment.units) < 0 ? "text-red-700" : "text-security-emerald-700"}`}>{units(adjustment.units) > 0 ? "+" : ""}{units(adjustment.units)}</td>
+                          <td className="px-4 py-3 text-security-navy-600">{adjustment.reason}</td>
+                          <td className="px-4 py-3 text-security-navy-500">{dateLabel(adjustment.createdAt)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -756,7 +756,7 @@ export default function LeaveManagementPage() {
       {tab === "audit" && (
         <SectionShell title="Audit history" description="A permanent, append-only record of every request, decision, and balance adjustment.">
           <div className="mb-5 max-w-sm"><EmployeeSelect value={employeeFilter} onChange={setEmployeeFilter} employees={employees} allLabel="All employees" /></div>
-          {loading ? <LoadingTable /> : audit.length ? <div className="relative ml-3 border-l border-neutral-200 pl-6">{audit.map((event) => <AuditRow key={event.id} event={event} employees={employees} />)}</div> : <EmptyState icon="audit" title="No audit events yet" text="Leave actions will appear here as they occur." />}
+          {loading ? <LoadingTable /> : audit.length ? <div className="relative ml-3 border-l border-security-navy-100 pl-6">{audit.map((event) => <AuditRow key={event.id} event={event} employees={employees} />)}</div> : <EmptyState icon="audit" title="No audit events yet" text="Leave actions will appear here as they occur." />}
         </SectionShell>
       )}
 
@@ -808,7 +808,7 @@ function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: str
 }
 
 function SectionShell({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
-  return <section className="card-wireframe overflow-hidden"><div className="border-b border-neutral-200 px-5 py-5 sm:px-6"><h2 className="text-lg font-bold text-neutral-950">{title}</h2><p className="mt-1 text-sm text-neutral-500">{description}</p></div><div className="p-4 sm:p-6">{children}</div></section>;
+  return <section className="card-wireframe overflow-hidden"><div className="border-b border-security-navy-100 px-5 py-5 sm:px-6"><h2 className="text-lg font-bold text-security-navy-900">{title}</h2><p className="mt-1 text-sm text-security-navy-500">{description}</p></div><div className="p-4 sm:p-6">{children}</div></section>;
 }
 
 function Status({ value }: { value: string }) {
@@ -816,11 +816,11 @@ function Status({ value }: { value: string }) {
 }
 
 function Field({ label, hint, required, children }: { label: string; hint?: string; required?: boolean; children: React.ReactNode }) {
-  return <label className="block"><span className="text-sm font-semibold text-neutral-800">{label}{required && <span className="ml-1 text-red-600">*</span>}</span>{hint && <span className="ml-2 text-xs font-normal text-neutral-500">{hint}</span>}{children}</label>;
+  return <label className="block"><span className="text-sm font-semibold text-security-navy-900">{label}{required && <span className="ml-1 text-red-600">*</span>}</span>{hint && <span className="ml-2 text-xs font-normal text-security-navy-500">{hint}</span>}{children}</label>;
 }
 
 function FormSection({ number, title, children }: { number: string; title: string; children: React.ReactNode }) {
-  return <section><div className="mb-4 flex items-center gap-3"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-neutral-900 text-xs font-bold text-white">{number}</span><h3 className="font-bold text-neutral-900">{title}</h3></div><div className="space-y-4 sm:pl-10">{children}</div></section>;
+  return <section><div className="mb-4 flex items-center gap-3"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-security-navy-900 text-xs font-bold text-white">{number}</span><h3 className="font-bold text-security-navy-900">{title}</h3></div><div className="space-y-4 sm:pl-10">{children}</div></section>;
 }
 
 function EmployeeSelect({ value, onChange, employees, allLabel }: { value: string; onChange: (value: string) => void; employees: GuardPickerOption[]; allLabel: string }) {
@@ -828,7 +828,7 @@ function EmployeeSelect({ value, onChange, employees, allLabel }: { value: strin
 }
 
 function CardFact({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
-  return <div><p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">{label}</p><p className={`mt-0.5 text-sm font-semibold ${danger ? "text-red-700" : "text-neutral-900"}`}>{value}</p></div>;
+  return <div><p className="text-[10px] font-semibold uppercase tracking-wide text-security-navy-500">{label}</p><p className={`mt-0.5 text-sm font-semibold ${danger ? "text-red-700" : "text-security-navy-900"}`}>{value}</p></div>;
 }
 
 function RequestCard({ leaveRequest, busy, canApprove, canExport, onApprove, onReject, onAttachCertificate, onDownloadCertificate }: {
@@ -843,25 +843,25 @@ function RequestCard({ leaveRequest, busy, canApprove, canExport, onApprove, onR
 }) {
   const isBusy = busy === leaveRequest.id;
   return (
-    <article className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm transition hover:border-neutral-300 hover:shadow-md">
+    <article className="overflow-hidden rounded-security-lg border border-security-navy-100 bg-white shadow-security-card transition hover:border-security-navy-200 hover:shadow-md">
       <div className="p-5">
         <div className="flex items-start gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-sm font-bold text-white">{initials(leaveRequest.employee)}</span>
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-security-navy-900 text-sm font-bold text-white">{initials(leaveRequest.employee)}</span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="font-bold text-neutral-950">{employeeName(leaveRequest.employee)}</h3>
+              <h3 className="font-bold text-security-navy-900">{employeeName(leaveRequest.employee)}</h3>
               <Status value={leaveRequest.status} />
             </div>
           </div>
         </div>
-        <div className="mt-5 grid grid-cols-2 gap-3 rounded-xl bg-neutral-50 p-4 sm:grid-cols-4">
+        <div className="mt-5 grid grid-cols-2 gap-3 rounded-security-lg bg-security-navy-50 p-4 sm:grid-cols-4">
           <CardFact label="Period" value={period(leaveRequest.startDate, leaveRequest.endDate)} />
           <CardFact label="Leave type" value={leaveTypeLabel(leaveRequest.leaveType)} />
           <CardFact label="Units" value={unitsText(leaveRequest.unitsRequested, leaveRequest.employee.employeeType)} />
           <CardFact label="Reason" value={leaveRequest.familyResponsibilityReason ? friendly(leaveRequest.familyResponsibilityReason) : leaveRequest.parentalLeaveScenario ? friendly(leaveRequest.parentalLeaveScenario) : leaveRequest.reason || "—"} />
         </div>
         {leaveRequest.leaveType === "SICK" && (
-          <p className="mt-3 text-xs text-neutral-500">
+          <p className="mt-3 text-xs text-security-navy-500">
             {leaveRequest.medicalCertificate ? "Medical certificate attached." : "No medical certificate attached."}
             {onAttachCertificate && !leaveRequest.medicalCertificate && <button type="button" onClick={() => onAttachCertificate(leaveRequest)} className="ml-2 font-semibold text-blue-700 underline decoration-blue-300 underline-offset-2">Attach</button>}
             {onDownloadCertificate && leaveRequest.medicalCertificate && <button type="button" onClick={() => onDownloadCertificate(leaveRequest)} className="ml-2 font-semibold text-blue-700 underline decoration-blue-300 underline-offset-2">Download</button>}
@@ -869,7 +869,7 @@ function RequestCard({ leaveRequest, busy, canApprove, canExport, onApprove, onR
         )}
       </div>
       {canApprove && (
-        <div className="flex flex-wrap justify-end gap-2 border-t border-neutral-200 bg-neutral-50 p-3">
+        <div className="flex flex-wrap justify-end gap-2 border-t border-security-navy-100 bg-security-navy-50 p-3">
           <button type="button" disabled={isBusy} onClick={() => onReject(leaveRequest)} className="btn-ghost px-3 py-2 text-sm">Reject</button>
           <button type="button" disabled={isBusy} onClick={() => onApprove(leaveRequest)} className="btn-primary px-3 py-2 text-sm">{isBusy ? "Working..." : "Approve"}</button>
         </div>
@@ -882,10 +882,10 @@ function RecordRow({ leaveRequest }: { leaveRequest: LeaveRequest }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 p-4">
       <div className="flex items-center gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-xs font-bold text-white">{initials(leaveRequest.employee)}</span>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-security-navy-900 text-xs font-bold text-white">{initials(leaveRequest.employee)}</span>
         <div>
-          <p className="font-semibold text-neutral-900">{employeeName(leaveRequest.employee)}</p>
-          <p className="text-xs text-neutral-500">{leaveTypeLabel(leaveRequest.leaveType)} · {period(leaveRequest.startDate, leaveRequest.endDate)} · {unitsText(leaveRequest.unitsRequested, leaveRequest.employee.employeeType)}</p>
+          <p className="font-semibold text-security-navy-900">{employeeName(leaveRequest.employee)}</p>
+          <p className="text-xs text-security-navy-500">{leaveTypeLabel(leaveRequest.leaveType)} · {period(leaveRequest.startDate, leaveRequest.endDate)} · {unitsText(leaveRequest.unitsRequested, leaveRequest.employee.employeeType)}</p>
         </div>
       </div>
       <Status value={leaveRequest.status} />
@@ -895,20 +895,20 @@ function RecordRow({ leaveRequest }: { leaveRequest: LeaveRequest }) {
 
 function BalanceTable({ balances, employeeType }: { balances: LeaveBalance[]; employeeType?: string | null }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-neutral-200">
+    <div className="overflow-x-auto rounded-security-lg border border-security-navy-100">
       <table className="w-full text-sm">
-        <thead className="bg-neutral-50 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">
+        <thead className="bg-security-navy-50 text-left text-xs font-semibold uppercase tracking-wide text-security-navy-500">
           <tr><th className="px-4 py-3">Leave type</th><th className="px-4 py-3">Cycle</th><th className="px-4 py-3">Entitlement</th><th className="px-4 py-3">Adjustments</th><th className="px-4 py-3">Taken</th><th className="px-4 py-3">Available</th></tr>
         </thead>
-        <tbody className="divide-y divide-neutral-100">
+        <tbody className="divide-y divide-security-navy-100">
           {balances.map((balance) => (
             <tr key={balance.leaveType}>
-              <td className="px-4 py-3 font-semibold text-neutral-900">{leaveTypeLabel(balance.leaveType)}</td>
-              <td className="px-4 py-3 text-neutral-500">{dateLabel(balance.cycleStart)} - {dateLabel(balance.cycleEnd)}</td>
+              <td className="px-4 py-3 font-semibold text-security-navy-900">{leaveTypeLabel(balance.leaveType)}</td>
+              <td className="px-4 py-3 text-security-navy-500">{dateLabel(balance.cycleStart)} - {dateLabel(balance.cycleEnd)}</td>
               <td className="px-4 py-3">{unitsText(balance.entitlementUnits, employeeType)}</td>
-              <td className={`px-4 py-3 ${balance.adjustmentUnits < 0 ? "text-red-700" : balance.adjustmentUnits > 0 ? "text-emerald-700" : ""}`}>{balance.adjustmentUnits > 0 ? "+" : ""}{unitsText(balance.adjustmentUnits, employeeType)}</td>
+              <td className={`px-4 py-3 ${balance.adjustmentUnits < 0 ? "text-red-700" : balance.adjustmentUnits > 0 ? "text-security-emerald-700" : ""}`}>{balance.adjustmentUnits > 0 ? "+" : ""}{unitsText(balance.adjustmentUnits, employeeType)}</td>
               <td className="px-4 py-3">{unitsText(balance.takenUnits, employeeType)}</td>
-              <td className={`px-4 py-3 font-semibold ${balance.availableUnits < 0 ? "text-red-700" : "text-emerald-700"}`}>{unitsText(balance.availableUnits, employeeType)}</td>
+              <td className={`px-4 py-3 font-semibold ${balance.availableUnits < 0 ? "text-red-700" : "text-security-emerald-700"}`}>{unitsText(balance.availableUnits, employeeType)}</td>
             </tr>
           ))}
         </tbody>
@@ -921,7 +921,7 @@ function PreviewCard({ preview, employeeType }: { preview: LeavePreview; employe
   return (
     <div className="space-y-4 p-5">
       {preview.exceedsBalance && (
-        <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-red-800">
+        <div className="flex items-start gap-2 rounded-security-lg border border-red-200 bg-red-50 p-3 text-red-800">
           <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0" />
           <p className="text-sm font-semibold">
             {preview.maxDaysForScenario != null
@@ -942,9 +942,9 @@ function AuditRow({ event, employees }: { event: AuditLog; employees: GuardPicke
   const employee = employees.find((e) => e.id === event.employeeId);
   return (
     <div className="relative mb-4 pb-1">
-      <span className="absolute -left-[27px] mt-1 h-3 w-3 rounded-full border-2 border-white bg-neutral-400" />
-      <p className="text-sm font-semibold text-neutral-900">{friendly(event.action)}</p>
-      <p className="text-xs text-neutral-500">{employee ? `${employee.firstName} ${employee.lastName}` : "—"} · {format(parseISO(event.createdAt), "d MMM yyyy HH:mm")}</p>
+      <span className="absolute -left-[27px] mt-1 h-3 w-3 rounded-full border-2 border-white bg-security-navy-300" />
+      <p className="text-sm font-semibold text-security-navy-900">{friendly(event.action)}</p>
+      <p className="text-xs text-security-navy-500">{employee ? `${employee.firstName} ${employee.lastName}` : "—"} · {format(parseISO(event.createdAt), "d MMM yyyy HH:mm")}</p>
     </div>
   );
 }
@@ -962,11 +962,11 @@ function ActionDialog({ kind, leaveRequest, reason, onReasonChange, busy, onClos
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
       <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
-        <div className="border-b border-neutral-200 px-5 py-4"><h3 className="font-bold text-neutral-950">{kind === "reject" ? "Reject leave request" : "Cancel leave"}</h3><p className="mt-1 text-sm text-neutral-500">{employeeName(leaveRequest.employee)} · {leaveTypeLabel(leaveRequest.leaveType)} · {period(leaveRequest.startDate, leaveRequest.endDate)}</p></div>
+        <div className="border-b border-security-navy-100 px-5 py-4"><h3 className="font-bold text-security-navy-900">{kind === "reject" ? "Reject leave request" : "Cancel leave"}</h3><p className="mt-1 text-sm text-security-navy-500">{employeeName(leaveRequest.employee)} · {leaveTypeLabel(leaveRequest.leaveType)} · {period(leaveRequest.startDate, leaveRequest.endDate)}</p></div>
         <div className="p-5">
           <Field label="Reason" required={requiresReason}><textarea value={reason} onChange={(event) => onReasonChange(event.target.value)} className="input-modern mt-1 min-h-24" /></Field>
         </div>
-        <div className="flex justify-end gap-3 border-t border-neutral-200 bg-neutral-50 p-4">
+        <div className="flex justify-end gap-3 border-t border-security-navy-100 bg-security-navy-50 p-4">
           <button type="button" onClick={onClose} className="btn-ghost">Close</button>
           <button type="button" disabled={busy || (requiresReason && !reason.trim())} onClick={onSubmit} className="btn-primary">{busy ? "Working..." : "Confirm"}</button>
         </div>
@@ -988,7 +988,7 @@ function CertificateDialog({ leaveRequest, form, file, onFormChange, onFileChang
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
       <form onSubmit={onSubmit} className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
-        <div className="border-b border-neutral-200 px-5 py-4"><h3 className="font-bold text-neutral-950">Attach medical certificate</h3><p className="mt-1 text-sm text-neutral-500">{employeeName(leaveRequest.employee)} · {period(leaveRequest.startDate, leaveRequest.endDate)}</p></div>
+        <div className="border-b border-security-navy-100 px-5 py-4"><h3 className="font-bold text-security-navy-900">Attach medical certificate</h3><p className="mt-1 text-sm text-security-navy-500">{employeeName(leaveRequest.employee)} · {period(leaveRequest.startDate, leaveRequest.endDate)}</p></div>
         <div className="space-y-4 p-5">
           <Field label="Practitioner name" required><input required value={form.practitionerName} onChange={(event) => onFormChange((old) => ({ ...old, practitionerName: event.target.value }))} className="input-modern mt-1" /></Field>
           <Field label="Practitioner registration number" required><input required value={form.practitionerRegistrationNumber} onChange={(event) => onFormChange((old) => ({ ...old, practitionerRegistrationNumber: event.target.value }))} className="input-modern mt-1" /></Field>
@@ -998,14 +998,14 @@ function CertificateDialog({ leaveRequest, form, file, onFormChange, onFileChang
             <Field label="Booked off to" required><DateInput value={form.bookedOffEndDate} onChange={(bookedOffEndDate) => onFormChange((old) => ({ ...old, bookedOffEndDate }))} className="input-modern mt-1" /></Field>
           </div>
           <Field label="Certificate file" required hint="PDF, JPG, PNG or WebP">
-            <label className="mt-1 flex cursor-pointer items-center gap-3 rounded-xl border-2 border-dashed border-neutral-300 bg-neutral-50 p-4 transition hover:border-orange-400 hover:bg-orange-50/40">
-              <span className="rounded-lg bg-white p-2 text-neutral-600 shadow-sm"><Icon name="file" /></span>
+            <label className="mt-1 flex cursor-pointer items-center gap-3 rounded-security-lg border-2 border-dashed border-security-navy-200 bg-security-navy-50 p-4 transition hover:border-security-amber-400 hover:bg-security-amber-50/40">
+              <span className="rounded-lg bg-white p-2 text-security-navy-600 shadow-security-card"><Icon name="file" /></span>
               <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{file?.name ?? "Choose a file"}</span></span>
               <input required type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(event) => onFileChange(event.target.files?.[0] ?? null)} className="sr-only" />
             </label>
           </Field>
         </div>
-        <div className="flex justify-end gap-3 border-t border-neutral-200 bg-neutral-50 p-4">
+        <div className="flex justify-end gap-3 border-t border-security-navy-100 bg-security-navy-50 p-4">
           <button type="button" onClick={onClose} className="btn-ghost">Close</button>
           <button type="submit" disabled={busy || !file} className="btn-primary">{busy ? "Uploading..." : "Attach certificate"}</button>
         </div>
@@ -1015,19 +1015,19 @@ function CertificateDialog({ leaveRequest, form, file, onFormChange, onFileChang
 }
 
 function LoadingCards() {
-  return <div className="grid gap-4 xl:grid-cols-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-40 animate-pulse rounded-xl bg-neutral-100" />)}</div>;
+  return <div className="grid gap-4 xl:grid-cols-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-40 animate-pulse rounded-security-lg bg-security-navy-50" />)}</div>;
 }
 
 function LoadingTable() {
-  return <div className="space-y-2">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-neutral-100" />)}</div>;
+  return <div className="space-y-2">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="h-14 animate-pulse rounded-security-lg bg-security-navy-50" />)}</div>;
 }
 
 function EmptyState({ icon, title, text, action }: { icon: IconName; title: string; text: string; action?: { label: string; onClick: () => void } }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-neutral-300 px-6 py-14 text-center">
-      <span className="mb-3 rounded-full bg-neutral-100 p-3 text-neutral-500"><Icon name={icon} /></span>
-      <p className="font-semibold text-neutral-900">{title}</p>
-      <p className="mt-1 max-w-sm text-sm text-neutral-500">{text}</p>
+    <div className="flex flex-col items-center justify-center rounded-security-lg border border-dashed border-security-navy-200 px-6 py-14 text-center">
+      <span className="mb-3 rounded-full bg-security-navy-50 p-3 text-security-navy-500"><Icon name={icon} /></span>
+      <p className="font-semibold text-security-navy-900">{title}</p>
+      <p className="mt-1 max-w-sm text-sm text-security-navy-500">{text}</p>
       {action && <button onClick={action.onClick} className="btn-primary mt-4">{action.label}</button>}
     </div>
   );

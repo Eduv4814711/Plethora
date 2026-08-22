@@ -19,15 +19,15 @@ import {
 const STATUS_COPY: Record<RosterContinuityState, { label: string; className: string }> = {
   needs_attention: {
     label: "Needs attention",
-    className: "bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:ring-amber-800",
+    className: "bg-security-amber-50 text-security-amber-800 ring-security-amber-200 dark:bg-security-amber-950/40 dark:text-security-amber-200 dark:ring-security-amber-800",
   },
   running: {
     label: "Running",
-    className: "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-200 dark:ring-emerald-800",
+    className: "bg-security-emerald-50 text-security-emerald-700 ring-security-emerald-200 dark:bg-security-emerald-700/40 dark:text-security-emerald-200 dark:ring-security-emerald-700",
   },
   not_setup: {
     label: "Not set up",
-    className: "bg-neutral-100 text-neutral-700 ring-neutral-200 dark:bg-neutral-800 dark:text-neutral-200 dark:ring-neutral-700",
+    className: "bg-security-navy-50 text-security-navy-700 ring-security-navy-100 dark:bg-security-navy-800 dark:text-security-navy-200 dark:ring-security-navy-700",
   },
   paused: {
     label: "Paused",
@@ -126,11 +126,11 @@ export default function RosteringOperationsPage() {
   if (legacySiteId || (loading && !overview)) {
     return (
       <div className="space-y-5 animate-pulse" aria-label="Loading rostering operations">
-        <div className="h-16 rounded-xl bg-neutral-200 dark:bg-neutral-800" />
+        <div className="h-16 rounded-security-lg bg-security-navy-100 dark:bg-security-navy-800" />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((item) => <div key={item} className="h-24 rounded-xl bg-neutral-200 dark:bg-neutral-800" />)}
+          {[1, 2, 3, 4].map((item) => <div key={item} className="h-24 rounded-security-lg bg-security-navy-100 dark:bg-security-navy-800" />)}
         </div>
-        <div className="h-80 rounded-xl bg-neutral-200 dark:bg-neutral-800" />
+        <div className="h-80 rounded-security-lg bg-security-navy-100 dark:bg-security-navy-800" />
       </div>
     );
   }
@@ -147,9 +147,9 @@ export default function RosteringOperationsPage() {
     <div className="space-y-6 animate-fade-in">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-orange-700 dark:text-orange-300">Operations</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-security-amber-700 dark:text-security-amber-300">Operations</p>
           <h1 className="page-title mt-1">Rostering</h1>
-          <p className="mt-1 max-w-2xl text-sm text-neutral-600 dark:text-neutral-400">
+          <p className="mt-1 max-w-2xl text-sm text-security-navy-600 dark:text-security-navy-400">
             See which sites are covered, resolve interruptions, and keep approved schedules running.
           </p>
         </div>
@@ -164,7 +164,7 @@ export default function RosteringOperationsPage() {
       </header>
 
       {error && (
-        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
+        <div role="alert" className="rounded-security-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200">
           <p className="font-semibold">Rostering status could not be loaded</p>
           <p className="mt-1">{error}</p>
           <button type="button" onClick={() => void load()} className="mt-3 btn-secondary">Try again</button>
@@ -179,40 +179,40 @@ export default function RosteringOperationsPage() {
                 key={item.id}
                 type="button"
                 onClick={() => setFilter(item.id)}
-                className={`rounded-2xl border p-4 text-left shadow-sm transition-colors ${
+                className={`rounded-2xl border p-4 text-left shadow-security-card transition-colors ${
                   filter === item.id
-                    ? "border-orange-400 bg-orange-50 ring-2 ring-orange-100 dark:border-orange-600 dark:bg-orange-950/30 dark:ring-orange-900/50"
-                    : "border-neutral-200 bg-white hover:border-orange-200 dark:border-neutral-700 dark:bg-neutral-900"
+                    ? "border-security-amber-400 bg-security-amber-50 ring-2 ring-security-amber-100 dark:border-security-amber-600 dark:bg-security-amber-950/30 dark:ring-security-amber-900/50"
+                    : "border-security-navy-100 bg-white hover:border-security-amber-200 dark:border-security-navy-700 dark:bg-security-navy-900"
                 }`}
                 aria-pressed={filter === item.id}
               >
-                <span className="text-3xl font-bold text-neutral-900 dark:text-white">{item.count}</span>
-                <span className="mt-1 block text-sm font-medium text-neutral-600 dark:text-neutral-300">{item.label}</span>
+                <span className="text-3xl font-bold text-security-navy-900 dark:text-white">{item.count}</span>
+                <span className="mt-1 block text-sm font-medium text-security-navy-600 dark:text-security-navy-300">{item.label}</span>
               </button>
             ))}
           </section>
 
           {interruptions.length > 0 && (
-            <section className="overflow-hidden rounded-2xl border border-amber-200 bg-amber-50/50 dark:border-amber-900/70 dark:bg-amber-950/20">
-              <div className="border-b border-amber-200 px-4 py-3 dark:border-amber-900/70 sm:px-5">
-                <h2 className="text-base font-semibold text-amber-950 dark:text-amber-100">Interruption queue</h2>
-                <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-300">Most urgent coverage problems appear first.</p>
+            <section className="overflow-hidden rounded-2xl border border-security-amber-200 bg-security-amber-50/50 dark:border-security-amber-900/70 dark:bg-security-amber-950/20">
+              <div className="border-b border-security-amber-200 px-4 py-3 dark:border-security-amber-900/70 sm:px-5">
+                <h2 className="text-base font-semibold text-security-amber-950 dark:text-security-amber-100">Interruption queue</h2>
+                <p className="mt-0.5 text-xs text-security-amber-800 dark:text-security-amber-300">Most urgent coverage problems appear first.</p>
               </div>
-              <div className="divide-y divide-amber-200 dark:divide-amber-900/60">
+              <div className="divide-y divide-security-amber-200 dark:divide-security-amber-900/60">
                 {interruptions.slice(0, 6).map((site) => (
                   <Link
                     key={site.siteId}
                     href={`/rostering/sites/${site.siteId}${site.nextIssue ? `?issue=${site.nextIssue.id}` : ""}`}
-                    className="flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-amber-100/60 dark:hover:bg-amber-950/40 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+                    className="flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-security-amber-100/60 dark:hover:bg-security-amber-950/40 sm:flex-row sm:items-center sm:justify-between sm:px-5"
                   >
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold text-neutral-900 dark:text-white">{site.siteName}</p>
+                        <p className="font-semibold text-security-navy-900 dark:text-white">{site.siteName}</p>
                         {site.criticalIssueCount > 0 && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700 dark:bg-red-950/50 dark:text-red-300">Urgent</span>}
                       </div>
-                      <p className="mt-0.5 line-clamp-2 text-sm text-neutral-700 dark:text-neutral-300">{site.nextIssue?.message}</p>
+                      <p className="mt-0.5 line-clamp-2 text-sm text-security-navy-700 dark:text-security-navy-300">{site.nextIssue?.message}</p>
                     </div>
-                    <span className="shrink-0 text-sm font-semibold text-orange-800 dark:text-orange-300">Review issue →</span>
+                    <span className="shrink-0 text-sm font-semibold text-security-amber-800 dark:text-security-amber-300">Review issue →</span>
                   </Link>
                 ))}
               </div>
@@ -222,8 +222,8 @@ export default function RosteringOperationsPage() {
           <section className="space-y-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">All site rosters</h2>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400">Open a site to view its schedule or take action.</p>
+                <h2 className="text-lg font-semibold text-security-navy-900 dark:text-white">All site rosters</h2>
+                <p className="text-sm text-security-navy-500 dark:text-security-navy-400">Open a site to view its schedule or take action.</p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <label className="relative min-w-0 sm:w-72">
@@ -248,39 +248,39 @@ export default function RosteringOperationsPage() {
             </div>
 
             {filteredSites.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-neutral-300 bg-white px-6 py-14 text-center dark:border-neutral-700 dark:bg-neutral-900">
-                <p className="font-semibold text-neutral-800 dark:text-neutral-200">No sites match this view</p>
-                <p className="mt-1 text-sm text-neutral-500">Clear the search or choose another status.</p>
+              <div className="rounded-2xl border border-dashed border-security-navy-200 bg-white px-6 py-14 text-center dark:border-security-navy-700 dark:bg-security-navy-900">
+                <p className="font-semibold text-security-navy-900 dark:text-security-navy-200">No sites match this view</p>
+                <p className="mt-1 text-sm text-security-navy-500">Clear the search or choose another status.</p>
                 <button type="button" onClick={() => { setFilter("all"); setQuery(""); }} className="mt-4 btn-secondary">Show all sites</button>
               </div>
             ) : (
               <>
                 <div className="space-y-3 md:hidden">
                   {filteredSites.map((site) => (
-                    <Link key={site.siteId} href={`/rostering/sites/${site.siteId}`} className="block rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+                    <Link key={site.siteId} href={`/rostering/sites/${site.siteId}`} className="block rounded-2xl border border-security-navy-100 bg-white p-4 shadow-security-card dark:border-security-navy-700 dark:bg-security-navy-900">
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0"><h3 className="font-semibold text-neutral-900 dark:text-white">{site.siteName}</h3><p className="mt-1 text-xs text-neutral-500">{site.guardCount} guard{site.guardCount === 1 ? "" : "s"} · {site.calendar.name}</p></div>
+                        <div className="min-w-0"><h3 className="font-semibold text-security-navy-900 dark:text-white">{site.siteName}</h3><p className="mt-1 text-xs text-security-navy-500">{site.guardCount} guard{site.guardCount === 1 ? "" : "s"} · {site.calendar.name}</p></div>
                         <StatusBadge state={site.state} />
                       </div>
-                      <p className="mt-3 text-sm text-neutral-700 dark:text-neutral-300">{siteStatusLine(site)}</p>
-                      <span className="mt-4 block text-sm font-semibold text-orange-700 dark:text-orange-300">{rosterSiteActionLabel(site)} →</span>
+                      <p className="mt-3 text-sm text-security-navy-700 dark:text-security-navy-300">{siteStatusLine(site)}</p>
+                      <span className="mt-4 block text-sm font-semibold text-security-amber-700 dark:text-security-amber-300">{rosterSiteActionLabel(site)} →</span>
                     </Link>
                   ))}
                 </div>
 
-                <div className="hidden overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-700 dark:bg-neutral-900 md:block">
+                <div className="hidden overflow-hidden rounded-2xl border border-security-navy-100 bg-white shadow-security-card dark:border-security-navy-700 dark:bg-security-navy-900 md:block">
                   <table className="w-full border-collapse text-sm">
-                    <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wider text-neutral-500 dark:bg-neutral-900/80 dark:text-neutral-400">
+                    <thead className="bg-security-navy-50 text-left text-xs uppercase tracking-wider text-security-navy-500 dark:bg-security-navy-900/80 dark:text-security-navy-400">
                       <tr><th className="px-5 py-3 font-semibold">Site</th><th className="px-4 py-3 font-semibold">Status</th><th className="px-4 py-3 font-semibold">Coverage horizon</th><th className="px-4 py-3 font-semibold">Team</th><th className="px-5 py-3 text-right font-semibold">Next action</th></tr>
                     </thead>
-                    <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                    <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
                       {filteredSites.map((site) => (
-                        <tr key={site.siteId} className="hover:bg-neutral-50/80 dark:hover:bg-neutral-800/40">
-                          <td className="px-5 py-4"><p className="font-semibold text-neutral-900 dark:text-white">{site.siteName}</p><p className="mt-0.5 text-xs text-neutral-500">{site.calendar.name}</p></td>
-                          <td className="px-4 py-4"><StatusBadge state={site.state} />{site.issueCount > 0 && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{site.issueCount} open issue{site.issueCount === 1 ? "" : "s"}</p>}</td>
-                          <td className="px-4 py-4 text-neutral-700 dark:text-neutral-300">{site.state === "running" ? displayDate(site.maintainedThrough) : siteStatusLine(site)}</td>
-                          <td className="px-4 py-4 text-neutral-700 dark:text-neutral-300">{site.guardCount} guard{site.guardCount === 1 ? "" : "s"}</td>
-                          <td className="px-5 py-4 text-right"><Link href={`/rostering/sites/${site.siteId}`} className="font-semibold text-orange-700 hover:underline dark:text-orange-300">{rosterSiteActionLabel(site)} →</Link></td>
+                        <tr key={site.siteId} className="hover:bg-security-navy-50/80 dark:hover:bg-security-navy-800/40">
+                          <td className="px-5 py-4"><p className="font-semibold text-security-navy-900 dark:text-white">{site.siteName}</p><p className="mt-0.5 text-xs text-security-navy-500">{site.calendar.name}</p></td>
+                          <td className="px-4 py-4"><StatusBadge state={site.state} />{site.issueCount > 0 && <p className="mt-1 text-xs text-security-amber-700 dark:text-security-amber-300">{site.issueCount} open issue{site.issueCount === 1 ? "" : "s"}</p>}</td>
+                          <td className="px-4 py-4 text-security-navy-700 dark:text-security-navy-300">{site.state === "running" ? displayDate(site.maintainedThrough) : siteStatusLine(site)}</td>
+                          <td className="px-4 py-4 text-security-navy-700 dark:text-security-navy-300">{site.guardCount} guard{site.guardCount === 1 ? "" : "s"}</td>
+                          <td className="px-5 py-4 text-right"><Link href={`/rostering/sites/${site.siteId}`} className="font-semibold text-security-amber-700 hover:underline dark:text-security-amber-300">{rosterSiteActionLabel(site)} →</Link></td>
                         </tr>
                       ))}
                     </tbody>

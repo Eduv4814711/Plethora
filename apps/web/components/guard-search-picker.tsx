@@ -120,13 +120,13 @@ export function GuardSearchPicker({
         aria-expanded={open}
       >
         <span
-          className={`min-w-0 ${truncateLabel ? "truncate" : "whitespace-normal break-words leading-snug"} ${!hasDisplayValue ? "text-neutral-500" : ""}`}
+          className={`min-w-0 ${truncateLabel ? "truncate" : "whitespace-normal break-words leading-snug"} ${!hasDisplayValue ? "text-security-navy-500" : ""}`}
           title={truncateLabel ? displayText : undefined}
         >
           {displayText}
         </span>
         <svg
-          className={`h-4 w-4 shrink-0 text-neutral-400 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`h-4 w-4 shrink-0 text-security-navy-400 transition-transform ${open ? "rotate-180" : ""}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -136,15 +136,15 @@ export function GuardSearchPicker({
         </svg>
       </button>
       {!value && defaultGuardId && (selected || defaultGuardLabel) && (
-        <p className="mt-0.5 text-[10px] text-neutral-500">Scheduled guard — change if someone else worked</p>
+        <p className="mt-0.5 text-[10px] text-security-navy-500">Scheduled guard — change if someone else worked</p>
       )}
 
       {open && (
         <div
-          className="absolute left-0 top-full z-50 mt-1 w-full min-w-[280px] overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg dark:border-neutral-700 dark:bg-neutral-950"
+          className="absolute left-0 top-full z-50 mt-1 w-full min-w-[280px] overflow-hidden rounded-lg border border-security-navy-100 bg-white shadow-lg dark:border-security-navy-700 dark:bg-security-navy-900"
           role="listbox"
         >
-          <div className="border-b border-neutral-200 p-2 dark:border-neutral-700">
+          <div className="border-b border-security-navy-100 p-2 dark:border-security-navy-700">
             <input
               ref={searchRef}
               type="search"
@@ -165,15 +165,15 @@ export function GuardSearchPicker({
                   onChange(null);
                   setOpen(false);
                 }}
-                className={`w-full rounded px-3 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900 ${
-                  !effectiveId ? "bg-neutral-100 font-medium dark:bg-neutral-900" : ""
+                className={`w-full rounded px-3 py-2 text-left text-sm hover:bg-security-navy-50 dark:hover:bg-security-navy-900 ${
+                  !effectiveId ? "bg-security-navy-50 font-medium dark:bg-security-navy-900" : ""
                 }`}
               >
                 {clearLabel}
               </button>
             )}
             {filtered.length === 0 ? (
-              <p className="px-3 py-2 text-sm text-neutral-500">No employees match your search</p>
+              <p className="px-3 py-2 text-sm text-security-navy-500">No employees match your search</p>
             ) : (
               filtered.map((guard) => (
                 <button
@@ -185,13 +185,13 @@ export function GuardSearchPicker({
                     onChange(guard.id);
                     setOpen(false);
                   }}
-                  className={`w-full rounded px-3 py-2 text-left text-sm hover:bg-neutral-100 dark:hover:bg-neutral-900 ${
-                    effectiveId === guard.id ? "bg-neutral-100 font-medium dark:bg-neutral-900" : ""
+                  className={`w-full rounded px-3 py-2 text-left text-sm hover:bg-security-navy-50 dark:hover:bg-security-navy-900 ${
+                    effectiveId === guard.id ? "bg-security-navy-50 font-medium dark:bg-security-navy-900" : ""
                   }`}
                 >
                   <div className="truncate">{guardName(guard)}</div>
                   {(guard.employeeNumber || guard.psiraRegistrationNumber) && (
-                    <div className="truncate text-xs text-neutral-500">
+                    <div className="truncate text-xs text-security-navy-500">
                       {guard.employeeNumber ?? guard.psiraRegistrationNumber}
                     </div>
                   )}

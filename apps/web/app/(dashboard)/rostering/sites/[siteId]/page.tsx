@@ -24,10 +24,10 @@ function statusHeadline(status: RosterContinuityStatus): string {
 }
 
 const BADGE_STYLES: Record<string, string> = {
-  running: "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-200 dark:ring-emerald-800",
-  needs_attention: "bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:ring-amber-800",
+  running: "bg-security-emerald-50 text-security-emerald-700 ring-security-emerald-200 dark:bg-security-emerald-700/40 dark:text-security-emerald-200 dark:ring-security-emerald-700",
+  needs_attention: "bg-security-amber-50 text-security-amber-800 ring-security-amber-200 dark:bg-security-amber-950/40 dark:text-security-amber-200 dark:ring-security-amber-800",
   paused: "bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-950/40 dark:text-blue-200 dark:ring-blue-800",
-  not_setup: "bg-neutral-100 text-neutral-700 ring-neutral-200 dark:bg-neutral-800 dark:text-neutral-200 dark:ring-neutral-700",
+  not_setup: "bg-security-navy-50 text-security-navy-700 ring-security-navy-100 dark:bg-security-navy-800 dark:text-security-navy-200 dark:ring-security-navy-700",
 };
 
 export default function RosterSiteWorkspacePage() {
@@ -62,7 +62,7 @@ export default function RosterSiteWorkspacePage() {
   }, [searchParams, status]);
 
   if (loading && !status) {
-    return <div className="space-y-4 animate-pulse"><div className="h-24 rounded-2xl bg-neutral-200 dark:bg-neutral-800" /><div className="h-72 rounded-2xl bg-neutral-200 dark:bg-neutral-800" /></div>;
+    return <div className="space-y-4 animate-pulse"><div className="h-24 rounded-2xl bg-security-navy-100 dark:bg-security-navy-800" /><div className="h-72 rounded-2xl bg-security-navy-100 dark:bg-security-navy-800" /></div>;
   }
 
   if (!status || error) {
@@ -71,19 +71,19 @@ export default function RosterSiteWorkspacePage() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <header className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 sm:p-5">
-        <Link href="/rostering" className="text-sm font-medium text-orange-700 hover:underline dark:text-orange-300">← All site rosters</Link>
+      <header className="rounded-2xl border border-security-navy-100 bg-white p-4 shadow-security-card dark:border-security-navy-700 dark:bg-security-navy-900 sm:p-5">
+        <Link href="/rostering" className="text-sm font-medium text-security-amber-700 hover:underline dark:text-security-amber-300">← All site rosters</Link>
         <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-bold text-neutral-900 dark:text-white">{status.siteName}</h1><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${BADGE_STYLES[status.state]}`}>{statusHeadline(status)}</span></div><p className="mt-2 text-sm text-neutral-500">{status.guardCount} guard{status.guardCount === 1 ? "" : "s"} · {status.calendar.name} roster period</p></div>
+          <div><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-bold text-security-navy-900 dark:text-white">{status.siteName}</h1><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${BADGE_STYLES[status.state]}`}>{statusHeadline(status)}</span></div><p className="mt-2 text-sm text-security-navy-500">{status.guardCount} guard{status.guardCount === 1 ? "" : "s"} · {status.calendar.name} roster period</p></div>
           {status.permissions.canUseAdvancedEditor && <Link href={`/rostering/sites/${siteId}/advanced`} className="btn-secondary hidden self-start sm:inline-flex">Advanced editor</Link>}
         </div>
-        <nav className="mt-5 flex gap-1 border-b border-neutral-200 dark:border-neutral-700" aria-label="Site roster sections">
-          <Link href={`/rostering/sites/${siteId}`} aria-current={tab === "overview" ? "page" : undefined} className={`border-b-2 px-4 py-2.5 text-sm font-semibold ${tab === "overview" ? "border-orange-500 text-orange-700 dark:text-orange-300" : "border-transparent text-neutral-500 hover:text-neutral-900 dark:hover:text-white"}`}>Overview</Link>
-          <Link href={`/rostering/sites/${siteId}?tab=schedule${searchParams.get("period") ? `&period=${encodeURIComponent(searchParams.get("period")!)}` : ""}`} aria-current={tab === "schedule" ? "page" : undefined} className={`border-b-2 px-4 py-2.5 text-sm font-semibold ${tab === "schedule" ? "border-orange-500 text-orange-700 dark:text-orange-300" : "border-transparent text-neutral-500 hover:text-neutral-900 dark:hover:text-white"}`}>Schedule</Link>
+        <nav className="mt-5 flex gap-1 border-b border-security-navy-100 dark:border-security-navy-700" aria-label="Site roster sections">
+          <Link href={`/rostering/sites/${siteId}`} aria-current={tab === "overview" ? "page" : undefined} className={`border-b-2 px-4 py-2.5 text-sm font-semibold ${tab === "overview" ? "border-security-amber-500 text-security-amber-700 dark:text-security-amber-300" : "border-transparent text-security-navy-500 hover:text-security-navy-900 dark:hover:text-white"}`}>Overview</Link>
+          <Link href={`/rostering/sites/${siteId}?tab=schedule${searchParams.get("period") ? `&period=${encodeURIComponent(searchParams.get("period")!)}` : ""}`} aria-current={tab === "schedule" ? "page" : undefined} className={`border-b-2 px-4 py-2.5 text-sm font-semibold ${tab === "schedule" ? "border-security-amber-500 text-security-amber-700 dark:text-security-amber-300" : "border-transparent text-security-navy-500 hover:text-security-navy-900 dark:hover:text-white"}`}>Schedule</Link>
         </nav>
       </header>
 
-      {notice && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">{notice}</div>}
+      {notice && <div role="status" className="rounded-security-lg border border-security-emerald-200 bg-security-emerald-50 px-4 py-3 text-sm text-security-emerald-700 dark:border-security-emerald-700 dark:bg-security-emerald-700/30 dark:text-security-emerald-200">{notice}</div>}
 
       {tab === "overview" ? <RosterContinuityPanel siteId={siteId} status={status} onChanged={load} onOneDayChange={() => setOneDayOpen(true)} /> : <RosterScheduleView siteId={siteId} calendarId={status.calendar.id} />}
 

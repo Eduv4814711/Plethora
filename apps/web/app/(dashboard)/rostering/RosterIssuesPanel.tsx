@@ -5,7 +5,7 @@ import type { RosterWarning } from "@/lib/roster-api";
 export function RosterIssuesPanel({ warnings }: { warnings: RosterWarning[] }) {
   if (!warnings.length) {
     return (
-      <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/20 px-4 py-3 text-sm text-emerald-800 dark:text-emerald-200">
+      <div className="rounded-security-lg border border-security-emerald-200 dark:border-security-emerald-700 bg-security-emerald-50/60 dark:bg-security-emerald-700/20 px-4 py-3 text-sm text-security-emerald-700 dark:text-security-emerald-200">
         No validation warnings — roster looks good.
       </div>
     );
@@ -17,7 +17,7 @@ export function RosterIssuesPanel({ warnings }: { warnings: RosterWarning[] }) {
   return (
     <div className="space-y-3">
       {hard.length > 0 && (
-        <div className="rounded-xl border border-red-300 dark:border-red-800 bg-red-50/80 dark:bg-red-950/30 px-4 py-3">
+        <div className="rounded-security-lg border border-red-300 dark:border-red-800 bg-red-50/80 dark:bg-red-950/30 px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-red-800 dark:text-red-200 mb-2">
             Must fix ({hard.length})
           </p>
@@ -29,11 +29,11 @@ export function RosterIssuesPanel({ warnings }: { warnings: RosterWarning[] }) {
         </div>
       )}
       {advisory.length > 0 && (
-        <div className="rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/30 px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-200 mb-2">
+        <div className="rounded-security-lg border border-security-amber-300 dark:border-security-amber-800 bg-security-amber-50/80 dark:bg-security-amber-950/30 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-security-amber-900 dark:text-security-amber-200 mb-2">
             Advisory ({advisory.length})
           </p>
-          <ul className="space-y-1 text-sm text-amber-950 dark:text-amber-100 max-h-48 overflow-y-auto">
+          <ul className="space-y-1 text-sm text-security-amber-950 dark:text-security-amber-100 max-h-48 overflow-y-auto">
             {advisory.map((w, i) => (
               <li key={`a-${i}`}>• {w.message}</li>
             ))}

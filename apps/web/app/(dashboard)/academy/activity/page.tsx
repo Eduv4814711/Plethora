@@ -46,7 +46,7 @@ export default function AcademyActivityPage() {
           ← Academy
         </Link>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-security-navy-900">Activity</h1>
-        <p className="text-sm text-neutral-600">Recent changes across students, enrolments, invoices, and payments.</p>
+        <p className="text-sm text-security-navy-600">Recent changes across students, enrolments, invoices, and payments.</p>
       </div>
 
       {error && (
@@ -64,11 +64,11 @@ export default function AcademyActivityPage() {
       {loading && items.length === 0 ? (
         <ul className="space-y-2">
           {Array.from({ length: 8 }).map((_, i) => (
-            <li key={i} className="h-16 animate-pulse rounded-xl bg-neutral-100" />
+            <li key={i} className="h-16 animate-pulse rounded-security-lg bg-security-navy-50" />
           ))}
         </ul>
       ) : items.length === 0 ? (
-        <p className="text-sm text-neutral-500">No activity yet.</p>
+        <p className="text-sm text-security-navy-500">No activity yet.</p>
       ) : (
         <ul className="max-w-3xl space-y-2">
           {items.map((a) => (

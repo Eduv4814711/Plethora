@@ -43,16 +43,16 @@ export default function AcademyAuditPage() {
 
       {error && <AlertBanner variant="error">{error}</AlertBanner>}
 
-      <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Filters</h2>
+      <div className="rounded-2xl border border-security-navy-100 bg-white p-5 shadow-security-card">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-security-navy-500">Filters</h2>
         <div className="mt-3 grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
           <label>
             <span className="label-text mb-1 block">Action</span>
-            <input id="academy-audit-action" className="input-modern rounded-xl" value={action} onChange={(e) => setAction(e.target.value)} />
+            <input id="academy-audit-action" className="input-modern rounded-security-lg" value={action} onChange={(e) => setAction(e.target.value)} />
           </label>
           <label>
             <span className="label-text mb-1 block">Entity type</span>
-            <input id="academy-audit-entity" className="input-modern rounded-xl" value={entityType} onChange={(e) => setEntityType(e.target.value)} />
+            <input id="academy-audit-entity" className="input-modern rounded-security-lg" value={entityType} onChange={(e) => setEntityType(e.target.value)} />
           </label>
           <Button onClick={load} loading={loading}>
             Apply filters
@@ -60,12 +60,12 @@ export default function AcademyAuditPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-        <div className="border-b border-neutral-200/80 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">Audit stream</h2></div>
+      <div className="overflow-hidden rounded-2xl border border-security-navy-100 bg-white shadow-security-card">
+        <div className="border-b border-security-navy-100/80 px-5 py-4"><h2 className="text-base font-semibold text-security-navy-900">Audit stream</h2></div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+          <table className="min-w-full divide-y divide-security-navy-100 text-sm">
             <caption className="sr-only">Academy audit events</caption>
-            <thead><tr className="text-[11px] uppercase tracking-wide text-neutral-500"><th scope="col">Time</th><th scope="col">Action</th><th scope="col">Entity</th><th scope="col">User</th></tr></thead>
+            <thead><tr className="text-[11px] uppercase tracking-wide text-security-navy-500"><th scope="col">Time</th><th scope="col">Action</th><th scope="col">Entity</th><th scope="col">User</th></tr></thead>
             <tbody>
               {loading ? (
                 <TableLoadingRow colSpan={4} label="Loading audit events..." />

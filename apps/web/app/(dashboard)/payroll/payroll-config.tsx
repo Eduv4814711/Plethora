@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { authFetch } from "@/lib/api";
 import { useConfirmDialog } from "@/components/ui";
 
-const CONFIG_SECTION_CLASS = "rounded-security-lg border border-neutral-200 bg-white p-4 shadow-security-card";
+const CONFIG_SECTION_CLASS = "rounded-security-lg border border-security-navy-100 bg-white p-4 shadow-security-card";
 
 export interface PayGrade {
   id: string;
@@ -114,10 +114,10 @@ export function PayrollConfig({
   if (loading) {
     return (
       <div className="card-wireframe p-4 animate-pulse">
-        <div className="h-4 bg-neutral-200 rounded w-32 mb-3" />
+        <div className="h-4 bg-security-navy-100 rounded w-32 mb-3" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-16 bg-neutral-200 rounded" />
+            <div key={i} className="h-16 bg-security-navy-100 rounded" />
           ))}
         </div>
       </div>
@@ -149,7 +149,7 @@ export function PayrollConfig({
           ))}
         </select>
         {selectedGroup && (
-          <p className="text-xs text-neutral-600 mt-1">
+          <p className="text-xs text-security-navy-600 mt-1">
             Rules for team members in &quot;{selectedGroup.name}&quot;
           </p>
         )}
@@ -281,15 +281,15 @@ function PayGradesSection({
       </form>}
       <div className="space-y-1">
         {grades.map((g) => (
-          <div key={g.id} className="flex items-center justify-between rounded px-2 py-1.5 text-sm hover:bg-neutral-50">
-            <span className="text-black">{g.name}</span>
-            <span className="flex items-center gap-2 font-mono text-neutral-600">
+          <div key={g.id} className="flex items-center justify-between rounded px-2 py-1.5 text-sm hover:bg-security-navy-50">
+            <span className="text-security-navy-900">{g.name}</span>
+            <span className="flex items-center gap-2 font-mono text-security-navy-600">
               R{Number(g.hourlyRate).toFixed(2)}/hr
               {canDelete && <button type="button" onClick={() => handleDelete(g.id)} className="text-red-600 hover:text-red-700 text-xs" aria-label={`Delete ${g.name}`}>×</button>}
             </span>
           </div>
         ))}
-        {grades.length === 0 && <p className="text-neutral-500 text-xs py-1">No pay grades yet</p>}
+        {grades.length === 0 && <p className="text-security-navy-500 text-xs py-1">No pay grades yet</p>}
       </div>
     </div>
   );
@@ -350,7 +350,7 @@ function PayRulesSection({
           const mult = rule ? Number(rule.multiplier) : defaultMult[rt];
           return (
             <div key={rt} className="flex items-center justify-between text-sm">
-              <span className="text-neutral-600">{ruleLabels[rt]}</span>
+              <span className="text-security-navy-600">{ruleLabels[rt]}</span>
               <div className="flex items-center gap-1">
                 <input
                   type="number"
@@ -365,13 +365,13 @@ function PayRulesSection({
                     if (!isNaN(v) && v >= 0 && v <= 10) handleSave(rt, v);
                   }}
                 />
-                <span className="text-neutral-400 text-xs cursor-default select-none" title="multiplier (edit value to change)">×</span>
+                <span className="text-security-navy-400 text-xs cursor-default select-none" title="multiplier (edit value to change)">×</span>
               </div>
             </div>
           );
         })}
         {groupId && ruleTypesToShow.length === 0 && (
-          <p className="text-neutral-500 text-xs py-1">
+          <p className="text-security-navy-500 text-xs py-1">
             No pay rules configured for this group.
           </p>
         )}
@@ -448,7 +448,7 @@ function AddPayRuleRow({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-t border-neutral-200 pt-2">
+    <div className="flex flex-wrap items-center gap-2 border-t border-security-navy-100 pt-2">
       <select
         value={ruleType}
         onChange={(e) => {
@@ -485,7 +485,7 @@ function AddPayRuleRow({
       <button
         type="button"
         onClick={() => setAdding(false)}
-        className="text-xs text-neutral-500 hover:underline"
+        className="text-xs text-security-navy-500 hover:underline"
       >
         Cancel
       </button>
@@ -598,15 +598,15 @@ function EarningsRulesSection({
       </form>}
       <div className="space-y-1">
         {earnings.map((e) => (
-          <div key={e.id} className="flex items-center justify-between rounded px-2 py-1.5 text-sm hover:bg-neutral-50">
-            <span className="text-black">{e.name}</span>
-            <span className="flex items-center gap-2 font-mono text-neutral-600">
+          <div key={e.id} className="flex items-center justify-between rounded px-2 py-1.5 text-sm hover:bg-security-navy-50">
+            <span className="text-security-navy-900">{e.name}</span>
+            <span className="flex items-center gap-2 font-mono text-security-navy-600">
               {e.type === "fixed" ? `R${Number(e.amount || 0).toFixed(2)}` : `${Number(e.rate || 0)}%`}
               {canDelete && <button type="button" onClick={() => handleDelete(e.id)} className="text-red-600 hover:text-red-700 text-xs" aria-label={`Delete ${e.name}`}>×</button>}
             </span>
           </div>
         ))}
-        {earnings.length === 0 && <p className="text-neutral-500 text-xs py-1">No earnings rules yet</p>}
+        {earnings.length === 0 && <p className="text-security-navy-500 text-xs py-1">No earnings rules yet</p>}
       </div>
     </div>
   );
@@ -717,15 +717,15 @@ function DeductionRulesSection({
       </form>}
       <div className="space-y-1">
         {deductions.map((d) => (
-          <div key={d.id} className="flex items-center justify-between rounded px-2 py-1.5 text-sm hover:bg-neutral-50">
-            <span className="text-black">{d.name}</span>
-            <span className="flex items-center gap-2 font-mono text-neutral-600">
+          <div key={d.id} className="flex items-center justify-between rounded px-2 py-1.5 text-sm hover:bg-security-navy-50">
+            <span className="text-security-navy-900">{d.name}</span>
+            <span className="flex items-center gap-2 font-mono text-security-navy-600">
               {d.type === "fixed" ? `R${Number(d.amount || 0).toFixed(2)}` : `${Number(d.rate || 0)}%`}
               {canDelete && <button type="button" onClick={() => handleDelete(d.id)} className="text-red-600 hover:text-red-700 text-xs" title="Delete" aria-label={`Delete ${d.name}`}>×</button>}
             </span>
           </div>
         ))}
-        {deductions.length === 0 && <p className="text-neutral-500 text-xs py-1">No deduction rules yet</p>}
+        {deductions.length === 0 && <p className="text-security-navy-500 text-xs py-1">No deduction rules yet</p>}
       </div>
     </div>
   );

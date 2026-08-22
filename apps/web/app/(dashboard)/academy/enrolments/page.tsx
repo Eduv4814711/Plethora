@@ -123,7 +123,7 @@ export default function AcademyEnrolmentsPage() {
             ← Academy
           </Link>
           <h1 className="mt-1 text-2xl font-semibold">Enrolments</h1>
-          <p className="mt-1 text-sm text-neutral-600">
+          <p className="mt-1 text-sm text-security-navy-600">
             Course runs below are limited to intakes that still accept enrolments and have capacity.
           </p>
         </div>
@@ -136,7 +136,7 @@ export default function AcademyEnrolmentsPage() {
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
-      {canCreate && <form onSubmit={create} className="grid gap-3 rounded-lg border border-neutral-300 p-4 sm:grid-cols-2 lg:grid-cols-4">
+      {canCreate && <form onSubmit={create} className="grid gap-3 rounded-lg border border-security-navy-200 p-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <label className="label-text mb-1 block">Student</label>
           <select className="input-compact w-full" value={studentId} onChange={(e) => setStudentId(e.target.value)}>
@@ -172,7 +172,7 @@ export default function AcademyEnrolmentsPage() {
         </div>
         <div className="lg:col-span-4 flex flex-col gap-2">
           {!adminFeeOk && students.length > 0 && studentId ? (
-            <p className="text-xs text-amber-800">
+            <p className="text-xs text-security-amber-800">
               Selected student must have admin fee <strong>paid</strong> or <strong>waived</strong> before enrolment. Use{" "}
               <Link href={`/academy/students/${studentId}`} className="font-semibold text-security-navy-700 hover:underline">
                 student profile
@@ -195,19 +195,19 @@ export default function AcademyEnrolmentsPage() {
       </form>}
 
       {canCreate && (!students.length || !runs.length) ? (
-        <p className="text-sm text-amber-700">
+        <p className="text-sm text-security-amber-700">
           Create at least one student (with admin fee cleared), branch, course, and an enrolable course run before
           enrolling.
         </p>
       ) : null}
 
       {loading ? (
-        <p className="text-sm text-neutral-500">Loading…</p>
+        <p className="text-sm text-security-navy-500">Loading…</p>
       ) : enrolments.length === 0 ? (
-        <p className="text-sm text-neutral-500">No enrolments yet.</p>
+        <p className="text-sm text-security-navy-500">No enrolments yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-neutral-300">
-          <table className="min-w-full divide-y divide-neutral-200 text-sm">
+        <div className="overflow-x-auto rounded-lg border border-security-navy-200">
+          <table className="min-w-full divide-y divide-security-navy-100 text-sm">
             <thead>
               <tr>
                 <th>Student</th>
@@ -223,11 +223,11 @@ export default function AcademyEnrolmentsPage() {
                     <Link href={`/academy/students/${en.student.id}`} className="font-semibold text-security-navy-700 hover:underline">
                       {en.student.firstName} {en.student.lastName}
                     </Link>
-                    <div className="font-mono text-xs text-neutral-500">{en.student.studentNumber}</div>
+                    <div className="font-mono text-xs text-security-navy-500">{en.student.studentNumber}</div>
                   </td>
                   <td>
                     <span className="font-mono text-xs">{en.courseRun.runCode}</span>{" "}
-                    <span className="text-xs text-neutral-600">
+                    <span className="text-xs text-security-navy-600">
                       {en.courseRun.course.code} — {en.courseRun.course.title}
                     </span>
                   </td>

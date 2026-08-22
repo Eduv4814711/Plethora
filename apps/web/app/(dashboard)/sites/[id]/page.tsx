@@ -148,7 +148,7 @@ function CoverageDaysPicker({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400 w-24 shrink-0">
+      <span className="text-xs font-medium text-security-navy-600 dark:text-security-navy-400 w-24 shrink-0">
         {label}
       </span>
       {canManage ? (
@@ -164,8 +164,8 @@ function CoverageDaysPicker({
                 onClick={() => onChange(toggleCoverageDay(days, d))}
                 className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors disabled:opacity-50 ${
                   active
-                    ? "border-orange-500 bg-orange-50 text-orange-700 dark:border-orange-500 dark:bg-orange-900/30 dark:text-orange-300"
-                    : "border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900/50 dark:text-neutral-400 dark:hover:border-neutral-600"
+                    ? "border-security-amber-500 bg-security-amber-50 text-security-amber-700 dark:border-security-amber-500 dark:bg-security-amber-900/30 dark:text-security-amber-300"
+                    : "border-security-navy-100 bg-white text-security-navy-500 hover:border-security-navy-200 dark:border-security-navy-700 dark:bg-security-navy-900/50 dark:text-security-navy-400 dark:hover:border-security-navy-600"
                 }`}
               >
                 {DAY_LABELS[d]}
@@ -174,12 +174,12 @@ function CoverageDaysPicker({
           })}
         </div>
       ) : (
-        <span className="text-xs text-neutral-500 dark:text-neutral-400">
+        <span className="text-xs text-security-navy-500 dark:text-security-navy-400">
           {describeCoverageDays(days)}
         </span>
       )}
       {canManage && (
-        <span className="text-[11px] text-neutral-400 dark:text-neutral-500">
+        <span className="text-[11px] text-security-navy-400 dark:text-security-navy-500">
           {describeCoverageDays(days)}
         </span>
       )}
@@ -358,8 +358,8 @@ export default function SiteDetailPage() {
   if (loading || !site) {
     return (
       <div className="animate-pulse space-y-6">
-        <div className="h-10 bg-neutral-200 dark:bg-neutral-700 rounded w-64" />
-        <div className="h-96 bg-neutral-200 dark:bg-neutral-700 rounded-sm" />
+        <div className="h-10 bg-security-navy-100 dark:bg-security-navy-700 rounded w-64" />
+        <div className="h-96 bg-security-navy-100 dark:bg-security-navy-700 rounded-sm" />
       </div>
     );
   }
@@ -370,16 +370,16 @@ export default function SiteDetailPage() {
         <div className="flex items-center gap-4 min-w-0">
           <Link
             href="/sites"
-            className="p-2.5 rounded-lg border-2 border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 hover:border-neutral-300 dark:hover:border-neutral-600 transition-all shrink-0"
+            className="p-2.5 rounded-lg border-2 border-security-navy-100 dark:border-security-navy-700 bg-white dark:bg-security-navy-900 hover:bg-security-navy-50 dark:hover:bg-security-navy-800 hover:border-security-navy-200 dark:hover:border-security-navy-600 transition-all shrink-0"
             aria-label="Back to sites"
           >
-            <svg className="w-5 h-5 text-neutral-600 dark:text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-security-navy-600 dark:text-security-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
           <div className="min-w-0">
             <h1 className="page-title truncate">{site.name}</h1>
-            <p className="text-neutral-500 dark:text-neutral-400 mt-0.5 text-sm">
+            <p className="text-security-navy-500 dark:text-security-navy-400 mt-0.5 text-sm">
               Assign guards to posts, then use the shortcuts below for rostering and attendance.
             </p>
           </div>
@@ -395,16 +395,16 @@ export default function SiteDetailPage() {
           (site.geofenceRadiusMeters != null && site.latitude != null && site.longitude != null)) && (
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
             {(site.physicalAddress || site.location) && (
-              <span className="flex items-center gap-2 text-neutral-600 dark:text-neutral-400">
-                <svg className="w-4 h-4 shrink-0 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <span className="flex items-center gap-2 text-security-navy-600 dark:text-security-navy-400">
+                <svg className="w-4 h-4 shrink-0 text-security-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 </svg>
                 {site.physicalAddress || site.location}
               </span>
             )}
             {(site.contactPersonName || site.contactPersonPhone) && (
-              <span className="flex items-center gap-2 text-neutral-600 dark:text-neutral-400">
-                <svg className="w-4 h-4 shrink-0 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <span className="flex items-center gap-2 text-security-navy-600 dark:text-security-navy-400">
+                <svg className="w-4 h-4 shrink-0 text-security-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
                 {site.contactPersonName}
@@ -415,14 +415,14 @@ export default function SiteDetailPage() {
               </span>
             )}
             {site.serviceType && (
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-medium bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-medium bg-security-navy-50 dark:bg-security-navy-800 text-security-navy-700 dark:text-security-navy-300">
                 {SERVICE_TYPE_LABELS[site.serviceType] || site.serviceType}
               </span>
             )}
             {site.geofenceRadiusMeters != null &&
               site.latitude != null &&
               site.longitude != null && (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200 border border-amber-200/80 dark:border-amber-800/50">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-medium bg-security-amber-50 dark:bg-security-amber-900/30 text-security-amber-900 dark:text-security-amber-200 border border-security-amber-200/80 dark:border-security-amber-800/50">
                   Geofence {site.geofenceRadiusMeters}m · WhatsApp requires location
                 </span>
               )}
@@ -436,18 +436,18 @@ export default function SiteDetailPage() {
             site.contactPersonPhone ||
             site.serviceType ||
             (site.geofenceRadiusMeters != null && site.latitude != null && site.longitude != null)
-              ? "border-t border-neutral-200 dark:border-neutral-700 pt-5"
+              ? "border-t border-security-navy-100 dark:border-security-navy-700 pt-5"
               : ""
           }
         >
-          <h3 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Shift roster sheet</h3>
-          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 mb-4 max-w-2xl">
+          <h3 className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">Shift roster sheet</h3>
+          <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-1 mb-4 max-w-2xl">
             Text here appears on the shift sheet and PDF for this site (e.g. female-only day shift, male-only night shift). Leave blank to use the default contract lines.
           </p>
           <SiteRosterSheetFields site={site} siteId={siteId} token={token!} canManage={canEdit} onSaved={refresh} />
         </div>
 
-        <div className="border-t border-neutral-200 dark:border-neutral-700 pt-5">
+        <div className="border-t border-security-navy-100 dark:border-security-navy-700 pt-5">
           <SiteGuardsAssignment
             site={site}
             siteId={siteId}
@@ -478,11 +478,11 @@ export default function SiteDetailPage() {
           <div className="card-elevated p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="section-title text-neutral-900 dark:text-neutral-100">Posts</h2>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
+                <h2 className="section-title text-security-navy-900 dark:text-security-navy-100">Posts</h2>
+                <p className="text-sm text-security-navy-500 dark:text-security-navy-400 mt-0.5">
                   Drag guards onto posts to set <strong className="font-medium">preferred posts for auto-roster scoring</strong>{" "}
                   (not a hard lock). Shift assignments are created on{" "}
-                  <Link href="/rostering" className="font-medium text-orange-600 dark:text-orange-400 hover:underline">
+                  <Link href="/rostering" className="font-medium text-security-amber-600 dark:text-security-amber-400 hover:underline">
                     Rostering
                   </Link>
                   .
@@ -574,13 +574,13 @@ export default function SiteDetailPage() {
           </div>
 
             {(canEdit || site.posts.length > 0 || !hasDayPost || !hasNightPost) && (
-              <div className="mt-5 space-y-3 border-t border-neutral-200 dark:border-neutral-700 pt-5">
+              <div className="mt-5 space-y-3 border-t border-security-navy-100 dark:border-security-navy-700 pt-5">
                 <div className="space-y-2.5">
                   <div>
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-700 dark:text-neutral-300">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-security-navy-700 dark:text-security-navy-300">
                       Days covered
                     </h3>
-                    <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-0.5">
+                    <p className="text-[11px] text-security-navy-400 dark:text-security-navy-500 mt-0.5">
                       Days left off are not rostered and raise no coverage-gap alerts.
                     </p>
                   </div>
@@ -605,7 +605,7 @@ export default function SiteDetailPage() {
                   </div>
                 )}
                 {staffingSavedFlash && (
-                  <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Staffing saved.</p>
+                  <p className="text-xs font-medium text-security-emerald-700 dark:text-security-emerald-300">Staffing saved.</p>
                 )}
                 {staffingReadinessHints.length > 0 && (
                   <ul className="space-y-1 text-[11px]">
@@ -615,7 +615,7 @@ export default function SiteDetailPage() {
                         className={
                           h.level === "error"
                             ? "text-red-700 dark:text-red-300"
-                            : "text-amber-800 dark:text-amber-200"
+                            : "text-security-amber-800 dark:text-security-amber-200"
                         }
                       >
                         • {h.message}
@@ -625,7 +625,7 @@ export default function SiteDetailPage() {
                 )}
                 {canEdit && (
                   <>
-                    <p className="text-[11px] text-neutral-400 dark:text-neutral-500">
+                    <p className="text-[11px] text-security-navy-400 dark:text-security-navy-500">
                       Set guards required per shift on each post. Use 0 for day-only or night-only sites.
                     </p>
                     <button
@@ -643,15 +643,15 @@ export default function SiteDetailPage() {
 
             {site.posts.length === 0 && (
               <div className="card-wireframe text-center py-12 px-6 rounded-lg">
-                <div className="w-14 h-14 mx-auto rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center mb-4">
-                  <svg className="w-7 h-7 text-neutral-500 dark:text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-14 h-14 mx-auto rounded-lg bg-security-navy-50 dark:bg-security-navy-800 flex items-center justify-center mb-4">
+                  <svg className="w-7 h-7 text-security-navy-500 dark:text-security-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                   </svg>
                 </div>
-                <p className="font-semibold text-neutral-700 dark:text-neutral-300">No posts yet</p>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1 max-w-sm mx-auto">
+                <p className="font-semibold text-security-navy-700 dark:text-security-navy-300">No posts yet</p>
+                <p className="text-sm text-security-navy-500 dark:text-security-navy-400 mt-1 max-w-sm mx-auto">
                   Add posts, then schedule guards on{" "}
-                  <Link href="/rostering" className="font-medium text-orange-600 dark:text-orange-400 hover:underline">
+                  <Link href="/rostering" className="font-medium text-security-amber-600 dark:text-security-amber-400 hover:underline">
                     Rostering
                   </Link>
                   .
@@ -808,14 +808,14 @@ function SiteGuardsAssignment({
   return (
     <div>
       <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
-        <h3 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Site guards</h3>
+        <h3 className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">Site guards</h3>
         {saving && (
-          <span className="text-xs text-neutral-500 dark:text-neutral-400">Saving…</span>
+          <span className="text-xs text-security-navy-500 dark:text-security-navy-400">Saving…</span>
         )}
       </div>
-      <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-4 max-w-2xl">
+      <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mb-4 max-w-2xl">
         Drag guards into the site box to assign them here. Assigned guards are used for{" "}
-        <Link href="/rostering" className="font-medium text-orange-600 dark:text-orange-400 hover:underline">
+        <Link href="/rostering" className="font-medium text-security-amber-600 dark:text-security-amber-400 hover:underline">
           auto-rostering
         </Link>{" "}
         on this site. Use the reliever pool for guards with reliever status — they are used as fallback when
@@ -830,8 +830,8 @@ function SiteGuardsAssignment({
                 h.level === "error"
                   ? "text-red-700 dark:text-red-300"
                   : h.level === "warning"
-                    ? "text-amber-800 dark:text-amber-200"
-                    : "text-neutral-500 dark:text-neutral-400"
+                    ? "text-security-amber-800 dark:text-security-amber-200"
+                    : "text-security-navy-500 dark:text-security-navy-400"
               }
             >
               • {h.message}
@@ -846,7 +846,7 @@ function SiteGuardsAssignment({
       )}
 
       {!canManage ? (
-        <div className="min-h-[72px] rounded-lg border border-dashed border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 p-3">
+        <div className="min-h-[72px] rounded-lg border border-dashed border-security-navy-100 dark:border-security-navy-700 bg-security-navy-50 dark:bg-security-navy-800/50 p-3">
           {assignedGuards.length > 0 ? (
             <div className="space-y-3">
               {assignedRegularGuards.length > 0 && (
@@ -872,14 +872,14 @@ function SiteGuardsAssignment({
               )}
             </div>
           ) : (
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">No guards assigned to this site.</p>
+            <p className="text-sm text-security-navy-500 dark:text-security-navy-400">No guards assigned to this site.</p>
           )}
         </div>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
           <div className="space-y-4">
             <div>
-              <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+              <p className="text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-2">
                 Available guards (
                 {guardSearchActive
                   ? `${filteredAvailableGuards.length} of ${availableRegularGuards.length}`
@@ -904,16 +904,16 @@ function SiteGuardsAssignment({
                 onDrop={(e) => handleDropOnUnassignedPool(e, "pool")}
                 className={`min-h-[120px] max-h-52 overflow-y-auto rounded-lg p-3 transition-colors ${
                   dragOverZone === "pool"
-                    ? "bg-neutral-100 dark:bg-neutral-800 border-2 border-dashed border-neutral-400 dark:border-neutral-500"
-                    : "bg-neutral-50 dark:bg-neutral-800/50 border border-dashed border-neutral-200 dark:border-neutral-700"
+                    ? "bg-security-navy-50 dark:bg-security-navy-800 border-2 border-dashed border-security-navy-300 dark:border-security-navy-400"
+                    : "bg-security-navy-50 dark:bg-security-navy-800/50 border border-dashed border-security-navy-100 dark:border-security-navy-700"
                 }`}
               >
                 {availableRegularGuards.length === 0 ? (
-                  <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                  <p className="text-sm text-security-navy-500 dark:text-security-navy-400">
                     All regular rosterable guards are assigned to this site.
                   </p>
                 ) : filteredAvailableGuards.length === 0 ? (
-                  <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                  <p className="text-sm text-security-navy-500 dark:text-security-navy-400">
                     No guards match &quot;{guardSearch.trim()}&quot;.
                   </p>
                 ) : (
@@ -937,7 +937,7 @@ function SiteGuardsAssignment({
             </div>
 
             <div>
-              <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+              <p className="text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-2">
                 Available relievers (
                 {relieverSearchActive
                   ? `${filteredAvailableRelievers.length} of ${availableRelievers.length}`
@@ -967,15 +967,15 @@ function SiteGuardsAssignment({
                 }`}
               >
                 {availableRelievers.length === 0 ? (
-                  <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                  <p className="text-sm text-security-navy-500 dark:text-security-navy-400">
                     No unassigned relievers. Mark guards as reliever on the{" "}
-                    <Link href="/employees" className="font-medium text-orange-600 dark:text-orange-400 hover:underline">
+                    <Link href="/employees" className="font-medium text-security-amber-600 dark:text-security-amber-400 hover:underline">
                       Employees
                     </Link>{" "}
                     page, or all relievers are already on this site.
                   </p>
                 ) : filteredAvailableRelievers.length === 0 ? (
-                  <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                  <p className="text-sm text-security-navy-500 dark:text-security-navy-400">
                     No relievers match &quot;{relieverSearch.trim()}&quot;.
                   </p>
                 ) : (
@@ -1000,7 +1000,7 @@ function SiteGuardsAssignment({
           </div>
 
           <div className="xl:col-span-2">
-            <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+            <p className="text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-2">
               Assigned to this site ({assignedGuards.length}
               {assignedRelievers.length > 0
                 ? ` · ${assignedRegularGuards.length} regular, ${assignedRelievers.length} reliever${assignedRelievers.length === 1 ? "" : "s"}`
@@ -1017,8 +1017,8 @@ function SiteGuardsAssignment({
               onDrop={handleDropOnSite}
               className={`min-h-[280px] rounded-lg p-3 transition-colors ${
                 dragOverZone === "site"
-                  ? "bg-orange-50 dark:bg-orange-950/30 border-2 border-dashed border-orange-400 dark:border-orange-600"
-                  : "bg-orange-50/50 dark:bg-orange-950/20 border border-dashed border-orange-200 dark:border-orange-800/60"
+                  ? "bg-security-amber-50 dark:bg-security-amber-950/30 border-2 border-dashed border-security-amber-400 dark:border-security-amber-600"
+                  : "bg-security-amber-50/50 dark:bg-security-amber-950/20 border border-dashed border-security-amber-200 dark:border-security-amber-800/60"
               }`}
             >
               {assignedGuards.length > 0 ? (
@@ -1026,7 +1026,7 @@ function SiteGuardsAssignment({
                   {assignedRegularGuards.length > 0 && (
                     <div>
                       {assignedRelievers.length > 0 && (
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500 dark:text-security-navy-400 mb-2">
                           Regular guards
                         </p>
                       )}
@@ -1075,7 +1075,7 @@ function SiteGuardsAssignment({
                   )}
                 </div>
               ) : (
-                <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                <p className="text-sm text-security-navy-500 dark:text-security-navy-400">
                   Drop guards or relievers here to assign them to this site.
                 </p>
               )}
@@ -1167,11 +1167,11 @@ function SiteRosterSheetFields({
       site
     );
     return (
-      <div className="space-y-3 text-sm text-neutral-600 dark:text-neutral-400">
+      <div className="space-y-3 text-sm text-security-navy-600 dark:text-security-navy-400">
         {hasExplicitConfig ? (
           <>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1">
+              <p className="text-xs font-semibold uppercase tracking-wider text-security-navy-500 dark:text-security-navy-400 mb-1">
                 Site rules (shift roster & PDF)
               </p>
               <ul className="list-disc pl-5 space-y-0.5">
@@ -1182,7 +1182,7 @@ function SiteRosterSheetFields({
             </div>
             {site.rosterSheetNotes?.trim() && (
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-security-navy-500 dark:text-security-navy-400 mb-1">
                   Roster notes
                 </p>
                 <p className="whitespace-pre-wrap">{site.rosterSheetNotes}</p>
@@ -1204,15 +1204,15 @@ function SiteRosterSheetFields({
         </div>
       )}
       {savedFlash && (
-        <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Saved.</p>
+        <p className="text-xs font-medium text-security-emerald-700 dark:text-security-emerald-300">Saved.</p>
       )}
       <div>
-        <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+        <p className="text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-2">
           Shift gender rules (shift roster & PDF)
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label htmlFor="roster-day-shift-gender" className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+            <label htmlFor="roster-day-shift-gender" className="block text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-1">
               Day shift
             </label>
             <select
@@ -1228,7 +1228,7 @@ function SiteRosterSheetFields({
             </select>
           </div>
           <div>
-            <label htmlFor="roster-night-shift-gender" className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+            <label htmlFor="roster-night-shift-gender" className="block text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-1">
               Night shift
             </label>
             <select
@@ -1244,12 +1244,12 @@ function SiteRosterSheetFields({
             </select>
           </div>
         </div>
-        <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-1.5">
+        <p className="text-[11px] text-security-navy-400 dark:text-security-navy-500 mt-1.5">
           Choose a requirement per shift. &quot;Not specified&quot; skips gender lines on the sheet. Guards required per shift are configured on Posts below.
         </p>
       </div>
       <div>
-        <label htmlFor="roster-site-rules-extra" className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+        <label htmlFor="roster-site-rules-extra" className="block text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-1">
           Additional site rules (optional)
         </label>
         <textarea
@@ -1263,7 +1263,7 @@ function SiteRosterSheetFields({
         />
       </div>
       <div>
-        <label htmlFor="roster-sheet-notes" className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+        <label htmlFor="roster-sheet-notes" className="block text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-1">
           Additional roster notes
         </label>
         <textarea
@@ -1375,17 +1375,17 @@ function SiteAutoRosterSettings({
     return (
       <div className="space-y-4">
         <div>
-          <h2 className="section-title text-neutral-900 dark:text-neutral-100 mb-1">Ongoing rostering</h2>
-          <p className="max-w-2xl text-sm text-neutral-500 dark:text-neutral-400">
+          <h2 className="section-title text-security-navy-900 dark:text-security-navy-100 mb-1">Ongoing rostering</h2>
+          <p className="max-w-2xl text-sm text-security-navy-500 dark:text-security-navy-400">
             Plethora can repeat the approved site schedule and keep the next two roster periods ready automatically.
           </p>
         </div>
-        <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm dark:border-neutral-700 dark:bg-neutral-900/50">
-          <p className="font-medium text-neutral-900 dark:text-neutral-100">
+        <div className="rounded-security-lg border border-security-navy-100 bg-security-navy-50 px-4 py-3 text-sm dark:border-security-navy-700 dark:bg-security-navy-900/50">
+          <p className="font-medium text-security-navy-900 dark:text-security-navy-100">
             Status: {labels[site.rosterContinuityState]}
           </p>
           {site.rosterMaintainedThrough && (
-            <p className="mt-1 text-xs text-neutral-500">
+            <p className="mt-1 text-xs text-security-navy-500">
               Roster maintained through {new Date(site.rosterMaintainedThrough).toLocaleDateString()}.
             </p>
           )}
@@ -1400,21 +1400,21 @@ function SiteAutoRosterSettings({
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="section-title text-neutral-900 dark:text-neutral-100 mb-1">Automatic rostering</h2>
-        <p className="text-sm text-neutral-500 dark:text-neutral-400 max-w-2xl">
+        <h2 className="section-title text-security-navy-900 dark:text-security-navy-100 mb-1">Automatic rostering</h2>
+        <p className="text-sm text-security-navy-500 dark:text-security-navy-400 max-w-2xl">
           When enabled, a daily job maintains shifts through your company payroll horizon. Plans meeting the
           coverage threshold apply automatically; others queue for review on{" "}
-          <Link href="/rostering" className="font-medium text-orange-600 dark:text-orange-400 hover:underline">
+          <Link href="/rostering" className="font-medium text-security-amber-600 dark:text-security-amber-400 hover:underline">
             Rostering
           </Link>
           .
         </p>
       </div>
       {lastRunLabel && (
-        <p className="text-xs text-neutral-500 dark:text-neutral-400">Last run: {lastRunLabel}</p>
+        <p className="text-xs text-security-navy-500 dark:text-security-navy-400">Last run: {lastRunLabel}</p>
       )}
       {!canManage ? (
-        <div className="text-sm text-neutral-600 dark:text-neutral-400 space-y-2">
+        <div className="text-sm text-security-navy-600 dark:text-security-navy-400 space-y-2">
           <p>
             Auto-roster:{" "}
             <span className="font-medium">{site.autoRosterEnabled ? "Enabled" : "Disabled"}</span>
@@ -1434,11 +1434,11 @@ function SiteAutoRosterSettings({
             </div>
           )}
           {savedFlash && (
-            <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
+            <p className="text-xs font-medium text-security-emerald-700 dark:text-security-emerald-300">
               Saved. Auto-roster will run for the current payroll horizon.
             </p>
           )}
-          <label className="flex items-center gap-2 text-sm font-medium text-neutral-800 dark:text-neutral-100">
+          <label className="flex items-center gap-2 text-sm font-medium text-security-navy-900 dark:text-security-navy-100">
             <input
               type="checkbox"
               checked={enabled}
@@ -1448,9 +1448,9 @@ function SiteAutoRosterSettings({
             Enable automatic rostering for this site
           </label>
           {enabled && (
-            <div className="space-y-4 pl-0 sm:pl-6 border-l-0 sm:border-l-2 border-orange-200 dark:border-orange-800/60">
+            <div className="space-y-4 pl-0 sm:pl-6 border-l-0 sm:border-l-2 border-security-amber-200 dark:border-security-amber-800/60">
               <div className="max-w-xs">
-                <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+                <label className="block text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-1">
                   Auto-apply when coverage ≥
                 </label>
                 <div className="flex items-center gap-2">
@@ -1462,16 +1462,16 @@ function SiteAutoRosterSettings({
                     onChange={(e) => setMinCoverage(e.target.value)}
                     className="input-modern w-24 text-sm"
                   />
-                  <span className="text-sm text-neutral-500">%</span>
+                  <span className="text-sm text-security-navy-500">%</span>
                 </div>
-                <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-1">
+                <p className="text-[11px] text-security-navy-400 dark:text-security-navy-500 mt-1">
                   Default 100%. Lower values auto-apply partial coverage; otherwise plans queue for roster approval review.
                 </p>
               </div>
             </div>
           )}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-security-navy-500 dark:text-security-navy-400 mb-2">
               Readiness checklist
             </p>
             <SiteAutoRosterChecklist site={site} />
@@ -1502,7 +1502,7 @@ function SiteAutoRosterChecklist({ site }: { site: Site }) {
       <li
         className={
           dayPosts.length > 0 || dayStaff === 0
-            ? "text-emerald-700 dark:text-emerald-300"
+            ? "text-security-emerald-700 dark:text-security-emerald-300"
             : "text-red-700 dark:text-red-300"
         }
       >
@@ -1512,14 +1512,14 @@ function SiteAutoRosterChecklist({ site }: { site: Site }) {
       <li
         className={
           nightPosts.length > 0 || nightStaff === 0
-            ? "text-emerald-700 dark:text-emerald-300"
+            ? "text-security-emerald-700 dark:text-security-emerald-300"
             : "text-red-700 dark:text-red-300"
         }
       >
         {nightPosts.length > 0 || nightStaff === 0 ? "✓" : "✗"} At least one night post ({nightPosts.length})
         {nightStaff === 0 ? " — night shift not staffed" : ""}
       </li>
-      <li className="text-neutral-700 dark:text-neutral-300">
+      <li className="text-security-navy-700 dark:text-security-navy-300">
         Staffing: {dayStaff} day + {nightStaff} night guard(s) required each calendar day
       </li>
       {hints
@@ -1530,7 +1530,7 @@ function SiteAutoRosterChecklist({ site }: { site: Site }) {
             className={
               h.level === "error"
                 ? "text-red-700 dark:text-red-300"
-                : "text-amber-800 dark:text-amber-200"
+                : "text-security-amber-800 dark:text-security-amber-200"
             }
           >
             • {h.message}
@@ -1557,11 +1557,11 @@ function ShiftStaffingFallbackCard({
   const inputId = shiftType === "day" ? "roster-day-guards-required-fallback" : "roster-night-guards-required-fallback";
 
   return (
-    <div className="p-4 rounded-lg border-2 border-dashed border-neutral-200 dark:border-neutral-700 bg-neutral-50/80 dark:bg-neutral-900/40">
+    <div className="p-4 rounded-lg border-2 border-dashed border-security-navy-100 dark:border-security-navy-700 bg-security-navy-50/80 dark:bg-security-navy-900/40">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <p className="font-medium text-sm text-neutral-800 dark:text-neutral-200">{label} — no post yet</p>
-          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+          <p className="font-medium text-sm text-security-navy-900 dark:text-security-navy-200">{label} — no post yet</p>
+          <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-0.5">
             Configure staffing here, or add a {label.toLowerCase()} post.
           </p>
         </div>
@@ -1606,7 +1606,7 @@ function ShiftStaffingField({
   if (!canManage) {
     const count = readOnlyValue ?? parseInt(value, 10);
     return (
-      <p className="text-xs text-neutral-600 dark:text-neutral-400 shrink-0">
+      <p className="text-xs text-security-navy-600 dark:text-security-navy-400 shrink-0">
         {shiftStaffingReadOnlyText(count, shiftType)}
       </p>
     );
@@ -1614,7 +1614,7 @@ function ShiftStaffingField({
 
   return (
     <div className="flex w-fit max-w-full items-center gap-2">
-      <label htmlFor={inputId} className="text-xs font-medium text-neutral-600 dark:text-neutral-400 whitespace-nowrap">
+      <label htmlFor={inputId} className="text-xs font-medium text-security-navy-600 dark:text-security-navy-400 whitespace-nowrap">
         {shiftStaffingLabel(shiftType)}
       </label>
       <input
@@ -1700,10 +1700,10 @@ function PostCard({
       tabIndex={canEdit && onEdit ? 0 : undefined}
       className={`p-4 rounded-lg border-2 transition-all duration-200 ${
         isDragOver
-          ? "border-neutral-400 dark:border-neutral-500 bg-neutral-50 dark:bg-neutral-800/50 ring-2 ring-neutral-300 dark:ring-neutral-600 ring-offset-2 dark:ring-offset-neutral-900"
-          : "border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900/50 hover:border-neutral-300 dark:hover:border-neutral-600"
+          ? "border-security-navy-300 dark:border-security-navy-400 bg-security-navy-50 dark:bg-security-navy-800/50 ring-2 ring-security-navy-200 dark:ring-security-navy-600 ring-offset-2 dark:ring-offset-security-navy-900"
+          : "border-security-navy-100 dark:border-security-navy-700 bg-white dark:bg-security-navy-900/50 hover:border-security-navy-200 dark:hover:border-security-navy-600"
       } ${
-        canEdit && onEdit ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-neutral-300 dark:focus:ring-neutral-600 focus:ring-offset-2 dark:focus:ring-offset-neutral-900" : ""
+        canEdit && onEdit ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-security-navy-200 dark:focus:ring-security-navy-600 focus:ring-offset-2 dark:focus:ring-offset-security-navy-900" : ""
       }`}
     >
       {confirmDialog}
@@ -1711,22 +1711,22 @@ function PostCard({
         <div className="flex items-center gap-3">
         <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
           post.shiftType === "day"
-            ? "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400"
-            : "bg-neutral-800 dark:bg-neutral-700 text-neutral-300"
+            ? "bg-security-amber-50 dark:bg-security-amber-900/20 text-security-amber-700 dark:text-security-amber-400"
+            : "bg-security-navy-800 dark:bg-security-navy-700 text-security-navy-300"
         }`}>
           {post.shiftType === "day" ? (
-            <svg className="w-5 h-5 text-neutral-600 dark:text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-security-navy-600 dark:text-security-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
             </svg>
           ) : (
-            <svg className="w-5 h-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-security-navy-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
             </svg>
           )}
         </div>
         <div>
-          <h3 className="font-semibold text-neutral-900 dark:text-neutral-100">{post.name}</h3>
-          <p className="text-xs text-neutral-500 dark:text-neutral-400">{shiftLabel}</p>
+          <h3 className="font-semibold text-security-navy-900 dark:text-security-navy-100">{post.name}</h3>
+          <p className="text-xs text-security-navy-500 dark:text-security-navy-400">{shiftLabel}</p>
         </div>
         </div>
         {canDelete && (
@@ -1752,7 +1752,7 @@ function PostCard({
                 onError?.("Failed to delete post");
               }
             }}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-neutral-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-security-navy-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
             title="Delete post"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1765,7 +1765,7 @@ function PostCard({
 
       {staffingEditor && (
         <div
-          className="mb-4 pb-4 border-b border-neutral-100 dark:border-neutral-800"
+          className="mb-4 pb-4 border-b border-security-navy-100 dark:border-security-navy-800"
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
         >
@@ -1784,11 +1784,11 @@ function PostCard({
         <div
           className={`min-h-[72px] rounded-lg p-3 transition-colors ${
             isDragOver
-              ? "bg-neutral-100 dark:bg-neutral-800 border-2 border-dashed border-neutral-400 dark:border-neutral-500"
-              : "bg-neutral-50 dark:bg-neutral-800/50 border border-dashed border-neutral-200 dark:border-neutral-700"
+              ? "bg-security-navy-50 dark:bg-security-navy-800 border-2 border-dashed border-security-navy-300 dark:border-security-navy-400"
+              : "bg-security-navy-50 dark:bg-security-navy-800/50 border border-dashed border-security-navy-100 dark:border-security-navy-700"
           }`}
         >
-          <p className="text-[10px] text-neutral-500 dark:text-neutral-400 mb-2">
+          <p className="text-[10px] text-security-navy-500 dark:text-security-navy-400 mb-2">
             Preferred for auto-roster when multiple guards qualify
           </p>
           <div className="flex flex-wrap gap-2">
@@ -1864,9 +1864,9 @@ function EditPostModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="card-wireframe w-full max-w-md shadow-xl">
-        <div className="p-6 border-b-2 border-neutral-200 dark:border-neutral-700">
-          <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">Edit Post</h3>
-          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">Update post name and shift type</p>
+        <div className="p-6 border-b-2 border-security-navy-100 dark:border-security-navy-700">
+          <h3 className="text-lg font-semibold text-security-navy-900 dark:text-security-navy-100">Edit Post</h3>
+          <p className="text-sm text-security-navy-500 dark:text-security-navy-400 mt-1">Update post name and shift type</p>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
@@ -1929,23 +1929,23 @@ function GuardChip({
         }
       }}
       onDragEnd={onDragEnd}
-      className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shadow-sm cursor-grab active:cursor-grabbing select-none transition-all ${
-        isDragging ? "opacity-50 scale-95" : "hover:shadow-md hover:border-neutral-300 dark:hover:border-neutral-600"
+      className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-security-navy-800 border border-security-navy-100 dark:border-security-navy-700 shadow-security-card cursor-grab active:cursor-grabbing select-none transition-all ${
+        isDragging ? "opacity-50 scale-95" : "hover:shadow-md hover:border-security-navy-200 dark:hover:border-security-navy-600"
       } ${draggable ? "" : "cursor-default"}`}
     >
       <span
         className={`w-2 h-2 rounded-full shrink-0 ${
           guard.status === "active"
-            ? "bg-emerald-500"
+            ? "bg-security-emerald-500"
             : guard.status === "training"
-              ? "bg-amber-500"
+              ? "bg-security-amber-500"
               : guard.status === "reliever"
                 ? "bg-violet-500"
-                : "bg-neutral-400"
+                : "bg-security-navy-300"
         }`}
         title={guard.status}
       />
-      <span className="text-neutral-700 dark:text-neutral-300">
+      <span className="text-security-navy-700 dark:text-security-navy-300">
         {guard.firstName} {guard.lastName}
       </span>
       {guard.status === "reliever" && (
@@ -1957,7 +1957,7 @@ function GuardChip({
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          className="ml-1 p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-neutral-400 hover:text-red-600 transition-colors"
+          className="ml-1 p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-security-navy-400 hover:text-red-600 transition-colors"
           title="Remove from post"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2054,8 +2054,8 @@ function AddPostForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-5 bg-white dark:bg-neutral-900 rounded-sm border border-neutral-200 dark:border-neutral-600">
-      <h4 className="font-semibold text-neutral-900 dark:text-neutral-100 mb-4">New Post</h4>
+    <form onSubmit={handleSubmit} className="p-5 bg-white dark:bg-security-navy-900 rounded-sm border border-security-navy-100 dark:border-security-navy-600">
+      <h4 className="font-semibold text-security-navy-900 dark:text-security-navy-100 mb-4">New Post</h4>
       {error && (
         <div className="mb-4 p-3 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-sm">
           {error}

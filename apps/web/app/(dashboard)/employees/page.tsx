@@ -251,7 +251,7 @@ export default function EmployeesPage() {
     return (
       <div className="animate-pulse grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {[1, 2, 3, 4, 5, 6].map((i) => (
-          <div key={i} className="h-44 bg-white border-2 border-neutral-200 rounded-[10px]" />
+          <div key={i} className="h-44 bg-white border-2 border-security-navy-100 rounded-[10px]" />
         ))}
       </div>
     );
@@ -262,11 +262,11 @@ export default function EmployeesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
         <div>
           <h1 className="page-title">Team</h1>
-          <p className="text-sm text-neutral-600 mt-1">
+          <p className="text-sm text-security-navy-600 mt-1">
             Add employees, keep their details up to date, and organise them into groups.
           </p>
           {searchQuery.trim().length >= 2 && (
-            <p className="text-xs text-neutral-600 mt-2">
+            <p className="text-xs text-security-navy-600 mt-2">
               Filtered by &quot;{searchQuery}&quot;{" "}
               <Link href="/employees" className="underline hover:no-underline">Clear</Link>
             </p>
@@ -316,8 +316,8 @@ export default function EmployeesPage() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-4 mb-8 p-4 sm:p-5 rounded-security-lg bg-gradient-to-br from-white via-neutral-50/80 to-security-navy-50/30 border-2 border-neutral-200 shadow-security-card">
-        <span className="text-xs font-bold uppercase tracking-widest text-neutral-600 shrink-0">
+      <div className="flex flex-wrap items-center gap-4 mb-8 p-4 sm:p-5 rounded-security-lg bg-gradient-to-br from-white via-security-navy-50/80 to-security-navy-50/30 border-2 border-security-navy-100 shadow-security-card">
+        <span className="text-xs font-bold uppercase tracking-widest text-security-navy-600 shrink-0">
           Filters
         </span>
         <div className="relative shrink-0 min-w-[min(100%,14rem)] sm:min-w-[15.5rem]">
@@ -329,8 +329,8 @@ export default function EmployeesPage() {
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className={clsx(
-              "h-11 w-full min-w-[13.5rem] appearance-none rounded-security-lg border-2 border-neutral-200/90 bg-white",
-              "pl-4 pr-11 text-sm font-semibold text-neutral-900 tracking-tight",
+              "h-11 w-full min-w-[13.5rem] appearance-none rounded-security-lg border-2 border-security-navy-100/90 bg-white",
+              "pl-4 pr-11 text-sm font-semibold text-security-navy-900 tracking-tight",
               "shadow-security-card",
               "cursor-pointer transition-all duration-200 ease-out",
               "hover:border-security-navy-300 hover:shadow-security-card-hover",
@@ -347,7 +347,7 @@ export default function EmployeesPage() {
             <option value="offboarded">Offboarded</option>
           </select>
           <span
-            className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-[calc(0.5rem-1px)] border-l border-neutral-200/70 bg-gradient-to-b from-security-navy-50/90 to-white text-security-navy-700"
+            className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-[calc(0.5rem-1px)] border-l border-security-navy-100/70 bg-gradient-to-b from-security-navy-50/90 to-white text-security-navy-700"
             aria-hidden
           >
             <svg className="h-4 w-4 shrink-0 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -412,11 +412,11 @@ export default function EmployeesPage() {
             return (
               <div
                 key={section.key}
-                className="rounded-[10px] border-2 border-neutral-200 bg-white overflow-hidden shadow-sm"
+                className="rounded-[10px] border-2 border-security-navy-100 bg-white overflow-hidden shadow-security-card"
               >
                 <button
                   type="button"
-                  className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-neutral-50/90 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2"
+                  className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-security-navy-50/90 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2"
                   aria-expanded={isOpen}
                   aria-controls={`team-folder-panel-${section.key}`}
                   id={`team-folder-trigger-${section.key}`}
@@ -429,7 +429,7 @@ export default function EmployeesPage() {
                     });
                   }}
                 >
-                  <span className="shrink-0 text-neutral-600" aria-hidden>
+                  <span className="shrink-0 text-security-navy-600" aria-hidden>
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
                         strokeLinecap="round"
@@ -439,15 +439,15 @@ export default function EmployeesPage() {
                       />
                     </svg>
                   </span>
-                  <span className="flex-1 min-w-0 font-semibold text-black truncate">
+                  <span className="flex-1 min-w-0 font-semibold text-security-navy-900 truncate">
                     {section.name}
                   </span>
-                  <span className="shrink-0 text-sm text-neutral-500 tabular-nums">
+                  <span className="shrink-0 text-sm text-security-navy-500 tabular-nums">
                     ({section.employees.length})
                   </span>
                   <svg
                     className={clsx(
-                      "w-5 h-5 shrink-0 text-neutral-500 transition-transform duration-200",
+                      "w-5 h-5 shrink-0 text-security-navy-500 transition-transform duration-200",
                       isOpen && "rotate-180"
                     )}
                     fill="none"
@@ -463,10 +463,10 @@ export default function EmployeesPage() {
                     id={`team-folder-panel-${section.key}`}
                     role="region"
                     aria-labelledby={`team-folder-trigger-${section.key}`}
-                    className="border-t-2 border-neutral-200 p-4 bg-wireframe-accent/40"
+                    className="border-t-2 border-security-navy-100 p-4 bg-wireframe-accent/40"
                   >
                     {section.employees.length === 0 ? (
-                      <p className="text-sm text-neutral-600 py-2 px-1">No members in this group.</p>
+                      <p className="text-sm text-security-navy-600 py-2 px-1">No members in this group.</p>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                         {section.employees.map((emp) => (
@@ -494,12 +494,12 @@ export default function EmployeesPage() {
 
       {employees.length === 0 && (
         <div className="card-wireframe text-center py-16 px-6">
-          <p className="text-base font-semibold text-black">
+          <p className="text-base font-semibold text-security-navy-900">
             {statusFilter !== "all" || searchQuery.trim().length >= 2
               ? "No team members match your filters"
               : "No team members yet"}
           </p>
-          <p className="text-sm mt-2 text-neutral-600 max-w-md mx-auto">
+          <p className="text-sm mt-2 text-security-navy-600 max-w-md mx-auto">
             {statusFilter !== "all" || searchQuery.trim().length >= 2
               ? "Try a different status or clear the search to see everyone."
               : "Add your first team member to start building rosters, tracking attendance, and preparing payroll."}
@@ -560,13 +560,13 @@ function EmployeeTeamCard({
     >
       <div className="flex justify-between items-start gap-3">
         <div>
-          <h3 className="text-lg font-bold text-black uppercase tracking-tight">
+          <h3 className="text-lg font-bold text-security-navy-900 uppercase tracking-tight">
             {emp.firstName} {emp.lastName}
           </h3>
-          <p className="text-xs uppercase tracking-wider text-black mt-1">
+          <p className="text-xs uppercase tracking-wider text-security-navy-900 mt-1">
             ID: {emp.employeeNumber}
           </p>
-          <p className="text-xs uppercase tracking-wider text-black mt-0.5">
+          <p className="text-xs uppercase tracking-wider text-security-navy-900 mt-0.5">
             {(emp.employeeType === "general" ? "Office" : "Guard")}: {emp.group?.name ?? "—"}
           </p>
         </div>
@@ -575,8 +575,8 @@ function EmployeeTeamCard({
         </span>
       </div>
 
-      <div className="mt-4 p-4 rounded-[10px] bg-neutral-200 border-2 border-neutral-200">
-        <div className="space-y-1.5 text-xs uppercase tracking-wider text-black font-medium">
+      <div className="mt-4 p-4 rounded-[10px] bg-security-navy-100 border-2 border-security-navy-100">
+        <div className="space-y-1.5 text-xs uppercase tracking-wider text-security-navy-900 font-medium">
           {emp.idNumber && <p>ID: {emp.idNumber}</p>}
           {emp.psiraRegistrationNumber && <p>PSIRA: {emp.psiraRegistrationNumber}</p>}
           {emp.phone && <p>PHONE: {emp.phone}</p>}
@@ -597,7 +597,7 @@ function EmployeeTeamCard({
             </p>
           )}
           {!emp.idNumber && !emp.psiraRegistrationNumber && !emp.phone && !emp.grade && emp.hourlyRate == null && emp.monthlySalary == null && (
-            <p className="text-black/70">No details</p>
+            <p className="text-security-navy-900/70">No details</p>
           )}
         </div>
       </div>
@@ -606,50 +606,50 @@ function EmployeeTeamCard({
         (!emp.assignedSites || emp.assignedSites.length === 0) &&
         ["active", "training", "hired", "reliever"].includes(emp.status) && (
           <div
-            className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[10px] border-2 border-neutral-200 bg-neutral-50 px-3 py-2 text-xs"
+            className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[10px] border-2 border-security-navy-100 bg-security-navy-50 px-3 py-2 text-xs"
             onClick={(e) => e.stopPropagation()}
           >
-            <span className="uppercase tracking-wider text-black">Next step: assign this guard to a site</span>
-            <Link href="/sites" className="font-bold uppercase tracking-wider text-black underline">
+            <span className="uppercase tracking-wider text-security-navy-900">Next step: assign this guard to a site</span>
+            <Link href="/sites" className="font-bold uppercase tracking-wider text-security-navy-900 underline">
               Go to Sites
             </Link>
           </div>
         )}
 
       {expandedId === emp.id && (
-        <div className="mt-4 pt-4 border-t-2 border-neutral-200 space-y-3 text-sm">
+        <div className="mt-4 pt-4 border-t-2 border-security-navy-100 space-y-3 text-sm">
           {emp.email && (
-            <p><span className="text-[10px] uppercase tracking-wider text-black">Email</span><br />{emp.email}</p>
+            <p><span className="text-[10px] uppercase tracking-wider text-security-navy-900">Email</span><br />{emp.email}</p>
           )}
           {emp.dateOfBirth && (
-            <p><span className="text-[10px] uppercase tracking-wider text-black">DOB</span><br />{toDateStr(emp.dateOfBirth)}</p>
+            <p><span className="text-[10px] uppercase tracking-wider text-security-navy-900">DOB</span><br />{toDateStr(emp.dateOfBirth)}</p>
           )}
           {emp.gender && (
-            <p><span className="text-[10px] uppercase tracking-wider text-black">Gender</span><br />{emp.gender === "M" ? "Male" : "Female"}</p>
+            <p><span className="text-[10px] uppercase tracking-wider text-security-navy-900">Gender</span><br />{emp.gender === "M" ? "Male" : "Female"}</p>
           )}
           {emp.maritalStatus && (
-            <p><span className="text-[10px] uppercase tracking-wider text-black">Marital status</span><br />{emp.maritalStatus.charAt(0).toUpperCase() + emp.maritalStatus.slice(1)}</p>
+            <p><span className="text-[10px] uppercase tracking-wider text-security-navy-900">Marital status</span><br />{emp.maritalStatus.charAt(0).toUpperCase() + emp.maritalStatus.slice(1)}</p>
           )}
           {emp.physicalAddress && (
-            <p><span className="text-[10px] uppercase tracking-wider text-black">Address</span><br />{emp.physicalAddress}{emp.postalCode ? ` ${emp.postalCode}` : ""}</p>
+            <p><span className="text-[10px] uppercase tracking-wider text-security-navy-900">Address</span><br />{emp.physicalAddress}{emp.postalCode ? ` ${emp.postalCode}` : ""}</p>
           )}
           {emp.commencementDate && (
-            <p><span className="text-[10px] uppercase tracking-wider text-black">Started</span><br />{toDateStr(emp.commencementDate)}</p>
+            <p><span className="text-[10px] uppercase tracking-wider text-security-navy-900">Started</span><br />{toDateStr(emp.commencementDate)}</p>
           )}
           {(emp.bankName || emp.bankAccountNumber) && (
-            <p><span className="text-[10px] uppercase tracking-wider text-black">Bank</span><br />{emp.bankName || "—"}{emp.bankAccountNumber ? ` •••• ${String(emp.bankAccountNumber).slice(-4)}` : ""}</p>
+            <p><span className="text-[10px] uppercase tracking-wider text-security-navy-900">Bank</span><br />{emp.bankName || "—"}{emp.bankAccountNumber ? ` •••• ${String(emp.bankAccountNumber).slice(-4)}` : ""}</p>
           )}
           {(emp.nextOfKin1Name || emp.nextOfKin1Phone) && (
-            <p><span className="text-[10px] uppercase tracking-wider text-black">Next of kin</span><br />{emp.nextOfKin1Name || "—"} {emp.nextOfKin1Phone ? `• ${emp.nextOfKin1Phone}` : ""}</p>
+            <p><span className="text-[10px] uppercase tracking-wider text-security-navy-900">Next of kin</span><br />{emp.nextOfKin1Name || "—"} {emp.nextOfKin1Phone ? `• ${emp.nextOfKin1Phone}` : ""}</p>
           )}
           {emp.psiraRegistrationExpiry && (
-            <p><span className="text-[10px] uppercase tracking-wider text-black">PSIRA expiry</span><br />{toDateStr(emp.psiraRegistrationExpiry)}</p>
+            <p><span className="text-[10px] uppercase tracking-wider text-security-navy-900">PSIRA expiry</span><br />{toDateStr(emp.psiraRegistrationExpiry)}</p>
           )}
           {emp.occupation && (
-            <p><span className="text-[10px] uppercase tracking-wider text-black">Occupation</span><br />{emp.occupation}</p>
+            <p><span className="text-[10px] uppercase tracking-wider text-security-navy-900">Occupation</span><br />{emp.occupation}</p>
           )}
           {emp.placeOfWork && (
-            <p><span className="text-[10px] uppercase tracking-wider text-black">Place of work</span><br />{emp.placeOfWork}</p>
+            <p><span className="text-[10px] uppercase tracking-wider text-security-navy-900">Place of work</span><br />{emp.placeOfWork}</p>
           )}
         </div>
       )}
@@ -669,7 +669,7 @@ function EmployeeTeamCard({
           }
           aria-disabled={!canEditEmployeeDetails}
           className={clsx(
-            "text-xs font-medium uppercase tracking-wider text-black hover:underline",
+            "text-xs font-medium uppercase tracking-wider text-security-navy-900 hover:underline",
             !canEditEmployeeDetails && "cursor-not-allowed opacity-40 hover:no-underline"
           )}
         >
@@ -690,7 +690,7 @@ function EmployeeTeamCard({
             }
             aria-disabled={!canEditEmployeeDetails}
             className={clsx(
-              "text-xs font-medium uppercase tracking-wider text-black hover:underline",
+              "text-xs font-medium uppercase tracking-wider text-security-navy-900 hover:underline",
               !canEditEmployeeDetails && "cursor-not-allowed opacity-40 hover:no-underline"
             )}
           >
@@ -855,8 +855,8 @@ function ManageGroupsSection({
   return (
     <div className="card-wireframe mb-6 p-4">
       {confirmDialog}
-      <h3 className="text-sm font-semibold text-neutral-800 mb-1">Groups</h3>
-      <p className="text-xs text-neutral-600 mb-4">
+      <h3 className="text-sm font-semibold text-security-navy-900 mb-1">Groups</h3>
+      <p className="text-xs text-security-navy-600 mb-4">
         Groups organise your team (for example by region or client). Each team member belongs to one group.
       </p>
       <form onSubmit={handleAdd} className="flex flex-wrap gap-2 mb-4">
@@ -865,7 +865,7 @@ function ManageGroupsSection({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Group name"
-          className="flex-1 min-w-[140px] px-2 py-1.5 text-sm border-2 border-neutral-200 rounded-[10px] bg-white input-modern"
+          className="flex-1 min-w-[140px] px-2 py-1.5 text-sm border-2 border-security-navy-100 rounded-[10px] bg-white input-modern"
           required
         />
         <input
@@ -873,7 +873,7 @@ function ManageGroupsSection({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Description (optional)"
-          className="flex-1 min-w-[140px] px-2 py-1.5 text-sm border-2 border-neutral-200 rounded-[10px] bg-white input-modern"
+          className="flex-1 min-w-[140px] px-2 py-1.5 text-sm border-2 border-security-navy-100 rounded-[10px] bg-white input-modern"
         />
         <button type="submit" disabled={saving} className="btn-secondary text-xs py-1.5 px-3">
           {saving ? "Adding..." : "Add group"}
@@ -881,7 +881,7 @@ function ManageGroupsSection({
       </form>
       <div className="space-y-1">
         {groups.map((g) => (
-          <div key={g.id} className="flex items-center justify-between py-1.5 px-2 text-sm rounded hover:bg-neutral-100/80">
+          <div key={g.id} className="flex items-center justify-between py-1.5 px-2 text-sm rounded hover:bg-security-navy-50/80">
             <span>{g.name}</span>
             <button
               type="button"
@@ -893,7 +893,7 @@ function ManageGroupsSection({
             </button>
           </div>
         ))}
-        {groups.length === 0 && <p className="text-neutral-400 text-xs py-1">No groups yet. Add one above.</p>}
+        {groups.length === 0 && <p className="text-security-navy-400 text-xs py-1">No groups yet. Add one above.</p>}
       </div>
     </div>
   );
@@ -1165,9 +1165,9 @@ function EmployeeForm({
       onSubmit={handleSubmit}
       className="card-wireframe mb-6 p-6 max-h-[85vh] overflow-y-auto"
     >
-      <div className="mb-4 pb-3 border-b-2 border-neutral-200">
-        <h3 className="text-base font-semibold text-neutral-900 tracking-tight">Add a team member</h3>
-        <p className="mt-1 text-xs text-neutral-600">
+      <div className="mb-4 pb-3 border-b-2 border-security-navy-100">
+        <h3 className="text-base font-semibold text-security-navy-900 tracking-tight">Add a team member</h3>
+        <p className="mt-1 text-xs text-security-navy-600">
           Fields marked with <span className="text-red-600 font-semibold">*</span> are required. You can fill in the other tabs later.
         </p>
       </div>
@@ -1178,8 +1178,8 @@ function EmployeeForm({
       )}
 
       <div className="space-y-4">
-        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-neutral-200">
-          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 mb-2">Staff type</h4>
+        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-security-navy-100">
+          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-security-navy-600 mb-2">Staff type</h4>
           <div className="flex gap-6">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -1188,10 +1188,10 @@ function EmployeeForm({
                 value="general"
                 checked={employeeType === "general"}
                 onChange={() => setEmployeeType("general")}
-                className="w-3.5 h-3.5 border-2 border-neutral-200 accent-neutral-900"
+                className="w-3.5 h-3.5 border-2 border-security-navy-100 accent-security-navy-900"
               />
-              <span className="text-sm font-medium text-neutral-900">Office</span>
-              <span className="text-xs text-neutral-500">(salary)</span>
+              <span className="text-sm font-medium text-security-navy-900">Office</span>
+              <span className="text-xs text-security-navy-500">(salary)</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -1200,15 +1200,15 @@ function EmployeeForm({
                 value="security_officer"
                 checked={employeeType === "security_officer"}
                 onChange={() => setEmployeeType("security_officer")}
-                className="w-3.5 h-3.5 border-2 border-neutral-200 accent-neutral-900"
+                className="w-3.5 h-3.5 border-2 border-security-navy-100 accent-security-navy-900"
               />
-              <span className="text-sm font-medium text-neutral-900">Guard</span>
-              <span className="text-xs text-neutral-500">(hourly)</span>
+              <span className="text-sm font-medium text-security-navy-900">Guard</span>
+              <span className="text-xs text-security-navy-500">(hourly)</span>
             </label>
           </div>
         </section>
 
-        <div className="flex gap-1 border-b-2 border-neutral-200 overflow-x-auto">
+        <div className="flex gap-1 border-b-2 border-security-navy-100 overflow-x-auto">
           {(["basic", "labour", "psira", "bank"] as const).map((tab) => (
             <button
               key={tab}
@@ -1217,8 +1217,8 @@ function EmployeeForm({
               className={clsx(
                 "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors -mb-px",
                 activeTab === tab
-                  ? "bg-white text-neutral-800 border-2 border-neutral-200 border-b-transparent"
-                  : "text-neutral-600 hover:text-neutral-900"
+                  ? "bg-white text-security-navy-900 border-2 border-security-navy-100 border-b-transparent"
+                  : "text-security-navy-600 hover:text-security-navy-900"
               )}
             >
               {tab === "basic" ? "Basic details" : tab === "labour" ? "Employment (BCEA)" : tab === "bank" ? "Bank & tax" : "PSIRA"}
@@ -1227,11 +1227,11 @@ function EmployeeForm({
         </div>
 
         {activeTab === "basic" && (
-        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-neutral-200">
-          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 mb-3">Basic details</h4>
+        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-security-navy-100">
+          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-security-navy-600 mb-3">Basic details</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
-              <label htmlFor="new-emp-number" className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+              <label htmlFor="new-emp-number" className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">
                 Team member ID <span className="text-red-600">*</span>
               </label>
               <input
@@ -1244,7 +1244,7 @@ function EmployeeForm({
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label htmlFor="new-emp-status" className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+              <label htmlFor="new-emp-status" className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">
                 Employment status
               </label>
               <select id="new-emp-status" value={status} onChange={(e) => setStatus(e.target.value)} className="input-compact">
@@ -1258,19 +1258,19 @@ function EmployeeForm({
               </select>
             </div>
             <div className="flex flex-col gap-1">
-              <label htmlFor="new-emp-first-name" className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+              <label htmlFor="new-emp-first-name" className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">
                 First name <span className="text-red-600">*</span>
               </label>
               <input id="new-emp-first-name" placeholder="e.g. Thabo" value={firstName} onChange={(e) => setFirstName(e.target.value)} required className="input-compact" />
             </div>
             <div className="flex flex-col gap-1">
-              <label htmlFor="new-emp-last-name" className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+              <label htmlFor="new-emp-last-name" className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">
                 Last name <span className="text-red-600">*</span>
               </label>
               <input id="new-emp-last-name" placeholder="e.g. Mokoena" value={lastName} onChange={(e) => setLastName(e.target.value)} required className="input-compact" />
             </div>
             <div className="flex flex-col gap-1">
-              <label htmlFor="new-emp-id-number" className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+              <label htmlFor="new-emp-id-number" className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">
                 SA ID number
               </label>
               <input
@@ -1290,20 +1290,20 @@ function EmployeeForm({
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label htmlFor="new-emp-phone" className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+              <label htmlFor="new-emp-phone" className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">
                 Phone (WhatsApp)
               </label>
               <input id="new-emp-phone" placeholder="e.g. 0821234567" value={phone} onChange={(e) => setPhone(e.target.value)} className="input-compact" title="WhatsApp number for clock-in, payslip, etc." />
             </div>
             <div className="flex flex-col gap-1">
-              <label htmlFor="new-emp-email" className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+              <label htmlFor="new-emp-email" className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">
                 Email
               </label>
               <input id="new-emp-email" type="email" placeholder="e.g. name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} className="input-compact" />
             </div>
             {employeeType === "general" ? (
               <div className="flex flex-col gap-1">
-                <label htmlFor="new-emp-salary" className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+                <label htmlFor="new-emp-salary" className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">
                   Monthly salary (R) <span className="text-red-600">*</span>
                 </label>
                 <input
@@ -1320,14 +1320,14 @@ function EmployeeForm({
               </div>
             ) : (
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+                <label className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">
                   Pay grade <span className="text-red-600">*</span>
                 </label>
                 <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} groupId={groupId} className="input-compact" required />
               </div>
             )}
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">
+              <label className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">
                 Group <span className="text-red-600">*</span>
               </label>
               <GroupSelect token={token} value={groupId} onChange={setGroupId} className="input-compact" required />
@@ -1337,15 +1337,15 @@ function EmployeeForm({
         )}
 
         {activeTab === "labour" && (
-        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-neutral-200">
-          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 mb-2">Labour Law (BCEA)</h4>
+        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-security-navy-100">
+          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-security-navy-600 mb-2">Labour Law (BCEA)</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">DOB</label>
+              <label className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">DOB</label>
               <DateInput value={dateOfBirth} onChange={setDateOfBirth} ariaLabel="Date of birth" pastOnly showToday={false} />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">Gender</label>
+              <label className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">Gender</label>
               <select value={gender} onChange={(e) => setGender(e.target.value)} className="input-compact">
                 <option value="">Select gender</option>
                 <option value="M">Male</option>
@@ -1353,7 +1353,7 @@ function EmployeeForm({
               </select>
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">Marital status</label>
+              <label className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">Marital status</label>
               <select value={maritalStatus} onChange={(e) => setMaritalStatus(e.target.value)} className="input-compact">
                 <option value="">Select marital status</option>
                 <option value="single">Single</option>
@@ -1366,7 +1366,7 @@ function EmployeeForm({
             <input placeholder="Postal address" value={postalAddress} onChange={(e) => setPostalAddress(e.target.value)} className="input-compact" />
             <input placeholder="Postal code" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className="input-compact" />
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">Commencement</label>
+              <label className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">Commencement</label>
               <DateInput value={commencementDate} onChange={setCommencementDate} ariaLabel="Commencement" />
             </div>
             <input placeholder="Occupation" value={occupation} onChange={(e) => setOccupation(e.target.value)} className="input-compact" />
@@ -1388,12 +1388,12 @@ function EmployeeForm({
         )}
 
         {activeTab === "bank" && (
-        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-neutral-200">
-          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 mb-1.5">Bank Details</h4>
+        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-security-navy-100">
+          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-security-navy-600 mb-1.5">Bank Details</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input placeholder="Tax number" value={taxNumber} onChange={(e) => setTaxNumber(e.target.value)} className="input-compact py-1.5 text-sm" />
             <div>
-              <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-600 mb-0.5">Bank</label>
+              <label className="block text-[10px] font-medium uppercase tracking-wider text-security-navy-600 mb-0.5">Bank</label>
               <select
                 value={SA_MAJOR_BANKS.includes(bankName) ? bankName : "Other"}
                 onChange={(e) => setBankName(e.target.value === "Other" ? "" : e.target.value)}
@@ -1421,19 +1421,19 @@ function EmployeeForm({
         )}
 
         {activeTab === "psira" && (
-        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-neutral-200">
-          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 mb-2">PSIRA</h4>
+        <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-security-navy-100">
+          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-security-navy-600 mb-2">PSIRA</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-600 mb-1">PSIRA <span className="text-red-600">*</span></label>
+              <label className="block text-[10px] font-medium uppercase tracking-wider text-security-navy-600 mb-1">PSIRA <span className="text-red-600">*</span></label>
               <input placeholder="PSIRA number" value={psiraRegistrationNumber} onChange={(e) => setPsiraNumber(e.target.value)} className="input-compact" required={employeeType === "security_officer"} />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-medium uppercase tracking-wider text-neutral-600">PSIRA expiry</label>
+              <label className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">PSIRA expiry</label>
               <DateInput value={psiraRegistrationExpiry} onChange={setPsiraExpiryDate} ariaLabel="PSIRA expiry" futureOnly />
             </div>
             <div>
-              <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-600 mb-1">PSIRA grade</label>
+              <label className="block text-[10px] font-medium uppercase tracking-wider text-security-navy-600 mb-1">PSIRA grade</label>
               <select value={psiraGrade} onChange={(e) => setPsiraGrade(e.target.value)} className="input-compact">
                 <option value="">—</option>
                 <option value="E">E</option>
@@ -1457,26 +1457,26 @@ function EmployeeForm({
             <input placeholder="Next of kin 2 – Phone" value={nextOfKin2Phone} onChange={(e) => setNextOfKin2Phone(e.target.value)} className="input-compact" />
             <input placeholder="Next of kin 3 – Name" value={nextOfKin3Name} onChange={(e) => setNextOfKin3Name(e.target.value)} className="input-compact" />
             <input placeholder="Next of kin 3 – Phone" value={nextOfKin3Phone} onChange={(e) => setNextOfKin3Phone(e.target.value)} className="input-compact" />
-            <div className="sm:col-span-2 p-4 rounded-lg border-2 border-neutral-200 bg-white space-y-2">
-              <p className="text-[10px] font-medium uppercase tracking-wider text-neutral-600 mb-1">Declaration</p>
+            <div className="sm:col-span-2 p-4 rounded-lg border-2 border-security-navy-100 bg-white space-y-2">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600 mb-1">Declaration</p>
               <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input type="checkbox" checked={residedOutsideSA === true} onChange={(e) => setResidedOutsideSA(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-neutral-200 accent-neutral-900" />
+                <input type="checkbox" checked={residedOutsideSA === true} onChange={(e) => setResidedOutsideSA(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-security-navy-100 accent-security-navy-900" />
                 Resided outside SA 1+ year (last 10 years)
               </label>
               <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input type="checkbox" checked={militaryPoliceService === true} onChange={(e) => setMilitaryPoliceService(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-neutral-200 accent-neutral-900" />
+                <input type="checkbox" checked={militaryPoliceService === true} onChange={(e) => setMilitaryPoliceService(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-security-navy-100 accent-security-navy-900" />
                 Military / Police / Intelligence
               </label>
               <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input type="checkbox" checked={criminalInvestigation === true} onChange={(e) => setCriminalInvestigation(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-neutral-200 accent-neutral-900" />
+                <input type="checkbox" checked={criminalInvestigation === true} onChange={(e) => setCriminalInvestigation(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-security-navy-100 accent-security-navy-900" />
                 Criminal investigation pending
               </label>
               <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input type="checkbox" checked={mentallyUnstable === true} onChange={(e) => setMentallyUnstable(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-neutral-200 accent-neutral-900" />
+                <input type="checkbox" checked={mentallyUnstable === true} onChange={(e) => setMentallyUnstable(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-security-navy-100 accent-security-navy-900" />
                 Ever declared mentally unstable
               </label>
               <label className="flex items-center gap-2 text-xs cursor-pointer">
-                <input type="checkbox" checked={trainingCompleted === true} onChange={(e) => setTrainingCompleted(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-neutral-200 accent-neutral-900" />
+                <input type="checkbox" checked={trainingCompleted === true} onChange={(e) => setTrainingCompleted(e.target.checked ? true : "")} className="w-3.5 h-3.5 rounded-sm border-2 border-security-navy-100 accent-security-navy-900" />
                 Accredited training completed
               </label>
             </div>
@@ -1486,17 +1486,17 @@ function EmployeeForm({
       </div>
 
       {canAttachDocuments && (
-        <section className="mt-4 p-4 rounded-lg bg-wireframe-accent border-2 border-neutral-200">
-          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 mb-1">
+        <section className="mt-4 p-4 rounded-lg bg-wireframe-accent border-2 border-security-navy-100">
+          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-security-navy-600 mb-1">
             Documents
           </h4>
-          <p className="mb-3 text-xs text-neutral-600">
+          <p className="mb-3 text-xs text-security-navy-600">
             Optional. Attach a PDF, Word or Excel file, a scan or a photo — ID copy, contract,
             PSIRA certificate. Files upload once the team member is saved and appear under
             Documents. Max 10MB each.
           </p>
 
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-security border-2 border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-800 transition-colors hover:border-neutral-400 hover:bg-neutral-50">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-security border-2 border-security-navy-200 bg-white px-3 py-2 text-sm font-medium text-security-navy-900 transition-colors hover:border-security-navy-300 hover:bg-security-navy-50">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
               <path
                 strokeLinecap="round"
@@ -1527,10 +1527,10 @@ function EmployeeForm({
               {documents.map((file, index) => (
                 <li
                   key={`${file.name}-${file.size}-${index}`}
-                  className="flex items-center gap-3 rounded-security border-2 border-neutral-200 bg-white px-3 py-2"
+                  className="flex items-center gap-3 rounded-security border-2 border-security-navy-100 bg-white px-3 py-2"
                 >
                   <svg
-                    className="h-4 w-4 shrink-0 text-neutral-500"
+                    className="h-4 w-4 shrink-0 text-security-navy-500"
                     fill="none"
                     stroke="currentColor"
                     strokeWidth={1.8}
@@ -1543,13 +1543,13 @@ function EmployeeForm({
                       d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                     />
                   </svg>
-                  <span className="min-w-0 flex-1 truncate text-sm text-neutral-900">{file.name}</span>
-                  <span className="shrink-0 text-xs text-neutral-500">{formatFileSize(file.size)}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-security-navy-900">{file.name}</span>
+                  <span className="shrink-0 text-xs text-security-navy-500">{formatFileSize(file.size)}</span>
                   <button
                     type="button"
                     onClick={() => removeDocument(index)}
                     aria-label={`Remove ${file.name}`}
-                    className="shrink-0 rounded-full p-1 text-neutral-500 transition-colors hover:bg-red-50 hover:text-red-600"
+                    className="shrink-0 rounded-full p-1 text-security-navy-500 transition-colors hover:bg-red-50 hover:text-red-600"
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -1562,7 +1562,7 @@ function EmployeeForm({
         </section>
       )}
 
-      <div className="mt-4 flex items-center gap-3 pt-4 border-t-2 border-neutral-200">
+      <div className="mt-4 flex items-center gap-3 pt-4 border-t-2 border-security-navy-100">
         <button type="submit" disabled={submitting} className="btn-primary text-sm py-2">
           {submitting
             ? savedId
@@ -1861,12 +1861,12 @@ function EditModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       {confirmDialog}
       <div className="card-elevated w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="p-6 border-b-2 border-neutral-200 shrink-0 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-neutral-900">Edit Team Member</h3>
+        <div className="p-6 border-b-2 border-security-navy-100 shrink-0 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-security-navy-900">Edit Team Member</h3>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-[10px] text-black hover:bg-neutral-100 border-2 border-transparent hover:border-security-navy-300 transition-colors"
+            className="p-2 rounded-[10px] text-security-navy-900 hover:bg-security-navy-50 border-2 border-transparent hover:border-security-navy-300 transition-colors"
             aria-label="Close"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1875,7 +1875,7 @@ function EditModal({
           </button>
         </div>
         {loading ? (
-          <div className="p-8 text-center text-neutral-500">Loading...</div>
+          <div className="p-8 text-center text-security-navy-500">Loading...</div>
         ) : (
           <form onSubmit={handleSubmit} className="p-6 overflow-y-auto max-h-[calc(90vh-180px)] space-y-6">
             {error && (
@@ -1884,8 +1884,8 @@ function EditModal({
               </div>
             )}
 
-            <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-neutral-200">
-              <h4 className="text-sm font-semibold text-neutral-700 mb-3">Staff type</h4>
+            <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-security-navy-100">
+              <h4 className="text-sm font-semibold text-security-navy-700 mb-3">Staff type</h4>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -1897,7 +1897,7 @@ function EditModal({
                     className="w-4 h-4"
                   />
                   <span className="font-medium">Office Staff</span>
-                  <span className="text-sm text-neutral-500">(monthly salary)</span>
+                  <span className="text-sm text-security-navy-500">(monthly salary)</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -1909,12 +1909,12 @@ function EditModal({
                     className="w-4 h-4"
                   />
                   <span className="font-medium">Guard</span>
-                  <span className="text-sm text-neutral-500">(hourly rate)</span>
+                  <span className="text-sm text-security-navy-500">(hourly rate)</span>
                 </label>
               </div>
             </section>
 
-            <div className="flex gap-1 border-b-2 border-neutral-200 overflow-x-auto">
+            <div className="flex gap-1 border-b-2 border-security-navy-100 overflow-x-auto">
               {(["basic", "labour", "psira", "bank", ...(canViewDocuments ? ["documents" as const] : [])] as const).map((tab) => (
                 <button
                   key={tab}
@@ -1923,8 +1923,8 @@ function EditModal({
                   className={clsx(
                     "px-4 py-2.5 text-sm font-medium rounded-t-sm transition-colors -mb-px whitespace-nowrap",
                       activeTab === tab
-                        ? "bg-white text-neutral-800 border-2 border-neutral-200 border-b-transparent"
-                      : "text-neutral-600 hover:text-neutral-900"
+                        ? "bg-white text-security-navy-900 border-2 border-security-navy-100 border-b-transparent"
+                      : "text-security-navy-600 hover:text-security-navy-900"
                   )}
                 >
                   {tab === "basic"
@@ -1941,11 +1941,11 @@ function EditModal({
             </div>
 
             {activeTab === "documents" && (
-            <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-neutral-200">
-              <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 mb-1.5">
+            <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-security-navy-100">
+              <h4 className="text-[10px] font-semibold uppercase tracking-widest text-security-navy-600 mb-1.5">
                 Documents
               </h4>
-              <p className="mb-3 text-xs text-neutral-600">
+              <p className="mb-3 text-xs text-security-navy-600">
                 PDF, Word, Excel, scans or photos — ID copy, contract, PSIRA certificate. Files
                 upload straight away and appear under Documents. Max 10MB each.
               </p>
@@ -1955,8 +1955,8 @@ function EditModal({
                   className={clsx(
                     "inline-flex items-center gap-2 rounded-security border-2 px-3 py-2 text-sm font-medium transition-colors",
                     uploadingDocs
-                      ? "cursor-wait border-neutral-200 bg-neutral-100 text-neutral-500"
-                      : "cursor-pointer border-neutral-300 bg-white text-neutral-800 hover:border-neutral-400 hover:bg-neutral-50"
+                      ? "cursor-wait border-security-navy-100 bg-security-navy-50 text-security-navy-500"
+                      : "cursor-pointer border-security-navy-200 bg-white text-security-navy-900 hover:border-security-navy-300 hover:bg-security-navy-50"
                   )}
                 >
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
@@ -1985,18 +1985,18 @@ function EditModal({
 
               <div className="mt-3">
                 {docsLoading ? (
-                  <p className="text-sm text-neutral-600">Loading documents…</p>
+                  <p className="text-sm text-security-navy-600">Loading documents…</p>
                 ) : docs.length === 0 ? (
-                  <p className="text-sm text-neutral-600">No documents on file yet.</p>
+                  <p className="text-sm text-security-navy-600">No documents on file yet.</p>
                 ) : (
                   <ul className="flex flex-col gap-2">
                     {docs.map((doc) => (
                       <li
                         key={doc.id}
-                        className="flex items-center gap-3 rounded-security border-2 border-neutral-200 bg-white px-3 py-2"
+                        className="flex items-center gap-3 rounded-security border-2 border-security-navy-100 bg-white px-3 py-2"
                       >
                         <svg
-                          className="h-4 w-4 shrink-0 text-neutral-500"
+                          className="h-4 w-4 shrink-0 text-security-navy-500"
                           fill="none"
                           stroke="currentColor"
                           strokeWidth={1.8}
@@ -2010,8 +2010,8 @@ function EditModal({
                           />
                         </svg>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm text-neutral-900">{doc.fileName}</span>
-                          <span className="block text-xs text-neutral-500">
+                          <span className="block truncate text-sm text-security-navy-900">{doc.fileName}</span>
+                          <span className="block text-xs text-security-navy-500">
                             {doc.documentType} · {new Date(doc.createdAt).toLocaleDateString()}
                             {doc.status !== "ACTIVE" && ` · ${doc.status}`}
                           </span>
@@ -2039,7 +2039,7 @@ function EditModal({
 
             {activeTab === "basic" && (
             <section>
-              <h4 className="text-sm font-semibold text-neutral-700 mb-3">Basic Information</h4>
+              <h4 className="text-sm font-semibold text-security-navy-700 mb-3">Basic Information</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <input
                   placeholder="Team Member ID *"
@@ -2068,7 +2068,7 @@ function EditModal({
                 />
                 <div>
                   <input placeholder="Phone (e.g. 0821234567 or +27821234567)" value={phone} onChange={(e) => setPhone(e.target.value)} className="input-modern" title="WhatsApp number for clock-in, payslip, etc." />
-                  <p className="text-xs text-neutral-500 mt-0.5">Saved in WhatsApp-compatible format for clock-in, payslip, and leave commands.</p>
+                  <p className="text-xs text-security-navy-500 mt-0.5">Saved in WhatsApp-compatible format for clock-in, payslip, and leave commands.</p>
                 </div>
                 <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-modern" />
                 {employeeType === "general" ? (
@@ -2092,14 +2092,14 @@ function EditModal({
 
             {activeTab === "labour" && (
             <section>
-              <h4 className="text-sm font-semibold text-neutral-700 mb-3">Labour Law (BCEA)</h4>
+              <h4 className="text-sm font-semibold text-security-navy-700 mb-3">Labour Law (BCEA)</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
-                  <label className="text-sm font-medium text-neutral-600">Date of birth</label>
+                  <label className="text-sm font-medium text-security-navy-600">Date of birth</label>
                   <DateInput value={dateOfBirth} onChange={setDateOfBirth} className="input-modern" ariaLabel="Date of birth" pastOnly showToday={false} />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-sm font-medium text-neutral-600">Gender</label>
+                  <label className="text-sm font-medium text-security-navy-600">Gender</label>
                   <select value={gender} onChange={(e) => setGender(e.target.value)} className="input-modern">
                     <option value="">Select gender</option>
                     <option value="M">Male</option>
@@ -2107,7 +2107,7 @@ function EditModal({
                   </select>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-sm font-medium text-neutral-600">Marital status</label>
+                  <label className="text-sm font-medium text-security-navy-600">Marital status</label>
                   <select value={maritalStatus} onChange={(e) => setMaritalStatus(e.target.value)} className="input-modern">
                     <option value="">Select marital status</option>
                     <option value="single">Single</option>
@@ -2120,7 +2120,7 @@ function EditModal({
                 <input placeholder="Postal address" value={postalAddress} onChange={(e) => setPostalAddress(e.target.value)} className="input-modern" />
                 <input placeholder="Postal code" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className="input-modern" />
                 <div className="flex flex-col gap-1">
-                  <label className="text-sm font-medium text-neutral-600">Employment commencement date</label>
+                  <label className="text-sm font-medium text-security-navy-600">Employment commencement date</label>
                   <DateInput value={commencementDate} onChange={setCommencementDate} className="input-modern" ariaLabel="Commencement" />
                 </div>
                 <input placeholder="Occupation" value={occupation} onChange={(e) => setOccupation(e.target.value)} className="input-modern" />
@@ -2142,12 +2142,12 @@ function EditModal({
             )}
 
             {activeTab === "bank" && (
-            <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-neutral-200">
-              <h4 className="text-[10px] font-semibold uppercase tracking-widest text-neutral-600 mb-1.5">Bank Details</h4>
+            <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-security-navy-100">
+              <h4 className="text-[10px] font-semibold uppercase tracking-widest text-security-navy-600 mb-1.5">Bank Details</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input placeholder="Tax number" value={taxNumber} onChange={(e) => setTaxNumber(e.target.value)} className="input-modern py-2 text-sm" />
                 <div>
-                  <label className="block text-[10px] font-medium uppercase tracking-wider text-neutral-600 mb-0.5">Bank</label>
+                  <label className="block text-[10px] font-medium uppercase tracking-wider text-security-navy-600 mb-0.5">Bank</label>
                   <select
                     value={SA_MAJOR_BANKS.includes(bankName) ? bankName : "Other"}
                     onChange={(e) => setBankName(e.target.value === "Other" ? "" : e.target.value)}
@@ -2176,18 +2176,18 @@ function EditModal({
 
             {activeTab === "psira" && (
             <section>
-              <h4 className="text-sm font-semibold text-neutral-700 mb-3">PSIRA – Security Staff</h4>
+              <h4 className="text-sm font-semibold text-security-navy-700 mb-3">PSIRA – Security Staff</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-neutral-600 mb-1">PSIRA number <span className="text-red-600">*</span></label>
+                  <label className="block text-sm font-medium text-security-navy-600 mb-1">PSIRA number <span className="text-red-600">*</span></label>
                   <input placeholder="PSIRA number" value={psiraRegistrationNumber} onChange={(e) => setPsiraNumber(e.target.value)} className="input-modern" required={employeeType === "security_officer"} />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-sm font-medium text-neutral-600">PSIRA expiry</label>
+                  <label className="text-sm font-medium text-security-navy-600">PSIRA expiry</label>
                   <DateInput value={psiraRegistrationExpiry} onChange={setPsiraExpiryDate} className="input-modern" ariaLabel="PSIRA expiry" futureOnly />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-neutral-600 mb-1">PSIRA grade</label>
+                  <label className="block text-sm font-medium text-security-navy-600 mb-1">PSIRA grade</label>
                   <select value={psiraGrade} onChange={(e) => setPsiraGrade(e.target.value)} className="input-modern">
                     <option value="">—</option>
                     <option value="E">E</option>
@@ -2331,7 +2331,7 @@ function StatusModal({
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
         <div className="card-wireframe w-full max-w-sm p-6 shadow-xl">
-          <p className="text-neutral-600">No status transitions available for offboarded team members.</p>
+          <p className="text-security-navy-600">No status transitions available for offboarded team members.</p>
           <button onClick={onClose} className="mt-4 btn-primary w-full">Close</button>
         </div>
       </div>
@@ -2341,9 +2341,9 @@ function StatusModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="card-wireframe w-full max-w-sm shadow-xl">
-        <div className="p-6 border-b-2 border-neutral-200">
-          <h3 className="text-lg font-semibold text-neutral-900">Change employment status</h3>
-          <p className="text-sm text-neutral-500 mt-1">
+        <div className="p-6 border-b-2 border-security-navy-100">
+          <h3 className="text-lg font-semibold text-security-navy-900">Change employment status</h3>
+          <p className="text-sm text-security-navy-500 mt-1">
             {employee.firstName} {employee.lastName}
           </p>
         </div>
@@ -2353,7 +2353,7 @@ function StatusModal({
               {error}
             </div>
           )}
-          <p className="text-sm text-neutral-600 mb-3">
+          <p className="text-sm text-security-navy-600 mb-3">
             Current: <span className={`badge ${statusColors[employee.status]}`}>{employee.status}</span>
           </p>
           <select

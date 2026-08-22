@@ -51,13 +51,13 @@ export function BulkActionBar({
   const actionDisabled = disabled || !allowedActions.includes(action) || (needsBranch && !branchId) || (needsCourse && !courseId);
 
   return (
-    <div className="sticky bottom-3 z-40 rounded-2xl border border-slate-300 bg-white/95 p-3 shadow-lg backdrop-blur">
+    <div className="sticky bottom-3 z-40 rounded-2xl border border-security-navy-200 bg-white/95 p-3 shadow-lg backdrop-blur">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+        <span className="rounded-full bg-security-navy-50 px-3 py-1 text-xs font-semibold text-security-navy-700">
           {selectedCount} selected
         </span>
         <select
-          className="input-compact min-w-56 rounded-xl"
+          className="input-compact min-w-56 rounded-security-lg"
           value={action}
           onChange={(e) => setAction(e.target.value as BulkActionType)}
         >
@@ -71,7 +71,7 @@ export function BulkActionBar({
         </select>
         {needsBranch && (
           <select
-            className="input-compact min-w-52 rounded-xl"
+            className="input-compact min-w-52 rounded-security-lg"
             value={branchId}
             onChange={(e) => setBranchId(e.target.value)}
           >
@@ -85,7 +85,7 @@ export function BulkActionBar({
         )}
         {needsCourse && (
           <select
-            className="input-compact min-w-52 rounded-xl"
+            className="input-compact min-w-52 rounded-security-lg"
             value={courseId}
             onChange={(e) => setCourseId(e.target.value)}
           >
@@ -99,13 +99,13 @@ export function BulkActionBar({
         )}
         <button
           type="button"
-          className="btn-primary px-3 py-1.5 text-xs rounded-xl"
+          className="btn-primary px-3 py-1.5 text-xs rounded-security-lg"
           disabled={actionDisabled}
           onClick={() => onApply({ action, branchId, courseId })}
         >
           Apply
         </button>
-        <button type="button" className="btn-ghost px-3 py-1.5 text-xs rounded-xl" onClick={onClear} disabled={disabled}>
+        <button type="button" className="btn-ghost px-3 py-1.5 text-xs rounded-security-lg" onClick={onClear} disabled={disabled}>
           Clear selection
         </button>
       </div>

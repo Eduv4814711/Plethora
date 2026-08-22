@@ -78,7 +78,7 @@ export default function AcademyFinancePage() {
       {loading && !summary ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label="Loading finance metrics">
           {Array.from({ length: 6 }).map((_, idx) => (
-            <div key={idx} className="rounded-lg border border-neutral-300 bg-white p-3">
+            <div key={idx} className="rounded-lg border border-security-navy-200 bg-white p-3">
               <SkeletonBlock className="h-3 w-28" />
               <SkeletonBlock className="mt-3 h-6 w-20" />
             </div>
@@ -98,11 +98,11 @@ export default function AcademyFinancePage() {
       <section className="card-dashboard p-4">
         <h2 className="font-medium">Pending verification</h2>
         {loading ? (
-          <p className="mt-2 text-sm text-neutral-500">Loading pending payments...</p>
+          <p className="mt-2 text-sm text-security-navy-500">Loading pending payments...</p>
         ) : pending.length === 0 ? (
-          <p className="mt-2 text-sm text-neutral-500">No payments are waiting for verification.</p>
+          <p className="mt-2 text-sm text-security-navy-500">No payments are waiting for verification.</p>
         ) : (
-          <ul className="mt-2 divide-y divide-neutral-200 text-sm">
+          <ul className="mt-2 divide-y divide-security-navy-100 text-sm">
             {pending.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
                 <span>
@@ -124,10 +124,10 @@ export default function AcademyFinancePage() {
       <section className="card-dashboard p-4">
         <h2 className="font-medium">Recent payments</h2>
         <div className="mt-2 overflow-x-auto">
-            <table className="min-w-full divide-y divide-neutral-200 text-sm" aria-busy={loading}>
+            <table className="min-w-full divide-y divide-security-navy-100 text-sm" aria-busy={loading}>
               <caption className="sr-only">Recent Academy payments</caption>
               <thead>
-                <tr className="text-[11px] uppercase tracking-wide text-neutral-500">
+                <tr className="text-[11px] uppercase tracking-wide text-security-navy-500">
                   <th scope="col">Invoice</th>
                   <th scope="col">Student</th>
                   <th scope="col">Amount</th>
@@ -162,7 +162,7 @@ export default function AcademyFinancePage() {
 function Kpi({ label, value }: { label: string; value: string }) {
   return (
     <div className="card-dashboard p-3">
-      <p className="text-xs text-neutral-500">{label}</p>
+      <p className="text-xs text-security-navy-500">{label}</p>
       <p className="mt-1 font-mono text-lg font-semibold">{value}</p>
     </div>
   );

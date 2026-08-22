@@ -79,7 +79,7 @@ export default function QuoteDetailPage() {
   };
 
   if (loading) {
-    return <div className="h-72 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-700" aria-label="Loading quote" />;
+    return <div className="h-72 animate-pulse rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700" aria-label="Loading quote" />;
   }
 
   if (!quote) {
@@ -108,10 +108,10 @@ export default function QuoteDetailPage() {
             ← Back to quotes
           </Link>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">{quote.quoteNumber}</h1>
+            <h1 className="text-xl font-semibold text-security-navy-900 dark:text-security-navy-100">{quote.quoteNumber}</h1>
             <StatusBadge status={quote.status} />
           </div>
-          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+          <p className="mt-1 text-sm text-security-navy-500 dark:text-security-navy-400">
             {quote.client?.name} · {quote.quoteDate?.slice(0, 10)} · valid until {quote.validUntil?.slice(0, 10)}
           </p>
         </div>
@@ -174,7 +174,7 @@ export default function QuoteDetailPage() {
       )}
 
       {convertedInvoice && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-security-emerald-200 bg-security-emerald-50 px-3 py-2 text-sm text-security-emerald-700 dark:border-security-emerald-700 dark:bg-security-emerald-700/30 dark:text-security-emerald-300">
           <span>This quote was converted to invoice {convertedInvoice.invoiceNumber}.</span>
           <Link href={`/payroll/billing/invoices/${convertedInvoice.id}`} className="font-semibold underline">
             Open invoice
@@ -182,17 +182,17 @@ export default function QuoteDetailPage() {
         </div>
       )}
 
-      <section className="overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-700">
-        <table className="min-w-full divide-y divide-neutral-200 text-sm dark:divide-neutral-700">
-          <thead className="bg-neutral-50 dark:bg-neutral-900">
-            <tr className="text-left text-[10px] uppercase tracking-wider text-neutral-500">
+      <section className="overflow-x-auto rounded-security-lg border border-security-navy-100 dark:border-security-navy-700">
+        <table className="min-w-full divide-y divide-security-navy-100 text-sm dark:divide-security-navy-700">
+          <thead className="bg-security-navy-50 dark:bg-security-navy-900">
+            <tr className="text-left text-[10px] uppercase tracking-wider text-security-navy-500">
               <th className="px-3 py-2">Description</th>
               <th className="px-3 py-2 text-right">Qty</th>
               <th className="px-3 py-2 text-right">Unit price</th>
               <th className="px-3 py-2 text-right">Amount</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+          <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
             {quote.items.map((item, i) => (
               <tr key={item.id ?? i}>
                 <td className="px-3 py-2">{item.description}</td>
@@ -210,30 +210,30 @@ export default function QuoteDetailPage() {
       </section>
 
       <section className="ml-auto w-full max-w-xs space-y-1.5">
-        <div className="flex justify-between text-sm text-neutral-700 dark:text-neutral-300">
+        <div className="flex justify-between text-sm text-security-navy-700 dark:text-security-navy-300">
           <span>Subtotal</span>
           <span className="font-mono tabular-nums">{formatCurrency(quote.subtotal, { currency })}</span>
         </div>
         {Number(quote.discountAmount) !== 0 && (
-          <div className="flex justify-between text-sm text-neutral-700 dark:text-neutral-300">
+          <div className="flex justify-between text-sm text-security-navy-700 dark:text-security-navy-300">
             <span>Discount</span>
             <span className="font-mono tabular-nums">-{formatCurrency(quote.discountAmount, { currency })}</span>
           </div>
         )}
-        <div className="flex justify-between text-sm text-neutral-700 dark:text-neutral-300">
+        <div className="flex justify-between text-sm text-security-navy-700 dark:text-security-navy-300">
           <span>VAT ({quote.vatRate}%)</span>
           <span className="font-mono tabular-nums">{formatCurrency(quote.vatAmount, { currency })}</span>
         </div>
-        <div className="flex justify-between border-t border-neutral-300 pt-2 text-base font-bold text-neutral-900 dark:border-neutral-600 dark:text-neutral-100">
+        <div className="flex justify-between border-t border-security-navy-200 pt-2 text-base font-bold text-security-navy-900 dark:border-security-navy-600 dark:text-security-navy-100">
           <span>Total</span>
           <span className="font-mono tabular-nums">{formatCurrency(quote.totalAmount, { currency })}</span>
         </div>
       </section>
 
       {quote.notes && (
-        <section className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm dark:border-neutral-700 dark:bg-neutral-900">
-          <h2 className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">Notes</h2>
-          <p className="whitespace-pre-wrap text-neutral-800 dark:text-neutral-200">{quote.notes}</p>
+        <section className="rounded-security-lg border border-security-navy-100 bg-security-navy-50 p-4 text-sm dark:border-security-navy-700 dark:bg-security-navy-900">
+          <h2 className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">Notes</h2>
+          <p className="whitespace-pre-wrap text-security-navy-900 dark:text-security-navy-200">{quote.notes}</p>
         </section>
       )}
     </main>

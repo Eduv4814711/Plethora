@@ -94,10 +94,10 @@ export default function ClientStatementPage() {
           >
             ← Back to clients
           </Link>
-          <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">
+          <h1 className="text-xl font-semibold text-security-navy-900 dark:text-security-navy-100">
             {statement?.client.name ?? "Client statement"}
           </h1>
-          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+          <p className="mt-1 text-sm text-security-navy-500 dark:text-security-navy-400">
             Account statement and purchase history.
           </p>
         </div>
@@ -121,7 +121,7 @@ export default function ClientStatementPage() {
 
       <div className="flex flex-wrap items-end gap-3">
         <label className="block">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">From</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">From</span>
           <input
             type="date"
             value={from}
@@ -130,19 +130,19 @@ export default function ClientStatementPage() {
           />
         </label>
         <label className="block">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-500">To</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">To</span>
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="input-modern mt-1" />
         </label>
       </div>
 
       {loading ? (
-        <div className="h-64 animate-pulse rounded-xl bg-neutral-200 dark:bg-neutral-700" aria-label="Loading statement" />
+        <div className="h-64 animate-pulse rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700" aria-label="Loading statement" />
       ) : statement ? (
         <>
-          <section className="overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-700">
-            <table className="min-w-full divide-y divide-neutral-200 text-sm dark:divide-neutral-700">
-              <thead className="bg-neutral-50 dark:bg-neutral-900">
-                <tr className="text-left text-[10px] uppercase tracking-wider text-neutral-500">
+          <section className="overflow-x-auto rounded-security-lg border border-security-navy-100 dark:border-security-navy-700">
+            <table className="min-w-full divide-y divide-security-navy-100 text-sm dark:divide-security-navy-700">
+              <thead className="bg-security-navy-50 dark:bg-security-navy-900">
+                <tr className="text-left text-[10px] uppercase tracking-wider text-security-navy-500">
                   <th className="px-3 py-2">Date</th>
                   <th className="px-3 py-2">Description</th>
                   <th className="px-3 py-2 text-right">Debit</th>
@@ -150,8 +150,8 @@ export default function ClientStatementPage() {
                   <th className="px-3 py-2 text-right">Balance</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                <tr className="bg-neutral-50 font-semibold dark:bg-neutral-900">
+              <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
+                <tr className="bg-security-navy-50 font-semibold dark:bg-security-navy-900">
                   <td className="px-3 py-2" colSpan={4}>
                     Opening balance
                   </td>
@@ -161,7 +161,7 @@ export default function ClientStatementPage() {
                 </tr>
                 {statement.transactions.length === 0 ? (
                   <tr>
-                    <td className="px-3 py-6 text-center text-neutral-500" colSpan={5}>
+                    <td className="px-3 py-6 text-center text-security-navy-500" colSpan={5}>
                       No transactions in this period.
                     </td>
                   </tr>
@@ -196,7 +196,7 @@ export default function ClientStatementPage() {
                     </tr>
                   ))
                 )}
-                <tr className="border-t-2 border-neutral-800 font-bold dark:border-neutral-300">
+                <tr className="border-t-2 border-security-navy-800 font-bold dark:border-security-navy-200">
                   <td className="px-3 py-2" colSpan={4}>
                     Closing balance
                   </td>
@@ -209,7 +209,7 @@ export default function ClientStatementPage() {
           </section>
 
           <section>
-            <h2 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-100">Outstanding by age</h2>
+            <h2 className="mb-2 text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">Outstanding by age</h2>
             <div className="grid gap-2 sm:grid-cols-5">
               {(
                 [
@@ -222,10 +222,10 @@ export default function ClientStatementPage() {
               ).map(([label, value]) => (
                 <div
                   key={label}
-                  className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900"
+                  className="rounded-lg border border-security-navy-100 bg-security-navy-50 px-3 py-2 dark:border-security-navy-700 dark:bg-security-navy-900"
                 >
-                  <p className="text-[10px] uppercase tracking-wider text-neutral-500">{label}</p>
-                  <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
+                  <p className="text-[10px] uppercase tracking-wider text-security-navy-500">{label}</p>
+                  <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-security-navy-900 dark:text-security-navy-100">
                     {formatCurrency(value, { currency })}
                   </p>
                 </div>
@@ -235,13 +235,13 @@ export default function ClientStatementPage() {
 
           <section className="grid gap-4 lg:grid-cols-2">
             <div>
-              <h2 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-100">Invoices</h2>
+              <h2 className="mb-2 text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">Invoices</h2>
               {invoices.length === 0 ? (
-                <p className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-6 text-center text-sm text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900">
+                <p className="rounded-security-lg border border-security-navy-100 bg-security-navy-50 px-4 py-6 text-center text-sm text-security-navy-600 dark:border-security-navy-700 dark:bg-security-navy-900">
                   No invoices yet.
                 </p>
               ) : (
-                <ul className="divide-y divide-neutral-100 rounded-xl border border-neutral-200 dark:divide-neutral-800 dark:border-neutral-700">
+                <ul className="divide-y divide-security-navy-100 rounded-security-lg border border-security-navy-100 dark:divide-security-navy-800 dark:border-security-navy-700">
                   {invoices.map((invoice) => (
                     <li key={invoice.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
                       <Link
@@ -250,7 +250,7 @@ export default function ClientStatementPage() {
                       >
                         {invoice.invoiceNumber}
                       </Link>
-                      <span className="text-neutral-500">{invoice.invoiceDate?.slice(0, 10)}</span>
+                      <span className="text-security-navy-500">{invoice.invoiceDate?.slice(0, 10)}</span>
                       <span className="font-mono tabular-nums">
                         {formatCurrency(invoice.totalAmount, { currency })}
                       </span>
@@ -262,13 +262,13 @@ export default function ClientStatementPage() {
             </div>
 
             <div>
-              <h2 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-100">Quotes</h2>
+              <h2 className="mb-2 text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">Quotes</h2>
               {quotes.length === 0 ? (
-                <p className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-6 text-center text-sm text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900">
+                <p className="rounded-security-lg border border-security-navy-100 bg-security-navy-50 px-4 py-6 text-center text-sm text-security-navy-600 dark:border-security-navy-700 dark:bg-security-navy-900">
                   No quotes yet.
                 </p>
               ) : (
-                <ul className="divide-y divide-neutral-100 rounded-xl border border-neutral-200 dark:divide-neutral-800 dark:border-neutral-700">
+                <ul className="divide-y divide-security-navy-100 rounded-security-lg border border-security-navy-100 dark:divide-security-navy-800 dark:border-security-navy-700">
                   {quotes.map((quote) => (
                     <li key={quote.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
                       <Link
@@ -277,7 +277,7 @@ export default function ClientStatementPage() {
                       >
                         {quote.quoteNumber}
                       </Link>
-                      <span className="text-neutral-500">{quote.quoteDate?.slice(0, 10)}</span>
+                      <span className="text-security-navy-500">{quote.quoteDate?.slice(0, 10)}</span>
                       <span className="font-mono tabular-nums">
                         {formatCurrency(quote.totalAmount, { currency })}
                       </span>
