@@ -6,6 +6,7 @@ dist
 coverage
 *.tsbuildinfo
 .turbo
+.cache/
 uploads
 *.ndjson
 *.zip
