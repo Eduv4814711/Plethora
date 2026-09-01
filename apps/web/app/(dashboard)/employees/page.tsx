@@ -10,6 +10,7 @@ import { canManageEmployeeDetails, hasCapability } from "@/lib/permissions";
 import { DateInput } from "@/components/date-input";
 import { useConfirmDialog } from "@/components/ui";
 import { clsx } from "clsx";
+import { EmployeeDocumentsSection } from "@/components/employees/EmployeeDocumentsSection";
 
 /**
  * Mirrors the server's allow-list in apps/api/src/modules/documents/documents.routes.ts.
@@ -273,6 +274,15 @@ export default function EmployeesPage() {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <Link
+            href="/employees/compliance"
+            className="btn-secondary h-11 shrink-0 flex items-center gap-2 text-security-emerald-800 border-security-emerald-300 bg-security-emerald-50/50 hover:bg-security-emerald-100/60"
+          >
+            <svg className="w-5 h-5 text-security-emerald-700" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            Compliance Report
+          </Link>
           <Link
             href="/employees/leave"
             className="btn-secondary h-11 shrink-0 flex items-center gap-2"
@@ -1934,107 +1944,18 @@ function EditModal({
                       : tab === "bank"
                         ? "Bank & tax"
                         : tab === "documents"
-                          ? "Documents"
+                          ? "Documents & Compliance"
                           : "PSIRA"}
                 </button>
               ))}
             </div>
 
             {activeTab === "documents" && (
-            <section className="p-4 rounded-lg bg-wireframe-accent border-2 border-security-navy-100">
-              <h4 className="text-[10px] font-semibold uppercase tracking-widest text-security-navy-600 mb-1.5">
-                Documents
-              </h4>
-              <p className="mb-3 text-xs text-security-navy-600">
-                PDF, Word, Excel, scans or photos — ID copy, contract, PSIRA certificate. Files
-                upload straight away and appear under Documents. Max 10MB each.
-              </p>
-
-              {canUploadDocuments && (
-                <label
-                  className={clsx(
-                    "inline-flex items-center gap-2 rounded-security border-2 px-3 py-2 text-sm font-medium transition-colors",
-                    uploadingDocs
-                      ? "cursor-wait border-security-navy-100 bg-security-navy-50 text-security-navy-500"
-                      : "cursor-pointer border-security-navy-200 bg-white text-security-navy-900 hover:border-security-navy-300 hover:bg-security-navy-50"
-                  )}
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M12 4v12m0-12l-4 4m4-4l4 4M4 17v1a3 3 0 003 3h10a3 3 0 003-3v-1"
-                    />
-                  </svg>
-                  {uploadingDocs ? "Uploading…" : "Upload files"}
-                  <input
-                    type="file"
-                    multiple
-                    accept={DOCUMENT_ACCEPT}
-                    disabled={uploadingDocs}
-                    className="sr-only"
-                    onChange={(e) => {
-                      void handleDocumentUpload(e.target.files);
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
-              )}
-
-              {docsError && <p className="mt-2 text-xs font-medium text-red-700">{docsError}</p>}
-
-              <div className="mt-3">
-                {docsLoading ? (
-                  <p className="text-sm text-security-navy-600">Loading documents…</p>
-                ) : docs.length === 0 ? (
-                  <p className="text-sm text-security-navy-600">No documents on file yet.</p>
-                ) : (
-                  <ul className="flex flex-col gap-2">
-                    {docs.map((doc) => (
-                      <li
-                        key={doc.id}
-                        className="flex items-center gap-3 rounded-security border-2 border-security-navy-100 bg-white px-3 py-2"
-                      >
-                        <svg
-                          className="h-4 w-4 shrink-0 text-security-navy-500"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth={1.8}
-                          viewBox="0 0 24 24"
-                          aria-hidden
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                          />
-                        </svg>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm text-security-navy-900">{doc.fileName}</span>
-                          <span className="block text-xs text-security-navy-500">
-                            {doc.documentType} · {new Date(doc.createdAt).toLocaleDateString()}
-                            {doc.status !== "ACTIVE" && ` · ${doc.status}`}
-                          </span>
-                        </span>
-                        {canDownloadDocuments && doc.downloadUrl && (
-                          <button
-                            type="button"
-                            className="btn-secondary shrink-0 text-xs py-1.5 px-3"
-                            onClick={() => {
-                              void downloadPrivateFile(token, doc.downloadUrl!, doc.fileName).catch((err) =>
-                                setDocsError(err instanceof Error ? err.message : "Download failed")
-                              );
-                            }}
-                          >
-                            Download
-                          </button>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </section>
+              <EmployeeDocumentsSection
+                employeeId={employeeId}
+                token={token}
+                onProfileUpdated={onSuccess}
+              />
             )}
 
             {activeTab === "basic" && (

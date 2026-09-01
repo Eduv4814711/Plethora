@@ -29,6 +29,7 @@ import {
   Area,
 } from "recharts";
 import { CHART_PRIMARY, CHART_SECONDARY, CHART_SERIES } from "@/lib/chart-theme";
+import { ComplianceSummaryWidget } from "@/components/dashboard/ComplianceSummaryWidget";
 
 interface Site {
   id: string;
@@ -445,6 +446,10 @@ export default function DashboardPage() {
           </span>
         </div>
       )}
+
+      <div className="mb-3 shrink-0">
+        <ComplianceSummaryWidget />
+      </div>
 
       <section className="mb-2 grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-3" aria-label="Action items">
         {(data?.pendingApprovalsInbox ?? 0) > 0 && (

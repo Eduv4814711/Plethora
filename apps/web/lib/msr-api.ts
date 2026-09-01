@@ -176,25 +176,130 @@ export async function reviewIncident(
   return parseJson(res, "Failed to review incident");
 }
 
-// ——— Documents ———
+// ——— Documents & Compliance ———
+
+export interface DocumentTypeDefinition {
+  type: string;
+  label: string;
+  category: string;
+  categoryLabel: string;
+  isSensitive?: boolean;
+  requiresExpiry?: boolean;
+  defaultAuthority?: string;
+  description?: string;
+}
+
+export interface ExpiryEvaluation {
+  state: "VALID" | "EXPIRING_SOON_7D" | "EXPIRING_SOON_30D" | "EXPIRING_SOON_60D" | "EXPIRING_SOON_90D" | "EXPIRED" | "NO_EXPIRY";
+  daysUntilExpiry: number | null;
+  hasExpired: boolean;
+  isExpiringSoon: boolean;
+  label: string;
+}
 
 export interface ManagedDocument {
   id: string;
   title: string;
   documentType: string;
   category: string;
+  documentCategory?: string | null;
+  documentNumber?: string | null;
+  issuingAuthority?: string | null;
+  issueDate?: string | null;
+  expiryDate?: string | null;
+  doesNotExpire?: boolean;
+  isSensitive?: boolean;
+  verificationStatus?: string;
+  verifiedById?: string | null;
+  verifiedAt?: string | null;
+  rejectionReason?: string | null;
+  notes?: string | null;
   status: string;
   fileName: string;
   downloadUrl?: string;
-  expiryDate?: string | null;
   createdAt: string;
+  updatedAt?: string;
   site?: { id: string; name: string } | null;
-  employee?: { id: string; firstName: string; lastName: string } | null;
+  employee?: { id: string; firstName: string; lastName: string; employeeNumber?: string } | null;
+  uploadedBy?: { id: string; name: string; email?: string } | null;
+  verifiedBy?: { id: string; name: string; email?: string } | null;
+  expiryState?: ExpiryEvaluation;
+  typeDefinition?: DocumentTypeDefinition;
+}
+
+export type OverallComplianceStatus = "COMPLIANT" | "ATTENTION_REQUIRED" | "NON_COMPLIANT";
+
+export interface RequiredDocumentRule {
+  type: string;
+  label: string;
+  category: string;
+  reason: string;
+  isRequired: boolean;
+}
+
+export interface RequirementEvaluation {
+  rule: RequiredDocumentRule;
+  status: "VERIFIED" | "VALID" | "EXPIRING_SOON" | "EXPIRED" | "PENDING_VERIFICATION" | "REJECTED" | "MISSING";
+  documentId?: string;
+  documentName?: string;
+  fileName?: string;
+  verificationStatus?: string;
+  issueDate?: string | null;
+  expiryDate?: string | null;
+  daysUntilExpiry?: number | null;
+  expiryLabel?: string;
+}
+
+export interface EmployeeComplianceDetail {
+  employeeId: string;
+  employeeNumber: string;
+  employeeName: string;
+  employeeType: string;
+  status: string;
+  jobRole?: string | null;
+  psiraGrade?: string | null;
+  psiraRegistrationNumber?: string | null;
+  overallStatus: OverallComplianceStatus;
+  summary: {
+    totalRequired: number;
+    verifiedCount: number;
+    pendingCount: number;
+    expiringCount: number;
+    expiredCount: number;
+    missingCount: number;
+  };
+  requirements: RequirementEvaluation[];
+  activeCertificates: Array<{
+    id: string;
+    type: string;
+    label: string;
+    category: string;
+    documentNumber?: string | null;
+    issuingAuthority?: string | null;
+    verificationStatus: string;
+    expiryDate?: string | null;
+    expiryLabel?: string;
+    hasExpired: boolean;
+    isExpiringSoon: boolean;
+  }>;
+  totalDocumentsCount: number;
+}
+
+export interface CompanyComplianceSummary {
+  totalEmployees: number;
+  fullyCompliantCount: number;
+  attentionRequiredCount: number;
+  nonCompliantCount: number;
+  complianceRatePercent: number;
+  documentsExpiringSoonCount: number;
+  employeesMissingDocumentsCount: number;
+  employeesWithExpiredDocumentsCount: number;
+  psiraVerificationPendingCount: number;
 }
 
 export async function listDocuments(
   token: string,
-  params?: Record<string, string | number | undefined>
+  params?: Record<string, string | number | boolean | undefined>
 ): Promise<{ items: ManagedDocument[]; total: number }> {
   const q = new URLSearchParams();
   if (params) {
@@ -206,20 +311,95 @@ export async function listDocuments(
   return parseJson(res, "Failed to load documents");
 }
 
+export async function getDocumentTaxonomy(token: string): Promise<{
+  categories: Record<string, { label: string; description: string; isSensitive?: boolean }>;
+  taxonomy: DocumentTypeDefinition[];
+}> {
+  const res = await authFetch("/documents/taxonomy", token);
+  return parseJson(res, "Failed to load document taxonomy");
+}
+
+export async function getEmployeeDocuments(
+  token: string,
+  employeeId: string,
+  params?: Record<string, string | number | undefined>
+): Promise<{ items: ManagedDocument[]; total: number }> {
+  const q = new URLSearchParams();
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== "") q.set(k, String(v));
+    }
+  }
+  const res = await authFetch(`/employees/${employeeId}/documents?${q.toString()}`, token);
+  return parseJson(res, "Failed to load employee documents");
+}
+
+export async function getEmployeeCompliance(
+  token: string,
+  employeeId: string
+): Promise<EmployeeComplianceDetail> {
+  const res = await authFetch(`/employees/${employeeId}/compliance`, token);
+  return parseJson(res, "Failed to load employee compliance");
+}
+
+export async function getCompanyComplianceSummary(
+  token: string
+): Promise<CompanyComplianceSummary> {
+  const res = await authFetch("/employees/compliance-summary", token);
+  return parseJson(res, "Failed to load company compliance summary");
+}
+
+export async function getCompanyComplianceReport(
+  token: string,
+  params?: Record<string, string | number | undefined>
+): Promise<{ items: EmployeeComplianceDetail[]; total: number }> {
+  const q = new URLSearchParams();
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== "") q.set(k, String(v));
+    }
+  }
+  const res = await authFetch(`/employees/compliance-report?${q.toString()}`, token);
+  return parseJson(res, "Failed to load compliance report");
+}
+
+export async function verifyDocument(token: string, documentId: string): Promise<ManagedDocument> {
+  const res = await authFetch(`/documents/${documentId}/verify`, token, { method: "POST" });
+  return parseJson(res, "Failed to verify document");
+}
+
+export async function rejectDocument(
+  token: string,
+  documentId: string,
+  rejectionReason: string
+): Promise<ManagedDocument> {
+  const res = await authFetch(`/documents/${documentId}/reject`, token, {
+    method: "POST",
+    body: JSON.stringify({ rejectionReason }),
+  });
+  return parseJson(res, "Failed to reject document");
+}
+
+export async function updateDocumentMetadata(
+  token: string,
+  documentId: string,
+  data: Record<string, unknown>
+): Promise<ManagedDocument> {
+  const res = await authFetch(`/documents/${documentId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+  return parseJson(res, "Failed to update document metadata");
+}
+
 export async function uploadDocument(
   token: string,
   file: File,
-  meta: Record<string, string>
+  meta: Record<string, string | boolean | undefined>
 ): Promise<ManagedDocument> {
   const form = new FormData();
-  // Metadata MUST be appended before the file. The upload route validates
-  // `data.fields` as soon as `request.file()` resolves, which is before the file
-  // body has been consumed — so any field sent after the file part has not been
-  // parsed yet and the request fails validation. A small file hides this (the
-  // whole payload lands in one chunk, so the trailing fields are already there);
-  // anything big enough to arrive in several chunks fails with a 400.
   for (const [k, v] of Object.entries(meta)) {
-    if (v) form.append(k, v);
+    if (v !== undefined && v !== null) form.append(k, String(v));
   }
   form.append("file", file);
   const csrf =

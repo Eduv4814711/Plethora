@@ -26,3 +26,16 @@ apps/web/.debug-*
 !.env.railway.api.example
 !.env.railway.web.example
 !.env.sync.example
+
+# Python & virtual environments
+**/.venv*
+**/.venv*/**
+**/venv/**
+**/__pycache__/**
+*.py[cod]
+
+# Video scratch & media assets
+videos/
+*.wav
+*.mp4
+*.webm

@@ -18,9 +18,18 @@ import {
   canViewEmployeeSensitiveFields,
   canWriteEmployeeSensitiveFields,
 } from "../lib/employee-dto.js";
-import { EMPLOYEE_RESTRICTED_FIELDS, hasRestrictedFields } from "../lib/sensitive-data.js";
+import { EMPLOYEE_RESTRICTED_FIELDS, hasRestrictedFields, canAccessSensitiveData } from "../lib/sensitive-data.js";
 import { recordSensitiveAccess } from "../lib/sensitive-access-audit.js";
 import { hasCapability } from "../lib/capabilities.js";
+import {
+  calculateEmployeeCompliance,
+  getCompanyComplianceSummary,
+  getCompanyComplianceReport,
+  evaluateExpiryState,
+  getDocumentDefinition,
+} from "../modules/documents/compliance.service.js";
+import { listDocuments } from "../modules/documents/documents.service.js";
+import { privateDownloadUrl } from "../lib/private-download.js";
 
 function rejectEmployeeDetailEdits(request: { user?: import("../lib/types.js").AuthenticatedUser }, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
   if (request.user && canEditEmployeeDetails(request.user)) return false;
@@ -437,6 +446,93 @@ export async function employeesRoutes(app: FastifyInstance) {
     return reply.send({ employeeNumber: nextNumber });
   });
 
+  app.get("/compliance-summary", { preHandler: readProtect }, async (request, reply) => {
+    const user = request.user!;
+    const summary = await getCompanyComplianceSummary(user.companyId);
+    return reply.send(summary);
+  });
+
+  app.get("/compliance-report", { preHandler: readProtect }, async (request, reply) => {
+    const user = request.user!;
+    const q = request.query as Record<string, string | undefined>;
+    const report = await getCompanyComplianceReport(user.companyId, {
+      status: q.status,
+      complianceStatus: q.complianceStatus as never,
+      employeeType: q.employeeType,
+      psiraGrade: q.psiraGrade,
+      groupId: q.groupId,
+      search: q.q || q.search,
+      expiryFilter: q.expiryFilter as never,
+      limit: q.limit ? Number(q.limit) : 50,
+      offset: q.offset ? Number(q.offset) : 0,
+    });
+    return reply.send(report);
+  });
+
+  app.get("/:id/compliance", { preHandler: readProtect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const user = request.user!;
+
+    const compliance = await calculateEmployeeCompliance(user.companyId, id);
+    if (!compliance) {
+      return reply.code(404).send({ error: "Employee not found" });
+    }
+    return reply.send(compliance);
+  });
+
+  app.get("/:id/documents", { preHandler: readProtect }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const user = request.user!;
+    const q = request.query as Record<string, string | undefined>;
+
+    const employee = await prisma.employee.findFirst({
+      where: { id, companyId: user.companyId },
+      select: { id: true },
+    });
+    if (!employee) {
+      return reply.code(404).send({ error: "Employee not found" });
+    }
+
+    const result = await listDocuments(user.companyId, {
+      employeeId: id,
+      documentCategory: q.documentCategory,
+      verificationStatus: q.verificationStatus,
+      status: q.status as never,
+      search: q.q || q.search,
+      limit: q.limit ? Number(q.limit) : 100,
+      offset: q.offset ? Number(q.offset) : 0,
+    });
+
+    const canExport = hasCapability(user, "/documents", "export") || hasCapability(user, "/employees", "export");
+    const canSeeSensitive =
+      user.isOwner ||
+      canAccessSensitiveData(user, "/employees") ||
+      canAccessSensitiveData(user, "/payroll") ||
+      hasCapability(user, "/documents", "view_sensitive");
+
+    const items = result.items
+      .filter((doc) => {
+        if (!doc.isSensitive && doc.documentCategory !== "LEAVE_MEDICAL" && doc.documentCategory !== "DISCIPLINARY" && doc.documentCategory !== "FIREARM") {
+          return true;
+        }
+        return canSeeSensitive;
+      })
+      .map((doc) => {
+        const { fileUrl: _fileUrl, ...meta } = doc;
+        return {
+          ...meta,
+          expiryState: evaluateExpiryState(doc.expiryDate, doc.doesNotExpire),
+          typeDefinition: getDocumentDefinition(doc.documentType),
+          ...(canExport ? { downloadUrl: privateDownloadUrl(`/documents/${doc.id}/download`) } : {}),
+        };
+      });
+
+    return reply.send({
+      items,
+      total: items.length,
+    });
+  });
+
   app.get("/:id", { preHandler: readProtect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.user!;
@@ -501,7 +597,7 @@ export async function employeesRoutes(app: FastifyInstance) {
     return reply.send(sanitizeEmployeeForDetail(employee, user));
   });
 
-  app.put("/:id", { preHandler: protect }, async (request, reply) => {
+  app.put("/:id", { preHandler: editProtect }, async (request, reply) => {
     if (rejectEmployeeDetailEdits(request, reply)) return;
     if (rejectRestrictedEmployeeFields(request, reply, "edit")) return;
     if (
@@ -696,7 +792,7 @@ export async function employeesRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post("/:id/status", { preHandler: editProtect }, async (request, reply) => {
+  app.post("/:id/status", { preHandler: [authMiddleware] }, async (request, reply) => {
     if (rejectEmployeeDetailEdits(request, reply)) return;
     const { id } = request.params as { id: string };
     const parsed = statusTransitionSchema.safeParse(request.body);

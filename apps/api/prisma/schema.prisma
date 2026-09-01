@@ -163,6 +163,7 @@ model User {
   alertsResolved         OperationalAlert[]    @relation("AlertResolvedBy")
   exceptionsReviewed     AttendanceException[] @relation("ExceptionReviewedBy")
   documentsUploaded      ManagedDocument[]     @relation("DocumentUploadedBy")
+  documentsVerified      ManagedDocument[]     @relation("DocumentVerifiedBy")
   incidentsReported      Incident[]            @relation("IncidentReportedBy")
   incidentsSupervised    Incident[]            @relation("IncidentAssignedSupervisor")
   approvalsRequested     ApprovalRequest[]     @relation("ApprovalRequestedBy")
@@ -2456,25 +2457,38 @@ enum DocumentStatus {
 }
 
 model ManagedDocument {
-  id           String           @id @default(cuid())
-  companyId    String
-  title        String
-  documentType String
-  category     DocumentCategory
-  fileUrl      String
-  fileName     String
-  mimeType     String
-  size         Int
-  employeeId   String?
-  siteId       String?
-  clientId     String?
-  incidentId   String?
-  taskId       String?
-  uploadedById String
-  expiryDate   DateTime?
-  status       DocumentStatus   @default(ACTIVE)
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  id                   String           @id @default(cuid())
+  companyId            String
+  title                String
+  documentType         String
+  category             DocumentCategory
+  documentCategory     String?
+  documentNumber       String?
+  issuingAuthority     String?
+  issueDate            DateTime?
+  expiryDate           DateTime?
+  doesNotExpire        Boolean          @default(false)
+  isSensitive          Boolean          @default(false)
+  fileUrl              String
+  fileName             String
+  mimeType             String
+  size                 Int
+  employeeId           String?
+  siteId               String?
+  clientId             String?
+  incidentId           String?
+  taskId               String?
+  uploadedById         String
+  verificationStatus   String           @default("PENDING_VERIFICATION")
+  verifiedById         String?
+  verifiedAt           DateTime?
+  rejectionReason      String?          @db.Text
+  notes                String?          @db.Text
+  status               DocumentStatus   @default(ACTIVE)
+  replacedByDocumentId String?
+  metadata             Json?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 
   company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
@@ -2483,9 +2497,12 @@ model ManagedDocument {
   incident   Incident? @relation(fields: [incidentId], references: [id], onDelete: SetNull)
   task       Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
   uploadedBy User      @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Cascade)
+  verifiedBy User?     @relation("DocumentVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
 
   @@index([companyId, category])
+  @@index([companyId, documentCategory])
   @@index([companyId, status])
+  @@index([companyId, verificationStatus])
   @@index([employeeId])
   @@index([siteId])
   @@index([clientId])
