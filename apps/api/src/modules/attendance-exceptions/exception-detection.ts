@@ -31,6 +31,78 @@ export type DetectedException = {
   dedupeKey: string;
 };
 
+export type ShiftAttendanceResolution = {
+  sourceShiftId?: string | null;
+  siteId?: string | null;
+  workDate?: Date | string | null;
+  plannedGuardId?: string | null;
+  approvalStatus: string;
+  actualGuardId?: string | null;
+  attendanceStatus: string;
+  plannedShiftType?: string | null;
+  actualShiftType?: string | null;
+};
+
+export type ShiftAttendanceResolutionTarget = {
+  id: string;
+  employeeId?: string | null;
+  siteId?: string | null;
+  workDateKey: string;
+  shiftType?: string | null;
+};
+
+const COVERED_ATTENDANCE_STATUSES = new Set([
+  "present",
+  "late",
+  "left_early",
+  "reliever",
+  "shift_swapped",
+]);
+
+function resolutionDateKey(value: Date | string | null | undefined): string | null {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return typeof value === "string" && value.length >= 10 ? value.slice(0, 10) : null;
+}
+
+/**
+ * Older and manually-added timesheet rows do not always retain sourceShiftId.
+ * Fall back to the same site/date/shift plus either the scheduled or actual guard
+ * so an approved swap or reliever record remains authoritative.
+ */
+export function attendanceResolutionAppliesToShift(
+  shift: ShiftAttendanceResolutionTarget,
+  row: ShiftAttendanceResolution
+): boolean {
+  if (row.sourceShiftId === shift.id) return true;
+  if (!shift.employeeId || !shift.siteId) return false;
+  if (row.siteId !== shift.siteId || resolutionDateKey(row.workDate) !== shift.workDateKey) {
+    return false;
+  }
+  if (row.actualGuardId !== shift.employeeId && row.plannedGuardId !== shift.employeeId) {
+    return false;
+  }
+  if (!shift.shiftType) return true;
+  return row.actualShiftType === shift.shiftType || row.plannedShiftType === shift.shiftType;
+}
+
+/**
+ * Manual attendance review is authoritative over automated clock exceptions.
+ * A verified shift, an approved/reviewed timesheet row, or a row showing that
+ * somebody covered the shift must not produce another attendance exception.
+ */
+export function attendanceSupersedesShiftExceptions(
+  shiftStatus: string,
+  rows: ShiftAttendanceResolution[]
+): boolean {
+  if (shiftStatus === "verified") return true;
+  return rows.some(
+    (row) =>
+      row.approvalStatus === "reviewed" ||
+      row.approvalStatus === "approved" ||
+      (Boolean(row.actualGuardId) && COVERED_ATTENDANCE_STATUSES.has(row.attendanceStatus))
+  );
+}
+
 function minutesBetween(a: Date, b: Date): number {
   return Math.round((a.getTime() - b.getTime()) / 60_000);
 }

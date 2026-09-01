@@ -8,7 +8,7 @@ import { format, isValid, parseISO } from "date-fns";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch, fetchCurrentPayPeriod } from "@/lib/api";
 import type { AttendanceShiftTypeFilter } from "@/lib/roster-api";
-import { attendanceOverviewHref } from "@/lib/attendance-navigation";
+import { attendanceOverviewHref, attendanceSiteHref } from "@/lib/attendance-navigation";
 import { SiteTimesheetsSection } from "../../SiteTimesheetsSection";
 
 const SHIFT_OPTIONS: Array<{ value: AttendanceShiftTypeFilter; label: string }> = [
@@ -37,6 +37,14 @@ export default function AttendanceSitePage() {
   const start = validDate(searchParams.get("start")) ? searchParams.get("start")! : null;
   const end = validDate(searchParams.get("end")) ? searchParams.get("end")! : null;
   const shiftType = validShift(searchParams.get("shiftType"));
+  const focusShiftId = searchParams.get("focusShiftId") || undefined;
+  const focusEmployeeId = searchParams.get("focusEmployeeId") || undefined;
+  const focusDate = validDate(searchParams.get("focusDate")) ? searchParams.get("focusDate")! : undefined;
+  const focus = focusShiftId || focusEmployeeId || focusDate
+    ? { shiftId: focusShiftId, employeeId: focusEmployeeId, workDate: focusDate }
+    : undefined;
+  const returnToParam = searchParams.get("returnTo");
+  const returnTo = returnToParam?.startsWith("/attendance/exceptions") ? returnToParam : undefined;
 
   useEffect(() => {
     if (!token || (start && end)) return;
@@ -86,16 +94,19 @@ export default function AttendanceSitePage() {
     );
   }
 
+  const routeState = { start, end, shiftType };
+  const showAllHref = attendanceSiteHref(siteId, routeState);
+
   return (
     <main className="animate-fade-in space-y-4 pb-24">
       <header className="sticky top-0 z-30 rounded-security-lg border border-security-navy-100 bg-white/95 p-4 shadow-security-card backdrop-blur dark:border-security-navy-700 dark:bg-security-navy-900/95">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <Link
-              href={attendanceOverviewHref({ start, end, shiftType })}
+              href={returnTo ?? attendanceOverviewHref(routeState)}
               className="inline-flex min-h-11 items-center text-sm font-medium text-security-navy-700 hover:underline dark:text-security-navy-300"
             >
-              ← Back to attendance overview
+              {returnTo ? "← Back to attendance issues" : "← Back to attendance overview"}
             </Link>
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <h1 className="text-xl font-semibold text-security-navy-900 dark:text-security-navy-100">{siteName}</h1>
@@ -138,6 +149,9 @@ export default function AttendanceSitePage() {
           periodStart={start}
           periodEnd={end}
           shiftType={shiftType}
+          focus={focus}
+          returnTo={returnTo}
+          showAllHref={showAllHref}
         />
       )}
     </main>

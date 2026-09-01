@@ -24,6 +24,14 @@ export const siteDetailInclude = {
     where: { isActive: true },
     include: { employee: { select: employeeSelect } },
   },
+  payProfiles: {
+    orderBy: { effectiveFrom: "desc" as const },
+    take: 1,
+    include: {
+      area: { select: { id: true, name: true, isActive: true } },
+      grade: { select: { id: true, name: true, isActive: true } },
+    },
+  },
   supervisor: { select: { id: true, name: true, email: true } },
   client: { select: { id: true, name: true, email: true, phone: true } },
 } satisfies Prisma.SiteInclude;

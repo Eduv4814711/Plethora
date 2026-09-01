@@ -81,6 +81,14 @@ interface Site {
   geofenceRadiusMeters?: number | null;
   posts: Post[];
   assignedGuards: { employee: { id: string; firstName: string; lastName: string; status: string; phone: string | null } }[];
+  payProfiles?: {
+    id: string;
+    areaId: string;
+    gradeId: string;
+    effectiveFrom: string;
+    area: { id: string; name: string; isActive: boolean };
+    grade: { id: string; name: string; isActive: boolean };
+  }[];
 }
 
 interface Guard {
@@ -429,17 +437,15 @@ export default function SiteDetailPage() {
           </div>
         )}
 
-        <div
-          className={
-            (site.physicalAddress || site.location) ||
-            site.contactPersonName ||
-            site.contactPersonPhone ||
-            site.serviceType ||
-            (site.geofenceRadiusMeters != null && site.latitude != null && site.longitude != null)
-              ? "border-t border-security-navy-100 dark:border-security-navy-700 pt-5"
-              : ""
-          }
-        >
+        <SitePayrollPricingCard
+          site={site}
+          siteId={siteId}
+          token={token!}
+          canManage={canEdit}
+          onSaved={refresh}
+        />
+
+        <div className="border-t border-security-navy-100 dark:border-security-navy-700 pt-5">
           <h3 className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">Shift roster sheet</h3>
           <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-1 mb-4 max-w-2xl">
             Text here appears on the shift sheet and PDF for this site (e.g. female-only day shift, male-only night shift). Leave blank to use the default contract lines.
@@ -2093,5 +2099,319 @@ function AddPostForm({
         </button>
       </div>
     </form>
+  );
+}
+
+interface SitePayrollCatalog {
+  rateSource: string;
+  areas: { id: string; name: string; isActive: boolean }[];
+  grades: { id: string; name: string; isActive: boolean }[];
+  rates: { id: string; areaId: string; gradeId: string; hourlyRate: number | string; effectiveFrom: string }[];
+}
+
+function SitePayrollPricingCard({
+  site,
+  siteId,
+  token,
+  canManage,
+  onSaved,
+}: {
+  site: Site;
+  siteId: string;
+  token: string;
+  canManage: boolean;
+  onSaved: () => void;
+}) {
+  const [catalog, setCatalog] = useState<SitePayrollCatalog>({
+    rateSource: "legacy_employee_grade",
+    areas: [],
+    grades: [],
+    rates: [],
+  });
+  const [isEditing, setIsEditing] = useState(false);
+  const currentProfile = site.payProfiles?.[0];
+  const [selectedAreaId, setSelectedAreaId] = useState(currentProfile?.area.id ?? "");
+  const [selectedGradeId, setSelectedGradeId] = useState(currentProfile?.grade.id ?? "");
+  const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().slice(0, 10));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    authFetch("/payroll/pricing/catalog", token)
+      .then((r) => r.json())
+      .then((d) => {
+        setCatalog({
+          rateSource: d.rateSource ?? "legacy_employee_grade",
+          areas: d.areas ?? [],
+          grades: d.grades ?? [],
+          rates: d.rates ?? [],
+        });
+      })
+      .catch(console.error);
+  }, [token]);
+
+  useEffect(() => {
+    if (currentProfile) {
+      setSelectedAreaId(currentProfile.area.id);
+      setSelectedGradeId(currentProfile.grade.id);
+    }
+  }, [currentProfile]);
+
+  const activeAreas = catalog.areas.filter((a) => a.isActive);
+  const activeGrades = catalog.grades.filter((g) => g.isActive);
+
+  // Resolved current rate for the site's profile
+  const resolvedRate = useMemo(() => {
+    if (!currentProfile) return null;
+    const now = new Date().toISOString().slice(0, 10);
+    return (
+      catalog.rates
+        .filter(
+          (r) =>
+            r.areaId === currentProfile.area.id &&
+            r.gradeId === currentProfile.grade.id &&
+            r.effectiveFrom.slice(0, 10) <= now
+        )
+        .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0] ?? null
+    );
+  }, [currentProfile, catalog.rates]);
+
+  // Preview rate for currently selected area + grade in editing mode
+  const previewRate = useMemo(() => {
+    if (!selectedAreaId || !selectedGradeId) return null;
+    return (
+      catalog.rates
+        .filter(
+          (r) =>
+            r.areaId === selectedAreaId &&
+            r.gradeId === selectedGradeId &&
+            r.effectiveFrom.slice(0, 10) <= effectiveFrom
+        )
+        .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0] ?? null
+    );
+  }, [selectedAreaId, selectedGradeId, effectiveFrom, catalog.rates]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canManage) return;
+    setError(null);
+    setSaving(true);
+    try {
+      const res = await authFetch(`/sites/${siteId}`, token, {
+        method: "PUT",
+        body: JSON.stringify({
+          payAreaId: selectedAreaId,
+          payGradeId: selectedGradeId,
+          payEffectiveFrom: effectiveFrom,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "Failed to update payroll pricing");
+      }
+      setIsEditing(false);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update payroll pricing");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="border-t border-security-navy-100 dark:border-security-navy-700 pt-5">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div>
+          <h3 className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">
+            Payroll Pricing Configuration
+          </h3>
+          <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-0.5">
+            Hourly guard pay at this site is determined by the company-wide Area × Grade wage matrix.
+          </p>
+        </div>
+        {canManage && !isEditing && (
+          <button
+            type="button"
+            onClick={() => {
+              setIsEditing(true);
+              setError(null);
+            }}
+            className="btn-secondary text-xs py-1.5 px-3"
+          >
+            {currentProfile ? "Edit Pricing Profile" : "+ Configure Pricing"}
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div className="mb-3 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-xs text-red-800 dark:text-red-200">
+          {error}
+        </div>
+      )}
+
+      {isEditing ? (
+        <form onSubmit={handleSave} className="p-4 rounded-lg bg-security-navy-50 dark:bg-security-navy-800/40 border border-security-navy-200 dark:border-security-navy-700 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+                Area *
+              </label>
+              <select
+                value={selectedAreaId}
+                onChange={(e) => setSelectedAreaId(e.target.value)}
+                required
+                className="input-modern"
+              >
+                <option value="">Select Area</option>
+                {activeAreas.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+                Grade *
+              </label>
+              <select
+                value={selectedGradeId}
+                onChange={(e) => setSelectedGradeId(e.target.value)}
+                required
+                className="input-modern"
+              >
+                <option value="">Select Grade</option>
+                {activeGrades.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+                Effective From Date *
+              </label>
+              <input
+                type="date"
+                value={effectiveFrom}
+                onChange={(e) => setEffectiveFrom(e.target.value)}
+                className="input-modern"
+                required
+              />
+            </div>
+          </div>
+
+          {selectedAreaId && selectedGradeId && (
+            <div className="text-xs">
+              {previewRate ? (
+                <div className="p-2.5 rounded bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 font-medium flex items-center justify-between">
+                  <span>
+                    Resolved Wage: <strong className="font-bold">R{Number(previewRate.hourlyRate).toFixed(2)}/hour</strong>
+                  </span>
+                  <span className="text-[11px] text-emerald-700 dark:text-emerald-300">
+                    Effective from {effectiveFrom}
+                  </span>
+                </div>
+              ) : (
+                <div className="p-2.5 rounded bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200">
+                  No wage rate configured for this Area &amp; Grade on {effectiveFrom}. Configure the price in{" "}
+                  <Link href="/payroll/configuration" className="underline font-bold">
+                    Payroll Configuration
+                  </Link>.
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              type="submit"
+              disabled={saving || !selectedAreaId || !selectedGradeId}
+              className="btn-primary text-xs py-1.5 px-4 disabled:opacity-50"
+            >
+              {saving ? "Saving Pricing…" : "Save Pricing Profile"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsEditing(false)}
+              className="btn-secondary text-xs py-1.5 px-3"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : currentProfile ? (
+        <div className="p-4 rounded-lg bg-security-navy-50/50 dark:bg-security-navy-800/30 border border-security-navy-100 dark:border-security-navy-700">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-security-navy-900 dark:text-security-navy-100">
+                  {currentProfile.area.name} · {currentProfile.grade.name}
+                </span>
+                <span className="inline-block px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                  {currentProfile.area.name} {currentProfile.grade.name}
+                </span>
+              </div>
+              <p className="text-xs text-security-navy-500 dark:text-security-navy-400">
+                Effective since {currentProfile.effectiveFrom.slice(0, 10)}
+              </p>
+            </div>
+            <div className="text-right">
+              {resolvedRate ? (
+                <div>
+                  <span className="text-lg font-bold font-mono text-emerald-700 dark:text-emerald-300">
+                    R{Number(resolvedRate.hourlyRate).toFixed(2)}
+                  </span>
+                  <span className="text-xs text-security-navy-500 font-medium"> / hr</span>
+                </div>
+              ) : (
+                <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+                  No current rate active
+                </span>
+              )}
+            </div>
+          </div>
+
+          {site.payProfiles && site.payProfiles.length > 1 && (
+            <div className="mt-3 pt-3 border-t border-security-navy-200/50 dark:border-security-navy-700/50">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-security-navy-600 dark:text-security-navy-400 mb-1.5">
+                Pricing Profile History ({site.payProfiles.length} versions)
+              </p>
+              <div className="space-y-1">
+                {site.payProfiles.map((p) => (
+                  <div key={p.id} className="flex justify-between text-xs text-security-navy-600 dark:text-security-navy-400">
+                    <span>Effective {p.effectiveFrom.slice(0, 10)}:</span>
+                    <span className="font-semibold">{p.area.name} · {p.grade.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
+              No Payroll Pricing Configured for this Site
+            </p>
+            <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">
+              Select an Area and Grade to enable payroll rate calculations for team members stationed at this site.
+            </p>
+          </div>
+          {canManage && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsEditing(true);
+                setError(null);
+              }}
+              className="btn-primary text-xs py-1.5 px-3 font-bold whitespace-nowrap"
+            >
+              + Set Up Site Pricing
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

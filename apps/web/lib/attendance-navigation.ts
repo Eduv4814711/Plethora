@@ -41,6 +41,28 @@ export function attendanceSiteHref(siteId: string, state: AttendanceRouteState):
   return `/attendance/sites/${encodeURIComponent(siteId)}?${attendanceQuery(state)}`;
 }
 
+export type AttendanceIssueReviewTarget = AttendanceRouteState & {
+  siteId: string;
+  shiftId?: string;
+  employeeId?: string;
+  workDate?: string;
+  returnTo?: string;
+};
+
+/**
+ * Opens the site timesheet with enough identity to isolate the row behind an
+ * attendance exception. The shift id is the authoritative match; employee and
+ * date are retained as a fallback for older rows that predate shift linking.
+ */
+export function attendanceIssueReviewHref(target: AttendanceIssueReviewTarget): string {
+  const query = attendanceQuery(target);
+  if (target.shiftId) query.set("focusShiftId", target.shiftId);
+  if (target.employeeId) query.set("focusEmployeeId", target.employeeId);
+  if (target.workDate) query.set("focusDate", target.workDate);
+  if (target.returnTo) query.set("returnTo", target.returnTo);
+  return `/attendance/sites/${encodeURIComponent(target.siteId)}?${query}`;
+}
+
 export function attendanceOverviewHref(state: AttendanceRouteState): string {
   return `/attendance?${attendanceQuery(state)}`;
 }

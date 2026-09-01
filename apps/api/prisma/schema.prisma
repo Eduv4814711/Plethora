@@ -58,6 +58,11 @@ model Company {
   rosterAutomationRuns  RosterAutomationRun[]
   payRules              PayRule[]
   payGrades             PayGrade[]
+  payAreas              PayArea[]
+  payGradeDefinitions   PayGradeDefinition[]
+  payAreaGradeRates     PayAreaGradeRate[]
+  sitePayProfiles       SitePayProfile[]
+  employeePayrollHomes  EmployeePayrollHomeSite[]
   employeeGroups        EmployeeGroup[]
   groupPayRules         GroupPayRule[]
   groupEarningsRules    GroupEarningsRule[]
@@ -294,6 +299,7 @@ model Employee {
   leaveRequests               LeaveRequest[]
   leaveAdjustments            LeaveAdjustment[]
   staffAttendanceDays         StaffAttendanceDay[]
+  payrollHomeSites            EmployeePayrollHomeSite[]
 
   @@unique([companyId, employeeNumber])
   @@index([companyId])
@@ -399,6 +405,8 @@ model Site {
   managedDocuments          ManagedDocument[]
   incidents                 Incident[]
   tasks                     Task[]
+  payProfiles               SitePayProfile[]
+  employeePayrollHomes      EmployeePayrollHomeSite[]
 
   @@index([companyId])
   @@index([companyId, siteStatus])
@@ -660,6 +668,101 @@ model PayGrade {
 
   @@index([companyId])
   @@index([groupId])
+}
+
+/// Company-wide wage area used by the site payroll pricing matrix.
+model PayArea {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company      Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  rates        PayAreaGradeRate[]
+  siteProfiles SitePayProfile[]
+
+  @@unique([companyId, name])
+  @@index([companyId, isActive])
+}
+
+/// Company-wide grade label. Rates live on PayAreaGradeRate, not on employees.
+model PayGradeDefinition {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company      Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  rates        PayAreaGradeRate[]
+  siteProfiles SitePayProfile[]
+
+  @@unique([companyId, name])
+  @@index([companyId, isActive])
+}
+
+/// Immutable, effective-dated Area x Grade hourly price.
+/// The applicable version is the latest effectiveFrom on or before the work date.
+model PayAreaGradeRate {
+  id            String   @id @default(cuid())
+  companyId     String
+  areaId        String
+  gradeId       String
+  hourlyRate    Decimal  @db.Decimal(10, 2)
+  effectiveFrom DateTime @db.Date
+  createdAt     DateTime @default(now())
+
+  company Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  area    PayArea             @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  grade   PayGradeDefinition @relation(fields: [gradeId], references: [id], onDelete: Restrict)
+
+  @@unique([areaId, gradeId, effectiveFrom])
+  @@index([companyId, effectiveFrom])
+  @@index([areaId, gradeId, effectiveFrom])
+}
+
+/// Effective-dated payroll classification for a site.
+model SitePayProfile {
+  id            String   @id @default(cuid())
+  companyId     String
+  siteId        String
+  areaId        String
+  gradeId       String
+  effectiveFrom DateTime @db.Date
+  createdAt     DateTime @default(now())
+
+  company Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site    Site               @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  area    PayArea            @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  grade   PayGradeDefinition @relation(fields: [gradeId], references: [id], onDelete: Restrict)
+
+  @@unique([siteId, effectiveFrom])
+  @@index([companyId, effectiveFrom])
+  @@index([siteId, effectiveFrom])
+}
+
+/// Effective-dated primary site used to price paid leave for hourly employees.
+model EmployeePayrollHomeSite {
+  id            String   @id @default(cuid())
+  companyId     String
+  employeeId    String
+  siteId        String
+  effectiveFrom DateTime @db.Date
+  createdAt     DateTime @default(now())
+
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  site     Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
+
+  @@unique([employeeId, effectiveFrom])
+  @@index([companyId, effectiveFrom])
+  @@index([employeeId, effectiveFrom])
+  @@index([siteId])
 }
 
 model EmployeeGroup {

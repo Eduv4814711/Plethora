@@ -37,8 +37,8 @@ export function alertFixTarget(alert: OperationalAlert): AlertFixTarget | null {
     }
 
     case "PAYROLL": {
-      // "Payroll blocked because attendance is not approved" — the blocker is in
-      // attendance, so sending them to /payroll would just bounce them back.
+      // Legacy payroll-attendance alerts point to the review workspace, where
+      // operators can investigate them without interrupting payroll calculation.
       const params = new URLSearchParams({ status: "OPEN", severity: "CRITICAL" });
       const periodStart = metaString(alert, "periodStart");
       const periodEnd = metaString(alert, "periodEnd");

@@ -22,6 +22,7 @@ import {
   attendanceExceptionScanCopy,
   type AttendanceExceptionAction,
 } from "@/lib/attendance-exception-copy";
+import { attendanceIssueReviewHref } from "@/lib/attendance-navigation";
 
 type ExceptionShiftFilter = "all" | "day" | "night";
 
@@ -32,6 +33,15 @@ function exceptionShiftType(exception: AttendanceException): "day" | "night" | n
 
 function validShift(value: string | null): ExceptionShiftFilter {
   return value === "day" || value === "night" || value === "all" ? value : "all";
+}
+
+function localDateKey(value: string): string | null {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export default function AttendanceExceptionsPage() {
@@ -93,15 +103,17 @@ export default function AttendanceExceptionsPage() {
     const requestId = ++requestIdRef.current;
     setError("");
     try {
-      const [listResult, analyticsResult, readiness] = await Promise.all([
-        listAttendanceExceptions(token, {
-          status: statusFilter === "all" ? undefined : statusFilter,
-          severity: severityFilter || undefined,
-          siteId: siteFilter || undefined,
-          periodStart,
-          periodEnd,
-          limit: 100,
-        }),
+      // Listing reconciles covered/approved shifts first. Load the summary only
+      // after that cleanup so the cards and counts always describe the same state.
+      const listResult = await listAttendanceExceptions(token, {
+        status: statusFilter === "all" ? undefined : statusFilter,
+        severity: severityFilter || undefined,
+        siteId: siteFilter || undefined,
+        periodStart,
+        periodEnd,
+        limit: 100,
+      });
+      const [analyticsResult, readiness] = await Promise.all([
         getExceptionAnalytics(token, { periodStart, periodEnd }),
         getPayrollReadiness(token),
       ]);
@@ -165,6 +177,16 @@ export default function AttendanceExceptionsPage() {
     });
   }, [items, shiftFilter]);
 
+  useEffect(() => {
+    if (loading || typeof window === "undefined" || !window.location.hash) return;
+    const targetId = decodeURIComponent(window.location.hash.slice(1));
+    if (!targetId.startsWith("attendance-issue-")) return;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [filteredItems.length, loading]);
+
   const summary = analytics;
   const overviewParams = new URLSearchParams();
   if (periodStart) overviewParams.set("start", periodStart);
@@ -179,7 +201,7 @@ export default function AttendanceExceptionsPage() {
 
       <PageHeader
         title="Attendance issues"
-        description="Review missing clock events, late arrivals, and other items that could block payroll."
+        description="Review missing clock events, late arrivals, and other attendance items without interrupting payroll calculation."
         actions={canCreate ? (
           <button type="button" className="btn-secondary min-h-11" onClick={() => void handleDetect()} disabled={detecting}>
             {detecting ? "Scanning…" : "Scan for new issues"}
@@ -189,7 +211,7 @@ export default function AttendanceExceptionsPage() {
 
       {payrollReadiness && payrollReadiness.status !== "READY" && (
         <AlertBanner variant="warning">
-          Payroll is waiting for attendance review
+          Attendance review is recommended, but payroll calculation can continue
           {payrollReadiness.openExceptions > 0 ? ` · ${payrollReadiness.openExceptions} open issue${payrollReadiness.openExceptions === 1 ? "" : "s"}` : ""}.
         </AlertBanner>
       )}
@@ -254,8 +276,25 @@ export default function AttendanceExceptionsPage() {
             const copy = attendanceExceptionCopy(exception.exceptionType);
             const shift = exceptionShiftType(exception);
             const actionsOpen = openActionsId === exception.id;
+            const workDate = exception.shift?.startTime ? localDateKey(exception.shift.startTime) : null;
+            const reviewStart = periodStart ?? workDate;
+            const reviewEnd = periodEnd ?? workDate;
+            const returnQuery = searchParams.toString();
+            const returnTo = `${pathname}${returnQuery ? `?${returnQuery}` : ""}#attendance-issue-${exception.id}`;
+            const reviewHref = exception.site && reviewStart && reviewEnd
+              ? attendanceIssueReviewHref({
+                  siteId: exception.site.id,
+                  start: reviewStart,
+                  end: reviewEnd,
+                  shiftType: shift ?? "all",
+                  shiftId: exception.shift?.id,
+                  employeeId: exception.employee?.id,
+                  workDate: workDate ?? undefined,
+                  returnTo,
+                })
+              : null;
             return (
-              <article key={exception.id} className="card-dashboard p-4">
+              <article id={`attendance-issue-${exception.id}`} key={exception.id} className="card-dashboard scroll-mt-24 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <h2 className="font-semibold text-security-navy-900 dark:text-security-navy-100">{copy.title}</h2>
@@ -275,17 +314,31 @@ export default function AttendanceExceptionsPage() {
 
                 {canApprove && ["OPEN", "UNDER_REVIEW"].includes(exception.status) && (
                   <div className="mt-4 border-t border-security-navy-100 pt-3 dark:border-security-navy-800">
-                    <button
-                      type="button"
-                      className="btn-primary min-h-11 w-full sm:w-auto"
-                      onClick={() => setOpenActionsId(actionsOpen ? null : exception.id)}
-                      aria-expanded={actionsOpen}
-                    >
-                      Choose outcome
-                    </button>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      {reviewHref && (
+                        <Link href={reviewHref} className="btn-amber min-h-11 w-full sm:w-auto">
+                          Review &amp; fix attendance
+                          <span aria-hidden="true">→</span>
+                        </Link>
+                      )}
+                      <button
+                        type="button"
+                        className={`${reviewHref ? "btn-secondary" : "btn-primary"} min-h-11 w-full sm:w-auto`}
+                        onClick={() => setOpenActionsId(actionsOpen ? null : exception.id)}
+                        aria-expanded={actionsOpen}
+                        aria-controls={`attendance-outcomes-${exception.id}`}
+                      >
+                        {actionsOpen ? "Hide outcomes" : "Record outcome"}
+                      </button>
+                    </div>
+                    {reviewHref && (
+                      <p className="mt-2 text-xs text-security-navy-500 dark:text-security-navy-400">
+                        Opens the exact site-timesheet row so you can correct the guard, shift, clock times, status, or notes before recording the outcome.
+                      </p>
+                    )}
                     {actionsOpen && (
-                      <div className="mt-3 rounded-security-lg border border-security-navy-100 bg-security-navy-50 p-3 dark:border-security-navy-700 dark:bg-security-navy-900">
-                        <label className="text-sm font-medium text-security-navy-700 dark:text-security-navy-300">
+                      <div id={`attendance-outcomes-${exception.id}`} className="mt-3 rounded-security-lg border border-security-navy-100 bg-security-navy-50 p-4 dark:border-security-navy-700 dark:bg-security-navy-900">
+                        <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300">
                           Supervisor note <span className="font-normal text-security-navy-500">(optional)</span>
                           <textarea
                             rows={2}
@@ -295,20 +348,33 @@ export default function AttendanceExceptionsPage() {
                             placeholder="Add context for the audit trail"
                           />
                         </label>
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                          {ATTENDANCE_EXCEPTION_ACTIONS.map((action) => (
-                            <button
-                              key={action.action}
-                              type="button"
-                              disabled={actingId === exception.id}
-                              onClick={() => void handleReview(exception, action.action)}
-                              className={`${action.danger ? "btn-destructive" : action.action === "approve" ? "btn-primary" : "btn-secondary"} min-h-11 text-left`}
-                              title={action.description}
-                            >
-                              <span className="block">{action.label}</span>
-                              <span className="mt-0.5 block text-xs font-normal opacity-80">{action.description}</span>
-                            </button>
-                          ))}
+                        <div className="mt-4">
+                          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-security-navy-500">
+                            Select an outcome
+                          </p>
+                          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+                            {ATTENDANCE_EXCEPTION_ACTIONS.map((action) => {
+                              const layoutClass = action.action === "reject"
+                                ? "sm:col-span-2 lg:col-span-3"
+                                : action.action === "under_review"
+                                  ? "lg:col-span-3"
+                                  : "lg:col-span-2";
+
+                              return (
+                                <button
+                                  key={action.action}
+                                  type="button"
+                                  disabled={actingId === exception.id}
+                                  onClick={() => void handleReview(exception, action.action)}
+                                  className={`${action.danger ? "btn-destructive" : action.action === "approve" ? "btn-primary" : "btn-secondary"} ${layoutClass} min-h-[5.5rem] w-full flex-col items-start justify-start gap-1 whitespace-normal px-4 py-3 text-left leading-normal`}
+                                  title={action.description}
+                                >
+                                  <span className="block text-sm font-semibold leading-5">{action.label}</span>
+                                  <span className="block text-xs font-normal leading-5 opacity-80">{action.description}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
                     )}

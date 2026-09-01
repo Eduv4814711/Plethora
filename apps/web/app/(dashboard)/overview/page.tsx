@@ -290,7 +290,9 @@ export default function DashboardPage() {
     const s = data?.payrollReadiness?.status;
     if (!s) return null;
     if (s === "READY" || s === "APPROVED_MANUALLY") return { text: "Payroll ready", variant: "success" as const };
-    if (s === "BLOCKED_BY_EXCEPTIONS") return { text: "Payroll blocked", variant: "error" as const };
+    // Treat historical rows from the former blocking policy as advisory. The API
+    // refresh will migrate them to the current readiness states on the next read.
+    if (s === "BLOCKED_BY_EXCEPTIONS") return { text: "Attendance review needed", variant: "warning" as const };
     return { text: "Attendance review needed", variant: "warning" as const };
   })();
 
@@ -433,9 +435,7 @@ export default function DashboardPage() {
             className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
               payrollReadinessLabel.variant === "success"
                 ? "bg-security-emerald-100 text-security-emerald-700"
-                : payrollReadinessLabel.variant === "error"
-                  ? "bg-red-100 text-red-800"
-                  : "bg-security-amber-100 text-security-amber-800"
+                : "bg-security-amber-100 text-security-amber-800"
             }`}
           >
             {payrollReadinessLabel.text}

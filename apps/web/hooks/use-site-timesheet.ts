@@ -38,6 +38,12 @@ export type SiteTimesheetPermissions = {
   canExport: boolean;
 };
 
+export type SiteTimesheetFocus = {
+  shiftId?: string;
+  employeeId?: string;
+  workDate?: string;
+};
+
 /**
  * Data layer for the site timesheet capture screen: loading, row edits, OB drafts,
  * confirmation (single and bulk), approval and unlock.
@@ -51,8 +57,9 @@ export function useSiteTimesheet(params: {
   periodEnd: string;
   shiftType: AttendanceShiftTypeFilter;
   permissions: SiteTimesheetPermissions;
+  focus?: SiteTimesheetFocus;
 }) {
-  const { token, siteId, periodStart, periodEnd, shiftType, permissions } = params;
+  const { token, siteId, periodStart, periodEnd, shiftType, permissions, focus } = params;
   const { canEdit, canApprove } = permissions;
   const canEditLockedOb = canApprove;
 
@@ -100,11 +107,11 @@ export function useSiteTimesheet(params: {
 
   useEffect(() => {
     setGuardFilter("");
-    setReviewFilter("pending");
+    setReviewFilter(focus ? "all" : "pending");
     void load();
     // The identity of `load` changes every render; the inputs below are the real deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, siteId, periodStart, periodEnd]);
+  }, [token, siteId, periodStart, periodEnd, focus?.shiftId, focus?.employeeId, focus?.workDate]);
 
   const replaceRow = (updated: SiteTimesheetRow) => {
     setSheet((current) =>
@@ -128,10 +135,28 @@ export function useSiteTimesheet(params: {
     () => sortedRows.filter((row) => rowMatchesShiftTypeFilter(row, shiftType)),
     [sortedRows, shiftType]
   );
+  const focusActive = Boolean(focus?.shiftId || focus?.employeeId || focus?.workDate);
+  const focusedRow = useMemo(() => {
+    if (!focusActive) return null;
+
+    const exactShiftRow = focus?.shiftId
+      ? sortedRows.find((row) => row.sourceShiftId === focus.shiftId)
+      : undefined;
+    if (exactShiftRow) return exactShiftRow;
+
+    return sortedRows.find((row) => {
+      const employeeMatches = focus?.employeeId
+        ? row.actualGuardId === focus.employeeId || row.plannedGuardId === focus.employeeId
+        : true;
+      const dateMatches = focus?.workDate ? row.workDate === focus.workDate : true;
+      return employeeMatches && dateMatches;
+    }) ?? null;
+  }, [focus?.employeeId, focus?.shiftId, focus?.workDate, focusActive, sortedRows]);
+  const focusScopedRows = focusActive ? (focusedRow ? [focusedRow] : []) : shiftScopedRows;
   const guardFilteredRows = useMemo(() => {
     const q = guardFilter.trim().toLowerCase();
-    if (!q) return shiftScopedRows;
-    return shiftScopedRows.filter((row) => {
+    if (!q) return focusScopedRows;
+    return focusScopedRows.filter((row) => {
       const haystack = [
         row.actualGuardName,
         row.plannedGuardName,
@@ -143,7 +168,7 @@ export function useSiteTimesheet(params: {
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [shiftScopedRows, guardFilter]);
+  }, [focusScopedRows, guardFilter]);
   const displayRows = useMemo(() => {
     if (reviewFilter === "all") return guardFilteredRows;
     if (reviewFilter === "pending") {
@@ -346,6 +371,8 @@ export function useSiteTimesheet(params: {
     reviewedCount,
     pendingReviewCount,
     otherShiftPendingCount,
+    focusActive,
+    focusedRow,
     load,
     updateRow,
     reopenRow,

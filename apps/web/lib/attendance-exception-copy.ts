@@ -19,7 +19,7 @@ export const ATTENDANCE_EXCEPTION_ACTIONS: Array<{
 
 /**
  * Keys must match the `AttendanceExceptionType` enum in prisma/schema.prisma.
- * `howToFix` is the operator-facing remedy shown when an issue blocks payroll.
+ * `howToFix` is the operator-facing remedy shown when an issue needs review.
  */
 const EXCEPTION_COPY: Record<
   string,

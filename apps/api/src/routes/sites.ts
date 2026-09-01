@@ -10,6 +10,13 @@ import { mapSiteForApi, siteDetailInclude } from "../lib/site-post-api.js";
 import { syncContractExpiryAlerts } from "../modules/documents/documents.service.js";
 import { reconcileRosterContinuityForSite } from "../modules/rosters/roster-continuity.service.js";
 import { ALL_WEEK_DAYS, normalizeCoverageDays } from "../lib/site-coverage-days.js";
+import { parsePayrollSettings } from "../lib/payroll-settings.js";
+import {
+  assignAutomaticPayrollHomes,
+  loadSitePricingResolver,
+  setSitePayProfile,
+  SITE_PRICING_RATE_SOURCE,
+} from "../services/payroll-pricing.service.js";
 
 const SERVICE_TYPES = [
   "guarding",
@@ -53,6 +60,26 @@ const ROSTER_SHIFT_DAYS = z
   .max(7)
   .optional()
   .transform((v) => (v === undefined ? undefined : normalizeCoverageDays(v)));
+const PAY_EFFECTIVE_FROM = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD").optional();
+
+function refinePayProfilePair(
+  data: { payAreaId?: string; payGradeId?: string },
+  ctx: z.RefinementCtx
+) {
+  if ((data.payAreaId && !data.payGradeId) || (!data.payAreaId && data.payGradeId)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Payroll Area and Grade must be selected together.",
+      path: [data.payAreaId ? "payGradeId" : "payAreaId"],
+    });
+  }
+}
+
+function payrollDate(value?: string): Date {
+  const date = value ? new Date(`${value}T00:00:00.000Z`) : new Date();
+  date.setUTCHours(0, 0, 0, 0);
+  return date;
+}
 
 /**
  * A shift only runs when it needs guards *and* has at least one weekday to cover.
@@ -134,6 +161,9 @@ const createSiteSchema = z
     rosterNightShiftDays: ROSTER_SHIFT_DAYS,
     autoRosterEnabled: z.boolean().optional(),
     autoRosterMinCoveragePercent: z.number().int().min(0).max(100).optional(),
+    payAreaId: z.string().min(1).optional(),
+    payGradeId: z.string().min(1).optional(),
+    payEffectiveFrom: PAY_EFFECTIVE_FROM,
   })
   .superRefine((data, ctx) => {
     const g = refineSiteGeofenceThreeOrNone(data);
@@ -141,6 +171,7 @@ const createSiteSchema = z
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: g.message, path: ["latitude"] });
     }
     refineShiftGuardsNotBothZero(data, ctx);
+    refinePayProfilePair(data, ctx);
   });
 
 const updateSiteSchema = z
@@ -178,6 +209,9 @@ const updateSiteSchema = z
     rosterNightShiftDays: ROSTER_SHIFT_DAYS,
     autoRosterEnabled: z.boolean().optional(),
     autoRosterMinCoveragePercent: z.number().int().min(0).max(100).optional(),
+    payAreaId: z.string().min(1).optional(),
+    payGradeId: z.string().min(1).optional(),
+    payEffectiveFrom: PAY_EFFECTIVE_FROM,
   })
   .superRefine((data, ctx) => {
     const g = refineSiteGeofenceThreeOrNone(data);
@@ -185,6 +219,7 @@ const updateSiteSchema = z
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: g.message, path: ["latitude"] });
     }
     refineShiftGuardsNotBothZero(data, ctx);
+    refinePayProfilePair(data, ctx);
   });
 
 function parseOptionalDate(v: string | null | undefined): Date | null | undefined {
@@ -192,6 +227,27 @@ function parseOptionalDate(v: string | null | undefined): Date | null | undefine
   if (v === null || v === "") return null;
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
+async function validatePayProfileSelection(
+  companyId: string,
+  areaId: string,
+  gradeId: string,
+  effectiveFrom: Date
+): Promise<string | null> {
+  const [area, grade, rate] = await Promise.all([
+    prisma.payArea.findFirst({ where: { id: areaId, companyId, isActive: true }, select: { id: true } }),
+    prisma.payGradeDefinition.findFirst({ where: { id: gradeId, companyId, isActive: true }, select: { id: true } }),
+    prisma.payAreaGradeRate.findFirst({
+      where: { companyId, areaId, gradeId, effectiveFrom: { lte: effectiveFrom } },
+      orderBy: { effectiveFrom: "desc" },
+      select: { id: true },
+    }),
+  ]);
+  if (!area) return "The selected payroll Area is missing or inactive.";
+  if (!grade) return "The selected payroll Grade is missing or inactive.";
+  if (!rate) return "No price is effective for the selected Area and Grade on that date.";
+  return null;
 }
 
 const POST_SHIFT_TYPES = ["day", "night"] as const;
@@ -255,6 +311,39 @@ export async function sitesRoutes(app: FastifyInstance) {
 
     const companyId = request.user!.companyId;
     const d = parsed.data;
+    const company = await prisma.company.findUniqueOrThrow({
+      where: { id: companyId },
+      select: { settings: true },
+    });
+    const sitePricingEnabled =
+      parsePayrollSettings(company.settings).rateSource === SITE_PRICING_RATE_SOURCE;
+    const hasPayProfile = Boolean(d.payAreaId && d.payGradeId);
+    const payProfileEffectiveFrom = payrollDate(d.payEffectiveFrom);
+    const activatesOrAssigns =
+      (d.siteStatus ?? "ACTIVE") === "ACTIVE" || (d.assignedGuardIds?.length ?? 0) > 0;
+    if (sitePricingEnabled && activatesOrAssigns && !hasPayProfile) {
+      return reply.code(409).send({
+        error: "Payroll pricing required",
+        message: "Select a payroll Area and Grade before activating this site or assigning team members.",
+      });
+    }
+    if (hasPayProfile) {
+      const selectionError = await validatePayProfileSelection(
+        companyId,
+        d.payAreaId!,
+        d.payGradeId!,
+        payProfileEffectiveFrom
+      );
+      if (selectionError) {
+        return reply.code(400).send({ error: "Invalid payroll pricing", message: selectionError });
+      }
+      if (sitePricingEnabled && activatesOrAssigns && payProfileEffectiveFrom > payrollDate()) {
+        return reply.code(400).send({
+          error: "Payroll pricing is not yet effective",
+          message: "An active or staffed site needs a payroll price effective today or earlier.",
+        });
+      }
+    }
 
     const site = await prisma.site.create({
       data: {
@@ -300,6 +389,16 @@ export async function sitesRoutes(app: FastifyInstance) {
       },
     });
 
+    if (hasPayProfile) {
+      await setSitePayProfile({
+        companyId,
+        siteId: site.id,
+        areaId: d.payAreaId!,
+        gradeId: d.payGradeId!,
+        effectiveFrom: payProfileEffectiveFrom,
+      });
+    }
+
     if (d.assignedGuardIds && d.assignedGuardIds.length > 0) {
       const guards = await prisma.employee.findMany({
         where: {
@@ -313,6 +412,7 @@ export async function sitesRoutes(app: FastifyInstance) {
         data: guards.map((g: { id: string }) => ({ siteId: site.id, employeeId: g.id })),
         skipDuplicates: true,
       });
+      await assignAutomaticPayrollHomes(companyId, guards.map((guard) => guard.id));
     }
 
     const siteWithAssignedRaw = await prisma.site.findUnique({
@@ -383,6 +483,39 @@ export async function sitesRoutes(app: FastifyInstance) {
     }
 
     const d = parsed.data;
+    const [company, existingAssignments] = await Promise.all([
+      prisma.company.findUniqueOrThrow({ where: { id: companyId }, select: { settings: true } }),
+      prisma.siteAssignment.findMany({ where: { siteId: id, isActive: true }, select: { employeeId: true } }),
+    ]);
+    const sitePricingEnabled =
+      parsePayrollSettings(company.settings).rateSource === SITE_PRICING_RATE_SOURCE;
+    const requestedPayProfile = Boolean(d.payAreaId && d.payGradeId);
+    const payProfileEffectiveFrom = payrollDate(d.payEffectiveFrom);
+    if (requestedPayProfile) {
+      const selectionError = await validatePayProfileSelection(
+        companyId,
+        d.payAreaId!,
+        d.payGradeId!,
+        payProfileEffectiveFrom
+      );
+      if (selectionError) {
+        return reply.code(400).send({ error: "Invalid payroll pricing", message: selectionError });
+      }
+    }
+    const today = payrollDate();
+    const desiredStatus = d.siteStatus ?? existing.siteStatus;
+    const desiredAssignedCount = d.assignedGuardIds?.length ?? existingAssignments.length;
+    if (sitePricingEnabled && (desiredStatus === "ACTIVE" || desiredAssignedCount > 0)) {
+      const resolver = await loadSitePricingResolver(companyId, [id], today);
+      const hasCurrentExistingPrice = Boolean(resolver(id, today));
+      const requestedPriceIsCurrent = requestedPayProfile && payProfileEffectiveFrom <= today;
+      if (!hasCurrentExistingPrice && !requestedPriceIsCurrent) {
+        return reply.code(409).send({
+          error: "Payroll pricing required",
+          message: "Select an Area and Grade with a price effective today before activating or staffing this site.",
+        });
+      }
+    }
     const {
       assignedGuardIds,
       latitude,
@@ -398,6 +531,9 @@ export async function sitesRoutes(app: FastifyInstance) {
       rosterNightShiftDays,
       autoRosterEnabled,
       autoRosterMinCoveragePercent,
+      payAreaId,
+      payGradeId,
+      payEffectiveFrom,
       ...rest
     } = d;
 
@@ -500,6 +636,16 @@ export async function sitesRoutes(app: FastifyInstance) {
       }
     }
 
+    if (requestedPayProfile) {
+      await setSitePayProfile({
+        companyId,
+        siteId: id,
+        areaId: payAreaId!,
+        gradeId: payGradeId!,
+        effectiveFrom: payrollDate(payEffectiveFrom),
+      });
+    }
+
     if (assignedGuardIds !== undefined) {
       await prisma.siteAssignment.deleteMany({ where: { siteId: id } });
       if (assignedGuardIds.length > 0) {
@@ -516,6 +662,10 @@ export async function sitesRoutes(app: FastifyInstance) {
           skipDuplicates: true,
         });
       }
+      await assignAutomaticPayrollHomes(
+        companyId,
+        [...existingAssignments.map((assignment) => assignment.employeeId), ...assignedGuardIds]
+      );
     }
 
     const siteWithAssignedRaw = await prisma.site.findFirst({

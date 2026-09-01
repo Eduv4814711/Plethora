@@ -1321,9 +1321,9 @@ function EmployeeForm({
             ) : (
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">
-                  Pay grade <span className="text-red-600">*</span>
+                  Pay grade <span className="text-security-navy-400 font-normal">(Optional)</span>
                 </label>
-                <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} groupId={groupId} className="input-compact" required />
+                <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} groupId={groupId} className="input-compact" />
               </div>
             )}
             <div className="flex flex-col gap-1">
@@ -2083,7 +2083,7 @@ function EditModal({
                     required
                   />
                 ) : (
-                  <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} groupId={groupId} required />
+                  <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} groupId={groupId} />
                 )}
                 <GroupSelect token={token} value={groupId} onChange={setGroupId} required />
               </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch, listTaskAssignees } from "@/lib/api";
@@ -85,6 +86,19 @@ interface Site {
   rosterNightShiftGender?: string | null;
   posts: Post[];
   assignedGuards: AssignedGuard[];
+  payProfiles?: Array<{
+    id: string;
+    effectiveFrom: string;
+    area: { id: string; name: string; isActive: boolean };
+    grade: { id: string; name: string; isActive: boolean };
+  }>;
+}
+
+interface SitePayrollCatalog {
+  rateSource: "legacy_employee_grade" | "site_area_grade";
+  areas: Array<{ id: string; name: string; isActive: boolean }>;
+  grades: Array<{ id: string; name: string; isActive: boolean }>;
+  rates: Array<{ id: string; areaId: string; gradeId: string; hourlyRate: string; effectiveFrom: string }>;
 }
 
 const RISK_LABELS: Record<string, string> = {
@@ -338,6 +352,15 @@ function SiteCard({
                     {SITE_STATUS_LABELS[site.siteStatus] ?? site.siteStatus}
                   </span>
                 )}
+                {site.payProfiles?.[0] ? (
+                  <span className="inline-block px-2.5 py-0.5 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700">
+                    {site.payProfiles[0].area.name} · {site.payProfiles[0].grade.name}
+                  </span>
+                ) : (
+                  <span className="inline-block px-2.5 py-0.5 rounded-lg text-xs font-medium bg-amber-50 text-amber-700">
+                    Payroll pricing required
+                  </span>
+                )}
                 {site.supervisor?.name && (
                   <span className="inline-block px-2.5 py-0.5 rounded-lg text-xs font-medium bg-security-navy-50 text-security-navy-700" title="Site supervisor">
                     Supervisor: {site.supervisor.name}
@@ -525,6 +548,147 @@ function useClients(token: string) {
   return clients;
 }
 
+function useSitePayrollCatalog(token: string) {
+  const [catalog, setCatalog] = useState<SitePayrollCatalog>({
+    rateSource: "legacy_employee_grade",
+    areas: [],
+    grades: [],
+    rates: [],
+  });
+  useEffect(() => {
+    if (!token) return;
+    authFetch("/payroll/pricing/catalog", token)
+      .then((response) => response.json())
+      .then((data) => setCatalog({
+        rateSource: data.rateSource ?? "legacy_employee_grade",
+        areas: data.areas ?? [],
+        grades: data.grades ?? [],
+        rates: data.rates ?? [],
+      }))
+      .catch(console.error);
+  }, [token]);
+  return catalog;
+}
+
+function SitePayrollFields({
+  catalog,
+  areaId,
+  gradeId,
+  effectiveFrom,
+  onAreaChange,
+  onGradeChange,
+  onEffectiveFromChange,
+  required,
+}: {
+  catalog: SitePayrollCatalog;
+  areaId: string;
+  gradeId: string;
+  effectiveFrom: string;
+  onAreaChange: (value: string) => void;
+  onGradeChange: (value: string) => void;
+  onEffectiveFromChange: (value: string) => void;
+  required: boolean;
+}) {
+  const selectedArea = catalog.areas.find((a) => a.id === areaId);
+  const selectedGrade = catalog.grades.find((g) => g.id === gradeId);
+  const applicableRate = catalog.rates
+    .filter((rate) => rate.areaId === areaId && rate.gradeId === gradeId && rate.effectiveFrom.slice(0, 10) <= effectiveFrom)
+    .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0];
+
+  return (
+    <div className="md:col-span-2 border border-security-navy-200 dark:border-security-navy-700 rounded-lg p-4 bg-security-navy-50/70 dark:bg-security-navy-800/40">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+        <h4 className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">Payroll Pricing Profile</h4>
+        <Link
+          href="/payroll/configuration"
+          className="text-xs text-security-navy-600 hover:text-security-navy-900 dark:text-security-navy-400 hover:underline"
+        >
+          Manage Global Wage Matrix →
+        </Link>
+      </div>
+      <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mb-3">
+        Guards working at this site are paid using this Area × Grade rate.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+            Area {required ? "*" : ""}
+          </label>
+          <select
+            value={areaId}
+            onChange={(e) => onAreaChange(e.target.value)}
+            required={required}
+            className="input-modern"
+          >
+            <option value="">Select Area</option>
+            {catalog.areas.filter((item) => item.isActive).map((item) => (
+              <option key={item.id} value={item.id}>{item.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+            Grade {required ? "*" : ""}
+          </label>
+          <select
+            value={gradeId}
+            onChange={(e) => onGradeChange(e.target.value)}
+            required={required}
+            className="input-modern"
+          >
+            <option value="">Select Grade</option>
+            {catalog.grades.filter((item) => item.isActive).map((item) => (
+              <option key={item.id} value={item.id}>{item.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+            Effective from
+          </label>
+          <input
+            type="date"
+            value={effectiveFrom}
+            onChange={(e) => onEffectiveFromChange(e.target.value)}
+            className="input-modern"
+            required={Boolean(areaId || gradeId)}
+          />
+        </div>
+      </div>
+      {areaId && gradeId && (
+        <div className="mt-3">
+          {applicableRate ? (
+            <div className="p-2.5 rounded bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-900 dark:text-emerald-200 flex items-center justify-between font-medium">
+              <span>
+                Resolved Price: <strong>{selectedArea?.name} {selectedGrade?.name} = R{Number(applicableRate.hourlyRate).toFixed(2)}/hour</strong>
+              </span>
+              <span className="text-[11px] text-emerald-700 dark:text-emerald-300">
+                Effective {effectiveFrom}
+              </span>
+            </div>
+          ) : (
+            <div className="p-2.5 rounded bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300">
+              No price is configured for {selectedArea?.name ?? "this Area"} and {selectedGrade?.name ?? "this Grade"} on {effectiveFrom}.{" "}
+              <Link href="/payroll/configuration" className="underline font-bold">
+                Set rate in Payroll Configuration
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
+      {catalog.areas.length === 0 && (
+        <div className="mt-3 p-2.5 rounded bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200">
+          No payroll Areas exist yet.{" "}
+          <Link href="/payroll/configuration" className="underline font-bold">
+            Create pricing rules in Payroll Configuration
+          </Link>{" "}
+          before activating this site.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SiteMoreDetailsFields({
   clientId,
   setClientId,
@@ -638,6 +802,7 @@ function SiteForm({
   const guards = useGuards(token);
   const supervisorUsers = useSupervisorUsers(token);
   const clients = useClients(token);
+  const payrollCatalog = useSitePayrollCatalog(token);
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
   const [physicalAddress, setPhysicalAddress] = useState("");
@@ -658,6 +823,9 @@ function SiteForm({
   const [riskLevel, setRiskLevel] = useState<string>("");
   const [siteStatus, setSiteStatus] = useState<string>("ACTIVE");
   const [siteInstructions, setSiteInstructions] = useState("");
+  const [payAreaId, setPayAreaId] = useState("");
+  const [payGradeId, setPayGradeId] = useState("");
+  const [payEffectiveFrom, setPayEffectiveFrom] = useState(new Date().toISOString().slice(0, 10));
   const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -707,6 +875,9 @@ function SiteForm({
           riskLevel: riskLevel || undefined,
           siteStatus: siteStatus || undefined,
           siteInstructions: siteInstructions || undefined,
+          payAreaId: payAreaId || undefined,
+          payGradeId: payGradeId || undefined,
+          payEffectiveFrom: payAreaId && payGradeId ? payEffectiveFrom : undefined,
           ...geoBody,
         }),
       });
@@ -809,6 +980,17 @@ function SiteForm({
             className="input-modern"
           />
         </div>
+
+        <SitePayrollFields
+          catalog={payrollCatalog}
+          areaId={payAreaId}
+          gradeId={payGradeId}
+          effectiveFrom={payEffectiveFrom}
+          onAreaChange={setPayAreaId}
+          onGradeChange={setPayGradeId}
+          onEffectiveFromChange={setPayEffectiveFrom}
+          required={payrollCatalog.rateSource === "site_area_grade" && siteStatus === "ACTIVE"}
+        />
 
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-security-navy-600 dark:text-security-navy-400 mb-1.5">Contract / service agreement</label>
@@ -965,6 +1147,8 @@ function EditSiteModal({
   const guards = useGuards(token);
   const supervisorUsers = useSupervisorUsers(token);
   const clients = useClients(token);
+  const payrollCatalog = useSitePayrollCatalog(token);
+  const currentPayProfile = site.payProfiles?.[0];
   const [name, setName] = useState(site.name);
   const [location, setLocation] = useState(site.location ?? "");
   const [physicalAddress, setPhysicalAddress] = useState(site.physicalAddress ?? "");
@@ -999,6 +1183,10 @@ function EditSiteModal({
   const [riskLevel, setRiskLevel] = useState<string>(site.riskLevel ?? "");
   const [siteStatus, setSiteStatus] = useState<string>(site.siteStatus ?? "ACTIVE");
   const [siteInstructions, setSiteInstructions] = useState(site.siteInstructions ?? "");
+  const [payAreaId, setPayAreaId] = useState(currentPayProfile?.area.id ?? "");
+  const [payGradeId, setPayGradeId] = useState(currentPayProfile?.grade.id ?? "");
+  const [payEffectiveFrom, setPayEffectiveFrom] = useState(new Date().toISOString().slice(0, 10));
+  const [payProfileChanged, setPayProfileChanged] = useState(false);
   const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [clearGeofence, setClearGeofence] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -1057,6 +1245,11 @@ function EditSiteModal({
           riskLevel: riskLevel || undefined,
           siteStatus: siteStatus || undefined,
           siteInstructions: siteInstructions || undefined,
+          ...(payProfileChanged ? {
+            payAreaId: payAreaId || undefined,
+            payGradeId: payGradeId || undefined,
+            payEffectiveFrom,
+          } : {}),
           ...geoPayload,
         }),
       });
@@ -1133,6 +1326,17 @@ function EditSiteModal({
                 />
               )}
             </div>
+
+            <SitePayrollFields
+              catalog={payrollCatalog}
+              areaId={payAreaId}
+              gradeId={payGradeId}
+              effectiveFrom={payEffectiveFrom}
+              onAreaChange={(value) => { setPayAreaId(value); setPayProfileChanged(true); }}
+              onGradeChange={(value) => { setPayGradeId(value); setPayProfileChanged(true); }}
+              onEffectiveFromChange={(value) => { setPayEffectiveFrom(value); setPayProfileChanged(true); }}
+              required={payrollCatalog.rateSource === "site_area_grade" && siteStatus === "ACTIVE"}
+            />
 
             <div className="md:col-span-2">
               <button

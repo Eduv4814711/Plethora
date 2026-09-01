@@ -1,7 +1,7 @@
 import type { PayPeriod } from "./tax.service.js";
 
 /** Version bumps when snapshot shape or formula semantics change intentionally. */
-export const PAYROLL_CALCULATION_VERSION = "1.4.0";
+export const PAYROLL_CALCULATION_VERSION = "2.0.0";
 
 export interface PayrollRuleSnapshot {
   overtimeMultiplier: number;
@@ -31,6 +31,37 @@ export interface PayrollTimesheetInputSnapshot {
   uifLeaveHours?: number;
   iodLeaveHours?: number;
   informationLeaveHours?: number;
+}
+
+export interface PayrollSiteSegmentSnapshot {
+  siteId: string;
+  siteName: string;
+  areaId: string;
+  areaName: string;
+  gradeId: string;
+  gradeName: string;
+  rateId: string;
+  hourlyRate: number;
+  workDate: string;
+  basicHours: number;
+  overtimeHours: number;
+  sundayHours: number;
+  publicHolidayHours: number;
+  basePay: number;
+  overtimePay: number;
+  sundayPay: number;
+  publicHolidayPay: number;
+  totalPay: number;
+}
+
+export interface PayrollPrimaryHomeSiteSnapshot {
+  siteId: string;
+  siteName: string;
+  areaId: string;
+  areaName: string;
+  gradeId: string;
+  gradeName: string;
+  hourlyRate: number;
 }
 
 export interface PayrollEmployeeContextSnapshot {
@@ -87,6 +118,9 @@ export interface PayrollEmployeeCalculationSnapshot {
   earningsRulesApplied: PayrollEarningsRuleSnapshot[];
   timesheet: PayrollTimesheetInputSnapshot | null;
   output: PayrollEmployeeOutputSnapshot;
+  pricingMode?: "legacy_employee_grade" | "site_area_grade";
+  segments?: PayrollSiteSegmentSnapshot[];
+  primaryPayrollSite?: PayrollPrimaryHomeSiteSnapshot | null;
 }
 
 /** Which SARS tax tables a run was calculated on, for audit and re-derivation. */
@@ -105,6 +139,7 @@ export interface PayrollCalculationInputsSnapshot {
   periodEnd: string;
   payPeriod: PayPeriod;
   isSdlLiable: boolean;
+  rateSource?: "legacy_employee_grade" | "site_area_grade";
   sdlStatus: PayrollSdlStatusSnapshot;
   taxYear: PayrollTaxYearSnapshot;
   timezone: string;

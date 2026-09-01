@@ -7,6 +7,8 @@ import { parsePayrollCalendarSettings } from "../../lib/payroll-calendar-setting
 import { getCurrentPayPeriod } from "../../services/payroll-period.service.js";
 import { createApprovalRequest } from "../approvals/approvals.service.js";
 import {
+  attendanceResolutionAppliesToShift,
+  attendanceSupersedesShiftExceptions,
   detectExceptionsForShift,
   exceptionTypeLabel,
   type DetectedException,
@@ -17,7 +19,101 @@ import { findApprovedLeaveConflict } from "../../services/attendance.service.js"
 import { normalizeLeaveDate } from "../../services/leave-availability.service.js";
 
 const EXCEPTION_SCAN_BATCH_SIZE = 500;
-const PAYROLL_BLOCKING_CRITICAL_STATUSES = ["OPEN", "UNDER_REVIEW", "APPROVED"] as const;
+const ACTIVE_EXCEPTION_STATUSES = ["OPEN", "UNDER_REVIEW"] as const;
+
+type ResolutionCandidateShift = {
+  id: string;
+  employeeId: string | null;
+  siteId: string | null;
+  startTime: Date;
+  shiftType: string | null;
+  status: string;
+  updatedAt?: Date;
+};
+
+async function findSupersededShiftIds(
+  companyId: string,
+  shifts: ResolutionCandidateShift[],
+  timeZone: string
+): Promise<string[]> {
+  if (shifts.length === 0) return [];
+  const shiftIds = shifts.map((shift) => shift.id);
+  const siteIds = [...new Set(shifts.flatMap((shift) => (shift.siteId ? [shift.siteId] : [])))];
+  const workDateKeys = shifts
+    .map((shift) => dateKeyInTimeZone(shift.startTime, timeZone))
+    .sort();
+  const periodStart = new Date(`${workDateKeys[0]!}T00:00:00.000Z`);
+  const periodEnd = new Date(`${workDateKeys.at(-1)!}T00:00:00.000Z`);
+  const fallbackWhere: Prisma.SiteTimesheetRowWhereInput[] = siteIds.length
+    ? [{ siteId: { in: siteIds }, workDate: { gte: periodStart, lte: periodEnd } }]
+    : [];
+  const [rows, approvedSheets] = await Promise.all([
+    prisma.siteTimesheetRow.findMany({
+      where: {
+        companyId,
+        OR: [{ sourceShiftId: { in: shiftIds } }, ...fallbackWhere],
+      },
+      select: {
+        sourceShiftId: true,
+        siteId: true,
+        workDate: true,
+        plannedGuardId: true,
+        actualGuardId: true,
+        plannedShiftType: true,
+        actualShiftType: true,
+        approvalStatus: true,
+        attendanceStatus: true,
+      },
+    }),
+    siteIds.length
+      ? prisma.siteTimesheet.findMany({
+          where: {
+            companyId,
+            siteId: { in: siteIds },
+            status: { in: ["approved", "locked"] },
+            periodStart: { lte: periodEnd },
+            periodEnd: { gte: periodStart },
+          },
+          select: {
+            siteId: true,
+            periodStart: true,
+            periodEnd: true,
+            approvedAt: true,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  return shifts
+    .filter((shift) => {
+      const target = {
+        id: shift.id,
+        employeeId: shift.employeeId,
+        siteId: shift.siteId,
+        workDateKey: dateKeyInTimeZone(shift.startTime, timeZone),
+        shiftType: shift.shiftType,
+      };
+      const matchingRows = rows.filter((row) => attendanceResolutionAppliesToShift(target, row));
+      if (attendanceSupersedesShiftExceptions(shift.status, matchingRows)) return true;
+
+      // An approved/locked site timesheet is the official attendance record. If
+      // this roster shift already existed when the period was approved, the
+      // supervisor's period approval is authoritative even for legacy rows that
+      // were omitted from the generated sheet. Shifts changed after approval
+      // remain reviewable instead of being silently dismissed.
+      if (!shift.siteId || !shift.updatedAt) return false;
+      const workDate = new Date(`${target.workDateKey}T00:00:00.000Z`);
+      return approvedSheets.some(
+        (sheet) =>
+          sheet.siteId === shift.siteId &&
+          sheet.periodStart <= workDate &&
+          sheet.periodEnd >= workDate &&
+          sheet.approvedAt != null &&
+          shift.updatedAt! <= sheet.approvedAt
+      );
+    })
+    .map((shift) => shift.id);
+}
 
 async function persistException(params: {
   companyId: string;
@@ -116,6 +212,93 @@ async function persistException(params: {
   }
 }
 
+async function resolveActiveExceptionsForShiftIds(
+  companyId: string,
+  shiftIds: string[],
+  reason = "Automatically resolved because the shift was covered or its attendance was approved."
+) {
+  if (shiftIds.length === 0) return 0;
+  const activeExceptions = await prisma.attendanceException.findMany({
+    where: {
+      companyId,
+      shiftId: { in: shiftIds },
+      status: { in: [...ACTIVE_EXCEPTION_STATUSES] },
+    },
+    select: { id: true },
+  });
+  if (activeExceptions.length === 0) return 0;
+
+  const exceptionIds = activeExceptions.map((exception) => exception.id);
+  const pendingApprovals = await prisma.approvalRequest.findMany({
+    where: {
+      companyId,
+      entityType: "AttendanceException",
+      entityId: { in: exceptionIds },
+      status: "PENDING",
+    },
+    select: { id: true },
+  });
+  const resolvedAt = new Date();
+  await Promise.all([
+    prisma.attendanceException.updateMany({
+      where: { id: { in: exceptionIds }, companyId },
+      data: { status: "RESOLVED", reviewedAt: resolvedAt, reviewNote: reason },
+    }),
+    prisma.approvalRequest.updateMany({
+      where: { id: { in: pendingApprovals.map((approval) => approval.id) }, companyId },
+      data: { status: "REJECTED", reviewedAt: resolvedAt, comment: reason },
+    }),
+    prisma.operationalAlert.updateMany({
+      where: {
+        companyId,
+        sourceId: { in: [...exceptionIds, ...pendingApprovals.map((approval) => approval.id)] },
+        status: { in: ["OPEN", "ACKNOWLEDGED"] },
+      },
+      data: { status: "RESOLVED", resolvedAt },
+    }),
+  ]);
+  return activeExceptions.length;
+}
+
+/** Reconcile stale automated issues against the authoritative attendance review. */
+export async function reconcileSupersededAttendanceExceptions(
+  companyId: string,
+  candidateShiftIds?: string[]
+) {
+  let shiftIds = [...new Set(candidateShiftIds ?? [])];
+  if (candidateShiftIds === undefined) {
+    const candidates = await prisma.attendanceException.findMany({
+      where: {
+        companyId,
+        shiftId: { not: null },
+        status: { in: [...ACTIVE_EXCEPTION_STATUSES] },
+      },
+      select: { shiftId: true },
+    });
+    shiftIds = [...new Set(candidates.flatMap((item) => (item.shiftId ? [item.shiftId] : [])))];
+  }
+  if (shiftIds.length === 0) return { resolved: 0, shiftIds: [] as string[] };
+
+  const [shifts, timeZone] = await Promise.all([
+    prisma.shift.findMany({
+      where: { companyId, id: { in: shiftIds } },
+      select: {
+        id: true,
+        employeeId: true,
+        siteId: true,
+        startTime: true,
+        shiftType: true,
+        status: true,
+        updatedAt: true,
+      },
+    }),
+    getCompanyTimezone(companyId),
+  ]);
+  const supersededShiftIds = await findSupersededShiftIds(companyId, shifts, timeZone);
+  const resolved = await resolveActiveExceptionsForShiftIds(companyId, supersededShiftIds);
+  return { resolved, shiftIds: supersededShiftIds };
+}
+
 export async function detectAndPersistExceptions(params: {
   companyId: string;
   siteId?: string;
@@ -156,7 +339,16 @@ export async function detectAndPersistExceptions(params: {
     });
     scanned += shifts.length;
 
+    const supersededShiftIds = await findSupersededShiftIds(
+      params.companyId,
+      shifts,
+      timeZone
+    );
+    const supersededShiftIdSet = new Set(supersededShiftIds);
+    await resolveActiveExceptionsForShiftIds(params.companyId, supersededShiftIds);
+
     for (const shift of shifts) {
+      if (supersededShiftIdSet.has(shift.id)) continue;
       if (shift.employeeId) {
         const shiftDate = normalizeLeaveDate(dateKeyInTimeZone(shift.startTime, timeZone));
         const leaveConflict = await findApprovedLeaveConflict(params.companyId, shift.employeeId, shiftDate);
@@ -258,6 +450,7 @@ export async function listExceptions(
           periodEnd ?? new Date("9999-12-31T23:59:59.999Z")
         )
       : undefined;
+  await reconcileSupersededAttendanceExceptions(companyId, periodShiftIds);
   const where: Prisma.AttendanceExceptionWhereInput = {
     companyId,
     ...(query.status ? { status: query.status as never } : {}),
@@ -346,10 +539,9 @@ export async function reviewException(params: {
     metadata: { previousStatus: exception.status, reviewNote: params.reviewNote },
   });
 
-  // Confirming an exception does not prove the underlying attendance was
-  // corrected. Keep its alert active until it is explicitly resolved/rejected
-  // or converted to an absence.
-  if (["reject", "resolve", "mark_absent"].includes(params.action)) {
+  // Any recorded outcome completes the operator's review. The underlying
+  // attendance can still be corrected independently without leaving a stale alert.
+  if (["approve", "reject", "resolve", "mark_absent"].includes(params.action)) {
     await prisma.operationalAlert.updateMany({
       where: {
         companyId: params.companyId,
@@ -412,16 +604,13 @@ export async function getExceptionAnalytics(
         where: {
           ...where,
           severity: "CRITICAL",
-          status: { in: [...PAYROLL_BLOCKING_CRITICAL_STATUSES] },
+          status: { in: [...ACTIVE_EXCEPTION_STATUSES] },
         },
       }),
       prisma.attendanceException.count({
         where: {
           ...where,
-          OR: [
-            { status: { in: ["OPEN", "UNDER_REVIEW"] } },
-            { severity: "CRITICAL", status: "APPROVED" },
-          ],
+          status: { in: [...ACTIVE_EXCEPTION_STATUSES] },
         },
       }),
       prisma.attendanceException.count({ where }),
@@ -513,24 +702,19 @@ export async function refreshPayrollReadiness(
       companyId,
       shiftId: { in: periodShiftIds },
       severity: "CRITICAL",
-      status: { in: [...PAYROLL_BLOCKING_CRITICAL_STATUSES] },
+      status: { in: [...ACTIVE_EXCEPTION_STATUSES] },
     },
   });
   const openAny = await prisma.attendanceException.count({
     where: {
       companyId,
       shiftId: { in: periodShiftIds },
-      OR: [
-        { status: { in: ["OPEN", "UNDER_REVIEW"] } },
-        { severity: "CRITICAL", status: "APPROVED" },
-      ],
+      status: { in: [...ACTIVE_EXCEPTION_STATUSES] },
     },
   });
 
-  let status: "READY" | "PENDING_ATTENDANCE_REVIEW" | "BLOCKED_BY_EXCEPTIONS" =
-    "READY";
-  if (openCritical > 0) status = "BLOCKED_BY_EXCEPTIONS";
-  else if (openAny > 0) status = "PENDING_ATTENDANCE_REVIEW";
+  const status: "READY" | "PENDING_ATTENDANCE_REVIEW" =
+    openAny > 0 ? "PENDING_ATTENDANCE_REVIEW" : "READY";
 
   await prisma.payrollPeriodReadiness.upsert({
     where: {
@@ -548,27 +732,22 @@ export async function refreshPayrollReadiness(
       openExceptions: openAny,
     },
     update: {
-      status: status === "READY" ? "READY" : status,
+      status,
       openExceptions: openAny,
     },
   });
 
-  if (status === "BLOCKED_BY_EXCEPTIONS") {
-    await upsertAlert({
+  // Exception review is advisory and must never lock payroll calculation. Close
+  // any legacy blocker alert created under the previous policy.
+  await prisma.operationalAlert.updateMany({
+    where: {
       companyId,
-      title: "Payroll blocked because attendance is not approved",
-      message: `${openCritical} critical attendance issue(s) must be corrected or explicitly resolved before payroll can proceed.`,
-      priority: "CRITICAL",
       sourceModule: "PAYROLL",
       dedupeKey: `payroll_blocked:${start.toISOString().slice(0, 10)}`,
-      // The fix for this lives in attendance, not payroll — carry the period so the
-      // dashboard can link straight to the exceptions blocking it.
-      metadata: {
-        periodStart: start.toISOString().slice(0, 10),
-        periodEnd: end.toISOString().slice(0, 10),
-      },
-    });
-  }
+      status: { in: ["OPEN", "ACKNOWLEDGED"] },
+    },
+    data: { status: "RESOLVED", resolvedAt: new Date() },
+  });
 
   return { status, openExceptions: openAny, openCritical };
 }
@@ -596,7 +775,7 @@ export interface BlockingExceptionBreakdown {
 }
 
 /**
- * What is actually blocking payroll, grouped by exception type.
+ * Active critical exceptions, grouped for operational review.
  *
  * The bare count ("97 critical issues") is not actionable on its own — this
  * gives the UI enough to explain each category and link straight to it.
@@ -612,7 +791,7 @@ export async function getBlockingExceptionBreakdown(
     companyId,
     shiftId: { in: periodShiftIds },
     severity: "CRITICAL" as const,
-    status: { in: [...PAYROLL_BLOCKING_CRITICAL_STATUSES] },
+    status: { in: [...ACTIVE_EXCEPTION_STATUSES] },
   };
 
   const grouped = await prisma.attendanceException.groupBy({
@@ -665,7 +844,7 @@ export async function getBlockingExceptionBreakdown(
   };
 }
 
-/** Block payroll calculate/approve when critical attendance exceptions are unresolved for the period. */
+/** Attendance exceptions are advisory; payroll calculation and approval remain available. */
 export async function assertPayrollNotBlocked(
   companyId: string,
   periodStart: Date,
@@ -678,19 +857,6 @@ export async function assertPayrollNotBlocked(
   blockingExceptions?: BlockingExceptionBreakdown;
 }> {
   const readiness = await refreshPayrollReadiness(companyId, periodStart, periodEnd);
-  if (readiness.status === "BLOCKED_BY_EXCEPTIONS") {
-    return {
-      blocked: true,
-      message: `${readiness.openCritical} critical attendance issue(s) must be corrected or explicitly resolved before payroll can proceed.`,
-      status: readiness.status,
-      openExceptions: readiness.openExceptions,
-      blockingExceptions: await getBlockingExceptionBreakdown(
-        companyId,
-        periodStart,
-        periodEnd
-      ),
-    };
-  }
   return {
     blocked: false,
     status: readiness.status,
@@ -707,7 +873,8 @@ export async function getPayrollReadiness(companyId: string) {
   const period = getCurrentPayPeriod(calendarSettings);
   const start = period.periodStart;
   const end = period.periodEnd;
-  let row = await prisma.payrollPeriodReadiness.findUnique({
+  await refreshPayrollReadiness(companyId, start, end);
+  return prisma.payrollPeriodReadiness.findUnique({
     where: {
       companyId_periodStart_periodEnd: {
         companyId,
@@ -716,17 +883,4 @@ export async function getPayrollReadiness(companyId: string) {
       },
     },
   });
-  if (!row) {
-    await refreshPayrollReadiness(companyId, start, end);
-    row = await prisma.payrollPeriodReadiness.findUnique({
-      where: {
-        companyId_periodStart_periodEnd: {
-          companyId,
-          periodStart: start,
-          periodEnd: end,
-        },
-      },
-    });
-  }
-  return row;
 }

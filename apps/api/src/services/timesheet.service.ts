@@ -4,6 +4,22 @@ import { dateKeyInTimeZone, getCompanyTimezone } from "../lib/timezone.js";
 import { employeeTypeConfig } from "../lib/leave-rules.config.js";
 import { toLeaveConfigEmployeeType } from "./leave-v3.service.js";
 
+export interface TimesheetSegment {
+  siteId: string;
+  workDate: Date;
+  basicHours: number;
+  overtimeHours: number;
+  sundayHours: number;
+  publicHolidayHours: number;
+}
+
+export interface TimesheetLeaveDay {
+  date: Date;
+  leaveType: string;
+  hours: number;
+  isPaid: boolean;
+}
+
 export interface TimesheetAggregate {
   employeeId: string;
   basicHours: number;
@@ -22,6 +38,10 @@ export interface TimesheetAggregate {
   iodLeaveHours?: number;
   /** Always 0 — information-only leave treatment does not exist in the simple leave engine. */
   informationLeaveHours?: number;
+  /** Worked hours split by site and date for multi-site rate calculation. */
+  segments?: TimesheetSegment[];
+  /** Approved leave days for daily rate calculation. */
+  leaveDaysList?: TimesheetLeaveDay[];
 }
 
 /** Maximum leave hours accepted per single leave record (guards against bad data). */
@@ -228,6 +248,46 @@ export async function aggregateTimesheets(
   const employeeIodLeaveHours = new Map<string, number>();
   const employeeInformationLeaveHours = new Map<string, number>();
   const knownLeaveDayKeys = new Set<string>();
+  const employeeLeaveDaysList = new Map<string, TimesheetLeaveDay[]>();
+  const employeeSegmentsMap = new Map<string, Map<string, TimesheetSegment>>();
+
+  function addSegment(
+    empId: string,
+    siteId: string,
+    workDate: Date,
+    bucket: { basicHours: number; overtimeHours: number; sundayHours: number; publicHolidayHours: number }
+  ) {
+    if (
+      bucket.basicHours === 0 &&
+      bucket.overtimeHours === 0 &&
+      bucket.sundayHours === 0 &&
+      bucket.publicHolidayHours === 0
+    ) {
+      return;
+    }
+    if (!employeeSegmentsMap.has(empId)) {
+      employeeSegmentsMap.set(empId, new Map());
+    }
+    const map = employeeSegmentsMap.get(empId)!;
+    const dateKey = workDate.toISOString().slice(0, 10);
+    const key = `${siteId}:${dateKey}`;
+    const existing = map.get(key);
+    if (existing) {
+      existing.basicHours += bucket.basicHours;
+      existing.overtimeHours += bucket.overtimeHours;
+      existing.sundayHours += bucket.sundayHours;
+      existing.publicHolidayHours += bucket.publicHolidayHours;
+    } else {
+      map.set(key, {
+        siteId,
+        workDate,
+        basicHours: bucket.basicHours,
+        overtimeHours: bucket.overtimeHours,
+        sundayHours: bucket.sundayHours,
+        publicHolidayHours: bucket.publicHolidayHours,
+      });
+    }
+  }
 
   for (const request of approvedLeaveRequests) {
     const overlapStart = request.startDate > periodStart ? request.startDate : periodStart;
@@ -247,12 +307,26 @@ export async function aggregateTimesheets(
     const target = request.leaveType === "PARENTAL" ? employeeUnpaidLeaveHours : employeeLeaveHours;
     target.set(request.employeeId, (target.get(request.employeeId) ?? 0) + hours);
 
+    const isPaid = request.leaveType !== "PARENTAL";
+    const hoursPerDay = overlapDays > 0 ? hours / overlapDays : hours;
+
     for (
       let day = new Date(overlapStart);
       day <= overlapEnd;
       day = new Date(day.getTime() + DAY_MS)
     ) {
       knownLeaveDayKeys.add(`${request.employeeId}:${day.toISOString().slice(0, 10)}`);
+      const date = new Date(day);
+      date.setUTCHours(0, 0, 0, 0);
+      if (!employeeLeaveDaysList.has(request.employeeId)) {
+        employeeLeaveDaysList.set(request.employeeId, []);
+      }
+      employeeLeaveDaysList.get(request.employeeId)!.push({
+        date,
+        leaveType: request.leaveType,
+        hours: Math.round(hoursPerDay * 100) / 100,
+        isPaid,
+      });
     }
   }
 
@@ -270,6 +344,17 @@ export async function aggregateTimesheets(
         const fallbackHours = row.hoursWorked != null ? Number(row.hoursWorked) : 8;
         if (Number.isFinite(fallbackHours) && fallbackHours > 0 && fallbackHours <= MAX_LEAVE_HOURS_PER_RECORD) {
           employeeLeaveHours.set(empId, (employeeLeaveHours.get(empId) ?? 0) + fallbackHours);
+          const date = new Date(row.workDate);
+          date.setUTCHours(0, 0, 0, 0);
+          if (!employeeLeaveDaysList.has(empId)) {
+            employeeLeaveDaysList.set(empId, []);
+          }
+          employeeLeaveDaysList.get(empId)!.push({
+            date,
+            leaveType: row.attendanceStatus === "sick_leave" ? "SICK" : "ANNUAL",
+            hours: fallbackHours,
+            isPaid: true,
+          });
         }
       }
       // Leave is paid or deducted from the leave source of truth. It is never
@@ -298,6 +383,10 @@ export async function aggregateTimesheets(
     t.overtimeHours += bucket.overtimeHours;
     t.sundayHours += bucket.sundayHours;
     t.publicHolidayHours += bucket.publicHolidayHours;
+
+    const rowWorkDate = new Date(row.workDate);
+    rowWorkDate.setUTCHours(0, 0, 0, 0);
+    addSegment(empId, row.siteId, rowWorkDate, bucket);
   }
 
   for (const shift of shiftsWithAttendance) {
@@ -311,6 +400,11 @@ export async function aggregateTimesheets(
       });
     }
     const t = totals.get(empId)!;
+
+    const shiftStartZoned = toZonedTime(shift.startTime, timeZone);
+    const shiftWorkDate = new Date(
+      Date.UTC(shiftStartZoned.getFullYear(), shiftStartZoned.getMonth(), shiftStartZoned.getDate())
+    );
 
     for (const att of shift.attendances) {
       const hoursWorked = att.hoursWorked != null ? Number(att.hoursWorked) : 0;
@@ -326,7 +420,22 @@ export async function aggregateTimesheets(
       t.overtimeHours += bucket.overtimeHours;
       t.sundayHours += bucket.sundayHours;
       t.publicHolidayHours += bucket.publicHolidayHours;
+
+      addSegment(empId, shift.siteId, shiftWorkDate, bucket);
     }
+  }
+
+  function getSegments(employeeId: string): TimesheetSegment[] {
+    const map = employeeSegmentsMap.get(employeeId);
+    if (!map) return [];
+    return [...map.values()].map((s) => ({
+      siteId: s.siteId,
+      workDate: s.workDate,
+      basicHours: Math.round(s.basicHours * 100) / 100,
+      overtimeHours: Math.round(s.overtimeHours * 100) / 100,
+      sundayHours: Math.round(s.sundayHours * 100) / 100,
+      publicHolidayHours: Math.round(s.publicHolidayHours * 100) / 100,
+    }));
   }
 
   const result: TimesheetAggregate[] = [];
@@ -347,6 +456,8 @@ export async function aggregateTimesheets(
       iodLeaveHours: Math.round((employeeIodLeaveHours.get(employeeId) ?? 0) * 100) / 100,
       informationLeaveHours: Math.round((employeeInformationLeaveHours.get(employeeId) ?? 0) * 100) / 100,
       leaveDays: Math.round((leaveHours / 8) * 100) / 100,
+      segments: getSegments(employeeId),
+      leaveDaysList: employeeLeaveDaysList.get(employeeId) ?? [],
     });
   }
 
@@ -367,6 +478,8 @@ export async function aggregateTimesheets(
       iodLeaveHours: Math.round((employeeIodLeaveHours.get(employeeId) ?? 0) * 100) / 100,
       informationLeaveHours: Math.round((employeeInformationLeaveHours.get(employeeId) ?? 0) * 100) / 100,
       leaveDays: Math.round((leaveHours / 8) * 100) / 100,
+      segments: getSegments(employeeId),
+      leaveDaysList: employeeLeaveDaysList.get(employeeId) ?? [],
     });
   }
 
@@ -385,6 +498,8 @@ export async function aggregateTimesheets(
       iodLeaveHours: Math.round((employeeIodLeaveHours.get(employeeId) ?? 0) * 100) / 100,
       informationLeaveHours: Math.round((employeeInformationLeaveHours.get(employeeId) ?? 0) * 100) / 100,
       leaveDays: 0,
+      segments: getSegments(employeeId),
+      leaveDaysList: employeeLeaveDaysList.get(employeeId) ?? [],
     });
   }
 
@@ -397,6 +512,8 @@ export async function aggregateTimesheets(
       uifLeaveHours: Math.round((employeeUifLeaveHours.get(employeeId) ?? 0) * 100) / 100,
       iodLeaveHours: Math.round((employeeIodLeaveHours.get(employeeId) ?? 0) * 100) / 100,
       informationLeaveHours: Math.round((employeeInformationLeaveHours.get(employeeId) ?? 0) * 100) / 100,
+      segments: getSegments(employeeId),
+      leaveDaysList: employeeLeaveDaysList.get(employeeId) ?? [],
     });
   }
 

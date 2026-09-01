@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  attendanceIssueReviewHref,
   attendanceOverviewHref,
   attendanceSiteHref,
   attendanceStaffHref,
@@ -21,6 +22,21 @@ describe("attendance navigation", () => {
   it("preserves the same context when returning to the overview", () => {
     expect(attendanceOverviewHref(state)).toBe(
       "/attendance?start=2026-07-01&end=2026-07-31&shiftType=night"
+    );
+  });
+
+  it("deep-links an attendance issue to its exact timesheet row", () => {
+    expect(
+      attendanceIssueReviewHref({
+        ...state,
+        siteId: "site 1/alpha",
+        shiftId: "shift-42",
+        employeeId: "employee-7",
+        workDate: "2026-07-18",
+        returnTo: "/attendance/exceptions?severity=CRITICAL",
+      })
+    ).toBe(
+      "/attendance/sites/site%201%2Falpha?start=2026-07-01&end=2026-07-31&shiftType=night&focusShiftId=shift-42&focusEmployeeId=employee-7&focusDate=2026-07-18&returnTo=%2Fattendance%2Fexceptions%3Fseverity%3DCRITICAL"
     );
   });
 

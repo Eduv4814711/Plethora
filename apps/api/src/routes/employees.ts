@@ -193,9 +193,6 @@ const createEmployeeSchemaWithRefine = createEmployeeSchema.superRefine((data, c
   if (data.employeeType === "security_officer" && (!data.psiraRegistrationNumber || !String(data.psiraRegistrationNumber).trim())) {
     ctx.addIssue({ code: "custom", path: ["psiraRegistrationNumber"], message: "PSIRA number is required for security guards" });
   }
-  if (data.employeeType === "security_officer" && (!data.gradeId || !String(data.gradeId).trim())) {
-    ctx.addIssue({ code: "custom", path: ["gradeId"], message: "Pay grade is required for security guards" });
-  }
   if (!data.groupId || !String(data.groupId).trim()) {
     ctx.addIssue({ code: "custom", path: ["groupId"], message: "Group is required for all employees" });
   }
@@ -454,6 +451,35 @@ export async function employeesRoutes(app: FastifyInstance) {
         ...select,
         grade: { select: { name: true, hourlyRate: true } },
         group: { select: { id: true, name: true } },
+        siteAssignments: {
+          where: { isActive: true },
+          select: {
+            site: {
+              select: {
+                id: true,
+                name: true,
+                payProfiles: {
+                  where: { effectiveFrom: { lte: new Date() } },
+                  orderBy: { effectiveFrom: "desc" },
+                  take: 1,
+                  select: {
+                    area: { select: { id: true, name: true } },
+                    grade: { select: { id: true, name: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+        payrollHomeSites: {
+          where: { effectiveFrom: { lte: new Date() } },
+          orderBy: { effectiveFrom: "desc" },
+          take: 1,
+          select: {
+            siteId: true,
+            site: { select: { id: true, name: true } },
+          },
+        },
       },
     });
 

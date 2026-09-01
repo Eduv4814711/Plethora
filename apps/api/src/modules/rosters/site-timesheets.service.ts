@@ -10,6 +10,7 @@ import {
   isShiftCoveredOnDateKey,
   resolveSiteCoverageDays,
 } from "../../lib/site-coverage-days.js";
+import { reconcileSupersededAttendanceExceptions } from "../attendance-exceptions/exceptions.service.js";
 
 type Tx = Prisma.TransactionClient | typeof prisma;
 
@@ -605,6 +606,7 @@ function serializeRow(
     discrepancyCodes:
       discrepancyCodes ??
       (Array.isArray(row.discrepancyCodes) ? (row.discrepancyCodes as string[]) : []),
+    sourceShiftId: row.sourceShiftId,
   };
 }
 
@@ -1648,6 +1650,7 @@ export async function approveSiteTimesheet(
           attendanceStatus: true,
           actualGuardId: true,
           plannedGuardId: true,
+          sourceShiftId: true,
           workDate: true,
         },
       },
@@ -1757,6 +1760,11 @@ export async function approveSiteTimesheet(
       });
     }
   });
+
+  await reconcileSupersededAttendanceExceptions(
+    companyId,
+    targetRows.flatMap((row) => (row.sourceShiftId ? [row.sourceShiftId] : []))
+  );
 
   await createAuditLog({
     userId,

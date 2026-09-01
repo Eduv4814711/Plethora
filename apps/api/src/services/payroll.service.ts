@@ -15,10 +15,15 @@ import { getRolling12MonthPayroll } from "./sdl-tracking.service.js";
 import {
   buildPayrollCalculationSnapshot,
   computePayrollLines,
+  PayrollCalculationPricingError,
   validateComputedPayrollLines,
   type PayrollCalculationContext,
   type PayrollDeductionResult,
 } from "./payroll-calculation.engine.js";
+import {
+  loadSitePricingResolver,
+  loadPayrollHomeSiteResolver,
+} from "./payroll-pricing.service.js";
 import type {
   PayrollCalculationSnapshot,
   PayrollSdlStatusSnapshot,
@@ -349,6 +354,34 @@ export async function calculatePayroll(
     groupEarningsByGroup.set(r.groupId, list);
   }
 
+  const siteIds = new Set<string>();
+  for (const agg of aggregates) {
+    if (agg.segments) {
+      for (const seg of agg.segments) {
+        siteIds.add(seg.siteId);
+      }
+    }
+  }
+  for (const emp of employees) {
+    if (emp.siteAssignments) {
+      for (const sa of emp.siteAssignments) {
+        siteIds.add(sa.siteId);
+      }
+    }
+  }
+
+  const isSitePricing = payrollSettings.rateSource === "site_area_grade";
+  const [sitePricingResolver, payrollHomeSiteResolver, allSites] = await Promise.all([
+    isSitePricing ? loadSitePricingResolver(companyId, [...siteIds], periodEnd) : undefined,
+    isSitePricing ? loadPayrollHomeSiteResolver(companyId, employees.map((e) => e.id), periodEnd) : undefined,
+    prisma.site.findMany({
+      where: { companyId },
+      select: { id: true, name: true },
+    }),
+  ]);
+
+  const siteNames = new Map(allSites.map((s) => [s.id, s.name]));
+
   const ctxBase: Omit<PayrollCalculationContext, "deductionsByEmployee" | "isSdlLiable"> = {
     payrollRunId,
     companyId,
@@ -363,13 +396,25 @@ export async function calculatePayroll(
     groupEarningsByGroup,
     aggregates: new Map(aggregates.map((a) => [a.employeeId, a])),
     employees,
+    rateSource: payrollSettings.rateSource,
+    sitePricingResolver,
+    payrollHomeSiteResolver,
+    siteNames,
   };
 
-  const grossPass = computePayrollLines({
-    ...ctxBase,
-    isSdlLiable: false,
-    deductionsByEmployee: new Map(),
-  });
+  let grossPass;
+  try {
+    grossPass = computePayrollLines({
+      ...ctxBase,
+      isSdlLiable: false,
+      deductionsByEmployee: new Map(),
+    });
+  } catch (error) {
+    if (error instanceof PayrollCalculationPricingError) {
+      throw new PayrollServiceError(error.message, error.details);
+    }
+    throw error;
+  }
 
   const projectedRunGross = grossPass.lines.reduce((sum, line) => sum + line.grossPay, 0);
   const sdlStatus = buildSdlStatus({
@@ -409,11 +454,22 @@ export async function calculatePayroll(
     deductionsByEmployee.set(emp.id, { total, lines: dedLines });
   }
 
-  const { lines, employeeSnapshots } = computePayrollLines({
-    ...ctxBase,
-    isSdlLiable,
-    deductionsByEmployee,
-  });
+  let lines;
+  let employeeSnapshots;
+  try {
+    const computed = computePayrollLines({
+      ...ctxBase,
+      isSdlLiable,
+      deductionsByEmployee,
+    });
+    lines = computed.lines;
+    employeeSnapshots = computed.employeeSnapshots;
+  } catch (error) {
+    if (error instanceof PayrollCalculationPricingError) {
+      throw new PayrollServiceError(error.message, error.details);
+    }
+    throw error;
+  }
   const lineValidationIssues = validateComputedPayrollLines(lines);
   if (lineValidationIssues.length > 0) {
     throw new PayrollServiceError(

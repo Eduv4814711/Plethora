@@ -49,6 +49,7 @@ export function SiteTimesheetTable({
   onUpdate,
   onApprove,
   onReopen,
+  focusedRowId,
 }: {
   rows: SiteTimesheetRow[];
   guardOptions: GuardPickerOption[];
@@ -65,6 +66,7 @@ export function SiteTimesheetTable({
   onUpdate: (row: SiteTimesheetRow, patch: Partial<SiteTimesheetRow>) => void;
   onApprove: (row: SiteTimesheetRow) => void;
   onReopen: (row: SiteTimesheetRow) => void;
+  focusedRowId?: string;
 }) {
   return (
     <div className="hidden xl:block">
@@ -93,7 +95,10 @@ export function SiteTimesheetTable({
           </thead>
           <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
             {rows.map((row) => {
-              const rowSurfaceClass = isRowFullyReviewed(row.approvalStatus)
+              const focused = row.id === focusedRowId;
+              const rowSurfaceClass = focused
+                ? "bg-security-amber-50 dark:bg-security-amber-950/30"
+                : isRowFullyReviewed(row.approvalStatus)
                 ? "bg-security-emerald-50/40 dark:bg-security-emerald-700/15"
                 : row.approvalStatus === "partially_reviewed"
                   ? "bg-security-amber-50/50 dark:bg-security-amber-950/20"
@@ -109,7 +114,11 @@ export function SiteTimesheetTable({
               const dutyOffLocked = Boolean(savedDutyOff) && !canEditLockedOb;
 
               return (
-                <tr key={row.id} className={rowSurfaceClass}>
+                <tr
+                  key={row.id}
+                  data-attendance-row-id={row.id}
+                  className={`${rowSurfaceClass} scroll-mt-32 ${focused ? "outline outline-2 -outline-offset-2 outline-security-amber-500" : ""}`}
+                >
                   <td className={`${cellClass} font-medium leading-tight`}>
                     {row.workDate}
                     <br />

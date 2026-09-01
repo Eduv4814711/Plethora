@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { clsx } from "clsx";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
@@ -18,7 +18,7 @@ import { NO_SHIFT_LABEL, noShiftDateKeys } from "@/lib/site-coverage-days";
 import { downloadSiteTimesheetCsv, exportSiteTimesheetPdf } from "@/lib/site-timesheet-export";
 import { hasCapability } from "@/lib/permissions";
 import { ConfirmModal, useConfirmDialog } from "@/components/ui";
-import { useSiteTimesheet } from "@/hooks/use-site-timesheet";
+import { useSiteTimesheet, type SiteTimesheetFocus } from "@/hooks/use-site-timesheet";
 
 /** "Sat 8 Aug" — date keys are UTC calendar days, so read them back in UTC. */
 function formatNoShiftDate(dateKey: string): string {
@@ -39,6 +39,9 @@ export function SiteTimesheetsSection({
   periodStart,
   periodEnd,
   shiftType = "all",
+  focus,
+  returnTo,
+  showAllHref,
 }: {
   token: string;
   siteId: string;
@@ -46,6 +49,9 @@ export function SiteTimesheetsSection({
   periodStart: string;
   periodEnd: string;
   shiftType?: AttendanceShiftTypeFilter;
+  focus?: SiteTimesheetFocus;
+  returnTo?: string;
+  showAllHref?: string;
 }) {
   const { user } = useAuth();
   // Either module's grant works here on purpose — attendance capture belongs to both the
@@ -73,6 +79,7 @@ export function SiteTimesheetsSection({
     periodEnd,
     shiftType,
     permissions,
+    focus,
   });
   const {
     sheet,
@@ -97,6 +104,8 @@ export function SiteTimesheetsSection({
     reviewedCount,
     pendingReviewCount,
     otherShiftPendingCount,
+    focusActive,
+    focusedRow,
     load,
   } = timesheet;
 
@@ -112,6 +121,16 @@ export function SiteTimesheetsSection({
   const guardFilterActive = guardFilter.trim().length > 0;
   const shiftFilterActive = shiftType !== "all";
   const shiftLabel = shiftType === "day" ? "day-shift" : shiftType === "night" ? "night-shift" : "all";
+
+  useEffect(() => {
+    if (!focusedRow) return;
+    const frame = window.requestAnimationFrame(() => {
+      const target = Array.from(document.querySelectorAll<HTMLElement>("[data-attendance-row-id]"))
+        .find((element) => element.dataset.attendanceRowId === focusedRow.id && element.offsetParent !== null);
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusedRow]);
 
   /**
    * Days in this period the site does not run, taken from its "Days covered" picker. These
@@ -381,6 +400,36 @@ export function SiteTimesheetsSection({
         </div>
       )}
 
+      {focusActive && (
+        <div
+          className="flex flex-col gap-3 rounded-lg border-2 border-security-amber-400 bg-security-amber-50 px-4 py-3 text-sm text-security-navy-900 dark:border-security-amber-700 dark:bg-security-amber-950/30 dark:text-security-navy-100 sm:flex-row sm:items-center sm:justify-between"
+          role="status"
+        >
+          <div>
+            <p className="font-semibold">
+              {focusedRow ? "Attendance issue record found" : "Attendance issue record not found"}
+            </p>
+            <p className="mt-1 text-xs text-security-navy-600 dark:text-security-navy-300">
+              {focusedRow
+                ? `${focusedRow.workDate} · ${focusedRow.actualGuardName ?? focusedRow.plannedGuardName ?? "Unassigned guard"}. Review the highlighted row and save the corrected attendance.`
+                : "The linked shift is not in this timesheet yet. Refresh the timesheet from roster shifts, or show the full timesheet to locate it manually."}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {showAllHref && (
+              <Link href={showAllHref} className="btn-secondary min-h-11">
+                Show full timesheet
+              </Link>
+            )}
+            {returnTo && (
+              <Link href={returnTo} className="btn-primary min-h-11">
+                Back to attendance issues
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+
       {sheet && (
         <>
           <div className="grid gap-2 text-xs sm:grid-cols-7">
@@ -526,40 +575,44 @@ export function SiteTimesheetsSection({
                 Attendance entries
               </p>
               <p className="text-xs text-security-navy-500 dark:text-security-navy-400">
-                Pending work is shown first so unfinished attendance is not missed.
+                {focusActive
+                  ? "Showing the attendance entry linked to the selected issue."
+                  : "Pending work is shown first so unfinished attendance is not missed."}
               </p>
             </div>
-            <div
-              className="flex flex-wrap gap-1 rounded-lg border border-security-navy-100 bg-white p-1 dark:border-security-navy-700 dark:bg-security-navy-900"
-              role="group"
-              aria-label="Show attendance entries"
-            >
-              {(
-                [
-                  ["pending", `Needs confirmation (${pendingReviewCount})`],
-                  ["confirmed", `Confirmed (${reviewedCount})`],
-                  ["all", `All (${shiftScopedRows.length})`],
-                ] as const
-              ).map(([value, text]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setReviewFilter(value)}
-                  aria-pressed={reviewFilter === value}
-                  className={clsx(
-                    "min-h-11 rounded-md px-3 text-sm font-medium",
-                    reviewFilter === value
-                      ? "bg-security-navy-800 text-white dark:bg-security-navy-600"
-                      : "text-security-navy-700 hover:bg-security-navy-50 dark:text-security-navy-300 dark:hover:bg-security-navy-900"
-                  )}
-                >
-                  {text}
-                </button>
-              ))}
-            </div>
+            {!focusActive && (
+              <div
+                className="flex flex-wrap gap-1 rounded-lg border border-security-navy-100 bg-white p-1 dark:border-security-navy-700 dark:bg-security-navy-900"
+                role="group"
+                aria-label="Show attendance entries"
+              >
+                {(
+                  [
+                    ["pending", `Needs confirmation (${pendingReviewCount})`],
+                    ["confirmed", `Confirmed (${reviewedCount})`],
+                    ["all", `All (${shiftScopedRows.length})`],
+                  ] as const
+                ).map(([value, text]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setReviewFilter(value)}
+                    aria-pressed={reviewFilter === value}
+                    className={clsx(
+                      "min-h-11 rounded-md px-3 text-sm font-medium",
+                      reviewFilter === value
+                        ? "bg-security-navy-800 text-white dark:bg-security-navy-600"
+                        : "text-security-navy-700 hover:bg-security-navy-50 dark:text-security-navy-300 dark:hover:bg-security-navy-900"
+                    )}
+                  >
+                    {text}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="flex flex-col gap-2 rounded-lg border border-security-navy-100 bg-white p-3 dark:border-security-navy-700 dark:bg-security-navy-900 sm:flex-row sm:items-end">
+          {!focusActive && <div className="flex flex-col gap-2 rounded-lg border border-security-navy-100 bg-white p-3 dark:border-security-navy-700 dark:bg-security-navy-900 sm:flex-row sm:items-end">
             <div className="min-w-0 flex-1">
               <label
                 htmlFor="site-timesheet-guard-filter"
@@ -599,7 +652,7 @@ export function SiteTimesheetsSection({
                 Clear filter
               </button>
             </div>
-          </div>
+          </div>}
 
           {guardFilterActive && displayRows.length === 0 && (
             <div className="rounded-lg border border-security-navy-100 bg-security-navy-50 px-3 py-3 text-sm text-security-navy-600 dark:border-security-navy-700 dark:bg-security-navy-900 dark:text-security-navy-300">
@@ -612,7 +665,7 @@ export function SiteTimesheetsSection({
               period. Switch shift type above to review the other shift.
             </div>
           )}
-          {!guardFilterActive && shiftScopedRows.length > 0 && displayRows.length === 0 && (
+          {!focusActive && !guardFilterActive && shiftScopedRows.length > 0 && displayRows.length === 0 && (
             <div
               className="rounded-lg border border-security-emerald-200 bg-security-emerald-50 px-4 py-4 text-sm text-security-emerald-700 dark:border-security-emerald-700 dark:bg-security-emerald-700/30 dark:text-security-emerald-200"
               role="status"
@@ -641,6 +694,7 @@ export function SiteTimesheetsSection({
                 onUpdate={(r, patch) => void timesheet.updateRow(r, patch)}
                 onApprove={(r) => void timesheet.approveRowAttendance(r)}
                 onReopen={(r) => void timesheet.reopenRow(r)}
+                focused={focusedRow?.id === row.id}
               />
             ))}
           </div>
@@ -661,6 +715,7 @@ export function SiteTimesheetsSection({
             onUpdate={(row, patch) => void timesheet.updateRow(row, patch)}
             onApprove={(row) => void timesheet.approveRowAttendance(row)}
             onReopen={(row) => void timesheet.reopenRow(row)}
+            focusedRowId={focusedRow?.id}
           />
         </>
       )}

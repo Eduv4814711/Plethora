@@ -15,10 +15,22 @@ import {
   type PayrollEmployeeCalculationSnapshot,
   type PayrollEmployeeContextSnapshot,
   type PayrollEmployeeOutputSnapshot,
+  type PayrollPrimaryHomeSiteSnapshot,
   type PayrollRuleSnapshot,
   type PayrollSdlStatusSnapshot,
+  type PayrollSiteSegmentSnapshot,
   type PayrollTimesheetInputSnapshot,
 } from "./payroll-calculation.types.js";
+import type { ResolvedSitePayRate } from "./payroll-pricing.service.js";
+
+export class PayrollCalculationPricingError extends Error {
+  details?: unknown;
+  constructor(message: string, details?: unknown) {
+    super(message);
+    this.name = "PayrollCalculationPricingError";
+    this.details = details;
+  }
+}
 
 export const DEFAULT_OT_MULTIPLIER = 1.5;
 export const DEFAULT_SUNDAY_MULTIPLIER = 2.0;
@@ -58,6 +70,10 @@ export interface PayrollCalculationContext {
   aggregates: Map<string, TimesheetAggregate>;
   employees: EmployeeForPayroll[];
   deductionsByEmployee: Map<string, PayrollDeductionResult>;
+  rateSource?: "legacy_employee_grade" | "site_area_grade";
+  sitePricingResolver?: (siteId: string, at: Date) => ResolvedSitePayRate | null;
+  payrollHomeSiteResolver?: (employeeId: string, at: Date) => string | null;
+  siteNames?: Map<string, string>;
 }
 
 function round2(n: number): number {
@@ -173,10 +189,19 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
   // Tax tables come from the period being paid, so recalculating an old run reproduces
   // the rates it was originally filed on rather than the current year's.
   const taxYearConfig = resolveTaxYearConfig(ctx.periodEnd);
+  const isSitePricing = ctx.rateSource === "site_area_grade";
 
   for (const emp of ctx.employees) {
-    const rules = resolvePayRules(emp, ctx);
-    const earningsRules = resolveEarningsRules(emp, ctx);
+    const rules = isSitePricing
+      ? {
+          overtimeMultiplier: ctx.companyPayRules.get("overtime") ?? DEFAULT_OT_MULTIPLIER,
+          sundayMultiplier: ctx.companyPayRules.get("sunday") ?? DEFAULT_SUNDAY_MULTIPLIER,
+          publicHolidayMultiplier:
+            ctx.companyPayRules.get("public_holiday") ?? DEFAULT_PUBLIC_HOLIDAY_MULTIPLIER,
+          source: "company" as const,
+        }
+      : resolvePayRules(emp, ctx);
+    const earningsRules = isSitePricing ? ctx.companyEarningsRules : resolveEarningsRules(emp, ctx);
     const context = employeeContext(emp);
     const agg = ctx.aggregates.get(emp.id);
     const ts = timesheetSnapshot(agg);
@@ -193,6 +218,8 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
     let grossPay = 0;
     const earningsLines: Array<{ name: string; amount: number }> = [];
     const earningsRulesApplied: PayrollEarningsRuleSnapshot[] = [];
+    let segmentsSnapshot: PayrollSiteSegmentSnapshot[] | undefined;
+    let primaryPayrollSiteSnapshot: PayrollPrimaryHomeSiteSnapshot | null | undefined;
 
     let output: PayrollEmployeeOutputSnapshot;
 
@@ -237,6 +264,268 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
       if (overtimePay > 0) earningsLines.push({ name: "Overtime", amount: overtimePay });
       if (sundayPay > 0) earningsLines.push({ name: "Sunday", amount: sundayPay });
       if (publicHolidayPay > 0) earningsLines.push({ name: "Public Holiday", amount: publicHolidayPay });
+    } else if (isSitePricing) {
+      const leaveHours = agg
+        ? agg.leaveHours > 0
+          ? agg.leaveHours
+          : agg.leaveDays * STANDARD_LEAVE_DAY_HOURS
+        : 0;
+      const hasWorkedHours =
+        !!agg &&
+        (agg.basicHours > 0 ||
+          agg.overtimeHours > 0 ||
+          agg.sundayHours > 0 ||
+          agg.publicHolidayHours > 0);
+
+      if (!hasWorkedHours && leaveHours === 0) {
+        const skipReason = "no_timesheet_hours";
+        output = {
+          hoursWorked: 0,
+          overtimeHours: 0,
+          basePay: 0,
+          overtimePay: 0,
+          sundayPay: 0,
+          publicHolidayPay: 0,
+          grossPay: 0,
+          deductions: 0,
+          netPay: 0,
+          tax: 0,
+          taxableEarnings: 0,
+          uifEmployee: 0,
+          uifEmployer: 0,
+          sdl: 0,
+          earningsLines: [],
+          deductionLines: [],
+          skipped: true,
+          skipReason,
+        };
+        employeeSnapshots.push({
+          context,
+          rules,
+          earningsRulesApplied: [],
+          timesheet: ts,
+          output,
+          pricingMode: "site_area_grade",
+          segments: [],
+          primaryPayrollSite: null,
+        });
+        continue;
+      }
+
+      // 1. Process worked segments
+      segmentsSnapshot = [];
+      if (agg?.segments && agg.segments.length > 0) {
+        for (const segment of agg.segments) {
+          if (
+            segment.basicHours === 0 &&
+            segment.overtimeHours === 0 &&
+            segment.sundayHours === 0 &&
+            segment.publicHolidayHours === 0
+          ) {
+            continue;
+          }
+          const sitePrice = ctx.sitePricingResolver
+            ? ctx.sitePricingResolver(segment.siteId, segment.workDate)
+            : null;
+          if (!sitePrice) {
+            const siteName = ctx.siteNames?.get(segment.siteId) ?? segment.siteId;
+            throw new PayrollCalculationPricingError(
+              `Missing payroll price for site "${siteName}" on ${segment.workDate.toISOString().slice(0, 10)} for ${emp.firstName} ${emp.lastName}`,
+              { employeeId: emp.id, siteId: segment.siteId, date: segment.workDate }
+            );
+          }
+          const rate = sitePrice.hourlyRate;
+          const sBase = round2(segment.basicHours * rate);
+          const sOt = round2(segment.overtimeHours * rate * rules.overtimeMultiplier);
+          const sSun = round2(segment.sundayHours * rate * rules.sundayMultiplier);
+          const sPub = round2(segment.publicHolidayHours * rate * rules.publicHolidayMultiplier);
+          const sTotal = round2(sBase + sOt + sSun + sPub);
+
+          hoursWorked = round2(hoursWorked + segment.basicHours);
+          overtimeHours = round2(overtimeHours + segment.overtimeHours);
+          basePay = round2(basePay + sBase);
+          overtimePay = round2(overtimePay + sOt);
+          sundayPay = round2(sundayPay + sSun);
+          publicHolidayPay = round2(publicHolidayPay + sPub);
+          grossPay = round2(grossPay + sTotal);
+
+          const siteName = ctx.siteNames?.get(segment.siteId) ?? sitePrice.areaName;
+          segmentsSnapshot.push({
+            siteId: segment.siteId,
+            siteName,
+            areaId: sitePrice.areaId,
+            areaName: sitePrice.areaName,
+            gradeId: sitePrice.gradeId,
+            gradeName: sitePrice.gradeName,
+            rateId: sitePrice.rateId,
+            hourlyRate: rate,
+            workDate: segment.workDate.toISOString().slice(0, 10),
+            basicHours: segment.basicHours,
+            overtimeHours: segment.overtimeHours,
+            sundayHours: segment.sundayHours,
+            publicHolidayHours: segment.publicHolidayHours,
+            basePay: sBase,
+            overtimePay: sOt,
+            sundayPay: sSun,
+            publicHolidayPay: sPub,
+            totalPay: sTotal,
+          });
+
+          if (sBase > 0) earningsLines.push({ name: `Basic - ${siteName} (${sitePrice.areaName}, ${sitePrice.gradeName} @ R${rate.toFixed(2)}/hr)`, amount: sBase });
+          if (sOt > 0) earningsLines.push({ name: `Overtime - ${siteName}`, amount: sOt });
+          if (sSun > 0) earningsLines.push({ name: `Sunday - ${siteName}`, amount: sSun });
+          if (sPub > 0) earningsLines.push({ name: `Public Holiday - ${siteName}`, amount: sPub });
+        }
+      } else if (hasWorkedHours) {
+        // Fallback for tests or aggregates with no segment records
+        const fallbackSiteId = emp.siteAssignments?.[0]?.siteId;
+        if (!fallbackSiteId) {
+          throw new PayrollCalculationPricingError(
+            `No site assigned for ${emp.firstName} ${emp.lastName} to price worked hours.`,
+            { employeeId: emp.id }
+          );
+        }
+        const sitePrice = ctx.sitePricingResolver
+          ? ctx.sitePricingResolver(fallbackSiteId, ctx.periodStart)
+          : null;
+        if (!sitePrice) {
+          const siteName = ctx.siteNames?.get(fallbackSiteId) ?? fallbackSiteId;
+          throw new PayrollCalculationPricingError(
+            `Missing payroll price for site "${siteName}" on ${ctx.periodStart.toISOString().slice(0, 10)} for ${emp.firstName} ${emp.lastName}`,
+            { employeeId: emp.id, siteId: fallbackSiteId, date: ctx.periodStart }
+          );
+        }
+        const rate = sitePrice.hourlyRate;
+        const workedBasicHours = agg?.basicHours ?? 0;
+        const workedOtHours = agg?.overtimeHours ?? 0;
+        const workedSunHours = agg?.sundayHours ?? 0;
+        const workedPubHours = agg?.publicHolidayHours ?? 0;
+
+        const sBase = round2(workedBasicHours * rate);
+        const sOt = round2(workedOtHours * rate * rules.overtimeMultiplier);
+        const sSun = round2(workedSunHours * rate * rules.sundayMultiplier);
+        const sPub = round2(workedPubHours * rate * rules.publicHolidayMultiplier);
+        const sTotal = round2(sBase + sOt + sSun + sPub);
+
+        hoursWorked = round2(hoursWorked + workedBasicHours);
+        overtimeHours = round2(overtimeHours + workedOtHours);
+        basePay = round2(basePay + sBase);
+        overtimePay = round2(overtimePay + sOt);
+        sundayPay = round2(sundayPay + sSun);
+        publicHolidayPay = round2(publicHolidayPay + sPub);
+        grossPay = round2(grossPay + sTotal);
+
+        const siteName = ctx.siteNames?.get(fallbackSiteId) ?? sitePrice.areaName;
+        segmentsSnapshot.push({
+          siteId: fallbackSiteId,
+          siteName,
+          areaId: sitePrice.areaId,
+          areaName: sitePrice.areaName,
+          gradeId: sitePrice.gradeId,
+          gradeName: sitePrice.gradeName,
+          rateId: sitePrice.rateId,
+          hourlyRate: rate,
+          workDate: ctx.periodStart.toISOString().slice(0, 10),
+          basicHours: workedBasicHours,
+          overtimeHours: workedOtHours,
+          sundayHours: workedSunHours,
+          publicHolidayHours: workedPubHours,
+          basePay: sBase,
+          overtimePay: sOt,
+          sundayPay: sSun,
+          publicHolidayPay: sPub,
+          totalPay: sTotal,
+        });
+
+        if (sBase > 0) earningsLines.push({ name: `Basic - ${siteName} (${sitePrice.areaName}, ${sitePrice.gradeName} @ R${rate.toFixed(2)}/hr)`, amount: sBase });
+        if (sOt > 0) earningsLines.push({ name: `Overtime - ${siteName}`, amount: sOt });
+        if (sSun > 0) earningsLines.push({ name: `Sunday - ${siteName}`, amount: sSun });
+        if (sPub > 0) earningsLines.push({ name: `Public Holiday - ${siteName}`, amount: sPub });
+      }
+
+      // 2. Process paid leave
+      if (leaveHours > 0) {
+        if (agg?.leaveDaysList && agg.leaveDaysList.length > 0) {
+          for (const leaveDay of agg.leaveDaysList) {
+            if (!leaveDay.isPaid || leaveDay.hours <= 0) continue;
+            const homeSiteId = ctx.payrollHomeSiteResolver
+              ? ctx.payrollHomeSiteResolver(emp.id, leaveDay.date)
+              : emp.siteAssignments?.[0]?.siteId ?? null;
+            if (!homeSiteId) {
+              throw new PayrollCalculationPricingError(
+                `No primary payroll site assigned for ${emp.firstName} ${emp.lastName} to price paid leave.`,
+                { employeeId: emp.id }
+              );
+            }
+            const homePrice = ctx.sitePricingResolver
+              ? ctx.sitePricingResolver(homeSiteId, leaveDay.date)
+              : null;
+            if (!homePrice) {
+              const sName = ctx.siteNames?.get(homeSiteId) ?? homeSiteId;
+              throw new PayrollCalculationPricingError(
+                `Missing payroll price at primary site "${sName}" on ${leaveDay.date.toISOString().slice(0, 10)} for ${emp.firstName} ${emp.lastName} paid leave`,
+                { employeeId: emp.id, siteId: homeSiteId, date: leaveDay.date }
+              );
+            }
+            const lPay = round2(leaveDay.hours * homePrice.hourlyRate);
+            basePay = round2(basePay + lPay);
+            hoursWorked = round2(hoursWorked + leaveDay.hours);
+            grossPay = round2(grossPay + lPay);
+            const sName = ctx.siteNames?.get(homeSiteId) ?? homePrice.areaName;
+            earningsLines.push({
+              name: `Paid Leave (${sName} - ${homePrice.areaName}, ${homePrice.gradeName} @ R${homePrice.hourlyRate.toFixed(2)}/hr)`,
+              amount: lPay,
+            });
+            primaryPayrollSiteSnapshot = {
+              siteId: homeSiteId,
+              siteName: sName,
+              areaId: homePrice.areaId,
+              areaName: homePrice.areaName,
+              gradeId: homePrice.gradeId,
+              gradeName: homePrice.gradeName,
+              hourlyRate: homePrice.hourlyRate,
+            };
+          }
+        } else {
+          const homeSiteId = ctx.payrollHomeSiteResolver
+            ? ctx.payrollHomeSiteResolver(emp.id, ctx.periodStart)
+            : emp.siteAssignments?.[0]?.siteId ?? null;
+          if (!homeSiteId) {
+            throw new PayrollCalculationPricingError(
+              `No primary payroll site assigned for ${emp.firstName} ${emp.lastName} to price paid leave.`,
+              { employeeId: emp.id }
+            );
+          }
+          const homePrice = ctx.sitePricingResolver
+            ? ctx.sitePricingResolver(homeSiteId, ctx.periodStart)
+            : null;
+          if (!homePrice) {
+            const sName = ctx.siteNames?.get(homeSiteId) ?? homeSiteId;
+            throw new PayrollCalculationPricingError(
+              `Missing payroll price at primary site "${sName}" on ${ctx.periodStart.toISOString().slice(0, 10)} for ${emp.firstName} ${emp.lastName} paid leave`,
+              { employeeId: emp.id, siteId: homeSiteId, date: ctx.periodStart }
+            );
+          }
+          const lPay = round2(leaveHours * homePrice.hourlyRate);
+          basePay = round2(basePay + lPay);
+          hoursWorked = round2(hoursWorked + leaveHours);
+          grossPay = round2(grossPay + lPay);
+          const sName = ctx.siteNames?.get(homeSiteId) ?? homePrice.areaName;
+          earningsLines.push({
+            name: `Paid Leave (${sName} - ${homePrice.areaName}, ${homePrice.gradeName} @ R${homePrice.hourlyRate.toFixed(2)}/hr)`,
+            amount: lPay,
+          });
+          primaryPayrollSiteSnapshot = {
+            siteId: homeSiteId,
+            siteName: sName,
+            areaId: homePrice.areaId,
+            areaName: homePrice.areaName,
+            gradeId: homePrice.gradeId,
+            gradeName: homePrice.gradeName,
+            hourlyRate: homePrice.hourlyRate,
+          };
+        }
+      }
     } else {
       if (hourlyRate === 0 && monthlySalary === 0) {
         const skipReason =
@@ -398,6 +687,9 @@ export function computePayrollLines(ctx: PayrollCalculationContext): {
       earningsRulesApplied,
       timesheet: ts,
       output,
+      pricingMode: isSitePricing ? "site_area_grade" : "legacy_employee_grade",
+      segments: segmentsSnapshot,
+      primaryPayrollSite: primaryPayrollSiteSnapshot,
     });
 
     lines.push({
@@ -536,6 +828,7 @@ export function buildPayrollCalculationSnapshot(params: {
       periodEnd: ctx.periodEnd.toISOString(),
       payPeriod: ctx.payPeriod,
       isSdlLiable: ctx.isSdlLiable,
+      rateSource: ctx.rateSource ?? "legacy_employee_grade",
       sdlStatus,
       taxYear: {
         year: taxYearConfig.year,

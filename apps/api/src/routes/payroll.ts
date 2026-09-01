@@ -631,18 +631,28 @@ export async function payrollRoutes(app: FastifyInstance) {
 
     const payslipInput = await fetchPayslipData(id, itemId, user.companyId);
     if (!payslipInput) {
-      return reply.code(404).send({ error: "Payroll item not found" });
+      return reply.code(404).send({ error: "Payroll item not found", message: "The payroll item does not exist or does not belong to this payroll run." });
     }
 
-    const templateData = buildPayslipTemplateData(payslipInput);
-    const pdfBuffer = await generatePayslipPDFFromTemplate(templateData);
-
-    const emp = payslipInput.payrollItem.employee;
-    const filename = `payslip-${emp.firstName}-${emp.lastName}-${format(payslipInput.periodStart, "yyyy-MM")}.pdf`;
-    return reply
-      .header("Content-Type", "application/pdf")
-      .header("Content-Disposition", `attachment; filename="${filename}"`)
-      .send(pdfBuffer);
+    try {
+      const templateData = buildPayslipTemplateData(payslipInput);
+      const pdfBuffer = await generatePayslipPDFFromTemplate(templateData);
+      const emp = payslipInput.payrollItem.employee;
+      const filename = `payslip-${emp.firstName}-${emp.lastName}-${format(payslipInput.periodStart, "yyyy-MM")}.pdf`;
+      return reply
+        .header("Content-Type", "application/pdf")
+        .header("Content-Disposition", `attachment; filename="${filename}"`)
+        .send(pdfBuffer);
+    } catch (err) {
+      request.log.error({ err }, "Payslip PDF generation failed");
+      const message = err instanceof Error ? err.message : "Unknown error";
+      return reply.code(500).send({
+        error: "PDF generation failed",
+        message: message.includes("puppeteer") || message.includes("Chrome") || message.includes("Chromium")
+          ? "PDF generation requires a browser (Puppeteer/Chrome). Check server configuration."
+          : `Could not generate payslip PDF: ${message}`,
+      });
+    }
   });
 
   app.get("/runs/:id/export/pdf", { preHandler: exportProtect }, async (request, reply) => {

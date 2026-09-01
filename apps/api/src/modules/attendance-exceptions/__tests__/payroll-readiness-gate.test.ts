@@ -9,6 +9,7 @@ vi.mock("../../../lib/prisma.js", () => ({
       upsert: vi.fn(),
       findUnique: vi.fn(),
     },
+    operationalAlert: { updateMany: vi.fn() },
   },
 }));
 
@@ -35,21 +36,22 @@ describe("assertPayrollNotBlocked", () => {
       { id: "shift-1", startTime: new Date("2026-07-10T06:00:00.000Z") },
     ] as never);
     vi.mocked(prisma.payrollPeriodReadiness.upsert).mockReset();
+    vi.mocked(prisma.operationalAlert.updateMany).mockReset().mockResolvedValue({ count: 0 } as never);
     vi.mocked(prisma.attendanceException.groupBy).mockReset();
     vi.mocked(prisma.attendanceException.groupBy).mockResolvedValue([] as never);
     vi.mocked(prisma.attendanceException.findMany).mockReset();
     vi.mocked(prisma.attendanceException.findMany).mockResolvedValue([] as never);
   });
 
-  it("blocks payroll when critical exceptions are open", async () => {
+  it("keeps payroll available when critical exceptions are open", async () => {
     vi.mocked(prisma.attendanceException.count)
       .mockResolvedValueOnce(2)
       .mockResolvedValueOnce(5);
     vi.mocked(prisma.payrollPeriodReadiness.upsert).mockResolvedValue({} as never);
 
     const result = await assertPayrollNotBlocked(companyId, start, end);
-    expect(result.blocked).toBe(true);
-    expect(result.status).toBe("BLOCKED_BY_EXCEPTIONS");
+    expect(result.blocked).toBe(false);
+    expect(result.status).toBe("PENDING_ATTENDANCE_REVIEW");
   });
 
   it("allows payroll when no critical exceptions", async () => {
@@ -63,7 +65,7 @@ describe("assertPayrollNotBlocked", () => {
     expect(result.status).toBe("READY");
   });
 
-  it("keeps a confirmed critical exception blocking until it is resolved", async () => {
+  it("counts only active reviews and never treats a confirmed issue as a payroll lock", async () => {
     vi.mocked(prisma.attendanceException.count)
       .mockResolvedValueOnce(1)
       .mockResolvedValueOnce(1);
@@ -71,52 +73,27 @@ describe("assertPayrollNotBlocked", () => {
 
     const result = await assertPayrollNotBlocked(companyId, start, end);
 
-    expect(result.blocked).toBe(true);
+    expect(result.blocked).toBe(false);
     expect(vi.mocked(prisma.attendanceException.count).mock.calls[0]?.[0]).toEqual({
       where: {
         companyId,
         shiftId: { in: ["shift-1"] },
         severity: "CRITICAL",
-        status: { in: ["OPEN", "UNDER_REVIEW", "APPROVED"] },
+        status: { in: ["OPEN", "UNDER_REVIEW"] },
       },
     });
   });
 
-  it("tells the caller what is blocking, not just how many", async () => {
+  it("does not attach a blocking breakdown when reviews are still open", async () => {
     vi.mocked(prisma.attendanceException.count)
       .mockResolvedValueOnce(3)
       .mockResolvedValueOnce(3);
     vi.mocked(prisma.payrollPeriodReadiness.upsert).mockResolvedValue({} as never);
-    vi.mocked(prisma.attendanceException.groupBy).mockResolvedValue([
-      { exceptionType: "MISSED_CLOCK_IN", _count: { id: 1 } },
-      { exceptionType: "ABSENT", _count: { id: 2 } },
-    ] as never);
-    vi.mocked(prisma.attendanceException.findMany).mockResolvedValue([
-      {
-        id: "exc-1",
-        description: "No attendance recorded — marked absent",
-        detectedAt: new Date("2026-07-10T06:00:00.000Z"),
-        employee: { firstName: "Thabo", lastName: "Nkosi", employeeNumber: "E-100" },
-        site: { name: "Sandton Gate" },
-      },
-    ] as never);
-
     const result = await assertPayrollNotBlocked(companyId, start, end);
 
-    expect(result.blocked).toBe(true);
-    expect(result.blockingExceptions?.total).toBe(3);
-    // Largest group first, so the operator starts where the volume is.
-    expect(result.blockingExceptions?.groups[0]).toMatchObject({
-      exceptionType: "ABSENT",
-      label: "Absent",
-      count: 2,
-    });
-    expect(result.blockingExceptions?.groups[0].samples[0]).toMatchObject({
-      employeeName: "Thabo Nkosi",
-      employeeNumber: "E-100",
-      siteName: "Sandton Gate",
-      date: "2026-07-10",
-    });
+    expect(result.blocked).toBe(false);
+    expect(result.blockingExceptions).toBeUndefined();
+    expect(prisma.attendanceException.groupBy).not.toHaveBeenCalled();
   });
 
   it("omits the breakdown entirely when nothing is blocking", async () => {
@@ -148,7 +125,7 @@ describe("getBlockingExceptionBreakdown", () => {
     vi.mocked(prisma.attendanceException.findMany).mockResolvedValue([] as never);
   });
 
-  it("counts only CRITICAL exceptions in a payroll-blocking status", async () => {
+  it("counts only active CRITICAL exceptions in the operational breakdown", async () => {
     vi.mocked(prisma.attendanceException.groupBy).mockResolvedValue([] as never);
 
     await getBlockingExceptionBreakdown(companyId, start, end);
@@ -159,7 +136,7 @@ describe("getBlockingExceptionBreakdown", () => {
         companyId,
         shiftId: { in: ["shift-1"] },
         severity: "CRITICAL",
-        status: { in: ["OPEN", "UNDER_REVIEW", "APPROVED"] },
+        status: { in: ["OPEN", "UNDER_REVIEW"] },
       },
     });
   });

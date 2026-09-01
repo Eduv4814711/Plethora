@@ -7,6 +7,7 @@ import {
   DEFAULT_PUBLIC_HOLIDAY_MULTIPLIER,
   DEFAULT_SUNDAY_MULTIPLIER,
   monthlySalaryForPayPeriod,
+  PayrollCalculationPricingError,
   validateComputedPayrollLines,
   type PayrollCalculationContext,
   type PayrollDeductionResult,
@@ -324,7 +325,7 @@ describe("computePayrollLines", () => {
         includeRelieversWithAttendance: true,
       },
     });
-    expect(snapshot.version).toBe("1.4.0");
+    expect(snapshot.version).toBe("2.0.0");
     expect(snapshot.totals.grossPay).toBe(5000);
     expect(snapshot.inputs.defaultMultipliers).toEqual({
       overtime: DEFAULT_OT_MULTIPLIER,
@@ -640,5 +641,411 @@ describe("computePayrollLines", () => {
     expect(issues.map((issue) => issue.field)).toEqual(
       expect.arrayContaining(["deductions", "netPay"])
     );
+  });
+
+  describe("site_area_grade wage matrix calculation engine", () => {
+    it("calculates wages for an employee working at a single site with Area × Grade pricing", () => {
+      const emp = baseEmployee({
+        id: "emp-guard-1",
+        firstName: "John",
+        lastName: "Doe",
+      });
+
+      const sitePricingResolver = (siteId: string, _at: Date) => {
+        if (siteId === "site-alpha") {
+          return {
+            hourlyRate: 38.99,
+            areaId: "area-1",
+            areaName: "Area 1",
+            gradeId: "grade-a",
+            gradeName: "Grade A",
+            rateId: "rate-1",
+            effectiveFrom: new Date("2026-01-01"),
+          };
+        }
+        return null;
+      };
+
+      const aggregates = new Map([
+        [
+          "emp-guard-1",
+          agg({
+            employeeId: "emp-guard-1",
+            basicHours: 160,
+            overtimeHours: 10,
+            sundayHours: 12,
+            publicHolidayHours: 8,
+            segments: [
+              {
+                siteId: "site-alpha",
+                workDate: new Date("2026-05-10"),
+                basicHours: 160,
+                overtimeHours: 10,
+                sundayHours: 12,
+                publicHolidayHours: 8,
+              },
+            ],
+          }),
+        ],
+      ]);
+
+      const companyPayRules = new Map([
+        ["overtime", 1.5],
+        ["sunday", 2.0],
+        ["public_holiday", 2.0],
+      ]);
+
+      const siteNames = new Map([["site-alpha", "Site Alpha"]]);
+
+      const { lines, employeeSnapshots } = computePayrollLines(
+        ctx({
+          employees: [emp],
+          aggregates,
+          rateSource: "site_area_grade",
+          sitePricingResolver,
+          companyPayRules,
+          siteNames,
+          deductionsByEmployee: new Map([["emp-guard-1", { total: 0, lines: [] }]]),
+        })
+      );
+
+      expect(lines).toHaveLength(1);
+      const line = lines[0]!;
+
+      // 160 * 38.99 = 6238.40
+      expect(line.basePay).toBe(6238.4);
+      // 10 * 38.99 * 1.5 = 584.85
+      expect(line.overtimePay).toBe(584.85);
+      // 12 * 38.99 * 2.0 = 935.76
+      expect(line.sundayPay).toBe(935.76);
+      // 8 * 38.99 * 2.0 = 623.84
+      expect(line.publicHolidayPay).toBe(623.84);
+      // Gross = 6238.40 + 584.85 + 935.76 + 623.84 = 8382.85
+      expect(line.grossPay).toBe(8382.85);
+      expect(line.hoursWorked).toBe(160);
+      expect(line.overtimeHours).toBe(10);
+
+      const snapshot = employeeSnapshots[0]!;
+      expect(snapshot.pricingMode).toBe("site_area_grade");
+      expect(snapshot.segments).toHaveLength(1);
+      expect(snapshot.segments![0]).toMatchObject({
+        siteId: "site-alpha",
+        siteName: "Site Alpha",
+        areaName: "Area 1",
+        gradeName: "Grade A",
+        hourlyRate: 38.99,
+        basicHours: 160,
+        basePay: 6238.4,
+        overtimePay: 584.85,
+        sundayPay: 935.76,
+        publicHolidayPay: 623.84,
+      });
+    });
+
+    it("calculates wages for a multi-site guard working at different sites with different rates in one period", () => {
+      const emp = baseEmployee({
+        id: "emp-multi",
+        firstName: "Sipho",
+        lastName: "Khumalo",
+      });
+
+      const sitePricingResolver = (siteId: string, _at: Date) => {
+        if (siteId === "site-alpha") {
+          // Area 1, Grade A = R38.99
+          return {
+            hourlyRate: 38.99,
+            areaId: "area-1",
+            areaName: "Area 1",
+            gradeId: "grade-a",
+            gradeName: "Grade A",
+            rateId: "rate-1",
+            effectiveFrom: new Date("2026-01-01"),
+          };
+        }
+        if (siteId === "site-bravo") {
+          // Area 1, Grade C = R32.32
+          return {
+            hourlyRate: 32.32,
+            areaId: "area-1",
+            areaName: "Area 1",
+            gradeId: "grade-c",
+            gradeName: "Grade C",
+            rateId: "rate-2",
+            effectiveFrom: new Date("2026-01-01"),
+          };
+        }
+        return null;
+      };
+
+      const aggregates = new Map([
+        [
+          "emp-multi",
+          agg({
+            employeeId: "emp-multi",
+            basicHours: 160,
+            overtimeHours: 10,
+            sundayHours: 0,
+            publicHolidayHours: 0,
+            segments: [
+              {
+                siteId: "site-alpha",
+                workDate: new Date("2026-05-05"),
+                basicHours: 80,
+                overtimeHours: 6,
+                sundayHours: 0,
+                publicHolidayHours: 0,
+              },
+              {
+                siteId: "site-bravo",
+                workDate: new Date("2026-05-15"),
+                basicHours: 80,
+                overtimeHours: 4,
+                sundayHours: 0,
+                publicHolidayHours: 0,
+              },
+            ],
+          }),
+        ],
+      ]);
+
+      const companyPayRules = new Map([
+        ["overtime", 1.5],
+        ["sunday", 2.0],
+        ["public_holiday", 2.0],
+      ]);
+
+      const siteNames = new Map([
+        ["site-alpha", "Alpha Security Site"],
+        ["site-bravo", "Bravo Retail Site"],
+      ]);
+
+      const { lines, employeeSnapshots } = computePayrollLines(
+        ctx({
+          employees: [emp],
+          aggregates,
+          rateSource: "site_area_grade",
+          sitePricingResolver,
+          companyPayRules,
+          siteNames,
+          deductionsByEmployee: new Map([["emp-multi", { total: 0, lines: [] }]]),
+        })
+      );
+
+      expect(lines).toHaveLength(1);
+      const line = lines[0]!;
+
+      // Site Alpha: 80 * 38.99 = 3119.20 base, OT: 6 * 38.99 * 1.5 = 350.91
+      // Site Bravo: 80 * 32.32 = 2585.60 base, OT: 4 * 32.32 * 1.5 = 193.92
+      // Total Base: 3119.20 + 2585.60 = 5704.80
+      // Total OT: 350.91 + 193.92 = 544.83
+      // Gross: 5704.80 + 544.83 = 6249.63
+      expect(line.basePay).toBe(5704.8);
+      expect(line.overtimePay).toBe(544.83);
+      expect(line.grossPay).toBe(6249.63);
+
+      const snapshot = employeeSnapshots[0]!;
+      expect(snapshot.segments).toHaveLength(2);
+      expect(snapshot.segments![0].siteName).toBe("Alpha Security Site");
+      expect(snapshot.segments![0].hourlyRate).toBe(38.99);
+      expect(snapshot.segments![1].siteName).toBe("Bravo Retail Site");
+      expect(snapshot.segments![1].hourlyRate).toBe(32.32);
+
+      // Verify itemized earnings lines appear for each site
+      expect(line.earningsLines).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: expect.stringContaining("Alpha Security Site") }),
+          expect.objectContaining({ name: expect.stringContaining("Bravo Retail Site") }),
+        ])
+      );
+    });
+
+    it("prices paid leave using the employee primary payroll home site", () => {
+      const emp = baseEmployee({
+        id: "emp-leave",
+        firstName: "Thabo",
+        lastName: "Mokoena",
+      });
+
+      const sitePricingResolver = (siteId: string, _at: Date) => {
+        if (siteId === "site-home") {
+          return {
+            hourlyRate: 40.0,
+            areaId: "area-1",
+            areaName: "Area 1",
+            gradeId: "grade-a",
+            gradeName: "Grade A",
+            rateId: "rate-home",
+            effectiveFrom: new Date("2026-01-01"),
+          };
+        }
+        if (siteId === "site-worked") {
+          return {
+            hourlyRate: 35.0,
+            areaId: "area-2",
+            areaName: "Area 2",
+            gradeId: "grade-b",
+            gradeName: "Grade B",
+            rateId: "rate-worked",
+            effectiveFrom: new Date("2026-01-01"),
+          };
+        }
+        return null;
+      };
+
+      const payrollHomeSiteResolver = (employeeId: string, _at: Date) => {
+        if (employeeId === "emp-leave") return "site-home";
+        return null;
+      };
+
+      const aggregates = new Map([
+        [
+          "emp-leave",
+          agg({
+            employeeId: "emp-leave",
+            basicHours: 80,
+            leaveHours: 16,
+            segments: [
+              {
+                siteId: "site-worked",
+                workDate: new Date("2026-05-02"),
+                basicHours: 80,
+                overtimeHours: 0,
+                sundayHours: 0,
+                publicHolidayHours: 0,
+              },
+            ],
+            leaveDaysList: [
+              {
+                date: new Date("2026-05-20"),
+                leaveType: "ANNUAL",
+                hours: 16,
+                isPaid: true,
+              },
+            ],
+          }),
+        ],
+      ]);
+
+      const siteNames = new Map([
+        ["site-home", "Primary Home Site"],
+        ["site-worked", "Secondary Field Site"],
+      ]);
+
+      const { lines, employeeSnapshots } = computePayrollLines(
+        ctx({
+          employees: [emp],
+          aggregates,
+          rateSource: "site_area_grade",
+          sitePricingResolver,
+          payrollHomeSiteResolver,
+          siteNames,
+          deductionsByEmployee: new Map([["emp-leave", { total: 0, lines: [] }]]),
+        })
+      );
+
+      expect(lines).toHaveLength(1);
+      const line = lines[0]!;
+
+      // Worked: 80 hrs @ R35 = 2800.00
+      // Leave: 16 hrs @ R40 (Home site rate) = 640.00
+      // Total Base = 3440.00
+      expect(line.basePay).toBe(3440);
+      expect(line.grossPay).toBe(3440);
+      expect(line.hoursWorked).toBe(96);
+
+      const snapshot = employeeSnapshots[0]!;
+      expect(snapshot.primaryPayrollSite).toMatchObject({
+        siteId: "site-home",
+        siteName: "Primary Home Site",
+        hourlyRate: 40.0,
+      });
+
+      expect(line.earningsLines).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: expect.stringContaining("Paid Leave (Primary Home Site") }),
+        ])
+      );
+    });
+
+    it("throws PayrollCalculationPricingError when a worked site has no effective rate", () => {
+      const emp = baseEmployee({
+        id: "emp-unpriced",
+        firstName: "Nelson",
+        lastName: "Mandela",
+      });
+
+      const aggregates = new Map([
+        [
+          "emp-unpriced",
+          agg({
+            employeeId: "emp-unpriced",
+            basicHours: 40,
+            segments: [
+              {
+                siteId: "site-unpriced",
+                workDate: new Date("2026-05-10"),
+                basicHours: 40,
+                overtimeHours: 0,
+                sundayHours: 0,
+                publicHolidayHours: 0,
+              },
+            ],
+          }),
+        ],
+      ]);
+
+      expect(() =>
+        computePayrollLines(
+          ctx({
+            employees: [emp],
+            aggregates,
+            rateSource: "site_area_grade",
+            sitePricingResolver: () => null,
+            siteNames: new Map([["site-unpriced", "Unconfigured Site"]]),
+            deductionsByEmployee: new Map(),
+          })
+        )
+      ).toThrow(PayrollCalculationPricingError);
+    });
+
+    it("throws PayrollCalculationPricingError when an employee with paid leave has no primary site", () => {
+      const emp = baseEmployee({
+        id: "emp-noleavehome",
+        firstName: "Walter",
+        lastName: "Sisulu",
+      });
+
+      const aggregates = new Map([
+        [
+          "emp-noleavehome",
+          agg({
+            employeeId: "emp-noleavehome",
+            basicHours: 0,
+            leaveHours: 8,
+            leaveDaysList: [
+              {
+                date: new Date("2026-05-01"),
+                leaveType: "ANNUAL",
+                hours: 8,
+                isPaid: true,
+              },
+            ],
+          }),
+        ],
+      ]);
+
+      expect(() =>
+        computePayrollLines(
+          ctx({
+            employees: [emp],
+            aggregates,
+            rateSource: "site_area_grade",
+            sitePricingResolver: () => null,
+            payrollHomeSiteResolver: () => null,
+            deductionsByEmployee: new Map(),
+          })
+        )
+      ).toThrow(PayrollCalculationPricingError);
+    });
   });
 });

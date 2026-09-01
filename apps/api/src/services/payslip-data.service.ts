@@ -16,6 +16,8 @@ interface PayslipDataInput {
   periodStart: Date;
   periodEnd: Date;
   siteName?: string | null;
+  siteGradeName?: string | null;
+  siteHourlyRate?: number | null;
   timesheet?: {
     basicHours: number;
     overtimeHours: number;
@@ -34,7 +36,7 @@ interface PayslipDataInput {
  * Build template data for the professional SA security payslip from DB models.
  */
 export function buildPayslipTemplateData(input: PayslipDataInput): PayslipTemplateData {
-  const { payrollItem, company, periodStart, periodEnd, siteName, timesheet, leaveBreakdown } = input;
+  const { payrollItem, company, periodStart, periodEnd, siteName, timesheet, leaveBreakdown, siteGradeName, siteHourlyRate } = input;
   const emp = payrollItem.employee;
   const payslip = payrollItem.payslip;
 
@@ -63,8 +65,14 @@ export function buildPayslipTemplateData(input: PayslipDataInput): PayslipTempla
 
   const jobTitle = emp.jobRole ?? emp.occupation ?? undefined;
   const grade = (emp as Employee & { grade?: { name: string; hourlyRate: unknown } | null }).grade;
-  const jobGrade = grade?.name ?? undefined;
-  const hourlyRate = grade?.hourlyRate != null ? Number(grade.hourlyRate) : emp.hourlyRate != null ? Number(emp.hourlyRate) : undefined;
+  const jobGrade = grade?.name ?? siteGradeName ?? undefined;
+  const hourlyRate = grade?.hourlyRate != null
+    ? Number(grade.hourlyRate)
+    : siteHourlyRate != null
+      ? siteHourlyRate
+      : emp.hourlyRate != null
+        ? Number(emp.hourlyRate)
+        : undefined;
   const jobGradeRate = hourlyRate != null ? `R ${hourlyRate.toFixed(2)}/hr` : undefined;
 
   return {
@@ -162,41 +170,74 @@ export async function fetchPayslipData(
           })
         : []
     ),
-    prisma.payrollItem.findUnique({ where: { id: itemId }, select: { employeeId: true } }).then((i) =>
-      i
-        ? prisma.shift.findFirst({
-            where: {
-              employeeId: i.employeeId,
-              startTime: { lt: run.periodEnd },
-              endTime: { gt: run.periodStart },
-            },
-            include: { site: true },
-          })
-        : null
-    ),
+    prisma.payrollItem.findUnique({ where: { id: itemId }, select: { employeeId: true } }).then(async (i) => {
+      if (!i) return null;
+      const shift = await prisma.shift.findFirst({
+        where: {
+          employeeId: i.employeeId,
+          startTime: { lt: run.periodEnd },
+          endTime: { gt: run.periodStart },
+        },
+        include: { site: { include: { payProfiles: { include: { area: true, grade: true }, orderBy: { effectiveFrom: "desc" } } } } },
+      });
+      if (shift?.site) return shift;
+      const assignment = await prisma.siteAssignment.findFirst({
+        where: { employeeId: i.employeeId },
+        include: { site: { include: { payProfiles: { include: { area: true, grade: true }, orderBy: { effectiveFrom: "desc" } } } } },
+      });
+      if (assignment?.site) return { site: assignment.site };
+      const home = await prisma.employeePayrollHomeSite.findFirst({
+        where: { employeeId: i.employeeId, effectiveFrom: { lte: run.periodEnd } },
+        orderBy: { effectiveFrom: "desc" },
+        include: { site: { include: { payProfiles: { include: { area: true, grade: true }, orderBy: { effectiveFrom: "desc" } } } } },
+      });
+      if (home?.site) return { site: home.site };
+      return null;
+    }),
   ]);
 
   if (!item || !company) return null;
 
-  const siteName = shiftWithSite?.site?.name ?? null;
+  const siteObj = (shiftWithSite?.site as { name?: string; payProfiles?: Array<{ areaId: string; gradeId: string; area: { name: string }; grade: { name: string } }> } | null);
+  const siteName = siteObj?.name ?? null;
+  const payProfile = siteObj?.payProfiles?.[0];
+  const siteGradeName = payProfile?.grade?.name ?? null;
+  let siteHourlyRate: number | null = null;
+  if (payProfile) {
+    const rateRecord = await prisma.payAreaGradeRate.findFirst({
+      where: {
+        companyId,
+        areaId: payProfile.areaId,
+        gradeId: payProfile.gradeId,
+        effectiveFrom: { lte: run.periodEnd },
+      },
+      orderBy: { effectiveFrom: "desc" },
+    });
+    if (rateRecord) {
+      siteHourlyRate = Number(rateRecord.hourlyRate);
+    }
+  }
 
-  // Same proration approach as timesheet.service.ts's aggregateTimesheets:
-  // a request spanning the period boundary only contributes the proportion
-  // of its units that fall within this pay period.
   const DAY_MS = 24 * 60 * 60 * 1000;
   let annualLeaveHours = 0;
   let sickLeaveHours = 0;
-  for (const request of leaveRequests) {
-    const overlapStart = request.startDate > run.periodStart ? request.startDate : run.periodStart;
-    const overlapEnd = request.endDate < run.periodEnd ? request.endDate : run.periodEnd;
+
+  for (const req of leaveRequests ?? []) {
+    const overlapStart = req.startDate > run.periodStart ? req.startDate : run.periodStart;
+    const overlapEnd = req.endDate < run.periodEnd ? req.endDate : run.periodEnd;
     if (overlapEnd < overlapStart) continue;
-    const totalDays = Math.round((request.endDate.getTime() - request.startDate.getTime()) / DAY_MS) + 1;
+
+    const totalDays = Math.round((req.endDate.getTime() - req.startDate.getTime()) / DAY_MS) + 1;
     const overlapDays = Math.round((overlapEnd.getTime() - overlapStart.getTime()) / DAY_MS) + 1;
     const ratio = totalDays > 0 ? overlapDays / totalDays : 0;
-    const hoursPerUnit = employeeTypeConfig(toLeaveConfigEmployeeType(request.employee.employeeType)).hoursPerUnit;
-    const hours = Number(request.unitsRequested) * ratio * hoursPerUnit;
-    if (request.leaveType === "ANNUAL") annualLeaveHours += hours;
-    else if (request.leaveType === "SICK") sickLeaveHours += hours;
+    const hoursPerUnit = employeeTypeConfig(toLeaveConfigEmployeeType(req.employee.employeeType)).hoursPerUnit;
+    const hours = Number(req.unitsRequested) * ratio * hoursPerUnit;
+
+    if (req.leaveType === "ANNUAL") {
+      annualLeaveHours += hours;
+    } else if (req.leaveType === "SICK") {
+      sickLeaveHours += hours;
+    }
   }
 
   return {
@@ -205,6 +246,8 @@ export async function fetchPayslipData(
     periodStart: run.periodStart,
     periodEnd: run.periodEnd,
     siteName,
+    siteGradeName,
+    siteHourlyRate,
     timesheet: timesheet
       ? {
           basicHours: Number(timesheet.basicHours),

@@ -249,6 +249,7 @@ export type SiteTimesheetRow = {
   occurrenceBookNumber: string | null;
   comments: string | null;
   discrepancyCodes: string[];
+  sourceShiftId?: string | null;
 };
 
 export type SiteTimesheet = {

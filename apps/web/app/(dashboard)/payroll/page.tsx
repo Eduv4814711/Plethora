@@ -1431,7 +1431,24 @@ function PayrollRunCard({
     setPreviewError(null);
     try {
       const res = await authFetch(`/payroll/runs/${run.id}/items/${item.id}/payslip/pdf`, token);
-      if (!res.ok) throw new Error("Failed to load payslip");
+      if (!res.ok) {
+        // Try to extract a meaningful error message from the API response body
+        const contentType = res.headers.get("content-type") ?? "";
+        let apiMessage: string | null = null;
+        if (contentType.includes("application/json")) {
+          const body = await res.json().catch(() => ({}));
+          apiMessage = body.message || body.error || null;
+        }
+        if (res.status === 403) {
+          throw new Error(
+            apiMessage ?? "You don't have permission to view payslips. Ask your administrator to grant 'view sensitive data' access on the Payroll module."
+          );
+        }
+        if (res.status === 404) {
+          throw new Error(apiMessage ?? "Payslip not found. The payroll item may have been removed or is not yet finalized.");
+        }
+        throw new Error(apiMessage ?? `Failed to load payslip (server error ${res.status})`);
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       window.open(url, "_blank");

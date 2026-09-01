@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { detectExceptionsForShift } from "../exception-detection.js";
+import {
+  attendanceResolutionAppliesToShift,
+  attendanceSupersedesShiftExceptions,
+  detectExceptionsForShift,
+} from "../exception-detection.js";
 
 describe("detectExceptionsForShift", () => {
   const baseStart = new Date("2026-07-09T06:00:00Z");
@@ -109,5 +113,75 @@ describe("detectExceptionsForShift", () => {
       now: new Date("2026-07-09T07:00:00Z"),
     });
     expect(result.some((r) => r.exceptionType === "OUTSIDE_GEOFENCE")).toBe(true);
+  });
+});
+
+describe("attendanceSupersedesShiftExceptions", () => {
+  it("suppresses automated issues for a verified shift", () => {
+    expect(attendanceSupersedesShiftExceptions("verified", [])).toBe(true);
+  });
+
+  it("suppresses automated issues once its timesheet row is approved", () => {
+    expect(
+      attendanceSupersedesShiftExceptions("completed", [
+        { approvalStatus: "approved", actualGuardId: null, attendanceStatus: "absent" },
+      ])
+    ).toBe(true);
+  });
+
+  it("suppresses an absence issue when another guard covered the shift", () => {
+    expect(
+      attendanceSupersedesShiftExceptions("completed", [
+        { approvalStatus: "pending", actualGuardId: "reliever-1", attendanceStatus: "reliever" },
+      ])
+    ).toBe(true);
+  });
+
+  it("keeps detecting a genuinely uncovered pending shift", () => {
+    expect(
+      attendanceSupersedesShiftExceptions("completed", [
+        { approvalStatus: "pending", actualGuardId: null, attendanceStatus: "pending" },
+      ])
+    ).toBe(false);
+  });
+});
+
+describe("attendanceResolutionAppliesToShift", () => {
+  const shift = {
+    id: "shift-legacy",
+    employeeId: "guard-covering",
+    siteId: "site-1",
+    workDateKey: "2026-08-24",
+    shiftType: "night",
+  };
+
+  it("matches an approved legacy row by actual guard, site, date, and shift", () => {
+    expect(
+      attendanceResolutionAppliesToShift(shift, {
+        sourceShiftId: null,
+        siteId: "site-1",
+        workDate: new Date("2026-08-24T00:00:00.000Z"),
+        plannedGuardId: "scheduled-guard",
+        actualGuardId: "guard-covering",
+        plannedShiftType: "night",
+        actualShiftType: "night",
+        attendanceStatus: "shift_swapped",
+        approvalStatus: "approved",
+      })
+    ).toBe(true);
+  });
+
+  it("does not match work recorded for a different shift type", () => {
+    expect(
+      attendanceResolutionAppliesToShift(shift, {
+        sourceShiftId: null,
+        siteId: "site-1",
+        workDate: "2026-08-24",
+        actualGuardId: "guard-covering",
+        actualShiftType: "day",
+        attendanceStatus: "present",
+        approvalStatus: "approved",
+      })
+    ).toBe(false);
   });
 });

@@ -7,8 +7,13 @@ vi.mock("../../../lib/prisma.js", () => ({
       groupBy: vi.fn(),
       count: vi.fn(),
       findMany: vi.fn(),
+      updateMany: vi.fn(),
     },
     shift: { count: vi.fn(), findMany: vi.fn() },
+    siteTimesheetRow: { findMany: vi.fn() },
+    siteTimesheet: { findMany: vi.fn() },
+    approvalRequest: { findMany: vi.fn(), updateMany: vi.fn() },
+    operationalAlert: { updateMany: vi.fn() },
   },
 }));
 
@@ -30,6 +35,8 @@ describe("attendance exception analytics contract", () => {
     vi.mocked(prisma.attendanceException.findMany).mockReset();
     vi.mocked(prisma.shift.count).mockReset();
     vi.mocked(prisma.shift.findMany).mockReset();
+    vi.mocked(prisma.siteTimesheetRow.findMany).mockReset().mockResolvedValue([] as never);
+    vi.mocked(prisma.siteTimesheet.findMany).mockReset().mockResolvedValue([] as never);
   });
 
   it("returns period totals, period open count, and the canonical absentee percentage", async () => {
@@ -65,10 +72,7 @@ describe("attendance exception analytics contract", () => {
       where: {
         companyId: "company-1",
         shiftId: { in: ["shift-period"] },
-        OR: [
-          { status: { in: ["OPEN", "UNDER_REVIEW"] } },
-          { severity: "CRITICAL", status: "APPROVED" },
-        ],
+        status: { in: ["OPEN", "UNDER_REVIEW"] },
       },
     });
   });
@@ -91,6 +95,7 @@ describe("attendance exception analytics contract", () => {
       .mockResolvedValueOnce([
         { id: "shift-1", startTime: new Date("2026-07-31T18:00:00.000Z") },
       ] as never)
+      .mockResolvedValueOnce([] as never)
       .mockResolvedValueOnce([shift] as never);
 
     const result = await listExceptions("company-1", {
@@ -104,7 +109,7 @@ describe("attendance exception analytics contract", () => {
       companyId: "company-1",
       shiftId: { in: ["shift-1"] },
     });
-    expect(prisma.shift.findMany).toHaveBeenNthCalledWith(2, {
+    expect(prisma.shift.findMany).toHaveBeenNthCalledWith(3, {
       where: { companyId: "company-1", id: { in: ["shift-1"] } },
       select: { id: true, startTime: true, endTime: true },
     });

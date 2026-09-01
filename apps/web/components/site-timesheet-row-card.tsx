@@ -43,6 +43,7 @@ type SiteTimesheetRowCardProps = {
   onUpdate: (row: SiteTimesheetRow, patch: Partial<SiteTimesheetRow>) => void;
   onApprove: (row: SiteTimesheetRow) => void;
   onReopen: (row: SiteTimesheetRow) => void;
+  focused?: boolean;
 };
 
 export function SiteTimesheetRowCard({
@@ -60,6 +61,7 @@ export function SiteTimesheetRowCard({
   onUpdate,
   onApprove,
   onReopen,
+  focused = false,
 }: SiteTimesheetRowCardProps) {
   const guardChanged = Boolean(row.actualGuardId && row.actualGuardId !== row.plannedGuardId);
   // Open the editor straight away when the row already departs from the roster — there is
@@ -109,7 +111,8 @@ export function SiteTimesheetRowCard({
 
   return (
     <article
-      className={`rounded-security-lg border p-4 space-y-3 ${
+      data-attendance-row-id={row.id}
+      className={`scroll-mt-32 rounded-security-lg border p-4 space-y-3 ${
         pendingReview
           ? row.discrepancyCodes.length
             ? "border-security-amber-200 bg-security-amber-50/50 dark:border-security-amber-900 dark:bg-security-amber-950/20"
@@ -117,7 +120,7 @@ export function SiteTimesheetRowCard({
               ? "border-security-amber-200 bg-security-amber-50/40 dark:border-security-amber-900 dark:bg-security-amber-950/15"
               : "border-security-navy-100 bg-white dark:border-security-navy-700 dark:bg-security-navy-900"
           : "border-security-emerald-200 bg-security-emerald-50/40 dark:border-security-emerald-700 dark:bg-security-emerald-700/15"
-      }`}
+      } ${focused ? "ring-2 ring-security-amber-500 ring-offset-2 dark:ring-offset-security-navy-900" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div>

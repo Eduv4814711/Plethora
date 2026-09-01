@@ -10,6 +10,7 @@ vi.mock("../../../lib/prisma.js", () => ({
       upsert: vi.fn(),
       findUnique: vi.fn(),
     },
+    operationalAlert: { updateMany: vi.fn() },
   },
 }));
 
@@ -36,6 +37,7 @@ describe("getPayrollReadiness pay period alignment", () => {
     ] as never);
     vi.mocked(prisma.payrollPeriodReadiness.upsert).mockReset();
     vi.mocked(prisma.payrollPeriodReadiness.findUnique).mockReset();
+    vi.mocked(prisma.operationalAlert.updateMany).mockReset().mockResolvedValue({ count: 0 } as never);
   });
 
   afterEach(() => {
@@ -50,8 +52,7 @@ describe("getPayrollReadiness pay period alignment", () => {
     vi.mocked(prisma.attendanceException.count).mockResolvedValue(0);
     vi.mocked(prisma.payrollPeriodReadiness.upsert).mockResolvedValue({} as never);
     vi.mocked(prisma.payrollPeriodReadiness.findUnique)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
+      .mockResolvedValue({
         companyId: "co-1",
         status: "READY",
         openExceptions: 0,

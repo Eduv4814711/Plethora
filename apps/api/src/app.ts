@@ -31,6 +31,7 @@ import { groupPayRulesRoutes } from "./routes/group-pay-rules.js";
 import { groupEarningsRulesRoutes } from "./routes/group-earnings-rules.js";
 import { groupDeductionRulesRoutes } from "./routes/group-deduction-rules.js";
 import { payGradesRoutes } from "./routes/pay-grades.js";
+import { payrollPricingRoutes } from "./routes/payroll-pricing.js";
 import { employeeGroupsRoutes } from "./routes/employee-groups.js";
 import { earningsRulesRoutes } from "./routes/earnings-rules.js";
 import { deductionRulesRoutes } from "./routes/deduction-rules.js";
@@ -213,6 +214,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(groupEarningsRulesRoutes, { prefix: "/payroll" });
   await app.register(groupDeductionRulesRoutes, { prefix: "/payroll" });
   await app.register(payGradesRoutes, { prefix: "/payroll/pay-grades" });
+  await app.register(payrollPricingRoutes, { prefix: "/payroll/pricing" });
   await app.register(employeeGroupsRoutes, { prefix: "/employee-groups" });
   await app.register(earningsRulesRoutes, { prefix: "/payroll/earnings-rules" });
   await app.register(deductionRulesRoutes, { prefix: "/payroll/deduction-rules" });
