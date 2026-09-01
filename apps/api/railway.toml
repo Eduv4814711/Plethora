@@ -6,6 +6,15 @@
 builder = "RAILPACK"
 # Railpack installs the root npm workspace before running this command.
 buildCommand = "npm run build --workspace=api"
+aptPackages = [
+  "chromium",
+  "fonts-liberation",
+  "libnss3",
+  "libatk-bridge2.0-0",
+  "libgtk-3-0",
+  "libasound2",
+  "libxss1"
+]
 watchPatterns = [
   "apps/api/**",
   "package.json",
