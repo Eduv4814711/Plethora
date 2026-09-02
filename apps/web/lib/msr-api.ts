@@ -399,7 +399,7 @@ export async function uploadDocument(
 ): Promise<ManagedDocument> {
   const form = new FormData();
   for (const [k, v] of Object.entries(meta)) {
-    if (v !== undefined && v !== null) form.append(k, String(v));
+    if (v !== undefined && v !== null && v !== "") form.append(k, String(v));
   }
   form.append("file", file);
   const csrf =

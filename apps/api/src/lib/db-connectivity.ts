@@ -1,6 +1,6 @@
 import { prisma } from "./prisma.js";
 
-const REQUIRED_SCHEMA_MIGRATION = "20260723140000_payroll_run_invariants";
+const REQUIRED_SCHEMA_MIGRATION = "20260902120000_employee_compliance_documents_columns";
 const READINESS_TIMEOUT_MS = 5_000;
 
 function databaseHostFromUrl(databaseUrl: string | undefined): string {

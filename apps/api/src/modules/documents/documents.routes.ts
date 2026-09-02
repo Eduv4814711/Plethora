@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "crypto";
 import { z } from "zod";
 import { authMiddleware } from "../../middleware/auth.js";
-import { requireCapability, requireCrudCapability } from "../../middleware/authorization.js";
+import { requireAnyCapability, requireCapability, requireCrudCapability } from "../../middleware/authorization.js";
 import { hasCapability } from "../../lib/capabilities.js";
 import { canAccessSensitiveData } from "../../lib/sensitive-data.js";
 import { readStreamToBuffer, storage } from "../../lib/storage.js";
@@ -115,7 +115,7 @@ function canUserAccessDocument(
 export async function documentsRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireCrudCapability({ module: "/documents" }),
+    requireCrudCapability({ anyOfModules: ["/documents", "/employees"] }),
   ];
 
   const forUser = <T extends { id: string; fileUrl: string; expiryDate?: Date | null; doesNotExpire?: boolean; documentType?: string }>(
@@ -286,7 +286,7 @@ export async function documentsRoutes(app: FastifyInstance) {
 
   app.get(
     "/:id/download",
-    { preHandler: [authMiddleware, requireCapability("/documents", "export")] },
+    { preHandler: [authMiddleware, requireAnyCapability(["/documents", "/employees"], "export")] },
     async (request, reply) => {
       const user = request.user!;
       const { id } = request.params as { id: string };
