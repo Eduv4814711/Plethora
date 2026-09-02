@@ -236,6 +236,17 @@ export function EmployeeDocumentsSection({
     }
   };
 
+  const handleUploadForRequirement = (type: string) => {
+    handleTypeChange(type);
+    setUploadFile(null);
+    setUploadNumber("");
+    setUploadIssueDate("");
+    setUploadExpiryDate("");
+    setUploadNotes("");
+    setUploadError("");
+    setShowUploadModal(true);
+  };
+
   // Filtered Documents
   const filteredDocuments = useMemo(() => {
     return documents.filter((doc) => {
@@ -495,10 +506,16 @@ export function EmployeeDocumentsSection({
 
           {/* Requirements Checklist Matrix */}
           <div className="mt-4 pt-4 border-t border-security-navy-200/50">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-security-navy-600 mb-2">
-              Mandatory Statutory & Role Requirements:
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-security-navy-700">
+                Mandatory Statutory & Role Requirements:
+              </p>
+              <span className="text-[11px] text-security-navy-600 font-medium">
+                {compliance.summary.verifiedCount} of {compliance.requirements.length} satisfied
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {compliance.requirements.map((req) => {
                 const isGood = req.status === "VERIFIED" || req.status === "VALID";
                 const isWarn = req.status === "EXPIRING_SOON" || req.status === "PENDING_VERIFICATION";
@@ -508,34 +525,80 @@ export function EmployeeDocumentsSection({
                   <div
                     key={req.rule.type}
                     className={clsx(
-                      "flex items-center justify-between p-2.5 rounded-security border text-xs bg-white",
-                      isGood && "border-security-emerald-200",
-                      isWarn && "border-security-amber-300 bg-security-amber-50/40",
-                      isBad && "border-red-300 bg-red-50/40"
+                      "flex flex-col justify-between p-3.5 rounded-security-lg border transition-shadow bg-white shadow-xs",
+                      isGood && "border-security-emerald-200 hover:border-security-emerald-300",
+                      isWarn && "border-security-amber-300 bg-security-amber-50/30 hover:border-security-amber-400",
+                      isBad && "border-red-300 bg-red-50/30 hover:border-red-400"
                     )}
                   >
-                    <div className="min-w-0 pr-2">
-                      <span className="font-semibold text-security-navy-900 block truncate" title={req.rule.label}>
-                        {req.rule.label}
-                      </span>
-                      {req.expiryLabel && (
-                        <span className="text-[10px] text-security-navy-600 block">{req.expiryLabel}</span>
-                      )}
+                    <div className="flex items-start justify-between gap-2.5">
+                      <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                        <span
+                          className={clsx(
+                            "mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full shrink-0 text-xs font-bold",
+                            isGood && "bg-security-emerald-100 text-security-emerald-700",
+                            isWarn && "bg-security-amber-100 text-security-amber-800",
+                            isBad && "bg-red-100 text-red-700"
+                          )}
+                        >
+                          {isGood && "✓"}
+                          {isWarn && "⏳"}
+                          {isBad && "✕"}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-security-navy-900 text-xs leading-snug break-words">
+                            {req.rule.label}
+                          </p>
+                          {req.rule.reason && (
+                            <p className="text-[11px] text-security-navy-500 mt-0.5 leading-tight">
+                              {req.rule.reason}
+                            </p>
+                          )}
+                          {req.documentName && (
+                            <p className="text-[11px] font-medium text-security-navy-700 mt-1 truncate">
+                              📄 {req.documentName}
+                            </p>
+                          )}
+                          {req.expiryLabel && (
+                            <p
+                              className={clsx(
+                                "text-[10px] font-medium mt-0.5",
+                                req.status === "EXPIRED" ? "text-red-700 font-semibold" : "text-security-navy-600"
+                              )}
+                            >
+                              {req.expiryLabel}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        <span
+                          className={clsx(
+                            "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                            req.status === "VERIFIED" && "bg-security-emerald-100 text-security-emerald-800 border border-security-emerald-200",
+                            req.status === "VALID" && "bg-security-emerald-50 text-security-emerald-700 border border-security-emerald-200",
+                            req.status === "EXPIRING_SOON" && "bg-security-amber-100 text-security-amber-900 border border-security-amber-300",
+                            req.status === "PENDING_VERIFICATION" && "bg-security-amber-100 text-security-amber-800 border border-security-amber-300",
+                            req.status === "EXPIRED" && "bg-red-100 text-red-900 border border-red-300",
+                            req.status === "MISSING" && "bg-red-100 text-red-800 border border-red-300",
+                            req.status === "REJECTED" && "bg-red-200 text-red-900 border border-red-300"
+                          )}
+                        >
+                          {req.status.replace(/_/g, " ")}
+                        </span>
+
+                        {isBad && canUpload && (
+                          <button
+                            type="button"
+                            onClick={() => handleUploadForRequirement(req.rule.type)}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-security-navy-700 hover:text-security-navy-950 bg-white hover:bg-security-navy-50 border border-security-navy-300 rounded px-2 py-0.5 shadow-2xs transition-colors"
+                          >
+                            + Upload
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <span
-                      className={clsx(
-                        "shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide",
-                        req.status === "VERIFIED" && "bg-security-emerald-100 text-security-emerald-800",
-                        req.status === "VALID" && "bg-security-emerald-50 text-security-emerald-700",
-                        req.status === "EXPIRING_SOON" && "bg-security-amber-200 text-security-amber-900",
-                        req.status === "PENDING_VERIFICATION" && "bg-security-amber-100 text-security-amber-800",
-                        req.status === "EXPIRED" && "bg-red-200 text-red-900",
-                        req.status === "MISSING" && "bg-red-100 text-red-800",
-                        req.status === "REJECTED" && "bg-red-200 text-red-900"
-                      )}
-                    >
-                      {req.status.replace(/_/g, " ")}
-                    </span>
                   </div>
                 );
               })}
