@@ -1,4 +1,4 @@
-﻿-- Add employee document and compliance columns to ManagedDocument table
+-- Add employee document and compliance columns to ManagedDocument table
 ALTER TABLE "ManagedDocument" ADD COLUMN IF NOT EXISTS "documentCategory" TEXT;
 ALTER TABLE "ManagedDocument" ADD COLUMN IF NOT EXISTS "documentNumber" TEXT;
 ALTER TABLE "ManagedDocument" ADD COLUMN IF NOT EXISTS "issuingAuthority" TEXT;

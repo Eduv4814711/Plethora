@@ -16,7 +16,7 @@
     "start:server": "node dist/index.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:deploy": "node scripts/deploy-migrations.mjs",
     "db:migrate:status": "prisma migrate status",
     "db:migrate:resolve-baseline-applied": "prisma migrate resolve --applied 20240101000000_baseline",
     "db:migrate:resolve-roster-v2-rolled-back": "prisma migrate resolve --rolled-back 20260627120000_roster_module_v2",
