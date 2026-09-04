@@ -129,6 +129,8 @@
     .header-site { font-size: 11px; font-weight: 600; }
     .label-cell { font-weight: 600; width: 35%; }
     .value-cell { width: 65%; }
+    .pay-summary-label { font-weight: 600; width: 18%; }
+    .pay-summary-value { width: 32%; }
     .currency { font-family: 'Consolas', 'Monaco', monospace; }
     .earnings-table, .deductions-table { margin-bottom: 0; }
     .earnings-deductions { display: flex; gap: 8px; }
@@ -193,11 +195,19 @@
       </tr>
     </table>
 
-    <!-- Site name (if applicable) -->
+    <!-- Payroll period, pay date, payslip date, and site -->
     <table style="margin-bottom: 5px;">
       <tr>
-        <th class="label-cell">Site Name</th>
-        <td class="value-cell header-site" id="siteName">-</td>
+        <th class="pay-summary-label">Pay Period</th>
+        <td class="pay-summary-value" id="payPeriod">-</td>
+        <th class="pay-summary-label">Payslip Date</th>
+        <td class="pay-summary-value" id="payslipDate">-</td>
+      </tr>
+      <tr>
+        <th class="pay-summary-label">Pay Date</th>
+        <td class="pay-summary-value" id="payDate">-</td>
+        <th class="pay-summary-label">Site Name</th>
+        <td class="header-site" id="siteName">-</td>
       </tr>
     </table>
 
@@ -313,6 +323,9 @@
       document.getElementById('maritalStatus').textContent = fmt(data.maritalStatus);
       document.getElementById('gender').textContent = fmt(data.gender);
 
+      document.getElementById('payPeriod').textContent = fmt(data.payPeriod);
+      document.getElementById('payslipDate').textContent = fmt(data.payslipDate || data.payDate);
+      document.getElementById('payDate').textContent = fmt(data.payDate);
       document.getElementById('siteName').textContent = fmt(data.siteName);
 
       const earnings = data.earnings || [];

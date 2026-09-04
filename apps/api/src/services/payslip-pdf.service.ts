@@ -3,6 +3,26 @@ import { launchPdfBrowser } from "../lib/pdf-browser.js";
 import { templatePath } from "../lib/template-dir.js";
 
 const TEMPLATE_PATH = templatePath("payslip.html");
+const PDF_RENDER_TIMEOUT_MS = 30_000;
+const BROWSER_CLOSE_TIMEOUT_MS = 5_000;
+
+async function withTimeout<T>(operation: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timeout: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),
+          timeoutMs
+        );
+        timeout.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
 
 export interface PayslipTemplateData {
   employerName?: string;
@@ -10,7 +30,9 @@ export interface PayslipTemplateData {
   dateEngaged?: string;
   employeeNumber?: string;
   jobTitle?: string;
+  payPeriod?: string;
   payDate?: string;
+  payslipDate?: string;
   siteName?: string;
   companyName?: string;
   companyAddress?: string;
@@ -73,14 +95,22 @@ export async function generatePayslipPDFFromTemplate(
       timeout: 15000,
     });
 
-    const pdfBuffer = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      margin: { top: "10mm", right: "18mm", bottom: "10mm", left: "10mm" },
-    });
+    const pdfBuffer = await withTimeout(
+      page.pdf({
+        format: "A4",
+        printBackground: true,
+        margin: { top: "10mm", right: "18mm", bottom: "10mm", left: "10mm" },
+      }),
+      PDF_RENDER_TIMEOUT_MS,
+      "Payslip PDF rendering"
+    );
 
     return Buffer.from(pdfBuffer);
   } finally {
-    await browser.close();
+    try {
+      await withTimeout(browser.close(), BROWSER_CLOSE_TIMEOUT_MS, "PDF browser shutdown");
+    } catch {
+      browser.process()?.kill();
+    }
   }
 }

@@ -1427,6 +1427,9 @@ function PayrollRunCard({
 
   const handlePreviewPayslip = async (item: PayrollItem) => {
     if (!canExport) return;
+    // Open the destination synchronously from the click event so browsers do
+    // not treat the eventual PDF navigation as an unsolicited popup.
+    const previewWindow = window.open("about:blank", "_blank");
     setPreviewingId(item.id);
     setPreviewError(null);
     try {
@@ -1451,9 +1454,17 @@ function PayrollRunCard({
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
+      if (previewWindow && !previewWindow.closed) {
+        previewWindow.location.href = url;
+      } else {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `payslip-${item.employee.firstName}-${item.employee.lastName}.pdf`;
+        link.click();
+      }
       setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (err) {
+      previewWindow?.close();
       setPreviewError(err instanceof Error ? err.message : "Failed to load payslip");
     } finally {
       setPreviewingId(null);

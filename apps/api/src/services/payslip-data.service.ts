@@ -15,6 +15,7 @@ interface PayslipDataInput {
   company: Company;
   periodStart: Date;
   periodEnd: Date;
+  payslipDate?: Date | string | null;
   siteName?: string | null;
   siteGradeName?: string | null;
   siteHourlyRate?: number | null;
@@ -58,7 +59,13 @@ export function buildPayslipTemplateData(input: PayslipDataInput): PayslipTempla
   const dateEngaged = emp.commencementDate
     ? format(new Date(emp.commencementDate), "d MMM yyyy")
     : undefined;
+  const payPeriod = `${format(periodStart, "d MMM yyyy")} – ${format(periodEnd, "d MMM yyyy")}`;
   const payDate = format(periodEnd, "d MMM yyyy");
+  const payslipDate = input.payslipDate
+    ? format(new Date(input.payslipDate), "d MMM yyyy")
+    : payrollItem?.createdAt
+      ? format(new Date(payrollItem.createdAt), "d MMM yyyy")
+      : format(periodEnd, "d MMM yyyy");
   const dateOfBirth = emp.dateOfBirth
     ? format(new Date(emp.dateOfBirth), "d MMM yyyy")
     : undefined;
@@ -81,7 +88,9 @@ export function buildPayslipTemplateData(input: PayslipDataInput): PayslipTempla
     dateEngaged,
     employeeNumber: emp.employeeNumber ?? undefined,
     jobTitle,
+    payPeriod,
     payDate,
+    payslipDate,
     siteName: siteName ?? undefined,
     companyName: company.legalName ?? company.name,
     companyAddress: company.address ?? undefined,

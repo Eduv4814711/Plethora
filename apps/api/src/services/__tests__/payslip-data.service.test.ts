@@ -92,6 +92,9 @@ describe("payslip-data.service", () => {
 
     expect(templateData.employerName).toBe("Acme Security");
     expect(templateData.employeeName).toBe("John Doe");
+    expect(templateData.payPeriod).toBe("1 Jun 2026 – 30 Jun 2026");
+    expect(templateData.payDate).toBe("30 Jun 2026");
+    expect(templateData.payslipDate).toBe("30 Jun 2026");
     expect(templateData.annualLeaveHours).toBe(16);
     expect(templateData.sickLeaveHours).toBe(8);
     expect(templateData.normalHoursWorked).toBe(160);
@@ -102,4 +105,3 @@ describe("payslip-data.service", () => {
     expect(templateData.netPay).toBe(15500);
   });
 });
-

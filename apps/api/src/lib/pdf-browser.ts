@@ -1,9 +1,4 @@
 import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 /**
  * Common Chromium / Chrome binary paths across Linux distributions, macOS, and Windows.
@@ -28,7 +23,11 @@ const KNOWN_EXECUTABLE_PATHS = [
   "/Applications/Chromium.app/Contents/MacOS/Chromium",
 ];
 
-// /dev/shm is tiny in most containers; without this Chromium crashes on larger documents.
+const BROWSER_LAUNCH_TIMEOUT_MS = 15_000;
+
+// /dev/shm is tiny in most containers; without these Chromium can crash on
+// larger documents. The no-sandbox flags are also required by the packaged
+// Chrome-for-Testing binary in some managed Windows environments.
 const LAUNCH_ARGS = [
   "--no-sandbox",
   "--disable-setuid-sandbox",
@@ -38,57 +37,35 @@ const LAUNCH_ARGS = [
   "--no-zygote",
 ];
 
-function findBinaryInDir(dir: string, depth = 0): string | null {
-  if (depth > 6 || !fs.existsSync(dir)) return null;
+async function launchFromExecutable(executablePath: string) {
+  const { default: puppeteerCore } = await import("puppeteer-core");
+  return puppeteerCore.launch({
+    executablePath,
+    headless: true,
+    args: LAUNCH_ARGS,
+    timeout: BROWSER_LAUNCH_TIMEOUT_MS,
+  });
+}
+
+async function resolveBundledBrowserPath(): Promise<string | null> {
   try {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        const found = findBinaryInDir(full, depth + 1);
-        if (found) return found;
-      } else if (entry.isFile()) {
-        const lower = entry.name.toLowerCase();
-        if (
-          lower === "chrome" ||
-          lower === "chromium" ||
-          lower === "chrome.exe" ||
-          lower === "chromium.exe"
-        ) {
-          return full;
-        }
-      }
-    }
+    const { default: puppeteer } = await import("puppeteer");
+    const executablePath = await puppeteer.executablePath();
+    return executablePath && fs.existsSync(executablePath) ? executablePath : null;
   } catch {
     return null;
   }
-  return null;
-}
-
-function findLocalCachedBrowser(): string | null {
-  const potentialCacheDirs = [
-    path.join(process.cwd(), ".cache", "puppeteer"),
-    path.join(process.cwd(), "apps", "api", ".cache", "puppeteer"),
-    path.join(__dirname, "..", "..", ".cache", "puppeteer"),
-    path.join(__dirname, "..", "..", "..", ".cache", "puppeteer"),
-  ];
-
-  for (const dir of potentialCacheDirs) {
-    const bin = findBinaryInDir(dir);
-    if (bin && fs.existsSync(bin)) {
-      return bin;
-    }
-  }
-  return null;
 }
 
 /**
  * Launches a browser for HTML→PDF conversion with resilient fallback:
  * 1. Checks PUPPETEER_EXECUTABLE_PATH if configured and exists on disk.
- * 2. Checks local workspace .cache/puppeteer directory (downloaded during build).
- * 3. Tries standard puppeteer default launch.
- * 4. Tries resolving executable via puppeteer.executablePath().
- * 5. Tries auto-discovering from known system binary paths.
+ * 2. Resolves Puppeteer's bundled browser directly.
+ * 3. Tries known system browser paths.
+ * 4. Tries standard Puppeteer browser resolution.
+ *
+ * Every launch has a short timeout so a broken browser installation cannot
+ * leave an API request hanging indefinitely.
  */
 export async function launchPdfBrowser() {
   const envExe = process.env.PUPPETEER_EXECUTABLE_PATH?.trim();
@@ -97,12 +74,7 @@ export async function launchPdfBrowser() {
   if (envExe) {
     if (fs.existsSync(envExe)) {
       try {
-        const { default: puppeteerCore } = await import("puppeteer-core");
-        return await puppeteerCore.launch({
-          executablePath: envExe,
-          headless: true,
-          args: LAUNCH_ARGS,
-        });
+        return await launchFromExecutable(envExe);
       } catch (err) {
         console.warn(
           `[pdf-browser] Failed to launch browser at PUPPETEER_EXECUTABLE_PATH (${envExe}):`,
@@ -116,68 +88,48 @@ export async function launchPdfBrowser() {
     }
   }
 
-  // 2. Check locally bundled / downloaded browser in .cache/puppeteer inside repository
-  const localCachedBin = findLocalCachedBrowser();
-  if (localCachedBin) {
+  // 2. Resolve the exact bundled executable. Do not recursively walk the
+  // Puppeteer cache: a Chrome distribution contains thousands of files and a
+  // synchronous traversal blocks the API event loop while a payslip is built.
+  const bundledExecutablePath = await resolveBundledBrowserPath();
+  if (bundledExecutablePath) {
     try {
-      const { default: puppeteerCore } = await import("puppeteer-core");
-      return await puppeteerCore.launch({
-        executablePath: localCachedBin,
-        headless: true,
-        args: LAUNCH_ARGS,
-      });
+      return await launchFromExecutable(bundledExecutablePath);
     } catch (err) {
       console.warn(
-        `[pdf-browser] Found local cached browser at ${localCachedBin} but launch failed:`,
+        `[pdf-browser] Failed to launch bundled browser at ${bundledExecutablePath}:`,
         err instanceof Error ? err.message : err
       );
     }
   }
 
-  // 3. Try default puppeteer launch
+  // 3. Fall back to an installed system browser.
+  for (const candidatePath of KNOWN_EXECUTABLE_PATHS) {
+    if (fs.existsSync(candidatePath)) {
+      try {
+        return await launchFromExecutable(candidatePath);
+      } catch (err) {
+        console.warn(
+          `[pdf-browser] Failed to launch system browser at ${candidatePath}:`,
+          err instanceof Error ? err.message : err
+        );
+      }
+    }
+  }
+
+  // 4. Let Puppeteer resolve its bundled browser as the final fallback.
   try {
     const { default: puppeteer } = await import("puppeteer");
     return await puppeteer.launch({
       headless: true,
       args: LAUNCH_ARGS,
+      timeout: BROWSER_LAUNCH_TIMEOUT_MS,
     });
-  } catch {
-    // Continue to fallback strategies
-  }
-
-  // 4. Try resolving path from puppeteer.executablePath()
-  try {
-    const { default: puppeteer } = await import("puppeteer");
-    let resolvedPath: string | undefined;
-    if (typeof puppeteer.executablePath === "function") {
-      const p = (puppeteer.executablePath as () => string | Promise<string>)();
-      resolvedPath = typeof (p as any)?.then === "function" ? await p : (p as string);
-    }
-    if (resolvedPath && fs.existsSync(resolvedPath)) {
-      return await puppeteer.launch({
-        executablePath: resolvedPath,
-        headless: true,
-        args: LAUNCH_ARGS,
-      });
-    }
-  } catch {
-    // Continue to system path search
-  }
-
-  // 5. Try auto-discovering from known system paths
-  for (const candidatePath of KNOWN_EXECUTABLE_PATHS) {
-    if (fs.existsSync(candidatePath)) {
-      try {
-        const { default: puppeteerCore } = await import("puppeteer-core");
-        return await puppeteerCore.launch({
-          executablePath: candidatePath,
-          headless: true,
-          args: LAUNCH_ARGS,
-        });
-      } catch {
-        // Try next candidate
-      }
-    }
+  } catch (err) {
+    console.warn(
+      "[pdf-browser] Failed to launch Puppeteer's bundled browser:",
+      err instanceof Error ? err.message : err
+    );
   }
 
   throw new Error(
