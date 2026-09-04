@@ -1,4 +1,10 @@
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Common Chromium / Chrome binary paths across Linux distributions, macOS, and Windows.
@@ -9,8 +15,13 @@ const KNOWN_EXECUTABLE_PATHS = [
   "/usr/bin/chromium-browser",
   "/usr/bin/google-chrome-stable",
   "/usr/bin/google-chrome",
+  "/usr/bin/google-chrome-unstable",
+  "/usr/local/bin/chromium",
+  "/usr/local/bin/chrome",
   "/usr/lib/chromium/chromium",
+  "/usr/lib/chromium/chrome",
   "/usr/lib/chromium-browser/chromium-browser",
+  "/usr/lib/chromium-browser/chrome",
   "/snap/bin/chromium",
   "/nix/var/nix/profiles/default/bin/chromium",
   // Windows
@@ -47,7 +58,51 @@ async function launchFromExecutable(executablePath: string) {
   });
 }
 
+function findDownloadedChromeExecutable(): string | null {
+  const cacheBases = [
+    path.join(process.cwd(), "apps", "api", ".cache", "puppeteer", "chrome"),
+    path.join(process.cwd(), ".cache", "puppeteer", "chrome"),
+    path.join(__dirname, "..", "..", ".cache", "puppeteer", "chrome"),
+    path.join(__dirname, "..", "..", "..", ".cache", "puppeteer", "chrome"),
+    path.join(os.homedir(), ".cache", "puppeteer", "chrome"),
+    process.env.PUPPETEER_CACHE_DIR ? path.join(process.env.PUPPETEER_CACHE_DIR, "chrome") : null,
+  ].filter((p): p is string => Boolean(p && fs.existsSync(p)));
+
+  const binaryNames = process.platform === "win32"
+    ? ["chrome.exe"]
+    : ["chrome", "chromium"];
+
+  for (const base of cacheBases) {
+    try {
+      const versions = fs.readdirSync(base);
+      for (const version of versions) {
+        const versionDir = path.join(base, version);
+        if (!fs.statSync(versionDir).isDirectory()) continue;
+        const subdirs = fs.readdirSync(versionDir);
+        for (const sub of subdirs) {
+          const subPath = path.join(versionDir, sub);
+          if (!fs.statSync(subPath).isDirectory()) continue;
+          for (const binName of binaryNames) {
+            const candidate = path.join(subPath, binName);
+            if (fs.existsSync(candidate)) {
+              return candidate;
+            }
+          }
+        }
+      }
+    } catch {
+      // Continue to next cache base
+    }
+  }
+  return null;
+}
+
 async function resolveBundledBrowserPath(): Promise<string | null> {
+  // First, check direct downloaded cache directory
+  const cachedBin = findDownloadedChromeExecutable();
+  if (cachedBin) return cachedBin;
+
+  // Next, query Puppeteer's executablePath
   try {
     const { default: puppeteer } = await import("puppeteer");
     const executablePath = await puppeteer.executablePath();
@@ -60,12 +115,9 @@ async function resolveBundledBrowserPath(): Promise<string | null> {
 /**
  * Launches a browser for HTML→PDF conversion with resilient fallback:
  * 1. Checks PUPPETEER_EXECUTABLE_PATH if configured and exists on disk.
- * 2. Resolves Puppeteer's bundled browser directly.
- * 3. Tries known system browser paths.
+ * 2. Checks installed system browser binaries (e.g. /usr/bin/chromium from Railpack aptPackages).
+ * 3. Resolves Puppeteer's downloaded browser from workspace .cache or home cache.
  * 4. Tries standard Puppeteer browser resolution.
- *
- * Every launch has a short timeout so a broken browser installation cannot
- * leave an API request hanging indefinitely.
  */
 export async function launchPdfBrowser() {
   const envExe = process.env.PUPPETEER_EXECUTABLE_PATH?.trim();
@@ -88,22 +140,7 @@ export async function launchPdfBrowser() {
     }
   }
 
-  // 2. Resolve the exact bundled executable. Do not recursively walk the
-  // Puppeteer cache: a Chrome distribution contains thousands of files and a
-  // synchronous traversal blocks the API event loop while a payslip is built.
-  const bundledExecutablePath = await resolveBundledBrowserPath();
-  if (bundledExecutablePath) {
-    try {
-      return await launchFromExecutable(bundledExecutablePath);
-    } catch (err) {
-      console.warn(
-        `[pdf-browser] Failed to launch bundled browser at ${bundledExecutablePath}:`,
-        err instanceof Error ? err.message : err
-      );
-    }
-  }
-
-  // 3. Fall back to an installed system browser.
+  // 2. Try an installed system browser (installed via Railpack aptPackages in railpack.json)
   for (const candidatePath of KNOWN_EXECUTABLE_PATHS) {
     if (fs.existsSync(candidatePath)) {
       try {
@@ -117,7 +154,20 @@ export async function launchPdfBrowser() {
     }
   }
 
-  // 4. Let Puppeteer resolve its bundled browser as the final fallback.
+  // 3. Resolve downloaded / bundled Chrome from .cache/puppeteer
+  const bundledExecutablePath = await resolveBundledBrowserPath();
+  if (bundledExecutablePath) {
+    try {
+      return await launchFromExecutable(bundledExecutablePath);
+    } catch (err) {
+      console.warn(
+        `[pdf-browser] Failed to launch bundled browser at ${bundledExecutablePath}:`,
+        err instanceof Error ? err.message : err
+      );
+    }
+  }
+
+  // 4. Let Puppeteer resolve its default browser as the final fallback
   try {
     const { default: puppeteer } = await import("puppeteer");
     return await puppeteer.launch({

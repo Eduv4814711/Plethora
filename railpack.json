@@ -1,0 +1,16 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "deploy": {
+    "aptPackages": [
+      "...",
+      "chromium",
+      "fonts-liberation",
+      "libnss3",
+      "libatk-bridge2.0-0",
+      "libgtk-3-0",
+      "libasound2",
+      "libxss1",
+      "libgbm1"
+    ]
+  }
+}
