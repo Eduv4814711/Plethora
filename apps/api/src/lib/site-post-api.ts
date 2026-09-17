@@ -69,7 +69,7 @@ export function mapPostForApi(post: SitePostRow) {
 }
 
 export function mapSiteForApi(site: SiteDetailRow) {
-  const { posts, ...rest } = site;
+  const { posts, monthlyRevenue: _revenue, ...rest } = site;
   return {
     ...rest,
     posts: posts.map(mapPostForApi),

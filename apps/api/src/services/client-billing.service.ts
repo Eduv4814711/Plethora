@@ -109,26 +109,393 @@ export interface SitePresetLine {
   description: string;
   quantity: string;
   unitAmount: string;
-  /** True when the site has no monthlyRevenue set — surfaced rather than silently dropped. */
+  /** True when the site has no configured billing rate — surfaced rather than silently dropped. */
   needsPrice: boolean;
 }
 
-/** Line-item presets from a client's active sites, priced at each site's monthly contract value. */
-export async function buildSitePresetLines(companyId: string, clientId: string): Promise<SitePresetLine[]> {
+/** Statuses that constitute an active billable guard. */
+export const ACTIVE_BILLABLE_GUARD_STATUSES = [
+  "active",
+  "training",
+  "hired",
+  "reliever",
+] as const;
+
+export interface ActiveBillableGuard {
+  id: string;
+  employeeNumber: string;
+  firstName: string;
+  lastName: string;
+  status: string;
+  assignedAt: Date;
+  effectiveFrom: Date | null;
+  effectiveTo: Date | null;
+}
+
+export interface SiteBillingCalculation {
+  siteId: string;
+  siteName: string;
+  clientId: string;
+  clientName?: string;
+  billingConfigured: boolean;
+  billingMethod: "PER_GUARD";
+  ratePerGuard: Prisma.Decimal | null;
+  billableGuardCount: number;
+  siteMonthlyTotal: Prisma.Decimal;
+  effectiveFrom: Date | null;
+  effectiveTo: Date | null;
+  rateId: string | null;
+  notes: string | null;
+  rateUpdatedAt: Date | null;
+}
+
+export interface ClientBillingCalculation {
+  clientId: string;
+  clientName: string;
+  asOfDate: string;
+  sites: SiteBillingCalculation[];
+  totalMonthlyAmount: Prisma.Decimal;
+  totalBillableGuards: number;
+  sitesConfiguredCount: number;
+  sitesUnconfiguredCount: number;
+}
+
+export interface ConfigureSiteBillingRateInput {
+  ratePerGuard: Prisma.Decimal | string | number;
+  billingMethod?: "PER_GUARD";
+  effectiveFrom: Date | string;
+  effectiveTo?: Date | string | null;
+  notes?: string | null;
+}
+
+/**
+ * Returns active billable guards assigned to a site as of a given date.
+ * Excludes offboarded, suspended, applicants, non-security officers,
+ * and guards with inactive or historical assignments.
+ */
+export async function getActiveBillableGuards(
+  companyId: string,
+  siteId: string,
+  asOfDate: Date = new Date()
+): Promise<ActiveBillableGuard[]> {
+  const targetDate = startOfUtcDay(asOfDate);
+
+  const assignments = await prisma.siteAssignment.findMany({
+    where: {
+      siteId,
+      isActive: true,
+      AND: [
+        {
+          OR: [
+            { effectiveFrom: null },
+            { effectiveFrom: { lte: targetDate } },
+          ],
+        },
+        {
+          OR: [
+            { effectiveTo: null },
+            { effectiveTo: { gte: targetDate } },
+          ],
+        },
+      ],
+      employee: {
+        companyId,
+        employeeType: "security_officer",
+        status: { in: [...ACTIVE_BILLABLE_GUARD_STATUSES] },
+      },
+    },
+    include: {
+      employee: {
+        select: {
+          id: true,
+          employeeNumber: true,
+          firstName: true,
+          lastName: true,
+          status: true,
+        },
+      },
+    },
+    orderBy: { assignedAt: "asc" },
+  });
+
+  return assignments.map((a) => ({
+    id: a.employee.id,
+    employeeNumber: a.employee.employeeNumber,
+    firstName: a.employee.firstName,
+    lastName: a.employee.lastName,
+    status: a.employee.status,
+    assignedAt: a.assignedAt,
+    effectiveFrom: a.effectiveFrom,
+    effectiveTo: a.effectiveTo,
+  }));
+}
+
+/** Returns the active billable guard count for a site as of a given date. */
+export async function getActiveBillableGuardCount(
+  companyId: string,
+  siteId: string,
+  asOfDate: Date = new Date()
+): Promise<number> {
+  const guards = await getActiveBillableGuards(companyId, siteId, asOfDate);
+  return guards.length;
+}
+
+/**
+ * Returns the effective SiteBillingRate for a site as of a given date.
+ */
+export async function getEffectiveSiteBillingRate(
+  companyId: string,
+  siteId: string,
+  asOfDate: Date = new Date()
+) {
+  const targetDate = startOfUtcDay(asOfDate);
+
+  return prisma.siteBillingRate.findFirst({
+    where: {
+      companyId,
+      siteId,
+      isActive: true,
+      effectiveFrom: { lte: targetDate },
+      OR: [
+        { effectiveTo: null },
+        { effectiveTo: { gte: targetDate } },
+      ],
+    },
+    orderBy: [
+      { effectiveFrom: "desc" },
+      { createdAt: "desc" },
+    ],
+    include: {
+      createdBy: { select: { id: true, name: true, email: true } },
+    },
+  });
+}
+
+/**
+ * Calculates billing for a site:
+ * Price Per Guard × Billable Guard Count = Site Monthly Total.
+ */
+export async function calculateSiteBilling(
+  companyId: string,
+  siteId: string,
+  asOfDate: Date = new Date()
+): Promise<SiteBillingCalculation> {
+  const site = await prisma.site.findFirst({
+    where: { id: siteId, companyId },
+    select: { id: true, name: true, clientId: true, client: { select: { name: true } } },
+  });
+
+  if (!site) {
+    throw new Error("Site not found");
+  }
+
+  const [billableGuards, rate] = await Promise.all([
+    getActiveBillableGuards(companyId, siteId, asOfDate),
+    getEffectiveSiteBillingRate(companyId, siteId, asOfDate),
+  ]);
+
+  const guardCount = billableGuards.length;
+
+  if (!rate) {
+    return {
+      siteId: site.id,
+      siteName: site.name,
+      clientId: site.clientId ?? "",
+      clientName: site.client?.name,
+      billingConfigured: false,
+      billingMethod: "PER_GUARD",
+      ratePerGuard: null,
+      billableGuardCount: guardCount,
+      siteMonthlyTotal: new Prisma.Decimal(0),
+      effectiveFrom: null,
+      effectiveTo: null,
+      rateId: null,
+      notes: null,
+      rateUpdatedAt: null,
+    };
+  }
+
+  const ratePerGuard = round2(toDecimal(rate.ratePerGuard));
+  const siteMonthlyTotal = round2(ratePerGuard.mul(guardCount));
+
+  return {
+    siteId: site.id,
+    siteName: site.name,
+    clientId: site.clientId ?? "",
+    clientName: site.client?.name,
+    billingConfigured: true,
+    billingMethod: "PER_GUARD",
+    ratePerGuard,
+    billableGuardCount: guardCount,
+    siteMonthlyTotal,
+    effectiveFrom: rate.effectiveFrom,
+    effectiveTo: rate.effectiveTo,
+    rateId: rate.id,
+    notes: rate.notes,
+    rateUpdatedAt: rate.updatedAt,
+  };
+}
+
+/**
+ * Aggregates client-level monthly billing across all client sites.
+ */
+export async function calculateClientBilling(
+  companyId: string,
+  clientId: string,
+  asOfDate: Date = new Date()
+): Promise<ClientBillingCalculation> {
+  const client = await prisma.client.findFirst({
+    where: { id: clientId, companyId },
+    select: { id: true, name: true },
+  });
+
+  if (!client) {
+    throw new Error("Client not found");
+  }
+
   const sites = await prisma.site.findMany({
     where: { companyId, clientId, siteStatus: "ACTIVE" },
-    select: { id: true, name: true, monthlyRevenue: true },
+    select: { id: true },
     orderBy: { name: "asc" },
   });
 
-  return sites.map((site) => ({
-    siteId: site.id,
-    siteName: site.name,
-    description: `Security services — ${site.name}`,
-    quantity: "1",
-    unitAmount: (site.monthlyRevenue ?? new Prisma.Decimal(0)).toString(),
-    needsPrice: site.monthlyRevenue == null,
-  }));
+  const siteCalculations = await Promise.all(
+    sites.map((s) => calculateSiteBilling(companyId, s.id, asOfDate))
+  );
+
+  let totalMonthlyAmount = new Prisma.Decimal(0);
+  let totalBillableGuards = 0;
+  let sitesConfiguredCount = 0;
+
+  for (const sc of siteCalculations) {
+    totalMonthlyAmount = totalMonthlyAmount.add(sc.siteMonthlyTotal);
+    totalBillableGuards += sc.billableGuardCount;
+    if (sc.billingConfigured) sitesConfiguredCount++;
+  }
+
+  return {
+    clientId: client.id,
+    clientName: client.name,
+    asOfDate: startOfUtcDay(asOfDate).toISOString().slice(0, 10),
+    sites: siteCalculations,
+    totalMonthlyAmount: round2(totalMonthlyAmount),
+    totalBillableGuards,
+    sitesConfiguredCount,
+    sitesUnconfiguredCount: siteCalculations.length - sitesConfiguredCount,
+  };
+}
+
+/**
+ * Configures or updates the billing rate for a site.
+ * Ensures effective dating without overwriting historical billing records.
+ */
+export async function configureSiteBillingRate(
+  companyId: string,
+  clientId: string,
+  siteId: string,
+  input: ConfigureSiteBillingRateInput,
+  userId?: string | null
+) {
+  const site = await prisma.site.findFirst({
+    where: { id: siteId, companyId },
+    select: { id: true, clientId: true },
+  });
+
+  if (!site) throw new Error("Site not found");
+  if (site.clientId !== clientId) {
+    throw new Error("Site does not belong to the specified client");
+  }
+
+  const ratePerGuard = round2(toDecimal(input.ratePerGuard));
+  if (ratePerGuard.lte(0)) {
+    throw new Error("Rate per guard must be greater than zero");
+  }
+
+  const effectiveFrom = startOfUtcDay(
+    input.effectiveFrom instanceof Date ? input.effectiveFrom : new Date(input.effectiveFrom)
+  );
+  const effectiveTo = input.effectiveTo
+    ? startOfUtcDay(input.effectiveTo instanceof Date ? input.effectiveTo : new Date(input.effectiveTo))
+    : null;
+
+  if (effectiveTo && effectiveTo < effectiveFrom) {
+    throw new Error("effectiveTo must be on or after effectiveFrom");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    // Check if there are overlapping active rates starting before or on effectiveFrom
+    const overlappingRates = await tx.siteBillingRate.findMany({
+      where: {
+        siteId,
+        companyId,
+        isActive: true,
+        effectiveFrom: { lte: effectiveFrom },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: effectiveFrom } }],
+      },
+      orderBy: { effectiveFrom: "desc" },
+    });
+
+    for (const oldRate of overlappingRates) {
+      if (oldRate.effectiveFrom.getTime() === effectiveFrom.getTime()) {
+        // Same effective date: supersede old rate
+        await tx.siteBillingRate.update({
+          where: { id: oldRate.id },
+          data: { isActive: false },
+        });
+      } else {
+        // Prior rate: cap its effectiveTo to the day prior to the new effective date
+        const dayBefore = new Date(effectiveFrom.getTime() - 86400000);
+        await tx.siteBillingRate.update({
+          where: { id: oldRate.id },
+          data: { effectiveTo: dayBefore },
+        });
+      }
+    }
+
+    return tx.siteBillingRate.create({
+      data: {
+        companyId,
+        clientId,
+        siteId,
+        billingMethod: "PER_GUARD",
+        ratePerGuard,
+        effectiveFrom,
+        effectiveTo,
+        isActive: true,
+        notes: input.notes?.trim() || null,
+        createdByUserId: userId ?? null,
+      },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true } },
+      },
+    });
+  });
+}
+
+/** Line-item presets from a client's active sites, priced via the billing engine. */
+export async function buildSitePresetLines(
+  companyId: string,
+  clientId: string,
+  asOfDate: Date = new Date()
+): Promise<SitePresetLine[]> {
+  const clientBilling = await calculateClientBilling(companyId, clientId, asOfDate);
+
+  return clientBilling.sites.map((site) => {
+    const guards = site.billableGuardCount;
+    const rate = site.ratePerGuard;
+    const desc = site.billingConfigured
+      ? `Security services — ${site.siteName} (${guards} guard${guards === 1 ? "" : "s"} @ R${rate?.toString() ?? "0"})`
+      : `Security services — ${site.siteName}`;
+
+    return {
+      siteId: site.siteId,
+      siteName: site.siteName,
+      description: desc,
+      quantity: site.billingConfigured ? String(guards) : "1",
+      unitAmount: (rate ?? new Prisma.Decimal(0)).toString(),
+      needsPrice: !site.billingConfigured,
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------

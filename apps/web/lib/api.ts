@@ -469,10 +469,12 @@ export async function authFetch(url: string, token: string, init?: RequestInit):
   const doFetch = (t: string) => {
     const hasBody = init?.body !== undefined && init?.body !== null && init?.body !== "";
     const isFormData = init?.body instanceof FormData;
+    const userHeaders = (init?.headers as Record<string, string> | undefined) ?? {};
+    const hasContentType = Object.keys(userHeaders).some((k) => k.toLowerCase() === "content-type");
     const headers: Record<string, string> = {
       Authorization: `Bearer ${t}`,
-      ...(hasBody && !isFormData ? { "Content-Type": "application/json" } : {}),
-      ...(init?.headers as Record<string, string> | undefined),
+      ...(hasBody && !isFormData && !hasContentType ? { "Content-Type": "application/json" } : {}),
+      ...userHeaders,
     };
     return fetch(`${API_BASE}${url}`, { credentials: "include", ...init, headers });
   };
@@ -1513,7 +1515,11 @@ export async function uploadAcademyStudentDocument(
   return res.json();
 }
 
+export * from "./academy-types";
+export const uploadStudentDocument = uploadAcademyStudentDocument;
+
 export const academyApi = {
+  uploadStudentDocument: uploadAcademyStudentDocument,
   listBranches: (token: string) => academyRequest<{ branches: unknown[] }>(token, "/branches"),
   createBranch: (token: string, body: Record<string, unknown>) =>
     academyRequest<{ branch: unknown }>(token, "/branches", { method: "POST", body: JSON.stringify(body) }),
@@ -1819,6 +1825,8 @@ export const academyApi = {
     const s = q.toString();
     return academyRequest<{ sessions: unknown[]; total: number; limit: number; offset: number }>(token, `/attendance/sessions${s ? `?${s}` : ""}`);
   },
+  getAttendanceSession: (token: string, id: string) =>
+    academyRequest<{ session: unknown }>(token, `/attendance/sessions/${id}`),
   createAttendanceSession: (token: string, body: Record<string, unknown>) =>
     academyRequest<{ session: unknown }>(token, "/attendance/sessions", { method: "POST", body: JSON.stringify(body) }),
   updateAttendanceSession: (token: string, id: string, body: Record<string, unknown>) =>

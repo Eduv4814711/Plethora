@@ -23,9 +23,14 @@ const NAV_LABEL_OVERRIDES: Record<string, string> = {
  * two lists can no longer drift.
  *
  * /settings/access is excluded: it is a tab inside Settings, not a nav entry.
+ * Compliance sub-modules are excluded: they are internal tabs inside /compliance.
  */
 export const NAV_ITEMS: NavItem[] = CAPABILITY_CATALOG
-  .filter((definition) => definition.path !== "/settings/access")
+  .filter(
+    (definition) =>
+      definition.path !== "/settings/access" &&
+      definition.parent !== "/compliance"
+  )
   .map((definition) => ({
     href: definition.path,
     label: NAV_LABEL_OVERRIDES[definition.path] ?? definition.label,
@@ -35,6 +40,7 @@ export const MAIN_NAV_HREFS = ["/", "/employees", "/employees/leave", "/sites", 
 export const MORE_NAV_HREFS = [
   "/clients",
   "/payroll/billing",
+  "/compliance",
   "/whatsapp",
   "/reports",
   "/approvals",

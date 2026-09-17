@@ -14,6 +14,7 @@ export const alertSourceModuleSchema = z.enum([
   "REPORTS",
   "WHATSAPP",
   "APPROVALS",
+  "COMPLIANCE",
 ]);
 
 export const listAlertsQuerySchema = z.object({

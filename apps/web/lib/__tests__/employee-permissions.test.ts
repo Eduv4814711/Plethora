@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CapabilityMap } from "../api";
 import {
+  NAV_ITEMS,
   canAccessRoute,
   canAccessMigrationTools,
   canManageEmployeeDetails,
@@ -99,5 +100,19 @@ describe("employee management helpers", () => {
     expect(canManageEmployeeDetails(subject({ "/employees": ["edit"] }))).toBe(true);
     expect(canManageEmployeeDetails(subject({ "/payroll": ["edit"] }))).toBe(true);
     expect(canManageEmployeeDetails(subject({ "/employees": ["view"] }))).toBe(false);
+  });
+});
+
+describe("navigation catalog items", () => {
+  it("includes top-level compliance but excludes compliance sub-module tabs and settings access", () => {
+    const hrefs = NAV_ITEMS.map((item) => item.href);
+    expect(hrefs).toContain("/compliance");
+    expect(hrefs).not.toContain("/compliance/statutory");
+    expect(hrefs).not.toContain("/compliance/funds");
+    expect(hrefs).not.toContain("/compliance/legal");
+    expect(hrefs).not.toContain("/compliance/cash-control");
+    expect(hrefs).not.toContain("/compliance/company");
+    expect(hrefs).not.toContain("/compliance/reports");
+    expect(hrefs).not.toContain("/settings/access");
   });
 });

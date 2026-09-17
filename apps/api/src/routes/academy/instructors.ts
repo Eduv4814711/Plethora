@@ -368,6 +368,10 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
     authMiddleware,
     requireCapability("/academy", "approve"),
   ];
+  const editProtect = [
+    authMiddleware,
+    requireCapability("/academy", "edit"),
+  ];
   app.get("/", { preHandler: academyProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const q = request.query as Record<string, string | undefined>;
@@ -544,7 +548,7 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
     return { instructors: paged.map((row) => sanitizeInstructor(row, request.user!)), total, limit, offset, summary };
   });
 
-  app.post("/bulk", { preHandler: authMiddleware }, async (request, reply) => {
+  app.post("/bulk", { preHandler: editProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     const body = bulkActionSchema.safeParse(request.body);
@@ -1110,7 +1114,7 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
     return { instructor: sanitizeInstructor(instructor, request.user!) };
   });
 
-  app.post("/:id/archive", { preHandler: authMiddleware }, async (request, reply) => {
+  app.post("/:id/archive", { preHandler: academyProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     if (!canArchiveOrDeleteInstructors(request.user ?? {})) {
@@ -1139,7 +1143,7 @@ export async function academyInstructorsRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post("/:id/restore", { preHandler: authMiddleware }, async (request, reply) => {
+  app.post("/:id/restore", { preHandler: academyProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     if (!canArchiveOrDeleteInstructors(request.user ?? {})) {

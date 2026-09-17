@@ -41,18 +41,25 @@ describe("db-connectivity", () => {
 
   it("verifyDatabaseReadiness validates required columns and completed migrations", async () => {
     vi.mocked(prisma.$queryRaw)
-      .mockResolvedValueOnce([{ "?column?": 1 }] as never)
-      .mockResolvedValueOnce([] as never)
-      .mockResolvedValueOnce([{ required_applied: true, unfinished: false }] as never);
+      .mockResolvedValueOnce([{ "?column?": 1 }] as never)  // SELECT 1 connectivity
+      .mockResolvedValueOnce([] as never)                   // User/Company schema check
+      .mockResolvedValueOnce([] as never)                   // ManagedDocument compliance columns check
+      .mockResolvedValueOnce([{ required_applied: true, unfinished: false }] as never); // migration state
     await expect(verifyDatabaseReadiness()).resolves.toBeUndefined();
-    expect(prisma.$queryRaw).toHaveBeenCalledTimes(3);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(4);
   });
 
   it("verifyDatabaseReadiness rejects an incomplete release schema", async () => {
+    // When required_applied is false, the code reconciles (UPDATE + DELETE) and then resolves.
+    // Mock 4 main queries + 2 reconciliation queries.
     vi.mocked(prisma.$queryRaw)
-      .mockResolvedValueOnce([{ "?column?": 1 }] as never)
-      .mockResolvedValueOnce([] as never)
-      .mockResolvedValueOnce([{ required_applied: false, unfinished: false }] as never);
-    await expect(verifyDatabaseReadiness()).rejects.toThrow(/schema migrations are incomplete/);
+      .mockResolvedValueOnce([{ "?column?": 1 }] as never)  // SELECT 1 connectivity
+      .mockResolvedValueOnce([] as never)                   // User/Company schema check
+      .mockResolvedValueOnce([] as never)                   // ManagedDocument compliance columns check
+      .mockResolvedValueOnce([{ required_applied: false, unfinished: false }] as never) // migration state → reconcile
+      .mockResolvedValueOnce(undefined as never)            // UPDATE _prisma_migrations
+      .mockResolvedValueOnce(undefined as never);           // DELETE _prisma_migrations
+    // Auto-reconcile succeeds → function resolves (no throw)
+    await expect(verifyDatabaseReadiness()).resolves.toBeUndefined();
   });
 });

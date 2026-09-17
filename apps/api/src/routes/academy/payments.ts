@@ -1,29 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
-import { prisma } from "../../lib/prisma.js";
-import { createAuditLog } from "../../lib/audit.js";
 import { authMiddleware } from "../../middleware/auth.js";
 import { requireCapability } from "../../middleware/authorization.js";
 import { academyProtect } from "./constants.js";
-import {
-  generateNextReceiptNumber,
-  afterPaymentMutation,
-} from "../../services/academy-finance.service.js";
+import * as financeService from "../../services/academy-finance.service.js";
+import { AcademyServiceError } from "../../services/academy-student.service.js";
 
-function parseDate(v: string): Date | undefined {
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return undefined;
-  return d;
-}
-
-function toDec(v: unknown): Prisma.Decimal {
-  if (typeof v === "number") return new Prisma.Decimal(v);
-  return new Prisma.Decimal(String(v));
-}
-
-function decimalJson(v: Prisma.Decimal): string {
-  return v.toString();
+function decimalJson(v: unknown): string {
+  return v != null ? v.toString() : "0";
 }
 
 const createPaymentSchema = z.object({
@@ -39,161 +24,103 @@ const rejectSchema = z.object({
   remarks: z.string().optional().nullable(),
 });
 
+function serializePayment(p: any) {
+  return {
+    ...p,
+    amount: decimalJson(p.amount),
+    invoice: p.invoice
+      ? {
+          ...p.invoice,
+          subtotal: p.invoice.subtotal != null ? decimalJson(p.invoice.subtotal) : undefined,
+          discountAmount: p.invoice.discountAmount != null ? decimalJson(p.invoice.discountAmount) : undefined,
+          totalAmount: decimalJson(p.invoice.totalAmount),
+        }
+      : null,
+    receipt: p.receipt
+      ? {
+          ...p.receipt,
+          amount: decimalJson(p.receipt.amount),
+        }
+      : null,
+  };
+}
+
 export async function academyPaymentsRoutes(app: FastifyInstance) {
   const approveProtect = [
     authMiddleware,
     requireCapability("/academy", "approve"),
   ];
+
   app.get("/", { preHandler: academyProtect }, async (request) => {
     const companyId = request.user!.companyId;
     const q = request.query as Record<string, string | undefined>;
-    const limit = Math.min(Number(q.limit) || 100, 200);
-    const offset = Number(q.offset) || 0;
-    const where = {
+
+    const res = await financeService.listPayments({
       companyId,
-      ...(q.invoiceId ? { invoiceId: q.invoiceId } : {}),
-      ...(q.studentId ? { studentId: q.studentId } : {}),
-      ...(q.verificationStatus ? { verificationStatus: q.verificationStatus as "pending" | "verified" | "rejected" } : {}),
-    };
-    const [payments, total] = await Promise.all([
-      prisma.academyPayment.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        take: limit,
-        skip: offset,
-        include: {
-          invoice: { select: { id: true, invoiceNumber: true, totalAmount: true, status: true } },
-          student: { select: { id: true, studentNumber: true, firstName: true, lastName: true } },
-          receipt: { select: { id: true, receiptNumber: true } },
-        },
-      }),
-      prisma.academyPayment.count({ where }),
-    ]);
+      invoiceId: q.invoiceId,
+      studentId: q.studentId,
+      verificationStatus: q.verificationStatus as any,
+      limit: Number(q.limit) || 100,
+      offset: Number(q.offset) || 0,
+    });
+
     return {
-      payments: payments.map((p) => ({
-        ...p,
-        amount: decimalJson(p.amount),
-        invoice: p.invoice
-          ? {
-              ...p.invoice,
-              totalAmount: decimalJson(p.invoice.totalAmount),
-            }
-          : null,
-      })),
-      total,
-      limit,
-      offset,
+      payments: res.payments.map((p) => serializePayment(p)),
+      total: res.total,
+      limit: res.limit,
+      offset: res.offset,
     };
   });
 
   app.get("/:id", { preHandler: academyProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const { id } = request.params as { id: string };
-    const payment = await prisma.academyPayment.findFirst({
-      where: { id, companyId },
-      include: {
-        invoice: true,
-        student: { select: { id: true, studentNumber: true, firstName: true, lastName: true } },
-        receipt: true,
-      },
-    });
+
+    const payment = await financeService.getPaymentById(companyId, id);
     if (!payment) {
-      return reply.code(404).send({ error: "Not found", message: "Payment not found" });
+      return reply.code(404).send({
+        error: "Not found",
+        message: "Payment not found",
+        statusCode: 404,
+      });
     }
-    return {
-      payment: {
-        ...payment,
-        amount: decimalJson(payment.amount),
-        invoice: payment.invoice
-          ? {
-              ...payment.invoice,
-              subtotal: decimalJson(payment.invoice.subtotal),
-              discountAmount: decimalJson(payment.invoice.discountAmount),
-              totalAmount: decimalJson(payment.invoice.totalAmount),
-            }
-          : null,
-        receipt: payment.receipt
-          ? {
-              ...payment.receipt,
-              amount: decimalJson(payment.receipt.amount),
-            }
-          : null,
-      },
-    };
+
+    return { payment: serializePayment(payment) };
   });
 
   app.post("/", { preHandler: academyProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
+
     const body = createPaymentSchema.safeParse(request.body);
     if (!body.success) {
-      return reply.code(400).send({ error: "Validation error", details: body.error.flatten() });
-    }
-    const d = body.data;
-    const paymentDate = parseDate(d.paymentDate);
-    if (!paymentDate) {
-      return reply.code(400).send({ error: "Validation error", message: "Invalid paymentDate" });
-    }
-    const amount = toDec(d.amount);
-    if (amount.lte(0)) {
-      return reply.code(400).send({ error: "Validation error", message: "Amount must be positive" });
-    }
-
-    const invoice = await prisma.academyInvoice.findFirst({
-      where: { id: d.invoiceId, companyId },
-    });
-    if (!invoice) {
-      return reply.code(400).send({ error: "Validation error", message: "invoiceId not found" });
-    }
-    if (invoice.status === "draft" || invoice.status === "cancelled") {
-      return reply.code(409).send({
-        error: "Conflict",
-        message: "Cannot record payments against draft or cancelled invoices",
+      const flattened = body.error.flatten();
+      const firstError =
+        Object.values(flattened.fieldErrors).flat()[0] ||
+        flattened.formErrors[0] ||
+        "Validation failed";
+      return reply.code(400).send({
+        error: "Validation error",
+        message: firstError,
+        statusCode: 400,
+        details: flattened,
       });
     }
 
-    const studentId = invoice.studentId;
-
-    if (d.proofDocumentId) {
-      const doc = await prisma.studentDocument.findFirst({
-        where: {
-          id: d.proofDocumentId,
-          companyId,
-          studentId,
-          deletedAt: null,
-        },
-      });
-      if (!doc) {
-        return reply.code(400).send({ error: "Validation error", message: "proofDocumentId not found" });
+    try {
+      const payment = await financeService.recordPayment(companyId, userId, body.data);
+      return reply.code(201).send({ payment: serializePayment(payment) });
+    } catch (err) {
+      if (err instanceof AcademyServiceError) {
+        return reply.code(err.statusCode).send({
+          error: err.error,
+          message: err.message,
+          statusCode: err.statusCode,
+          ...(err.details !== undefined ? { details: err.details } : {}),
+        });
       }
+      throw err;
     }
-
-    const payment = await prisma.academyPayment.create({
-      data: {
-        companyId,
-        invoiceId: d.invoiceId,
-        studentId,
-        paymentDate,
-        amount,
-        paymentMethod: d.paymentMethod ?? undefined,
-        referenceNumber: d.referenceNumber ?? undefined,
-        proofDocumentId: d.proofDocumentId ?? undefined,
-        verificationStatus: "pending",
-      },
-    });
-
-    await createAuditLog({
-      userId,
-      companyId,
-      action: "academy.payment.create",
-      entityType: "AcademyPayment",
-      entityId: payment.id,
-      metadata: { invoiceId: d.invoiceId, amount: decimalJson(amount) },
-    });
-
-    return reply.code(201).send({
-      payment: { ...payment, amount: decimalJson(payment.amount) },
-    });
   });
 
   app.post("/:id/verify", { preHandler: approveProtect }, async (request, reply) => {
@@ -201,118 +128,53 @@ export async function academyPaymentsRoutes(app: FastifyInstance) {
     const userId = request.user!.sub;
     const { id } = request.params as { id: string };
 
-    const existing = await prisma.academyPayment.findFirst({
-      where: { id, companyId },
-      include: { receipt: true },
-    });
-    if (!existing) {
-      return reply.code(404).send({ error: "Not found", message: "Payment not found" });
+    try {
+      const payment = await financeService.verifyPayment(companyId, userId, id);
+      return { payment: serializePayment(payment) };
+    } catch (err) {
+      if (err instanceof AcademyServiceError) {
+        return reply.code(err.statusCode).send({
+          error: err.error,
+          message: err.message,
+          statusCode: err.statusCode,
+        });
+      }
+      throw err;
     }
-    if (existing.verificationStatus !== "pending") {
-      return reply.code(409).send({ error: "Conflict", message: "Payment is not pending verification" });
-    }
-    if (existing.receipt) {
-      return reply.code(409).send({ error: "Conflict", message: "Receipt already exists" });
-    }
-
-    const receiptNumber = await generateNextReceiptNumber(companyId);
-    const receiptDate = new Date();
-
-    await prisma.$transaction(async (tx) => {
-      await tx.academyPayment.update({
-        where: { id },
-        data: {
-          verificationStatus: "verified",
-          verifiedByUserId: userId,
-          verifiedAt: new Date(),
-          rejectionRemarks: null,
-        },
-      });
-      await tx.academyReceipt.create({
-        data: {
-          companyId,
-          paymentId: id,
-          receiptNumber,
-          receiptDate,
-          amount: existing.amount,
-          issuedByUserId: userId,
-        },
-      });
-      await afterPaymentMutation(tx, existing.invoiceId, companyId);
-    });
-
-    const payment = await prisma.academyPayment.findFirstOrThrow({
-      where: { id, companyId },
-      include: { receipt: true },
-    });
-
-    await createAuditLog({
-      userId,
-      companyId,
-      action: "academy.payment.verify",
-      entityType: "AcademyPayment",
-      entityId: id,
-      metadata: { receiptNumber, amount: decimalJson(existing.amount) },
-    });
-
-    return {
-      payment: {
-        ...payment,
-        amount: decimalJson(payment.amount),
-        receipt: payment.receipt
-          ? { ...payment.receipt, amount: decimalJson(payment.receipt.amount) }
-          : null,
-      },
-    };
   });
 
   app.post("/:id/reject", { preHandler: approveProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const userId = request.user!.sub;
     const { id } = request.params as { id: string };
+
     const body = rejectSchema.safeParse(request.body ?? {});
     if (!body.success) {
-      return reply.code(400).send({ error: "Validation error", details: body.error.flatten() });
-    }
-
-    const existing = await prisma.academyPayment.findFirst({
-      where: { id, companyId },
-      include: { receipt: true },
-    });
-    if (!existing) {
-      return reply.code(404).send({ error: "Not found", message: "Payment not found" });
-    }
-    if (existing.verificationStatus !== "pending") {
-      return reply.code(409).send({ error: "Conflict", message: "Payment is not pending verification" });
-    }
-    if (existing.receipt) {
-      return reply.code(409).send({ error: "Conflict", message: "Cannot reject a verified payment" });
-    }
-
-    await prisma.$transaction(async (tx) => {
-      await tx.academyPayment.update({
-        where: { id },
-        data: {
-          verificationStatus: "rejected",
-          verifiedByUserId: userId,
-          verifiedAt: new Date(),
-          rejectionRemarks: body.data.remarks ?? undefined,
-        },
+      const flattened = body.error.flatten();
+      const firstError =
+        Object.values(flattened.fieldErrors).flat()[0] ||
+        flattened.formErrors[0] ||
+        "Validation failed";
+      return reply.code(400).send({
+        error: "Validation error",
+        message: firstError,
+        statusCode: 400,
+        details: flattened,
       });
-      await afterPaymentMutation(tx, existing.invoiceId, companyId);
-    });
+    }
 
-    const payment = await prisma.academyPayment.findFirstOrThrow({ where: { id, companyId } });
-
-    await createAuditLog({
-      userId,
-      companyId,
-      action: "academy.payment.reject",
-      entityType: "AcademyPayment",
-      entityId: id,
-      metadata: { remarks: body.data.remarks },
-    });
-
-    return { payment: { ...payment, amount: decimalJson(payment.amount) } };
+    try {
+      const payment = await financeService.rejectPayment(companyId, userId, id, body.data.remarks);
+      return { payment: serializePayment(payment) };
+    } catch (err) {
+      if (err instanceof AcademyServiceError) {
+        return reply.code(err.statusCode).send({
+          error: err.error,
+          message: err.message,
+          statusCode: err.statusCode,
+        });
+      }
+      throw err;
+    }
   });
 }

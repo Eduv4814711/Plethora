@@ -11,6 +11,7 @@
  */
 
 import { prisma } from "../lib/prisma.js";
+import { calculateSiteBilling } from "./client-billing.service.js";
 
 export type LabourHealthIndicator = "healthy" | "warning" | "danger";
 
@@ -175,7 +176,17 @@ export async function getContractLabourCost(
   for (const [siteId, costs] of siteCosts) {
     const site = siteMap.get(siteId);
     const siteName = site?.name ?? "Unknown";
-    const revenue = site?.monthlyRevenue != null ? Number(site.monthlyRevenue) : null;
+    let revenue: number | null = null;
+    try {
+      const siteBilling = await calculateSiteBilling(companyId, siteId, periodEnd);
+      if (siteBilling.billingConfigured && siteBilling.siteMonthlyTotal.gt(0)) {
+        revenue = Number(siteBilling.siteMonthlyTotal);
+      } else if (site?.monthlyRevenue != null) {
+        revenue = Number(site.monthlyRevenue);
+      }
+    } catch {
+      revenue = site?.monthlyRevenue != null ? Number(site.monthlyRevenue) : null;
+    }
 
     let labourRatio: number | null = null;
     let healthIndicator: LabourHealthIndicator | null = null;

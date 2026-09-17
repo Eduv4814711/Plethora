@@ -60,8 +60,15 @@ async function reconcileDatabase() {
       if (res.rowCount && res.rowCount > 0) {
         console.log(`[deploy-migrations] Cleared ${res.rowCount} stuck unfinished migration(s):`, res.rows.map(r => r.migration_name).join(", "));
       }
-    } catch (cleanErr) {
-      console.warn("[deploy-migrations] Failed migrations cleanup note:", cleanErr?.message || cleanErr);
+    } catch (clearErr) {
+      console.warn("[deploy-migrations] Stuck migration cleanup note:", clearErr?.message || clearErr);
+    }
+    // 4. Ensure compliance hub tables exist
+    try {
+      const { applyComplianceTables } = await import("./apply-compliance-tables-fn.mjs");
+      await applyComplianceTables(client);
+    } catch (compErr) {
+      console.warn("[deploy-migrations] Compliance tables check note:", compErr?.message || compErr);
     }
   } catch (err) {
     console.warn("[deploy-migrations] Pre-migration connection note:", err?.message || err);

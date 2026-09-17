@@ -29,7 +29,12 @@ async function renderInBrowser(
   const page = await browser.newPage();
   try {
     await page.setContent(buildHtml(job), { waitUntil: "load", timeout: 10000 });
-    await page.waitForNetworkIdle({ idleTime: 300, timeout: 10000 });
+    // Best-effort wait for any logo images to settle without hanging:
+    try {
+      await page.waitForNetworkIdle({ idleTime: 100, timeout: 1500 });
+    } catch {
+      // Continue even if network idle times out (e.g. offline dev or blocked external font/logo)
+    }
     const pdfBuffer = await page.pdf({
       format: "A4",
       landscape: job.options?.landscape ?? false,
@@ -38,7 +43,7 @@ async function renderInBrowser(
     });
     return Buffer.from(pdfBuffer);
   } finally {
-    await page.close();
+    await page.close().catch(() => {});
   }
 }
 
@@ -49,11 +54,26 @@ export async function renderPdf(
   data: unknown,
   options?: RenderPdfOptions
 ): Promise<Buffer> {
-  const browser = await launchPdfBrowser();
-  try {
+  let browser: Awaited<ReturnType<typeof launchPdfBrowser>> | null = null;
+  let timer: NodeJS.Timeout | undefined;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("PDF generation timed out after 25 seconds")), 25_000);
+    timer.unref?.();
+  });
+
+  const renderWork = async (): Promise<Buffer> => {
+    browser = await launchPdfBrowser();
     return await renderInBrowser(browser, { templateFile, globalName, data, options });
+  };
+
+  try {
+    return await Promise.race([renderWork(), timeoutPromise]);
   } finally {
-    await browser.close();
+    if (timer) clearTimeout(timer);
+    if (browser) {
+      await (browser as { close: () => Promise<void> }).close().catch(() => {});
+    }
   }
 }
 

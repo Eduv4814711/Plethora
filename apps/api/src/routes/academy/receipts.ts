@@ -1,43 +1,38 @@
 import type { FastifyInstance } from "fastify";
-import { Prisma } from "@prisma/client";
-import { prisma } from "../../lib/prisma.js";
 import { academyProtect } from "./constants.js";
+import * as financeService from "../../services/academy-finance.service.js";
 
-function decimalJson(v: Prisma.Decimal): string {
-  return v.toString();
+function decimalJson(v: unknown): string {
+  return v != null ? v.toString() : "0";
 }
 
 export async function academyReceiptsRoutes(app: FastifyInstance) {
   app.get("/:id", { preHandler: academyProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const { id } = request.params as { id: string };
-    const receipt = await prisma.academyReceipt.findFirst({
-      where: { id, companyId },
-      include: {
-        payment: {
-          include: {
-            invoice: { select: { id: true, invoiceNumber: true, totalAmount: true, status: true } },
-            student: { select: { id: true, studentNumber: true, firstName: true, lastName: true } },
-          },
-        },
-        issuedBy: { select: { id: true, name: true, email: true } },
-      },
-    });
+
+    const receipt = await financeService.getReceiptById(companyId, id);
     if (!receipt) {
-      return reply.code(404).send({ error: "Not found", message: "Receipt not found" });
+      return reply.code(404).send({
+        error: "Not found",
+        message: "Receipt not found",
+        statusCode: 404,
+      });
     }
+
+    const raw = receipt as any;
     return {
       receipt: {
-        ...receipt,
-        amount: decimalJson(receipt.amount),
-        payment: receipt.payment
+        ...raw,
+        amount: decimalJson(raw.amount),
+        payment: raw.payment
           ? {
-              ...receipt.payment,
-              amount: decimalJson(receipt.payment.amount),
-              invoice: receipt.payment.invoice
+              ...raw.payment,
+              amount: decimalJson(raw.payment.amount),
+              invoice: raw.payment.invoice
                 ? {
-                    ...receipt.payment.invoice,
-                    totalAmount: decimalJson(receipt.payment.invoice.totalAmount),
+                    ...raw.payment.invoice,
+                    totalAmount: decimalJson(raw.payment.invoice.totalAmount),
                   }
                 : null,
             }

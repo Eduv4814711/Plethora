@@ -21,8 +21,8 @@ describe("payslip-data.service", () => {
         netPay: 15500 as any,
         paymentStatus: "PENDING",
         leaveDays: 2 as any,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: new Date("2026-06-30T00:00:00.000Z"),
+        updatedAt: new Date("2026-06-30T00:00:00.000Z"),
         employee: {
           id: "emp-1",
           companyId: "comp-1",

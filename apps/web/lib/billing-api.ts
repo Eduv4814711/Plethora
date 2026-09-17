@@ -1,5 +1,5 @@
 import { authFetch } from "./api";
-import { downloadAttachment } from "./download";
+import { downloadAttachment, previewAttachment } from "./download";
 
 const BASE = "/payroll/billing";
 
@@ -135,6 +135,20 @@ export interface BillableClient {
   invoiceCount: number;
   quoteCount: number;
   outstanding: string;
+  billableGuardCount?: number;
+  monthlyBillingTotal?: string;
+  sitesConfiguredCount?: number;
+  sitesUnconfiguredCount?: number;
+  sites?: Array<{
+    siteId: string;
+    siteName: string;
+    ratePerGuard: string | null;
+    billableGuardCount: number;
+    siteMonthlyTotal: string;
+    billingConfigured: boolean;
+    effectiveFrom: string | null;
+    effectiveTo: string | null;
+  }>;
 }
 
 export interface SitePresetLine {
@@ -250,17 +264,37 @@ export async function getClientStatement(
 
 // ——— Quotes ———
 
+export interface ListQuotesParams {
+  clientId?: string;
+  status?: string;
+  search?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export async function listQuotes(
   token: string,
-  params: { clientId?: string; status?: string; limit?: number; offset?: number } = {}
+  params: ListQuotesParams = {}
 ): Promise<{ quotes: Quote[]; total: number; limit: number; offset: number }> {
   const q = new URLSearchParams();
   if (params.clientId) q.set("clientId", params.clientId);
   if (params.status) q.set("status", params.status);
+  if (params.search) q.set("search", params.search);
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
   if (params.limit) q.set("limit", String(params.limit));
   if (params.offset) q.set("offset", String(params.offset));
   const suffix = q.toString() ? `?${q}` : "";
   return parseJson(await authFetch(`${BASE}/quotes${suffix}`, token), "Failed to load quotes");
+}
+
+export async function duplicateQuote(token: string, id: string): Promise<Quote> {
+  return parseJson(
+    await authFetch(`${BASE}/quotes/${id}/duplicate`, token, jsonInit("POST")),
+    "Failed to duplicate quote"
+  );
 }
 
 export async function getQuote(token: string, id: string): Promise<Quote> {
@@ -327,17 +361,37 @@ export async function convertQuoteToInvoice(
 
 // ——— Invoices ———
 
+export interface ListInvoicesParams {
+  clientId?: string;
+  status?: string;
+  search?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export async function listInvoices(
   token: string,
-  params: { clientId?: string; status?: string; limit?: number; offset?: number } = {}
+  params: ListInvoicesParams = {}
 ): Promise<{ invoices: Invoice[]; total: number; limit: number; offset: number }> {
   const q = new URLSearchParams();
   if (params.clientId) q.set("clientId", params.clientId);
   if (params.status) q.set("status", params.status);
+  if (params.search) q.set("search", params.search);
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
   if (params.limit) q.set("limit", String(params.limit));
   if (params.offset) q.set("offset", String(params.offset));
   const suffix = q.toString() ? `?${q}` : "";
   return parseJson(await authFetch(`${BASE}/invoices${suffix}`, token), "Failed to load invoices");
+}
+
+export async function duplicateInvoice(token: string, id: string): Promise<Invoice> {
+  return parseJson(
+    await authFetch(`${BASE}/invoices/${id}/duplicate`, token, jsonInit("POST")),
+    "Failed to duplicate invoice"
+  );
 }
 
 export async function getInvoice(token: string, id: string): Promise<Invoice> {
@@ -443,3 +497,255 @@ export function downloadStatementPdf(
   const q = new URLSearchParams({ from, to });
   return downloadPdf(token, `${BASE}/clients/${clientId}/statement/pdf?${q}`, name);
 }
+
+// ——— PDF previews (opens in new tab) ———
+
+export function previewQuotePdf(token: string, id: string) {
+  return previewAttachment(token, `${BASE}/quotes/${id}/pdf`);
+}
+
+export function previewInvoicePdf(token: string, id: string) {
+  return previewAttachment(token, `${BASE}/invoices/${id}/pdf`);
+}
+
+export function previewReceiptPdf(token: string, id: string) {
+  return previewAttachment(token, `${BASE}/receipts/${id}/pdf`);
+}
+
+export function previewStatementPdf(
+  token: string,
+  clientId: string,
+  from: string,
+  to: string
+) {
+  const q = new URLSearchParams({ from, to });
+  return previewAttachment(token, `${BASE}/clients/${clientId}/statement/pdf?${q}`);
+}
+
+// ——— CSV data exports ———
+
+function triggerCsvDownload(content: string, filename: string) {
+  if (typeof window === "undefined") return;
+  const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+function escapeCsvCell(value: unknown): string {
+  if (value === null || value === undefined) return '""';
+  const str = String(value).replace(/"/g, '""');
+  return `"${str}"`;
+}
+
+export function exportInvoicesToCsv(
+  invoices: Invoice[],
+  filename = `invoices_${new Date().toISOString().slice(0, 10)}.csv`
+) {
+  const headers = [
+    "Invoice #",
+    "Client",
+    "Issue Date",
+    "Due Date",
+    "Subtotal",
+    "VAT",
+    "Total Amount",
+    "Amount Paid",
+    "Amount Due",
+    "Status",
+    "Reference",
+  ];
+  const rows = invoices.map((inv) => [
+    escapeCsvCell(inv.invoiceNumber),
+    escapeCsvCell(inv.client?.name ?? ""),
+    escapeCsvCell(inv.invoiceDate?.slice(0, 10) ?? ""),
+    escapeCsvCell(inv.dueDate?.slice(0, 10) ?? ""),
+    escapeCsvCell(inv.subtotal),
+    escapeCsvCell(inv.vatAmount),
+    escapeCsvCell(inv.totalAmount),
+    escapeCsvCell(inv.amountPaid ?? "0.00"),
+    escapeCsvCell(inv.amountDue ?? inv.totalAmount),
+    escapeCsvCell(inv.status),
+    escapeCsvCell(inv.reference ?? ""),
+  ]);
+  const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+  triggerCsvDownload(csv, filename);
+}
+
+export function exportQuotesToCsv(
+  quotes: Quote[],
+  filename = `quotes_${new Date().toISOString().slice(0, 10)}.csv`
+) {
+  const headers = [
+    "Quote #",
+    "Client",
+    "Quote Date",
+    "Valid Until",
+    "Subtotal",
+    "VAT",
+    "Total Amount",
+    "Status",
+    "Reference",
+  ];
+  const rows = quotes.map((q) => [
+    escapeCsvCell(q.quoteNumber),
+    escapeCsvCell(q.client?.name ?? ""),
+    escapeCsvCell(q.quoteDate?.slice(0, 10) ?? ""),
+    escapeCsvCell(q.validUntil?.slice(0, 10) ?? ""),
+    escapeCsvCell(q.subtotal),
+    escapeCsvCell(q.vatAmount),
+    escapeCsvCell(q.totalAmount),
+    escapeCsvCell(q.status),
+    escapeCsvCell(q.reference ?? ""),
+  ]);
+  const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+  triggerCsvDownload(csv, filename);
+}
+
+export function exportClientsBalancesToCsv(
+  clients: BillableClient[],
+  filename = `client_balances_${new Date().toISOString().slice(0, 10)}.csv`
+) {
+  const headers = [
+    "Client Name",
+    "Email",
+    "Phone",
+    "VAT Number",
+    "Active",
+    "Sites",
+    "Quotes",
+    "Invoices",
+    "Outstanding Balance",
+  ];
+  const rows = clients.map((c) => [
+    escapeCsvCell(c.name),
+    escapeCsvCell(c.billingEmail || c.email || ""),
+    escapeCsvCell(c.phone ?? ""),
+    escapeCsvCell(c.vatNumber ?? ""),
+    escapeCsvCell(c.isActive ? "Yes" : "No"),
+    escapeCsvCell(c.siteCount),
+    escapeCsvCell(c.quoteCount),
+    escapeCsvCell(c.invoiceCount),
+    escapeCsvCell(c.outstanding),
+  ]);
+  const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+  triggerCsvDownload(csv, filename);
+}
+
+// ——— Site Billing Configuration & Rates ———
+
+export interface SiteBillingSummary {
+  siteId: string;
+  siteName: string;
+  billingMethod: "PER_GUARD";
+  ratePerGuard: string | null;
+  billableGuardCount: number;
+  siteMonthlyTotal: string;
+  billingConfigured: boolean;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+  notes?: string | null;
+  rateId?: string | null;
+  rateUpdatedAt?: string | null;
+}
+
+export interface ClientSitesBillingResponse {
+  clientId: string;
+  clientName: string;
+  asOfDate: string;
+  totalMonthlyAmount: string;
+  totalBillableGuards: number;
+  sitesConfiguredCount: number;
+  sitesUnconfiguredCount: number;
+  sites: SiteBillingSummary[];
+}
+
+export interface ActiveBillableGuardInfo {
+  id: string;
+  employeeNumber: string;
+  firstName: string;
+  lastName: string;
+  status: string;
+  assignedAt: string;
+}
+
+export interface SiteBillingRateHistoryEntry {
+  id: string;
+  billingMethod: string;
+  ratePerGuard: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  isActive: boolean;
+  notes: string | null;
+  createdBy: { id: string; name: string; email: string } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SiteBillingDetailResponse {
+  site: {
+    id: string;
+    name: string;
+    physicalAddress?: string | null;
+    siteStatus: string;
+  };
+  billing: SiteBillingSummary;
+  activeGuards: ActiveBillableGuardInfo[];
+  history: SiteBillingRateHistoryEntry[];
+}
+
+export interface ConfigureSiteBillingRatePayload {
+  ratePerGuard: number;
+  billingMethod?: "PER_GUARD";
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  notes?: string | null;
+}
+
+export async function getClientSitesBilling(
+  token: string,
+  clientId: string,
+  asOf?: string
+): Promise<ClientSitesBillingResponse> {
+  const query = asOf ? `?asOf=${encodeURIComponent(asOf)}` : "";
+  const res = await authFetch(`${BASE}/clients/${clientId}/sites${query}`, token);
+  return parseJson(res, "Failed to load client sites billing");
+}
+
+export async function getSiteBillingDetail(
+  token: string,
+  clientId: string,
+  siteId: string,
+  asOf?: string
+): Promise<SiteBillingDetailResponse> {
+  const query = asOf ? `?asOf=${encodeURIComponent(asOf)}` : "";
+  const res = await authFetch(`${BASE}/clients/${clientId}/sites/${siteId}${query}`, token);
+  return parseJson(res, "Failed to load site billing details");
+}
+
+export async function updateSiteBillingRate(
+  token: string,
+  clientId: string,
+  siteId: string,
+  data: ConfigureSiteBillingRatePayload
+): Promise<{
+  rate: SiteBillingRateHistoryEntry;
+  siteBilling: {
+    siteId: string;
+    siteName: string;
+    ratePerGuard: string | null;
+    billableGuardCount: number;
+    siteMonthlyTotal: string;
+    billingConfigured: boolean;
+  };
+}> {
+  const res = await authFetch(`${BASE}/clients/${clientId}/sites/${siteId}/rate`, token, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  return parseJson(res, "Failed to configure site billing rate");
+}
+

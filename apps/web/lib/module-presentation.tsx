@@ -89,6 +89,9 @@ export const MODULE_ICONS: Record<string, ReactNode> = {
   "/academy": p(
     "M12 14l9-5-9-5-9 5 9 5zm0 0v7m-5-9.5V17c0 1.1 2.24 2 5 2s5-.9 5-2v-5.5"
   ),
+  "/compliance": p(
+    "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+  ),
   "/audit": p(
     "M9 12h6m-6 4h6M9 8h6m3 13H6a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2v14a2 2 0 01-2 2z"
   ),
@@ -118,6 +121,7 @@ export const MODULE_DESCRIPTIONS: Record<string, string> = {
   "/documents": "Certificates and expiry tracking",
   "/client-portal": "What your clients can see",
   "/academy": "Training, courses and enrolments",
+  "/compliance": "Statutory, funds, legal & cash floor",
   "/audit": "Who changed what, and when",
   "/settings": "Company, users and access",
   "/settings/migrate": "Bulk import and export",

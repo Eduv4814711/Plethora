@@ -20,18 +20,44 @@ function parseDateOnly(v: string): Date | undefined {
   return d;
 }
 
+const optionalForeignId = z
+  .string()
+  .refine((val) => val.trim().length > 0, {
+    message: "Foreign key reference cannot be an empty string",
+  })
+  .optional()
+  .nullable();
+
 const createRunSchema = z.object({
-  courseId: z.string().min(1),
-  runCode: z.string().min(1).max(80),
+  courseId: z.string().trim().min(1, "courseId is required"),
+  runCode: z.string().trim().min(1).max(80),
   intakeName: z.string().optional().nullable(),
-  academyBranchId: z.string().min(1),
+  academyBranchId: z.string().trim().min(1, "academyBranchId is required"),
   venueText: z.string().optional().nullable(),
-  instructorEmployeeId: z.string().optional().nullable(),
+  instructorEmployeeId: optionalForeignId,
+  classroomId: optionalForeignId,
   startDate: z.string().min(1),
   endDate: z.string().min(1),
   capacity: z.number().int().min(0).optional(),
   status: runStatusSchema.optional(),
 });
+
+const ALLOWED_RUN_STATUS_TRANSITIONS: Record<AcademyCourseRunStatus, AcademyCourseRunStatus[]> = {
+  planned: ["open", "closed"],
+  open: ["in_progress", "closed"],
+  in_progress: ["completed", "closed"],
+  completed: ["reported", "closed"],
+  reported: ["closed"],
+  closed: [],
+};
+
+export function canTransitionCourseRunStatus(
+  current: AcademyCourseRunStatus,
+  target: AcademyCourseRunStatus
+): boolean {
+  if (current === target) return true;
+  return (ALLOWED_RUN_STATUS_TRANSITIONS[current] ?? []).includes(target);
+}
 
 const updateRunSchema = createRunSchema.partial().omit({ courseId: true });
 
@@ -99,6 +125,17 @@ export async function academyCourseRunsRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: "Validation error", message: "instructorEmployeeId not found" });
       }
     }
+    if (body.data.classroomId) {
+      const classroom = await prisma.academyClassroom.findFirst({
+        where: { id: body.data.classroomId, companyId },
+      });
+      if (!classroom) {
+        return reply.code(400).send({ error: "Validation error", message: "classroomId not found" });
+      }
+      if (classroom.academyBranchId !== body.data.academyBranchId) {
+        return reply.code(400).send({ error: "Validation error", message: "Classroom branch does not match course run branch" });
+      }
+    }
 
     try {
       const run = await prisma.courseRun.create({
@@ -113,7 +150,7 @@ export async function academyCourseRunsRoutes(app: FastifyInstance) {
           startDate,
           endDate,
           capacity: body.data.capacity ?? 0,
-          status: body.data.status,
+          status: body.data.status ?? "planned",
         },
         include: {
           course: { select: { code: true, title: true } },
@@ -193,6 +230,26 @@ export async function academyCourseRunsRoutes(app: FastifyInstance) {
       });
       if (!emp) {
         return reply.code(400).send({ error: "Validation error", message: "instructorEmployeeId not found" });
+      }
+    }
+    const targetBranchId = d.academyBranchId ?? existing.academyBranchId;
+    if (d.classroomId) {
+      const classroom = await prisma.academyClassroom.findFirst({
+        where: { id: d.classroomId, companyId },
+      });
+      if (!classroom) {
+        return reply.code(400).send({ error: "Validation error", message: "classroomId not found" });
+      }
+      if (classroom.academyBranchId !== targetBranchId) {
+        return reply.code(400).send({ error: "Validation error", message: "Classroom branch does not match course run branch" });
+      }
+    }
+    if (d.status != null && d.status !== existing.status) {
+      if (!canTransitionCourseRunStatus(existing.status, d.status)) {
+        return reply.code(400).send({
+          error: "Validation error",
+          message: `Cannot transition course run status from '${existing.status}' to '${d.status}'`,
+        });
       }
     }
     const startDate = d.startDate != null ? parseDateOnly(d.startDate) : undefined;

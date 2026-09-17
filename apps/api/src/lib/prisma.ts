@@ -11,7 +11,10 @@ export const prisma =
         (process.env.NODE_ENV === "test" ? process.env.TEST_DATABASE_URL : undefined) ??
         process.env.DATABASE_URL ?? "postgresql://localhost:5432/plethora",
     }),
-    log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
+    log:
+      process.env.PRISMA_LOG_QUERIES === "true"
+        ? ["query", "error", "warn"]
+        : ["error", "warn"],
   });
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;

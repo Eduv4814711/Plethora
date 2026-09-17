@@ -181,7 +181,6 @@ export async function clientsRoutes(app: FastifyInstance) {
             id: true,
             name: true,
             siteStatus: true,
-            monthlyRevenue: true,
             physicalAddress: true,
             serviceType: true,
             contractStartDate: true,
@@ -197,10 +196,7 @@ export async function clientsRoutes(app: FastifyInstance) {
     }
     return reply.send({
       ...client,
-      sites: client.sites.map((site) => ({
-        ...site,
-        monthlyRevenue: site.monthlyRevenue?.toString() ?? null,
-      })),
+      sites: client.sites,
     });
   });
 

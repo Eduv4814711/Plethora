@@ -557,7 +557,6 @@ export interface ClientSiteSummary {
   id: string;
   name: string;
   siteStatus: string;
-  monthlyRevenue: string | null;
   physicalAddress?: string | null;
   serviceType?: string | null;
   contractStartDate?: string | null;

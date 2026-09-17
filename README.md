@@ -41,7 +41,7 @@ Install these before running the project:
      npm --version
      ```
 
-   - `node --version` should print `v26...` and `npm --version` should print
+   - `node --version` should print `v24...` and `npm --version` should print
      `11...`.
 
 3. **PostgreSQL**

@@ -119,4 +119,34 @@ export async function internalCronRoutes(app: FastifyInstance) {
       retainedIndefinitely: PERMANENT_AUDIT_ACTION_PREFIXES,
     });
   });
+
+  app.post("/cron/compliance-sync", async (request, reply) => {
+    if (!authorizeCron(request)) {
+      return reply.code(env.cronSecret ? 401 : 503).send({
+        error: env.cronSecret ? "Unauthorized" : "Cron not configured",
+        message: env.cronSecret
+          ? "Invalid or missing Authorization bearer token"
+          : "Set CRON_SECRET on the API service to enable compliance sync",
+      });
+    }
+
+    const { syncComplianceAlerts } = await import("../modules/compliance/compliance-alerts.service.js");
+    const companies = await prisma.company.findMany({ select: { id: true } });
+    const results: Array<{ companyId: string; createdCount: number; scannedCount: number }> = [];
+
+    for (const company of companies) {
+      try {
+        const res = await syncComplianceAlerts(company.id);
+        results.push({ companyId: company.id, ...res });
+      } catch (err) {
+        request.log.error({ err, companyId: company.id }, "compliance-sync failed for company");
+      }
+    }
+
+    return reply.send({
+      ok: true,
+      companiesProcessed: companies.length,
+      results,
+    });
+  });
 }

@@ -146,7 +146,6 @@ const createSiteSchema = z
       .union([z.enum(SERVICE_TYPES), z.literal("")])
       .optional()
       .transform((v) => (v === "" ? undefined : v)),
-    monthlyRevenue: z.number().positive().optional(),
     assignedGuardIds: z.array(z.string()).optional(),
     latitude: z.number().min(-90).max(90).optional(),
     longitude: z.number().min(-180).max(180).optional(),
@@ -194,7 +193,6 @@ const updateSiteSchema = z
       .union([z.enum(SERVICE_TYPES), z.literal("")])
       .optional()
       .transform((v) => (v === "" ? undefined : v)),
-    monthlyRevenue: z.number().positive().optional().nullable(),
     assignedGuardIds: z.array(z.string()).optional(),
     latitude: z.number().min(-90).max(90).nullable().optional(),
     longitude: z.number().min(-180).max(180).nullable().optional(),
@@ -363,7 +361,6 @@ export async function sitesRoutes(app: FastifyInstance) {
         siteInstructions: d.siteInstructions ?? undefined,
         clientId: d.clientId ?? undefined,
         serviceType: d.serviceType,
-        monthlyRevenue: d.monthlyRevenue,
         latitude:
           d.latitude !== undefined && d.longitude !== undefined && d.geofenceRadiusMeters !== undefined
             ? d.latitude

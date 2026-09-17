@@ -100,13 +100,41 @@ describe.runIf(dbReady)("client billing (integration)", () => {
         companyId,
         name: `Acme HQ ${runId}`,
         clientId,
-        monthlyRevenue: "25000.00",
         siteStatus: "ACTIVE",
       },
     });
     siteId = site.id;
 
-    // A second site with no contract value, to prove it is surfaced rather than dropped.
+    await prisma.siteBillingRate.create({
+      data: {
+        companyId,
+        clientId,
+        siteId,
+        ratePerGuard: new Prisma.Decimal("25000.00"),
+        effectiveFrom: new Date("2026-01-01"),
+      },
+    });
+
+    const guard = await prisma.employee.create({
+      data: {
+        companyId,
+        employeeNumber: `EMP-${runId}`,
+        firstName: "Test",
+        lastName: "Guard",
+        status: "active",
+        employeeType: "security_officer",
+      },
+    });
+
+    await prisma.siteAssignment.create({
+      data: {
+        siteId,
+        employeeId: guard.id,
+        isActive: true,
+      },
+    });
+
+    // A second site with no billing rate, to prove it is surfaced as unpriced.
     await prisma.site.create({
       data: {
         companyId,
@@ -140,7 +168,7 @@ describe.runIf(dbReady)("client billing (integration)", () => {
     return res.json() as { id: string; quoteNumber: string; totalAmount: string; status: string };
   }
 
-  it("returns site presets priced from monthlyRevenue and flags unpriced sites", async () => {
+  it("returns site presets priced from site billing rate and flags unpriced sites", async () => {
     const res = await app.inject({
       method: "GET",
       url: `${BILLING}/clients/${clientId}/site-preset`,
@@ -449,4 +477,105 @@ describe.runIf(dbReady)("client billing (integration)", () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it("allows Finance user to view client sites billing and site calculations", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `${BILLING}/clients/${clientId}/sites`,
+      headers: authHeader(token),
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      totalMonthlyAmount: string;
+      totalBillableGuards: number;
+      sitesConfiguredCount: number;
+      sites: Array<{ siteId: string; ratePerGuard: string | null; siteMonthlyTotal: string }>;
+    };
+    expect(body.totalBillableGuards).toBe(1);
+    expect(body.totalMonthlyAmount).toBe("25000");
+    expect(body.sitesConfiguredCount).toBe(1);
+    const configuredSite = body.sites.find((s) => s.siteId === siteId);
+    expect(configuredSite?.ratePerGuard).toBe("25000");
+    expect(configuredSite?.siteMonthlyTotal).toBe("25000");
+  });
+
+  it("allows Finance user to configure a site's billing rate", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `${BILLING}/clients/${clientId}/sites/${siteId}/rate`,
+      headers: { ...authHeader(token), "content-type": "application/json" },
+      payload: {
+        ratePerGuard: 12500,
+        effectiveFrom: "2026-09-01",
+        notes: "Revised annual contract rate",
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      rate: { ratePerGuard: string; effectiveFrom: string };
+      siteBilling: { siteMonthlyTotal: string; billableGuardCount: number };
+    };
+    expect(body.rate.ratePerGuard).toBe("12500");
+    expect(body.rate.effectiveFrom).toBe("2026-09-01");
+    expect(body.siteBilling.siteMonthlyTotal).toBe("12500");
+  });
+
+  it("rejects non-positive rates and invalid dates", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `${BILLING}/clients/${clientId}/sites/${siteId}/rate`,
+      headers: { ...authHeader(token), "content-type": "application/json" },
+      payload: {
+        ratePerGuard: -100,
+        effectiveFrom: "invalid-date",
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("prevents operations-only user from accessing client site billing and hides site pricing", async () => {
+    const opsUser = await prisma.user.create({
+      data: {
+        companyId,
+        name: "Ops Only Manager",
+        email: `ops-only-${runId}@plethora-test.local`,
+        passwordHash: await hashPassword("ops-password-32chars!!"),
+        capabilities: { "/sites": ["view", "create", "edit"], "/clients": ["view"] },
+      },
+    });
+    const opsToken = jwt.sign(
+      { sub: opsUser.id, email: opsUser.email, companyId },
+      config.jwt.accessSecret,
+      { expiresIn: "1h" }
+    );
+
+    // Operations user cannot view billing
+    const billingRes = await app.inject({
+      method: "GET",
+      url: `${BILLING}/clients/${clientId}/sites`,
+      headers: authHeader(opsToken),
+    });
+    expect(billingRes.statusCode).toBe(403);
+
+    // Operations user cannot configure rate
+    const configureRes = await app.inject({
+      method: "POST",
+      url: `${BILLING}/clients/${clientId}/sites/${siteId}/rate`,
+      headers: { ...authHeader(opsToken), "content-type": "application/json" },
+      payload: { ratePerGuard: 15000, effectiveFrom: "2026-09-01" },
+    });
+    expect(configureRes.statusCode).toBe(403);
+
+    // Operations user viewing /sites does NOT receive monthlyRevenue
+    const siteRes = await app.inject({
+      method: "GET",
+      url: `/sites/${siteId}`,
+      headers: authHeader(opsToken),
+    });
+    expect(siteRes.statusCode).toBe(200);
+    const siteData = siteRes.json() as Record<string, unknown>;
+    expect(siteData.monthlyRevenue).toBeUndefined();
+    expect(siteData.ratePerGuard).toBeUndefined();
+  });
 });
+

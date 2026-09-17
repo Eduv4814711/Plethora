@@ -81,6 +81,7 @@ model Company {
   siteTimesheets            SiteTimesheet[]
   siteTimesheetRows         SiteTimesheetRow[]
   staffAttendanceDays       StaffAttendanceDay[]
+  siteBillingRates          SiteBillingRate[]
 
   academyBranches            AcademyBranch[]
   academyStudents            Student[]
@@ -121,6 +122,18 @@ model Company {
   clientReceipts         ClientReceipt[]
   payrollPeriodReadiness PayrollPeriodReadiness[]
   accessChangeRequests   AccessChangeRequest[]
+
+  // Compliance & Financial Control Hub
+  complianceObligations           ComplianceObligation[]
+  statutoryPeriods                StatutoryPeriod[]
+  statutoryPayments               StatutoryPayment[]
+  employeeStatutoryContributions  EmployeeStatutoryContribution[]
+  statutoryRateConfigs            StatutoryRateConfig[]
+  complianceRemediationPlans      ComplianceRemediationPlan[]
+  complianceLegalCases            ComplianceLegalCase[]
+  cashCommitments                 CashCommitment[]
+  cashPositionSnapshots           CashPositionSnapshot[]
+  employmentExits                 EmploymentExit[]
 }
 
 model User {
@@ -170,9 +183,21 @@ model User {
   approvalsToReview      ApprovalRequest[]     @relation("ApprovalApprover")
   notificationsReceived  AppNotification[]
   clientProfile          Client?
+
+  // Compliance & Financial Control Hub
+  obligationsOwned               ComplianceObligation[]        @relation("ObligationOwner")
+  obligationsVerified            ComplianceObligation[]        @relation("ObligationVerifiedBy")
+  obligationsOverridden          ComplianceObligation[]        @relation("ObligationManagementOverride")
+  statutoryPaymentsCaptured      StatutoryPayment[]            @relation("StatutoryPaymentCapturedBy")
+  statutoryRateConfigsVerified   StatutoryRateConfig[]         @relation("StatutoryRateConfigVerifiedBy")
+  remediationPlansOwned          ComplianceRemediationPlan[]   @relation("RemediationPlanOwner")
+  legalCasesAssigned             ComplianceLegalCase[]         @relation("LegalCaseAssignedTo")
+  cashPositionSnapshots          CashPositionSnapshot[]        @relation("CashPositionCapturedBy")
+  employmentExitsProcessed       EmploymentExit[]              @relation("EmploymentExitProcessedBy")
   clientQuotesDecided    ClientQuote[]         @relation("ClientQuoteDecidedBy")
   clientPaymentsRecorded ClientPayment[]       @relation("ClientPaymentRecordedBy")
   clientReceiptsIssued   ClientReceipt[]       @relation("ClientReceiptIssuedBy")
+  siteBillingRatesCreated SiteBillingRate[]     @relation("SiteBillingRateCreatedBy")
 
   // Access change requests (maker-checker on user access)
   accessChangesTargeting AccessChangeRequest[] @relation("AccessChangeTarget")
@@ -302,6 +327,11 @@ model Employee {
   staffAttendanceDays         StaffAttendanceDay[]
   payrollHomeSites            EmployeePayrollHomeSite[]
 
+  // Compliance & Financial Control Hub
+  employeeStatutoryContributions EmployeeStatutoryContribution[]
+  complianceLegalCases           ComplianceLegalCase[]
+  employmentExits                EmploymentExit[]
+
   @@unique([companyId, employeeNumber])
   @@index([companyId])
   @@index([companyId, status])
@@ -337,7 +367,8 @@ model Site {
   contractStartDate              DateTime?
   contractEndDate                DateTime?
   serviceType                    String? // guarding, access_control, patrols, etc.
-  monthlyRevenue                 Decimal?              @db.Decimal(12, 2) // Optional - for labour % and profitability
+  /// Deprecated: Operational pricing has migrated to SiteBillingRate managed in Client Billing.
+  monthlyRevenue                 Decimal?              @db.Decimal(12, 2)
   /// Site supervisor assignment; job titles never authorize access.
   supervisorId                   String?
   riskLevel                      SiteRiskLevel         @default(LOW)
@@ -390,6 +421,7 @@ model Site {
   client                    Client?                    @relation(fields: [clientId], references: [id], onDelete: SetNull)
   quoteLines                ClientQuoteLine[]          @relation("ClientQuoteLineSite")
   invoiceLines              ClientInvoiceLine[]        @relation("ClientInvoiceLineSite")
+  billingRates              SiteBillingRate[]
   posts                     SitePost[]
   assignedGuards            SiteAssignment[]
   guardSiteEligibilities    GuardSiteEligibility[]
@@ -408,6 +440,8 @@ model Site {
   tasks                     Task[]
   payProfiles               SitePayProfile[]
   employeePayrollHomes      EmployeePayrollHomeSite[]
+  employmentExits           EmploymentExit[]           @relation("EmploymentExitSite")
+  newEmploymentExits        EmploymentExit[]           @relation("EmploymentExitNewSite")
 
   @@index([companyId])
   @@index([companyId, siteStatus])
@@ -2335,6 +2369,7 @@ enum AlertSourceModule {
   REPORTS
   WHATSAPP
   APPROVALS
+  COMPLIANCE
 }
 
 model OperationalAlert {
@@ -2725,6 +2760,7 @@ model Client {
   quotes           ClientQuote[]
   invoices         ClientInvoice[]
   payments         ClientPayment[]
+  billingRates     SiteBillingRate[]
 
   @@index([companyId])
   @@index([userId])
@@ -2897,6 +2933,37 @@ model ClientReceipt {
   @@index([companyId, receiptDate])
 }
 
+enum SiteBillingMethod {
+  PER_GUARD
+}
+
+/// Effective-dated billing rate configured for a site under a client. Managed strictly by Finance in Client Billing.
+model SiteBillingRate {
+  id              String            @id @default(cuid())
+  companyId       String
+  clientId        String
+  siteId          String
+  billingMethod   SiteBillingMethod @default(PER_GUARD)
+  ratePerGuard    Decimal           @db.Decimal(12, 2)
+  effectiveFrom   DateTime          @db.Date
+  effectiveTo     DateTime?         @db.Date
+  isActive        Boolean           @default(true)
+  notes           String?           @db.Text
+  createdByUserId String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client    Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  site      Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdBy User?     @relation("SiteBillingRateCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, clientId])
+  @@index([siteId, effectiveFrom])
+  @@index([siteId, isActive])
+  @@index([clientId])
+}
+
 enum PayrollReadinessStatus {
   READY
   PENDING_ATTENDANCE_REVIEW
@@ -2971,7 +3038,403 @@ model AccessChangeRequest {
   requestedBy User    @relation("AccessChangeRequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
   reviewedBy  User?   @relation("AccessChangeReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
 
+
   @@index([companyId, status, requestedAt])
   @@index([companyId, targetUserId, status])
   @@index([requestedById, status])
+}
+
+// =============================================================================
+// Compliance & Financial Control Hub
+// =============================================================================
+
+enum ComplianceObligationType {
+  PSIRA_COMPANY
+  DIRECTOR_VETTING
+  EMPLOYEE_PSIRA
+  NBCPSS
+  SARS_TAX_CLEARANCE
+  COIDA
+  UIF
+  PSSPF
+  PUBLIC_LIABILITY
+  POPIA
+  OTHER
+}
+
+enum ComplianceObligationStatus {
+  COMPLIANT
+  ATTENTION_REQUIRED
+  NON_COMPLIANT
+  PENDING_VERIFICATION
+  NOT_APPLICABLE
+}
+
+enum ComplianceRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum StatutoryScheme {
+  PAYE
+  UIF
+  SDL
+  PSSPF
+  NBCPSS
+  COIDA
+  OTHER
+}
+
+enum StatutoryPeriodStatus {
+  CALCULATED
+  DECLARED
+  PARTIALLY_PAID
+  PAID
+  FAILED
+  OVERDUE
+  DISPUTED
+}
+
+enum StatutoryPaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REVERSED
+}
+
+enum LegalCaseType {
+  CCMA
+  LABOUR_COURT
+  REGULATORY
+  EMPLOYEE_DISPUTE
+  OTHER
+}
+
+enum LegalCaseStatus {
+  OPEN
+  IN_PROGRESS
+  AWAITING_OUTCOME
+  SETTLED
+  CLOSED
+  WITHDRAWN
+}
+
+enum CashCommitmentCategory {
+  PAYROLL
+  STATUTORY
+  CRITICAL_SUPPLIER
+  OPERATING_EXPENSE
+  REMEDIATION_PAYMENT
+  CAPEX
+  RELATED_PARTY_OR_INVESTMENT
+  OTHER
+}
+
+enum CashCommitmentFrequency {
+  ONCE
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+}
+
+enum RemediationPlanStatus {
+  ACTIVE
+  COMPLETED
+  DEFAULTED
+  SUSPENDED
+}
+
+enum RemediationFrequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+}
+
+/// Company-level compliance obligation register (PSiRA cert, tax clearance, insurance, POPIA, etc.)
+model ComplianceObligation {
+  id                        String                     @id @default(cuid())
+  companyId                 String
+  type                      ComplianceObligationType
+  title                     String
+  authority                 String?
+  referenceNumber           String?
+  status                    ComplianceObligationStatus @default(PENDING_VERIFICATION)
+  riskLevel                 ComplianceRiskLevel        @default(MEDIUM)
+  ownerUserId               String?
+  effectiveDate             DateTime?                  @db.Date
+  dueDate                   DateTime?                  @db.Date
+  expiryDate                DateTime?                  @db.Date
+  expectedAmount            Decimal?                   @db.Decimal(14, 2)
+  paidAmount                Decimal?                   @db.Decimal(14, 2)
+  notes                     String?                    @db.Text
+  primaryEvidenceDocumentId String?
+  lastVerifiedAt            DateTime?
+  verifiedById              String?
+  managementOverrideReason  String?                    @db.Text
+  managementOverrideById    String?
+  managementOverrideAt      DateTime?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+
+  company            Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  owner              User?                       @relation("ObligationOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  verifiedBy         User?                       @relation("ObligationVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  managementOverride User?                       @relation("ObligationManagementOverride", fields: [managementOverrideById], references: [id], onDelete: SetNull)
+  remediationPlans   ComplianceRemediationPlan[]
+
+  @@index([companyId, type])
+  @@index([companyId, status])
+  @@index([companyId, expiryDate])
+  @@index([ownerUserId])
+}
+
+/// Expected vs declared vs paid liabilities per statutory scheme per period.
+model StatutoryPeriod {
+  id                         String                @id @default(cuid())
+  companyId                  String
+  scheme                     StatutoryScheme
+  periodStart                DateTime              @db.Date
+  periodEnd                  DateTime              @db.Date
+  dueDate                    DateTime              @db.Date
+  expectedEmployeeAmount     Decimal               @default(0) @db.Decimal(14, 2)
+  expectedEmployerAmount     Decimal               @default(0) @db.Decimal(14, 2)
+  expectedOtherAmount        Decimal               @default(0) @db.Decimal(14, 2)
+  expectedTotal              Decimal               @default(0) @db.Decimal(14, 2)
+  declaredTotal              Decimal?              @db.Decimal(14, 2)
+  successfulPaidTotal        Decimal               @default(0) @db.Decimal(14, 2)
+  varianceExpectedVsDeclared Decimal?              @db.Decimal(14, 2)
+  outstandingAmount          Decimal               @default(0) @db.Decimal(14, 2)
+  filedAt                    DateTime?
+  status                     StatutoryPeriodStatus @default(CALCULATED)
+  externalReference          String?
+  notes                      String?               @db.Text
+  sourcePayrollRunIds        Json?
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
+
+  company       Company                       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  payments      StatutoryPayment[]
+  contributions EmployeeStatutoryContribution[]
+
+  @@unique([companyId, scheme, periodStart, periodEnd])
+  @@index([companyId, scheme, status])
+  @@index([companyId, dueDate])
+  @@index([companyId, status])
+}
+
+/// Individual payment attempt against a StatutoryPeriod.
+/// FAILED / REVERSED records are stored but never counted in successfulPaidTotal.
+model StatutoryPayment {
+  id                String                 @id @default(cuid())
+  companyId         String
+  statutoryPeriodId String
+  amount            Decimal                @db.Decimal(14, 2)
+  paymentDate       DateTime               @db.Date
+  status            StatutoryPaymentStatus @default(PENDING)
+  paymentReference  String?
+  externalReference String?
+  failureReason     String?                @db.Text
+  proofDocumentId   String?
+  capturedById      String
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  statutoryPeriod StatutoryPeriod @relation(fields: [statutoryPeriodId], references: [id], onDelete: Cascade)
+  capturedBy      User            @relation("StatutoryPaymentCapturedBy", fields: [capturedById], references: [id], onDelete: Restrict)
+
+  @@index([companyId, statutoryPeriodId])
+  @@index([companyId, status])
+  @@index([statutoryPeriodId, status])
+}
+
+/// Employee-level contribution breakdown per statutory period.
+model EmployeeStatutoryContribution {
+  id                        String          @id @default(cuid())
+  companyId                 String
+  statutoryPeriodId         String
+  employeeId                String
+  scheme                    StatutoryScheme
+  pensionableOrFundEarnings Decimal         @db.Decimal(14, 2)
+  employeeRate              Decimal         @db.Decimal(7, 4)
+  employerRate              Decimal         @db.Decimal(7, 4)
+  employeeAmount            Decimal         @db.Decimal(14, 2)
+  employerAmount            Decimal         @db.Decimal(14, 2)
+  totalAmount               Decimal         @db.Decimal(14, 2)
+  rateConfigId              String?
+  rateSnapshot              Json
+  createdAt                 DateTime        @default(now())
+
+  company         Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  statutoryPeriod StatutoryPeriod         @relation(fields: [statutoryPeriodId], references: [id], onDelete: Cascade)
+  employee        Employee                @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  rateConfig      StatutoryRateConfig?    @relation(fields: [rateConfigId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, statutoryPeriodId, employeeId, scheme])
+  @@index([companyId, scheme])
+  @@index([statutoryPeriodId])
+  @@index([employeeId])
+}
+
+/// Effective-dated statutory rate configuration. Never overwrite -- create a new version.
+model StatutoryRateConfig {
+  id              String          @id @default(cuid())
+  companyId       String
+  scheme          StatutoryScheme
+  effectiveFrom   DateTime        @db.Date
+  effectiveTo     DateTime?       @db.Date
+  employeeRate    Decimal?        @db.Decimal(7, 4)
+  employerRate    Decimal?        @db.Decimal(7, 4)
+  earningsCeiling Decimal?        @db.Decimal(14, 2)
+  configuration   Json?
+  sourceReference String?
+  verifiedAt      DateTime?
+  verifiedById    String?
+  isProvisional   Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  company               Company                         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  verifiedBy            User?                           @relation("StatutoryRateConfigVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  employeeContributions EmployeeStatutoryContribution[]
+
+  @@index([companyId, scheme, effectiveFrom])
+  @@index([companyId, scheme])
+}
+
+/// Arrears and AOD instalment repayment plan for statutory obligations.
+model ComplianceRemediationPlan {
+  id                         String                @id @default(cuid())
+  companyId                  String
+  obligationId               String?
+  scheme                     StatutoryScheme?
+  title                      String
+  originalBalance            Decimal               @db.Decimal(14, 2)
+  currentBalance             Decimal               @db.Decimal(14, 2)
+  installmentAmount          Decimal               @db.Decimal(14, 2)
+  frequency                  RemediationFrequency
+  startDate                  DateTime              @db.Date
+  endDate                    DateTime?             @db.Date
+  nextPaymentDate            DateTime?             @db.Date
+  status                     RemediationPlanStatus @default(ACTIVE)
+  externalAgreementReference String?
+  primaryEvidenceDocumentId  String?
+  ownerUserId                String?
+  notes                      String?               @db.Text
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
+
+  company    Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  obligation ComplianceObligation? @relation(fields: [obligationId], references: [id], onDelete: SetNull)
+  owner      User?                 @relation("RemediationPlanOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status])
+  @@index([companyId, nextPaymentDate])
+  @@index([obligationId])
+}
+
+/// CCMA, Labour Court, regulatory, and employee dispute case register.
+model ComplianceLegalCase {
+  id                String              @id @default(cuid())
+  companyId         String
+  employeeId        String?
+  caseNumber        String
+  caseType          LegalCaseType
+  title             String
+  description       String?             @db.Text
+  riskLevel         ComplianceRiskLevel @default(MEDIUM)
+  status            LegalCaseStatus     @default(OPEN)
+  dateReceived      DateTime            @db.Date
+  nextEventDate     DateTime?           @db.Date
+  assignedToId      String?
+  nextAction        String?             @db.Text
+  primaryDocumentId String?
+  outcome           String?             @db.Text
+  closedAt          DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  assignedTo User?     @relation("LegalCaseAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, caseNumber])
+  @@index([companyId, status])
+  @@index([companyId, riskLevel])
+  @@index([companyId, nextEventDate])
+  @@index([employeeId])
+  @@index([assignedToId])
+}
+
+/// Cash commitments used by the protected cash floor calculation.
+model CashCommitment {
+  id              String                  @id @default(cuid())
+  companyId       String
+  name            String
+  category        CashCommitmentCategory
+  amount          Decimal                 @db.Decimal(14, 2)
+  frequency       CashCommitmentFrequency @default(MONTHLY)
+  dueDay          Int?
+  protected       Boolean                 @default(false)
+  priority        Int                     @default(0)
+  active          Boolean                 @default(true)
+  supplierOrPayee String?
+  notes           String?                 @db.Text
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, active])
+  @@index([companyId, category])
+}
+
+/// Manual cash position snapshot for protected cash floor calculations.
+model CashPositionSnapshot {
+  id            String   @id @default(cuid())
+  companyId     String
+  availableCash Decimal  @db.Decimal(14, 2)
+  capturedAt    DateTime @default(now())
+  capturedById  String
+  notes         String?  @db.Text
+
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  capturedBy User    @relation("CashPositionCapturedBy", fields: [capturedById], references: [id], onDelete: Restrict)
+
+  @@index([companyId, capturedAt])
+}
+
+/// Termination workflow tracker for HR and payroll compliance.
+model EmploymentExit {
+  id                            String   @id @default(cuid())
+  companyId                     String
+  employeeId                    String
+  lastWorkingDate               DateTime @db.Date
+  reason                        String?
+  siteId                        String?
+  redeployed                    Boolean  @default(false)
+  newSiteId                     String?
+  terminationStatus             String   @default("pending")
+  uifDeclarationCompleted       Boolean  @default(false)
+  certificateOfServiceCompleted Boolean  @default(false)
+  finalPayrollCompleted         Boolean  @default(false)
+  notes                         String?  @db.Text
+  processedById                 String?
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  site        Site?    @relation("EmploymentExitSite", fields: [siteId], references: [id], onDelete: SetNull)
+  newSite     Site?    @relation("EmploymentExitNewSite", fields: [newSiteId], references: [id], onDelete: SetNull)
+  processedBy User?    @relation("EmploymentExitProcessedBy", fields: [processedById], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([companyId, terminationStatus])
 }

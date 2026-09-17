@@ -63,6 +63,7 @@ import { approvalsRoutes } from "./modules/approvals/approvals.routes.js";
 import { notificationsRoutes } from "./modules/notifications/notifications.routes.js";
 import { clientsRoutes, clientPortalRoutes } from "./modules/clients/clients.routes.js";
 import { reportsExtendedRoutes } from "./modules/reports-extended/reports-extended.routes.js";
+import { complianceRoutes } from "./modules/compliance/compliance.routes.js";
 import { corsOriginFromEnv, env } from "./lib/env.js";
 import { verifyDatabaseReadiness } from "./lib/db-connectivity.js";
 
@@ -96,6 +97,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, {
     origin: corsOriginFromEnv(),
     credentials: true,
+    exposedHeaders: ["Content-Disposition"],
   });
 
   await app.register(helmet as never, {
@@ -126,6 +128,17 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(multipart, {
     limits: { fileSize: 10 * 1024 * 1024 },
+  });
+
+  // Handle application/json flexibly (including charset, proxies, or compound headers)
+  app.addContentTypeParser(/^application\/json/i, { parseAs: "string" }, (_req, body, done) => {
+    try {
+      const str = typeof body === "string" ? body : body ? body.toString() : "";
+      const json = str ? JSON.parse(str) : {};
+      done(null, json);
+    } catch (err) {
+      done(err as Error, undefined);
+    }
   });
 
   if (isLocalStorage()) {
@@ -245,6 +258,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(clientsRoutes, { prefix: "/clients" });
   await app.register(clientPortalRoutes, { prefix: "/client-portal" });
   await app.register(academyRoutes, { prefix: "/academy" });
+  await app.register(complianceRoutes, { prefix: "/compliance" });
   await app.register(internalCronRoutes, { prefix: "/internal" });
 
   return app;

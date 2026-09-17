@@ -4,9 +4,11 @@ import { hasCapability } from "@/lib/permissions";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { academyApi } from "@/lib/api";
 import { DateInput } from "@/components/date-input";
+import { TableEmptyRow, TableLoadingRow } from "@/components/ui";
 
 interface StudentOpt {
   id: string;
@@ -49,6 +51,7 @@ function statusBadgeClass(status: string): string {
 }
 
 export default function AcademyInvoicesPage() {
+  const router = useRouter();
   const { token, user } = useAuth();
   const canCreate = Boolean(user && hasCapability(user, "/academy", "create"));
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
@@ -122,7 +125,7 @@ export default function AcademyInvoicesPage() {
         items: [{ description: lineDesc || "Course fee", quantity: 1, unitAmount: Number(unitAmount) }],
       });
       const inv = invoice as { id: string };
-      window.location.href = `/academy/invoices/${inv.id}`;
+      router.push(`/academy/invoices/${inv.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
     } finally {
@@ -277,34 +280,33 @@ export default function AcademyInvoicesPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td colSpan={6} className="py-8 text-center text-sm text-security-navy-500">
-                  Loading invoices...
-                </td>
-              </tr>
-            ) : invoices.map((inv) => (
-              <tr key={inv.id}>
-                <td className="font-mono text-xs">{inv.invoiceNumber}</td>
-                <td className="text-xs">
-                  {inv.student.firstName} {inv.student.lastName}
-                </td>
-                <td>
-                  <span className={`badge-neutral ${statusBadgeClass(inv.status)}`}>
-                    {inv.status.replace(/_/g, " ")}
-                  </span>
-                </td>
-                <td className="font-mono text-xs">{inv.totalAmount}</td>
-                <td className="text-xs">{String(inv.dueDate).slice(0, 10)}</td>
-                <td>
-                  <Link href={`/academy/invoices/${inv.id}`} className="font-semibold text-security-navy-700 hover:underline text-xs">
-                    Open
-                  </Link>
-                </td>
-              </tr>
-            ))}
+              <TableLoadingRow colSpan={6} label="Loading invoices..." />
+            ) : invoices.length === 0 ? (
+              <TableEmptyRow colSpan={6} message="No invoices found matching the current criteria." />
+            ) : (
+              invoices.map((inv) => (
+                <tr key={inv.id}>
+                  <td className="font-mono text-xs">{inv.invoiceNumber}</td>
+                  <td className="text-xs">
+                    {inv.student.firstName} {inv.student.lastName}
+                  </td>
+                  <td>
+                    <span className={`badge-neutral ${statusBadgeClass(inv.status)}`}>
+                      {inv.status.replace(/_/g, " ")}
+                    </span>
+                  </td>
+                  <td className="font-mono text-xs">{inv.totalAmount}</td>
+                  <td className="text-xs">{String(inv.dueDate).slice(0, 10)}</td>
+                  <td>
+                    <Link href={`/academy/invoices/${inv.id}`} className="font-semibold text-security-navy-700 hover:underline text-xs">
+                      Open
+                    </Link>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
-        {!loading && invoices.length === 0 && <p className="p-4 text-sm text-security-navy-500">No invoices yet.</p>}
       </div>
 
       <div className="flex items-center justify-end gap-2">

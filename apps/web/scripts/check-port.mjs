@@ -13,8 +13,15 @@ const NEXT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", ".next");
 
 function listListeners(port) {
   try {
+    if (process.platform === "win32") {
+      return execSync(`netstat -ano | findstr :${port}`, {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+    }
     return execSync(`ss -tlnp 2>/dev/null | grep ':${port}' || true`, {
       encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
     }).trim();
   } catch {
     return "";

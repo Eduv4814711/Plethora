@@ -92,6 +92,24 @@ export const statementQuerySchema = z.object({
   to: z.string().min(1),
 });
 
+export const configureSiteBillingRateSchema = z.object({
+  ratePerGuard: z.coerce.number().min(0, "Rate per guard must be 0 or greater").max(10_000_000),
+  billingMethod: z.literal("PER_GUARD").default("PER_GUARD"),
+  effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "effectiveFrom must be YYYY-MM-DD"),
+  effectiveTo: z
+    .preprocess(
+      (val) => (val === "" || val === undefined ? null : val),
+      z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "effectiveTo must be YYYY-MM-DD").nullable()
+    )
+    .optional(),
+  notes: z
+    .preprocess(
+      (val) => (val === "" || val === undefined ? null : val),
+      z.string().max(2000).nullable()
+    )
+    .optional(),
+});
+
 /** Serializes a quote/invoice row, converting every Decimal field to a string. */
 export function serializeDocument<T extends Record<string, unknown>>(row: T): T {
   const out: Record<string, unknown> = { ...row };

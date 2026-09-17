@@ -7,13 +7,17 @@ import { authMiddleware } from "../../middleware/auth.js";
 import { requireCapability, requireCrudCapability } from "../../middleware/authorization.js";
 import {
   buildSitePresetLines,
+  calculateClientBilling,
+  calculateSiteBilling,
   canTransitionInvoice,
   canTransitionQuote,
   computeDocumentTotals,
   computeLineTotal,
+  configureSiteBillingRate,
   generateNextInvoiceNumber,
   generateNextQuoteNumber,
   generateNextReceiptNumber,
+  getActiveBillableGuards,
   getAgingTotals,
   getClientBillingSummary,
   getClientPurchaseHistory,
@@ -25,6 +29,7 @@ import {
   syncInvoicePaymentStatus,
 } from "../../services/client-billing.service.js";
 import {
+  configureSiteBillingRateSchema,
   createInvoiceSchema,
   createQuoteSchema,
   declineQuoteSchema,
@@ -107,29 +112,57 @@ export async function billingRoutes(app: FastifyInstance) {
       include: { _count: { select: { sites: true, invoices: true, quotes: true } } },
     });
 
-    const balances = await Promise.all(
+    const clientData = await Promise.all(
       clients.map(async (client) => {
-        const summary = await getClientBillingSummary(companyId, client.id);
-        return { clientId: client.id, outstanding: decimalJson(summary.outstanding) };
+        const [summary, clientBilling] = await Promise.all([
+          getClientBillingSummary(companyId, client.id),
+          calculateClientBilling(companyId, client.id),
+        ]);
+        return {
+          clientId: client.id,
+          outstanding: decimalJson(summary.outstanding),
+          billableGuardCount: clientBilling.totalBillableGuards,
+          monthlyBillingTotal: decimalJson(clientBilling.totalMonthlyAmount),
+          sitesConfiguredCount: clientBilling.sitesConfiguredCount,
+          sitesUnconfiguredCount: clientBilling.sitesUnconfiguredCount,
+          sites: clientBilling.sites.map((s) => ({
+            siteId: s.siteId,
+            siteName: s.siteName,
+            ratePerGuard: s.ratePerGuard ? decimalJson(s.ratePerGuard) : null,
+            billableGuardCount: s.billableGuardCount,
+            siteMonthlyTotal: decimalJson(s.siteMonthlyTotal),
+            billingConfigured: s.billingConfigured,
+            effectiveFrom: s.effectiveFrom ? s.effectiveFrom.toISOString().slice(0, 10) : null,
+            effectiveTo: s.effectiveTo ? s.effectiveTo.toISOString().slice(0, 10) : null,
+          })),
+        };
       })
     );
-    const byClient = new Map(balances.map((b) => [b.clientId, b.outstanding]));
+    const byClient = new Map(clientData.map((b) => [b.clientId, b]));
 
     return {
-      clients: clients.map((client) => ({
-        id: client.id,
-        name: client.name,
-        email: client.email,
-        billingEmail: client.billingEmail,
-        phone: client.phone,
-        isActive: client.isActive,
-        paymentTermsDays: client.paymentTermsDays,
-        vatNumber: client.vatNumber,
-        siteCount: client._count.sites,
-        invoiceCount: client._count.invoices,
-        quoteCount: client._count.quotes,
-        outstanding: byClient.get(client.id) ?? "0",
-      })),
+      clients: clients.map((client) => {
+        const data = byClient.get(client.id);
+        return {
+          id: client.id,
+          name: client.name,
+          email: client.email,
+          billingEmail: client.billingEmail,
+          phone: client.phone,
+          isActive: client.isActive,
+          paymentTermsDays: client.paymentTermsDays,
+          vatNumber: client.vatNumber,
+          siteCount: client._count.sites,
+          invoiceCount: client._count.invoices,
+          quoteCount: client._count.quotes,
+          outstanding: data?.outstanding ?? "0",
+          billableGuardCount: data?.billableGuardCount ?? 0,
+          monthlyBillingTotal: data?.monthlyBillingTotal ?? "0",
+          sitesConfiguredCount: data?.sitesConfiguredCount ?? 0,
+          sitesUnconfiguredCount: data?.sitesUnconfiguredCount ?? 0,
+          sites: data?.sites ?? [],
+        };
+      }),
     };
   });
 
@@ -140,6 +173,186 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Client not found" });
     }
     return { lines: await buildSitePresetLines(companyId, clientId) };
+  });
+
+  app.get("/clients/:clientId/sites", { preHandler: crudProtect }, async (request, reply) => {
+    const companyId = request.user!.companyId;
+    const { clientId } = request.params as { clientId: string };
+    const { asOf } = request.query as { asOf?: string };
+    const client = await findClient(companyId, clientId);
+    if (!client) {
+      return reply.code(404).send({ error: "Client not found" });
+    }
+    const asOfDate = asOf ? new Date(asOf) : new Date();
+    const billing = await calculateClientBilling(companyId, clientId, asOfDate);
+
+    return {
+      clientId: billing.clientId,
+      clientName: billing.clientName,
+      asOfDate: billing.asOfDate,
+      totalMonthlyAmount: decimalJson(billing.totalMonthlyAmount),
+      totalBillableGuards: billing.totalBillableGuards,
+      sitesConfiguredCount: billing.sitesConfiguredCount,
+      sitesUnconfiguredCount: billing.sitesUnconfiguredCount,
+      sites: billing.sites.map((s) => ({
+        siteId: s.siteId,
+        siteName: s.siteName,
+        billingMethod: s.billingMethod,
+        ratePerGuard: s.ratePerGuard ? decimalJson(s.ratePerGuard) : null,
+        billableGuardCount: s.billableGuardCount,
+        siteMonthlyTotal: decimalJson(s.siteMonthlyTotal),
+        billingConfigured: s.billingConfigured,
+        effectiveFrom: s.effectiveFrom ? s.effectiveFrom.toISOString().slice(0, 10) : null,
+        effectiveTo: s.effectiveTo ? s.effectiveTo.toISOString().slice(0, 10) : null,
+        notes: s.notes,
+        rateId: s.rateId,
+        rateUpdatedAt: s.rateUpdatedAt,
+      })),
+    };
+  });
+
+  app.get("/clients/:clientId/sites/:siteId", { preHandler: crudProtect }, async (request, reply) => {
+    const companyId = request.user!.companyId;
+    const { clientId, siteId } = request.params as { clientId: string; siteId: string };
+    const { asOf } = request.query as { asOf?: string };
+    const client = await findClient(companyId, clientId);
+    if (!client) {
+      return reply.code(404).send({ error: "Client not found" });
+    }
+    const site = await prisma.site.findFirst({
+      where: { id: siteId, companyId, clientId },
+      select: { id: true, name: true, physicalAddress: true, siteStatus: true },
+    });
+    if (!site) {
+      return reply.code(404).send({ error: "Site not found for this client" });
+    }
+
+    const asOfDate = asOf ? new Date(asOf) : new Date();
+    const [siteBilling, activeGuards, history] = await Promise.all([
+      calculateSiteBilling(companyId, siteId, asOfDate),
+      getActiveBillableGuards(companyId, siteId, asOfDate),
+      prisma.siteBillingRate.findMany({
+        where: { siteId, companyId },
+        orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
+        include: { createdBy: { select: { id: true, name: true, email: true } } },
+      }),
+    ]);
+
+    return {
+      site: {
+        id: site.id,
+        name: site.name,
+        physicalAddress: site.physicalAddress,
+        siteStatus: site.siteStatus,
+      },
+      billing: {
+        siteId: siteBilling.siteId,
+        siteName: siteBilling.siteName,
+        billingMethod: siteBilling.billingMethod,
+        ratePerGuard: siteBilling.ratePerGuard ? decimalJson(siteBilling.ratePerGuard) : null,
+        billableGuardCount: siteBilling.billableGuardCount,
+        siteMonthlyTotal: decimalJson(siteBilling.siteMonthlyTotal),
+        billingConfigured: siteBilling.billingConfigured,
+        effectiveFrom: siteBilling.effectiveFrom ? siteBilling.effectiveFrom.toISOString().slice(0, 10) : null,
+        effectiveTo: siteBilling.effectiveTo ? siteBilling.effectiveTo.toISOString().slice(0, 10) : null,
+        notes: siteBilling.notes,
+        rateId: siteBilling.rateId,
+        rateUpdatedAt: siteBilling.rateUpdatedAt,
+      },
+      activeGuards: activeGuards.map((g) => ({
+        id: g.id,
+        employeeNumber: g.employeeNumber,
+        firstName: g.firstName,
+        lastName: g.lastName,
+        status: g.status,
+        assignedAt: g.assignedAt.toISOString().slice(0, 10),
+      })),
+      history: history.map((h) => ({
+        id: h.id,
+        billingMethod: h.billingMethod,
+        ratePerGuard: decimalJson(h.ratePerGuard),
+        effectiveFrom: h.effectiveFrom.toISOString().slice(0, 10),
+        effectiveTo: h.effectiveTo ? h.effectiveTo.toISOString().slice(0, 10) : null,
+        isActive: h.isActive,
+        notes: h.notes,
+        createdBy: h.createdBy ? { id: h.createdBy.id, name: h.createdBy.name, email: h.createdBy.email } : null,
+        createdAt: h.createdAt,
+        updatedAt: h.updatedAt,
+      })),
+    };
+  });
+
+  app.post("/clients/:clientId/sites/:siteId/rate", { preHandler: crudProtect }, async (request, reply) => {
+    const user = request.user!;
+    const companyId = user.companyId;
+    const { clientId, siteId } = request.params as { clientId: string; siteId: string };
+
+    const parsed = configureSiteBillingRateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const client = await findClient(companyId, clientId);
+    if (!client) {
+      return reply.code(404).send({ error: "Client not found" });
+    }
+
+    try {
+      const newRate = await configureSiteBillingRate(
+        companyId,
+        clientId,
+        siteId,
+        parsed.data,
+        user.sub
+      );
+
+      await createAuditLog({
+        userId: user.sub,
+        companyId,
+        action: "site_billing_rate.configure",
+        entityType: "site_billing_rate",
+        entityId: newRate.id,
+        metadata: {
+          siteId,
+          clientId,
+          ratePerGuard: newRate.ratePerGuard.toString(),
+          effectiveFrom: newRate.effectiveFrom.toISOString().slice(0, 10),
+          effectiveTo: newRate.effectiveTo ? newRate.effectiveTo.toISOString().slice(0, 10) : null,
+        },
+      });
+
+      const updatedCalculation = await calculateSiteBilling(companyId, siteId, newRate.effectiveFrom);
+
+      return reply.code(200).send({
+        rate: {
+          id: newRate.id,
+          billingMethod: newRate.billingMethod,
+          ratePerGuard: decimalJson(newRate.ratePerGuard),
+          effectiveFrom: newRate.effectiveFrom.toISOString().slice(0, 10),
+          effectiveTo: newRate.effectiveTo ? newRate.effectiveTo.toISOString().slice(0, 10) : null,
+          isActive: newRate.isActive,
+          notes: newRate.notes,
+          createdAt: newRate.createdAt,
+        },
+        siteBilling: {
+          siteId: updatedCalculation.siteId,
+          siteName: updatedCalculation.siteName,
+          ratePerGuard: updatedCalculation.ratePerGuard ? decimalJson(updatedCalculation.ratePerGuard) : null,
+          billableGuardCount: updatedCalculation.billableGuardCount,
+          siteMonthlyTotal: decimalJson(updatedCalculation.siteMonthlyTotal),
+          billingConfigured: updatedCalculation.billingConfigured,
+        },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to configure site rate";
+      if (message.includes("not found")) {
+        return reply.code(404).send({ error: message });
+      }
+      return reply.code(400).send({ error: "Configuration error", message });
+    }
   });
 
   app.get("/clients/:clientId/history", { preHandler: crudProtect }, async (request, reply) => {
@@ -209,11 +422,37 @@ export async function billingRoutes(app: FastifyInstance) {
     const q = request.query as Record<string, string | undefined>;
     const limit = Math.min(Number(q.limit) || 50, 200);
     const offset = Number(q.offset) || 0;
-    const where: Prisma.ClientQuoteWhereInput = {
-      companyId,
-      ...(q.clientId ? { clientId: q.clientId } : {}),
-      ...(q.status ? { status: q.status as ClientQuoteStatus } : {}),
-    };
+
+    const search = q.search?.trim();
+    const fromDate = q.from ? parseDate(q.from) : undefined;
+    const toDate = q.to ? parseDate(q.to) : undefined;
+
+    const andConditions: Prisma.ClientQuoteWhereInput[] = [
+      { companyId },
+      ...(q.clientId ? [{ clientId: q.clientId }] : []),
+      ...(q.status ? [{ status: q.status as ClientQuoteStatus }] : []),
+    ];
+
+    if (fromDate || toDate) {
+      andConditions.push({
+        quoteDate: {
+          ...(fromDate ? { gte: fromDate } : {}),
+          ...(toDate ? { lte: toDate } : {}),
+        },
+      });
+    }
+
+    if (search) {
+      andConditions.push({
+        OR: [
+          { quoteNumber: { contains: search, mode: "insensitive" } },
+          { reference: { contains: search, mode: "insensitive" } },
+          { client: { name: { contains: search, mode: "insensitive" } } },
+        ],
+      });
+    }
+
+    const where: Prisma.ClientQuoteWhereInput = { AND: andConditions };
 
     const [quotes, total] = await Promise.all([
       prisma.clientQuote.findMany({
@@ -550,6 +789,61 @@ export async function billingRoutes(app: FastifyInstance) {
     }
   });
 
+  app.post("/quotes/:id/duplicate", { preHandler: crudProtect }, async (request, reply) => {
+    const companyId = request.user!.companyId;
+    const { id } = request.params as { id: string };
+    const existing = await prisma.clientQuote.findFirst({
+      where: { id, companyId },
+      include: { items: { orderBy: { sortOrder: "asc" } }, client: true },
+    });
+    if (!existing) return reply.code(404).send({ error: "Quote not found" });
+
+    const quoteDate = startOfUtcDay(new Date());
+    const validUntil = new Date(quoteDate);
+    validUntil.setUTCDate(validUntil.getUTCDate() + 30);
+
+    const quoteNumber = await generateNextQuoteNumber(companyId);
+    const lines = existing.items.map((item) => ({
+      siteId: item.siteId,
+      description: item.description,
+      quantity: item.quantity,
+      unitAmount: item.unitAmount,
+      lineTotal: item.lineTotal,
+      sortOrder: item.sortOrder,
+    }));
+
+    const duplicate = await prisma.clientQuote.create({
+      data: {
+        companyId,
+        clientId: existing.clientId,
+        quoteNumber,
+        quoteDate,
+        validUntil,
+        reference: existing.reference ? `Copy of ${existing.reference}` : `Copy of ${existing.quoteNumber}`,
+        notes: existing.notes,
+        vatRate: existing.vatRate,
+        subtotal: existing.subtotal,
+        discountAmount: existing.discountAmount,
+        vatAmount: existing.vatAmount,
+        totalAmount: existing.totalAmount,
+        status: "draft",
+        items: { create: lines },
+      },
+      include: { client: { select: { id: true, name: true } }, items: { orderBy: { sortOrder: "asc" } } },
+    });
+
+    await createAuditLog({
+      userId: request.user!.sub,
+      companyId,
+      action: "billing.quote.duplicate",
+      entityType: "client_quote",
+      entityId: duplicate.id,
+      metadata: { originalQuoteId: existing.id, quoteNumber: duplicate.quoteNumber },
+    });
+
+    return reply.code(201).send(serializeDocument(duplicate as unknown as Record<string, unknown>));
+  });
+
   // -------------------------------------------------------------------------
   // Invoices
   // -------------------------------------------------------------------------
@@ -559,11 +853,37 @@ export async function billingRoutes(app: FastifyInstance) {
     const q = request.query as Record<string, string | undefined>;
     const limit = Math.min(Number(q.limit) || 50, 200);
     const offset = Number(q.offset) || 0;
-    const where: Prisma.ClientInvoiceWhereInput = {
-      companyId,
-      ...(q.clientId ? { clientId: q.clientId } : {}),
-      ...(q.status ? { status: q.status as ClientInvoiceStatus } : {}),
-    };
+
+    const search = q.search?.trim();
+    const fromDate = q.from ? parseDate(q.from) : undefined;
+    const toDate = q.to ? parseDate(q.to) : undefined;
+
+    const andConditions: Prisma.ClientInvoiceWhereInput[] = [
+      { companyId },
+      ...(q.clientId ? [{ clientId: q.clientId }] : []),
+      ...(q.status ? [{ status: q.status as ClientInvoiceStatus }] : []),
+    ];
+
+    if (fromDate || toDate) {
+      andConditions.push({
+        invoiceDate: {
+          ...(fromDate ? { gte: fromDate } : {}),
+          ...(toDate ? { lte: toDate } : {}),
+        },
+      });
+    }
+
+    if (search) {
+      andConditions.push({
+        OR: [
+          { invoiceNumber: { contains: search, mode: "insensitive" } },
+          { reference: { contains: search, mode: "insensitive" } },
+          { client: { name: { contains: search, mode: "insensitive" } } },
+        ],
+      });
+    }
+
+    const where: Prisma.ClientInvoiceWhereInput = { AND: andConditions };
 
     const [invoices, total] = await Promise.all([
       prisma.clientInvoice.findMany({
@@ -874,6 +1194,61 @@ export async function billingRoutes(app: FastifyInstance) {
     });
 
     return serializeDocument(invoice as unknown as Record<string, unknown>);
+  });
+
+  app.post("/invoices/:id/duplicate", { preHandler: crudProtect }, async (request, reply) => {
+    const companyId = request.user!.companyId;
+    const { id } = request.params as { id: string };
+    const existing = await prisma.clientInvoice.findFirst({
+      where: { id, companyId },
+      include: { items: { orderBy: { sortOrder: "asc" } }, client: true },
+    });
+    if (!existing) return reply.code(404).send({ error: "Invoice not found" });
+
+    const invoiceDate = startOfUtcDay(new Date());
+    const dueDate = new Date(invoiceDate);
+    dueDate.setUTCDate(dueDate.getUTCDate() + (existing.client.paymentTermsDays ?? 30));
+
+    const invoiceNumber = await generateNextInvoiceNumber(companyId);
+    const lines = existing.items.map((item) => ({
+      siteId: item.siteId,
+      description: item.description,
+      quantity: item.quantity,
+      unitAmount: item.unitAmount,
+      lineTotal: item.lineTotal,
+      sortOrder: item.sortOrder,
+    }));
+
+    const duplicate = await prisma.clientInvoice.create({
+      data: {
+        companyId,
+        clientId: existing.clientId,
+        invoiceNumber,
+        invoiceDate,
+        dueDate,
+        reference: existing.reference ? `Copy of ${existing.reference}` : `Copy of ${existing.invoiceNumber}`,
+        notes: existing.notes,
+        vatRate: existing.vatRate,
+        subtotal: existing.subtotal,
+        discountAmount: existing.discountAmount,
+        vatAmount: existing.vatAmount,
+        totalAmount: existing.totalAmount,
+        status: "draft",
+        items: { create: lines },
+      },
+      include: { client: { select: { id: true, name: true } }, items: { orderBy: { sortOrder: "asc" } } },
+    });
+
+    await createAuditLog({
+      userId: request.user!.sub,
+      companyId,
+      action: "billing.invoice.duplicate",
+      entityType: "client_invoice",
+      entityId: duplicate.id,
+      metadata: { originalInvoiceId: existing.id, invoiceNumber: duplicate.invoiceNumber },
+    });
+
+    return reply.code(201).send(serializeDocument(duplicate as unknown as Record<string, unknown>));
   });
 
   // -------------------------------------------------------------------------

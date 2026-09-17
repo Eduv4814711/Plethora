@@ -5,8 +5,8 @@ import { createAuditLog } from "../../lib/audit.js";
 import { academyProtect } from "./constants.js";
 
 const createSchema = z.object({
-  academyBranchId: z.string().min(1),
-  classroomName: z.string().min(1),
+  academyBranchId: z.string().trim().min(1, "academyBranchId is required"),
+  classroomName: z.string().trim().min(1, "classroomName is required"),
   capacity: z.number().int().min(0).optional(),
   approvedCapacity: z.number().int().min(0).optional().nullable(),
   equipmentChecklist: z.string().optional().nullable(),
@@ -45,6 +45,19 @@ export async function academyClassroomsRoutes(app: FastifyInstance) {
     const userId = request.user!.sub;
     const parsed = createSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "Validation error", details: parsed.error.flatten() });
+
+    const branch = await prisma.academyBranch.findFirst({
+      where: { id: parsed.data.academyBranchId, companyId },
+      select: { id: true },
+    });
+    if (!branch) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "academyBranchId not found in company",
+        statusCode: 400,
+      });
+    }
+
     const row = await prisma.academyClassroom.create({ data: { companyId, ...parsed.data } });
     await createAuditLog({ userId, companyId, action: "academy.classroom.create", entityType: "AcademyClassroom", entityId: row.id });
     return reply.code(201).send({ classroom: row });
@@ -58,6 +71,21 @@ export async function academyClassroomsRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: "Validation error", details: parsed.error.flatten() });
     const exists = await prisma.academyClassroom.findFirst({ where: { id, companyId } });
     if (!exists) return reply.code(404).send({ error: "Not found", message: "Classroom not found" });
+
+    if (parsed.data.academyBranchId) {
+      const branch = await prisma.academyBranch.findFirst({
+        where: { id: parsed.data.academyBranchId, companyId },
+        select: { id: true },
+      });
+      if (!branch) {
+        return reply.code(400).send({
+          error: "Validation error",
+          message: "academyBranchId not found in company",
+          statusCode: 400,
+        });
+      }
+    }
+
     const classroom = await prisma.academyClassroom.update({ where: { id }, data: parsed.data });
     await createAuditLog({ userId, companyId, action: "academy.classroom.update", entityType: "AcademyClassroom", entityId: id });
     return { classroom };

@@ -18,6 +18,7 @@ const MODULE_PATH_BY_SOURCE: Partial<Record<AlertSourceModule, string>> = {
   APPROVALS: "/approvals",
   PAYROLL: "/payroll",
   ROSTERING: "/rostering",
+  COMPLIANCE: "/compliance",
 };
 
 /**
@@ -51,6 +52,8 @@ function alertLinkUrl(
       return "/approvals";
     case "PAYROLL":
       return "/payroll";
+    case "COMPLIANCE":
+      return sourceId ? `/compliance?id=${sourceId}` : "/compliance";
     default:
       return undefined;
   }

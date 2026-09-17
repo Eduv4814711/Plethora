@@ -12,7 +12,14 @@ export async function getAcademyComplianceGate(companyId: string): Promise<{ ok:
   return { ok: blockers.length === 0, blockers };
 }
 
-export async function ensureLearnerDocumentGate(companyId: string, studentId: string): Promise<{ ok: boolean; reason?: string }> {
+export async function ensureLearnerDocumentGate(
+  companyId: string,
+  studentId: string,
+  requiresDocuments: boolean = true
+): Promise<{ ok: boolean; reason?: string }> {
+  if (!requiresDocuments) {
+    return { ok: true };
+  }
   const count = await prisma.studentDocument.count({ where: { companyId, studentId, deletedAt: null } });
   if (count <= 0) return { ok: false, reason: "Learner has no verified documents uploaded" };
   return { ok: true };

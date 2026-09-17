@@ -11,6 +11,7 @@ uploads
 *.ndjson
 *.zip
 *.dump
+*.pdf
 .backups/
 .node/
 .pgdata/
@@ -18,6 +19,11 @@ uploads
 pgsql/
 pgsql18/
 apps/web/.debug-*
+
+# Database backups and dev logs — never commit these
+backups/db/
+backups/logs/
+scripts/logs/
 
 # Environment files — never commit real secrets. Keep example templates only.
 .env

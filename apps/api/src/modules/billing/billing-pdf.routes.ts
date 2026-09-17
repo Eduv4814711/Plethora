@@ -123,7 +123,9 @@ export async function registerBillingPdfRoutes(
         payments: { select: { amount: true } },
       },
     });
-    if (!invoice) return reply.code(404).send({ error: "Invoice not found" });
+    if (!invoice) {
+      return reply.code(404).send({ error: "Invoice not found" });
+    }
 
     let paid = new Prisma.Decimal(0);
     for (const payment of invoice.payments) paid = paid.add(payment.amount);
@@ -261,10 +263,10 @@ export async function registerBillingPdfRoutes(
       },
     });
 
-    const safeName = safeFilenamePart(client.name, "client");
+    const safeName = safeFilenamePart(client.name, "client").replace(/\s+/g, "_");
     return reply
       .header("Content-Type", "application/pdf")
-      .header("Content-Disposition", `attachment; filename="Statement ${safeName} ${periodStart} to ${periodEnd}.pdf"`)
+      .header("Content-Disposition", `attachment; filename="Statement_${safeName}_${periodStart}_to_${periodEnd}.pdf"`)
       .send(pdf);
   });
 }
