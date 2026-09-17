@@ -48,22 +48,94 @@ DO $$ BEGIN
   CREATE TYPE "RemediationFrequency" AS ENUM ('WEEKLY', 'BIWEEKLY', 'MONTHLY', 'QUARTERLY');
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
-ALTER TYPE "AlertSourceModule" ADD VALUE IF NOT EXISTS 'COMPLIANCE';
+DO $$ BEGIN
+  ALTER TYPE "AlertSourceModule" ADD VALUE IF NOT EXISTS 'COMPLIANCE';
+EXCEPTION WHEN duplicate_object THEN null; END $$;
 
--- Drop any previous incorrect table structures safely
-DROP TABLE IF EXISTS "EmploymentExit" CASCADE;
-DROP TABLE IF EXISTS "CashPositionSnapshot" CASCADE;
-DROP TABLE IF EXISTS "CashCommitment" CASCADE;
-DROP TABLE IF EXISTS "ComplianceLegalCase" CASCADE;
-DROP TABLE IF EXISTS "ComplianceRemediationPlan" CASCADE;
-DROP TABLE IF EXISTS "EmployeeStatutoryContribution" CASCADE;
-DROP TABLE IF EXISTS "StatutoryPayment" CASCADE;
-DROP TABLE IF EXISTS "StatutoryRateConfig" CASCADE;
-DROP TABLE IF EXISTS "StatutoryPeriod" CASCADE;
-DROP TABLE IF EXISTS "ComplianceObligation" CASCADE;
+DO $$ BEGIN
+  ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'DOCUMENT_REVIEW';
+EXCEPTION WHEN duplicate_object THEN null; END $$;
 
--- CreateTable: ComplianceObligation
-CREATE TABLE "ComplianceObligation" (
+-- Drop foreign keys on obsolete models
+ALTER TABLE IF EXISTS "AdminChangeRequest" DROP CONSTRAINT IF EXISTS "AdminChangeRequest_approverId_fkey";
+ALTER TABLE IF EXISTS "AdminChangeRequest" DROP CONSTRAINT IF EXISTS "AdminChangeRequest_companyId_fkey";
+ALTER TABLE IF EXISTS "AdminChangeRequest" DROP CONSTRAINT IF EXISTS "AdminChangeRequest_requestedById_fkey";
+ALTER TABLE IF EXISTS "AdminChangeRequest" DROP CONSTRAINT IF EXISTS "AdminChangeRequest_targetUserId_fkey";
+ALTER TABLE IF EXISTS "AttendanceException" DROP CONSTRAINT IF EXISTS "AttendanceException_attendanceId_fkey";
+ALTER TABLE IF EXISTS "AttendanceException" DROP CONSTRAINT IF EXISTS "AttendanceException_shiftId_fkey";
+ALTER TABLE IF EXISTS "Company" DROP CONSTRAINT IF EXISTS "Company_owner_same_company_fkey";
+ALTER TABLE IF EXISTS "DataQualityIssue" DROP CONSTRAINT IF EXISTS "DataQualityIssue_companyId_fkey";
+ALTER TABLE IF EXISTS "PlatformAuditEvent" DROP CONSTRAINT IF EXISTS "PlatformAuditEvent_actorUserId_fkey";
+ALTER TABLE IF EXISTS "PlatformAuditEvent" DROP CONSTRAINT IF EXISTS "PlatformAuditEvent_targetCompanyId_fkey";
+ALTER TABLE IF EXISTS "PlatformAuditEvent" DROP CONSTRAINT IF EXISTS "PlatformAuditEvent_targetUserId_fkey";
+ALTER TABLE IF EXISTS "RosterPublication" DROP CONSTRAINT IF EXISTS "RosterPublication_companyId_fkey";
+ALTER TABLE IF EXISTS "RosterPublication" DROP CONSTRAINT IF EXISTS "RosterPublication_siteId_fkey";
+ALTER TABLE IF EXISTS "SiteTimesheetRow" DROP CONSTRAINT IF EXISTS "SiteTimesheetRow_sourceAttendanceId_fkey";
+ALTER TABLE IF EXISTS "SiteTimesheetRow" DROP CONSTRAINT IF EXISTS "SiteTimesheetRow_sourceShiftId_fkey";
+ALTER TABLE IF EXISTS "UserPermission" DROP CONSTRAINT IF EXISTS "UserPermission_userId_fkey";
+
+-- Drop obsolete indexes
+DROP INDEX IF EXISTS "AuditLog_companyId_riskLevel_timestamp_idx";
+DROP INDEX IF EXISTS "AuditLog_requestId_idx";
+DROP INDEX IF EXISTS "SiteTimesheetRow_sourceAttendanceId_idx";
+DROP INDEX IF EXISTS "SiteTimesheetRow_sourceShiftId_idx";
+
+-- Drop obsolete columns
+ALTER TABLE IF EXISTS "ApprovalRequest" DROP COLUMN IF EXISTS "executedAt";
+ALTER TABLE IF EXISTS "ApprovalRequest" DROP COLUMN IF EXISTS "payload";
+ALTER TABLE IF EXISTS "ApprovalRequest" DROP COLUMN IF EXISTS "reason";
+ALTER TABLE IF EXISTS "ApprovalRequest" DROP COLUMN IF EXISTS "riskLevel";
+
+ALTER TABLE IF EXISTS "AuditLog" DROP COLUMN IF EXISTS "afterState";
+ALTER TABLE IF EXISTS "AuditLog" DROP COLUMN IF EXISTS "approvalRequestId";
+ALTER TABLE IF EXISTS "AuditLog" DROP COLUMN IF EXISTS "beforeState";
+ALTER TABLE IF EXISTS "AuditLog" DROP COLUMN IF EXISTS "eventHash";
+ALTER TABLE IF EXISTS "AuditLog" DROP COLUMN IF EXISTS "previousHash";
+ALTER TABLE IF EXISTS "AuditLog" DROP COLUMN IF EXISTS "reason";
+ALTER TABLE IF EXISTS "AuditLog" DROP COLUMN IF EXISTS "result";
+ALTER TABLE IF EXISTS "AuditLog" DROP COLUMN IF EXISTS "riskLevel";
+ALTER TABLE IF EXISTS "AuditLog" DROP COLUMN IF EXISTS "sessionId";
+ALTER TABLE IF EXISTS "AuditLog" DROP COLUMN IF EXISTS "source";
+
+ALTER TABLE IF EXISTS "ManagedDocument" DROP COLUMN IF EXISTS "sensitivity";
+
+ALTER TABLE IF EXISTS "PayrollRun" DROP COLUMN IF EXISTS "approvedAt";
+ALTER TABLE IF EXISTS "PayrollRun" DROP COLUMN IF EXISTS "approvedById";
+ALTER TABLE IF EXISTS "PayrollRun" DROP COLUMN IF EXISTS "calculatedById";
+ALTER TABLE IF EXISTS "PayrollRun" DROP COLUMN IF EXISTS "markedPaidAt";
+ALTER TABLE IF EXISTS "PayrollRun" DROP COLUMN IF EXISTS "markedPaidById";
+
+ALTER TABLE IF EXISTS "User" DROP COLUMN IF EXISTS "accessVersion";
+ALTER TABLE IF EXISTS "User" DROP COLUMN IF EXISTS "adminClass";
+ALTER TABLE IF EXISTS "User" DROP COLUMN IF EXISTS "disabledAt";
+ALTER TABLE IF EXISTS "User" DROP COLUMN IF EXISTS "disabledReason";
+ALTER TABLE IF EXISTS "User" DROP COLUMN IF EXISTS "isSystemOwner";
+ALTER TABLE IF EXISTS "User" DROP COLUMN IF EXISTS "lastLoginAt";
+ALTER TABLE IF EXISTS "User" DROP COLUMN IF EXISTS "mfaEnabled";
+ALTER TABLE IF EXISTS "User" DROP COLUMN IF EXISTS "mfaEnrolledAt";
+ALTER TABLE IF EXISTS "User" DROP COLUMN IF EXISTS "mfaRequired";
+ALTER TABLE IF EXISTS "User" DROP COLUMN IF EXISTS "mfaSecretEncrypted";
+
+-- Drop obsolete tables safely
+DROP TABLE IF EXISTS "AdminChangeRequest" CASCADE;
+DROP TABLE IF EXISTS "DataQualityIssue" CASCADE;
+DROP TABLE IF EXISTS "PermissionPreset" CASCADE;
+DROP TABLE IF EXISTS "PlatformAuditEvent" CASCADE;
+DROP TABLE IF EXISTS "RosterPublication" CASCADE;
+DROP TABLE IF EXISTS "UserPermission" CASCADE;
+
+-- Drop obsolete enums safely
+DROP TYPE IF EXISTS "AdminChangeType";
+DROP TYPE IF EXISTS "AdminClass";
+DROP TYPE IF EXISTS "DataQualityIssueStatus";
+DROP TYPE IF EXISTS "DataQualitySeverity";
+DROP TYPE IF EXISTS "DocumentSensitivity";
+DROP TYPE IF EXISTS "PermissionGrantStatus";
+DROP TYPE IF EXISTS "PermissionScopeType";
+DROP TYPE IF EXISTS "RosterPublicationStatus";
+
+-- CreateTable: ComplianceObligation (Idempotent, non-destructive)
+CREATE TABLE IF NOT EXISTS "ComplianceObligation" (
     "id" TEXT NOT NULL,
     "companyId" TEXT NOT NULL,
     "type" "ComplianceObligationType" NOT NULL,
@@ -90,8 +162,8 @@ CREATE TABLE "ComplianceObligation" (
     CONSTRAINT "ComplianceObligation_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable: StatutoryPeriod
-CREATE TABLE "StatutoryPeriod" (
+-- CreateTable: StatutoryPeriod (Idempotent, non-destructive)
+CREATE TABLE IF NOT EXISTS "StatutoryPeriod" (
     "id" TEXT NOT NULL,
     "companyId" TEXT NOT NULL,
     "scheme" "StatutoryScheme" NOT NULL,
@@ -116,8 +188,8 @@ CREATE TABLE "StatutoryPeriod" (
     CONSTRAINT "StatutoryPeriod_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable: StatutoryPayment
-CREATE TABLE "StatutoryPayment" (
+-- CreateTable: StatutoryPayment (Idempotent, non-destructive)
+CREATE TABLE IF NOT EXISTS "StatutoryPayment" (
     "id" TEXT NOT NULL,
     "companyId" TEXT NOT NULL,
     "statutoryPeriodId" TEXT NOT NULL,
@@ -134,8 +206,8 @@ CREATE TABLE "StatutoryPayment" (
     CONSTRAINT "StatutoryPayment_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable: EmployeeStatutoryContribution
-CREATE TABLE "EmployeeStatutoryContribution" (
+-- CreateTable: EmployeeStatutoryContribution (Idempotent, non-destructive)
+CREATE TABLE IF NOT EXISTS "EmployeeStatutoryContribution" (
     "id" TEXT NOT NULL,
     "companyId" TEXT NOT NULL,
     "statutoryPeriodId" TEXT NOT NULL,
@@ -153,8 +225,8 @@ CREATE TABLE "EmployeeStatutoryContribution" (
     CONSTRAINT "EmployeeStatutoryContribution_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable: StatutoryRateConfig
-CREATE TABLE "StatutoryRateConfig" (
+-- CreateTable: StatutoryRateConfig (Idempotent, non-destructive)
+CREATE TABLE IF NOT EXISTS "StatutoryRateConfig" (
     "id" TEXT NOT NULL,
     "companyId" TEXT NOT NULL,
     "scheme" "StatutoryScheme" NOT NULL,
@@ -173,8 +245,8 @@ CREATE TABLE "StatutoryRateConfig" (
     CONSTRAINT "StatutoryRateConfig_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable: ComplianceRemediationPlan
-CREATE TABLE "ComplianceRemediationPlan" (
+-- CreateTable: ComplianceRemediationPlan (Idempotent, non-destructive)
+CREATE TABLE IF NOT EXISTS "ComplianceRemediationPlan" (
     "id" TEXT NOT NULL,
     "companyId" TEXT NOT NULL,
     "obligationId" TEXT,
@@ -197,8 +269,8 @@ CREATE TABLE "ComplianceRemediationPlan" (
     CONSTRAINT "ComplianceRemediationPlan_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable: ComplianceLegalCase
-CREATE TABLE "ComplianceLegalCase" (
+-- CreateTable: ComplianceLegalCase (Idempotent, non-destructive)
+CREATE TABLE IF NOT EXISTS "ComplianceLegalCase" (
     "id" TEXT NOT NULL,
     "companyId" TEXT NOT NULL,
     "employeeId" TEXT,
@@ -220,8 +292,8 @@ CREATE TABLE "ComplianceLegalCase" (
     CONSTRAINT "ComplianceLegalCase_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable: CashCommitment
-CREATE TABLE "CashCommitment" (
+-- CreateTable: CashCommitment (Idempotent, non-destructive)
+CREATE TABLE IF NOT EXISTS "CashCommitment" (
     "id" TEXT NOT NULL,
     "companyId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -239,8 +311,8 @@ CREATE TABLE "CashCommitment" (
     CONSTRAINT "CashCommitment_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable: CashPositionSnapshot
-CREATE TABLE "CashPositionSnapshot" (
+-- CreateTable: CashPositionSnapshot (Idempotent, non-destructive)
+CREATE TABLE IF NOT EXISTS "CashPositionSnapshot" (
     "id" TEXT NOT NULL,
     "companyId" TEXT NOT NULL,
     "availableCash" DECIMAL(14,2) NOT NULL,
@@ -250,8 +322,8 @@ CREATE TABLE "CashPositionSnapshot" (
     CONSTRAINT "CashPositionSnapshot_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable: EmploymentExit
-CREATE TABLE "EmploymentExit" (
+-- CreateTable: EmploymentExit (Idempotent, non-destructive)
+CREATE TABLE IF NOT EXISTS "EmploymentExit" (
     "id" TEXT NOT NULL,
     "companyId" TEXT NOT NULL,
     "employeeId" TEXT NOT NULL,
@@ -271,91 +343,137 @@ CREATE TABLE "EmploymentExit" (
     CONSTRAINT "EmploymentExit_pkey" PRIMARY KEY ("id")
 );
 
--- Indexes
-CREATE INDEX "ComplianceObligation_companyId_type_idx" ON "ComplianceObligation"("companyId", "type");
-CREATE INDEX "ComplianceObligation_companyId_status_idx" ON "ComplianceObligation"("companyId", "status");
-CREATE INDEX "ComplianceObligation_companyId_expiryDate_idx" ON "ComplianceObligation"("companyId", "expiryDate");
-CREATE INDEX "ComplianceObligation_ownerUserId_idx" ON "ComplianceObligation"("ownerUserId");
+-- Indexes (Idempotent)
+CREATE INDEX IF NOT EXISTS "ComplianceObligation_companyId_type_idx" ON "ComplianceObligation"("companyId", "type");
+CREATE INDEX IF NOT EXISTS "ComplianceObligation_companyId_status_idx" ON "ComplianceObligation"("companyId", "status");
+CREATE INDEX IF NOT EXISTS "ComplianceObligation_companyId_expiryDate_idx" ON "ComplianceObligation"("companyId", "expiryDate");
+CREATE INDEX IF NOT EXISTS "ComplianceObligation_ownerUserId_idx" ON "ComplianceObligation"("ownerUserId");
 
-CREATE INDEX "StatutoryPeriod_companyId_scheme_status_idx" ON "StatutoryPeriod"("companyId", "scheme", "status");
-CREATE INDEX "StatutoryPeriod_companyId_dueDate_idx" ON "StatutoryPeriod"("companyId", "dueDate");
-CREATE INDEX "StatutoryPeriod_companyId_status_idx" ON "StatutoryPeriod"("companyId", "status");
-CREATE UNIQUE INDEX "StatutoryPeriod_companyId_scheme_periodStart_periodEnd_key" ON "StatutoryPeriod"("companyId", "scheme", "periodStart", "periodEnd");
+CREATE INDEX IF NOT EXISTS "StatutoryPeriod_companyId_scheme_status_idx" ON "StatutoryPeriod"("companyId", "scheme", "status");
+CREATE INDEX IF NOT EXISTS "StatutoryPeriod_companyId_dueDate_idx" ON "StatutoryPeriod"("companyId", "dueDate");
+CREATE INDEX IF NOT EXISTS "StatutoryPeriod_companyId_status_idx" ON "StatutoryPeriod"("companyId", "status");
+CREATE UNIQUE INDEX IF NOT EXISTS "StatutoryPeriod_companyId_scheme_periodStart_periodEnd_key" ON "StatutoryPeriod"("companyId", "scheme", "periodStart", "periodEnd");
 
-CREATE INDEX "StatutoryPayment_companyId_statutoryPeriodId_idx" ON "StatutoryPayment"("companyId", "statutoryPeriodId");
-CREATE INDEX "StatutoryPayment_companyId_status_idx" ON "StatutoryPayment"("companyId", "status");
-CREATE INDEX "StatutoryPayment_statutoryPeriodId_status_idx" ON "StatutoryPayment"("statutoryPeriodId", "status");
+CREATE INDEX IF NOT EXISTS "StatutoryPayment_companyId_statutoryPeriodId_idx" ON "StatutoryPayment"("companyId", "statutoryPeriodId");
+CREATE INDEX IF NOT EXISTS "StatutoryPayment_companyId_status_idx" ON "StatutoryPayment"("companyId", "status");
+CREATE INDEX IF NOT EXISTS "StatutoryPayment_statutoryPeriodId_status_idx" ON "StatutoryPayment"("statutoryPeriodId", "status");
 
-CREATE INDEX "EmployeeStatutoryContribution_companyId_scheme_idx" ON "EmployeeStatutoryContribution"("companyId", "scheme");
-CREATE INDEX "EmployeeStatutoryContribution_statutoryPeriodId_idx" ON "EmployeeStatutoryContribution"("statutoryPeriodId");
-CREATE INDEX "EmployeeStatutoryContribution_employeeId_idx" ON "EmployeeStatutoryContribution"("employeeId");
-CREATE UNIQUE INDEX "EmployeeStatutoryContribution_companyId_statutoryPeriodId_e_key" ON "EmployeeStatutoryContribution"("companyId", "statutoryPeriodId", "employeeId", "scheme");
+CREATE INDEX IF NOT EXISTS "EmployeeStatutoryContribution_companyId_scheme_idx" ON "EmployeeStatutoryContribution"("companyId", "scheme");
+CREATE INDEX IF NOT EXISTS "EmployeeStatutoryContribution_statutoryPeriodId_idx" ON "EmployeeStatutoryContribution"("statutoryPeriodId");
+CREATE INDEX IF NOT EXISTS "EmployeeStatutoryContribution_employeeId_idx" ON "EmployeeStatutoryContribution"("employeeId");
+CREATE UNIQUE INDEX IF NOT EXISTS "EmployeeStatutoryContribution_companyId_statutoryPeriodId_e_key" ON "EmployeeStatutoryContribution"("companyId", "statutoryPeriodId", "employeeId", "scheme");
 
-CREATE INDEX "StatutoryRateConfig_companyId_scheme_effectiveFrom_idx" ON "StatutoryRateConfig"("companyId", "scheme", "effectiveFrom");
-CREATE INDEX "StatutoryRateConfig_companyId_scheme_idx" ON "StatutoryRateConfig"("companyId", "scheme");
+CREATE INDEX IF NOT EXISTS "StatutoryRateConfig_companyId_scheme_effectiveFrom_idx" ON "StatutoryRateConfig"("companyId", "scheme", "effectiveFrom");
+CREATE INDEX IF NOT EXISTS "StatutoryRateConfig_companyId_scheme_idx" ON "StatutoryRateConfig"("companyId", "scheme");
 
-CREATE INDEX "ComplianceRemediationPlan_companyId_status_idx" ON "ComplianceRemediationPlan"("companyId", "status");
-CREATE INDEX "ComplianceRemediationPlan_companyId_nextPaymentDate_idx" ON "ComplianceRemediationPlan"("companyId", "nextPaymentDate");
-CREATE INDEX "ComplianceRemediationPlan_obligationId_idx" ON "ComplianceRemediationPlan"("obligationId");
+CREATE INDEX IF NOT EXISTS "ComplianceRemediationPlan_companyId_status_idx" ON "ComplianceRemediationPlan"("companyId", "status");
+CREATE INDEX IF NOT EXISTS "ComplianceRemediationPlan_companyId_nextPaymentDate_idx" ON "ComplianceRemediationPlan"("companyId", "nextPaymentDate");
+CREATE INDEX IF NOT EXISTS "ComplianceRemediationPlan_obligationId_idx" ON "ComplianceRemediationPlan"("obligationId");
 
-CREATE INDEX "ComplianceLegalCase_companyId_status_idx" ON "ComplianceLegalCase"("companyId", "status");
-CREATE INDEX "ComplianceLegalCase_companyId_riskLevel_idx" ON "ComplianceLegalCase"("companyId", "riskLevel");
-CREATE INDEX "ComplianceLegalCase_companyId_nextEventDate_idx" ON "ComplianceLegalCase"("companyId", "nextEventDate");
-CREATE INDEX "ComplianceLegalCase_employeeId_idx" ON "ComplianceLegalCase"("employeeId");
-CREATE INDEX "ComplianceLegalCase_assignedToId_idx" ON "ComplianceLegalCase"("assignedToId");
-CREATE UNIQUE INDEX "ComplianceLegalCase_companyId_caseNumber_key" ON "ComplianceLegalCase"("companyId", "caseNumber");
+CREATE INDEX IF NOT EXISTS "ComplianceLegalCase_companyId_status_idx" ON "ComplianceLegalCase"("companyId", "status");
+CREATE INDEX IF NOT EXISTS "ComplianceLegalCase_companyId_riskLevel_idx" ON "ComplianceLegalCase"("companyId", "riskLevel");
+CREATE INDEX IF NOT EXISTS "ComplianceLegalCase_companyId_nextEventDate_idx" ON "ComplianceLegalCase"("companyId", "nextEventDate");
+CREATE INDEX IF NOT EXISTS "ComplianceLegalCase_employeeId_idx" ON "ComplianceLegalCase"("employeeId");
+CREATE INDEX IF NOT EXISTS "ComplianceLegalCase_assignedToId_idx" ON "ComplianceLegalCase"("assignedToId");
+CREATE UNIQUE INDEX IF NOT EXISTS "ComplianceLegalCase_companyId_caseNumber_key" ON "ComplianceLegalCase"("companyId", "caseNumber");
 
-CREATE INDEX "CashCommitment_companyId_active_idx" ON "CashCommitment"("companyId", "active");
-CREATE INDEX "CashCommitment_companyId_category_idx" ON "CashCommitment"("companyId", "category");
+CREATE INDEX IF NOT EXISTS "CashCommitment_companyId_active_idx" ON "CashCommitment"("companyId", "active");
+CREATE INDEX IF NOT EXISTS "CashCommitment_companyId_category_idx" ON "CashCommitment"("companyId", "category");
 
-CREATE INDEX "CashPositionSnapshot_companyId_capturedAt_idx" ON "CashPositionSnapshot"("companyId", "capturedAt");
+CREATE INDEX IF NOT EXISTS "CashPositionSnapshot_companyId_capturedAt_idx" ON "CashPositionSnapshot"("companyId", "capturedAt");
 
-CREATE INDEX "EmploymentExit_companyId_idx" ON "EmploymentExit"("companyId");
-CREATE INDEX "EmploymentExit_employeeId_idx" ON "EmploymentExit"("employeeId");
-CREATE INDEX "EmploymentExit_companyId_terminationStatus_idx" ON "EmploymentExit"("companyId", "terminationStatus");
+CREATE INDEX IF NOT EXISTS "EmploymentExit_companyId_idx" ON "EmploymentExit"("companyId");
+CREATE INDEX IF NOT EXISTS "EmploymentExit_employeeId_idx" ON "EmploymentExit"("employeeId");
+CREATE INDEX IF NOT EXISTS "EmploymentExit_companyId_terminationStatus_idx" ON "EmploymentExit"("companyId", "terminationStatus");
 
--- Foreign Keys
+-- Foreign Keys (Drop-then-Add Pattern)
+ALTER TABLE "ComplianceObligation" DROP CONSTRAINT IF EXISTS "ComplianceObligation_companyId_fkey";
 ALTER TABLE "ComplianceObligation" ADD CONSTRAINT "ComplianceObligation_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "ComplianceObligation" DROP CONSTRAINT IF EXISTS "ComplianceObligation_ownerUserId_fkey";
 ALTER TABLE "ComplianceObligation" ADD CONSTRAINT "ComplianceObligation_ownerUserId_fkey" FOREIGN KEY ("ownerUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+ALTER TABLE "ComplianceObligation" DROP CONSTRAINT IF EXISTS "ComplianceObligation_verifiedById_fkey";
 ALTER TABLE "ComplianceObligation" ADD CONSTRAINT "ComplianceObligation_verifiedById_fkey" FOREIGN KEY ("verifiedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+ALTER TABLE "ComplianceObligation" DROP CONSTRAINT IF EXISTS "ComplianceObligation_managementOverrideById_fkey";
 ALTER TABLE "ComplianceObligation" ADD CONSTRAINT "ComplianceObligation_managementOverrideById_fkey" FOREIGN KEY ("managementOverrideById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
+ALTER TABLE "StatutoryPeriod" DROP CONSTRAINT IF EXISTS "StatutoryPeriod_companyId_fkey";
 ALTER TABLE "StatutoryPeriod" ADD CONSTRAINT "StatutoryPeriod_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
+ALTER TABLE "StatutoryPayment" DROP CONSTRAINT IF EXISTS "StatutoryPayment_companyId_fkey";
 ALTER TABLE "StatutoryPayment" ADD CONSTRAINT "StatutoryPayment_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "StatutoryPayment" DROP CONSTRAINT IF EXISTS "StatutoryPayment_statutoryPeriodId_fkey";
 ALTER TABLE "StatutoryPayment" ADD CONSTRAINT "StatutoryPayment_statutoryPeriodId_fkey" FOREIGN KEY ("statutoryPeriodId") REFERENCES "StatutoryPeriod"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "StatutoryPayment" DROP CONSTRAINT IF EXISTS "StatutoryPayment_capturedById_fkey";
 ALTER TABLE "StatutoryPayment" ADD CONSTRAINT "StatutoryPayment_capturedById_fkey" FOREIGN KEY ("capturedById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
+ALTER TABLE "EmployeeStatutoryContribution" DROP CONSTRAINT IF EXISTS "EmployeeStatutoryContribution_companyId_fkey";
 ALTER TABLE "EmployeeStatutoryContribution" ADD CONSTRAINT "EmployeeStatutoryContribution_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "EmployeeStatutoryContribution" DROP CONSTRAINT IF EXISTS "EmployeeStatutoryContribution_statutoryPeriodId_fkey";
 ALTER TABLE "EmployeeStatutoryContribution" ADD CONSTRAINT "EmployeeStatutoryContribution_statutoryPeriodId_fkey" FOREIGN KEY ("statutoryPeriodId") REFERENCES "StatutoryPeriod"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "EmployeeStatutoryContribution" DROP CONSTRAINT IF EXISTS "EmployeeStatutoryContribution_employeeId_fkey";
 ALTER TABLE "EmployeeStatutoryContribution" ADD CONSTRAINT "EmployeeStatutoryContribution_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+ALTER TABLE "EmployeeStatutoryContribution" DROP CONSTRAINT IF EXISTS "EmployeeStatutoryContribution_rateConfigId_fkey";
 ALTER TABLE "EmployeeStatutoryContribution" ADD CONSTRAINT "EmployeeStatutoryContribution_rateConfigId_fkey" FOREIGN KEY ("rateConfigId") REFERENCES "StatutoryRateConfig"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
+ALTER TABLE "StatutoryRateConfig" DROP CONSTRAINT IF EXISTS "StatutoryRateConfig_companyId_fkey";
 ALTER TABLE "StatutoryRateConfig" ADD CONSTRAINT "StatutoryRateConfig_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "StatutoryRateConfig" DROP CONSTRAINT IF EXISTS "StatutoryRateConfig_verifiedById_fkey";
 ALTER TABLE "StatutoryRateConfig" ADD CONSTRAINT "StatutoryRateConfig_verifiedById_fkey" FOREIGN KEY ("verifiedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
+ALTER TABLE "ComplianceRemediationPlan" DROP CONSTRAINT IF EXISTS "ComplianceRemediationPlan_companyId_fkey";
 ALTER TABLE "ComplianceRemediationPlan" ADD CONSTRAINT "ComplianceRemediationPlan_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "ComplianceRemediationPlan" DROP CONSTRAINT IF EXISTS "ComplianceRemediationPlan_obligationId_fkey";
 ALTER TABLE "ComplianceRemediationPlan" ADD CONSTRAINT "ComplianceRemediationPlan_obligationId_fkey" FOREIGN KEY ("obligationId") REFERENCES "ComplianceObligation"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+ALTER TABLE "ComplianceRemediationPlan" DROP CONSTRAINT IF EXISTS "ComplianceRemediationPlan_ownerUserId_fkey";
 ALTER TABLE "ComplianceRemediationPlan" ADD CONSTRAINT "ComplianceRemediationPlan_ownerUserId_fkey" FOREIGN KEY ("ownerUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
+ALTER TABLE "ComplianceLegalCase" DROP CONSTRAINT IF EXISTS "ComplianceLegalCase_companyId_fkey";
 ALTER TABLE "ComplianceLegalCase" ADD CONSTRAINT "ComplianceLegalCase_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "ComplianceLegalCase" DROP CONSTRAINT IF EXISTS "ComplianceLegalCase_employeeId_fkey";
 ALTER TABLE "ComplianceLegalCase" ADD CONSTRAINT "ComplianceLegalCase_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+ALTER TABLE "ComplianceLegalCase" DROP CONSTRAINT IF EXISTS "ComplianceLegalCase_assignedToId_fkey";
 ALTER TABLE "ComplianceLegalCase" ADD CONSTRAINT "ComplianceLegalCase_assignedToId_fkey" FOREIGN KEY ("assignedToId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
+ALTER TABLE "CashCommitment" DROP CONSTRAINT IF EXISTS "CashCommitment_companyId_fkey";
 ALTER TABLE "CashCommitment" ADD CONSTRAINT "CashCommitment_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
+ALTER TABLE "CashPositionSnapshot" DROP CONSTRAINT IF EXISTS "CashPositionSnapshot_companyId_fkey";
 ALTER TABLE "CashPositionSnapshot" ADD CONSTRAINT "CashPositionSnapshot_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "CashPositionSnapshot" DROP CONSTRAINT IF EXISTS "CashPositionSnapshot_capturedById_fkey";
 ALTER TABLE "CashPositionSnapshot" ADD CONSTRAINT "CashPositionSnapshot_capturedById_fkey" FOREIGN KEY ("capturedById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
+ALTER TABLE "EmploymentExit" DROP CONSTRAINT IF EXISTS "EmploymentExit_companyId_fkey";
 ALTER TABLE "EmploymentExit" ADD CONSTRAINT "EmploymentExit_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "EmploymentExit" DROP CONSTRAINT IF EXISTS "EmploymentExit_employeeId_fkey";
 ALTER TABLE "EmploymentExit" ADD CONSTRAINT "EmploymentExit_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+ALTER TABLE "EmploymentExit" DROP CONSTRAINT IF EXISTS "EmploymentExit_siteId_fkey";
 ALTER TABLE "EmploymentExit" ADD CONSTRAINT "EmploymentExit_siteId_fkey" FOREIGN KEY ("siteId") REFERENCES "Site"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+ALTER TABLE "EmploymentExit" DROP CONSTRAINT IF EXISTS "EmploymentExit_newSiteId_fkey";
 ALTER TABLE "EmploymentExit" ADD CONSTRAINT "EmploymentExit_newSiteId_fkey" FOREIGN KEY ("newSiteId") REFERENCES "Site"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+ALTER TABLE "EmploymentExit" DROP CONSTRAINT IF EXISTS "EmploymentExit_processedById_fkey";
 ALTER TABLE "EmploymentExit" ADD CONSTRAINT "EmploymentExit_processedById_fkey" FOREIGN KEY ("processedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 `;
 
 export async function applyComplianceTables(client) {
-  console.log("[applyComplianceTables] Aligning exact compliance hub schema...");
+  console.log("[applyComplianceTables] Aligning exact compliance hub schema safely...");
   await client.query(complianceDdl);
   console.log("[applyComplianceTables] Compliance hub tables, columns, indexes, and FKs aligned.");
 }
