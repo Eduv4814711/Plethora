@@ -1,6 +1,5 @@
 import { prisma } from "./prisma.js";
 
-const REQUIRED_SCHEMA_MIGRATION = "20260902120000_employee_compliance_documents_columns";
 const READINESS_TIMEOUT_MS = 5_000;
 
 function databaseHostFromUrl(databaseUrl: string | undefined): string {
@@ -46,12 +45,20 @@ function withTimeout<T>(operation: Promise<T>): Promise<T> {
 }
 
 /**
- * Verify the database is reachable and compatible with this application
- * release. LIMIT 0 makes PostgreSQL resolve every required table/column
- * without reading company data.
+ * Verify the database is reachable and its schema is compatible with this
+ * application release.
+ *
+ * Each check uses `LIMIT 0` so PostgreSQL resolves every referenced
+ * table/column without reading any company data.
+ *
+ * IMPORTANT: When adding a new production-critical model, add a corresponding
+ * LIMIT 0 check here so Railway's health endpoint blocks traffic until the
+ * schema is confirmed.
  */
 export async function verifyDatabaseReadiness(): Promise<void> {
   await withTimeout(verifyDatabaseConnection());
+
+  // ── Core auth tables ────────────────────────────────────────────────────────
   await withTimeout(prisma.$queryRaw`
     SELECT
       u."accountType",
@@ -63,7 +70,7 @@ export async function verifyDatabaseReadiness(): Promise<void> {
     LIMIT 0
   `);
 
-  // Verify ManagedDocument compliance columns are resolvable
+  // ── ManagedDocument compliance columns (added in 20260902120000) ────────────
   try {
     await withTimeout(prisma.$queryRaw`
       SELECT
@@ -80,47 +87,53 @@ export async function verifyDatabaseReadiness(): Promise<void> {
     );
   }
 
-  const state = await withTimeout(prisma.$queryRaw<Array<{
-    required_applied: boolean;
-    unfinished: boolean;
-  }>>`
-    SELECT
-      EXISTS (
-        SELECT 1
-        FROM "_prisma_migrations"
-        WHERE "migration_name" = ${REQUIRED_SCHEMA_MIGRATION}
-          AND "finished_at" IS NOT NULL
-          AND "rolled_back_at" IS NULL
-      ) AS required_applied,
-      EXISTS (
-        SELECT 1
-        FROM "_prisma_migrations"
-        WHERE "finished_at" IS NULL
-          AND "rolled_back_at" IS NULL
-      ) AS unfinished
-  `);
-
-  if (!state[0]?.required_applied || state[0]?.unfinished) {
-    console.warn(
-      "[db-readiness] Migration record check flagged incomplete state in _prisma_migrations. Reconciling verified migration..."
+  // ── SiteBillingRate (added in 20260911120000) ───────────────────────────────
+  // This table is required by the Client Billing module. If it is missing,
+  // every GET /payroll/billing/clients request will throw Prisma P2021 and
+  // return HTTP 500 to users. Blocking here ensures Railway does not route
+  // traffic to a deployment that cannot serve billing data.
+  try {
+    await withTimeout(prisma.$queryRaw`
+      SELECT
+        sbr."id",
+        sbr."companyId",
+        sbr."clientId",
+        sbr."siteId",
+        sbr."ratePerGuard",
+        sbr."effectiveFrom",
+        sbr."effectiveTo",
+        sbr."isActive"
+      FROM "SiteBillingRate" sbr
+      LIMIT 0
+    `);
+  } catch (rateErr) {
+    throw new Error(
+      `Database schema migrations are incomplete for this application release: SiteBillingRate table missing (${rateErr instanceof Error ? rateErr.message : String(rateErr)}). ` +
+      `Run: prisma migrate deploy (or resolve any stuck migrations first).`
     );
-    try {
-      await prisma.$queryRaw`
-        UPDATE "_prisma_migrations"
-        SET "rolled_back_at" = NULL,
-            "finished_at" = COALESCE("finished_at", NOW()),
-            "applied_steps_count" = GREATEST("applied_steps_count", 1)
-        WHERE "migration_name" = ${REQUIRED_SCHEMA_MIGRATION}
-      `;
-      await prisma.$queryRaw`
-        DELETE FROM "_prisma_migrations"
-        WHERE "finished_at" IS NULL AND "rolled_back_at" IS NULL
-      `;
-      console.log("[db-readiness] Successfully reconciled migration state in _prisma_migrations.");
-    } catch (reconcileErr) {
-      console.error("[db-readiness] Failed to auto-reconcile _prisma_migrations:", reconcileErr);
-      throw new Error("Database schema migrations are incomplete for this application release");
+  }
+
+  // ── Unfinished migration check (informational, does not auto-heal) ──────────
+  // We log a warning when unfinished migrations are detected so they appear in
+  // Railway logs, but we do NOT automatically delete or mark them. Any stuck
+  // migration must be resolved explicitly via:
+  //   prisma migrate resolve --rolled-back <migration_name>
+  try {
+    const unfinished = await withTimeout(prisma.$queryRaw<Array<{ migration_name: string }>>`
+      SELECT "migration_name"
+      FROM "_prisma_migrations"
+      WHERE "finished_at" IS NULL
+        AND "rolled_back_at" IS NULL
+    `);
+    if (unfinished.length > 0) {
+      const names = unfinished.map((r) => r.migration_name).join(", ");
+      console.warn(
+        `[db-readiness] WARNING: ${unfinished.length} unfinished migration(s) detected in _prisma_migrations: ${names}. ` +
+        `These must be resolved manually with: prisma migrate resolve --rolled-back <migration_name>`
+      );
     }
+  } catch {
+    // _prisma_migrations may not exist in very early bootstrap — non-fatal here.
   }
 }
 

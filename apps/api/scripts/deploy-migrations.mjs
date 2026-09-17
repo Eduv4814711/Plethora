@@ -20,7 +20,9 @@ async function reconcileDatabase() {
   try {
     await client.connect();
 
-    // 1. Ensure ManagedDocument compliance columns exist
+    // 1. Ensure ManagedDocument compliance columns exist.
+    //    This is a forward-compatibility patch for 20260902120000_employee_compliance_documents_columns
+    //    which may have been applied without its migration record in some environments.
     const sqlPath = join(
       apiDir,
       "prisma",
@@ -37,6 +39,7 @@ async function reconcileDatabase() {
     }
 
     // 2. Mark 20260902120000_employee_compliance_documents_columns as applied (NOT rolled back)
+    //    so Prisma does not attempt to re-apply it via migrate deploy.
     try {
       await client.query(`
         UPDATE "_prisma_migrations"
@@ -50,20 +53,20 @@ async function reconcileDatabase() {
       console.warn("[deploy-migrations] Migration record update note:", migErr?.message || migErr);
     }
 
-    // 3. Clear any stuck unfinished migrations (finished_at IS NULL AND rolled_back_at IS NULL)
-    try {
-      const res = await client.query(`
-        DELETE FROM "_prisma_migrations"
-        WHERE "finished_at" IS NULL AND "rolled_back_at" IS NULL
-        RETURNING "migration_name";
-      `);
-      if (res.rowCount && res.rowCount > 0) {
-        console.log(`[deploy-migrations] Cleared ${res.rowCount} stuck unfinished migration(s):`, res.rows.map(r => r.migration_name).join(", "));
-      }
-    } catch (clearErr) {
-      console.warn("[deploy-migrations] Stuck migration cleanup note:", clearErr?.message || clearErr);
-    }
-    // 4. Ensure compliance hub tables exist
+    // NOTE: We intentionally do NOT delete unfinished _prisma_migrations rows.
+    //
+    // Auto-deleting rows where finished_at IS NULL was previously used to clear
+    // "stuck" migrations, but this is dangerous: it destroys the migration history
+    // that Prisma relies on, and silently hides production failures. A failed
+    // migration must be diagnosed and resolved explicitly using:
+    //
+    //   prisma migrate resolve --rolled-back <migration_name>
+    //
+    // before re-running migrate deploy. See DEPLOYMENT_RAILWAY.md for the recovery
+    // procedure. Removing this block ensures the pipeline fails loudly if a
+    // migration is in a bad state instead of hiding it.
+
+    // 3. Ensure compliance hub tables exist.
     try {
       const { applyComplianceTables } = await import("./apply-compliance-tables-fn.mjs");
       await applyComplianceTables(client);
@@ -93,11 +96,26 @@ async function main() {
     }
   );
 
-  if (deploy.status !== 0) {
-    console.warn("[deploy-migrations] prisma migrate deploy exited with code:", deploy.status);
+  if (deploy.error) {
+    console.error("[deploy-migrations] Failed to spawn prisma migrate deploy:", deploy.error.message);
+    process.exit(1);
   }
+
+  if (deploy.status !== 0) {
+    console.error(
+      "[deploy-migrations] prisma migrate deploy exited with code:",
+      deploy.status,
+      "— aborting deployment to prevent running application code against an incomplete database schema.",
+      "Review the migration history and resolve any stuck/failed migrations before redeploying.",
+      "Recovery: prisma migrate resolve --rolled-back <migration_name>"
+    );
+    process.exit(deploy.status ?? 1);
+  }
+
+  console.log("[deploy-migrations] prisma migrate deploy completed successfully.");
 }
 
 main().catch((err) => {
   console.error("[deploy-migrations] Unexpected error:", err);
+  process.exit(1);
 });

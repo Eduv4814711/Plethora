@@ -78,6 +78,7 @@ export default function BillingHubPage() {
   const canCreate = user ? hasCapability(user, "/payroll/billing", "create") : false;
 
   const [summary, setSummary] = useState<BillingSummary | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const [clients, setClients] = useState<BillableClient[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -106,12 +107,21 @@ export default function BillingHubPage() {
     if (!token || !canView) return;
     setLoading(true);
     setError(null);
+    setSummaryError(null);
     try {
-      const [summaryRes, clientsRes] = await Promise.all([
-        getBillingSummary(token).catch(() => null),
+      const [summaryResult, clientsRes] = await Promise.all([
+        getBillingSummary(token).then(
+          (res) => ({ ok: true as const, data: res }),
+          (err) => ({ ok: false as const, message: err instanceof Error ? err.message : "Failed to load billing summary" })
+        ),
         listBillableClients(token),
       ]);
-      if (summaryRes) setSummary(summaryRes);
+      if (summaryResult.ok) {
+        setSummary(summaryResult.data);
+      } else {
+        setSummary(null);
+        setSummaryError(summaryResult.message);
+      }
       setClients(clientsRes.clients);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load client billing data");
@@ -169,6 +179,11 @@ export default function BillingHubPage() {
   const totalSitesCount = clients.reduce((acc, c) => acc + (c.siteCount ?? 0), 0);
   const totalConfiguredSites = clients.reduce((acc, c) => acc + (c.sitesConfiguredCount ?? 0), 0);
   const unconfiguredSites = totalSitesCount - totalConfiguredSites;
+
+  // When the summary request itself failed we must not display R 0,00 — that
+  // would be indistinguishable from a legitimate zero balance. Use a sentinel
+  // to render a clear "failed to load" indicator in the KPI cards instead.
+  const summaryFailed = !loading && summaryError !== null;
 
   const collectionRate = summary
     ? Number(summary.totalBilled) > 0
@@ -251,39 +266,63 @@ export default function BillingHubPage() {
           ))}
         </div>
       ) : (
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Key billing metrics">
-          <BillingKpiCard
-            label="Outstanding AR"
-            value={formatCurrency(summary?.outstanding ?? 0, { currency })}
-            sub={summary?.overdueInvoiceCount ? `${summary.overdueInvoiceCount} overdue invoice${summary.overdueInvoiceCount !== 1 ? "s" : ""}` : "No overdue invoices"}
-            variant={summary?.overdueInvoiceCount ? "danger" : "success"}
-            badge={summary?.overdueInvoiceCount ?? 0}
-            icon={<IconDollar />}
-          />
-          <BillingKpiCard
-            label="Total Billed"
-            value={formatCurrency(summary?.totalBilled ?? 0, { currency })}
-            sub={`${summary?.activeInvoiceCount ?? 0} active invoice${(summary?.activeInvoiceCount ?? 0) !== 1 ? "s" : ""}`}
-            variant="info"
-            badge={summary?.activeInvoiceCount}
-            icon={<IconInvoice />}
-          />
-          <BillingKpiCard
-            label="Collected"
-            value={formatCurrency(summary?.totalCollected ?? 0, { currency })}
-            sub={`${collectionRate.toFixed(1)}% collection rate`}
-            variant="success"
-            icon={<IconReceipt />}
-          />
-          <BillingKpiCard
-            label="Monthly Contract Value"
-            value={formatCurrency(totalMonthlyBilling, { currency })}
-            sub={`${totalBillableGuards} billable guards · ${totalSitesCount} sites`}
-            variant={unconfiguredSites > 0 ? "warning" : "default"}
-            badge={unconfiguredSites > 0 ? `${unconfiguredSites} unpriced` : undefined}
-            icon={<IconClients />}
-          />
-        </section>
+        <>
+          {summaryFailed && !error && (
+            <div
+              className="flex items-center justify-between rounded-security border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800"
+              role="status"
+              aria-live="polite"
+            >
+              <span>Billing summary could not be loaded. Financial totals are unavailable.</span>
+              <button type="button" onClick={() => void load()} className="font-semibold underline text-amber-900">
+                Retry
+              </button>
+            </div>
+          )}
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Key billing metrics">
+            <BillingKpiCard
+              label="Outstanding AR"
+              value={summaryFailed ? "—" : formatCurrency(summary?.outstanding ?? 0, { currency })}
+              sub={
+                summaryFailed
+                  ? "Failed to load"
+                  : summary?.overdueInvoiceCount
+                  ? `${summary.overdueInvoiceCount} overdue invoice${summary.overdueInvoiceCount !== 1 ? "s" : ""}`
+                  : "No overdue invoices"
+              }
+              variant={summaryFailed ? "warning" : summary?.overdueInvoiceCount ? "danger" : "success"}
+              badge={summaryFailed ? undefined : (summary?.overdueInvoiceCount ?? 0)}
+              icon={<IconDollar />}
+            />
+            <BillingKpiCard
+              label="Total Billed"
+              value={summaryFailed ? "—" : formatCurrency(summary?.totalBilled ?? 0, { currency })}
+              sub={
+                summaryFailed
+                  ? "Failed to load"
+                  : `${summary?.activeInvoiceCount ?? 0} active invoice${(summary?.activeInvoiceCount ?? 0) !== 1 ? "s" : ""}`
+              }
+              variant={summaryFailed ? "warning" : "info"}
+              badge={summaryFailed ? undefined : summary?.activeInvoiceCount}
+              icon={<IconInvoice />}
+            />
+            <BillingKpiCard
+              label="Collected"
+              value={summaryFailed ? "—" : formatCurrency(summary?.totalCollected ?? 0, { currency })}
+              sub={summaryFailed ? "Failed to load" : `${collectionRate.toFixed(1)}% collection rate`}
+              variant={summaryFailed ? "warning" : "success"}
+              icon={<IconReceipt />}
+            />
+            <BillingKpiCard
+              label="Monthly Contract Value"
+              value={formatCurrency(totalMonthlyBilling, { currency })}
+              sub={`${totalBillableGuards} billable guards · ${totalSitesCount} sites`}
+              variant={unconfiguredSites > 0 ? "warning" : "default"}
+              badge={unconfiguredSites > 0 ? `${unconfiguredSites} unpriced` : undefined}
+              icon={<IconClients />}
+            />
+          </section>
+        </>
       )}
 
       {/* ── AR Aging Analysis ── */}
