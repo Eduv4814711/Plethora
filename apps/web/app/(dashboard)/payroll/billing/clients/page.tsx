@@ -15,6 +15,7 @@ import {
 } from "@/lib/billing-api";
 import { currencyFromSettings, formatCurrency } from "@/lib/currency";
 import { ArRiskBadge, computeArRisk } from "../_components/ar-risk-badge";
+import { BillingAccessRestricted } from "../_components/billing-access-restricted";
 import { clsx } from "clsx";
 
 function getLast30DaysRange() {
@@ -27,6 +28,7 @@ export default function BillingClientsPage() {
   const { token, user } = useAuth();
   const { settings } = useSettings();
   const currency = currencyFromSettings(settings);
+  const canView = user ? hasCapability(user, "/payroll/billing", "view") : false;
   const canExport = user ? hasCapability(user, "/payroll/billing", "export") : false;
   const canEdit = user
     ? hasCapability(user, "/payroll/billing", "edit") || hasCapability(user, "/payroll/billing", "create")
@@ -57,7 +59,7 @@ export default function BillingClientsPage() {
   const [rateError, setRateError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!token) return;
+    if (!token || !canView) return;
     setLoading(true);
     setError(null);
     try {
@@ -68,9 +70,13 @@ export default function BillingClientsPage() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, canView]);
 
   useEffect(() => { void load(); }, [load]);
+
+  if (user && !canView) {
+    return <BillingAccessRestricted />;
+  }
 
   const handlePreviewStatement = async (client: BillableClient) => {
     if (!token) return;

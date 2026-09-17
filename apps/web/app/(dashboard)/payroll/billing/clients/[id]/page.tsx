@@ -27,6 +27,7 @@ import {
 import { currencyFromSettings, formatCurrency } from "@/lib/currency";
 import { StatusBadge } from "../../_components/status-badge";
 import { ArRiskBadge, computeArRisk } from "../../_components/ar-risk-badge";
+import { BillingAccessRestricted } from "../../_components/billing-access-restricted";
 import { clsx } from "clsx";
 
 function startOfYear(): string { return `${new Date().getUTCFullYear()}-01-01`; }
@@ -76,6 +77,7 @@ export default function ClientStatementPage() {
     "overview";
 
   const currency = currencyFromSettings(settings);
+  const canView = user ? hasCapability(user, "/payroll/billing", "view") : false;
   const canExport = user ? hasCapability(user, "/payroll/billing", "export") : false;
   const canEdit = user ? hasCapability(user, "/payroll/billing", "edit") || hasCapability(user, "/payroll/billing", "create") : false;
 
@@ -102,7 +104,7 @@ export default function ClientStatementPage() {
   const [rateModalSuccess, setRateModalSuccess] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!token) return;
+    if (!token || !canView) return;
     setLoading(true);
     setError(null);
     try {
@@ -120,7 +122,7 @@ export default function ClientStatementPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, params.id, from, to]);
+  }, [token, canView, params.id, from, to]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -188,6 +190,10 @@ export default function ClientStatementPage() {
   const modalGuardsCount = selectedSiteModal?.billing.billableGuardCount ?? 0;
   const modalParsedRate = Number(rateInput);
   const modalLiveTotal = !isNaN(modalParsedRate) && modalParsedRate > 0 ? modalParsedRate * modalGuardsCount : 0;
+
+  if (user && !canView) {
+    return <BillingAccessRestricted />;
+  }
 
   return (
     <main className="animate-fade-in space-y-5 pb-16">

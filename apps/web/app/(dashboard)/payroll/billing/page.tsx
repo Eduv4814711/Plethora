@@ -17,6 +17,7 @@ import { BillingKpiCard } from "./_components/billing-kpi-card";
 import { AgingBar } from "./_components/aging-bar";
 import { ArRiskBadge, computeArRisk } from "./_components/ar-risk-badge";
 import { StatusBadge } from "./_components/status-badge";
+import { BillingAccessRestricted } from "./_components/billing-access-restricted";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 const IconInvoice = () => (
@@ -70,6 +71,7 @@ export default function BillingHubPage() {
   const { token, user } = useAuth();
   const { settings } = useSettings();
   const currency = currencyFromSettings(settings);
+  const canView = user ? hasCapability(user, "/payroll/billing", "view") : false;
   const canEdit = user
     ? hasCapability(user, "/payroll/billing", "edit") || hasCapability(user, "/payroll/billing", "create")
     : false;
@@ -101,7 +103,7 @@ export default function BillingHubPage() {
   const [expandedRateClientId, setExpandedRateClientId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!token) return;
+    if (!token || !canView) return;
     setLoading(true);
     setError(null);
     try {
@@ -116,9 +118,13 @@ export default function BillingHubPage() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, canView]);
 
   useEffect(() => { void load(); }, [load]);
+
+  if (user && !canView) {
+    return <BillingAccessRestricted />;
+  }
 
   const openRateModal = (
     clientId: string,

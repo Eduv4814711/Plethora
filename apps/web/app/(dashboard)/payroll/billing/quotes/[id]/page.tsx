@@ -20,6 +20,7 @@ import {
 import { currencyFromSettings, formatCurrency } from "@/lib/currency";
 import { StatusBadge } from "../../_components/status-badge";
 import { InvoiceDocument } from "../../_components/invoice-document";
+import { BillingAccessRestricted } from "../../_components/billing-access-restricted";
 import { clsx } from "clsx";
 
 // Quote lifecycle pipeline
@@ -93,6 +94,7 @@ export default function QuoteDetailPage() {
   const router = useRouter();
   const currency = currencyFromSettings(settings);
 
+  const canView = user ? hasCapability(user, "/payroll/billing", "view") : false;
   const canApprove = user ? hasCapability(user, "/payroll/billing", "approve") : false;
   const canCreate = user ? hasCapability(user, "/payroll/billing", "create") : false;
   const canExport = user ? hasCapability(user, "/payroll/billing", "export") : false;
@@ -104,7 +106,7 @@ export default function QuoteDetailPage() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!token) return;
+    if (!token || !canView) return;
     setLoading(true);
     setError(null);
     try {
@@ -114,7 +116,7 @@ export default function QuoteDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, params.id]);
+  }, [token, canView, params.id]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -140,10 +142,15 @@ export default function QuoteDetailPage() {
       const invoice = await convertQuoteToInvoice(token, quote.id);
       router.push(`/payroll/billing/invoices/${invoice.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to convert quote");
+      setError(err instanceof Error ? err.message : "Failed to convert quote to invoice");
+    } finally {
       setBusy(false);
     }
   };
+
+  if (user && !canView) {
+    return <BillingAccessRestricted />;
+  }
 
   if (loading) {
     return (

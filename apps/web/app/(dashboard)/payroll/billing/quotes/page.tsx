@@ -21,6 +21,7 @@ import { currencyFromSettings, formatCurrency } from "@/lib/currency";
 import { StatusBadge } from "../_components/status-badge";
 import { computeTotalsPreview, DocumentTotals } from "../_components/document-totals";
 import { emptyLine, LineItemsEditor, type EditableLine } from "../_components/line-items-editor";
+import { BillingAccessRestricted } from "../_components/billing-access-restricted";
 import { clsx } from "clsx";
 
 const STATUSES: Array<QuoteStatus | "all"> = [
@@ -42,6 +43,7 @@ export default function QuotesPage() {
   const { token, user } = useAuth();
   const { settings } = useSettings();
   const currency = currencyFromSettings(settings);
+  const canView = user ? hasCapability(user, "/payroll/billing", "view") : false;
   const canCreate = user ? hasCapability(user, "/payroll/billing", "create") : false;
   const canExport = user ? hasCapability(user, "/payroll/billing", "export") : false;
 
@@ -69,7 +71,7 @@ export default function QuotesPage() {
   const [lines, setLines] = useState<EditableLine[]>([emptyLine()]);
 
   const load = useCallback(async () => {
-    if (!token) return;
+    if (!token || !canView) return;
     setLoading(true);
     setError(null);
     try {
@@ -90,9 +92,13 @@ export default function QuotesPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, status, clientFilter, search, fromDate, toDate]);
+  }, [token, canView, status, clientFilter, search, fromDate, toDate]);
 
   useEffect(() => { void load(); }, [load]);
+
+  if (user && !canView) {
+    return <BillingAccessRestricted />;
+  }
 
   const totals = useMemo(() => computeTotalsPreview(lines, discount, vatRate), [lines, discount, vatRate]);
 

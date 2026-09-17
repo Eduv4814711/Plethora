@@ -24,6 +24,7 @@ import { currencyFromSettings, formatCurrency } from "@/lib/currency";
 import { StatusBadge } from "../../_components/status-badge";
 import { InvoiceDocument } from "../../_components/invoice-document";
 import { PaymentTimeline } from "../../_components/payment-timeline";
+import { BillingAccessRestricted } from "../../_components/billing-access-restricted";
 import { clsx } from "clsx";
 
 const METHODS = [
@@ -107,6 +108,7 @@ export default function InvoiceDetailPage() {
   const router = useRouter();
   const currency = currencyFromSettings(settings);
 
+  const canView = user ? hasCapability(user, "/payroll/billing", "view") : false;
   const canApprove = user ? hasCapability(user, "/payroll/billing", "approve") : false;
   const canCreate = user ? hasCapability(user, "/payroll/billing", "create") : false;
   const canDelete = user ? hasCapability(user, "/payroll/billing", "delete") : false;
@@ -128,7 +130,7 @@ export default function InvoiceDetailPage() {
   const [paymentNotes, setPaymentNotes] = useState("");
 
   const load = useCallback(async () => {
-    if (!token) return;
+    if (!token || !canView) return;
     setLoading(true);
     setError(null);
     try {
@@ -138,7 +140,7 @@ export default function InvoiceDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, params.id]);
+  }, [token, canView, params.id]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -197,6 +199,10 @@ export default function InvoiceDetailPage() {
       setReversingId(null);
     }
   };
+
+  if (user && !canView) {
+    return <BillingAccessRestricted />;
+  }
 
   if (loading) {
     return (
