@@ -131,15 +131,24 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   // Handle application/json flexibly (including charset, proxies, or compound headers)
-  app.addContentTypeParser(/^application\/json/i, { parseAs: "string" }, (_req, body, done) => {
+  const flexibleJsonParser = (
+    _req: unknown,
+    body: string | Buffer,
+    done: (err: Error | null, result?: unknown) => void
+  ) => {
     try {
       const str = typeof body === "string" ? body : body ? body.toString() : "";
       const json = str ? JSON.parse(str) : {};
       done(null, json);
     } catch (err) {
-      done(err as Error, undefined);
+      const error = err as Error & { statusCode?: number };
+      error.statusCode = 400;
+      done(error, undefined);
     }
-  });
+  };
+  app.removeContentTypeParser("application/json");
+  app.addContentTypeParser("application/json", { parseAs: "string" }, flexibleJsonParser);
+  app.addContentTypeParser(/^application\/json/i, { parseAs: "string" }, flexibleJsonParser);
 
   if (isLocalStorage()) {
     await app.register(fastifyStatic, {

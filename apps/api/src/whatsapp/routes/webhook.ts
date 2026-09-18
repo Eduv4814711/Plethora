@@ -118,6 +118,9 @@ async function storeInboundMessage(
 }
 
 export async function webhookRoutes(app: FastifyInstance) {
+  if (app.hasContentTypeParser("application/json")) {
+    app.removeContentTypeParser("application/json");
+  }
   app.addContentTypeParser(
     "application/json",
     { parseAs: "string" },

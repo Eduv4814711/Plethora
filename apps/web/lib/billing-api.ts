@@ -210,10 +210,13 @@ export interface RecordPaymentPayload {
   notes?: string | null;
 }
 
-function jsonInit(method: string, body?: unknown): RequestInit {
+export function jsonInit(method: string, body?: unknown): RequestInit {
+  if (body === undefined) {
+    return { method };
+  }
   return {
     method,
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    body: JSON.stringify(body),
     headers: { "Content-Type": "application/json" },
   };
 }
