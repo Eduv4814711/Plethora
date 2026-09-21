@@ -1,6 +1,7 @@
 import { prisma } from "../../lib/prisma.js";
 import { randomUUID } from "node:crypto";
 import { config } from "../../lib/config.js";
+import { normalizeWhatsAppPhone } from "../../lib/phone.js";
 import {
   validateClockIn,
   calculateHours,
@@ -60,27 +61,8 @@ export async function readResponseBodyWithLimit(response: Response, maxBytes: nu
   return Buffer.concat(chunks, total);
 }
 
-/**
- * Normalize phone for matching. WhatsApp sends IDs like "27821234567" (no +).
- * Employee.phone may be stored as "+27821234567" or "0821234567" etc.
- */
-function normalizePhone(waId: string): string {
-  const digits = waId.replace(/\D/g, "");
-  if (digits.startsWith("27") && digits.length === 11) return digits;
-  if (digits.startsWith("0") && digits.length === 10) return "27" + digits.slice(1);
-  return digits;
-}
-
-function normalizeStoredPhone(phone: string | null): string {
-  if (!phone) return "";
-  const digits = phone.replace(/\D/g, "");
-  if (digits.startsWith("27") && digits.length === 11) return digits;
-  if (digits.startsWith("0") && digits.length === 10) return "27" + digits.slice(1);
-  return digits;
-}
-
 export async function findEmployeeByPhone(waId: string): Promise<EmployeeWithCompany | null> {
-  const normalized = normalizePhone(waId);
+  const normalized = normalizeWhatsAppPhone(waId);
   if (!normalized) return null;
 
   const employees = await prisma.employee.findMany({
@@ -88,9 +70,15 @@ export async function findEmployeeByPhone(waId: string): Promise<EmployeeWithCom
     select: { id: true, companyId: true, firstName: true, lastName: true, phone: true },
   });
 
-  const matches = employees.filter((employee) => normalizeStoredPhone(employee.phone) === normalized);
+  const matches = employees.filter((employee) => normalizeWhatsAppPhone(employee.phone) === normalized);
   // A WhatsApp sender has no tenant identifier. Never guess when the same
   // normalized phone is active on multiple employee rows or companies.
+  if (matches.length > 1) {
+    console.warn(
+      `[WhatsApp Multi-Tenant Safety] Ambiguous phone number ${normalized} matches multiple active employees (${matches.length}). Refusing to guess tenant.`
+    );
+    return null;
+  }
   return matches.length === 1 ? matches[0]! : null;
 }
 

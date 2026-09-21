@@ -1,123 +1,222 @@
-# WhatsApp Production Configuration
+# WhatsApp Cloud API Production Deployment Guide
 
-This guide explains how to configure WhatsApp Cloud API for your production environment.
-
----
-
-## Prerequisites
-
-- API deployed with a **public Railway HTTPS URL**
-- Meta Developer account with WhatsApp Business API access
-- WhatsApp Business phone number (or test number for development)
+This document is the canonical reference for deploying and maintaining the official **Meta WhatsApp Business Platform Cloud API** integration for **Plethora ERP** in production on **Railway**.
 
 ---
 
-## Step 1: Deploy Your API
+## Architecture Overview
 
-Ensure your API is deployed on Railway and reachable at a stable HTTPS URL,
-for example `https://your-api.up.railway.app` or `https://api.yourdomain.com`.
+Plethora connects directly to the official **Meta WhatsApp Cloud API** via HTTPS:
 
-Test the health endpoint: `https://YOUR-API-URL/health` should return `{"status":"ok"}`.
-
----
-
-## Step 2: Set Production Environment Variables
-
-On the Railway API service, add these variables:
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `WHATSAPP_ENABLED` | Explicit integration switch; defaults to disabled | `false` |
-| `WHATSAPP_PHONE_NUMBER_ID` | Your WhatsApp Business phone number ID from Meta | `123456789012345` |
-| `WHATSAPP_ACCESS_TOKEN` | **Permanent** access token (see Step 4) | `EAAxxxx...` |
-| `WHATSAPP_VERIFY_TOKEN` | Secret string you choose (used by Meta to verify webhook) | `plethora_whatsapp_verify_abc123` |
-| `WHATSAPP_APP_SECRET` | Meta app secret used to verify signed webhook requests | Store as a Railway secret |
-| `WHATSAPP_API_VERSION` | Meta API version (optional, default `v21.0`) | `v21.0` |
-
-**Important:** Keep `WHATSAPP_ENABLED=false` while the integration is not in
-use. Credentials already stored in Railway are ignored while disabled. To
-enable it, set `WHATSAPP_ENABLED=true` and provide all four credential
-variables. Use the same `WHATSAPP_VERIFY_TOKEN` value when configuring the
-webhook in Meta (Step 3). Obtain `WHATSAPP_APP_SECRET` from **Meta App Dashboard
-> App settings > Basic**; it is different from both the access token and verify
-token. Never paste any secret values into deployment logs or support messages.
-
----
-
-## Step 3: Configure Meta Webhook
-
-1. Go to [Meta for Developers](https://developers.facebook.com/) → Your App → **WhatsApp** → **Configuration**.
-2. Under **Webhook**, click **Edit**.
-3. Set:
-   - **Callback URL**: `https://YOUR-PRODUCTION-API-URL/webhook`  
-     Example: `https://your-api.up.railway.app/webhook`
-   - **Verify token**: Same value as `WHATSAPP_VERIFY_TOKEN` in your env
-4. Click **Verify and Save**.
-5. Subscribe to **messages** (required for incoming messages and status updates).
-
----
-
-## Step 4: Use a Permanent Access Token
-
-The temporary token from Meta expires in 24 hours. For production, create a **permanent** token:
-
-1. In Meta for Developers → Your App → **WhatsApp** → **API Setup**.
-2. Under **System User** (or create one in Business Settings → Users → System Users):
-   - Create a System User if needed.
-   - Generate a token with `whatsapp_business_messaging` and `whatsapp_business_management` permissions.
-3. Copy the token and set it as `WHATSAPP_ACCESS_TOKEN` in your production env.
-4. Store it securely; you won’t see it again.
-
----
-
-## Step 5: Verify Configuration
-
-1. Set `WHATSAPP_ENABLED=true` and redeploy your API so it picks up the new env vars.
-2. In Meta, the webhook should verify successfully.
-3. Send a test message to your WhatsApp Business number (e.g. `help`).
-4. You should receive a reply from the bot.
-
----
-
-## Template Messages (First Contact)
-
-When a team member has not messaged your business in the last 24 hours, you must use a **template message** to initiate contact. Templates must be created and approved in Meta Business Manager:
-
-1. Go to [Meta Business Suite](https://business.facebook.com) → **WhatsApp Manager** → **Message Templates**.
-2. Create a template (e.g. `hello_world` is pre-approved for testing).
-3. For custom templates, submit for approval. Once approved, the template name can be used in the dashboard.
-4. Optional: Set `WHATSAPP_TEMPLATES` env var (comma-separated names) to customize the list, or `WHATSAPP_WABA_ID` to fetch templates from Meta's API.
-
----
-
-## Database: Message History
-
-The WhatsApp module stores conversation history in the `WhatsAppMessage` table.
-Apply committed migrations through the deployment command:
-
-```bash
-npm run db:migrate:deploy --workspace=api
+```text
+Employee WhatsApp
+       ↕
+Meta WhatsApp Cloud API (v26.0)
+       ↕ HTTPS Webhook & Graph API
+Plethora API on Railway
+       ↕
+PostgreSQL Database (Attendance, Rostering, Leave, Payroll)
 ```
 
-Do not use `prisma db push` against production.
+No unofficial libraries, QR codes, headless browsers, or third-party wrappers (such as WAHA or WPPConnect) are permitted.
 
 ---
 
-## Quick Reference
+## Crucial Terminology & Secrets Distinction
 
-| Item | Value |
-|------|-------|
-| Webhook URL | `https://YOUR-API-URL/webhook` |
-| Verify token | Same as `WHATSAPP_VERIFY_TOKEN` |
-| Supported commands | `clock in`, `clock out`, `payslip`, `leave`, `help` |
-| Dashboard | `/whatsapp` - Message team members, view history |
+Meta identifiers and secrets are easy to confuse. Review this table carefully before configuring your environment:
+
+### Identifiers
+
+| Identifier | What It Is | Where to Find It in Meta | Not To Be Confused With |
+|------------|------------|--------------------------|-------------------------|
+| **Phone Number ID** | Unique ID for the specific WhatsApp phone number sending/receiving messages | WhatsApp Manager → Phone Numbers (or WhatsApp → API Setup) | **WABA ID** or **App ID** |
+| **WABA ID** | WhatsApp Business Account ID owning templates, phone numbers, and subscriptions | WhatsApp Manager → Settings (or Business Portfolio Settings) | **Phone Number ID** or **App ID** |
+| **App ID** | Meta Developer App identifier | Meta Developer Dashboard header | **WABA ID** or **Phone Number ID** |
+
+> [!WARNING]
+> `Phone Number ID ≠ WABA ID ≠ App ID`. Using a WABA ID in place of a Phone Number ID will result in 400/404 errors on Graph API calls.
+
+### Credentials & Tokens
+
+| Token / Secret | Purpose | Where to Obtain / Set | Not To Be Confused With |
+|----------------|---------|-----------------------|-------------------------|
+| **Access Token** | Bearer token for API requests (`WHATSAPP_ACCESS_TOKEN`) | Meta System User with `whatsapp_business_messaging` and `whatsapp_business_management` permissions | **Verify Token** or **App Secret** |
+| **Verify Token** | Shared secret string you invent (`WHATSAPP_VERIFY_TOKEN`) | Chosen by you and entered into both Plethora env and Meta Webhook setup | **Access Token** or **App Secret** |
+| **App Secret** | Cryptographic key for HMAC validation (`WHATSAPP_APP_SECRET`) | Meta App Dashboard → App Settings → Basic → App Secret | **Access Token** or **Verify Token** |
+
+> [!WARNING]
+> `Access Token ≠ Verify Token ≠ App Secret`. Webhook signature verification uses the **App Secret** via HMAC-SHA256 (`X-Hub-Signature-256`), never the Verify Token or Access Token.
 
 ---
 
-## Troubleshooting
+## Railway Production Configuration
 
-- **Webhook verification fails**: Ensure the callback URL is exactly `https://YOUR-API-URL/webhook` (no trailing slash). The API must be reachable from the internet.
-- **403 Forbidden on verify**: The `hub.verify_token` from Meta must match `WHATSAPP_VERIFY_TOKEN` exactly.
-- **Messages not received**: Confirm you’re subscribed to the **messages** webhook field.
-- **Token expired**: Use a permanent token from a System User, not the temporary one from the API Setup page.
-- **API reports an incomplete WhatsApp configuration**: Either add every variable named as missing, or set `WHATSAPP_ENABLED=false` and redeploy. Credentials are ignored while disabled and may be removed after the deployment is stable.
+Configure these environment variables on your **Railway API service**.
+
+> [!IMPORTANT]
+> - These variables must be set **only on the Railway API service**.
+> - **Never** expose them on the frontend Next.js service or prefix them with `NEXT_PUBLIC_*`.
+> - Meta servers must reach the **public HTTPS domain** of your API (e.g., `https://api.quickbophasecurity.co.za/webhook` or your public `https://xxx.up.railway.app/webhook`). Railway private/internal service domains cannot be reached by Meta.
+
+### Environment Variable Template
+
+```env
+# WhatsApp Integration Switch
+WHATSAPP_ENABLED=false
+
+# Meta WhatsApp Cloud API Credentials
+WHATSAPP_PHONE_NUMBER_ID=
+WHATSAPP_WABA_ID=
+WHATSAPP_ACCESS_TOKEN=
+WHATSAPP_VERIFY_TOKEN=
+WHATSAPP_APP_SECRET=
+
+# Meta Graph API Version (defaults to v26.0)
+WHATSAPP_API_VERSION=v26.0
+```
+
+---
+
+## Recommended Step-by-Step Deployment Sequence
+
+The Plethora webhook architecture permits verification before enabling inbound processing, preventing chicken-and-egg deployment roadblocks.
+
+### Step 1: Deploy API with WhatsApp Secrets
+
+1. Add `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_WABA_ID`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_VERIFY_TOKEN`, and `WHATSAPP_APP_SECRET` to the Railway API service.
+2. Keep `WHATSAPP_ENABLED=false` initially.
+3. Deploy the service and verify public HTTPS reachability at `https://YOUR-API-DOMAIN/health`.
+
+### Step 2: Configure Meta Webhook Verification
+
+1. Go to [Meta for Developers](https://developers.facebook.com/) → Your App → **WhatsApp** → **Configuration**.
+2. Click **Edit** under **Webhook**:
+   - **Callback URL**: `https://api.quickbophasecurity.co.za/webhook` (or your public Railway API domain `https://YOUR-API-DOMAIN/webhook`).
+   - **Verify Token**: Enter the exact string configured in `WHATSAPP_VERIFY_TOKEN`.
+3. Click **Verify and Save**.
+   - Plethora will verify the token and return HTTP 200 with the challenge even though `WHATSAPP_ENABLED=false`.
+4. Click **Manage** under Webhook fields and subscribe to **messages**.
+
+### Step 3: Subscribe App to WABA
+
+Plethora includes an administrative endpoint to subscribe the app to your WABA:
+
+```bash
+curl -X POST https://api.quickbophasecurity.co.za/whatsapp/subscription \
+  -H "Authorization: Bearer <ADMIN_JWT_TOKEN>"
+```
+
+Alternatively, run Meta's Graph API subscription endpoint via curl (see examples below).
+
+### Step 4: Verify Integration Health
+
+Check the configuration status through Plethora's authenticated health endpoint:
+
+```bash
+curl -X GET https://api.quickbophasecurity.co.za/whatsapp/health?connectivity=true \
+  -H "Authorization: Bearer <ADMIN_JWT_TOKEN>"
+```
+
+Expected response:
+
+```json
+{
+  "enabled": false,
+  "configured": true,
+  "phoneNumberConfigured": true,
+  "wabaConfigured": true,
+  "accessTokenConfigured": true,
+  "appSecretConfigured": true,
+  "verifyTokenConfigured": true,
+  "apiVersion": "v26.0",
+  "metaApiReachable": true
+}
+```
+
+### Step 5: Enable WhatsApp in Production
+
+1. Update the Railway environment variable:
+   ```env
+   WHATSAPP_ENABLED=true
+   ```
+2. Redeploy the Railway API service.
+3. Send a test message from a registered employee's mobile number (`help`).
+4. Validate that the employee receives the interactive command menu.
+
+---
+
+## Meta Cloud API Reference Commands (curl)
+
+Use `v26.0` for all Meta Cloud API requests.
+
+### 1. Register Phone Number
+
+```bash
+curl -X POST "https://graph.facebook.com/v26.0/{PHONE_NUMBER_ID}/register" \
+  -H "Authorization: Bearer {ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messaging_product": "whatsapp",
+    "pin": "123456"
+  }'
+```
+
+### 2. Subscribe Meta App to WABA
+
+```bash
+curl -X POST "https://graph.facebook.com/v26.0/{WABA_ID}/subscribed_apps" \
+  -H "Authorization: Bearer {ACCESS_TOKEN}"
+```
+
+### 3. Check Subscribed Apps
+
+```bash
+curl -X GET "https://graph.facebook.com/v26.0/{WABA_ID}/subscribed_apps" \
+  -H "Authorization: Bearer {ACCESS_TOKEN}"
+```
+
+### 4. Send Test Template Message
+
+```bash
+curl -X POST "https://graph.facebook.com/v26.0/{PHONE_NUMBER_ID}/messages" \
+  -H "Authorization: Bearer {ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messaging_product": "whatsapp",
+    "to": "27821234567",
+    "type": "template",
+    "template": {
+      "name": "hello_world",
+      "language": {
+        "code": "en_US"
+      }
+    }
+  }'
+```
+
+---
+
+## Customer-Service Window & Messaging Rules
+
+- **Within the 24-Hour Window**: Free-form text and interactive messages are permitted when the employee messaged the business within the preceding 24 hours.
+- **Outside the 24-Hour Window**: Messages will fail with Meta error `131047`. Outbound messaging requires an approved **Message Template** (e.g. shift notifications, urgent broadcasts).
+- Plethora returns `requiresTemplate: true` in the API when error `131047` occurs, instructing the dispatcher to select an approved template.
+
+---
+
+## Webhook Idempotency & Concurrency Safety
+
+Meta may retry webhook deliveries if an acknowledgment takes too long or network interruptions occur.
+
+Plethora enforces durable database-level deduplication:
+- Each incoming Meta message ID (`wamid.HBg...`) is atomically inserted into `WhatsAppWebhookEvent` with a unique constraint on `metaEventId`.
+- Duplicate or concurrent retries hit the database unique constraint (`P2002`), log the duplicate, and safely exit with HTTP 200 without reprocessing commands or mutating attendance/leave records.
+
+---
+
+## Multi-Tenant Safety Invariant
+
+Plethora is a multi-tenant platform:
+- Inbound WhatsApp senders have no tenant header. Senders are mapped to employees via normalized international phone format (`27821234567`).
+- If a phone number matches active employees across multiple companies (or multiple records within one company), **Plethora will never guess the tenant**. The event is rejected with an audit log warning.

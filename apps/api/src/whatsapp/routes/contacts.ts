@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { authMiddleware } from "../../middleware/auth.js";
 import { requireCrudCapability } from "../../middleware/authorization.js";
 import { prisma } from "../../lib/prisma.js";
+import { formatPhoneForWaMe } from "../../lib/phone.js";
 
 export async function contactsRoutes(app: FastifyInstance) {
   const protect = [
@@ -35,7 +36,7 @@ export async function contactsRoutes(app: FastifyInstance) {
       firstName: e.firstName,
       lastName: e.lastName,
       phone: e.phone,
-      whatsappUrl: e.phone ? `https://wa.me/${e.phone.replace(/\D/g, "")}` : null,
+      whatsappUrl: formatPhoneForWaMe(e.phone),
     }));
 
     return reply.send({ data, total, limit, offset });

@@ -78,10 +78,11 @@ CORS_ORIGIN=https://plethora.quickbophasecurity.co.za
 TRUST_PROXY=true
 WHATSAPP_ENABLED=false
 WHATSAPP_PHONE_NUMBER_ID=
+WHATSAPP_WABA_ID=
 WHATSAPP_ACCESS_TOKEN=
 WHATSAPP_VERIFY_TOKEN=
 WHATSAPP_APP_SECRET=
-WHATSAPP_API_VERSION=v21.0
+WHATSAPP_API_VERSION=v26.0
 ENCRYPTION_KEY=<required app format>
 CLOCK_IN_WINDOW_MINUTES=15
 CRON_SECRET=<long random secret>
@@ -91,10 +92,11 @@ WhatsApp is optional and disabled by default:
 
 - To keep it disabled, set `WHATSAPP_ENABLED=false` (or leave it unset). Stale
   WhatsApp credentials are ignored, the public webhook does not process
-  messages, and outbound Meta calls remain blocked. Removing unused secrets is
-  still recommended after the deployment is stable.
-- To enable it later, set `WHATSAPP_ENABLED=true` and set
-  `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`,
+  messages, and outbound Meta calls remain blocked. Note that Meta webhook verification
+  (`GET /webhook`) succeeds with matching `WHATSAPP_VERIFY_TOKEN` even while
+  disabled, allowing Meta setup to complete prior to activation.
+- To enable it, set `WHATSAPP_ENABLED=true` and set
+  `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_WABA_ID`, `WHATSAPP_ACCESS_TOKEN`,
   `WHATSAPP_VERIFY_TOKEN`, and `WHATSAPP_APP_SECRET`. Obtain the app secret from
   **Meta App Dashboard > App settings > Basic**; it is not the access token or
   the verify token.
@@ -291,8 +293,9 @@ WhatsApp is disabled or environment validation fails:
 
 - Set `WHATSAPP_ENABLED=false` and redeploy to run the API without WhatsApp.
   Existing credential variables can remain temporarily and are ignored.
-- To enable WhatsApp, set `WHATSAPP_ENABLED=true` plus all four required
-  credentials listed above. The startup error lists any missing variable names
+- To enable WhatsApp, set `WHATSAPP_ENABLED=true` plus all required
+  credentials listed above (`WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_WABA_ID`,
+  `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`). The startup error lists any missing variable names
   without exposing their values. `WHATSAPP_APP_SECRET` comes from Meta App
   settings, not from the webhook verify token.
 - If the pre-deploy log says all migrations were successfully applied, do not

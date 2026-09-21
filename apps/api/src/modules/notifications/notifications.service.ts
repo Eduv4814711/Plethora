@@ -2,6 +2,7 @@ import type { NotificationChannel, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { hasCapability, normalizeCapabilities } from "../../lib/capabilities.js";
 import { sendText } from "../../whatsapp/services/send.service.js";
+import { normalizeWhatsAppPhone } from "../../lib/phone.js";
 
 export type CreateNotificationInput = {
   companyId: string;
@@ -85,7 +86,7 @@ async function dispatchWhatsAppNotification(userId: string, message: string) {
   });
   const phone = employee?.phone?.trim();
   if (!phone) return;
-  const digits = phone.replace(/\D/g, "");
+  const digits = normalizeWhatsAppPhone(phone);
   if (!digits) return;
   await sendText(digits, message.slice(0, 1000));
 }

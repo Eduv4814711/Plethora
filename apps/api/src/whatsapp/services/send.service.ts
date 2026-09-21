@@ -1,4 +1,5 @@
 import { config } from "../../lib/config.js";
+import { normalizeWhatsAppPhone } from "../../lib/phone.js";
 
 const GRAPH_URL = "https://graph.facebook.com";
 
@@ -19,7 +20,7 @@ export async function sendText(to: string, text: string): Promise<SendTextResult
   const body = {
     messaging_product: "whatsapp",
     recipient_type: "individual",
-    to: to.replace(/\D/g, ""),
+    to: normalizeWhatsAppPhone(to),
     type: "text",
     text: { preview_url: false, body: text },
   };
@@ -87,7 +88,7 @@ export async function sendTemplate(
   const body = {
     messaging_product: "whatsapp",
     recipient_type: "individual",
-    to: to.replace(/\D/g, ""),
+    to: normalizeWhatsAppPhone(to),
     type: "template",
     template: {
       name: templateName,
@@ -145,7 +146,7 @@ export async function sendInteractiveList(
   const body = {
     messaging_product: "whatsapp",
     recipient_type: "individual",
-    to: to.replace(/\D/g, ""),
+    to: normalizeWhatsAppPhone(to),
     type: "interactive",
     interactive: {
       type: "list",
@@ -243,7 +244,7 @@ export async function sendDocument(
   const body = {
     messaging_product: "whatsapp",
     recipient_type: "individual",
-    to: to.replace(/\D/g, ""),
+    to: normalizeWhatsAppPhone(to),
     type: "document",
     document: { id: mediaId, filename },
   };

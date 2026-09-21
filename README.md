@@ -304,15 +304,16 @@ Set-Location ..\..
 ### WhatsApp Cloud API
 
 WhatsApp is optional and disabled by default. Set `WHATSAPP_ENABLED=true` only
-when testing Meta WhatsApp webhooks with all four credentials:
+when testing Meta WhatsApp webhooks with all required credentials:
 
 ```env
 WHATSAPP_ENABLED=false
 WHATSAPP_PHONE_NUMBER_ID=
+WHATSAPP_WABA_ID=
 WHATSAPP_ACCESS_TOKEN=
 WHATSAPP_VERIFY_TOKEN=
 WHATSAPP_APP_SECRET=
-WHATSAPP_API_VERSION=v21.0
+WHATSAPP_API_VERSION=v26.0
 ```
 
 For production setup, read `docs/WHATSAPP_PRODUCTION.md`.

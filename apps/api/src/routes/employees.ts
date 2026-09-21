@@ -4,6 +4,7 @@ import type { EmployeeStatus } from "@prisma/client";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireCapability, requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
+import { normalizeWhatsAppPhone } from "../lib/phone.js";
 import { reconcileContinuityForEmployee } from "../modules/rosters/roster-continuity.service.js";
 import { ROSTER_PLACEHOLDER_JOB_ROLE_PREFIX } from "../modules/rosters/rosters.service.js";
 import { transitionEmployeeStatus } from "../services/employee.service.js";
@@ -75,10 +76,7 @@ const optionalNumber = z.number().optional();
  * WhatsApp sends IDs like "27821234567". We store in the same format for reliable matching.
  */
 function normalizePhoneForStorage(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.startsWith("27") && digits.length === 11) return digits;
-  if (digits.startsWith("0") && digits.length === 10) return "27" + digits.slice(1);
-  return digits;
+  return normalizeWhatsAppPhone(phone);
 }
 
 /** Reject dates with year outside 1900-2100 to avoid Prisma/database errors (e.g. year 202500) */

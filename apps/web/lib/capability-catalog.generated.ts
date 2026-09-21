@@ -29,7 +29,7 @@ export const CAPABILITY_CATALOG: readonly CapabilityDefinition[] = [
   { path: "/employees", label: "Team", capabilities: ["view", "view_sensitive", "create", "edit", "delete", "export"] },
   { path: "/employees/leave", label: "Team · Leave", parent: "/employees", capabilities: ["view", "create", "edit", "delete", "approve", "export"] },
   { path: "/sites", label: "Sites", capabilities: ["view", "create", "edit", "delete", "export"] },
-  { path: "/clients", label: "Clients", capabilities: ["view", "create", "edit", "export"] },
+  { path: "/clients", label: "Clients", capabilities: ["view", "view_sensitive", "create", "edit", "delete", "export"] },
   { path: "/rostering", label: "Rostering", capabilities: ["view", "create", "edit", "delete", "approve", "export"] },
   { path: "/attendance", label: "Attendance", capabilities: ["view", "create", "edit", "delete", "approve", "export"] },
   { path: "/payroll", label: "Payroll", capabilities: ["view", "view_sensitive", "create", "edit", "delete", "approve", "export"] },

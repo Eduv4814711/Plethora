@@ -73,6 +73,7 @@ const rawEnvSchema = z.object({
   TRUST_PROXY: z.preprocess(parseBooleanFlag, z.boolean().optional()),
   WHATSAPP_ENABLED: z.preprocess(parseStrictBooleanFlag, z.boolean().optional()),
   WHATSAPP_PHONE_NUMBER_ID: z.preprocess(emptyToUndefined, z.string().optional()),
+  WHATSAPP_WABA_ID: z.preprocess(emptyToUndefined, z.string().optional()),
   WHATSAPP_ACCESS_TOKEN: z.preprocess(emptyToUndefined, z.string().optional()),
   WHATSAPP_VERIFY_TOKEN: z.preprocess(emptyToUndefined, z.string().optional()),
   WHATSAPP_APP_SECRET: z.preprocess(emptyToUndefined, z.string().optional()),
@@ -117,6 +118,7 @@ export type Env = {
   whatsapp: {
     enabled: boolean;
     phoneNumberId: string;
+    wabaId: string;
     accessToken: string;
     verifyToken: string;
     appSecret: string;
@@ -149,6 +151,7 @@ function pickRawEnv(source: NodeJS.ProcessEnv): Record<string, unknown> {
     TRUST_PROXY: source.TRUST_PROXY,
     WHATSAPP_ENABLED: source.WHATSAPP_ENABLED,
     WHATSAPP_PHONE_NUMBER_ID: source.WHATSAPP_PHONE_NUMBER_ID,
+    WHATSAPP_WABA_ID: source.WHATSAPP_WABA_ID,
     WHATSAPP_ACCESS_TOKEN: source.WHATSAPP_ACCESS_TOKEN,
     WHATSAPP_VERIFY_TOKEN: source.WHATSAPP_VERIFY_TOKEN,
     WHATSAPP_APP_SECRET: source.WHATSAPP_APP_SECRET,
@@ -162,6 +165,7 @@ function pickRawEnv(source: NodeJS.ProcessEnv): Record<string, unknown> {
 
 const WHATSAPP_CREDENTIAL_NAMES = [
   "WHATSAPP_PHONE_NUMBER_ID",
+  "WHATSAPP_WABA_ID",
   "WHATSAPP_ACCESS_TOKEN",
   "WHATSAPP_VERIFY_TOKEN",
   "WHATSAPP_APP_SECRET",
@@ -297,6 +301,7 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const corsOrigins = parseCorsOrigins(raw.CORS_ORIGIN);
 
   const phoneNumberId = raw.WHATSAPP_PHONE_NUMBER_ID ?? "";
+  const wabaId = raw.WHATSAPP_WABA_ID ?? "";
   const accessToken = raw.WHATSAPP_ACCESS_TOKEN ?? "";
   const verifyToken = raw.WHATSAPP_VERIFY_TOKEN ?? "";
   const appSecret = raw.WHATSAPP_APP_SECRET ?? "";
@@ -316,15 +321,17 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
       enabled: !!(
         raw.WHATSAPP_ENABLED === true &&
         phoneNumberId &&
+        wabaId &&
         accessToken &&
         verifyToken &&
         appSecret
       ),
       phoneNumberId,
+      wabaId,
       accessToken,
       verifyToken,
       appSecret,
-      apiVersion: raw.WHATSAPP_API_VERSION ?? "v21.0",
+      apiVersion: raw.WHATSAPP_API_VERSION ?? "v26.0",
     },
     clockInWindowMinutes: raw.CLOCK_IN_WINDOW_MINUTES ?? 15,
     encryptionKey: raw.ENCRYPTION_KEY,

@@ -26,7 +26,7 @@ describe("parseEnv", () => {
     expect(env.port).toBe(3001);
     expect(env.host).toBe("0.0.0.0");
     expect(env.clockInWindowMinutes).toBe(15);
-    expect(env.whatsapp.apiVersion).toBe("v21.0");
+    expect(env.whatsapp.apiVersion).toBe("v26.0");
     expect(env.whatsapp.enabled).toBe(false);
     expect(env.trustProxy).toBe(false);
   });
@@ -41,6 +41,7 @@ describe("parseEnv", () => {
       CLOCK_IN_WINDOW_MINUTES: "30",
       WHATSAPP_ENABLED: "true",
       WHATSAPP_PHONE_NUMBER_ID: "123",
+      WHATSAPP_WABA_ID: "waba-123",
       WHATSAPP_ACCESS_TOKEN: "token",
       WHATSAPP_VERIFY_TOKEN: "verify",
       WHATSAPP_APP_SECRET: "app-secret",
@@ -53,6 +54,7 @@ describe("parseEnv", () => {
     expect(env.frontendUrl).toBe("http://localhost:3000");
     expect(env.clockInWindowMinutes).toBe(30);
     expect(env.whatsapp.enabled).toBe(true);
+    expect(env.whatsapp.wabaId).toBe("waba-123");
     expect(env.whatsapp.apiVersion).toBe("v22.0");
     expect(env.encryptionKey).toBe("sixteen-char-key!!");
   });
@@ -130,19 +132,22 @@ describe("parseEnv", () => {
           })
         )
       ).toThrow(
-        /WHATSAPP_ENABLED=true requires a complete signed WhatsApp configuration\. Missing: WHATSAPP_APP_SECRET\./
+        /WHATSAPP_ENABLED=true requires a complete signed WhatsApp configuration\. Missing: WHATSAPP_WABA_ID, WHATSAPP_APP_SECRET\./
       );
 
       const env = parseEnv(
         prodBase({
           WHATSAPP_ENABLED: "true",
           WHATSAPP_PHONE_NUMBER_ID: "123",
+          WHATSAPP_WABA_ID: "waba-123",
           WHATSAPP_ACCESS_TOKEN: "token",
           WHATSAPP_VERIFY_TOKEN: "verify",
           WHATSAPP_APP_SECRET: "app-secret",
         })
       );
       expect(env.whatsapp.enabled).toBe(true);
+      expect(env.whatsapp.wabaId).toBe("waba-123");
+      expect(env.whatsapp.apiVersion).toBe("v26.0");
     });
 
     it("rejects invalid WHATSAPP_ENABLED values", () => {

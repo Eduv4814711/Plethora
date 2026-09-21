@@ -23,6 +23,7 @@ export const config = {
   whatsapp: {
     enabled: env.whatsapp.enabled,
     phoneNumberId: env.whatsapp.phoneNumberId,
+    wabaId: env.whatsapp.wabaId,
     accessToken: env.whatsapp.accessToken,
     verifyToken: env.whatsapp.verifyToken,
     appSecret: env.whatsapp.appSecret,

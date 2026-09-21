@@ -1453,6 +1453,21 @@ model WhatsAppClockPending {
   @@index([employeeId])
 }
 
+/// Durable record of received Meta WhatsApp webhook events for reliable idempotency and auditing.
+model WhatsAppWebhookEvent {
+  id            String    @id @default(cuid())
+  metaEventId   String    @unique
+  phoneNumberId String?
+  eventType     String
+  payload       Json?
+  status        String // "PROCESSING" | "PROCESSED" | "FAILED"
+  errorMessage  String?
+  receivedAt    DateTime  @default(now())
+  processedAt   DateTime?
+
+  @@index([receivedAt])
+}
+
 // --- Academy Management (training provider operations) ---
 
 enum AcademyStudentStatus {
