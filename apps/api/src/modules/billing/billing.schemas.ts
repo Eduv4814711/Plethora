@@ -38,15 +38,33 @@ const documentBase = {
   items: z.array(lineSchema).min(1),
 };
 
-export const createQuoteSchema = z.object({
-  ...documentBase,
-  quoteNumber: z.string().max(50).optional(),
-  quoteDate: z.string().min(1),
-  validUntil: z.string().min(1),
-});
+export const createQuoteSchema = z
+  .object({
+    clientId: z.string().min(1).optional().nullable(),
+    prospectName: z.string().max(250).optional().nullable(),
+    prospectEmail: z.string().max(250).optional().nullable(),
+    prospectPhone: z.string().max(50).optional().nullable(),
+    prospectAddress: z.string().max(1000).optional().nullable(),
+    reference: z.string().max(200).optional().nullable(),
+    notes: z.string().max(5000).optional().nullable(),
+    discountAmount: money.optional().default(0),
+    vatRate: money.optional().default(15),
+    items: z.array(lineSchema).min(1),
+    quoteNumber: z.string().max(50).optional(),
+    quoteDate: z.string().min(1),
+    validUntil: z.string().min(1),
+  })
+  .refine((data) => Boolean(data.clientId?.trim() || data.prospectName?.trim()), {
+    message: "Either an existing client or a business name for a potential client is required",
+    path: ["clientId"],
+  });
 
 export const updateQuoteSchema = z.object({
-  clientId: z.string().min(1).optional(),
+  clientId: z.string().min(1).optional().nullable(),
+  prospectName: z.string().max(250).optional().nullable(),
+  prospectEmail: z.string().max(250).optional().nullable(),
+  prospectPhone: z.string().max(50).optional().nullable(),
+  prospectAddress: z.string().max(1000).optional().nullable(),
   reference: z.string().max(200).optional().nullable(),
   notes: z.string().max(5000).optional().nullable(),
   discountAmount: money.optional(),

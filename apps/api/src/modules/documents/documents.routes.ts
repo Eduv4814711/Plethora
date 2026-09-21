@@ -73,6 +73,7 @@ const metaSchema = z.object({
   employeeId: z.string().optional().nullable(),
   siteId: z.string().optional().nullable(),
   clientId: z.string().optional().nullable(),
+  clientContractId: z.string().optional().nullable(),
   incidentId: z.string().optional().nullable(),
   taskId: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
@@ -88,23 +89,53 @@ const updateMetaSchema = z.object({
   expiryDate: z.string().optional().nullable(),
   doesNotExpire: z.boolean().optional(),
   isSensitive: z.boolean().optional(),
+  clientContractId: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
 
 function isDocumentSensitive(doc: { isSensitive?: boolean; documentCategory?: string | null; documentType?: string }): boolean {
   if (doc.isSensitive) return true;
   const cat = (doc.documentCategory ?? "").toUpperCase();
-  if (cat === "LEAVE_MEDICAL" || cat === "DISCIPLINARY" || cat === "FIREARM") return true;
+  if (cat === "LEAVE_MEDICAL" || cat === "DISCIPLINARY" || cat === "FIREARM" || cat === "CLIENT_IDENTITY") return true;
   const def = getDocumentDefinition(doc.documentType ?? "");
   return Boolean(def.isSensitive);
 }
 
+function isClientDocument(doc: {
+  category?: string;
+  documentCategory?: string | null;
+  clientId?: string | null;
+  clientContractId?: string | null;
+}): boolean {
+  if (doc.clientId || doc.clientContractId) return true;
+  if (doc.category === "CLIENT") return true;
+  const cat = (doc.documentCategory ?? "").toUpperCase();
+  return cat.startsWith("CLIENT_");
+}
+
 function canUserAccessDocument(
   user: import("../../lib/types.js").AuthenticatedUser,
-  doc: { isSensitive?: boolean; documentCategory?: string | null; documentType?: string }
+  doc: {
+    isSensitive?: boolean;
+    category?: string;
+    documentCategory?: string | null;
+    documentType?: string;
+    clientId?: string | null;
+    clientContractId?: string | null;
+  }
 ): boolean {
   if (user.isOwner) return true;
   if (!isDocumentSensitive(doc)) return true;
+
+  // Least privilege: Sensitive client evidence requires client view_sensitive or documents view_sensitive.
+  // Employee or payroll sensitive capabilities never leak client-sensitive documents.
+  if (isClientDocument(doc)) {
+    return (
+      canAccessSensitiveData(user, "/clients") ||
+      hasCapability(user, "/documents", "view_sensitive")
+    );
+  }
+
   return (
     canAccessSensitiveData(user, "/employees") ||
     canAccessSensitiveData(user, "/payroll") ||
@@ -115,7 +146,7 @@ function canUserAccessDocument(
 export async function documentsRoutes(app: FastifyInstance) {
   const protect = [
     authMiddleware,
-    requireCrudCapability({ anyOfModules: ["/documents", "/employees"] }),
+    requireCrudCapability({ anyOfModules: ["/documents", "/employees", "/clients"] }),
   ];
 
   const forUser = <T extends { id: string; fileUrl: string; expiryDate?: Date | null; doesNotExpire?: boolean; documentType?: string }>(
@@ -216,10 +247,19 @@ export async function documentsRoutes(app: FastifyInstance) {
     const resolvedIsSensitive = parsed.data.isSensitive ?? docDef.isSensitive ?? false;
 
     // Check sensitive document upload permission
-    if (resolvedIsSensitive && !canUserAccessDocument(user, { isSensitive: true, documentCategory: resolvedDocCategory, documentType: parsed.data.documentType })) {
+    if (
+      resolvedIsSensitive &&
+      !canUserAccessDocument(user, {
+        isSensitive: true,
+        documentCategory: resolvedDocCategory,
+        documentType: parsed.data.documentType,
+        clientId: parsed.data.clientId,
+        clientContractId: parsed.data.clientContractId,
+      })
+    ) {
       return reply.code(403).send({
         error: "Forbidden",
-        message: "Sensitive access permissions required for medical, disciplinary, or firearm documents",
+        message: "Sensitive access permissions required for this document",
       });
     }
 
@@ -274,6 +314,7 @@ export async function documentsRoutes(app: FastifyInstance) {
       employeeId: parsed.data.employeeId,
       siteId: parsed.data.siteId,
       clientId: parsed.data.clientId,
+      clientContractId: parsed.data.clientContractId,
       incidentId: parsed.data.incidentId,
       taskId: parsed.data.taskId,
       notes: parsed.data.notes,
@@ -286,7 +327,7 @@ export async function documentsRoutes(app: FastifyInstance) {
 
   app.get(
     "/:id/download",
-    { preHandler: [authMiddleware, requireAnyCapability(["/documents", "/employees"], "export")] },
+    { preHandler: [authMiddleware, requireAnyCapability(["/documents", "/employees", "/clients"], "export")] },
     async (request, reply) => {
       const user = request.user!;
       const { id } = request.params as { id: string };
@@ -356,6 +397,7 @@ export async function documentsRoutes(app: FastifyInstance) {
       expiryDate: parsed.data.expiryDate ? new Date(parsed.data.expiryDate) : undefined,
       doesNotExpire: parsed.data.doesNotExpire,
       isSensitive: parsed.data.isSensitive,
+      clientContractId: parsed.data.clientContractId,
       notes: parsed.data.notes,
     });
 

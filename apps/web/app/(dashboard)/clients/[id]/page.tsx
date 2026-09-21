@@ -2,311 +2,304 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { AlertBanner } from "@/components/ui";
 import { hasCapability } from "@/lib/permissions";
 import {
   getClient,
-  listClientAccountCandidates,
+  getClientContacts,
+  getClientRelatedParties,
+  getClientContracts,
+  getClientCompliance,
   listSitesForLinking,
   linkClientSites,
   unlinkClientSite,
   updateClient,
-  type ClientAccountCandidate,
+  type ClientContact,
+  type ClientContract,
   type ClientDetail,
-  type ClientWritableFields,
+  type ClientRelatedParty,
+  type ClientComplianceEvaluation,
   type LinkableSite,
 } from "@/lib/msr-api";
+import { ClientOverviewTab } from "./client-overview-tab";
+import { ClientLegalTab } from "./client-legal-tab";
+import { ClientContactsTab } from "./client-contacts-tab";
+import { ClientContractsTab } from "./client-contracts-tab";
+import { ClientDocumentsTab } from "./client-documents-tab";
+import { ClientPrivacyTab } from "./client-privacy-tab";
 import { ClientMonthEndTab } from "./month-end-tab";
 
-type Tab = "details" | "sites" | "month-end";
+type ClientTab =
+  | "overview"
+  | "legal"
+  | "contacts"
+  | "contracts"
+  | "sites"
+  | "documents"
+  | "privacy"
+  | "month-end";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "details", label: "Details" },
+const TABS: { id: ClientTab; label: string; badge?: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "legal", label: "Legal & Identity" },
+  { id: "contacts", label: "Contacts" },
+  { id: "contracts", label: "Contracts" },
   { id: "sites", label: "Sites" },
-  { id: "month-end", label: "Month-end reports" },
+  { id: "documents", label: "Documents & Compliance" },
+  { id: "privacy", label: "Privacy & Data (POPIA)" },
+  { id: "month-end", label: "Month-end Reports" },
 ];
 
-type FormState = {
-  name: string;
-  email: string;
-  phone: string;
-  contactPersonName: string;
-  contactPersonRole: string;
-  contactPersonMobile: string;
-  physicalAddress: string;
-  notes: string;
-  billingEmail: string;
-  billingAddress: string;
-  vatNumber: string;
-  registrationNumber: string;
-  paymentTermsDays: string;
-  userId: string;
-  isActive: boolean;
-  reportRecipients: string[];
-};
-
-function formFrom(client: ClientDetail): FormState {
-  return {
-    name: client.name,
-    email: client.email ?? "",
-    phone: client.phone ?? "",
-    contactPersonName: client.contactPersonName ?? "",
-    contactPersonRole: client.contactPersonRole ?? "",
-    contactPersonMobile: client.contactPersonMobile ?? "",
-    physicalAddress: client.physicalAddress ?? "",
-    notes: client.notes ?? "",
-    billingEmail: client.billingEmail ?? "",
-    billingAddress: client.billingAddress ?? "",
-    vatNumber: client.vatNumber ?? "",
-    registrationNumber: client.registrationNumber ?? "",
-    paymentTermsDays: String(client.paymentTermsDays ?? 30),
-    userId: client.userId ?? "",
-    isActive: client.isActive,
-    reportRecipients: client.reportRecipients ?? [],
-  };
-}
-
-function payloadFrom(form: FormState): Partial<ClientWritableFields> {
-  const orNull = (value: string) => (value.trim() ? value.trim() : null);
-  return {
-    name: form.name.trim(),
-    email: orNull(form.email),
-    phone: orNull(form.phone),
-    contactPersonName: orNull(form.contactPersonName),
-    contactPersonRole: orNull(form.contactPersonRole),
-    contactPersonMobile: orNull(form.contactPersonMobile),
-    physicalAddress: orNull(form.physicalAddress),
-    notes: orNull(form.notes),
-    billingEmail: orNull(form.billingEmail),
-    billingAddress: orNull(form.billingAddress),
-    vatNumber: orNull(form.vatNumber),
-    registrationNumber: orNull(form.registrationNumber),
-    paymentTermsDays: Number(form.paymentTermsDays) || 30,
-    userId: form.userId || null,
-    isActive: form.isActive,
-    reportRecipients: form.reportRecipients,
-  };
-}
-
-export default function ClientDetailPage() {
+export default function ClientWorkspacePage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const clientId = params.id;
   const { token, user } = useAuth();
 
+  const [tab, setTab] = useState<ClientTab>(() => {
+    const requested = searchParams.get("tab") as ClientTab | null;
+    return requested && TABS.some((t) => t.id === requested) ? requested : "overview";
+  });
+
   const [client, setClient] = useState<ClientDetail | null>(null);
-  const [form, setForm] = useState<FormState | null>(null);
-  const [candidates, setCandidates] = useState<ClientAccountCandidate[]>([]);
-  const [tab, setTab] = useState<Tab>("details");
+  const [contacts, setContacts] = useState<ClientContact[]>([]);
+  const [relatedParties, setRelatedParties] = useState<ClientRelatedParty[]>([]);
+  const [contracts, setContracts] = useState<ClientContract[]>([]);
+  const [compliance, setCompliance] = useState<ClientComplianceEvaluation | null>(null);
+
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [selectedContractFilterId, setSelectedContractFilterId] = useState<string | undefined>();
 
   const canEdit = Boolean(
-    user && (hasCapability(user, "/clients", "edit") || hasCapability(user, "/sites", "edit"))
+    user && (user.isOwner || hasCapability(user, "/clients", "edit") || hasCapability(user, "/sites", "edit"))
   );
 
-  const load = useCallback(async () => {
-    if (!token) return;
+  const canVerifyDocuments = Boolean(
+    user && (user.isOwner || hasCapability(user, "/documents", "edit") || hasCapability(user, "/compliance", "edit"))
+  );
+
+  const canAccessBilling = Boolean(
+    user && (user.isOwner || hasCapability(user, "/payroll/billing", "view"))
+  );
+
+  const loadAll = useCallback(async () => {
+    if (!token || !clientId) return;
     setError("");
     try {
-      const [detail, users] = await Promise.all([
-        getClient(token, clientId),
-        listClientAccountCandidates(token).catch(() => [] as ClientAccountCandidate[]),
-      ]);
-      setClient(detail);
-      setForm(formFrom(detail));
-      setCandidates(users);
+      const [clientData, contactsData, partiesData, contractsData, complianceData] =
+        await Promise.all([
+          getClient(token, clientId),
+          getClientContacts(token, clientId).catch(() => [] as ClientContact[]),
+          getClientRelatedParties(token, clientId).catch(() => [] as ClientRelatedParty[]),
+          getClientContracts(token, clientId).catch(() => [] as ClientContract[]),
+          getClientCompliance(token, clientId).catch(() => null),
+        ]);
+
+      setClient(clientData);
+      setContacts(contactsData);
+      setRelatedParties(partiesData);
+      setContracts(contractsData);
+      setCompliance(complianceData);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load client");
+      setError(err instanceof Error ? err.message : "Failed to load client workspace");
     }
   }, [token, clientId]);
 
   useEffect(() => {
     setLoading(true);
-    void load().finally(() => setLoading(false));
-  }, [load]);
+    void loadAll().finally(() => setLoading(false));
+  }, [loadAll]);
 
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!token || !form) return;
-    setSaving(true);
-    setError("");
-    setNotice("");
-    try {
-      await updateClient(token, clientId, payloadFrom(form));
-      setNotice("Client saved.");
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save client");
-    } finally {
-      setSaving(false);
-    }
+  const handleSaveClientMaster = async (payload: any) => {
+    if (!token || !clientId) return;
+    await updateClient(token, clientId, payload);
+    await loadAll();
+  };
+
+  const handleNavigateToDocuments = (contractId?: string) => {
+    setSelectedContractFilterId(contractId);
+    setTab("documents");
   };
 
   if (loading) {
     return (
       <main className="animate-fade-in space-y-4 pb-16">
-        <div className="h-40 animate-pulse rounded-security-lg bg-security-navy-100 dark:bg-security-navy-700" aria-label="Loading client" />
+        <div className="h-44 animate-pulse rounded-security-lg bg-security-navy-100 dark:bg-security-navy-800" />
       </main>
     );
   }
 
-  if (!client || !form) {
+  if (!client) {
     return (
       <main className="animate-fade-in space-y-4 pb-16">
         <Link href="/clients" className="text-sm text-security-navy-700 hover:underline">
           ← Back to clients
         </Link>
-        <AlertBanner variant="error">{error || "Client not found"}</AlertBanner>
+        <AlertBanner variant="error">{error || "Client record not found"}</AlertBanner>
       </main>
     );
   }
 
-  const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
-    setForm((current) => (current ? { ...current, [key]: value } : current));
+  const attentionCount = compliance?.summary.attention || 0;
+  const missingCount = compliance?.summary.missing || 0;
 
   return (
     <main className="animate-fade-in space-y-5 pb-16">
-      <header className="space-y-1">
-        <Link href="/clients" className="text-sm font-medium text-security-navy-700 hover:underline dark:text-security-navy-300">
-          ← Back to clients
+      {/* Breadcrumb & Master Header */}
+      <header className="space-y-2">
+        <Link
+          href="/clients"
+          className="text-xs font-medium text-security-navy-600 hover:underline dark:text-security-navy-400"
+        >
+          ← Back to Clients Directory
         </Link>
-        <div className="flex flex-wrap items-center justify-between gap-3">
+
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-semibold text-security-navy-900 dark:text-security-navy-100">{client.name}</h1>
-            <p className="text-sm text-security-navy-500 dark:text-security-navy-400">
-              {client.sites.length} linked site(s) · {client.isActive ? "Active" : "Inactive"}
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-bold text-security-navy-900 dark:text-security-navy-100">
+                {client.name}
+              </h1>
+              {client.tradingName && client.tradingName !== client.name && (
+                <span className="text-sm text-security-navy-500">t/a {client.tradingName}</span>
+              )}
+              <span className="rounded-full bg-security-navy-100 px-2.5 py-0.5 text-xs font-semibold text-security-navy-800 dark:bg-security-navy-800 dark:text-security-navy-200">
+                {client.entityType ? client.entityType.replace(/_/g, " ") : "Entity"}
+              </span>
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                  client.isActive
+                    ? "bg-security-emerald-100 text-security-emerald-800 dark:bg-security-emerald-950/60 dark:text-security-emerald-300"
+                    : "bg-security-navy-100 text-security-navy-600 dark:bg-security-navy-800 dark:text-security-navy-400"
+                }`}
+              >
+                {client.isActive ? "Active" : "Inactive"}
+              </span>
+            </div>
+
+            <p className="mt-1 text-xs text-security-navy-500">
+              Registration: {client.registrationNumber || "Unregistered"} · {client.sites.length} operational site(s) · {contracts.length} contract agreement(s)
             </p>
           </div>
-          <Link
-            href={`/payroll/billing/clients/${client.id}`}
-            className="btn-secondary text-sm"
-          >
-            Billing & statements
-          </Link>
+
+          {/* Finance-controlled Client Billing Link */}
+          {canAccessBilling && (
+            <Link
+              href={`/payroll/billing/clients/${client.id}`}
+              className="btn-secondary flex items-center gap-1.5 text-xs text-security-emerald-800 dark:text-security-emerald-300"
+            >
+              <span>💳</span> Client Billing & Rates
+            </Link>
+          )}
         </div>
       </header>
 
       {error && <AlertBanner variant="error">{error}</AlertBanner>}
       {notice && <AlertBanner variant="success">{notice}</AlertBanner>}
 
-      <nav className="flex gap-1 border-b border-security-navy-100 dark:border-security-navy-700" aria-label="Client sections">
-        {TABS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setTab(item.id)}
-            className={`min-h-11 px-4 text-sm font-medium ${
-              tab === item.id
-                ? "border-b-2 border-security-navy-700 text-security-navy-800 dark:text-security-navy-300"
-                : "text-security-navy-500 hover:text-security-navy-900 dark:hover:text-security-navy-200"
-            }`}
-            aria-current={tab === item.id ? "page" : undefined}
-          >
-            {item.label}
-          </button>
-        ))}
+      {/* 8-Tab Navigation Bar */}
+      <nav
+        className="flex overflow-x-auto border-b border-security-navy-200 dark:border-security-navy-700"
+        aria-label="Client Workspace Sections"
+      >
+        <div className="flex gap-1 min-w-max">
+          {TABS.map((item) => {
+            const isActiveTab = tab === item.id;
+            const hasAttention =
+              item.id === "documents" && (attentionCount > 0 || missingCount > 0);
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  setTab(item.id);
+                  setError("");
+                  setNotice("");
+                }}
+                className={`relative flex items-center gap-1.5 border-b-2 px-4 py-3 text-xs font-semibold transition-colors ${
+                  isActiveTab
+                    ? "border-security-navy-900 text-security-navy-900 dark:border-security-amber-400 dark:text-security-amber-400"
+                    : "border-transparent text-security-navy-500 hover:border-security-navy-300 hover:text-security-navy-800 dark:hover:text-security-navy-200"
+                }`}
+                aria-current={isActiveTab ? "page" : undefined}
+              >
+                {item.label}
+                {hasAttention && (
+                  <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-security-amber-500 px-1 text-[10px] font-bold text-white">
+                    {attentionCount + missingCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </nav>
 
-      {tab === "details" && (
-        <form onSubmit={save} className="card-dashboard grid gap-3 p-4 sm:grid-cols-2">
-          <div>
-            <label className="label-text mb-1 block">Client name</label>
-            <input className="input-modern w-full" value={form.name} onChange={(e) => set("name", e.target.value)} required disabled={!canEdit} />
-          </div>
-          <div>
-            <label className="label-text mb-1 block">Email</label>
-            <input type="email" className="input-modern w-full" value={form.email} onChange={(e) => set("email", e.target.value)} disabled={!canEdit} />
-          </div>
-          <div>
-            <label className="label-text mb-1 block">Phone</label>
-            <input className="input-modern w-full" value={form.phone} onChange={(e) => set("phone", e.target.value)} disabled={!canEdit} />
-          </div>
-          <div>
-            <label className="label-text mb-1 block">Portal user (client account)</label>
-            <select className="input-modern w-full" value={form.userId} onChange={(e) => set("userId", e.target.value)} disabled={!canEdit}>
-              <option value="">None</option>
-              {candidates.map((candidate) => (
-                <option key={candidate.id} value={candidate.id}>
-                  {candidate.name} ({candidate.email})
-                </option>
-              ))}
-            </select>
-          </div>
+      {/* Tab Panels */}
+      {tab === "overview" && (
+        <ClientOverviewTab
+          client={client}
+          compliance={compliance}
+          contacts={contacts}
+          contracts={contracts}
+          user={user}
+          onTabChange={(t) => setTab(t)}
+        />
+      )}
 
-          <p className="pt-1 text-xs font-semibold uppercase tracking-wider text-security-navy-500 sm:col-span-2">
-            Contact person
-          </p>
-          <div>
-            <label className="label-text mb-1 block">Name</label>
-            <input className="input-modern w-full" value={form.contactPersonName} onChange={(e) => set("contactPersonName", e.target.value)} disabled={!canEdit} />
-          </div>
-          <div>
-            <label className="label-text mb-1 block">Role / title</label>
-            <input className="input-modern w-full" value={form.contactPersonRole} onChange={(e) => set("contactPersonRole", e.target.value)} disabled={!canEdit} />
-          </div>
-          <div>
-            <label className="label-text mb-1 block">Mobile</label>
-            <input className="input-modern w-full" value={form.contactPersonMobile} onChange={(e) => set("contactPersonMobile", e.target.value)} disabled={!canEdit} />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="label-text mb-1 block">Physical address</label>
-            <textarea rows={2} className="input-modern w-full" value={form.physicalAddress} onChange={(e) => set("physicalAddress", e.target.value)} disabled={!canEdit} />
-          </div>
+      {tab === "legal" && (
+        <ClientLegalTab
+          client={client}
+          canEdit={canEdit}
+          token={token ?? ""}
+          onSaveClient={handleSaveClientMaster}
+          relatedParties={relatedParties}
+          onRefreshRelatedParties={async () => {
+            if (!token) return;
+            const res = await getClientRelatedParties(token, client.id);
+            setRelatedParties(res);
+          }}
+          onError={setError}
+          onSuccess={setNotice}
+        />
+      )}
 
-          <p className="pt-1 text-xs font-semibold uppercase tracking-wider text-security-navy-500 sm:col-span-2">
-            Billing details — printed on quotes, invoices and statements
-          </p>
-          <div>
-            <label className="label-text mb-1 block">Billing email</label>
-            <input type="email" className="input-modern w-full" value={form.billingEmail} onChange={(e) => set("billingEmail", e.target.value)} disabled={!canEdit} />
-          </div>
-          <div>
-            <label className="label-text mb-1 block">VAT number</label>
-            <input className="input-modern w-full" value={form.vatNumber} onChange={(e) => set("vatNumber", e.target.value)} disabled={!canEdit} />
-          </div>
-          <div>
-            <label className="label-text mb-1 block">Company registration number</label>
-            <input className="input-modern w-full" value={form.registrationNumber} onChange={(e) => set("registrationNumber", e.target.value)} disabled={!canEdit} />
-          </div>
-          <div>
-            <label className="label-text mb-1 block">Payment terms (days)</label>
-            <input type="number" min={0} max={365} className="input-modern w-full" value={form.paymentTermsDays} onChange={(e) => set("paymentTermsDays", e.target.value)} disabled={!canEdit} />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="label-text mb-1 block">Billing address</label>
-            <textarea rows={2} className="input-modern w-full" value={form.billingAddress} onChange={(e) => set("billingAddress", e.target.value)} disabled={!canEdit} />
-          </div>
+      {tab === "contacts" && (
+        <ClientContactsTab
+          client={client}
+          contacts={contacts}
+          canEdit={canEdit}
+          token={token ?? ""}
+          onRefreshContacts={async () => {
+            if (!token) return;
+            const res = await getClientContacts(token, client.id);
+            setContacts(res);
+          }}
+          onError={setError}
+          onSuccess={setNotice}
+        />
+      )}
 
-          <div className="sm:col-span-2">
-            <RecipientsEditor
-              value={form.reportRecipients}
-              onChange={(next) => set("reportRecipients", next)}
-              disabled={!canEdit}
-            />
-          </div>
-
-          <div className="sm:col-span-2">
-            <label className="label-text mb-1 block">Internal notes</label>
-            <textarea rows={3} className="input-modern w-full" value={form.notes} onChange={(e) => set("notes", e.target.value)} disabled={!canEdit} />
-          </div>
-
-          <label className="flex items-center gap-2 text-sm sm:col-span-2">
-            <input type="checkbox" checked={form.isActive} onChange={(e) => set("isActive", e.target.checked)} disabled={!canEdit} />
-            Active
-          </label>
-
-          {canEdit && (
-            <div className="sm:col-span-2">
-              <button type="submit" className="btn-primary" disabled={saving}>
-                {saving ? "Saving…" : "Save changes"}
-              </button>
-            </div>
-          )}
-        </form>
+      {tab === "contracts" && (
+        <ClientContractsTab
+          client={client}
+          contracts={contracts}
+          canEdit={canEdit}
+          token={token ?? ""}
+          onRefreshContracts={async () => {
+            if (!token) return;
+            const res = await getClientContracts(token, client.id);
+            setContracts(res);
+          }}
+          onNavigateToDocuments={handleNavigateToDocuments}
+          onError={setError}
+          onSuccess={setNotice}
+        />
       )}
 
       {tab === "sites" && (
@@ -314,86 +307,49 @@ export default function ClientDetailPage() {
           client={client}
           canEdit={canEdit}
           token={token ?? ""}
-          onChanged={load}
+          onChanged={loadAll}
           onError={setError}
         />
       )}
 
-      {tab === "month-end" && <ClientMonthEndTab clientId={client.id} token={token ?? ""} />}
+      {tab === "documents" && (
+        <ClientDocumentsTab
+          client={client}
+          compliance={compliance}
+          contracts={contracts}
+          initialContractFilterId={selectedContractFilterId}
+          canEdit={canEdit}
+          canVerify={canVerifyDocuments}
+          token={token ?? ""}
+          onRefreshCompliance={async () => {
+            if (!token) return;
+            const res = await getClientCompliance(token, client.id);
+            setCompliance(res);
+          }}
+          onError={setError}
+          onSuccess={setNotice}
+        />
+      )}
+
+      {tab === "privacy" && (
+        <ClientPrivacyTab
+          client={client}
+          contacts={contacts}
+          canEdit={canEdit}
+          token={token ?? ""}
+          onError={setError}
+          onSuccess={setNotice}
+        />
+      )}
+
+      {tab === "month-end" && (
+        <ClientMonthEndTab clientId={client.id} token={token ?? ""} />
+      )}
     </main>
   );
 }
 
-function RecipientsEditor({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: string[];
-  onChange: (next: string[]) => void;
-  disabled: boolean;
-}) {
-  const [draft, setDraft] = useState("");
-
-  const add = () => {
-    const email = draft.trim();
-    if (!email || value.includes(email)) return;
-    onChange([...value, email]);
-    setDraft("");
-  };
-
-  return (
-    <div>
-      <label className="label-text mb-1 block">Email the month-end pack to (sent manually)</label>
-      <p className="mb-2 text-xs text-security-navy-500">
-        Nothing is emailed automatically — these are the addresses to send the downloaded pack to.
-        Leave empty to fall back to the billing email.
-      </p>
-      <div className="mb-2 flex flex-wrap gap-2">
-        {value.map((email) => (
-          <span
-            key={email}
-            className="inline-flex items-center gap-2 rounded-full bg-security-navy-50 px-3 py-1 text-sm dark:bg-security-navy-800"
-          >
-            {email}
-            {!disabled && (
-              <button
-                type="button"
-                onClick={() => onChange(value.filter((item) => item !== email))}
-                className="text-security-navy-500 hover:text-red-600"
-                aria-label={`Remove ${email}`}
-              >
-                ×
-              </button>
-            )}
-          </span>
-        ))}
-        {value.length === 0 && <span className="text-sm text-security-navy-500">No recipients captured.</span>}
-      </div>
-      {!disabled && (
-        <div className="flex gap-2">
-          <input
-            type="email"
-            className="input-modern w-full max-w-sm"
-            value={draft}
-            placeholder="name@client.co.za"
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                add();
-              }
-            }}
-          />
-          <button type="button" className="btn-secondary" onClick={add}>
-            Add
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
+/** Operational Sites Tab: manages linking/detaching sites to this client */
 function SitesTab({
   client,
   canEdit,
@@ -450,35 +406,51 @@ function SitesTab({
   return (
     <div className="space-y-4">
       <div className="overflow-x-auto rounded-security-lg border border-security-navy-100 dark:border-security-navy-700">
-        <table className="min-w-full divide-y divide-security-navy-100 text-sm dark:divide-security-navy-700">
+        <table className="min-w-full divide-y divide-security-navy-100 text-xs dark:divide-security-navy-700">
           <thead className="bg-security-navy-50 dark:bg-security-navy-900">
-            <tr className="text-left text-[10px] uppercase tracking-wider text-security-navy-500">
-              <th className="px-3 py-2">Site</th>
-              <th className="px-3 py-2">Address</th>
-              <th className="px-3 py-2">Service</th>
-              <th className="px-3 py-2">Contract</th>
-              <th className="px-3 py-2">Status</th>
-              {canEdit && <th className="px-3 py-2" />}
+            <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-security-navy-500">
+              <th className="px-4 py-2.5">Site Name</th>
+              <th className="px-4 py-2.5">Deployment Address</th>
+              <th className="px-4 py-2.5">Operational Service</th>
+              <th className="px-4 py-2.5">Legacy Contract Period</th>
+              <th className="px-4 py-2.5">Status</th>
+              {canEdit && <th className="px-4 py-2.5 text-right">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
             {client.sites.map((site) => (
-              <tr key={site.id}>
-                <td className="px-3 py-2">
-                  <Link href={`/sites/${site.id}`} className="font-medium text-security-navy-700 hover:underline dark:text-security-navy-300">
+              <tr key={site.id} className="hover:bg-security-navy-50/50 dark:hover:bg-security-navy-800/40">
+                <td className="px-4 py-3">
+                  <Link
+                    href={`/sites/${site.id}`}
+                    className="font-medium text-security-navy-900 hover:text-security-amber-600 hover:underline dark:text-security-navy-100"
+                  >
                     {site.name}
                   </Link>
                 </td>
-                <td className="px-3 py-2 text-security-navy-600 dark:text-security-navy-400">{site.physicalAddress || "—"}</td>
-                <td className="px-3 py-2 text-security-navy-600 dark:text-security-navy-400">{site.serviceType || "—"}</td>
-                <td className="px-3 py-2 text-security-navy-600 dark:text-security-navy-400">
+                <td className="px-4 py-3 text-security-navy-600 dark:text-security-navy-400">
+                  {site.physicalAddress || "—"}
+                </td>
+                <td className="px-4 py-3 text-security-navy-600 dark:text-security-navy-400">
+                  {site.serviceType || "—"}
+                </td>
+                <td className="px-4 py-3 font-mono text-security-navy-600 dark:text-security-navy-400">
                   {site.contractStartDate ? String(site.contractStartDate).slice(0, 10) : "—"}
                   {site.contractEndDate ? ` → ${String(site.contractEndDate).slice(0, 10)}` : ""}
                 </td>
-                <td className="px-3 py-2 text-security-navy-600 dark:text-security-navy-400">{site.siteStatus}</td>
+                <td className="px-4 py-3">
+                  <span className="rounded-full bg-security-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-security-emerald-800 dark:bg-security-emerald-950/60 dark:text-security-emerald-300">
+                    {site.siteStatus}
+                  </span>
+                </td>
                 {canEdit && (
-                  <td className="px-3 py-2 text-right">
-                    <button type="button" className="btn-secondary py-1 text-sm" onClick={() => unlink(site.id)} disabled={busy}>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      type="button"
+                      className="btn-secondary py-1 text-xs"
+                      onClick={() => unlink(site.id)}
+                      disabled={busy}
+                    >
                       Detach
                     </button>
                   </td>
@@ -487,8 +459,8 @@ function SitesTab({
             ))}
             {client.sites.length === 0 && (
               <tr>
-                <td colSpan={canEdit ? 6 : 5} className="px-3 py-8 text-center text-sm text-security-navy-600">
-                  No sites linked yet. Attach them below so their timesheets appear in the month-end pack.
+                <td colSpan={canEdit ? 6 : 5} className="px-4 py-8 text-center text-xs text-security-navy-500">
+                  No operational sites linked yet. Attach sites below to include their posts and attendance in month-end packs.
                 </td>
               </tr>
             )}
@@ -497,18 +469,19 @@ function SitesTab({
       </div>
 
       {canEdit && (
-        <div className="card-dashboard space-y-3 p-4">
-          <h2 className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">Attach sites</h2>
+        <div className="card-dashboard space-y-3 p-4 text-xs">
+          <h2 className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">
+            Attach Operational Sites
+          </h2>
           {unlinked.length === 0 ? (
-            <p className="text-sm text-security-navy-600">
-              Every site is already linked to a client. Detach it from its current client first, or set the
-              client on the <Link href="/sites" className="text-security-navy-700 hover:underline">site itself</Link>.
+            <p className="text-security-navy-500">
+              All company sites are currently attached to clients.
             </p>
           ) : (
             <>
-              <div className="max-h-56 space-y-1 overflow-y-auto">
+              <div className="max-h-56 space-y-1.5 overflow-y-auto">
                 {unlinked.map((site) => (
-                  <label key={site.id} className="flex items-center gap-2 text-sm">
+                  <label key={site.id} className="flex items-center gap-2">
                     <input
                       type="checkbox"
                       checked={selected.includes(site.id)}
@@ -518,12 +491,19 @@ function SitesTab({
                         )
                       }
                     />
-                    {site.name}
+                    <span className="font-medium text-security-navy-800 dark:text-security-navy-200">
+                      {site.name}
+                    </span>
                   </label>
                 ))}
               </div>
-              <button type="button" className="btn-primary" onClick={link} disabled={busy || selected.length === 0}>
-                {busy ? "Linking…" : `Attach ${selected.length || ""} site(s)`.trim()}
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={link}
+                disabled={busy || selected.length === 0}
+              >
+                {busy ? "Linking..." : `Attach ${selected.length || ""} Site(s)`.trim()}
               </button>
             </>
           )}

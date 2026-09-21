@@ -84,7 +84,16 @@ export async function registerBillingPdfRoutes(
       status: quote.status,
       watermark: watermarkFor(quote.status, true),
       issuer: issuerFrom(company),
-      billTo: billToFrom(quote.client),
+      billTo: quote.client
+        ? billToFrom(quote.client)
+        : {
+            name: quote.prospectName || "Valued Client",
+            address: quote.prospectAddress || null,
+            email: quote.prospectEmail || null,
+            phone: quote.prospectPhone || null,
+            vatNumber: null,
+            registrationNumber: null,
+          },
       issueDateLabel: "Date",
       issueDate: dateOnly(quote.quoteDate),
       dueDateLabel: "Valid until",

@@ -64,8 +64,12 @@ export interface Quote extends DocumentTotals {
   reference?: string | null;
   notes?: string | null;
   status: QuoteStatus;
-  clientId: string;
-  client?: ClientSummaryRef;
+  clientId?: string | null;
+  client?: ClientSummaryRef | null;
+  prospectName?: string | null;
+  prospectEmail?: string | null;
+  prospectPhone?: string | null;
+  prospectAddress?: string | null;
   items: DocumentLine[];
   invoices?: Array<{ id: string; invoiceNumber: string; status: InvoiceStatus }>;
 }
@@ -190,7 +194,17 @@ export interface DocumentPayload {
   items: LineInput[];
 }
 
-export interface CreateQuotePayload extends DocumentPayload {
+export interface CreateQuotePayload {
+  clientId?: string | null;
+  prospectName?: string | null;
+  prospectEmail?: string | null;
+  prospectPhone?: string | null;
+  prospectAddress?: string | null;
+  reference?: string | null;
+  notes?: string | null;
+  discountAmount?: string | number;
+  vatRate?: string | number;
+  items: LineInput[];
   quoteDate: string;
   validUntil: string;
   quoteNumber?: string;
@@ -595,7 +609,7 @@ export function exportQuotesToCsv(
   ];
   const rows = quotes.map((q) => [
     escapeCsvCell(q.quoteNumber),
-    escapeCsvCell(q.client?.name ?? ""),
+    escapeCsvCell(q.client?.name || q.prospectName || ""),
     escapeCsvCell(q.quoteDate?.slice(0, 10) ?? ""),
     escapeCsvCell(q.validUntil?.slice(0, 10) ?? ""),
     escapeCsvCell(q.subtotal),

@@ -23,6 +23,14 @@ export const DOCUMENT_CATEGORIES: Record<string, { label: string; description: s
   SPECIALIST_SECURITY: { label: "Specialist Security Certificates", description: "Armed response, CCTV, Access Control, and CIT qualifications" },
   FIREARM: { label: "Firearm Documents", description: "Firearm competency, authorizations, and SAPS/business training", isSensitive: true },
   QUALIFICATIONS: { label: "Other Qualifications", description: "First Aid, Firefighting, OHS, Driver's licenses and PrDP" },
+  // Client document categories (Phase 5 upgrade)
+  CLIENT_LEGAL: { label: "Client Legal Documents", description: "CIPC registration, founding statements, trust deeds and company identity" },
+  CLIENT_IDENTITY: { label: "Client Identity & Beneficial Ownership", description: "Beneficial ownership register and director identity verification", isSensitive: true },
+  CLIENT_AUTHORITY: { label: "Client Authority Documents", description: "Authorised signatory resolutions and power of attorney" },
+  CLIENT_CONTRACT: { label: "Client Service Contracts", description: "Service agreements, SLAs, amendments and service orders" },
+  CLIENT_PRIVACY: { label: "Client POPIA & Privacy Documents", description: "POPIA operator agreements, data processing agreements and privacy notices" },
+  CLIENT_PROCUREMENT: { label: "Client Procurement & Compliance", description: "Tax clearance PINs, B-BBEE certificates and vendor packs" },
+  CLIENT_OTHER: { label: "Other Client Documents", description: "Site correspondence, handover notes and other client files" },
 };
 
 export const DOCUMENT_TAXONOMY: DocumentTypeDefinition[] = [
@@ -117,6 +125,40 @@ export const DOCUMENT_TAXONOMY: DocumentTypeDefinition[] = [
   { type: "ohs_training", label: "Occupational Health & Safety Training", category: "QUALIFICATIONS", categoryLabel: "Other Qualifications", requiresExpiry: false },
   { type: "academic_qualification", label: "Academic Qualification", category: "QUALIFICATIONS", categoryLabel: "Other Qualifications", requiresExpiry: false },
   { type: "other_professional_qualification", label: "Other Professional Qualification", category: "QUALIFICATIONS", categoryLabel: "Other Qualifications", requiresExpiry: false },
+
+  // 11. Client Legal Documents
+  { type: "cipc_registration", label: "CIPC Registration Certificate", category: "CLIENT_LEGAL", categoryLabel: "Client Legal Documents", defaultAuthority: "CIPC", requiresExpiry: false },
+  { type: "proof_of_business_address", label: "Proof of Business Address", category: "CLIENT_LEGAL", categoryLabel: "Client Legal Documents", requiresExpiry: true },
+  { type: "founding_statement_ck", label: "Founding Statement (CK1/CK2)", category: "CLIENT_LEGAL", categoryLabel: "Client Legal Documents", defaultAuthority: "CIPC", requiresExpiry: false },
+  { type: "trust_deed", label: "Trust Deed & Letters of Authority", category: "CLIENT_LEGAL", categoryLabel: "Client Legal Documents", defaultAuthority: "Master of High Court", requiresExpiry: false },
+  { type: "body_corporate_constitution", label: "Body Corporate Constitution / Rules", category: "CLIENT_LEGAL", categoryLabel: "Client Legal Documents", requiresExpiry: false },
+
+  // 12. Client Identity & Beneficial Ownership (Sensitive)
+  { type: "beneficial_ownership_evidence", label: "Beneficial Ownership Register / Evidence", category: "CLIENT_IDENTITY", categoryLabel: "Client Identity & Beneficial Ownership", isSensitive: true, requiresExpiry: false },
+  { type: "director_id_evidence", label: "Director / Principal Identity Evidence", category: "CLIENT_IDENTITY", categoryLabel: "Client Identity & Beneficial Ownership", isSensitive: true, requiresExpiry: false },
+  { type: "fica_due_diligence", label: "FICA / Due Diligence Documentation", category: "CLIENT_IDENTITY", categoryLabel: "Client Identity & Beneficial Ownership", isSensitive: true, requiresExpiry: true },
+
+  // 13. Client Authority Documents
+  { type: "authorised_signatory_resolution", label: "Authorised Signatory Resolution", category: "CLIENT_AUTHORITY", categoryLabel: "Client Authority Documents", requiresExpiry: false },
+  { type: "power_of_attorney", label: "Power of Attorney", category: "CLIENT_AUTHORITY", categoryLabel: "Client Authority Documents", requiresExpiry: false },
+
+  // 14. Client Service Contracts
+  { type: "client_service_agreement", label: "Service Agreement / Contract", category: "CLIENT_CONTRACT", categoryLabel: "Client Service Contracts", requiresExpiry: true },
+  { type: "service_level_agreement", label: "Service Level Agreement (SLA)", category: "CLIENT_CONTRACT", categoryLabel: "Client Service Contracts", requiresExpiry: true },
+  { type: "contract_amendment", label: "Contract Amendment / Addendum", category: "CLIENT_CONTRACT", categoryLabel: "Client Service Contracts", requiresExpiry: false },
+  { type: "contract_termination_notice", label: "Contract Notice / Termination", category: "CLIENT_CONTRACT", categoryLabel: "Client Service Contracts", requiresExpiry: false },
+
+  // 15. Client Privacy & POPIA Documents
+  { type: "popia_operator_agreement", label: "POPIA Section 21 Operator Agreement", category: "CLIENT_PRIVACY", categoryLabel: "Client POPIA & Privacy Documents", requiresExpiry: true },
+  { type: "client_privacy_notice", label: "Privacy Notice / Processing Acknowledgement", category: "CLIENT_PRIVACY", categoryLabel: "Client POPIA & Privacy Documents", requiresExpiry: false },
+
+  // 16. Client Procurement & Compliance
+  { type: "tax_clearance_pin", label: "SARS Tax Compliance PIN", category: "CLIENT_PROCUREMENT", categoryLabel: "Client Procurement & Compliance", defaultAuthority: "SARS", requiresExpiry: true },
+  { type: "bbbee_certificate_affidavit", label: "B-BBEE Certificate / Sworn Affidavit", category: "CLIENT_PROCUREMENT", categoryLabel: "Client Procurement & Compliance", requiresExpiry: true },
+  { type: "vendor_registration_form", label: "Client Vendor Registration Form", category: "CLIENT_PROCUREMENT", categoryLabel: "Client Procurement & Compliance", requiresExpiry: false },
+
+  // 17. Other Client Documents
+  { type: "client_general_document", label: "General Client Documentation", category: "CLIENT_OTHER", categoryLabel: "Other Client Documents", requiresExpiry: false },
 ];
 
 export const TAXONOMY_BY_TYPE = new Map(DOCUMENT_TAXONOMY.map((item) => [item.type, item]));

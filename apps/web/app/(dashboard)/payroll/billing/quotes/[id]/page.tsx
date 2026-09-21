@@ -186,10 +186,17 @@ export default function QuoteDetailPage() {
               <StatusBadge status={quote.status} />
               {isExpired && <span className="badge-warning text-[10px]">Expired</span>}
             </div>
-            <p className="mt-1 text-sm text-security-navy-500">
-              {quote.client?.name} · Valid until{" "}
-              <span className={new Date(quote.validUntil) < new Date() ? "font-semibold text-red-600" : ""}>
-                {new Date(quote.validUntil).toLocaleDateString("en-ZA", { year: "numeric", month: "short", day: "numeric" })}
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-security-navy-500">
+              <span className="font-semibold text-security-navy-900">{quote.client?.name || quote.prospectName || "—"}</span>
+              {!quote.clientId && quote.prospectName && (
+                <span className="inline-flex items-center rounded-full bg-security-amber-50 px-2 py-0.5 text-[10px] font-semibold text-security-amber-700 ring-1 ring-inset ring-security-amber-600/20">
+                  Potential Client
+                </span>
+              )}
+              <span>· Valid until{" "}
+                <span className={new Date(quote.validUntil) < new Date() ? "font-semibold text-red-600" : ""}>
+                  {new Date(quote.validUntil).toLocaleDateString("en-ZA", { year: "numeric", month: "short", day: "numeric" })}
+                </span>
               </span>
             </p>
           </div>
@@ -259,11 +266,19 @@ export default function QuoteDetailPage() {
           notes: quote.notes,
         }}
         party={{
-          clientName: quote.client?.name ?? "Unknown",
-          clientEmail: (quote.client as unknown as Record<string, string | null>)?.billingEmail ?? (quote.client as unknown as Record<string, string | null>)?.email,
-          clientAddress: (quote.client as unknown as Record<string, string | null>)?.billingAddress,
-          clientVatNumber: (quote.client as unknown as Record<string, string | null>)?.vatNumber,
-          clientPhone: (quote.client as unknown as Record<string, string | null>)?.phone,
+          clientName: quote.client?.name ?? quote.prospectName ?? "Unknown",
+          clientEmail: quote.client
+            ? ((quote.client as unknown as Record<string, string | null>)?.billingEmail ?? (quote.client as unknown as Record<string, string | null>)?.email)
+            : quote.prospectEmail,
+          clientAddress: quote.client
+            ? (quote.client as unknown as Record<string, string | null>)?.billingAddress
+            : quote.prospectAddress,
+          clientVatNumber: quote.client
+            ? (quote.client as unknown as Record<string, string | null>)?.vatNumber
+            : null,
+          clientPhone: quote.client
+            ? (quote.client as unknown as Record<string, string | null>)?.phone
+            : quote.prospectPhone,
         }}
         financials={{
           subtotal: quote.subtotal,
@@ -279,9 +294,14 @@ export default function QuoteDetailPage() {
       {/* CTA for accepted quotes that haven't been converted yet */}
       {canCreate && quote.status === "accepted" && !convertedInvoice && (
         <div className="rounded-security-lg border border-security-emerald-200 bg-security-emerald-50 p-5 text-center">
-          <p className="text-sm font-semibold text-security-emerald-800 mb-2">
+          <p className="text-sm font-semibold text-security-emerald-800 mb-1">
             This quote has been accepted — convert it to a tax invoice to begin billing.
           </p>
+          {!quote.clientId && quote.prospectName && (
+            <p className="text-xs text-security-emerald-700 mb-3">
+              Converting will automatically onboard <strong>{quote.prospectName}</strong> as a client record in your system.
+            </p>
+          )}
           <button type="button" disabled={busy} onClick={convert} className="btn-amber">
             {busy ? "Converting…" : "Convert to Invoice →"}
           </button>

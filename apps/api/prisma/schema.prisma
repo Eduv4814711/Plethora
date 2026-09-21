@@ -120,6 +120,11 @@ model Company {
   clientInvoices         ClientInvoice[]
   clientPayments         ClientPayment[]
   clientReceipts         ClientReceipt[]
+  clientContacts         ClientContact[]
+  clientRelatedParties   ClientRelatedParty[]
+  clientContracts        ClientContract[]
+  clientContractSites    ClientContractSite[]
+  clientDataProcessingProfiles ClientDataProcessingProfile[]
   payrollPeriodReadiness PayrollPeriodReadiness[]
   accessChangeRequests   AccessChangeRequest[]
 
@@ -422,6 +427,7 @@ model Site {
   quoteLines                ClientQuoteLine[]          @relation("ClientQuoteLineSite")
   invoiceLines              ClientInvoiceLine[]        @relation("ClientInvoiceLineSite")
   billingRates              SiteBillingRate[]
+  contractSites             ClientContractSite[]
   posts                     SitePost[]
   assignedGuards            SiteAssignment[]
   guardSiteEligibilities    GuardSiteEligibility[]
@@ -2511,6 +2517,7 @@ model ManagedDocument {
   employeeId           String?
   siteId               String?
   clientId             String?
+  clientContractId     String?
   incidentId           String?
   taskId               String?
   uploadedById         String
@@ -2525,14 +2532,15 @@ model ManagedDocument {
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
-  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
-  site       Site?     @relation(fields: [siteId], references: [id], onDelete: SetNull)
-  client     Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  incident   Incident? @relation(fields: [incidentId], references: [id], onDelete: SetNull)
-  task       Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  uploadedBy User      @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Cascade)
-  verifiedBy User?     @relation("DocumentVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  company        Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee       Employee?       @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  site           Site?           @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  client         Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientContract ClientContract? @relation(fields: [clientContractId], references: [id], onDelete: SetNull)
+  incident       Incident?       @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  task           Task?           @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  uploadedBy     User            @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Cascade)
+  verifiedBy     User?           @relation("DocumentVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
 
   @@index([companyId, category])
   @@index([companyId, documentCategory])
@@ -2541,6 +2549,7 @@ model ManagedDocument {
   @@index([employeeId])
   @@index([siteId])
   @@index([clientId])
+  @@index([clientContractId])
   @@index([expiryDate])
 }
 
@@ -2753,17 +2762,225 @@ model Client {
   /// Who the month-end pack is emailed to (manually). Empty falls back to `billingEmail ?? email`.
   reportRecipients    String[] @default([])
 
-  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  user             User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
-  sites            Site[]
-  managedDocuments ManagedDocument[]
-  quotes           ClientQuote[]
-  invoices         ClientInvoice[]
-  payments         ClientPayment[]
-  billingRates     SiteBillingRate[]
+  /// Legal identity & corporate classification (Phase 1 upgrade)
+  legalName             String?
+  tradingName           String?
+  entityType            ClientEntityType?
+  taxNumber             String?
+  registeredAddress     String?                @db.Text
+  onboardingStatus      ClientOnboardingStatus @default(DRAFT)
+  onboardingCompletedAt DateTime?
+
+  company               Company                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user                  User?                        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sites                 Site[]
+  managedDocuments      ManagedDocument[]
+  quotes                ClientQuote[]
+  invoices              ClientInvoice[]
+  payments              ClientPayment[]
+  billingRates          SiteBillingRate[]
+  contacts              ClientContact[]
+  relatedParties        ClientRelatedParty[]
+  contracts             ClientContract[]
+  dataProcessingProfile ClientDataProcessingProfile?
 
   @@index([companyId])
   @@index([userId])
+}
+
+enum ClientEntityType {
+  PRIVATE_COMPANY
+  CLOSE_CORPORATION
+  TRUST
+  PARTNERSHIP
+  SOLE_PROPRIETOR
+  NATURAL_PERSON
+  GOVERNMENT
+  MUNICIPALITY
+  BODY_CORPORATE_HOA
+  NPO
+  OTHER
+}
+
+enum ClientOnboardingStatus {
+  DRAFT
+  IN_REVIEW
+  READY
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum ClientContactType {
+  PRIMARY
+  OPERATIONS
+  BILLING
+  EMERGENCY
+  PROCUREMENT
+  LEGAL
+  INFORMATION_OFFICER
+  AUTHORISED_SIGNATORY
+  REPORT_RECIPIENT
+  OTHER
+}
+
+enum ClientRelationshipType {
+  DIRECTOR
+  MEMBER
+  TRUSTEE
+  PARTNER
+  BENEFICIAL_OWNER
+  AUTHORISED_SIGNATORY
+  OTHER
+}
+
+enum ClientContractStatus {
+  DRAFT
+  ACTIVE
+  PENDING_RENEWAL
+  EXPIRED
+  TERMINATED
+  CANCELLED
+}
+
+enum ContractRenewalType {
+  FIXED_TERM
+  AUTO_RENEW_MONTHLY
+  AUTO_RENEW_ANNUAL
+  MONTH_TO_MONTH
+  EVERGREEN
+}
+
+enum OperatorAgreementStatus {
+  NOT_APPLICABLE
+  REQUIRED
+  SENT
+  SIGNED
+  EXPIRED
+}
+
+model ClientContact {
+  id          String            @id @default(cuid())
+  companyId   String
+  clientId    String
+  firstName   String
+  lastName    String?
+  jobTitle    String?
+  department  String?
+  email       String?
+  mobile      String?
+  contactType ClientContactType @default(OTHER)
+  isPrimary   Boolean           @default(false)
+  isActive    Boolean           @default(true)
+  notes       String?           @db.Text
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client  Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([clientId])
+  @@index([companyId, clientId])
+  @@index([companyId, isPrimary])
+}
+
+model ClientRelatedParty {
+  id                    String                 @id @default(cuid())
+  companyId             String
+  clientId              String
+  fullName              String
+  relationshipType      ClientRelationshipType
+  ownershipPercent      Decimal?               @db.Decimal(5, 2)
+  isAuthorisedSignatory Boolean                @default(false)
+  authorityReference    String?
+  notes                 String?                @db.Text
+  isActive              Boolean                @default(true)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client  Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([clientId])
+}
+
+model ClientContract {
+  id               String               @id @default(cuid())
+  companyId        String
+  clientId         String
+  contractNumber   String
+  title            String
+  status           ClientContractStatus @default(ACTIVE)
+  signedDate       DateTime?            @db.Date
+  effectiveFrom    DateTime             @db.Date
+  effectiveTo      DateTime?            @db.Date
+  noticePeriodDays Int                  @default(30)
+  renewalType      ContractRenewalType  @default(FIXED_TERM)
+  autoRenew        Boolean              @default(false)
+  scopeSummary     String?              @db.Text
+  serviceTypes     String[]             @default([])
+  notes            String?              @db.Text
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  company   Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client    Client               @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  sites     ClientContractSite[]
+  documents ManagedDocument[]
+
+  @@unique([companyId, contractNumber])
+  @@index([companyId])
+  @@index([clientId])
+  @@index([companyId, status])
+}
+
+model ClientContractSite {
+  id         String   @id @default(cuid())
+  companyId  String
+  contractId String
+  siteId     String
+  createdAt  DateTime @default(now())
+
+  company  Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contract ClientContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  site     Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([contractId, siteId])
+  @@index([companyId])
+  @@index([contractId])
+  @@index([siteId])
+}
+
+model ClientDataProcessingProfile {
+  id                          String                  @id @default(cuid())
+  companyId                   String
+  clientId                    String                  @unique
+  responsiblePartyName        String?
+  informationOfficerName      String?
+  informationOfficerEmail     String?
+  informationOfficerPhone     String?
+  processingPurposes          String[]                @default([])
+  dataCategories              String[]                @default([])
+  hasCrossBorderTransfer      Boolean                 @default(false)
+  crossBorderDetails          String?                 @db.Text
+  operatorAgreementStatus     OperatorAgreementStatus @default(REQUIRED)
+  operatorAgreementSignedDate DateTime?               @db.Date
+  operatorAgreementDocumentId String?
+  privacyNoticeProvided       Boolean                 @default(false)
+  privacyNoticeDate           DateTime?               @db.Date
+  retentionPolicyNotes        String?                 @db.Text
+  securityMeasuresNotes       String?                 @db.Text
+  notes                       String?                 @db.Text
+  createdAt                   DateTime                @default(now())
+  updatedAt                   DateTime                @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client  Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([clientId])
 }
 
 enum ClientQuoteStatus {
@@ -2788,7 +3005,11 @@ enum ClientInvoiceStatus {
 model ClientQuote {
   id              String            @id @default(cuid())
   companyId       String
-  clientId        String
+  clientId        String?
+  prospectName    String?
+  prospectEmail   String?
+  prospectPhone   String?
+  prospectAddress String?           @db.Text
   quoteNumber     String
   quoteDate       DateTime          @db.Date
   validUntil      DateTime          @db.Date
@@ -2807,7 +3028,7 @@ model ClientQuote {
   updatedAt       DateTime          @updatedAt
 
   company   Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  client    Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  client    Client?           @relation(fields: [clientId], references: [id], onDelete: Restrict)
   decidedBy User?             @relation("ClientQuoteDecidedBy", fields: [decidedByUserId], references: [id], onDelete: SetNull)
   items     ClientQuoteLine[]
   invoices  ClientInvoice[]
@@ -2816,6 +3037,7 @@ model ClientQuote {
   @@index([companyId, status])
   @@index([clientId])
   @@index([companyId, quoteDate])
+  @@index([companyId, prospectName])
 }
 
 model ClientQuoteLine {

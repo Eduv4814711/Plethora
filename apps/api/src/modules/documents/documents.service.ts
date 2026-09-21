@@ -119,6 +119,7 @@ export async function listDocuments(
     employeeId?: string;
     siteId?: string;
     clientId?: string;
+    clientContractId?: string;
     expiringWithinDays?: number;
     search?: string;
     isSensitive?: boolean;
@@ -135,6 +136,7 @@ export async function listDocuments(
     ...(query.employeeId ? { employeeId: query.employeeId } : {}),
     ...(query.siteId ? { siteId: query.siteId } : {}),
     ...(query.clientId ? { clientId: query.clientId } : {}),
+    ...(query.clientContractId ? { clientContractId: query.clientContractId } : {}),
     ...(query.isSensitive !== undefined ? { isSensitive: query.isSensitive } : {}),
     ...(query.expiringWithinDays != null
       ? {
@@ -182,6 +184,7 @@ export async function validateDocumentReferences(
     employeeId?: string | null;
     siteId?: string | null;
     clientId?: string | null;
+    clientContractId?: string | null;
     incidentId?: string | null;
     taskId?: string | null;
   }
@@ -200,6 +203,10 @@ export async function validateDocumentReferences(
   if (refs.clientId) {
     labels.push("client");
     checks.push(prisma.client.findFirst({ where: { id: refs.clientId, companyId }, select: { id: true } }).then(Boolean));
+  }
+  if (refs.clientContractId) {
+    labels.push("contract");
+    checks.push(prisma.clientContract.findFirst({ where: { id: refs.clientContractId, companyId }, select: { id: true } }).then(Boolean));
   }
   if (refs.incidentId) {
     labels.push("incident");
@@ -236,6 +243,7 @@ export async function createDocumentRecord(params: {
   employeeId?: string | null;
   siteId?: string | null;
   clientId?: string | null;
+  clientContractId?: string | null;
   incidentId?: string | null;
   taskId?: string | null;
   notes?: string | null;
@@ -261,6 +269,7 @@ export async function createDocumentRecord(params: {
       employeeId: params.employeeId?.trim() || null,
       siteId: params.siteId?.trim() || null,
       clientId: params.clientId?.trim() || null,
+      clientContractId: params.clientContractId?.trim() || null,
       incidentId: params.incidentId?.trim() || null,
       taskId: params.taskId?.trim() || null,
       notes: params.notes?.trim() || null,
@@ -335,6 +344,7 @@ export async function updateDocumentMetadata(
     expiryDate?: Date | null;
     doesNotExpire?: boolean;
     isSensitive?: boolean;
+    clientContractId?: string | null;
     notes?: string | null;
   }
 ) {
@@ -350,6 +360,9 @@ export async function updateDocumentMetadata(
   if (data.documentNumber !== undefined) updateData.documentNumber = data.documentNumber;
   if (data.issuingAuthority !== undefined) updateData.issuingAuthority = data.issuingAuthority;
   if (data.issueDate !== undefined) updateData.issueDate = data.issueDate;
+  if (data.clientContractId !== undefined) {
+    updateData.clientContract = data.clientContractId ? { connect: { id: data.clientContractId } } : { disconnect: true };
+  }
   if (data.doesNotExpire !== undefined) {
     updateData.doesNotExpire = data.doesNotExpire;
     if (data.doesNotExpire) updateData.expiryDate = null;

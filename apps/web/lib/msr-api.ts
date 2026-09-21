@@ -221,6 +221,10 @@ export interface ManagedDocument {
   updatedAt?: string;
   site?: { id: string; name: string } | null;
   employee?: { id: string; firstName: string; lastName: string; employeeNumber?: string } | null;
+  clientId?: string | null;
+  client?: { id: string; name: string } | null;
+  clientContractId?: string | null;
+  clientContract?: { id: string; contractNumber: string; title: string } | null;
   uploadedBy?: { id: string; name: string; email?: string } | null;
   verifiedBy?: { id: string; name: string; email?: string } | null;
   expiryState?: ExpiryEvaluation;
@@ -531,9 +535,193 @@ export async function uploadIncidentAttachment(
 
 // ——— Clients ———
 
+export type ClientEntityType =
+  | "PRIVATE_COMPANY"
+  | "CLOSE_CORPORATION"
+  | "TRUST"
+  | "PARTNERSHIP"
+  | "SOLE_PROPRIETOR"
+  | "NATURAL_PERSON"
+  | "GOVERNMENT"
+  | "MUNICIPALITY"
+  | "BODY_CORPORATE_HOA"
+  | "NPO"
+  | "OTHER";
+
+export type ClientOnboardingStatus =
+  | "DRAFT"
+  | "IN_REVIEW"
+  | "READY"
+  | "ACTIVE"
+  | "SUSPENDED"
+  | "CLOSED";
+
+export type ClientContactType =
+  | "PRIMARY"
+  | "OPERATIONS"
+  | "BILLING"
+  | "EMERGENCY"
+  | "PROCUREMENT"
+  | "LEGAL"
+  | "INFORMATION_OFFICER"
+  | "AUTHORISED_SIGNATORY"
+  | "REPORT_RECIPIENT"
+  | "OTHER";
+
+export type ClientRelationshipType =
+  | "DIRECTOR"
+  | "MEMBER"
+  | "TRUSTEE"
+  | "PARTNER"
+  | "BENEFICIAL_OWNER"
+  | "AUTHORISED_SIGNATORY"
+  | "OTHER";
+
+export type ClientContractStatus =
+  | "DRAFT"
+  | "PENDING_SIGNATURE"
+  | "ACTIVE"
+  | "UNDER_REVIEW"
+  | "EXPIRED"
+  | "TERMINATED"
+  | "DISPUTED";
+
+export type ContractRenewalType = "MANUAL" | "EVERGREEN" | "FIXED_TERM" | "MONTH_TO_MONTH";
+
+export type OperatorAgreementStatus =
+  | "NOT_REQUIRED"
+  | "PENDING"
+  | "SIGNED"
+  | "ATTACHED"
+  | "EXEMPT";
+
+export interface ClientContact {
+  id: string;
+  companyId: string;
+  clientId: string;
+  firstName: string;
+  lastName?: string | null;
+  jobTitle?: string | null;
+  department?: string | null;
+  email?: string | null;
+  mobile?: string | null;
+  contactType: ClientContactType;
+  isPrimary: boolean;
+  isActive: boolean;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClientRelatedParty {
+  id: string;
+  companyId: string;
+  clientId: string;
+  fullName: string;
+  relationshipType: ClientRelationshipType;
+  ownershipPercent?: number | null;
+  isAuthorisedSignatory: boolean;
+  authorityReference?: string | null;
+  notes?: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ClientContractSite {
+  id: string;
+  contractId: string;
+  siteId: string;
+  assignedAt: string;
+  notes?: string | null;
+  site: {
+    id: string;
+    name: string;
+    siteStatus: string;
+    physicalAddress?: string | null;
+  };
+}
+
+export interface ClientContract {
+  id: string;
+  companyId: string;
+  clientId: string;
+  contractNumber: string;
+  title: string;
+  status: ClientContractStatus;
+  signedDate?: string | null;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+  noticePeriodDays?: number | null;
+  renewalType: ContractRenewalType;
+  autoRenew: boolean;
+  scopeSummary?: string | null;
+  serviceTypes: string[];
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  contractSites?: ClientContractSite[];
+  documents?: ManagedDocument[];
+}
+
+export interface ClientDataProcessingProfile {
+  id: string;
+  companyId: string;
+  clientId: string;
+  responsiblePartyLegalName?: string | null;
+  responsiblePartyAddress?: string | null;
+  informationOfficerContactId?: string | null;
+  processingPurposes: string[];
+  dataCategories: string[];
+  retentionPolicyReference?: string | null;
+  crossBorderTransfer: boolean;
+  crossBorderDetails?: string | null;
+  operatorAgreementStatus: OperatorAgreementStatus;
+  operatorAgreementSignedDate?: string | null;
+  operatorAgreementDocumentId?: string | null;
+  privacyNoticeDistributed: boolean;
+  privacyNoticeDate?: string | null;
+  securitySafeguardsSummary?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  informationOfficer?: ClientContact | null;
+}
+
+export interface ClientComplianceCheck {
+  key: string;
+  label: string;
+  category: string;
+  status: "COMPLETE" | "ATTENTION" | "MISSING" | "NOT_APPLICABLE";
+  requirementLevel: "STATUTORY" | "CONTRACTUAL" | "RECOMMENDED" | "OPTIONAL";
+  message: string;
+}
+
+export interface ClientComplianceEvaluation {
+  clientId: string;
+  clientName: string;
+  entityType?: ClientEntityType | null;
+  overallStatus: "COMPLETE" | "ATTENTION" | "MISSING";
+  checks: ClientComplianceCheck[];
+  summary: {
+    total: number;
+    complete: number;
+    attention: number;
+    missing: number;
+    notApplicable: number;
+  };
+}
+
 export interface ClientRecord {
   id: string;
   name: string;
+  legalName?: string | null;
+  tradingName?: string | null;
+  entityType?: ClientEntityType | null;
+  taxNumber?: string | null;
+  registeredAddress?: string | null;
+  onboardingStatus?: ClientOnboardingStatus;
+  onboardingCompletedAt?: string | null;
   email?: string | null;
   phone?: string | null;
   userId?: string | null;
@@ -550,7 +738,10 @@ export interface ClientRecord {
   notes?: string | null;
   reportRecipients?: string[];
   user?: { id: string; name: string; email: string } | null;
-  _count?: { sites: number };
+  contacts?: ClientContact[];
+  relatedParties?: ClientRelatedParty[];
+  contracts?: ClientContract[];
+  _count?: { sites: number; contracts?: number; contacts?: number; documents?: number };
 }
 
 export interface ClientSiteSummary {
@@ -571,6 +762,12 @@ export interface ClientDetail extends ClientRecord {
 /** Everything the create and update endpoints accept. */
 export type ClientWritableFields = {
   name: string;
+  legalName?: string | null;
+  tradingName?: string | null;
+  entityType?: ClientEntityType | null;
+  taxNumber?: string | null;
+  registeredAddress?: string | null;
+  onboardingStatus?: ClientOnboardingStatus;
   email: string | null;
   phone: string | null;
   userId: string | null;
@@ -702,6 +899,197 @@ export async function unlinkClientSite(token: string, id: string, siteId: string
     const err = await res.json().catch(() => ({}));
     throw new Error((err as { message?: string }).message || "Failed to unlink site");
   }
+}
+
+export async function getClientContacts(token: string, clientId: string): Promise<ClientContact[]> {
+  const res = await authFetch(`/clients/${clientId}/contacts`, token);
+  const body = await parseJson<{ data: ClientContact[] }>(res, "Failed to load client contacts");
+  return body.data;
+}
+
+export async function createClientContact(
+  token: string,
+  clientId: string,
+  data: Partial<ClientContact>
+): Promise<ClientContact> {
+  const res = await authFetch(`/clients/${clientId}/contacts`, token, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  const body = await parseJson<{ data: ClientContact }>(res, "Failed to create contact");
+  return body.data;
+}
+
+export async function updateClientContact(
+  token: string,
+  clientId: string,
+  contactId: string,
+  data: Partial<ClientContact>
+): Promise<ClientContact> {
+  const res = await authFetch(`/clients/${clientId}/contacts/${contactId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+  const body = await parseJson<{ data: ClientContact }>(res, "Failed to update contact");
+  return body.data;
+}
+
+export async function deleteClientContact(
+  token: string,
+  clientId: string,
+  contactId: string
+): Promise<void> {
+  const res = await authFetch(`/clients/${clientId}/contacts/${contactId}`, token, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { message?: string }).message || "Failed to delete contact");
+  }
+}
+
+export async function getClientRelatedParties(
+  token: string,
+  clientId: string
+): Promise<ClientRelatedParty[]> {
+  const res = await authFetch(`/clients/${clientId}/related-parties`, token);
+  const body = await parseJson<{ data: ClientRelatedParty[] }>(res, "Failed to load related parties");
+  return body.data;
+}
+
+export async function createClientRelatedParty(
+  token: string,
+  clientId: string,
+  data: Partial<ClientRelatedParty>
+): Promise<ClientRelatedParty> {
+  const res = await authFetch(`/clients/${clientId}/related-parties`, token, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  const body = await parseJson<{ data: ClientRelatedParty }>(res, "Failed to create related party");
+  return body.data;
+}
+
+export async function updateClientRelatedParty(
+  token: string,
+  clientId: string,
+  partyId: string,
+  data: Partial<ClientRelatedParty>
+): Promise<ClientRelatedParty> {
+  const res = await authFetch(`/clients/${clientId}/related-parties/${partyId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+  const body = await parseJson<{ data: ClientRelatedParty }>(res, "Failed to update related party");
+  return body.data;
+}
+
+export async function deleteClientRelatedParty(
+  token: string,
+  clientId: string,
+  partyId: string
+): Promise<void> {
+  const res = await authFetch(`/clients/${clientId}/related-parties/${partyId}`, token, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { message?: string }).message || "Failed to delete related party");
+  }
+}
+
+export async function getClientContracts(
+  token: string,
+  clientId: string
+): Promise<ClientContract[]> {
+  const res = await authFetch(`/clients/${clientId}/contracts`, token);
+  const body = await parseJson<{ data: ClientContract[] }>(res, "Failed to load contracts");
+  return body.data;
+}
+
+export async function createClientContract(
+  token: string,
+  clientId: string,
+  data: Partial<ClientContract>
+): Promise<ClientContract> {
+  const res = await authFetch(`/clients/${clientId}/contracts`, token, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  const body = await parseJson<{ data: ClientContract }>(res, "Failed to create contract");
+  return body.data;
+}
+
+export async function updateClientContract(
+  token: string,
+  clientId: string,
+  contractId: string,
+  data: Partial<ClientContract>
+): Promise<ClientContract> {
+  const res = await authFetch(`/clients/${clientId}/contracts/${contractId}`, token, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+  const body = await parseJson<{ data: ClientContract }>(res, "Failed to update contract");
+  return body.data;
+}
+
+export async function linkContractSites(
+  token: string,
+  clientId: string,
+  contractId: string,
+  siteIds: string[]
+): Promise<ClientContract> {
+  const res = await authFetch(`/clients/${clientId}/contracts/${contractId}/sites`, token, {
+    method: "POST",
+    body: JSON.stringify({ siteIds }),
+  });
+  const body = await parseJson<{ data: ClientContract }>(res, "Failed to link sites to contract");
+  return body.data;
+}
+
+export async function unlinkContractSite(
+  token: string,
+  clientId: string,
+  contractId: string,
+  siteId: string
+): Promise<ClientContract> {
+  const res = await authFetch(`/clients/${clientId}/contracts/${contractId}/sites/${siteId}`, token, {
+    method: "DELETE",
+  });
+  const body = await parseJson<{ data: ClientContract }>(res, "Failed to detach site from contract");
+  return body.data;
+}
+
+export async function getClientCompliance(
+  token: string,
+  clientId: string
+): Promise<ClientComplianceEvaluation> {
+  const res = await authFetch(`/clients/${clientId}/compliance`, token);
+  const body = await parseJson<{ data: ClientComplianceEvaluation }>(res, "Failed to load compliance evaluation");
+  return body.data;
+}
+
+export async function getClientDataProcessing(
+  token: string,
+  clientId: string
+): Promise<ClientDataProcessingProfile | null> {
+  const res = await authFetch(`/clients/${clientId}/data-processing`, token);
+  const body = await parseJson<{ data: ClientDataProcessingProfile | null }>(res, "Failed to load data processing profile");
+  return body.data;
+}
+
+export async function updateClientDataProcessing(
+  token: string,
+  clientId: string,
+  data: Partial<ClientDataProcessingProfile>
+): Promise<ClientDataProcessingProfile> {
+  const res = await authFetch(`/clients/${clientId}/data-processing`, token, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+  const body = await parseJson<{ data: ClientDataProcessingProfile }>(res, "Failed to update data processing profile");
+  return body.data;
 }
 
 // ——— Month-end client reporting ———

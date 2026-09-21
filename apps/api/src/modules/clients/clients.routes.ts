@@ -130,6 +130,42 @@ function pickContactFields(data: ContactFieldInput) {
   };
 }
 
+import {
+  createClientSchema,
+  updateClientSchema,
+  createContactSchema,
+  updateContactSchema,
+  createRelatedPartySchema,
+  updateRelatedPartySchema,
+  createContractSchema,
+  updateContractSchema,
+  linkContractSitesSchema,
+  updateDataProcessingProfileSchema,
+} from "./clients.schemas.js";
+import {
+  listClientsService,
+  getClientByIdService,
+  createClientService,
+  updateClientService,
+  listClientContactsService,
+  createClientContactService,
+  updateClientContactService,
+  deleteClientContactService,
+  listClientRelatedPartiesService,
+  createClientRelatedPartyService,
+  updateClientRelatedPartyService,
+  deleteClientRelatedPartyService,
+  listClientContractsService,
+  getClientContractService,
+  createClientContractService,
+  updateClientContractService,
+  linkContractSitesService,
+  unlinkContractSiteService,
+  getClientDataProcessingProfileService,
+  upsertClientDataProcessingProfileService,
+} from "./clients.service.js";
+import { evaluateClientCompliance } from "./client-compliance.service.js";
+
 export async function clientsRoutes(app: FastifyInstance) {
   // `/clients` is the new home for client records; `/settings` and `/sites` stay accepted so
   // existing capability grants (which predate `/clients`) do not silently lose access.
@@ -146,13 +182,17 @@ export async function clientsRoutes(app: FastifyInstance) {
 
   app.get("/", { preHandler: clientViewProtect }, async (request, reply) => {
     const user = request.user!;
-    const clients = await prisma.client.findMany({
-      where: { companyId: user.companyId },
-      include: {
-        user: { select: { id: true, name: true, email: true } },
-        _count: { select: { sites: true } },
-      },
-      orderBy: { name: "asc" },
+    const q = request.query as {
+      search?: string;
+      entityType?: string;
+      onboardingStatus?: string;
+      isActive?: string;
+    };
+    const clients = await listClientsService(user.companyId, {
+      search: q?.search,
+      entityType: q?.entityType,
+      onboardingStatus: q?.onboardingStatus,
+      isActive: q?.isActive !== undefined ? q.isActive === "true" : undefined,
     });
     return reply.send(clients);
   });
@@ -172,45 +212,16 @@ export async function clientsRoutes(app: FastifyInstance) {
 
   app.get("/:id", { preHandler: clientViewProtect }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const client = await prisma.client.findFirst({
-      where: { id, companyId: request.user!.companyId },
-      include: {
-        user: { select: { id: true, name: true, email: true } },
-        sites: {
-          select: {
-            id: true,
-            name: true,
-            siteStatus: true,
-            physicalAddress: true,
-            serviceType: true,
-            contractStartDate: true,
-            contractEndDate: true,
-            contactPersonName: true,
-          },
-          orderBy: { name: "asc" },
-        },
-      },
-    });
+    const client = await getClientByIdService(request.user!.companyId, id);
     if (!client) {
       return reply.code(404).send({ error: "Not found", message: "Client not found" });
     }
-    return reply.send({
-      ...client,
-      sites: client.sites,
-    });
+    return reply.send(client);
   });
 
   app.post("/", { preHandler: clientCreateProtect }, async (request, reply) => {
     const user = request.user!;
-    const schema = z.object({
-      name: z.string().min(1),
-      email: z.string().email().optional().nullable(),
-      phone: z.string().optional().nullable(),
-      userId: z.string().optional().nullable(),
-      ...billingFields,
-      ...contactFields,
-    });
-    const parsed = schema.safeParse(request.body);
+    const parsed = createClientSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Validation error",
@@ -228,51 +239,19 @@ export async function clientsRoutes(app: FastifyInstance) {
         });
       }
     }
-    const client = await prisma.client.create({
-      data: {
-        companyId: user.companyId,
-        name: parsed.data.name,
-        email: parsed.data.email,
-        phone: parsed.data.phone,
-        userId: parsed.data.userId,
-        ...pickBillingFields(parsed.data),
-        ...pickContactFields(parsed.data),
-      },
-    });
-    await createAuditLog({
-      userId: user.sub,
-      companyId: user.companyId,
-      action: "client.create",
-      entityType: "Client",
-      entityId: client.id,
-    });
+    const client = await createClientService(user.companyId, user.sub, parsed.data);
     return reply.code(201).send(client);
   });
 
   app.patch("/:id", { preHandler: clientEditProtect }, async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
-    const schema = z.object({
-      name: z.string().min(1).optional(),
-      email: z.string().email().optional().nullable(),
-      phone: z.string().optional().nullable(),
-      userId: z.string().optional().nullable(),
-      isActive: z.boolean().optional(),
-      ...billingFields,
-      ...contactFields,
-    });
-    const parsed = schema.safeParse(request.body);
+    const parsed = updateClientSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
         error: "Validation error",
         message: parsed.error.issues[0]?.message ?? "Invalid body",
       });
-    }
-    const existing = await prisma.client.findFirst({
-      where: { id, companyId: user.companyId },
-    });
-    if (!existing) {
-      return reply.code(404).send({ error: "Not found", message: "Client not found" });
     }
     if (parsed.data.userId) {
       const linkUser = await prisma.user.findFirst({
@@ -285,27 +264,244 @@ export async function clientsRoutes(app: FastifyInstance) {
         });
       }
     }
-    const client = await prisma.client.update({
-      where: { id },
-      data: {
-        ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
-        ...(parsed.data.email !== undefined ? { email: parsed.data.email } : {}),
-        ...(parsed.data.phone !== undefined ? { phone: parsed.data.phone } : {}),
-        ...(parsed.data.userId !== undefined ? { userId: parsed.data.userId } : {}),
-        ...(parsed.data.isActive !== undefined ? { isActive: parsed.data.isActive } : {}),
-        ...pickBillingFields(parsed.data),
-        ...pickContactFields(parsed.data),
-      },
-    });
-    await createAuditLog({
-      userId: user.sub,
-      companyId: user.companyId,
-      action: "client.update",
-      entityType: "Client",
-      entityId: client.id,
-    });
+    const client = await updateClientService(user.companyId, id, user.sub, parsed.data);
+    if (!client) {
+      return reply.code(404).send({ error: "Not found", message: "Client not found" });
+    }
     return reply.send(client);
   });
+
+  // ——— Contacts Sub-routes ———
+  app.get("/:id/contacts", { preHandler: clientViewProtect }, async (request, reply) => {
+    const user = request.user!;
+    const { id } = request.params as { id: string };
+    const contacts = await listClientContactsService(user.companyId, id);
+    if (!contacts) {
+      return reply.code(404).send({ error: "Not found", message: "Client not found" });
+    }
+    return reply.send({ data: contacts });
+  });
+
+  app.post("/:id/contacts", { preHandler: clientEditProtect }, async (request, reply) => {
+    const user = request.user!;
+    const { id } = request.params as { id: string };
+    const parsed = createContactSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.issues[0]?.message ?? "Invalid body",
+      });
+    }
+    const contact = await createClientContactService(user.companyId, id, user.sub, parsed.data);
+    if (!contact) {
+      return reply.code(404).send({ error: "Not found", message: "Client not found" });
+    }
+    return reply.code(201).send({ data: contact });
+  });
+
+  app.patch("/:id/contacts/:contactId", { preHandler: clientEditProtect }, async (request, reply) => {
+    const user = request.user!;
+    const { id, contactId } = request.params as { id: string; contactId: string };
+    const parsed = updateContactSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.issues[0]?.message ?? "Invalid body",
+      });
+    }
+    const contact = await updateClientContactService(user.companyId, id, contactId, user.sub, parsed.data);
+    if (!contact) {
+      return reply.code(404).send({ error: "Not found", message: "Contact not found" });
+    }
+    return reply.send({ data: contact });
+  });
+
+  app.delete("/:id/contacts/:contactId", { preHandler: clientEditProtect }, async (request, reply) => {
+    const user = request.user!;
+    const { id, contactId } = request.params as { id: string; contactId: string };
+    const ok = await deleteClientContactService(user.companyId, id, contactId, user.sub);
+    if (!ok) {
+      return reply.code(404).send({ error: "Not found", message: "Contact not found" });
+    }
+    return reply.send({ success: true });
+  });
+
+  // ——— Related Parties Sub-routes ———
+  app.get("/:id/related-parties", { preHandler: clientViewProtect }, async (request, reply) => {
+    const user = request.user!;
+    const { id } = request.params as { id: string };
+    const parties = await listClientRelatedPartiesService(user.companyId, id);
+    if (!parties) {
+      return reply.code(404).send({ error: "Not found", message: "Client not found" });
+    }
+    return reply.send({ data: parties });
+  });
+
+  app.post("/:id/related-parties", { preHandler: clientEditProtect }, async (request, reply) => {
+    const user = request.user!;
+    const { id } = request.params as { id: string };
+    const parsed = createRelatedPartySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.issues[0]?.message ?? "Invalid body",
+      });
+    }
+    const party = await createClientRelatedPartyService(user.companyId, id, user.sub, parsed.data);
+    if (!party) {
+      return reply.code(404).send({ error: "Not found", message: "Client not found" });
+    }
+    return reply.code(201).send({ data: party });
+  });
+
+  app.patch("/:id/related-parties/:partyId", { preHandler: clientEditProtect }, async (request, reply) => {
+    const user = request.user!;
+    const { id, partyId } = request.params as { id: string; partyId: string };
+    const parsed = updateRelatedPartySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.issues[0]?.message ?? "Invalid body",
+      });
+    }
+    const party = await updateClientRelatedPartyService(user.companyId, id, partyId, user.sub, parsed.data);
+    if (!party) {
+      return reply.code(404).send({ error: "Not found", message: "Related party not found" });
+    }
+    return reply.send({ data: party });
+  });
+
+  app.delete("/:id/related-parties/:partyId", { preHandler: clientEditProtect }, async (request, reply) => {
+    const user = request.user!;
+    const { id, partyId } = request.params as { id: string; partyId: string };
+    const ok = await deleteClientRelatedPartyService(user.companyId, id, partyId, user.sub);
+    if (!ok) {
+      return reply.code(404).send({ error: "Not found", message: "Related party not found" });
+    }
+    return reply.send({ success: true });
+  });
+
+  // ——— Contracts Sub-routes ———
+  app.get("/:id/contracts", { preHandler: clientViewProtect }, async (request, reply) => {
+    const user = request.user!;
+    const { id } = request.params as { id: string };
+    const contracts = await listClientContractsService(user.companyId, id);
+    if (!contracts) {
+      return reply.code(404).send({ error: "Not found", message: "Client not found" });
+    }
+    return reply.send({ data: contracts });
+  });
+
+  app.post("/:id/contracts", { preHandler: clientEditProtect }, async (request, reply) => {
+    const user = request.user!;
+    const { id } = request.params as { id: string };
+    const parsed = createContractSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.issues[0]?.message ?? "Invalid body",
+      });
+    }
+    const result = await createClientContractService(user.companyId, id, user.sub, parsed.data);
+    if (!result.ok) {
+      return reply.code(result.statusCode).send({ error: "Contract error", message: result.error });
+    }
+    return reply.code(201).send({ data: result.data });
+  });
+
+  app.get("/:id/contracts/:contractId", { preHandler: clientViewProtect }, async (request, reply) => {
+    const user = request.user!;
+    const { id, contractId } = request.params as { id: string; contractId: string };
+    const contract = await getClientContractService(user.companyId, id, contractId);
+    if (!contract) {
+      return reply.code(404).send({ error: "Not found", message: "Contract not found" });
+    }
+    return reply.send({ data: contract });
+  });
+
+  app.patch("/:id/contracts/:contractId", { preHandler: clientEditProtect }, async (request, reply) => {
+    const user = request.user!;
+    const { id, contractId } = request.params as { id: string; contractId: string };
+    const parsed = updateContractSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.issues[0]?.message ?? "Invalid body",
+      });
+    }
+    const result = await updateClientContractService(user.companyId, id, contractId, user.sub, parsed.data);
+    if (!result.ok) {
+      return reply.code(result.statusCode).send({ error: "Contract error", message: result.error });
+    }
+    return reply.send({ data: result.data });
+  });
+
+  app.post("/:id/contracts/:contractId/sites", { preHandler: clientEditProtect }, async (request, reply) => {
+    const user = request.user!;
+    const { id, contractId } = request.params as { id: string; contractId: string };
+    const parsed = linkContractSitesSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.issues[0]?.message ?? "Invalid body",
+      });
+    }
+    const result = await linkContractSitesService(user.companyId, id, contractId, user.sub, parsed.data.siteIds);
+    if (!result.ok) {
+      return reply.code(result.statusCode).send({ error: "Contract site link error", message: result.error });
+    }
+    return reply.send({ data: result.data });
+  });
+
+  app.delete("/:id/contracts/:contractId/sites/:siteId", { preHandler: clientEditProtect }, async (request, reply) => {
+    const user = request.user!;
+    const { id, contractId, siteId } = request.params as { id: string; contractId: string; siteId: string };
+    const result = await unlinkContractSiteService(user.companyId, id, contractId, user.sub, siteId);
+    if (!result.ok) {
+      return reply.code(result.statusCode).send({ error: "Contract site unlink error", message: result.error });
+    }
+    const updatedContract = await getClientContractService(user.companyId, id, contractId);
+    return reply.send({ data: updatedContract });
+  });
+
+  // ——— Compliance Evaluation Sub-route ———
+  app.get("/:id/compliance", { preHandler: clientViewProtect }, async (request, reply) => {
+    const user = request.user!;
+    const { id } = request.params as { id: string };
+    const evalResult = await evaluateClientCompliance(user.companyId, id);
+    if (!evalResult) {
+      return reply.code(404).send({ error: "Not found", message: "Client not found" });
+    }
+    return reply.send({ data: evalResult });
+  });
+
+  // ——— POPIA / Data Processing Profile Sub-routes ———
+  app.get("/:id/data-processing", { preHandler: clientViewProtect }, async (request, reply) => {
+    const user = request.user!;
+    const { id } = request.params as { id: string };
+    const profile = await getClientDataProcessingProfileService(user.companyId, id);
+    return reply.send({ data: profile });
+  });
+
+  const handleDataProcessingSave = async (request: any, reply: any) => {
+    const user = request.user!;
+    const { id } = request.params as { id: string };
+    const parsed = updateDataProcessingProfileSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.issues[0]?.message ?? "Invalid body",
+      });
+    }
+    const profile = await upsertClientDataProcessingProfileService(user.companyId, id, user.sub, parsed.data);
+    if (!profile) {
+      return reply.code(404).send({ error: "Not found", message: "Client not found" });
+    }
+    return reply.send({ data: profile });
+  };
+
+  app.patch("/:id/data-processing", { preHandler: clientEditProtect }, handleDataProcessingSave);
+  app.put("/:id/data-processing", { preHandler: clientEditProtect }, handleDataProcessingSave);
 
   /** Attach sites to a client in bulk. Only writes `Site.clientId`. */
   app.post("/:id/sites", { preHandler: clientEditProtect }, async (request, reply) => {

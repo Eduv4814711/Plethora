@@ -448,6 +448,7 @@ export async function billingRoutes(app: FastifyInstance) {
           { quoteNumber: { contains: search, mode: "insensitive" } },
           { reference: { contains: search, mode: "insensitive" } },
           { client: { name: { contains: search, mode: "insensitive" } } },
+          { prospectName: { contains: search, mode: "insensitive" } },
         ],
       });
     }
@@ -492,8 +493,15 @@ export async function billingRoutes(app: FastifyInstance) {
     if (validUntil < quoteDate) {
       return reply.code(400).send({ error: "Validation error", message: "validUntil must be on or after quoteDate" });
     }
-    if (!(await findClient(companyId, data.clientId))) {
-      return reply.code(400).send({ error: "Validation error", message: "clientId not found" });
+    if (data.clientId) {
+      if (!(await findClient(companyId, data.clientId))) {
+        return reply.code(400).send({ error: "Validation error", message: "clientId not found" });
+      }
+    } else if (!data.prospectName?.trim()) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "Either an existing client or a business name for a potential client is required",
+      });
     }
 
     const lines = buildLineRows(data.items);
@@ -508,7 +516,11 @@ export async function billingRoutes(app: FastifyInstance) {
       const quote = await prisma.clientQuote.create({
         data: {
           companyId,
-          clientId: data.clientId,
+          clientId: data.clientId || null,
+          prospectName: data.clientId ? null : (data.prospectName?.trim() ?? null),
+          prospectEmail: data.clientId ? null : (data.prospectEmail?.trim() ?? null),
+          prospectPhone: data.clientId ? null : (data.prospectPhone?.trim() ?? null),
+          prospectAddress: data.clientId ? null : (data.prospectAddress?.trim() ?? null),
           quoteNumber,
           quoteDate,
           validUntil,
@@ -530,7 +542,12 @@ export async function billingRoutes(app: FastifyInstance) {
         action: "billing.quote.create",
         entityType: "client_quote",
         entityId: quote.id,
-        metadata: { quoteNumber, clientId: data.clientId, totalAmount: decimalJson(totals.totalAmount) },
+        metadata: {
+          quoteNumber,
+          clientId: data.clientId || null,
+          prospectName: data.prospectName || null,
+          totalAmount: decimalJson(totals.totalAmount),
+        },
       });
 
       return reply.code(201).send(serializeDocument(quote as unknown as Record<string, unknown>));
@@ -608,7 +625,11 @@ export async function billingRoutes(app: FastifyInstance) {
       return tx.clientQuote.update({
         where: { id },
         data: {
-          ...(data.clientId ? { clientId: data.clientId } : {}),
+          ...(data.clientId !== undefined ? { clientId: data.clientId } : {}),
+          ...(data.prospectName !== undefined ? { prospectName: data.prospectName } : {}),
+          ...(data.prospectEmail !== undefined ? { prospectEmail: data.prospectEmail } : {}),
+          ...(data.prospectPhone !== undefined ? { prospectPhone: data.prospectPhone } : {}),
+          ...(data.prospectAddress !== undefined ? { prospectAddress: data.prospectAddress } : {}),
           quoteDate,
           validUntil,
           ...(data.reference !== undefined ? { reference: data.reference } : {}),
@@ -735,9 +756,33 @@ export async function billingRoutes(app: FastifyInstance) {
       });
     }
 
+    let clientId = quote.clientId;
+    let paymentTermsDays = quote.client?.paymentTermsDays ?? 30;
+
+    if (!clientId) {
+      const newClient = await prisma.client.create({
+        data: {
+          companyId,
+          name: quote.prospectName?.trim() || "Unnamed Client",
+          email: quote.prospectEmail?.trim() || null,
+          phone: quote.prospectPhone?.trim() || null,
+          billingEmail: quote.prospectEmail?.trim() || null,
+          billingAddress: quote.prospectAddress?.trim() || null,
+          paymentTermsDays: 30,
+        },
+      });
+      clientId = newClient.id;
+      paymentTermsDays = newClient.paymentTermsDays;
+
+      await prisma.clientQuote.update({
+        where: { id: quote.id },
+        data: { clientId: newClient.id },
+      });
+    }
+
     const invoiceDate = startOfUtcDay(new Date());
     const dueDate = new Date(invoiceDate);
-    dueDate.setUTCDate(dueDate.getUTCDate() + (quote.client.paymentTermsDays ?? 30));
+    dueDate.setUTCDate(dueDate.getUTCDate() + paymentTermsDays);
 
     const invoiceNumber = await generateNextInvoiceNumber(companyId);
 
@@ -745,7 +790,7 @@ export async function billingRoutes(app: FastifyInstance) {
       const invoice = await prisma.clientInvoice.create({
         data: {
           companyId,
-          clientId: quote.clientId,
+          clientId,
           quoteId: quote.id,
           invoiceNumber,
           invoiceDate,
@@ -816,6 +861,10 @@ export async function billingRoutes(app: FastifyInstance) {
       data: {
         companyId,
         clientId: existing.clientId,
+        prospectName: existing.prospectName,
+        prospectEmail: existing.prospectEmail,
+        prospectPhone: existing.prospectPhone,
+        prospectAddress: existing.prospectAddress,
         quoteNumber,
         quoteDate,
         validUntil,

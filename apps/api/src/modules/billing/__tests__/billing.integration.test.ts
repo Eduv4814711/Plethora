@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { randomBytes } from "node:crypto";
 import jwt from "jsonwebtoken";
 import { prisma } from "../../../lib/prisma.js";
+import { Prisma } from "@prisma/client";
 import { authHeader, isIntegrationDatabaseAvailable } from "../../../test-utils/tenant-harness.js";
 import { config } from "../../../lib/config.js";
 import { hashPassword } from "../../../services/auth.service.js";
@@ -66,14 +67,14 @@ describe.runIf(dbReady)("client billing (integration)", () => {
     otherCompanyId = tenantB.companyId;
     otherToken = tenantB.token;
 
-    // Inherits billing view/create via the /payroll prefix, but has no approve.
+    // Has billing view/create, but has no approve.
     const viewer = await prisma.user.create({
       data: {
         companyId,
         name: "Payroll Viewer",
         email: `billing-viewer-${runId}@plethora-test.local`,
         passwordHash: await hashPassword("billing-test-password-32chars!!"),
-        capabilities: { "/payroll": ["view", "create"] },
+        capabilities: { "/payroll/billing": ["view", "create"] },
       },
     });
     viewOnlyToken = jwt.sign(
@@ -428,7 +429,7 @@ describe.runIf(dbReady)("client billing (integration)", () => {
     expect(forbidden.statusCode).toBe(403);
   });
 
-  it("lets a user granted only /payroll inherit billing view access", async () => {
+  it("lets a user granted /payroll/billing access view quotes", async () => {
     const res = await app.inject({
       method: "GET",
       url: `${BILLING}/quotes`,
@@ -577,5 +578,96 @@ describe.runIf(dbReady)("client billing (integration)", () => {
     expect(siteData.monthlyRevenue).toBeUndefined();
     expect(siteData.ratePerGuard).toBeUndefined();
   });
+
+  it("supports creating, searching, duplicating, and converting quotes for potential clients", async () => {
+    const prospectName = `Prospect Enterprise ${runId}`;
+    const prospectEmail = `procurement-${runId}@prospect.local`;
+
+    // 1. Create quote for potential client without existing clientId
+    const createRes = await app.inject({
+      method: "POST",
+      url: `${BILLING}/quotes`,
+      headers: { ...authHeader(token), "content-type": "application/json" },
+      payload: {
+        prospectName,
+        prospectEmail,
+        prospectPhone: "+27 11 555 9999",
+        prospectAddress: "45 Innovation Way, Sandton",
+        quoteDate: "2026-09-01",
+        validUntil: "2026-09-30",
+        vatRate: 15,
+        items: [{ description: "Ad-hoc Event Security", quantity: 2, unitAmount: "1250.00" }],
+      },
+    });
+    expect(createRes.statusCode).toBe(201);
+    const createdQuote = createRes.json() as {
+      id: string;
+      quoteNumber: string;
+      clientId: string | null;
+      prospectName: string;
+      prospectEmail: string;
+      totalAmount: string;
+      status: string;
+    };
+    expect(createdQuote.clientId).toBeNull();
+    expect(createdQuote.prospectName).toBe(prospectName);
+    expect(createdQuote.prospectEmail).toBe(prospectEmail);
+    expect(createdQuote.totalAmount).toBe("2875");
+
+    // 1b. Verify PDF download succeeds for potential client quote
+    const pdfRes = await app.inject({
+      method: "GET",
+      url: `${BILLING}/quotes/${createdQuote.id}/pdf`,
+      headers: authHeader(token),
+    });
+    expect(pdfRes.statusCode).toBe(200);
+    expect(pdfRes.headers["content-type"]).toBe("application/pdf");
+
+    // 2. Search finds the quote by potential client business name
+    const searchRes = await app.inject({
+      method: "GET",
+      url: `${BILLING}/quotes?search=${encodeURIComponent(`Prospect Enterprise ${runId}`)}`,
+      headers: authHeader(token),
+    });
+    expect(searchRes.statusCode).toBe(200);
+    const searchJson = searchRes.json() as { quotes: Array<{ id: string; prospectName: string }> };
+    expect(searchJson.quotes.some((q) => q.id === createdQuote.id)).toBe(true);
+
+    // 3. Duplicate carries over prospect fields
+    const dupRes = await app.inject({
+      method: "POST",
+      url: `${BILLING}/quotes/${createdQuote.id}/duplicate`,
+      headers: authHeader(token),
+    });
+    expect(dupRes.statusCode).toBe(201);
+    const dupQuote = dupRes.json() as { id: string; prospectName: string; clientId: string | null };
+    expect(dupQuote.prospectName).toBe(prospectName);
+    expect(dupQuote.clientId).toBeNull();
+
+    // 4. Issue & Accept potential client quote
+    await app.inject({ method: "POST", url: `${BILLING}/quotes/${createdQuote.id}/issue`, headers: authHeader(token) });
+    await app.inject({ method: "POST", url: `${BILLING}/quotes/${createdQuote.id}/accept`, headers: authHeader(token) });
+
+    // 5. Convert to invoice automatically creates Client and links it
+    const convertRes = await app.inject({
+      method: "POST",
+      url: `${BILLING}/quotes/${createdQuote.id}/convert-to-invoice`,
+      headers: authHeader(token),
+    });
+    expect(convertRes.statusCode).toBe(201);
+    const invoice = convertRes.json() as { id: string; clientId: string; quoteId: string };
+    expect(invoice.quoteId).toBe(createdQuote.id);
+    expect(invoice.clientId).toBeDefined();
+
+    // Verify the newly created client in database
+    const onboardedClient = await prisma.client.findUnique({
+      where: { id: invoice.clientId },
+    });
+    expect(onboardedClient).toBeDefined();
+    expect(onboardedClient?.name).toBe(prospectName);
+    expect(onboardedClient?.email).toBe(prospectEmail);
+    expect(onboardedClient?.billingAddress).toBe("45 Innovation Way, Sandton");
+  });
 });
+
 

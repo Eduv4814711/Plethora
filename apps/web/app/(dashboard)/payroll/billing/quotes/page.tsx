@@ -61,7 +61,12 @@ export default function QuotesPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [clientMode, setClientMode] = useState<"existing" | "prospect">("existing");
   const [clientId, setClientId] = useState("");
+  const [prospectName, setProspectName] = useState("");
+  const [prospectEmail, setProspectEmail] = useState("");
+  const [prospectPhone, setProspectPhone] = useState("");
+  const [prospectAddress, setProspectAddress] = useState("");
   const [quoteDate, setQuoteDate] = useState(today);
   const [validUntil, setValidUntil] = useState(() => plusDays(30));
   const [reference, setReference] = useState("");
@@ -121,21 +126,57 @@ export default function QuotesPage() {
   );
 
   const resetForm = () => {
-    setClientId(""); setQuoteDate(today()); setValidUntil(plusDays(30));
-    setReference(""); setNotes(""); setDiscount("0.00"); setVatRate("15"); setLines([emptyLine()]);
+    setClientMode("existing");
+    setClientId("");
+    setProspectName("");
+    setProspectEmail("");
+    setProspectPhone("");
+    setProspectAddress("");
+    setQuoteDate(today());
+    setValidUntil(plusDays(30));
+    setReference("");
+    setNotes("");
+    setDiscount("0.00");
+    setVatRate("15");
+    setLines([emptyLine()]);
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
     const usable = lines.filter((l) => l.description.trim() !== "");
-    if (!clientId) { setError("Select a client for this quote."); return; }
-    if (usable.length === 0) { setError("Add at least one line item."); return; }
+    if (clientMode === "existing" && !clientId) {
+      setError("Select an existing client for this quote.");
+      return;
+    }
+    if (clientMode === "prospect" && !prospectName.trim()) {
+      setError("Enter the business name for the potential client.");
+      return;
+    }
+    if (usable.length === 0) {
+      setError("Add at least one line item.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      await createQuote(token, { clientId, quoteDate, validUntil, reference: reference || null, notes: notes || null, discountAmount: discount, vatRate, items: usable });
-      resetForm(); setShowForm(false); await load();
+      await createQuote(token, {
+        clientId: clientMode === "existing" ? clientId : null,
+        prospectName: clientMode === "prospect" ? prospectName.trim() : null,
+        prospectEmail: clientMode === "prospect" && prospectEmail.trim() ? prospectEmail.trim() : null,
+        prospectPhone: clientMode === "prospect" && prospectPhone.trim() ? prospectPhone.trim() : null,
+        prospectAddress: clientMode === "prospect" && prospectAddress.trim() ? prospectAddress.trim() : null,
+        quoteDate,
+        validUntil,
+        reference: reference || null,
+        notes: notes || null,
+        discountAmount: discount,
+        vatRate,
+        items: usable,
+      });
+      resetForm();
+      setShowForm(false);
+      await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create quote");
     } finally {
@@ -218,14 +259,112 @@ export default function QuotesPage() {
       {showForm && canCreate && (
         <form onSubmit={submit} className="space-y-4 rounded-security-lg border border-security-navy-200 bg-white p-5 shadow-security-card">
           <h2 className="text-sm font-semibold text-security-navy-900">New Quote</h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <label className="block">
-              <span className="label-text mb-1.5 block">Client</span>
-              <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="input-modern w-full" required id="new-quote-client">
-                <option value="">Select client…</option>
-                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </label>
+          {/* Client Selection (Existing Client vs Potential Client) */}
+          <div className="rounded-security-md border border-security-navy-200 bg-security-navy-50/70 p-3.5 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-security-navy-700">Client Selection</span>
+              <div className="inline-flex rounded-security bg-security-navy-200/60 p-0.5" role="radiogroup" aria-label="Client mode">
+                <button
+                  type="button"
+                  onClick={() => setClientMode("existing")}
+                  className={clsx(
+                    "px-3 py-1 text-xs font-semibold rounded-security transition-all",
+                    clientMode === "existing"
+                      ? "bg-white text-security-navy-900 shadow-sm"
+                      : "text-security-navy-600 hover:text-security-navy-900"
+                  )}
+                  id="client-mode-existing"
+                >
+                  🏢 Existing Client
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClientMode("prospect")}
+                  className={clsx(
+                    "px-3 py-1 text-xs font-semibold rounded-security transition-all",
+                    clientMode === "prospect"
+                      ? "bg-white text-security-navy-900 shadow-sm"
+                      : "text-security-navy-600 hover:text-security-navy-900"
+                  )}
+                  id="client-mode-prospect"
+                >
+                  ✨ Potential Client / New Business
+                </button>
+              </div>
+            </div>
+
+            {clientMode === "existing" ? (
+              <div>
+                <label className="block">
+                  <span className="label-text mb-1 block">Choose Existing Client <span className="text-red-500">*</span></span>
+                  <select
+                    value={clientId}
+                    onChange={(e) => setClientId(e.target.value)}
+                    className="input-modern w-full"
+                    required={clientMode === "existing"}
+                    id="new-quote-client"
+                  >
+                    <option value="">Select client…</option>
+                    {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </label>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="label-text mb-1 block">Business / Company Name <span className="text-red-500">*</span></span>
+                    <input
+                      value={prospectName}
+                      onChange={(e) => setProspectName(e.target.value)}
+                      placeholder="e.g. Apex Logistics (Pty) Ltd"
+                      className="input-modern w-full"
+                      required={clientMode === "prospect"}
+                      id="new-quote-prospect-name"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="label-text mb-1 block">Contact Email (optional)</span>
+                    <input
+                      type="email"
+                      value={prospectEmail}
+                      onChange={(e) => setProspectEmail(e.target.value)}
+                      placeholder="e.g. procurement@apexlogistics.co.za"
+                      className="input-modern w-full"
+                      id="new-quote-prospect-email"
+                    />
+                  </label>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="label-text mb-1 block">Contact Phone (optional)</span>
+                    <input
+                      value={prospectPhone}
+                      onChange={(e) => setProspectPhone(e.target.value)}
+                      placeholder="e.g. +27 11 555 1234"
+                      className="input-modern w-full"
+                      id="new-quote-prospect-phone"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="label-text mb-1 block">Billing / Physical Address (optional)</span>
+                    <input
+                      value={prospectAddress}
+                      onChange={(e) => setProspectAddress(e.target.value)}
+                      placeholder="e.g. 14 Katherine St, Sandton"
+                      className="input-modern w-full"
+                      id="new-quote-prospect-address"
+                    />
+                  </label>
+                </div>
+                <p className="text-[11px] text-security-navy-500">
+                  💡 This quote will be prepared for a potential client. When accepted and converted to an invoice, the system will automatically create their client account.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
             <label className="block">
               <span className="label-text mb-1.5 block">Quote date</span>
               <input type="date" value={quoteDate} onChange={(e) => setQuoteDate(e.target.value)} className="input-modern w-full" required id="new-quote-date" />
@@ -240,7 +379,7 @@ export default function QuotesPage() {
             </label>
           </div>
 
-          <LineItemsEditor token={token ?? ""} clientId={clientId} lines={lines} onChange={setLines} currency={currency} disabled={saving} />
+          <LineItemsEditor token={token ?? ""} clientId={clientMode === "existing" ? clientId : ""} lines={lines} onChange={setLines} currency={currency} disabled={saving} />
 
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="space-y-3">
@@ -346,7 +485,19 @@ export default function QuotesPage() {
                       {isAccepted && !hasInvoice && <span className="ml-1 badge-success text-[9px]">Ready to convert</span>}
                       {quote.reference && <p className="text-[11px] text-security-navy-500">{quote.reference}</p>}
                     </td>
-                    <td className="px-4 py-3 font-medium text-security-navy-800">{quote.client?.name ?? "—"}</td>
+                    <td className="px-4 py-3 font-medium text-security-navy-800">
+                      <div className="flex items-center gap-1.5">
+                        <span>{quote.client?.name || quote.prospectName || "—"}</span>
+                        {!quote.clientId && quote.prospectName && (
+                          <span className="inline-flex items-center rounded-full bg-security-amber-50 px-2 py-0.5 text-[10px] font-semibold text-security-amber-700 ring-1 ring-inset ring-security-amber-600/20">
+                            Potential
+                          </span>
+                        )}
+                      </div>
+                      {quote.prospectEmail && (
+                        <p className="text-[11px] text-security-navy-400">{quote.prospectEmail}</p>
+                      )}
+                    </td>
                     <td className="hidden px-4 py-3 tabular-nums text-security-navy-600 sm:table-cell">{quote.quoteDate?.slice(0, 10)}</td>
                     <td className={clsx("hidden px-4 py-3 tabular-nums sm:table-cell", isExpired ? "font-semibold text-red-600" : "text-security-navy-600")}>
                       {quote.validUntil?.slice(0, 10)}
