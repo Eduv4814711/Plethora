@@ -15,11 +15,21 @@ const sendSchema = z.object({
     .max(MESSAGE_MAX_LENGTH, `Message must be at most ${MESSAGE_MAX_LENGTH} characters`),
 });
 
+const templateParameterSchema = z.object({
+  type: z.string().default("text"),
+  text: z.string().optional(),
+}).passthrough();
+
+const templateComponentSchema = z.object({
+  type: z.string(),
+  parameters: z.array(templateParameterSchema).optional(),
+}).passthrough();
+
 const sendTemplateSchema = z.object({
   employeeId: z.string().min(1, "Employee ID is required"),
   templateName: z.string().min(1, "Template name is required"),
-  languageCode: z.string().default("en"),
-  components: z.array(z.unknown()).optional(),
+  languageCode: z.string().min(1).default("en"),
+  components: z.array(templateComponentSchema).optional(),
 });
 
 export async function sendRoutes(app: FastifyInstance) {
@@ -129,10 +139,27 @@ export async function sendRoutes(app: FastifyInstance) {
       });
     }
 
+    let effectiveLanguage = languageCode;
+    if (templateName === "hello_world" && languageCode === "en") {
+      effectiveLanguage = "en_US";
+    }
+
+    if (templateName === "employee_roster_update") {
+      const bodyComp = components?.find((c) => String(c.type).toLowerCase() === "body");
+      const params = bodyComp?.parameters ?? [];
+      const validTextParams = params.filter((p) => typeof p.text === "string" && p.text.trim().length > 0);
+      if (validTextParams.length < 4) {
+        return reply.code(400).send({
+          success: false,
+          error: "Template employee_roster_update requires four body parameters",
+        });
+      }
+    }
+
     const result = await sendTemplate(
       employee.phone,
       templateName,
-      languageCode,
+      effectiveLanguage,
       components
     );
 

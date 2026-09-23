@@ -108,6 +108,12 @@ async function storeInboundMessage(
   const employee = await findEmployeeByPhone(from);
   if (!employee) return;
 
+  const existing = await prisma.whatsAppMessage.findFirst({
+    where: { whatsappMessageId: msg.id, direction: "inbound" },
+    select: { id: true },
+  });
+  if (existing) return;
+
   await prisma.whatsAppMessage
     .create({
       data: {
@@ -122,7 +128,7 @@ async function storeInboundMessage(
     .catch((err) => log.warn(err, "Failed to store inbound WhatsApp message"));
 }
 
-async function handleInboundMessage(
+export async function handleInboundMessage(
   msg: WhatsAppIncomingMessage,
   log: FastifyRequest["log"]
 ): Promise<void> {
@@ -230,6 +236,8 @@ export async function webhookRoutes(app: FastifyInstance) {
       const body = payload;
       const entries = body.entry ?? [];
 
+      let hasFailures = false;
+
       for (const entry of entries) {
         const changes = entry.changes ?? [];
         for (const change of changes) {
@@ -260,7 +268,7 @@ export async function webhookRoutes(app: FastifyInstance) {
           if (!value.messages) continue;
 
           for (const msg of value.messages) {
-            // Check idempotency before processing
+            // Check idempotency and retry eligibility before processing
             const deduplication = await recordInboundWebhookEvent({
               metaEventId: msg.id,
               eventType: `message:${msg.type}`,
@@ -268,7 +276,7 @@ export async function webhookRoutes(app: FastifyInstance) {
               payload: msg,
             });
 
-            if (deduplication.isDuplicate) {
+            if (!deduplication.canProcess) {
               request.log.info(
                 { messageId: msg.id, from: msg.from },
                 "Duplicate WhatsApp webhook message ignored"
@@ -276,16 +284,30 @@ export async function webhookRoutes(app: FastifyInstance) {
               continue;
             }
 
+            if (deduplication.isRetry) {
+              request.log.info(
+                { messageId: msg.id, from: msg.from },
+                "Retrying previously failed WhatsApp webhook message"
+              );
+            }
+
             try {
               await handleInboundMessage(msg, request.log);
               await markWebhookEventProcessed(msg.id);
             } catch (err) {
+              hasFailures = true;
               const errMsg = err instanceof Error ? err.message : String(err);
               request.log.error(err, "WhatsApp message processing failed");
               await markWebhookEventFailed(msg.id, errMsg);
             }
           }
         }
+      }
+
+      if (hasFailures) {
+        return reply.code(500).send({
+          error: "One or more WhatsApp messages failed processing",
+        });
       }
 
       return reply.code(200).send();

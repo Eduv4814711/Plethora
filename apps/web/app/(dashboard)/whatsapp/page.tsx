@@ -13,6 +13,7 @@ import {
   getWhatsAppTemplates,
   type WhatsAppContact,
   type WhatsAppMessage,
+  type WhatsAppTemplate,
 } from "@/lib/api";
 import { ConversationView } from "@/components/whatsapp/conversation-view";
 import { AlertBanner, EmptyState, PageHeader } from "@/components/ui";
@@ -31,8 +32,32 @@ export default function WhatsAppPage() {
   const [error, setError] = useState<string | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [requiresTemplate, setRequiresTemplate] = useState(false);
-  const [templates, setTemplates] = useState<{ name: string; language: string }[]>([]);
-  const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [templateLoadError, setTemplateLoadError] = useState<string | null>(null);
+  const [selectedTemplateKey, setSelectedTemplateKey] = useState("");
+  const [templateParams, setTemplateParams] = useState<Record<number, string>>({});
+
+  const selectedTemplate = templates.find(
+    (t) => `${t.name}::${t.language}` === selectedTemplateKey
+  );
+
+  const getTemplateBodyInfo = useCallback((template?: WhatsAppTemplate) => {
+    if (!template) return { bodyText: "", paramCount: 0, examples: [] as string[] };
+    const bodyComponent = template.components?.find(
+      (c) => String(c.type).toUpperCase() === "BODY"
+    );
+    const bodyText = bodyComponent?.text ?? "";
+    const examples = bodyComponent?.example?.body_text?.[0] ?? [];
+    const matches = Array.from(bodyText.matchAll(/\{\{(\d+)\}\}/g));
+    let paramCount = matches.length > 0 ? Math.max(...matches.map((m) => parseInt(m[1], 10))) : 0;
+    if (paramCount === 0 && template.name === "employee_roster_update") {
+      paramCount = 4;
+    }
+    return { bodyText, paramCount, examples };
+  }, []);
+
+  const bodyInfo = getTemplateBodyInfo(selectedTemplate);
 
   const fetchContacts = useCallback(async () => {
     if (!token) return;
@@ -90,9 +115,22 @@ export default function WhatsAppPage() {
 
   useEffect(() => {
     if (requiresTemplate && token) {
+      setLoadingTemplates(true);
+      setTemplateLoadError(null);
       getWhatsAppTemplates(token)
-        .then((r) => setTemplates(r.data))
-        .catch(() => setTemplates([]));
+        .then((r) => {
+          setTemplates(r.data);
+          if (r.data.length === 0) {
+            setTemplateLoadError("No approved WhatsApp templates found in your Meta account.");
+          }
+        })
+        .catch((e) => {
+          setTemplates([]);
+          setTemplateLoadError(e instanceof Error ? e.message : "Failed to load approved templates from Meta.");
+        })
+        .finally(() => {
+          setLoadingTemplates(false);
+        });
     }
   }, [requiresTemplate, token]);
 
@@ -119,13 +157,42 @@ export default function WhatsAppPage() {
 
   const handleSendTemplate = async () => {
     if (!token || !canSend || !selectedContact || !selectedTemplate) return;
+
+    const { paramCount } = bodyInfo;
+    if (paramCount > 0) {
+      for (let i = 1; i <= paramCount; i++) {
+        if (!templateParams[i]?.trim()) {
+          setError(`Please fill in parameter ${i} for this template.`);
+          return;
+        }
+      }
+    }
+
     setSending(true);
     setError(null);
     try {
-      const result = await sendWhatsAppTemplate(token, selectedContact.id, selectedTemplate);
+      const components =
+        paramCount > 0
+          ? [
+              {
+                type: "body",
+                parameters: Array.from({ length: paramCount }, (_, idx) => ({
+                  type: "text",
+                  text: templateParams[idx + 1].trim(),
+                })),
+              },
+            ]
+          : undefined;
+
+      const result = await sendWhatsAppTemplate(token, selectedContact.id, selectedTemplate.name, {
+        languageCode: selectedTemplate.language,
+        components,
+      });
+
       if (result.success) {
         setRequiresTemplate(false);
-        setSelectedTemplate("");
+        setSelectedTemplateKey("");
+        setTemplateParams({});
         fetchMessages();
       } else {
         setError(result.error ?? "Failed to send template");
@@ -243,36 +310,116 @@ export default function WhatsAppPage() {
               {canSend ? <div className="p-4 border-t border-security-navy-100">
                 {error && <p className="text-xs text-red-600 mb-2">{error}</p>}
                 {requiresTemplate ? (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <p className="text-sm text-security-navy-600">
-                      Free-form messages require the contact to have messaged recently. Send a template instead:
+                      Free-form messages require the contact to have messaged recently. Send an approved template message:
                     </p>
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <select
-                        value={selectedTemplate}
-                        onChange={(e) => setSelectedTemplate(e.target.value)}
-                        className="input-compact flex-1"
-                        aria-label="Template message"
-                      >
-                        <option value="">Select template</option>
-                        {templates.map((t) => (
-                          <option key={t.name} value={t.name}>
-                            {t.name}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={handleSendTemplate}
-                        disabled={!selectedTemplate || sending}
-                        className="btn-primary px-4 py-2 text-sm"
-                      >
-                        {sending ? "Sending..." : "Send Template"}
-                      </button>
-                    </div>
+
+                    {templateLoadError && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-security text-xs text-red-700">
+                        {templateLoadError}
+                      </div>
+                    )}
+
+                    {loadingTemplates ? (
+                      <p className="text-xs text-security-navy-500 animate-pulse">Loading approved templates from Meta...</p>
+                    ) : (
+                      <>
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <select
+                            value={selectedTemplateKey}
+                            onChange={(e) => {
+                              setSelectedTemplateKey(e.target.value);
+                              setTemplateParams({});
+                              setError(null);
+                            }}
+                            className="input-compact flex-1"
+                            aria-label="Template message"
+                            disabled={sending || templates.length === 0}
+                          >
+                            <option value="">
+                              {templates.length === 0 ? "No approved templates available" : "Select approved template"}
+                            </option>
+                            {templates.map((t) => (
+                              <option key={`${t.name}::${t.language}`} value={`${t.name}::${t.language}`}>
+                                {t.name} ({t.language})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {selectedTemplate && (
+                          <div className="space-y-3 p-3 bg-security-navy-50 rounded-security border border-security-navy-100 text-xs">
+                            {bodyInfo.bodyText ? (
+                              <div>
+                                <span className="font-semibold text-security-navy-700 block mb-1">Template Preview:</span>
+                                <p className="text-security-navy-600 italic bg-white p-2 rounded border border-security-navy-100">
+                                  {bodyInfo.bodyText}
+                                </p>
+                              </div>
+                            ) : null}
+
+                            {bodyInfo.paramCount > 0 ? (
+                              <div className="space-y-2">
+                                <span className="font-semibold text-security-navy-700 block">
+                                  Required Parameters ({bodyInfo.paramCount}):
+                                </span>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {Array.from({ length: bodyInfo.paramCount }, (_, idx) => {
+                                    const paramNum = idx + 1;
+                                    const placeholder =
+                                      bodyInfo.examples[idx] ||
+                                      (selectedTemplate.name === "employee_roster_update"
+                                        ? ["Employee Name", "Shift Date", "Site / Post", "Supervisor / Contact"][idx]
+                                        : `Parameter {{${paramNum}}}`);
+                                    return (
+                                      <div key={paramNum} className="space-y-1">
+                                        <label className="text-security-navy-500 font-medium">
+                                          Parameter {paramNum} {`{{${paramNum}}}`}
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={templateParams[paramNum] ?? ""}
+                                          onChange={(e) =>
+                                            setTemplateParams((prev) => ({
+                                              ...prev,
+                                              [paramNum]: e.target.value,
+                                            }))
+                                          }
+                                          placeholder={placeholder}
+                                          className="input-compact w-full"
+                                          disabled={sending}
+                                        />
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-security-navy-500">This template requires no parameters.</p>
+                            )}
+
+                            <div className="flex justify-end pt-1">
+                              <button
+                                type="button"
+                                onClick={handleSendTemplate}
+                                disabled={sending}
+                                className="btn-primary px-4 py-2 text-sm"
+                              >
+                                {sending ? "Sending..." : "Send Template"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+
                     <button
                       type="button"
-                      onClick={() => setRequiresTemplate(false)}
+                      onClick={() => {
+                        setRequiresTemplate(false);
+                        setError(null);
+                      }}
                       className="text-xs text-security-navy-500 hover:text-security-navy-900"
                     >
                       Try free-form again

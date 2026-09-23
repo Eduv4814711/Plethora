@@ -79,13 +79,31 @@ describe("WhatsApp Health, WABA Subscription & Templates Routes", () => {
   });
 
   describe("GET /whatsapp/templates", () => {
-    it("returns approved templates from Meta when available", async () => {
+    it("returns approved templates with components from Meta when available", async () => {
       const originalFetch = globalThis.fetch;
       globalThis.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           data: [
-            { name: "shift_alert", language: "en_US", status: "APPROVED" },
+            {
+              name: "employee_roster_update",
+              language: "en",
+              status: "APPROVED",
+              category: "UTILITY",
+              components: [
+                {
+                  type: "BODY",
+                  text: "Hello {{1}}, your roster shift for {{2}} at {{3}} has been confirmed. Contact {{4}} if you have questions.",
+                },
+              ],
+            },
+            {
+              name: "hello_world",
+              language: "en_US",
+              status: "APPROVED",
+              category: "UTILITY",
+              components: [],
+            },
             { name: "pending_template", language: "en_US", status: "PENDING" },
             { name: "rejected_template", language: "en_US", status: "REJECTED" },
           ],
@@ -101,14 +119,32 @@ describe("WhatsApp Health, WABA Subscription & Templates Routes", () => {
         expect(res.statusCode).toBe(200);
         const json = JSON.parse(res.body);
         expect(json.data).toEqual([
-          { name: "shift_alert", language: "en_US", status: "APPROVED" },
+          {
+            name: "employee_roster_update",
+            language: "en",
+            status: "APPROVED",
+            category: "UTILITY",
+            components: [
+              {
+                type: "BODY",
+                text: "Hello {{1}}, your roster shift for {{2}} at {{3}} has been confirmed. Contact {{4}} if you have questions.",
+              },
+            ],
+          },
+          {
+            name: "hello_world",
+            language: "en_US",
+            status: "APPROVED",
+            category: "UTILITY",
+            components: [],
+          },
         ]);
       } finally {
         globalThis.fetch = originalFetch;
       }
     });
 
-    it("falls back to default templates on Meta API failure without crashing or leaking secrets", async () => {
+    it("returns useful 502 error instead of invented fallback on Meta network timeout without leaking secrets", async () => {
       const originalFetch = globalThis.fetch;
       globalThis.fetch = vi.fn().mockRejectedValueOnce(new Error("Meta network timeout"));
 
@@ -118,11 +154,36 @@ describe("WhatsApp Health, WABA Subscription & Templates Routes", () => {
           url: "/whatsapp/templates",
         });
 
-        expect(res.statusCode).toBe(200);
+        expect(res.statusCode).toBe(502);
         const json = JSON.parse(res.body);
-        expect(json.data).toEqual([
-          { name: "hello_world", language: "en", status: "APPROVED" },
-        ]);
+        expect(json.error).toBeDefined();
+        expect(json.error).toContain("Meta WhatsApp API");
+        // Must NEVER present invented fallback
+        expect(res.body).not.toContain("hello_world");
+        // Must NEVER leak secrets
+        expect(res.body).not.toContain("super-secret-access-token");
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("returns useful 502 error when Meta returns non-OK status", async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: async () => JSON.stringify({ error: { message: "Invalid OAuth access token" } }),
+      } as any);
+
+      try {
+        const res = await app.inject({
+          method: "GET",
+          url: "/whatsapp/templates",
+        });
+
+        expect(res.statusCode).toBe(502);
+        const json = JSON.parse(res.body);
+        expect(json.error).toContain("Meta API error: Invalid OAuth access token");
         expect(res.body).not.toContain("super-secret-access-token");
       } finally {
         globalThis.fetch = originalFetch;

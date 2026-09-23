@@ -989,18 +989,36 @@ export async function sendWhatsAppMessage(
   return { success: data.success ?? true, error: data.error, requiresTemplate: data.requiresTemplate };
 }
 
+export interface WhatsAppTemplateComponent {
+  type: string;
+  text?: string;
+  format?: string;
+  example?: { body_text?: string[][] };
+  parameters?: Array<{ type: string; text?: string; [key: string]: unknown }>;
+  [key: string]: unknown;
+}
+
+export interface WhatsAppTemplate {
+  name: string;
+  language: string;
+  status: string;
+  category?: string;
+  components?: WhatsAppTemplateComponent[];
+}
+
 export async function sendWhatsAppTemplate(
   token: string,
   employeeId: string,
   templateName: string,
   options?: { languageCode?: string; components?: unknown[] }
 ): Promise<{ success: boolean; error?: string }> {
+  const defaultLang = templateName === "hello_world" ? "en_US" : "en";
   const res = await authFetch("/whatsapp/send-template", token, {
     method: "POST",
     body: JSON.stringify({
       employeeId,
       templateName,
-      languageCode: options?.languageCode ?? "en",
+      languageCode: options?.languageCode ?? defaultLang,
       components: options?.components,
     }),
   });
@@ -1011,11 +1029,11 @@ export async function sendWhatsAppTemplate(
   return { success: data.success ?? true, error: data.error };
 }
 
-export async function getWhatsAppTemplates(token: string): Promise<{ data: { name: string; language: string }[] }> {
+export async function getWhatsAppTemplates(token: string): Promise<{ data: WhatsAppTemplate[] }> {
   const res = await authFetch("/whatsapp/templates", token);
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { error?: string }).error ?? "Failed to fetch templates");
+    const err = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+    throw new Error(err.error || err.message || "Failed to fetch templates");
   }
   const json = await res.json();
   return { data: json.data ?? [] };

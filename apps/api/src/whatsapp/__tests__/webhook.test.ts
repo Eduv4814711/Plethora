@@ -7,7 +7,19 @@ const processLocationAndSend = vi.fn().mockResolvedValue(undefined);
 const sendUnsupportedTypeReply = vi.fn().mockResolvedValue(undefined);
 const findEmployeeByPhone = vi.fn().mockResolvedValue(null);
 
-const recordedEventIds = new Set<string>();
+interface MockWebhookEvent {
+  id: string;
+  metaEventId: string;
+  eventType: string;
+  phoneNumberId?: string | null;
+  payload?: unknown;
+  status: "PROCESSING" | "PROCESSED" | "FAILED";
+  errorMessage?: string | null;
+  receivedAt: Date;
+  processedAt?: Date | null;
+}
+
+const webhookEvents = new Map<string, MockWebhookEvent>();
 
 vi.mock("../../lib/config.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../lib/config.js")>();
@@ -31,19 +43,43 @@ vi.mock("../../lib/prisma.js", () => ({
   prisma: {
     whatsAppMessage: {
       create: vi.fn().mockResolvedValue({}),
+      findFirst: vi.fn().mockResolvedValue(null),
       updateMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     whatsAppWebhookEvent: {
-      create: vi.fn().mockImplementation(async ({ data }: { data: { metaEventId: string } }) => {
-        if (recordedEventIds.has(data.metaEventId)) {
+      create: vi.fn().mockImplementation(async ({ data }: { data: { metaEventId: string; eventType: string; phoneNumberId?: string; payload?: unknown; status?: string } }) => {
+        if (webhookEvents.has(data.metaEventId)) {
           const err = new Error("Unique constraint failed");
           (err as unknown as { code: string }).code = "P2002";
           throw err;
         }
-        recordedEventIds.add(data.metaEventId);
-        return { id: "evt_" + data.metaEventId, ...data };
+        const record: MockWebhookEvent = {
+          id: "evt_" + data.metaEventId,
+          metaEventId: data.metaEventId,
+          eventType: data.eventType,
+          phoneNumberId: data.phoneNumberId ?? null,
+          payload: data.payload,
+          status: (data.status as "PROCESSING" | "PROCESSED" | "FAILED") ?? "PROCESSING",
+          errorMessage: null,
+          receivedAt: new Date(),
+          processedAt: null,
+        };
+        webhookEvents.set(data.metaEventId, record);
+        return record;
       }),
-      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      findUnique: vi.fn().mockImplementation(async ({ where }: { where: { metaEventId: string } }) => {
+        return webhookEvents.get(where.metaEventId) ?? null;
+      }),
+      updateMany: vi.fn().mockImplementation(async ({ where, data }: { where: { metaEventId: string; status?: string }; data: any }) => {
+        const record = webhookEvents.get(where.metaEventId);
+        if (!record) return { count: 0 };
+        if (where.status && record.status !== where.status) return { count: 0 };
+        if (data.status) record.status = data.status;
+        if (data.errorMessage !== undefined) record.errorMessage = data.errorMessage;
+        if (data.processedAt) record.processedAt = data.processedAt;
+        if (data.payload !== undefined) record.payload = data.payload;
+        return { count: 1 };
+      }),
     },
   },
 }));
@@ -387,5 +423,274 @@ describe("WhatsApp webhook", () => {
     } finally {
       config.whatsapp.appSecret = "";
     }
+  });
+
+  describe("Failed inbound webhook processing and retry path", () => {
+    it("marks event as FAILED and returns 500 when handler fails", async () => {
+      processAndSend.mockReset();
+      processAndSend.mockRejectedValueOnce(new Error("Database connection timeout"));
+
+      const payload = {
+        object: "whatsapp_business_account",
+        entry: [
+          {
+            changes: [
+              {
+                field: "messages",
+                value: {
+                  messaging_product: "whatsapp",
+                  metadata: { phone_number_id: "123456789" },
+                  messages: [
+                    {
+                      from: "27821234567",
+                      id: "wamid.fail_event_1",
+                      timestamp: "1710000000",
+                      type: "text",
+                      text: { body: "clock in" },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/webhook",
+        payload,
+      });
+
+      expect(res.statusCode).toBe(500);
+      expect(processAndSend).toHaveBeenCalledTimes(1);
+
+      const event = webhookEvents.get("wamid.fail_event_1");
+      expect(event).toBeDefined();
+      expect(event?.status).toBe("FAILED");
+      expect(event?.errorMessage).toContain("Database connection timeout");
+    });
+
+    it("allows a failed event to be retried on redelivery and successfully complete", async () => {
+      processAndSend.mockReset();
+      // First attempt fails
+      processAndSend.mockRejectedValueOnce(new Error("Transient downstream error"));
+
+      const payload = {
+        object: "whatsapp_business_account",
+        entry: [
+          {
+            changes: [
+              {
+                field: "messages",
+                value: {
+                  messaging_product: "whatsapp",
+                  metadata: { phone_number_id: "123456789" },
+                  messages: [
+                    {
+                      from: "27821234567",
+                      id: "wamid.retry_success_test",
+                      timestamp: "1710000000",
+                      type: "text",
+                      text: { body: "clock in" },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      // 1. Initial attempt fails
+      const res1 = await app.inject({ method: "POST", url: "/webhook", payload });
+      expect(res1.statusCode).toBe(500);
+      expect(processAndSend).toHaveBeenCalledTimes(1);
+      expect(webhookEvents.get("wamid.retry_success_test")?.status).toBe("FAILED");
+
+      // 2. Redelivery succeeds
+      processAndSend.mockResolvedValueOnce(undefined);
+      const res2 = await app.inject({ method: "POST", url: "/webhook", payload });
+      expect(res2.statusCode).toBe(200);
+      expect(processAndSend).toHaveBeenCalledTimes(2); // Retried!
+      expect(webhookEvents.get("wamid.retry_success_test")?.status).toBe("PROCESSED");
+    });
+
+    it("proves that a successfully processed event cannot run twice", async () => {
+      // Continuation of wamid.retry_success_test which is already PROCESSED:
+      // Send a third delivery of the same message:
+      const payload = {
+        object: "whatsapp_business_account",
+        entry: [
+          {
+            changes: [
+              {
+                field: "messages",
+                value: {
+                  messaging_product: "whatsapp",
+                  metadata: { phone_number_id: "123456789" },
+                  messages: [
+                    {
+                      from: "27821234567",
+                      id: "wamid.retry_success_test",
+                      timestamp: "1710000000",
+                      type: "text",
+                      text: { body: "clock in" },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const countBefore = processAndSend.mock.calls.length;
+      const res3 = await app.inject({ method: "POST", url: "/webhook", payload });
+      expect(res3.statusCode).toBe(200);
+      // Handler MUST NOT be called again
+      expect(processAndSend).toHaveBeenCalledTimes(countBefore);
+    });
+
+    it("handles partial failures when one webhook request contains multiple messages", async () => {
+      processAndSend.mockReset();
+      processAndSend.mockImplementation(async (from: string, text: string) => {
+        if (text === "clock out") {
+          throw new Error("Attendance service unavailable");
+        }
+      });
+
+      const multiPayload = {
+        object: "whatsapp_business_account",
+        entry: [
+          {
+            changes: [
+              {
+                field: "messages",
+                value: {
+                  messaging_product: "whatsapp",
+                  metadata: { phone_number_id: "123456789" },
+                  messages: [
+                    {
+                      from: "27821234567",
+                      id: "wamid.multi_msg_success",
+                      timestamp: "1710000000",
+                      type: "text",
+                      text: { body: "clock in" },
+                    },
+                    {
+                      from: "27821234567",
+                      id: "wamid.multi_msg_fail",
+                      timestamp: "1710000000",
+                      type: "text",
+                      text: { body: "clock out" },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      // Initial batch delivery: 1 succeeds, 1 fails -> HTTP 500 returned so Meta redelivers
+      const res1 = await app.inject({ method: "POST", url: "/webhook", payload: multiPayload });
+      expect(res1.statusCode).toBe(500);
+
+      expect(webhookEvents.get("wamid.multi_msg_success")?.status).toBe("PROCESSED");
+      expect(webhookEvents.get("wamid.multi_msg_fail")?.status).toBe("FAILED");
+
+      // Now service recovers and handles clock out
+      processAndSend.mockReset();
+      processAndSend.mockResolvedValue(undefined);
+
+      // Redelivery arrives containing BOTH messages
+      const res2 = await app.inject({ method: "POST", url: "/webhook", payload: multiPayload });
+      expect(res2.statusCode).toBe(200);
+
+      // Only the failed message was retried! The succeeded message was NOT run twice!
+      expect(processAndSend).toHaveBeenCalledTimes(1);
+      expect(processAndSend).toHaveBeenCalledWith("27821234567", "clock out");
+      expect(webhookEvents.get("wamid.multi_msg_fail")?.status).toBe("PROCESSED");
+    });
+
+    it("handles concurrent duplicate deliveries of a failed event safely", async () => {
+      processAndSend.mockReset();
+      // Initially fail the message
+      processAndSend.mockRejectedValueOnce(new Error("Initial failure"));
+
+      const payload = {
+        object: "whatsapp_business_account",
+        entry: [
+          {
+            changes: [
+              {
+                field: "messages",
+                value: {
+                  messaging_product: "whatsapp",
+                  metadata: { phone_number_id: "123456789" },
+                  messages: [
+                    {
+                      from: "27821234567",
+                      id: "wamid.concurrent_failed",
+                      timestamp: "1710000000",
+                      type: "text",
+                      text: { body: "clock in" },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      await app.inject({ method: "POST", url: "/webhook", payload });
+      expect(webhookEvents.get("wamid.concurrent_failed")?.status).toBe("FAILED");
+
+      // Now simulate 2 concurrent redeliveries arriving at once
+      processAndSend.mockReset();
+      processAndSend.mockResolvedValue(undefined);
+
+      const [resA, resB] = await Promise.all([
+        app.inject({ method: "POST", url: "/webhook", payload }),
+        app.inject({ method: "POST", url: "/webhook", payload }),
+      ]);
+
+      expect(resA.statusCode).toBe(200);
+      expect(resB.statusCode).toBe(200);
+      // Exactly one execution occurred across both concurrent redeliveries
+      expect(processAndSend).toHaveBeenCalledTimes(1);
+    });
+
+    it("retryFailedWebhookEvent programmatically retries failed events but rejects processed events", async () => {
+      const { retryFailedWebhookEvent } = await import("../services/webhook-event.service.js");
+
+      // 1. Trying to retry a PROCESSED event
+      const handlerMock = vi.fn().mockResolvedValue(undefined);
+      const resProcessed = await retryFailedWebhookEvent("wamid.multi_msg_success", handlerMock);
+      expect(resProcessed.success).toBe(false);
+      expect(resProcessed.status).toBe("PROCESSED");
+      expect(resProcessed.error).toContain("cannot run twice");
+      expect(handlerMock).not.toHaveBeenCalled();
+
+      // 2. Retrying a FAILED event
+      webhookEvents.set("wamid.prog_failed", {
+        id: "evt_prog_failed",
+        metaEventId: "wamid.prog_failed",
+        eventType: "message:text",
+        payload: { from: "27821234567", text: { body: "clock in" } },
+        status: "FAILED",
+        errorMessage: "Old error",
+        receivedAt: new Date(),
+        processedAt: null,
+      });
+
+      const resFailed = await retryFailedWebhookEvent("wamid.prog_failed", handlerMock);
+      expect(resFailed.success).toBe(true);
+      expect(resFailed.status).toBe("PROCESSED");
+      expect(handlerMock).toHaveBeenCalledTimes(1);
+      expect(webhookEvents.get("wamid.prog_failed")?.status).toBe("PROCESSED");
+    });
   });
 });

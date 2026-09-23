@@ -112,6 +112,7 @@ model Company {
   operationalAlerts      OperationalAlert[]
   attendanceExceptions   AttendanceException[]
   managedDocuments       ManagedDocument[]
+  documentVersions       DocumentVersion[]
   incidents              Incident[]
   approvalRequests       ApprovalRequest[]
   appNotifications       AppNotification[]
@@ -182,6 +183,7 @@ model User {
   exceptionsReviewed     AttendanceException[] @relation("ExceptionReviewedBy")
   documentsUploaded      ManagedDocument[]     @relation("DocumentUploadedBy")
   documentsVerified      ManagedDocument[]     @relation("DocumentVerifiedBy")
+  documentVersionsCreated DocumentVersion[]    @relation("DocumentVersionCreatedBy")
   incidentsReported      Incident[]            @relation("IncidentReportedBy")
   incidentsSupervised    Incident[]            @relation("IncidentAssignedSupervisor")
   approvalsRequested     ApprovalRequest[]     @relation("ApprovalRequestedBy")
@@ -2502,6 +2504,9 @@ enum DocumentCategory {
   EQUIPMENT
   COMPLIANCE
   TASK
+  BILLING
+  REPORT
+  ACADEMY
   OTHER
 }
 
@@ -2512,8 +2517,21 @@ enum DocumentStatus {
   PENDING_REVIEW
 }
 
+enum DocumentOrigin {
+  UPLOADED
+  GENERATED
+}
+
+enum DocumentLifecycleStatus {
+  DRAFT
+  REVIEW
+  FINAL
+  SUPERSEDED
+  ARCHIVED
+}
+
 model ManagedDocument {
-  id                   String           @id @default(cuid())
+  id                   String                  @id @default(cuid())
   companyId            String
   title                String
   documentType         String
@@ -2523,8 +2541,8 @@ model ManagedDocument {
   issuingAuthority     String?
   issueDate            DateTime?
   expiryDate           DateTime?
-  doesNotExpire        Boolean          @default(false)
-  isSensitive          Boolean          @default(false)
+  doesNotExpire        Boolean                 @default(false)
+  isSensitive          Boolean                 @default(false)
   fileUrl              String
   fileName             String
   mimeType             String
@@ -2536,36 +2554,75 @@ model ManagedDocument {
   incidentId           String?
   taskId               String?
   uploadedById         String
-  verificationStatus   String           @default("PENDING_VERIFICATION")
+  verificationStatus   String                  @default("PENDING_VERIFICATION")
   verifiedById         String?
   verifiedAt           DateTime?
-  rejectionReason      String?          @db.Text
-  notes                String?          @db.Text
-  status               DocumentStatus   @default(ACTIVE)
+  rejectionReason      String?                 @db.Text
+  notes                String?                 @db.Text
+  status               DocumentStatus          @default(ACTIVE)
+  origin               DocumentOrigin          @default(UPLOADED)
+  sourceModule         String?
+  sourceEntityType     String?
+  sourceEntityId       String?
+  lifecycleStatus      DocumentLifecycleStatus @default(FINAL)
+  currentVersionId     String?
   replacedByDocumentId String?
   metadata             Json?
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
 
-  company        Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee       Employee?       @relation(fields: [employeeId], references: [id], onDelete: SetNull)
-  site           Site?           @relation(fields: [siteId], references: [id], onDelete: SetNull)
-  client         Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  clientContract ClientContract? @relation(fields: [clientContractId], references: [id], onDelete: SetNull)
-  incident       Incident?       @relation(fields: [incidentId], references: [id], onDelete: SetNull)
-  task           Task?           @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  uploadedBy     User            @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Cascade)
-  verifiedBy     User?           @relation("DocumentVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  company        Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee       Employee?         @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  site           Site?             @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  client         Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientContract ClientContract?   @relation(fields: [clientContractId], references: [id], onDelete: SetNull)
+  incident       Incident?         @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  task           Task?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  uploadedBy     User              @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Cascade)
+  verifiedBy     User?             @relation("DocumentVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  currentVersion DocumentVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  versions       DocumentVersion[] @relation("DocumentVersions")
 
   @@index([companyId, category])
   @@index([companyId, documentCategory])
   @@index([companyId, status])
   @@index([companyId, verificationStatus])
+  @@index([companyId, origin])
+  @@index([sourceModule, sourceEntityId])
+  @@index([currentVersionId])
+  @@index([lifecycleStatus])
   @@index([employeeId])
   @@index([siteId])
   @@index([clientId])
   @@index([clientContractId])
   @@index([expiryDate])
+}
+
+model DocumentVersion {
+  id            String          @id @default(cuid())
+  companyId     String
+  documentId    String
+  versionNumber Int
+  fileUrl       String
+  fileName      String
+  mimeType      String
+  size          Int
+  checksum      String?
+  createdById   String?
+  createdAt     DateTime        @default(now())
+  changeSummary String?
+  sourceType    String?
+  metadata      Json?
+
+  company    Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  document   ManagedDocument   @relation("DocumentVersions", fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy  User?             @relation("DocumentVersionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  currentFor ManagedDocument[] @relation("CurrentVersion")
+
+  @@unique([documentId, versionNumber])
+  @@index([companyId])
+  @@index([documentId])
+  @@index([createdById])
 }
 
 enum IncidentType {

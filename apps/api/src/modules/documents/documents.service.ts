@@ -1,4 +1,4 @@
-import { Prisma, type DocumentCategory, type DocumentStatus } from "@prisma/client";
+import { Prisma, type DocumentCategory, type DocumentStatus, type DocumentOrigin, type DocumentLifecycleStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { upsertAlert } from "../alerts/alerts.service.js";
@@ -109,13 +109,54 @@ export async function syncDocumentExpiryAlerts(companyId: string) {
   return { scanned: docs.length, created };
 }
 
+export const VALID_DOCUMENT_CATEGORIES = new Set<string>([
+  "EMPLOYEE",
+  "SITE",
+  "CLIENT",
+  "PAYROLL",
+  "ATTENDANCE",
+  "INCIDENT",
+  "EQUIPMENT",
+  "COMPLIANCE",
+  "TASK",
+  "BILLING",
+  "REPORT",
+  "ACADEMY",
+  "OTHER",
+]);
+
+export const CATEGORY_ALIASES: Record<string, DocumentCategory> = {
+  HR_COMPLIANCE: "COMPLIANCE",
+  CLIENT_CONTRACT: "CLIENT",
+  SITE_OPERATIONS: "SITE",
+  OPERATIONAL: "SITE",
+  VEHICLE_FLEET: "EQUIPMENT",
+  FIREARM_LICENSING: "EQUIPMENT",
+  INCIDENT_EVIDENCE: "INCIDENT",
+  GENERAL: "OTHER",
+};
+
+export function resolveDocumentCategory(cat?: string | null): DocumentCategory | undefined {
+  if (!cat) return undefined;
+  const upper = cat.toUpperCase().trim();
+  if (VALID_DOCUMENT_CATEGORIES.has(upper)) {
+    return upper as DocumentCategory;
+  }
+  if (CATEGORY_ALIASES[upper]) {
+    return CATEGORY_ALIASES[upper];
+  }
+  return undefined;
+}
+
 export async function listDocuments(
   companyId: string,
   query: {
-    category?: DocumentCategory;
+    category?: DocumentCategory | string;
     documentCategory?: string;
     verificationStatus?: string;
     status?: DocumentStatus;
+    origin?: DocumentOrigin;
+    lifecycleStatus?: DocumentLifecycleStatus;
     employeeId?: string;
     siteId?: string;
     clientId?: string;
@@ -127,12 +168,19 @@ export async function listDocuments(
     offset?: number;
   }
 ) {
+  const resolvedCategory = resolveDocumentCategory(query.category);
   const where: Prisma.ManagedDocumentWhereInput = {
     companyId,
-    ...(query.category ? { category: query.category } : {}),
-    ...(query.documentCategory ? { documentCategory: query.documentCategory } : {}),
+    ...(resolvedCategory ? { category: resolvedCategory } : {}),
+    ...(query.documentCategory
+      ? { documentCategory: query.documentCategory }
+      : !resolvedCategory && query.category
+      ? { documentCategory: query.category }
+      : {}),
     ...(query.verificationStatus ? { verificationStatus: query.verificationStatus } : {}),
     ...(query.status ? { status: query.status } : {}),
+    ...(query.origin ? { origin: query.origin } : {}),
+    ...(query.lifecycleStatus ? { lifecycleStatus: query.lifecycleStatus } : {}),
     ...(query.employeeId ? { employeeId: query.employeeId } : {}),
     ...(query.siteId ? { siteId: query.siteId } : {}),
     ...(query.clientId ? { clientId: query.clientId } : {}),
@@ -169,6 +217,8 @@ export async function listDocuments(
       include: {
         employee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
         site: { select: { id: true, name: true } },
+        client: { select: { id: true, name: true } },
+        currentVersion: true,
         uploadedBy: { select: { id: true, name: true, email: true } },
         verifiedBy: { select: { id: true, name: true, email: true } },
       },
@@ -240,6 +290,11 @@ export async function createDocumentRecord(params: {
   fileName: string;
   mimeType: string;
   size: number;
+  origin?: DocumentOrigin;
+  sourceModule?: string | null;
+  sourceEntityType?: string | null;
+  sourceEntityId?: string | null;
+  lifecycleStatus?: DocumentLifecycleStatus;
   employeeId?: string | null;
   siteId?: string | null;
   clientId?: string | null;
@@ -254,7 +309,7 @@ export async function createDocumentRecord(params: {
       companyId: params.companyId,
       title: params.title,
       documentType: params.documentType,
-      category: params.category,
+      category: (resolveDocumentCategory(params.category) ?? "OTHER") as DocumentCategory,
       documentCategory: params.documentCategory?.trim() || null,
       documentNumber: params.documentNumber?.trim() || null,
       issuingAuthority: params.issuingAuthority?.trim() || null,
@@ -266,6 +321,11 @@ export async function createDocumentRecord(params: {
       fileName: params.fileName,
       mimeType: params.mimeType,
       size: params.size,
+      origin: params.origin ?? "UPLOADED",
+      sourceModule: params.sourceModule?.trim() || null,
+      sourceEntityType: params.sourceEntityType?.trim() || null,
+      sourceEntityId: params.sourceEntityId?.trim() || null,
+      lifecycleStatus: params.lifecycleStatus ?? "FINAL",
       employeeId: params.employeeId?.trim() || null,
       siteId: params.siteId?.trim() || null,
       clientId: params.clientId?.trim() || null,
@@ -280,6 +340,40 @@ export async function createDocumentRecord(params: {
     },
     include: {
       employee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
+      site: { select: { id: true, name: true } },
+      client: { select: { id: true, name: true } },
+      uploadedBy: { select: { id: true, name: true, email: true } },
+      verifiedBy: { select: { id: true, name: true, email: true } },
+    },
+  });
+
+  // Create initial DocumentVersion (Version 1)
+  const versionData: Prisma.DocumentVersionCreateInput = {
+    company: { connect: { id: params.companyId } },
+    document: { connect: { id: doc.id } },
+    versionNumber: 1,
+    fileUrl: params.fileUrl,
+    fileName: params.fileName,
+    mimeType: params.mimeType,
+    size: params.size,
+    changeSummary: "Initial document record",
+    sourceType: params.origin === "GENERATED" ? "SYSTEM_GENERATION" : "INITIAL_UPLOAD",
+  };
+  if (params.uploadedById) {
+    versionData.createdBy = { connect: { id: params.uploadedById } };
+  }
+  const initialVersion = await prisma.documentVersion.create({
+    data: versionData,
+  });
+
+  const updatedDoc = await prisma.managedDocument.update({
+    where: { id: doc.id },
+    data: { currentVersionId: initialVersion.id },
+    include: {
+      currentVersion: true,
+      employee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
+      site: { select: { id: true, name: true } },
+      client: { select: { id: true, name: true } },
       uploadedBy: { select: { id: true, name: true, email: true } },
       verifiedBy: { select: { id: true, name: true, email: true } },
     },
@@ -320,6 +414,7 @@ export async function createDocumentRecord(params: {
       documentType: params.documentType,
       employeeId: params.employeeId,
       documentNumber: params.documentNumber,
+      versionNumber: 1,
     },
   });
 
@@ -327,7 +422,7 @@ export async function createDocumentRecord(params: {
     await syncDocumentExpiryAlerts(params.companyId);
   }
 
-  return doc;
+  return updatedDoc;
 }
 
 export async function updateDocumentMetadata(
@@ -336,6 +431,7 @@ export async function updateDocumentMetadata(
   userId: string,
   data: {
     title?: string;
+    category?: DocumentCategory | string;
     documentType?: string;
     documentCategory?: string | null;
     documentNumber?: string | null;
@@ -355,6 +451,10 @@ export async function updateDocumentMetadata(
 
   const updateData: Prisma.ManagedDocumentUpdateInput = {};
   if (data.title !== undefined) updateData.title = data.title;
+  if (data.category !== undefined) {
+    const resolvedCat = resolveDocumentCategory(data.category);
+    if (resolvedCat) updateData.category = resolvedCat;
+  }
   if (data.documentType !== undefined) updateData.documentType = data.documentType;
   if (data.documentCategory !== undefined) updateData.documentCategory = data.documentCategory;
   if (data.documentNumber !== undefined) updateData.documentNumber = data.documentNumber;

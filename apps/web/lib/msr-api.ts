@@ -197,6 +197,23 @@ export interface ExpiryEvaluation {
   label: string;
 }
 
+export interface DocumentVersion {
+  id: string;
+  companyId: string;
+  documentId: string;
+  versionNumber: number;
+  fileUrl?: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  checksum?: string | null;
+  createdById: string;
+  createdAt: string;
+  changeSummary?: string | null;
+  sourceType?: string | null;
+  createdBy?: { id: string; name: string; email?: string } | null;
+}
+
 export interface ManagedDocument {
   id: string;
   title: string;
@@ -215,8 +232,21 @@ export interface ManagedDocument {
   rejectionReason?: string | null;
   notes?: string | null;
   status: string;
+  origin?: "UPLOADED" | "GENERATED";
+  sourceModule?: string | null;
+  sourceEntityType?: string | null;
+  sourceEntityId?: string | null;
+  lifecycleStatus?: "DRAFT" | "REVIEW" | "FINAL" | "SUPERSEDED" | "ARCHIVED";
+  currentVersionId?: string | null;
+  currentVersion?: DocumentVersion | null;
+  versions?: DocumentVersion[];
+  sourceInfo?: { editSourceUrl?: string; sourceLabel: string; isGenerated: boolean };
   fileName: string;
+  mimeType?: string;
+  fileUrl?: string;
   downloadUrl?: string;
+  viewUrl?: string;
+  permissions?: { canEdit?: boolean; canExport?: boolean; canApprove?: boolean };
   createdAt: string;
   updatedAt?: string;
   site?: { id: string; name: string } | null;
@@ -396,6 +426,8 @@ export async function updateDocumentMetadata(
   return parseJson(res, "Failed to update document metadata");
 }
 
+export const updateDocument = updateDocumentMetadata;
+
 export async function uploadDocument(
   token: string,
   file: File,
@@ -420,6 +452,108 @@ export async function uploadDocument(
     body: form,
   });
   return parseJson(res, "Failed to upload document");
+}
+
+export async function uploadDocumentVersion(
+  token: string,
+  documentId: string,
+  file: File,
+  changeSummary?: string
+): Promise<ManagedDocument> {
+  const form = new FormData();
+  form.append("file", file);
+  if (changeSummary) form.append("changeSummary", changeSummary);
+
+  const csrf =
+    typeof document !== "undefined"
+      ? document.cookie.match(/(?:^|;\s*)plethora_csrf=([^;]*)/)?.[1]
+      : null;
+  const res = await fetch(buildApiUrl(`documents/${documentId}/versions`), {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(csrf ? { "X-CSRF-Token": decodeURIComponent(csrf) } : {}),
+    },
+    body: form,
+  });
+  return parseJson(res, "Failed to upload new document version");
+}
+
+export async function rotateDocumentPages(
+  token: string,
+  documentId: string,
+  options: { pageIndices?: number[]; angleDegrees?: number }
+): Promise<ManagedDocument> {
+  const res = await authFetch(`/documents/${documentId}/pdf/rotate`, token, {
+    method: "POST",
+    body: JSON.stringify(options),
+  });
+  return parseJson(res, "Failed to rotate document pages");
+}
+
+export async function reorderDocumentPages(
+  token: string,
+  documentId: string,
+  pageOrder: number[]
+): Promise<ManagedDocument> {
+  const res = await authFetch(`/documents/${documentId}/pdf/reorder`, token, {
+    method: "POST",
+    body: JSON.stringify({ pageOrder }),
+  });
+  return parseJson(res, "Failed to reorder document pages");
+}
+
+export async function deleteDocumentPages(
+  token: string,
+  documentId: string,
+  pageIndices: number[]
+): Promise<ManagedDocument> {
+  const res = await authFetch(`/documents/${documentId}/pdf/delete-page`, token, {
+    method: "POST",
+    body: JSON.stringify({ pageIndices }),
+  });
+  return parseJson(res, "Failed to delete document pages");
+}
+
+export async function stampDocument(
+  token: string,
+  documentId: string,
+  options: { pageIndex?: number; signerRole?: string; notes?: string; x?: number; y?: number }
+): Promise<ManagedDocument> {
+  const res = await authFetch(`/documents/${documentId}/pdf/stamp`, token, {
+    method: "POST",
+    body: JSON.stringify(options),
+  });
+  return parseJson(res, "Failed to apply electronic signature stamp");
+}
+
+export async function regenerateDocument(
+  token: string,
+  documentId: string
+): Promise<ManagedDocument> {
+  const res = await authFetch(`/documents/${documentId}/regenerate`, token, {
+    method: "POST",
+  });
+  return parseJson(res, "Failed to regenerate document from system data");
+}
+
+export async function finalizeDocument(
+  token: string,
+  documentId: string
+): Promise<ManagedDocument> {
+  const res = await authFetch(`/documents/${documentId}/finalize`, token, {
+    method: "POST",
+  });
+  return parseJson(res, "Failed to finalize document");
+}
+
+export async function getDocumentVersions(
+  token: string,
+  documentId: string
+): Promise<{ versions: DocumentVersion[] }> {
+  const res = await authFetch(`/documents/${documentId}/versions`, token);
+  return parseJson(res, "Failed to load document versions");
 }
 
 // ——— Attendance exceptions ———
@@ -1210,7 +1344,7 @@ export function approvalEntityHref(item: ApprovalRequest): string | null {
     case "Incident":
       return `/incidents/${item.entityId}`;
     case "ManagedDocument":
-      return "/documents";
+      return `/documents/${item.entityId}`;
     case "SiteTimesheet":
       return "/attendance";
     case "Task":
