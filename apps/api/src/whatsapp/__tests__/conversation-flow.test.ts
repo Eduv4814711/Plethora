@@ -67,8 +67,15 @@ const updateAttendance = vi.fn().mockResolvedValue({ id: "att-1" });
 const findManyShifts = vi.fn().mockResolvedValue([]);
 const findFirstShift = vi.fn().mockResolvedValue(null);
 const updateShift = vi.fn().mockResolvedValue({ id: "shift-1" });
-const findFirstSite = vi.fn().mockResolvedValue(mockSite);
+const findFirstSite = vi.fn().mockImplementation((args?: any) => {
+  const contains = args?.where?.name?.contains;
+  if (contains && !String(mockSite.name).toLowerCase().includes(String(contains).toLowerCase())) {
+    return Promise.resolve(null);
+  }
+  return Promise.resolve(mockSite);
+});
 const findUniqueSite = vi.fn().mockResolvedValue(mockSite);
+const findManySites = vi.fn().mockResolvedValue([mockSite]);
 const findFirstUser = vi.fn().mockResolvedValue(mockUser);
 const createIncident = vi.fn().mockResolvedValue(mockIncident);
 const findFirstIncident = vi.fn().mockResolvedValue(mockIncident);
@@ -105,6 +112,7 @@ vi.mock("../../lib/prisma.js", () => ({
     site: {
       findFirst: (...args: any[]) => findFirstSite(...args),
       findUnique: (...args: any[]) => findUniqueSite(...args),
+      findMany: (...args: any[]) => findManySites(...args),
     },
     user: {
       findFirst: (...args: any[]) => findFirstUser(...args),
@@ -243,6 +251,50 @@ describe("WhatsApp Conversation State Machine & Micro-Prompts", () => {
 
       // Verify session transitions to await photo
       expect(sessionManager.getSession(phone)?.state).toBe("INCIDENT_AWAITING_PHOTO");
+    });
+
+    it("presents numbered site selection list in step 2 and selects site by number", async () => {
+      const { processIncomingMessage } = await import("../services/handler.service.js");
+      const { sessionManager } = await import("../services/session.service.js");
+
+      findManySites.mockResolvedValueOnce([
+        mockSite,
+        { id: "site-202", name: "Rosebank Link Tower", companyId: "co-101" },
+      ]);
+
+      // Step 1: Trigger incident
+      await processIncomingMessage(phone, "report");
+      const step2 = await processIncomingMessage(phone, "2");
+
+      expect("reply" in step2).toBe(true);
+      if ("reply" in step2) {
+        expect(step2.reply).toContain("📍 *Site Selection* (Step 2/3)");
+        expect(step2.reply).toContain("1️⃣ *Sandton City Mall*");
+        expect(step2.reply).toContain("2️⃣ *Rosebank Link Tower*");
+        expect(step2.reply).toContain("Reply with the site number (*1–2*)");
+        expect(step2.buttons).toHaveLength(2);
+        expect(step2.buttons?.[1]?.id).toBe("inc_site_2");
+        expect(step2.buttons?.[1]?.title).toContain("Rosebank");
+      }
+
+      // Test invalid selection -> re-displays list with warning
+      const invalidStep2 = await processIncomingMessage(phone, "99");
+      expect("reply" in invalidStep2).toBe(true);
+      if ("reply" in invalidStep2) {
+        expect(invalidStep2.reply).toContain("⚠️ Site \"99\" not recognized.");
+        expect(invalidStep2.reply).toContain("1️⃣ *Sandton City Mall*");
+        expect(invalidStep2.reply).toContain("2️⃣ *Rosebank Link Tower*");
+      }
+
+      // Step 2: Select site 2 by replying with number "2"
+      const step3 = await processIncomingMessage(phone, "2");
+      expect("reply" in step3).toBe(true);
+      if ("reply" in step3) {
+        expect(step3.reply).toContain("📝 *Incident Details* (Step 3/3)");
+        expect(step3.reply).toContain("Site: *Rosebank Link Tower*");
+      }
+      expect(sessionManager.getSession(phone)?.state).toBe("INCIDENT_ENTER_DETAILS");
+      expect(sessionManager.getSession(phone)?.data.siteId).toBe("site-202");
     });
 
     it("rejects invalid incident category with clear user error message", async () => {

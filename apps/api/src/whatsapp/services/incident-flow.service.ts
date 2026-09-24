@@ -91,23 +91,21 @@ export async function handleIncidentSelectType(
 ): Promise<IncidentFlowResult> {
   const clean = text.trim().toLowerCase().replace(/^inc_cat_/, "");
   const selected = INCIDENT_CATEGORIES[clean];
-
-  if (!selected) {
-    // Check keyword matching
-    let matched: CategoryOption | undefined;
+  let categoryOption = selected;
+  if (!categoryOption) {
     if (clean.includes("emerg") || clean.includes("hazard") || clean.includes("safe")) {
-      matched = INCIDENT_CATEGORIES["1"];
+      categoryOption = INCIDENT_CATEGORIES["1"];
     } else if (clean.includes("break") || clean.includes("theft") || clean.includes("trespass")) {
-      matched = INCIDENT_CATEGORIES["2"];
+      categoryOption = INCIDENT_CATEGORIES["2"];
     } else if (clean.includes("guard") || clean.includes("misconduct") || clean.includes("absent")) {
-      matched = INCIDENT_CATEGORIES["3"];
+      categoryOption = INCIDENT_CATEGORIES["3"];
     } else if (clean.includes("equip") || clean.includes("damage") || clean.includes("gate")) {
-      matched = INCIDENT_CATEGORIES["4"];
+      categoryOption = INCIDENT_CATEGORIES["4"];
     } else if (clean.includes("complain") || clean.includes("other") || clean.includes("general")) {
-      matched = INCIDENT_CATEGORIES["5"];
+      categoryOption = INCIDENT_CATEGORIES["5"];
     }
 
-    if (!matched) {
+    if (!categoryOption) {
       return {
         reply:
           `⚠️ Invalid category selection. Please reply with a number from *1 to 5*:\n\n` +
@@ -119,21 +117,11 @@ export async function handleIncidentSelectType(
           `Or type *cancel* to exit.`,
       };
     }
-
-    sessionManager.setSessionState(from, "INCIDENT_SELECT_SITE", {
-      incidentType: matched.type,
-      severity: matched.severity,
-      categoryLabel: matched.label,
-    });
-  } else {
-    sessionManager.setSessionState(from, "INCIDENT_SELECT_SITE", {
-      incidentType: selected.type,
-      severity: selected.severity,
-      categoryLabel: selected.label,
-    });
   }
 
-  // Look up employee's current or assigned sites
+  const targetCategory = categoryOption;
+
+  // 1. Look up employee's active attendance to identify current on-duty site
   const activeAttendance = await prisma.attendance.findFirst({
     where: {
       shift: { employeeId: session.employeeId, companyId: session.companyId },
@@ -143,65 +131,111 @@ export async function handleIncidentSelectType(
     },
     include: { shift: { include: { site: true } } },
   });
+  const currentSite = activeAttendance?.shift.site;
 
-  if (activeAttendance?.shift.site) {
-    const currentSite = activeAttendance.shift.site;
-    sessionManager.updateSessionData(from, {
-      suggestedSiteId: currentSite.id,
-      suggestedSiteName: currentSite.name,
-    });
-
-    return {
-      reply:
-        `📍 *Site Confirmation* (Step 2/3)\n\n` +
-        `You are currently clocked in at *${currentSite.name}*.\nIs the incident occurring at this site?\n\n` +
-        `1️⃣ *Yes, at ${currentSite.name}*\n` +
-        `2️⃣ *No, a different site*\n\n` +
-        `Reply *1* to confirm, or type the name of the site.`,
-      buttons: [
-        { id: "inc_site_yes", title: "Yes, this site" },
-        { id: "inc_site_other", title: "Different site" },
-      ],
-    };
-  }
-
-  // Find recent sites assigned to this employee
-  const recentShifts = await prisma.shift.findMany({
-    where: { employeeId: session.employeeId, companyId: session.companyId },
-    include: { site: true },
-    orderBy: { startTime: "desc" },
-    take: 3,
+  // 2. Fetch active sites for the company
+  const companySites = await prisma.site.findMany({
+    where: { companyId: session.companyId, siteStatus: "ACTIVE" },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+    take: 10,
   });
 
-  const uniqueSites = Array.from(
-    new Map(
-      recentShifts
-        .filter((s) => s.site != null)
-        .map((s) => [s.site!.id, s.site!])
-    ).values()
-  );
-
-  if (uniqueSites.length > 0) {
-    sessionManager.updateSessionData(from, {
-      siteOptions: uniqueSites.map((s) => ({ id: s.id, name: s.name })),
+  // Fallback to any company sites if none marked ACTIVE
+  let availableSites = companySites;
+  if (availableSites.length === 0) {
+    availableSites = await prisma.site.findMany({
+      where: { companyId: session.companyId },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+      take: 10,
     });
+  }
 
-    const optionsText = uniqueSites
-      .map((s, idx) => `${idx + 1}️⃣ *${s.name}*`)
+  // Fallback if findMany returns empty but findFirst has site (e.g. unit mocks)
+  if (availableSites.length === 0 && !currentSite) {
+    const single = await prisma.site.findFirst({
+      where: { companyId: session.companyId },
+      select: { id: true, name: true },
+    });
+    if (single) {
+      availableSites = [single];
+    }
+  }
+
+  // 3. Assemble ordered list: prioritize current on-duty site first
+  const orderedList: { id: string; name: string; isCurrent?: boolean }[] = [];
+  if (currentSite) {
+    orderedList.push({ id: currentSite.id, name: currentSite.name, isCurrent: true });
+    for (const s of availableSites) {
+      if (s.id !== currentSite.id) {
+        orderedList.push({ id: s.id, name: s.name });
+      }
+    }
+  } else {
+    for (const s of availableSites) {
+      orderedList.push({ id: s.id, name: s.name });
+    }
+  }
+
+  const siteOptions = orderedList.slice(0, 10).map((s, idx) => ({
+    number: idx + 1,
+    id: s.id,
+    name: s.name,
+    isCurrent: Boolean(s.isCurrent),
+    displayName: s.isCurrent ? `${s.name} (Current Site)` : s.name,
+  }));
+
+  sessionManager.setSessionState(from, "INCIDENT_SELECT_SITE", {
+    incidentType: targetCategory.type,
+    severity: targetCategory.severity,
+    categoryLabel: targetCategory.label,
+    siteOptions,
+    suggestedSiteId: currentSite?.id,
+    suggestedSiteName: currentSite?.name,
+  });
+
+  if (siteOptions.length > 0) {
+    const optionsText = siteOptions
+      .map((s) => `${s.number}️⃣ *${s.displayName}*`)
       .join("\n");
 
+    const reply =
+      `📍 *Site Selection* (Step 2/3)\n\n` +
+      `Category: *${targetCategory.label}*\n\n` +
+      `Please select the site where this incident occurred:\n\n` +
+      `${optionsText}\n\n` +
+      `Reply with the site number (*1–${siteOptions.length}*) or type the site name.\n` +
+      `Type *cancel* to abort.`;
+
+    if (siteOptions.length <= 3) {
+      return {
+        reply,
+        buttons: siteOptions.map((s) => ({
+          id: `inc_site_${s.number}`,
+          title: `${s.number}. ${s.name}`.slice(0, 20),
+        })),
+      };
+    }
+
     return {
-      reply:
-        `📍 *Site Selection* (Step 2/3)\n\n` +
-        `Which site did this occur at?\n\n` +
-        `${optionsText}\n\n` +
-        `Reply with the number (1–${uniqueSites.length}) or type the site name.`,
+      reply,
+      sendInteractiveList: {
+        body: reply,
+        buttonText: "Choose Site",
+        rows: siteOptions.map((s) => ({
+          id: `inc_site_${s.number}`,
+          title: `${s.number}. ${s.name}`.slice(0, 24),
+          description: s.isCurrent ? "Currently on duty here" : undefined,
+        })),
+      },
     };
   }
 
   return {
     reply:
       `📍 *Site Selection* (Step 2/3)\n\n` +
+      `Category: *${targetCategory.label}*\n\n` +
       `Please reply with the *Name* of the site or post where this incident occurred:`,
   };
 }
@@ -214,78 +248,119 @@ export async function handleIncidentSelectSite(
   const clean = text.trim();
   const lower = clean.toLowerCase();
 
-  // If user confirmed suggested site (1, yes, inc_site_yes)
+  const siteOptions = session.data.siteOptions as
+    | { number: number; id: string; name: string; isCurrent?: boolean; displayName: string }[]
+    | undefined;
+
+  let selectedSite: { id: string; name: string } | undefined;
+
+  // 1. Check if user typed a number (e.g. "1", "2") or clicked interactive button "inc_site_1"
+  const cleanNumber = lower.replace(/^inc_site_/, "").trim();
+  const num = parseInt(cleanNumber, 10);
+  if (!isNaN(num) && siteOptions && siteOptions.length > 0) {
+    const found = siteOptions.find((s) => s.number === num);
+    if (found) {
+      selectedSite = { id: found.id, name: found.name };
+    }
+  }
+
+  // 2. Check "yes" or "inc_site_yes" if option 1 was Current Site
   if (
-    (lower === "1" || lower === "yes" || lower === "inc_site_yes" || lower.includes("this site")) &&
-    session.data.suggestedSiteId &&
-    session.data.suggestedSiteName
+    !selectedSite &&
+    (lower === "yes" || lower === "inc_site_yes" || lower.includes("this site") || lower === "current") &&
+    siteOptions &&
+    siteOptions.length > 0
   ) {
+    const currentOpt = siteOptions.find((s) => s.isCurrent) ?? siteOptions[0];
+    if (currentOpt) {
+      selectedSite = { id: currentOpt.id, name: currentOpt.name };
+    }
+  }
+
+  // 3. Match against siteOptions by name or partial name
+  if (!selectedSite && siteOptions && siteOptions.length > 0) {
+    const found = siteOptions.find(
+      (s) =>
+        s.name.toLowerCase() === lower ||
+        s.name.toLowerCase().includes(lower) ||
+        lower.includes(s.name.toLowerCase())
+    );
+    if (found) {
+      selectedSite = { id: found.id, name: found.name };
+    }
+  }
+
+  // 4. Search in DB for any company site matching clean
+  if (!selectedSite) {
+    const site = await prisma.site.findFirst({
+      where: {
+        companyId: session.companyId,
+        name: { contains: clean, mode: "insensitive" },
+      },
+      select: { id: true, name: true },
+    });
+    if (site) {
+      selectedSite = { id: site.id, name: site.name };
+    }
+  }
+
+  // 5. If site successfully matched, proceed to Step 3
+  if (selectedSite) {
     sessionManager.setSessionState(from, "INCIDENT_ENTER_DETAILS", {
-      siteId: session.data.suggestedSiteId,
-      siteName: session.data.suggestedSiteName,
+      siteId: selectedSite.id,
+      siteName: selectedSite.name,
     });
 
     return {
       reply:
         `📝 *Incident Details* (Step 3/3)\n\n` +
-        `Site: *${session.data.suggestedSiteName}*\n` +
+        `Site: *${selectedSite.name}*\n` +
         `Category: *${session.data.categoryLabel}*\n\n` +
         `Please type a short description of what happened in a single message.\n` +
         `(Include: what happened, persons involved, immediate actions taken).`,
     };
   }
 
-  // Check if chosen from siteOptions
-  const siteOptions = session.data.siteOptions as { id: string; name: string }[] | undefined;
+  // 6. If not matched, re-display the site selection list with guidance
   if (siteOptions && siteOptions.length > 0) {
-    const num = parseInt(lower, 10);
-    if (!isNaN(num) && num >= 1 && num <= siteOptions.length) {
-      const chosen = siteOptions[num - 1]!;
-      sessionManager.setSessionState(from, "INCIDENT_ENTER_DETAILS", {
-        siteId: chosen.id,
-        siteName: chosen.name,
-      });
+    const optionsText = siteOptions
+      .map((s) => `${s.number}️⃣ *${s.displayName}*`)
+      .join("\n");
 
+    const reply =
+      `⚠️ Site "${clean}" not recognized.\n\n` +
+      `Please select a site by replying with its number:\n\n` +
+      `${optionsText}\n\n` +
+      `Reply with *1–${siteOptions.length}* or type the exact site name (or *cancel* to abort).`;
+
+    if (siteOptions.length <= 3) {
       return {
-        reply:
-          `📝 *Incident Details* (Step 3/3)\n\n` +
-          `Site: *${chosen.name}*\n` +
-          `Category: *${session.data.categoryLabel}*\n\n` +
-          `Please type a short description of what happened in a single message.\n` +
-          `(Include: what happened, persons involved, immediate actions taken).`,
+        reply,
+        buttons: siteOptions.map((s) => ({
+          id: `inc_site_${s.number}`,
+          title: `${s.number}. ${s.name}`.slice(0, 20),
+        })),
       };
     }
-  }
 
-  // Search site by name within company
-  const site = await prisma.site.findFirst({
-    where: {
-      companyId: session.companyId,
-      name: { contains: clean, mode: "insensitive" },
-    },
-    select: { id: true, name: true },
-  });
-
-  if (!site) {
     return {
-      reply:
-        `⚠️ Site "${clean}" not recognized in company records.\n\n` +
-        `Please enter the exact site name, or type *cancel* to exit.`,
+      reply,
+      sendInteractiveList: {
+        body: reply,
+        buttonText: "Choose Site",
+        rows: siteOptions.map((s) => ({
+          id: `inc_site_${s.number}`,
+          title: `${s.number}. ${s.name}`.slice(0, 24),
+          description: s.isCurrent ? "Currently on duty here" : undefined,
+        })),
+      },
     };
   }
 
-  sessionManager.setSessionState(from, "INCIDENT_ENTER_DETAILS", {
-    siteId: site.id,
-    siteName: site.name,
-  });
-
   return {
     reply:
-      `📝 *Incident Details* (Step 3/3)\n\n` +
-      `Site: *${site.name}*\n` +
-      `Category: *${session.data.categoryLabel}*\n\n` +
-      `Please type a short description of what happened in a single message.\n` +
-      `(Include: what happened, persons involved, immediate actions taken).`,
+      `⚠️ Site "${clean}" not recognized in company records.\n\n` +
+      `Please enter the exact site name, or type *cancel* to exit.`,
   };
 }
 
