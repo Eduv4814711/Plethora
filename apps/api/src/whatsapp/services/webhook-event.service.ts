@@ -5,6 +5,7 @@ export type RecordEventResult = {
   isDuplicate: boolean;
   canProcess: boolean;
   isRetry: boolean;
+  isProcessing?: boolean;
   eventId?: string;
 };
 
@@ -65,8 +66,9 @@ export async function recordInboundWebhookEvent(params: {
     }
 
     if (existing.status === "PROCESSING") {
-      // Active in-flight processing; block concurrent duplicates
-      return { isDuplicate: true, canProcess: false, isRetry: false, eventId: existing.id };
+      // Keep Meta retrying until the original delivery reaches a durable outcome.
+      // A worker can die after creating this row, so acknowledging it would lose the event.
+      return { isDuplicate: true, canProcess: false, isRetry: false, isProcessing: true, eventId: existing.id };
     }
 
     if (existing.status === "FAILED") {
@@ -98,18 +100,20 @@ export async function recordInboundWebhookEvent(params: {
 /**
  * Marks the webhook event as successfully processed.
  */
-export async function markWebhookEventProcessed(metaEventId: string): Promise<void> {
-  if (!metaEventId) return;
+export async function markWebhookEventProcessed(metaEventId: string): Promise<boolean> {
+  if (!metaEventId) return false;
   try {
-    await prisma.whatsAppWebhookEvent.updateMany({
+    const result = await prisma.whatsAppWebhookEvent.updateMany({
       where: { metaEventId },
       data: {
         status: "PROCESSED",
         processedAt: new Date(),
       },
     });
+    return result.count === 1;
   } catch {
-    // Non-fatal if status update fails
+    // Keep the event in PROCESSING: its business action may already have committed.
+    return false;
   }
 }
 
@@ -186,11 +190,19 @@ export async function retryFailedWebhookEvent(
 
   try {
     await handler(existing.payload);
-    await markWebhookEventProcessed(metaEventId);
-    return { success: true, status: "PROCESSED" };
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     await markWebhookEventFailed(metaEventId, errMsg);
     return { success: false, status: "FAILED", error: errMsg };
   }
+
+  if (!(await markWebhookEventProcessed(metaEventId))) {
+    return {
+      success: false,
+      status: "PROCESSING",
+      error: "Handler completed, but its webhook completion could not be stored; reconcile before retrying",
+    };
+  }
+
+  return { success: true, status: "PROCESSED" };
 }

@@ -211,7 +211,21 @@ Meta may retry webhook deliveries if an acknowledgment takes too long or network
 
 Plethora enforces durable database-level deduplication:
 - Each incoming Meta message ID (`wamid.HBg...`) is atomically inserted into `WhatsAppWebhookEvent` with a unique constraint on `metaEventId`.
-- Duplicate or concurrent retries hit the database unique constraint (`P2002`), log the duplicate, and safely exit with HTTP 200 without reprocessing commands or mutating attendance/leave records.
+- A duplicate of a `PROCESSED` event receives HTTP 200 without running the command again.
+- A duplicate of a `PROCESSING` event receives HTTP 503 so Meta can retry after the first delivery finishes. If a business action succeeds but its completion status cannot be stored, the event stays `PROCESSING` and also receives HTTP 503.
+- A `FAILED` event can be claimed for a retry. Claiming is atomic, so concurrent deliveries cannot run the same retry together.
+
+An event can remain `PROCESSING` after a worker crash. Do not automatically replay an old `PROCESSING` event: an attendance or leave action may have committed before the crash. During rollout, inspect backend logs for `WhatsApp message processed, but completion could not be stored` and repeated webhook HTTP 503 responses. Investigate any `PROCESSING` row older than ten minutes alongside its attendance, leave, message, and audit records. Reconcile the business action before changing the event status or retrying it. The database query below identifies candidates without changing data:
+
+```sql
+SELECT "metaEventId", "eventType", "phoneNumberId", "receivedAt", "errorMessage"
+FROM "WhatsAppWebhookEvent"
+WHERE "status" = 'PROCESSING'
+  AND "receivedAt" < now() - interval '10 minutes'
+ORDER BY "receivedAt";
+```
+
+The long-term reliability fix is to make each command's business mutation idempotent by Meta message ID and commit it with its processing record. Until then, treat stale events as reconciliation work rather than automatic retries.
 
 ---
 

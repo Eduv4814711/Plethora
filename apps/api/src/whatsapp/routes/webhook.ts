@@ -237,6 +237,7 @@ export async function webhookRoutes(app: FastifyInstance) {
       const entries = body.entry ?? [];
 
       let hasFailures = false;
+      let hasInFlightEvents = false;
 
       for (const entry of entries) {
         const changes = entry.changes ?? [];
@@ -277,9 +278,12 @@ export async function webhookRoutes(app: FastifyInstance) {
             });
 
             if (!deduplication.canProcess) {
+              if (deduplication.isProcessing) hasInFlightEvents = true;
               request.log.info(
                 { messageId: msg.id, from: msg.from },
-                "Duplicate WhatsApp webhook message ignored"
+                deduplication.isProcessing
+                  ? "WhatsApp webhook message is still processing"
+                  : "Duplicate WhatsApp webhook message ignored"
               );
               continue;
             }
@@ -293,12 +297,20 @@ export async function webhookRoutes(app: FastifyInstance) {
 
             try {
               await handleInboundMessage(msg, request.log);
-              await markWebhookEventProcessed(msg.id);
             } catch (err) {
               hasFailures = true;
               const errMsg = err instanceof Error ? err.message : String(err);
               request.log.error(err, "WhatsApp message processing failed");
               await markWebhookEventFailed(msg.id, errMsg);
+              continue;
+            }
+
+            if (!(await markWebhookEventProcessed(msg.id))) {
+              hasInFlightEvents = true;
+              request.log.error(
+                { messageId: msg.id },
+                "WhatsApp message processed, but completion could not be stored; reconcile before retrying"
+              );
             }
           }
         }
@@ -307,6 +319,12 @@ export async function webhookRoutes(app: FastifyInstance) {
       if (hasFailures) {
         return reply.code(500).send({
           error: "One or more WhatsApp messages failed processing",
+        });
+      }
+
+      if (hasInFlightEvents) {
+        return reply.code(503).send({
+          error: "One or more WhatsApp messages are still processing",
         });
       }
 
