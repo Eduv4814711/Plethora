@@ -132,6 +132,7 @@ export async function handleInboundMessage(
   msg: WhatsAppIncomingMessage,
   log: FastifyRequest["log"]
 ): Promise<void> {
+  const start = Date.now();
   const from = msg.from;
   let text: string | undefined;
   let msgType = "text";
@@ -153,6 +154,7 @@ export async function handleInboundMessage(
       log
     );
     await processLocationAndSend(from, msg.location.latitude, msg.location.longitude);
+    log.info({ from, messageId: msg.id, durationMs: Date.now() - start }, "Processed location WhatsApp message");
     return;
   } else if ((msg.type === "image" && msg.image?.id) || (msg.type === "document" && msg.document?.id)) {
     const media = msg.type === "image" ? msg.image! : msg.document!;
@@ -165,6 +167,7 @@ export async function handleInboundMessage(
       msg.type === "document" ? msg.document?.filename : undefined,
       caption
     );
+    log.info({ from, messageId: msg.id, mediaType: msg.type, durationMs: Date.now() - start }, "Processed media WhatsApp message");
     return;
   }
 
@@ -177,6 +180,7 @@ export async function handleInboundMessage(
   log.info({ from, messageType: msgType, messageId: msg.id }, "Processing inbound WhatsApp message");
   await storeInboundMessage(from, msg, msgType, text, log);
   await processAndSend(from, text);
+  log.info({ from, messageType: msgType, messageId: msg.id, durationMs: Date.now() - start }, "Completed inbound WhatsApp message");
 }
 
 export async function webhookRoutes(app: FastifyInstance) {

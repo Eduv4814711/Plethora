@@ -12,7 +12,7 @@ import { siteHasGeofence } from "../../lib/geo.js";
 import { fetchPayslipData, buildPayslipTemplateData } from "../../services/payslip-data.service.js";
 import { generatePayslipPDFFromTemplate } from "../../services/payslip-pdf.service.js";
 import { generateRosterPDF } from "../../services/roster-pdf.service.js";
-import { sendText, sendDocument, sendInteractiveList } from "./send.service.js";
+import { sendText, sendDocument, sendInteractiveList, sendInteractiveButtons } from "./send.service.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { storage } from "../../lib/storage.js";
 import { extensionForMime, matchesMagicBytes } from "../../lib/upload-validation.js";
@@ -28,6 +28,27 @@ import {
   LeaveV3Error,
 } from "../../services/leave-v3.service.js";
 import type { LeaveTypeCode, ParentalLeaveScenarioCode } from "../../services/leave-rules.js";
+import { sessionManager } from "./session.service.js";
+import {
+  startIncidentFlow,
+  handleIncidentSelectType,
+  handleIncidentSelectSite,
+  handleIncidentEnterDetails,
+} from "./incident-flow.service.js";
+import {
+  startLeaveFlow,
+  handleLeaveSelectType,
+  handleLeaveEnterStartDate,
+  handleLeaveEnterEndDate,
+  handleLeaveEnterReason,
+  handleLeaveConfirm,
+} from "./leave-flow.service.js";
+import { handleStatusFlow } from "./status-flow.service.js";
+import { handleSupervisorHandoff } from "./handoff.service.js";
+import {
+  handleOfficeClockIn,
+  handleOfficeClockOut,
+} from "./office-clock.service.js";
 
 type EmployeeWithCompany = {
   id: string;
@@ -35,6 +56,10 @@ type EmployeeWithCompany = {
   firstName: string;
   lastName: string;
   phone: string | null;
+  employeeType?: string | null;
+  jobRole?: string | null;
+  ordinaryHours?: string | null;
+  ordinaryDays?: string | null;
 };
 
 const MAX_LEAVE_DOCUMENT_BYTES = 10 * 1024 * 1024;
@@ -67,7 +92,17 @@ export async function findEmployeeByPhone(waId: string): Promise<EmployeeWithCom
 
   const employees = await prisma.employee.findMany({
     where: { status: "active", phone: { not: null } },
-    select: { id: true, companyId: true, firstName: true, lastName: true, phone: true },
+    select: {
+      id: true,
+      companyId: true,
+      firstName: true,
+      lastName: true,
+      phone: true,
+      employeeType: true,
+      jobRole: true,
+      ordinaryHours: true,
+      ordinaryDays: true,
+    },
   });
 
   const matches = employees.filter((employee) => normalizeWhatsAppPhone(employee.phone) === normalized);
@@ -82,51 +117,80 @@ export async function findEmployeeByPhone(waId: string): Promise<EmployeeWithCom
   return matches.length === 1 ? matches[0]! : null;
 }
 
-const HELP_TEXT = `*Plethora - Commands*
-• *clock in* / *in* - Clock in for your shift (geofenced sites: then share your location when asked)
-• *clock out* / *out* - Clock out (same for geofenced sites)
-• *payslip* - Request your latest payslip
-• *roster* / *schedule* / *shifts* / *my shifts* - Upcoming shifts (PDF, mobile-friendly)
-• *leave YYYY-MM-DD YYYY-MM-DD type* - Apply for a date range
-  Add *4h* (or another duration) for partial leave
-  Types: annual, sick, family, parental, adoption, commissioning, maternity, study, special, iod, unpaid
-• *leave balance* - Check your current balances
-• *leave status* / *leave history* - Check applications
-• *leave withdraw APPLICATION_ID* - Withdraw or request cancellation
-• Send evidence with caption *leave APPLICATION_ID*
-• *help* - Show this menu`;
+const HELP_TEXT = `*Plethora Operational Assistant*
+Welcome to Plethora field & office services.
+
+1️⃣ *Clock In* - Start shift or office workday
+2️⃣ *Clock Out* - End shift or office workday
+3️⃣ *Report Incident* - Log emergency, safety hazard, or event
+4️⃣ *My Shifts & Roster* - Upcoming schedule (PDF)
+5️⃣ *Latest Payslip* - Download latest payslip (PDF)
+6️⃣ *Leave Services* - Apply for leave or check balances
+7️⃣ *Operational Status* - Check current duty & next shift
+8️⃣ *Contact Supervisor* - Request human assistance
+
+• Send evidence/photo with caption *incident REF* or *leave REF*
+• Reply *1–8*, tap an option, or type a keyword (*status*, *in*, *out*)
+• Type *cancel* at any time to return to this menu.`;
 
 const INTERACTIVE_ID_TO_CMD: Record<string, string> = {
   clock_in: "clock in",
   clock_out: "clock out",
-  payslip: "payslip",
+  incident: "incident",
   roster: "roster",
-  leave: "apply leave",
+  payslip: "payslip",
+  leave: "leave",
+  status: "status",
+  supervisor: "supervisor",
   help: "help",
+  menu: "help",
+  cancel: "cancel",
+  sup_yes: "sup_yes",
+  sup_no: "sup_no",
 };
 
 const HELP_INTERACTIVE_ROWS = [
-  { id: "clock_in", title: "Clock In", description: "Clock in for your shift" },
-  { id: "clock_out", title: "Clock Out", description: "Clock out" },
-  { id: "payslip", title: "Payslip", description: "Request your latest payslip" },
-  { id: "roster", title: "My roster", description: "Upcoming shifts as PDF" },
-  { id: "leave", title: "Apply Leave", description: "Apply for leave" },
-  { id: "help", title: "Help", description: "Show this menu" },
+  { id: "clock_in", title: "1. Clock In", description: "Clock in for shift or office day" },
+  { id: "clock_out", title: "2. Clock Out", description: "Clock out of shift or office day" },
+  { id: "incident", title: "3. Report Incident", description: "Log incident or safety risk" },
+  { id: "roster", title: "4. My Roster", description: "Upcoming shifts as PDF" },
+  { id: "payslip", title: "5. Latest Payslip", description: "Request latest payslip PDF" },
+  { id: "leave", title: "6. Apply Leave", description: "Apply for leave or check balance" },
+  { id: "status", title: "7. Status", description: "Check current shift & duty status" },
+  { id: "supervisor", title: "8. Supervisor", description: "Request supervisor assistance" },
+  { id: "help", title: "Help Menu", description: "Show commands & help" },
 ];
 
 const ROSTER_MAX_SHIFTS = 20;
 const ROSTER_HORIZON_DAYS = 45;
 const WHATSAPP_LOCATION_PENDING_MS = 10 * 60 * 1000;
 
-type ProcessResult =
-  | { reply: string; sendDocument?: { buffer: Buffer; filename: string } }
-  | { sendInteractiveList: { body: string; buttonText: string; rows: typeof HELP_INTERACTIVE_ROWS } };
+export type ProcessResult =
+  | {
+      reply: string;
+      sendDocument?: { buffer: Buffer; filename: string };
+      buttons?: { id: string; title: string }[];
+    }
+  | {
+      sendInteractiveList: {
+        body: string;
+        buttonText: string;
+        rows: typeof HELP_INTERACTIVE_ROWS;
+      };
+    }
+  | {
+      sendInteractiveButtons: {
+        body: string;
+        buttons: { id: string; title: string }[];
+      };
+    };
 
 export async function processIncomingMessage(
   from: string,
   text: string
 ): Promise<ProcessResult> {
-  let cmd = text.trim().toLowerCase().replace(/\s+/g, " ");
+  const rawTrimmed = text.trim();
+  let cmd = rawTrimmed.toLowerCase().replace(/\s+/g, " ");
   if (INTERACTIVE_ID_TO_CMD[cmd]) {
     cmd = INTERACTIVE_ID_TO_CMD[cmd];
   }
@@ -138,11 +202,24 @@ export async function processIncomingMessage(
     };
   }
 
-  if (!cmd) {
-    return { reply: HELP_TEXT };
+  sessionManager.getOrCreateSession(from, employee.id, employee.companyId);
+
+  // Universal abort / cancel commands
+  if (cmd === "cancel" || cmd === "exit" || cmd === "stop" || cmd === "abort") {
+    sessionManager.clearSession(from);
+    return {
+      reply: "Operation cancelled. Reply with *menu* or a command to continue.",
+      buttons: [
+        { id: "clock_in", title: "1. Clock In" },
+        { id: "clock_out", title: "2. Clock Out" },
+        { id: "help", title: "Main Menu" },
+      ],
+    };
   }
 
-  if (cmd === "help" || cmd === "menu") {
+  // Universal menu / help commands
+  if (cmd === "help" || cmd === "menu" || !cmd) {
+    sessionManager.clearSession(from);
     return {
       sendInteractiveList: {
         body: "What would you like to do? Tap the button below to choose an option.",
@@ -152,57 +229,182 @@ export async function processIncomingMessage(
     };
   }
 
+  // Check active multi-step conversation session
+  const session = sessionManager.getSession(from);
+  if (session && session.state !== "IDLE") {
+    switch (session.state) {
+      case "INCIDENT_SELECT_TYPE":
+        return handleIncidentSelectType(from, rawTrimmed, session);
+      case "INCIDENT_SELECT_SITE":
+        return handleIncidentSelectSite(from, rawTrimmed, session);
+      case "INCIDENT_ENTER_DETAILS":
+        return handleIncidentEnterDetails(from, rawTrimmed, session);
+      case "INCIDENT_AWAITING_PHOTO":
+        // User typed a command instead of sending a photo -> clear photo wait state and continue
+        sessionManager.clearSession(from);
+        break;
+      case "LEAVE_SELECT_TYPE":
+        return handleLeaveSelectType(from, rawTrimmed, session);
+      case "LEAVE_ENTER_START_DATE":
+        return handleLeaveEnterStartDate(from, rawTrimmed, session);
+      case "LEAVE_ENTER_END_DATE":
+        return handleLeaveEnterEndDate(from, rawTrimmed, session);
+      case "LEAVE_ENTER_REASON":
+        return handleLeaveEnterReason(from, rawTrimmed, session);
+      case "LEAVE_CONFIRM":
+        return handleLeaveConfirm(from, rawTrimmed, session);
+      case "AWAITING_SUPERVISOR_CONFIRM":
+        if (cmd === "1" || cmd === "yes" || cmd === "sup_yes" || cmd.includes("alert")) {
+          return handleSupervisorHandoff(
+            from,
+            employee.id,
+            employee.companyId,
+            "User confirmed assistance after repeated unrecognized commands"
+          );
+        } else {
+          sessionManager.clearSession(from);
+          return { reply: "Request cancelled. Reply *menu* for available commands." };
+        }
+    }
+  }
+
+  // 1. Clock In
   if (
+    cmd === "1" ||
     cmd === "clock in" ||
     cmd === "clockin" ||
     cmd === "in" ||
     cmd === "clock in 1"
   ) {
+    sessionManager.resetUnrecognized(from);
     return handleClockIn(employee, from);
   }
 
+  // 2. Clock Out
   if (
+    cmd === "2" ||
     cmd === "clock out" ||
     cmd === "clockout" ||
     cmd === "out" ||
     cmd === "clock out 1"
   ) {
+    sessionManager.resetUnrecognized(from);
     return handleClockOut(employee, from);
   }
 
-  if (cmd.startsWith("payslip")) {
-    return handlePayslip(employee);
+  // 3. Incident Reporting
+  if (
+    cmd === "3" ||
+    cmd === "incident" ||
+    cmd === "report" ||
+    cmd === "report incident" ||
+    cmd === "emergency" ||
+    cmd === "hazard"
+  ) {
+    sessionManager.resetUnrecognized(from);
+    return startIncidentFlow(from, employee.id, employee.companyId);
   }
 
+  // 4. Roster / Shifts
   if (
+    cmd === "4" ||
     cmd === "roster" ||
     cmd === "schedule" ||
     cmd === "shifts" ||
     cmd === "my shifts"
   ) {
+    sessionManager.resetUnrecognized(from);
     return handleRoster(employee, from);
   }
 
+  // 5. Payslip
+  if (cmd === "5" || cmd.startsWith("payslip") || cmd === "pay slip") {
+    sessionManager.resetUnrecognized(from);
+    return handlePayslip(employee);
+  }
+
+  // 6. Leave Services
   if (cmd === "leave status" || cmd === "leave history") {
+    sessionManager.resetUnrecognized(from);
     return handleLeaveHistory(employee);
   }
   if (cmd === "leave balance" || cmd === "balance") {
+    sessionManager.resetUnrecognized(from);
     return handleLeaveBalance(employee);
   }
   if (cmd.startsWith("leave withdraw ")) {
+    sessionManager.resetUnrecognized(from);
     return handleLeaveWithdrawal(employee, cmd.slice("leave withdraw ".length).trim());
   }
-  if (cmd.startsWith("leave ") || cmd === "apply leave") {
-    if (cmd === "apply leave") {
-      return {
-        reply:
-          "Format: leave YYYY-MM-DD [end-date] type [reason]\nExample: leave 2026-08-01 2026-08-03 annual Family trip\nUse 'leave balance', 'leave status', or 'leave withdraw ID'.",
-      };
-    }
+  if (cmd === "6" || cmd === "leave" || cmd === "apply leave") {
+    sessionManager.resetUnrecognized(from);
+    return startLeaveFlow(from, employee.id, employee.companyId);
+  }
+  if (cmd.startsWith("leave ")) {
+    sessionManager.resetUnrecognized(from);
     return handleLeave(employee, cmd);
   }
 
-  return { reply: `Unknown command. Send *help* for available commands.` };
+  // 7. Operational Status
+  if (cmd === "7" || cmd === "status" || cmd === "my status" || cmd === "shift status") {
+    sessionManager.resetUnrecognized(from);
+    return handleStatusFlow(employee.id, employee.companyId);
+  }
+
+  // 8. Supervisor Handoff / Assistance
+  if (
+    cmd === "8" ||
+    cmd === "supervisor" ||
+    cmd === "agent" ||
+    cmd === "human" ||
+    cmd === "support" ||
+    cmd === "dispatch" ||
+    cmd === "help me" ||
+    cmd === "call supervisor"
+  ) {
+    sessionManager.resetUnrecognized(from);
+    return handleSupervisorHandoff(
+      from,
+      employee.id,
+      employee.companyId,
+      "Employee requested contact via WhatsApp keyword"
+    );
+  }
+
+  // Fallback Handling
+  const attempts = sessionManager.incrementUnrecognized(from);
+  if (attempts >= 2) {
+    sessionManager.setSessionState(from, "AWAITING_SUPERVISOR_CONFIRM", {
+      employeeId: employee.id,
+      companyId: employee.companyId,
+    });
+    return {
+      reply:
+        `We're having trouble understanding your request.\n\n` +
+        `Would you like us to alert a supervisor / controller to contact you?\n\n` +
+        `1️⃣ *Yes, alert supervisor*\n` +
+        `2️⃣ *No, return to menu*\n\n` +
+        `Reply *1* or *2*.`,
+      buttons: [
+        { id: "sup_yes", title: "1. Alert Supervisor" },
+        { id: "sup_no", title: "2. Return to Menu" },
+      ],
+    };
+  }
+
+  return {
+    reply:
+      `Unknown command. Send *help* for available commands.\n\n` +
+      `Quick numbers:\n` +
+      `• *1* - Clock In\n` +
+      `• *2* - Clock Out\n` +
+      `• *3* - Report Incident\n` +
+      `• *4* - My Roster\n` +
+      `• *5* - Payslip\n` +
+      `• *6* - Leave\n` +
+      `• *7* - Status\n` +
+      `• *8* - Call Supervisor`,
+  };
 }
 
 async function completeWhatsAppClockOut(
@@ -275,6 +477,10 @@ async function handleClockIn(
   employee: EmployeeWithCompany,
   fromWaId: string
 ): Promise<{ reply: string }> {
+  if ((employee.employeeType ?? "security_officer") === "general") {
+    return handleOfficeClockIn(employee, fromWaId);
+  }
+
   const now = new Date();
   const dayStart = new Date(now);
   dayStart.setHours(0, 0, 0, 0);
@@ -388,6 +594,10 @@ async function handleClockOut(
   employee: EmployeeWithCompany,
   fromWaId: string
 ): Promise<{ reply: string }> {
+  if ((employee.employeeType ?? "security_officer") === "general") {
+    return handleOfficeClockOut(employee, fromWaId);
+  }
+
   const attendance = await prisma.attendance.findFirst({
     where: {
       shift: { employeeId: employee.id, companyId: employee.companyId },
@@ -802,6 +1012,19 @@ async function handleRoster(
   employee: EmployeeWithCompany,
   fromWaId: string
 ): Promise<{ reply: string; sendDocument?: { buffer: Buffer; filename: string } }> {
+  if ((employee.employeeType ?? "security_officer") === "general") {
+    const roleStr = employee.jobRole ? ` (${employee.jobRole})` : "";
+    return {
+      reply:
+        `📅 *Office Staff Work Schedule*\n\n` +
+        `You are registered as office staff${roleStr}.\n` +
+        `Office staff follow standard working schedules rather than site-based shifts.\n\n` +
+        `• *Working Days*: ${employee.ordinaryDays ?? "Monday – Friday"}\n` +
+        `• *Working Hours*: ${employee.ordinaryHours ?? "Standard business hours"}\n\n` +
+        `Reply *1* to Clock In or *2* to Clock Out for your workday.`,
+    };
+  }
+
   const now = new Date();
   const horizonEnd = addDays(now, ROSTER_HORIZON_DAYS);
   const timeZone = await getCompanyTimezone(employee.companyId);
@@ -887,11 +1110,35 @@ async function deliverProcessResult(from: string, result: ProcessResult): Promis
     return;
   }
 
-  if ("reply" in result) {
-    const sent = await sendText(from, result.reply);
-    if (!sent.success) {
-      throw new Error(sent.error ?? "Failed to send WhatsApp reply");
+  if ("sendInteractiveButtons" in result && result.sendInteractiveButtons) {
+    const { body, buttons } = result.sendInteractiveButtons;
+    const btnRes = await sendInteractiveButtons(from, body, buttons);
+    if (!btnRes.success) {
+      console.warn("[WhatsApp] Interactive buttons failed, falling back to text:", btnRes.error);
+      const fallback = await sendText(from, body);
+      if (!fallback.success) {
+        throw new Error(fallback.error ?? "Failed to send WhatsApp reply");
+      }
     }
+    return;
+  }
+
+  if ("reply" in result) {
+    if (result.buttons && result.buttons.length > 0) {
+      const btnRes = await sendInteractiveButtons(from, result.reply, result.buttons);
+      if (!btnRes.success) {
+        const textRes = await sendText(from, result.reply);
+        if (!textRes.success) {
+          throw new Error(textRes.error ?? "Failed to send WhatsApp reply");
+        }
+      }
+    } else {
+      const sent = await sendText(from, result.reply);
+      if (!sent.success) {
+        throw new Error(sent.error ?? "Failed to send WhatsApp reply");
+      }
+    }
+
     if (result.sendDocument) {
       const docSent = await sendDocument(
         from,
@@ -919,12 +1166,94 @@ export async function processLocationAndSend(
   await deliverProcessResult(from, result);
 }
 
+async function attachIncidentEvidence(
+  employee: EmployeeWithCompany,
+  incidentRef: string,
+  mediaId: string,
+  declaredMimeType: string,
+  filename: string | undefined
+): Promise<ProcessResult> {
+  const incident = await prisma.incident.findFirst({
+    where: {
+      companyId: employee.companyId,
+      OR: [{ id: incidentRef }, { incidentNumber: incidentRef }],
+    },
+  });
+
+  if (!incident) {
+    return {
+      reply: `Incident reference "${incidentRef}" not found for your company. Please check the reference number.`,
+    };
+  }
+
+  const allowed = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
+  if (!allowed.has(declaredMimeType)) {
+    return { reply: "Evidence must be an image (JPEG, PNG, WebP) or PDF file." };
+  }
+
+  const auth = { Authorization: `Bearer ${config.whatsapp.accessToken}` };
+  let metadataResponse: Response;
+  try {
+    metadataResponse = await fetch(
+      `https://graph.facebook.com/${config.whatsapp.apiVersion}/${encodeURIComponent(mediaId)}?phone_number_id=${encodeURIComponent(config.whatsapp.phoneNumberId)}`,
+      { headers: auth, signal: AbortSignal.timeout(WHATSAPP_MEDIA_TIMEOUT_MS) }
+    );
+  } catch {
+    return { reply: "WhatsApp could not retrieve that file. Please send it again." };
+  }
+  if (!metadataResponse.ok) return { reply: "WhatsApp could not retrieve that file. Please send it again." };
+  const metadata = (await metadataResponse.json()) as { url?: string; mime_type?: string; file_size?: number };
+  if (!metadata.url || (metadata.file_size ?? 0) > MAX_LEAVE_DOCUMENT_BYTES) {
+    return { reply: "The document is missing or exceeds the 10MB limit." };
+  }
+
+  let download: Response;
+  try {
+    download = await fetch(metadata.url, { headers: auth, signal: AbortSignal.timeout(WHATSAPP_MEDIA_TIMEOUT_MS) });
+  } catch {
+    return { reply: "The WhatsApp file link expired. Please send the document again." };
+  }
+  if (!download.ok) return { reply: "The WhatsApp file link expired. Please send the document again." };
+
+  const contentLength = Number(download.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_LEAVE_DOCUMENT_BYTES) {
+    return { reply: "The document exceeds the 10MB limit." };
+  }
+
+  const mimeType = (metadata.mime_type ?? download.headers.get("content-type") ?? declaredMimeType).split(";", 1)[0]!.trim().toLowerCase();
+  let buffer: Buffer;
+  try {
+    buffer = await readResponseBodyWithLimit(download, MAX_LEAVE_DOCUMENT_BYTES);
+  } catch {
+    return { reply: "The document failed file type or size validation." };
+  }
+
+  if (!allowed.has(mimeType) || !matchesMagicBytes(buffer, mimeType)) {
+    return { reply: "The document failed file type or format validation." };
+  }
+
+  const key = `incident-attachments/${employee.companyId}/${incident.id}/${randomUUID()}.${extensionForMime(mimeType)}`;
+  await storage.uploadFile({ key, body: buffer, contentType: mimeType });
+
+  await prisma.incidentAttachment.create({
+    data: {
+      incidentId: incident.id,
+      filename: filename || `whatsapp-evidence-${Date.now()}.${extensionForMime(mimeType)}`,
+      mimeType,
+      size: buffer.length,
+      url: storage.getAssetUrl(key),
+      uploadedById: incident.reportedById,
+    },
+  });
+
+  return {
+    reply: `📸 Photo/Evidence successfully attached to incident *${incident.incidentNumber}*. The control room has been updated.`,
+  };
+}
+
 /**
- * WhatsApp can only deliver a file plus a short caption — it has no form for
- * the medical certificate's structured fields (practitioner name/reg number/
- * consultation date). So a WhatsApp-attached file is stored as the
- * certificate's file reference with placeholder structured fields, flagged
- * for HR to complete. This is a deliberate simplification, not a bug.
+ * WhatsApp media receiver: handles both medical certificates (caption: leave ID)
+ * and incident evidence (caption: incident ID or pending photo upload session).
  */
 export async function processLeaveDocumentAndSend(
   from: string,
@@ -935,8 +1264,27 @@ export async function processLeaveDocumentAndSend(
 ): Promise<void> {
   const employee = await findEmployeeByPhone(from);
   if (!employee) return deliverProcessResult(from, { reply: "Phone number not registered. Contact HR to update your details." });
+
+  const session = sessionManager.getSession(from);
+  const incidentMatch = caption?.trim().match(/^incident\s+([A-Za-z0-9_-]+)$/i)?.[1];
+  const isAwaitingIncidentPhoto = session?.state === "INCIDENT_AWAITING_PHOTO" && session.data?.incidentId;
+  const incidentRef = incidentMatch || (isAwaitingIncidentPhoto ? (session.data.incidentId as string) : undefined);
+
+  if (incidentRef) {
+    const res = await attachIncidentEvidence(employee, incidentRef, mediaId, declaredMimeType, filename);
+    sessionManager.clearSession(from);
+    return deliverProcessResult(from, res);
+  }
+
   const requestId = caption?.trim().match(/^leave\s+([A-Za-z0-9_-]+)$/i)?.[1];
-  if (!requestId) return deliverProcessResult(from, { reply: "To attach a medical certificate, caption the image or PDF: leave REQUEST_ID" });
+  if (!requestId) {
+    return deliverProcessResult(from, {
+      reply:
+        "To attach evidence, please caption the image or document:\n" +
+        "• *incident <INCIDENT_NUMBER>* for incident photos\n" +
+        "• *leave <REQUEST_ID>* for medical certificates",
+    });
+  }
   const application = await prisma.leaveRequest.findFirst({
     where: { id: requestId, companyId: employee.companyId, employeeId: employee.id, leaveType: "SICK", status: { in: ["PENDING", "APPROVED"] } },
   });
