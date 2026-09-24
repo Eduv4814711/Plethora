@@ -317,6 +317,71 @@ describe("WhatsApp webhook", () => {
     expect(processAndSend).toHaveBeenCalledTimes(1);
   });
 
+  it("asks Meta to retry a duplicate while the first delivery is still processing", async () => {
+    processAndSend.mockReset();
+    processAndSend.mockResolvedValue(undefined);
+    let finishProcessing!: () => void;
+    processAndSend.mockImplementationOnce(
+      () => new Promise<void>((resolve) => { finishProcessing = resolve; })
+    );
+
+    const payload = {
+      object: "whatsapp_business_account",
+      entry: [{ changes: [{ field: "messages", value: {
+        metadata: { phone_number_id: "123456789" },
+        messages: [{
+          from: "27821234567",
+          id: "wamid.in_flight",
+          timestamp: "1710000000",
+          type: "text",
+          text: { body: "help" },
+        }],
+      } }] }],
+    };
+
+    const first = app.inject({ method: "POST", url: "/webhook", payload });
+    await vi.waitFor(() => expect(processAndSend).toHaveBeenCalledTimes(1));
+
+    const concurrent = await app.inject({ method: "POST", url: "/webhook", payload });
+    expect(concurrent.statusCode).toBe(503);
+    expect(processAndSend).toHaveBeenCalledTimes(1);
+
+    finishProcessing();
+    expect((await first).statusCode).toBe(200);
+    expect((await app.inject({ method: "POST", url: "/webhook", payload })).statusCode).toBe(200);
+    expect(processAndSend).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not acknowledge a completed action whose event status could not be stored", async () => {
+    const { prisma } = await import("../../lib/prisma.js");
+    processAndSend.mockReset();
+    processAndSend.mockResolvedValue(undefined);
+    vi.mocked(prisma.whatsAppWebhookEvent.updateMany).mockRejectedValueOnce(new Error("DB unavailable"));
+
+    const payload = {
+      object: "whatsapp_business_account",
+      entry: [{ changes: [{ field: "messages", value: {
+        metadata: { phone_number_id: "123456789" },
+        messages: [{
+          from: "27821234567",
+          id: "wamid.completion_unstored",
+          timestamp: "1710000000",
+          type: "text",
+          text: { body: "help" },
+        }],
+      } }] }],
+    };
+
+    const first = await app.inject({ method: "POST", url: "/webhook", payload });
+    expect(first.statusCode).toBe(503);
+    expect(webhookEvents.get("wamid.completion_unstored")?.status).toBe("PROCESSING");
+    expect(processAndSend).toHaveBeenCalledTimes(1);
+
+    const retry = await app.inject({ method: "POST", url: "/webhook", payload });
+    expect(retry.statusCode).toBe(503);
+    expect(processAndSend).toHaveBeenCalledTimes(1);
+  });
+
   it("replies to unsupported message types", async () => {
     sendUnsupportedTypeReply.mockClear();
     processAndSend.mockClear();
@@ -691,6 +756,32 @@ describe("WhatsApp webhook", () => {
       expect(resFailed.status).toBe("PROCESSED");
       expect(handlerMock).toHaveBeenCalledTimes(1);
       expect(webhookEvents.get("wamid.prog_failed")?.status).toBe("PROCESSED");
+    });
+
+    it("does not claim a programmatic retry succeeded when completion storage fails", async () => {
+      const { prisma } = await import("../../lib/prisma.js");
+      const { retryFailedWebhookEvent } = await import("../services/webhook-event.service.js");
+      webhookEvents.set("wamid.prog_completion_unstored", {
+        id: "evt_prog_completion_unstored",
+        metaEventId: "wamid.prog_completion_unstored",
+        eventType: "message:text",
+        payload: { from: "27821234567", text: { body: "help" } },
+        status: "FAILED",
+        receivedAt: new Date(),
+      });
+      const handler = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(prisma.whatsAppWebhookEvent.updateMany)
+        .mockImplementationOnce(async ({ where, data }: any) => {
+          const event = webhookEvents.get(where.metaEventId)!;
+          event.status = data.status;
+          return { count: 1 };
+        })
+        .mockRejectedValueOnce(new Error("DB unavailable"));
+
+      const result = await retryFailedWebhookEvent("wamid.prog_completion_unstored", handler);
+      expect(result).toMatchObject({ success: false, status: "PROCESSING" });
+      expect(webhookEvents.get("wamid.prog_completion_unstored")?.status).toBe("PROCESSING");
+      expect(handler).toHaveBeenCalledTimes(1);
     });
   });
 });
