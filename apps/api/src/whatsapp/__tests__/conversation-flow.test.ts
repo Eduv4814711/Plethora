@@ -133,6 +133,10 @@ vi.mock("../../lib/prisma.js", () => ({
       findUnique: vi.fn().mockResolvedValue(null),
       delete: vi.fn().mockResolvedValue({}),
       upsert: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({}),
+    },
+    staffAttendanceDay: {
+      findFirst: vi.fn().mockResolvedValue(null),
     },
   },
 }));

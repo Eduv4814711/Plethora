@@ -2,6 +2,9 @@ import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { getCompanyTimezone } from "../../lib/timezone.js";
 import { formatInTimeZone } from "date-fns-tz";
+import { findOfficeSiteForEmployee } from "./office-geofence.service.js";
+import { siteHasGeofence, evaluateSiteGeofence, formatDistance } from "../../lib/geo.js";
+import type { Site } from "@prisma/client";
 
 export type OfficeEmployee = {
   id: string;
@@ -13,7 +16,10 @@ export type OfficeEmployee = {
   jobRole?: string | null;
   ordinaryHours?: string | null;
   ordinaryDays?: string | null;
+  geofenceExempt?: boolean;
 };
+
+const WHATSAPP_LOCATION_PENDING_MS = 10 * 60 * 1000;
 
 /**
  * Handle WhatsApp Clock In for Office Staff (employeeType === "general").
@@ -22,11 +28,12 @@ export type OfficeEmployee = {
  * or occurrence book entries. Attendance is captured in StaffAttendanceDay for
  * leave cross-checks, daily presence tracking, and management reporting.
  *
- * It is completely isolated from guard hourly payroll calculations.
+ * If the employee has an assigned office site with a geofence configured,
+ * a pending location request is created requiring a location message.
  */
 export async function handleOfficeClockIn(
   employee: OfficeEmployee,
-  _fromWaId: string
+  fromWaId: string
 ): Promise<{ reply: string }> {
   const now = new Date();
   const timeZone = await getCompanyTimezone(employee.companyId);
@@ -79,7 +86,42 @@ export async function handleOfficeClockIn(
     }
   }
 
-  // 3. Upsert StaffAttendanceDay record with status 'present' and timeIn
+  // 3. Resolve office geofence for employee
+  const officeSite = await findOfficeSiteForEmployee(employee.id, employee.companyId);
+  if (officeSite && siteHasGeofence(officeSite)) {
+    const expiresAt = new Date(Date.now() + WHATSAPP_LOCATION_PENDING_MS);
+    await prisma.whatsAppClockPending.upsert({
+      where: { waFrom: fromWaId },
+      create: {
+        waFrom: fromWaId,
+        employeeId: employee.id,
+        companyId: employee.companyId,
+        intent: "office_clock_in",
+        siteId: officeSite.id,
+        expiresAt,
+      },
+      update: {
+        employeeId: employee.id,
+        companyId: employee.companyId,
+        intent: "office_clock_in",
+        siteId: officeSite.id,
+        failedAttempts: 0,
+        expiresAt,
+      },
+    });
+
+    return {
+      reply:
+        `🏢 *Office Location Required*\n\n` +
+        `Office: *${officeSite.name}*\n\n` +
+        `Please share your current WhatsApp location within 10 minutes to verify your arrival:\n` +
+        `1. Tap 📎 (or + on iPhone)\n` +
+        `2. Select *Location*\n` +
+        `3. Tap *Send your current location*`,
+    };
+  }
+
+  // 4. Fallback: Immediate clock-in when no office geofence applies
   const record = await prisma.staffAttendanceDay.upsert({
     where: {
       companyId_employeeId_workDate: {
@@ -132,7 +174,7 @@ export async function handleOfficeClockIn(
  */
 export async function handleOfficeClockOut(
   employee: OfficeEmployee,
-  _fromWaId: string
+  fromWaId: string
 ): Promise<{ reply: string }> {
   const now = new Date();
   const timeZone = await getCompanyTimezone(employee.companyId);
@@ -181,7 +223,42 @@ export async function handleOfficeClockOut(
     };
   }
 
-  // 4. Calculate hours worked
+  // 4. Resolve office geofence for employee
+  const officeSite = await findOfficeSiteForEmployee(employee.id, employee.companyId);
+  if (officeSite && siteHasGeofence(officeSite)) {
+    const expiresAt = new Date(Date.now() + WHATSAPP_LOCATION_PENDING_MS);
+    await prisma.whatsAppClockPending.upsert({
+      where: { waFrom: fromWaId },
+      create: {
+        waFrom: fromWaId,
+        employeeId: employee.id,
+        companyId: employee.companyId,
+        intent: "office_clock_out",
+        siteId: officeSite.id,
+        expiresAt,
+      },
+      update: {
+        employeeId: employee.id,
+        companyId: employee.companyId,
+        intent: "office_clock_out",
+        siteId: officeSite.id,
+        failedAttempts: 0,
+        expiresAt,
+      },
+    });
+
+    return {
+      reply:
+        `🏢 *Office Location Required to Clock Out*\n\n` +
+        `Office: *${officeSite.name}*\n\n` +
+        `Please share your current WhatsApp location within 10 minutes to verify your departure:\n` +
+        `1. Tap 📎 (or + on iPhone)\n` +
+        `2. Select *Location*\n` +
+        `3. Tap *Send your current location*`,
+    };
+  }
+
+  // 5. Fallback: Immediate clock-out when no office geofence applies
   const timeIn = record.timeIn;
   const msWorked = now.getTime() - timeIn.getTime();
   const hoursWorked = Math.max(0, Math.round((msWorked / (1000 * 60 * 60)) * 100) / 100);
@@ -216,6 +293,214 @@ export async function handleOfficeClockOut(
       `• Clock In: *${inFmt}*\n` +
       `• Clock Out: *${outFmt}*\n` +
       `• Hours Worked: *${hoursWorked.toFixed(2)} hrs*\n\n` +
+      `Have a great evening, ${employee.firstName}!`,
+  };
+}
+
+/**
+ * Complete WhatsApp Clock In for Office Staff with verified GPS location.
+ */
+export async function completeOfficeClockInWithLocation(
+  employee: OfficeEmployee,
+  fromWaId: string,
+  site: Site,
+  latitude: number,
+  longitude: number
+): Promise<{ reply: string }> {
+  const geoResult = evaluateSiteGeofence(site, latitude, longitude);
+
+  if (geoResult && !geoResult.withinGeofence) {
+    await prisma.whatsAppClockPending.update({
+      where: { waFrom: fromWaId },
+      data: { failedAttempts: { increment: 1 } },
+    }).catch(() => undefined);
+
+    const distStr = formatDistance(geoResult.distanceMeters);
+    return {
+      reply:
+        `❌ *Clock In Failed: Outside Office Geofence*\n\n` +
+        `You are *${distStr}* away from *${site.name}*.\n` +
+        `You must be within *${geoResult.radiusMeters}m* of the office to clock in.\n\n` +
+        `Please move to the office and send your location again.`,
+    };
+  }
+
+  await prisma.whatsAppClockPending.delete({ where: { waFrom: fromWaId } }).catch(() => undefined);
+
+  const now = new Date();
+  const timeZone = await getCompanyTimezone(employee.companyId);
+  const todayDateStr = formatInTimeZone(now, timeZone, "yyyy-MM-dd");
+  const workDate = new Date(`${todayDateStr}T00:00:00.000Z`);
+
+  const record = await prisma.staffAttendanceDay.upsert({
+    where: {
+      companyId_employeeId_workDate: {
+        companyId: employee.companyId,
+        employeeId: employee.id,
+        workDate,
+      },
+    },
+    create: {
+      companyId: employee.companyId,
+      employeeId: employee.id,
+      workDate,
+      status: "present",
+      timeIn: now,
+      siteId: site.id,
+      clockInLat: latitude,
+      clockInLng: longitude,
+      clockInDistanceMeters: geoResult ? geoResult.distanceMeters : null,
+    },
+    update: {
+      status: "present",
+      timeIn: now,
+      siteId: site.id,
+      clockInLat: latitude,
+      clockInLng: longitude,
+      clockInDistanceMeters: geoResult ? geoResult.distanceMeters : null,
+    },
+  });
+
+  await createAuditLog({
+    companyId: employee.companyId,
+    action: "staff_attendance.clock_in",
+    entityType: "StaffAttendanceDay",
+    entityId: record?.id ?? "staff-att-unknown",
+    metadata: {
+      source: "whatsapp",
+      from: employee.phone,
+      timeIn: now,
+      workDate: todayDateStr,
+      siteId: site.id,
+      siteName: site.name,
+      latitude,
+      longitude,
+      distanceMeters: geoResult?.distanceMeters,
+    },
+  });
+
+  const timeFmt = formatInTimeZone(now, timeZone, "HH:mm");
+  const roleStr = employee.jobRole ? ` (${employee.jobRole})` : "";
+  const distNote = geoResult ? `\n📍 Verified at *${site.name}* (${formatDistance(geoResult.distanceMeters)} from office)` : "";
+
+  return {
+    reply:
+      `Good day, ${employee.firstName}! 🏢\n\n` +
+      `✅ You are clocked in for today at *${timeFmt}*${roleStr}.${distNote}\n\n` +
+      `Have a productive day! Reply *2* or *clock out* when you finish work.`,
+  };
+}
+
+/**
+ * Complete WhatsApp Clock Out for Office Staff with verified GPS location.
+ */
+export async function completeOfficeClockOutWithLocation(
+  employee: OfficeEmployee,
+  fromWaId: string,
+  site: Site,
+  latitude: number,
+  longitude: number
+): Promise<{ reply: string }> {
+  const geoResult = evaluateSiteGeofence(site, latitude, longitude);
+
+  if (geoResult && !geoResult.withinGeofence) {
+    await prisma.whatsAppClockPending.update({
+      where: { waFrom: fromWaId },
+      data: { failedAttempts: { increment: 1 } },
+    }).catch(() => undefined);
+
+    const distStr = formatDistance(geoResult.distanceMeters);
+    return {
+      reply:
+        `❌ *Clock Out Failed: Outside Office Geofence*\n\n` +
+        `You are *${distStr}* away from *${site.name}*.\n` +
+        `You must be within *${geoResult.radiusMeters}m* of the office to clock out.\n\n` +
+        `Please return to the office and send your location again.`,
+    };
+  }
+
+  await prisma.whatsAppClockPending.delete({ where: { waFrom: fromWaId } }).catch(() => undefined);
+
+  const now = new Date();
+  const timeZone = await getCompanyTimezone(employee.companyId);
+  const todayDateStr = formatInTimeZone(now, timeZone, "yyyy-MM-dd");
+  const workDate = new Date(`${todayDateStr}T00:00:00.000Z`);
+
+  let record = await prisma.staffAttendanceDay.findUnique({
+    where: {
+      companyId_employeeId_workDate: {
+        companyId: employee.companyId,
+        employeeId: employee.id,
+        workDate,
+      },
+    },
+  });
+
+  if (!record || !record.timeIn || record.timeOut) {
+    const unclosed = await prisma.staffAttendanceDay.findFirst({
+      where: {
+        companyId: employee.companyId,
+        employeeId: employee.id,
+        timeIn: { not: null },
+        timeOut: null,
+      },
+      orderBy: { workDate: "desc" },
+    });
+    if (unclosed) {
+      record = unclosed;
+    }
+  }
+
+  if (!record || !record.timeIn || record.timeOut) {
+    return {
+      reply: "No active clock-in found. Reply *1* or *clock in* to record your attendance for today.",
+    };
+  }
+
+  const timeIn = record.timeIn;
+  const msWorked = now.getTime() - timeIn.getTime();
+  const hoursWorked = Math.max(0, Math.round((msWorked / (1000 * 60 * 60)) * 100) / 100);
+
+  const updated = await prisma.staffAttendanceDay.update({
+    where: { id: record.id },
+    data: {
+      timeOut: now,
+      hoursWorked,
+      clockOutLat: latitude,
+      clockOutLng: longitude,
+      clockOutDistanceMeters: geoResult ? geoResult.distanceMeters : null,
+    },
+  });
+
+  await createAuditLog({
+    companyId: employee.companyId,
+    action: "staff_attendance.clock_out",
+    entityType: "StaffAttendanceDay",
+    entityId: updated?.id ?? record.id,
+    metadata: {
+      source: "whatsapp",
+      from: employee.phone,
+      timeIn,
+      timeOut: now,
+      hoursWorked,
+      siteId: site.id,
+      siteName: site.name,
+      latitude,
+      longitude,
+      distanceMeters: geoResult?.distanceMeters,
+    },
+  });
+
+  const inFmt = formatInTimeZone(timeIn, timeZone, "HH:mm");
+  const outFmt = formatInTimeZone(now, timeZone, "HH:mm");
+  const distNote = geoResult ? `\n• Location: Verified at *${site.name}* (${formatDistance(geoResult.distanceMeters)} from office)` : "";
+
+  return {
+    reply:
+      `🏢 *Clock Out Confirmed*\n\n` +
+      `• Clock In: *${inFmt}*\n` +
+      `• Clock Out: *${outFmt}*\n` +
+      `• Hours Worked: *${hoursWorked.toFixed(2)} hrs*${distNote}\n\n` +
       `Have a great evening, ${employee.firstName}!`,
   };
 }

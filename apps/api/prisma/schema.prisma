@@ -275,6 +275,7 @@ model Employee {
   commencementDate   DateTime?
   occupation         String?
   placeOfWork        String?
+  geofenceExempt     Boolean   @default(false)
   ordinaryHours      String? // e.g. "45 hours/week"
   ordinaryDays       String? // e.g. "Mon-Fri"
   overtimeRate       Decimal?  @db.Decimal(10, 2)
@@ -450,6 +451,7 @@ model Site {
   employeePayrollHomes      EmployeePayrollHomeSite[]
   employmentExits           EmploymentExit[]           @relation("EmploymentExitSite")
   newEmploymentExits        EmploymentExit[]           @relation("EmploymentExitNewSite")
+  staffAttendanceDays       StaffAttendanceDay[]
 
   @@index([companyId])
   @@index([companyId, siteStatus])
@@ -1091,27 +1093,36 @@ enum SiteTimesheetRowStatus {
 ///
 /// This table is for leave cross-checks and reporting only. Nothing in payroll reads it.
 model StaffAttendanceDay {
-  id          String                @id @default(cuid())
-  companyId   String
-  employeeId  String
-  workDate    DateTime              @db.Date
-  status      StaffAttendanceStatus
-  timeIn      DateTime?
-  timeOut     DateTime?
+  id                    String                @id @default(cuid())
+  companyId             String
+  employeeId            String
+  siteId                String?
+  workDate              DateTime              @db.Date
+  status                StaffAttendanceStatus
+  timeIn                DateTime?
+  timeOut               DateTime?
   /// Derived from timeIn/timeOut for display only — never read by payroll.
-  hoursWorked Decimal?              @db.Decimal(10, 2)
-  notes       String?
+  hoursWorked           Decimal?              @db.Decimal(10, 2)
+  clockInLat            Decimal?              @db.Decimal(10, 7)
+  clockInLng            Decimal?              @db.Decimal(10, 7)
+  clockOutLat           Decimal?              @db.Decimal(10, 7)
+  clockOutLng           Decimal?              @db.Decimal(10, 7)
+  clockInDistanceMeters Int?
+  clockOutDistanceMeters Int?
+  notes                 String?
   /// User.id of the supervisor who captured this, for the audit trail.
-  recordedBy  String?
-  createdAt   DateTime              @default(now())
-  updatedAt   DateTime              @updatedAt
+  recordedBy            String?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
 
   company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  site     Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
 
   @@unique([companyId, employeeId, workDate])
   @@index([companyId, workDate])
   @@index([employeeId, workDate])
+  @@index([siteId])
 }
 
 enum StaffAttendanceStatus {
@@ -1439,14 +1450,16 @@ model WhatsAppMessage {
 
 /// Pending WhatsApp clock-in/out when site geofence requires a follow-up location message.
 model WhatsAppClockPending {
-  id         String   @id @default(cuid())
-  waFrom     String   @unique
-  employeeId String
-  companyId  String
-  intent     String // clock_in | clock_out
-  shiftId    String
-  expiresAt  DateTime
-  createdAt  DateTime @default(now())
+  id             String   @id @default(cuid())
+  waFrom         String   @unique
+  employeeId     String
+  companyId      String
+  intent         String // clock_in | clock_out | office_clock_in | office_clock_out
+  shiftId        String?
+  siteId         String?
+  failedAttempts Int      @default(0)
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
 
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)

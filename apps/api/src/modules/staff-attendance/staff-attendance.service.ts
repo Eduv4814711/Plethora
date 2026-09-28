@@ -102,6 +102,7 @@ export async function getStaffAttendanceDay(
     employeeIds.length > 0
       ? prisma.staffAttendanceDay.findMany({
           where: { companyId, workDate, employeeId: { in: employeeIds } },
+          include: { site: { select: { id: true, name: true } } },
         })
       : [],
     employeeIds.length > 0
@@ -143,6 +144,14 @@ export async function getStaffAttendanceDay(
         timeIn: record?.timeIn?.toISOString() ?? null,
         timeOut: record?.timeOut?.toISOString() ?? null,
         hoursWorked: record?.hoursWorked != null ? Number(record.hoursWorked) : null,
+        clockInLat: record?.clockInLat != null ? Number(record.clockInLat) : null,
+        clockInLng: record?.clockInLng != null ? Number(record.clockInLng) : null,
+        clockOutLat: record?.clockOutLat != null ? Number(record.clockOutLat) : null,
+        clockOutLng: record?.clockOutLng != null ? Number(record.clockOutLng) : null,
+        clockInDistanceMeters: record?.clockInDistanceMeters ?? null,
+        clockOutDistanceMeters: record?.clockOutDistanceMeters ?? null,
+        siteId: record?.siteId ?? null,
+        siteName: record?.site?.name ?? null,
         notes: record?.notes ?? null,
         onApprovedLeave: Boolean(approvedLeave),
         approvedLeaveType: approvedLeave?.leaveType ?? null,

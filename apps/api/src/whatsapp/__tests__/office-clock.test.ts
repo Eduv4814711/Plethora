@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { prisma } from "../../lib/prisma.js";
 
 const sendText = vi.fn().mockResolvedValue({ success: true, messageId: "wamid.out" });
 const sendInteractiveList = vi.fn().mockResolvedValue({ success: true, messageId: "wamid.out" });
@@ -60,6 +61,23 @@ vi.mock("../../lib/prisma.js", () => ({
     },
     company: {
       findUnique: vi.fn().mockResolvedValue({ name: "SafeCorp Security" }),
+    },
+    siteAssignment: {
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
+    site: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
+    whatsAppClockPending: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      upsert: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({}),
+      delete: vi.fn().mockResolvedValue({}),
+    },
+    operationalAlert: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({}),
     },
   },
 }));
@@ -327,6 +345,185 @@ describe("Office Staff WhatsApp Clock In & Clock Out", () => {
       expect(text).toContain("🟢 *Active at Office*");
       expect(text).toContain("2h 0m elapsed");
       expect(text).toContain("Monday – Friday");
+    });
+  });
+
+  describe("Office Geofencing Clock-In and Clock-Out", () => {
+    const mockOfficeSite = {
+      id: "site-office-hq",
+      companyId: "co-101",
+      name: "Sandton Head Office",
+      latitude: -26.10756,
+      longitude: 28.0567,
+      geofenceRadiusMeters: 200,
+    };
+
+    it("prompts for location when office employee has a geofenced site assigned", async () => {
+      vi.mocked(prisma.siteAssignment.findFirst).mockResolvedValueOnce({
+        id: "sa-1",
+        employeeId: "emp-office-1",
+        siteId: "site-office-hq",
+        assignedAt: new Date(),
+        isActive: true,
+        site: mockOfficeSite as any,
+      } as any);
+
+      const { handleOfficeClockIn } = await import("../services/office-clock.service.js");
+      const result = await handleOfficeClockIn(mockOfficeEmployee, "27829998877");
+
+      expect(result.reply).toContain("🏢 *Office Location Required*");
+      expect(result.reply).toContain("Sandton Head Office");
+      expect(result.reply).toContain("Send your current location");
+      expect(prisma.whatsAppClockPending.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { waFrom: "27829998877" },
+          create: expect.objectContaining({
+            intent: "office_clock_in",
+            siteId: "site-office-hq",
+          }),
+        })
+      );
+    });
+
+    it("completes office clock-in when location is within geofence", async () => {
+      upsertStaffAttendance.mockResolvedValueOnce({
+        id: "staff-att-geo-1",
+        companyId: "co-101",
+        employeeId: "emp-office-1",
+        workDate: new Date(),
+        status: "present",
+        timeIn: new Date(),
+        clockInLat: -26.10756,
+        clockInLng: 28.0567,
+        siteId: "site-office-hq",
+        clockInDistanceMeters: 15,
+      });
+
+      const { completeOfficeClockInWithLocation } = await import("../services/office-clock.service.js");
+      const result = await completeOfficeClockInWithLocation(
+        mockOfficeEmployee,
+        "27829998877",
+        mockOfficeSite as any,
+        -26.10756,
+        28.0567
+      );
+
+      expect(result.reply).toContain("Good day, Nomsa! 🏢");
+      expect(result.reply).toContain("Verified at *Sandton Head Office*");
+      expect(prisma.whatsAppClockPending.delete).toHaveBeenCalledWith({ where: { waFrom: "27829998877" } });
+      expect(upsertStaffAttendance).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            status: "present",
+            siteId: "site-office-hq",
+            clockInLat: -26.10756,
+            clockInLng: 28.0567,
+          }),
+        })
+      );
+    });
+
+    it("rejects office clock-in when location is outside geofence", async () => {
+      const { completeOfficeClockInWithLocation } = await import("../services/office-clock.service.js");
+      const result = await completeOfficeClockInWithLocation(
+        mockOfficeEmployee,
+        "27829998877",
+        mockOfficeSite as any,
+        -25.7479,
+        28.2293
+      );
+
+      expect(result.reply).toContain("❌ *Clock In Failed: Outside Office Geofence*");
+      expect(result.reply).toContain("Sandton Head Office");
+      expect(result.reply).toContain("within *200m*");
+      expect(prisma.whatsAppClockPending.delete).not.toHaveBeenCalled();
+      expect(prisma.whatsAppClockPending.update).toHaveBeenCalled();
+    });
+
+    it("prompts for location when office employee clocks out of geofenced site", async () => {
+      const timeIn = new Date(Date.now() - 4 * 3600000);
+      findUniqueStaffAttendance.mockResolvedValueOnce({
+        id: "staff-att-1",
+        companyId: "co-101",
+        employeeId: "emp-office-1",
+        timeIn,
+        timeOut: null,
+      });
+      vi.mocked(prisma.siteAssignment.findFirst).mockResolvedValueOnce({
+        id: "sa-1",
+        employeeId: "emp-office-1",
+        siteId: "site-office-hq",
+        assignedAt: new Date(),
+        isActive: true,
+        site: mockOfficeSite as any,
+      } as any);
+
+      const { handleOfficeClockOut } = await import("../services/office-clock.service.js");
+      const result = await handleOfficeClockOut(mockOfficeEmployee, "27829998877");
+
+      expect(result.reply).toContain("🏢 *Office Location Required to Clock Out*");
+      expect(result.reply).toContain("Sandton Head Office");
+      expect(prisma.whatsAppClockPending.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            intent: "office_clock_out",
+            siteId: "site-office-hq",
+          }),
+        })
+      );
+    });
+
+    it("completes office clock-out when location is within geofence", async () => {
+      const timeIn = new Date(Date.now() - 4 * 3600000);
+      findUniqueStaffAttendance.mockResolvedValueOnce({
+        id: "staff-att-1",
+        companyId: "co-101",
+        employeeId: "emp-office-1",
+        timeIn,
+        timeOut: null,
+      });
+      updateStaffAttendance.mockResolvedValueOnce({
+        id: "staff-att-1",
+        timeOut: new Date(),
+        hoursWorked: 4,
+      });
+
+      const { completeOfficeClockOutWithLocation } = await import("../services/office-clock.service.js");
+      const result = await completeOfficeClockOutWithLocation(
+        mockOfficeEmployee,
+        "27829998877",
+        mockOfficeSite as any,
+        -26.10756,
+        28.0567
+      );
+
+      expect(result.reply).toContain("🏢 *Clock Out Confirmed*");
+      expect(result.reply).toContain("Hours Worked:");
+      expect(result.reply).toContain("Verified at *Sandton Head Office*");
+      expect(prisma.whatsAppClockPending.delete).toHaveBeenCalledWith({ where: { waFrom: "27829998877" } });
+    });
+
+    it("bypasses geofence when employee has geofenceExempt set to true", async () => {
+      findUniqueStaffAttendance.mockResolvedValueOnce(null);
+      findUniqueEmployee.mockResolvedValueOnce({
+        ...mockOfficeEmployee,
+        geofenceExempt: true,
+      });
+      upsertStaffAttendance.mockResolvedValueOnce({
+        id: "staff-att-exempt-1",
+        companyId: "co-101",
+        employeeId: "emp-office-1",
+        workDate: new Date(),
+        status: "present",
+        timeIn: new Date(),
+      });
+
+      const exemptEmployee = { ...mockOfficeEmployee, geofenceExempt: true };
+      const { handleOfficeClockIn } = await import("../services/office-clock.service.js");
+      const result = await handleOfficeClockIn(exemptEmployee, "27829998877");
+
+      expect(result.reply).toContain("Good day, Nomsa! 🏢");
+      expect(prisma.whatsAppClockPending.upsert).not.toHaveBeenCalled();
     });
   });
 });

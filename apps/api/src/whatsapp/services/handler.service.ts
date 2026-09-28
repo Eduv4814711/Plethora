@@ -48,7 +48,11 @@ import { handleSupervisorHandoff } from "./handoff.service.js";
 import {
   handleOfficeClockIn,
   handleOfficeClockOut,
+  completeOfficeClockInWithLocation,
+  completeOfficeClockOutWithLocation,
 } from "./office-clock.service.js";
+import { evaluateSiteGeofence, formatDistance } from "../../lib/geo.js";
+import { upsertAlert } from "../../modules/alerts/alerts.service.js";
 
 type EmployeeWithCompany = {
   id: string;
@@ -410,7 +414,7 @@ export async function processIncomingMessage(
 async function completeWhatsAppClockOut(
   attendanceId: string,
   employee: EmployeeWithCompany,
-  clockOutCoords?: { lat: number; lng: number }
+  clockOutCoords?: { lat: number; lng: number; distanceMeters?: number; siteName?: string }
 ): Promise<{ reply: string }> {
   const attendance = await prisma.attendance.findFirst({
     where: {
@@ -462,14 +466,19 @@ async function completeWhatsAppClockOut(
       from: employee.phone,
       hoursWorked,
       overtimeHours,
+      latitude: clockOutCoords?.lat,
+      longitude: clockOutCoords?.lng,
+      distanceMeters: clockOutCoords?.distanceMeters,
+      siteName: clockOutCoords?.siteName,
     },
   });
 
   triggerPostClockExceptionSync(employee.companyId, attendance.shift.siteId);
 
   const timeZone = await getCompanyTimezone(employee.companyId);
+  const distNote = clockOutCoords?.distanceMeters != null ? ` (Verified on-site: ${formatDistance(clockOutCoords.distanceMeters)})` : "";
   return {
-    reply: `Clocked out at ${formatInTimeZone(now, timeZone, "HH:mm")}. Hours: ${hoursWorked}, Overtime: ${overtimeHours}h.`,
+    reply: `Clocked out at ${formatInTimeZone(now, timeZone, "HH:mm")}${distNote}. Hours: ${hoursWorked}, Overtime: ${overtimeHours}h.`,
   };
 }
 
@@ -539,6 +548,7 @@ async function handleClockIn(
         companyId: employee.companyId,
         intent: "clock_in",
         shiftId: shift.id,
+        siteId: site.id,
         expiresAt,
       },
       update: {
@@ -546,11 +556,15 @@ async function handleClockIn(
         companyId: employee.companyId,
         intent: "clock_in",
         shiftId: shift.id,
+        siteId: site.id,
+        failedAttempts: 0,
         expiresAt,
       },
     });
     return {
       reply:
+        `📍 *Location Required to Clock In*\n\n` +
+        `Site: *${site.name}*\n\n` +
         `This site requires your location. Tap 📎 → *Location* → *Send your current location* within 10 minutes to complete clock-in.`,
     };
   }
@@ -638,6 +652,7 @@ async function handleClockOut(
         companyId: employee.companyId,
         intent: "clock_out",
         shiftId: attendance.shiftId,
+        siteId: outSite.id,
         expiresAt,
       },
       update: {
@@ -645,11 +660,15 @@ async function handleClockOut(
         companyId: employee.companyId,
         intent: "clock_out",
         shiftId: attendance.shiftId,
+        siteId: outSite.id,
+        failedAttempts: 0,
         expiresAt,
       },
     });
     return {
       reply:
+        `📍 *Location Required to Clock Out*\n\n` +
+        `Site: *${outSite.name}*\n\n` +
         `This site requires your location to clock out. Tap 📎 → *Location* → *Send your current location* within 10 minutes to complete clock-out.`,
     };
   }
@@ -672,15 +691,67 @@ export async function processIncomingLocation(
   });
 
   if (!pending) {
-    return {
-      reply:
-        "Send *clock in* or *clock out* first. Sites with a geofence need your location after that command.",
-    };
+    const isGeneral = (employee.employeeType ?? "security_officer") === "general";
+    if (isGeneral) {
+      const activeOffice = await prisma.staffAttendanceDay.findFirst({
+        where: {
+          employeeId: employee.id,
+          companyId: employee.companyId,
+          timeIn: { not: null },
+          timeOut: null,
+        },
+      });
+      if (activeOffice) {
+        return {
+          reply:
+            "📍 *Location Received*\n\nYou are currently clocked in at the office.\n\nReply *2* or *clock out* to complete your workday, or *7* to view status.",
+          buttons: [
+            { id: "clock_out", title: "Clock Out" },
+            { id: "status", title: "View Status" },
+          ],
+        };
+      }
+      return {
+        reply:
+          "📍 *Location Received*\n\nYou are not currently clocked in.\n\nReply *1* or *clock in* to record your attendance for today, or *help* for the main menu.",
+        buttons: [
+          { id: "clock_in", title: "Clock In" },
+          { id: "help", title: "Main Menu" },
+        ],
+      };
+    } else {
+      const activeGuard = await prisma.attendance.findFirst({
+        where: {
+          shift: { employeeId: employee.id, companyId: employee.companyId },
+          clockIn: { not: null },
+          clockOut: null,
+          status: "clocked_in",
+        },
+      });
+      if (activeGuard) {
+        return {
+          reply:
+            "📍 *Location Received*\n\nYou are currently clocked in on shift.\n\nReply *2* or *clock out* when finishing duty.",
+          buttons: [
+            { id: "clock_out", title: "Clock Out" },
+            { id: "status", title: "View Status" },
+          ],
+        };
+      }
+      return {
+        reply:
+          "📍 *Location Received*\n\nYou are not currently clocked in on duty.\n\nReply *1* or *clock in* to start your shift.",
+        buttons: [
+          { id: "clock_in", title: "Clock In" },
+          { id: "help", title: "Main Menu" },
+        ],
+      };
+    }
   }
 
   if (pending.expiresAt.getTime() < Date.now()) {
     await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
-    return { reply: "That request expired. Send clock in or clock out again." };
+    return { reply: "That location request expired (10 minute limit). Send clock in or clock out again." };
   }
 
   if (pending.employeeId !== employee.id || pending.companyId !== employee.companyId) {
@@ -688,7 +759,41 @@ export async function processIncomingLocation(
     return { reply: "Could not verify your session. Try again." };
   }
 
+  // 1. Office Staff Clock In with Location
+  if (pending.intent === "office_clock_in") {
+    if (!pending.siteId) {
+      await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
+      return handleOfficeClockIn(employee, from);
+    }
+    const site = await prisma.site.findUnique({ where: { id: pending.siteId } });
+    if (!site) {
+      await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
+      return { reply: "Office location not found. Please contact HR." };
+    }
+    return completeOfficeClockInWithLocation(employee, from, site, latitude, longitude);
+  }
+
+  // 2. Office Staff Clock Out with Location
+  if (pending.intent === "office_clock_out") {
+    if (!pending.siteId) {
+      await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
+      return handleOfficeClockOut(employee, from);
+    }
+    const site = await prisma.site.findUnique({ where: { id: pending.siteId } });
+    if (!site) {
+      await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
+      return { reply: "Office location not found. Please contact HR." };
+    }
+    return completeOfficeClockOutWithLocation(employee, from, site, latitude, longitude);
+  }
+
+  // 3. Security Guard Clock In with Location
   if (pending.intent === "clock_in") {
+    if (!pending.shiftId) {
+      await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
+      return { reply: "Shift not specified. Please send clock in again." };
+    }
+
     try {
       await validateClockIn(pending.shiftId, employee.companyId);
     } catch (err) {
@@ -708,13 +813,37 @@ export async function processIncomingLocation(
       return { reply: "Shift or site not found. Contact HR." };
     }
 
-    try {
-      assertWithinSiteGeofence(shift.site, latitude, longitude);
-    } catch (err) {
-      if (err instanceof AttendanceValidationError) {
-        return { reply: err.message };
+    const geoResult = evaluateSiteGeofence(shift.site, latitude, longitude);
+    if (geoResult && !geoResult.withinGeofence) {
+      const nextAttempts = (pending.failedAttempts ?? 0) + 1;
+      await prisma.whatsAppClockPending.update({
+        where: { waFrom: from },
+        data: { failedAttempts: nextAttempts },
+      }).catch(() => undefined);
+
+      if (nextAttempts >= 2) {
+        const timeZone = await getCompanyTimezone(employee.companyId);
+        const todayDateStr = formatInTimeZone(new Date(), timeZone, "yyyy-MM-dd");
+        void upsertAlert({
+          companyId: employee.companyId,
+          title: `Geofence Clock-In Failed: ${employee.firstName} ${employee.lastName}`,
+          message: `${employee.firstName} ${employee.lastName} attempted to clock in from ${formatDistance(geoResult.distanceMeters)} away from ${shift.site.name} (perimeter: ${geoResult.radiusMeters}m).`,
+          priority: "MEDIUM",
+          sourceModule: "ATTENDANCE",
+          dedupeKey: `geofence_fail:${employee.id}:${todayDateStr}`,
+          siteId: shift.site.id,
+          employeeId: employee.id,
+        }).catch(() => undefined);
       }
-      throw err;
+
+      const distStr = formatDistance(geoResult.distanceMeters);
+      return {
+        reply:
+          `❌ *Clock In Failed: Outside Geofence*\n\n` +
+          `You are *${distStr}* away from *${shift.site.name}*.\n` +
+          `You must be within *${geoResult.radiusMeters}m* of the site to clock in.\n\n` +
+          `Please move to your post on-site and send your location again.`,
+      };
     }
 
     const now = new Date();
@@ -749,6 +878,7 @@ export async function processIncomingLocation(
         shiftId: shift.id,
         latitude,
         longitude,
+        distanceMeters: geoResult?.distanceMeters,
       },
     });
 
@@ -756,12 +886,19 @@ export async function processIncomingLocation(
 
     const siteName = shift.site?.name ?? "your post";
     const timeZone = await getCompanyTimezone(employee.companyId);
+    const distNote = geoResult ? ` (Verified on-site: ${formatDistance(geoResult.distanceMeters)} from post)` : "";
     return {
-      reply: `Clocked in for ${siteName} at ${formatInTimeZone(now, timeZone, "HH:mm")}.`,
+      reply: `Clocked in for *${siteName}* at ${formatInTimeZone(now, timeZone, "HH:mm")}${distNote}.`,
     };
   }
 
+  // 4. Security Guard Clock Out with Location
   if (pending.intent === "clock_out") {
+    if (!pending.shiftId) {
+      await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
+      return { reply: "Shift not specified. Please send clock out again." };
+    }
+
     const attendance = await prisma.attendance.findFirst({
       where: {
         shiftId: pending.shiftId,
@@ -779,19 +916,34 @@ export async function processIncomingLocation(
     }
 
     const site = attendance.shift.site;
+    let distMeters: number | undefined;
     if (site) {
-      try {
-        assertWithinSiteGeofence(site, latitude, longitude);
-      } catch (err) {
-        if (err instanceof AttendanceValidationError) {
-          return { reply: err.message };
-        }
-        throw err;
+      const geoResult = evaluateSiteGeofence(site, latitude, longitude);
+      if (geoResult && !geoResult.withinGeofence) {
+        await prisma.whatsAppClockPending.update({
+          where: { waFrom: from },
+          data: { failedAttempts: { increment: 1 } },
+        }).catch(() => undefined);
+
+        const distStr = formatDistance(geoResult.distanceMeters);
+        return {
+          reply:
+            `❌ *Clock Out Failed: Outside Geofence*\n\n` +
+            `You are *${distStr}* away from *${site.name}*.\n` +
+            `You must be within *${geoResult.radiusMeters}m* of the site to clock out.\n\n` +
+            `Please return to your post and send your location again.`,
+        };
       }
+      distMeters = geoResult?.distanceMeters;
     }
 
     await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
-    return completeWhatsAppClockOut(attendance.id, employee, { lat: latitude, lng: longitude });
+    return completeWhatsAppClockOut(attendance.id, employee, {
+      lat: latitude,
+      lng: longitude,
+      distanceMeters: distMeters,
+      siteName: site?.name,
+    });
   }
 
   await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
