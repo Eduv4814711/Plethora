@@ -267,6 +267,17 @@ export function StaffRollCall({
                       ? ` · ${formatTimeOfDay(row.timeIn)}–${formatTimeOfDay(row.timeOut)}`
                       : ""}
                   </p>
+                  {row.clockInLat != null && row.clockInLng != null && (
+                    <div className="mt-1 flex items-center gap-1.5 text-xs font-medium text-security-emerald-700 dark:text-security-emerald-400">
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-security-emerald-500" />
+                      <span>
+                        📍 Verified: {row.siteName || "Office"}
+                        {row.clockInDistanceMeters != null
+                          ? ` (${row.clockInDistanceMeters >= 1000 ? `${(row.clockInDistanceMeters / 1000).toFixed(1)}km` : `${row.clockInDistanceMeters}m`})`
+                          : ""}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {state === "leave" && row.onApprovedLeave ? (

@@ -2,6 +2,7 @@ import { config } from "../../lib/config.js";
 import { normalizeWhatsAppPhone } from "../../lib/phone.js";
 
 const GRAPH_URL = "https://graph.facebook.com";
+const DEFAULT_TIMEOUT_MS = 15_000;
 
 export type SendTextResult = {
   success: boolean;
@@ -32,6 +33,7 @@ export async function sendText(to: string, text: string): Promise<SendTextResult
       Authorization: `Bearer ${config.whatsapp.accessToken}`,
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
   });
 
   const resText = await res.text();
@@ -104,6 +106,7 @@ export async function sendTemplate(
       Authorization: `Bearer ${config.whatsapp.accessToken}`,
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
   });
 
   const resText = await res.text();
@@ -111,6 +114,79 @@ export async function sendTemplate(
   if (!res.ok) {
     console.error("[WhatsApp] Template send failed:", res.status, resText);
     let userError = "Failed to send template";
+    try {
+      const errJson = JSON.parse(resText) as { error?: { message?: string } };
+      userError = errJson?.error?.message ?? resText;
+    } catch {
+      // ignore
+    }
+    return { success: false, error: userError };
+  }
+
+  let messageId: string | undefined;
+  try {
+    const json = JSON.parse(resText) as { messages?: [{ id?: string }] };
+    messageId = json?.messages?.[0]?.id;
+  } catch {
+    // ignore
+  }
+
+  return { success: true, messageId };
+}
+
+export async function sendInteractiveButtons(
+  to: string,
+  bodyText: string,
+  buttons: { id: string; title: string }[]
+): Promise<SendTextResult> {
+  if (!config.whatsapp.enabled) {
+    console.warn("[WhatsApp] Not configured, skipping send");
+    return { success: false, error: "WhatsApp is not configured" };
+  }
+
+  if (!buttons || buttons.length === 0) {
+    return sendText(to, bodyText);
+  }
+
+  // Meta Cloud API supports at most 3 buttons with titles up to 20 chars
+  const formattedButtons = buttons.slice(0, 3).map((b) => ({
+    type: "reply" as const,
+    reply: {
+      id: b.id.slice(0, 256),
+      title: b.title.slice(0, 20),
+    },
+  }));
+
+  const url = `${GRAPH_URL}/${config.whatsapp.apiVersion}/${config.whatsapp.phoneNumberId}/messages`;
+  const body = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: normalizeWhatsAppPhone(to),
+    type: "interactive",
+    interactive: {
+      type: "button",
+      body: { text: bodyText },
+      action: {
+        buttons: formattedButtons,
+      },
+    },
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.whatsapp.accessToken}`,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+  });
+
+  const resText = await res.text();
+
+  if (!res.ok) {
+    console.error("[WhatsApp] Interactive buttons send failed:", res.status, resText);
+    let userError = "Failed to send buttons";
     try {
       const errJson = JSON.parse(resText) as { error?: { message?: string } };
       userError = errJson?.error?.message ?? resText;
@@ -152,14 +228,14 @@ export async function sendInteractiveList(
       type: "list",
       body: { text: bodyText },
       action: {
-        button: buttonText,
+        button: buttonText.slice(0, 20),
         sections: [
           {
             title: "Commands",
-            rows: rows.map((r) => ({
-              id: r.id,
-              title: r.title,
-              ...(r.description ? { description: r.description } : {}),
+            rows: rows.slice(0, 10).map((r) => ({
+              id: r.id.slice(0, 200),
+              title: r.title.slice(0, 24),
+              ...(r.description ? { description: r.description.slice(0, 72) } : {}),
             })),
           },
         ],
@@ -174,6 +250,7 @@ export async function sendInteractiveList(
       Authorization: `Bearer ${config.whatsapp.accessToken}`,
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
   });
 
   const resText = await res.text();
@@ -285,6 +362,7 @@ export async function sendDocument(
       Authorization: `Bearer ${config.whatsapp.accessToken}`,
     },
     body: form,
+    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
   });
 
   if (!uploadRes.ok) {
@@ -316,6 +394,7 @@ export async function sendDocument(
       Authorization: `Bearer ${config.whatsapp.accessToken}`,
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
   });
 
   if (!sendRes.ok) {

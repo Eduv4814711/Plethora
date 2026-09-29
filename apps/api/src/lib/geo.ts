@@ -20,7 +20,7 @@ export const haversineDistance = haversineMeters;
 export function siteHasGeofence(site: {
   latitude: unknown;
   longitude: unknown;
-  geofenceRadiusMeters: number | null;
+  geofenceRadiusMeters?: number | null;
 }): boolean {
   return (
     site.latitude != null &&
@@ -41,9 +41,63 @@ export function toGeoNumber(v: unknown): number | null {
 }
 
 /** Distance from site center to point in meters; null if site has no geofence center. */
-export function distanceFromSiteCenterMeters(site: Site, lat: number, lng: number): number | null {
+export function distanceFromSiteCenterMeters(
+  site: { latitude: unknown; longitude: unknown },
+  lat: number,
+  lng: number
+): number | null {
   const centerLat = toGeoNumber(site.latitude);
   const centerLng = toGeoNumber(site.longitude);
   if (centerLat == null || centerLng == null) return null;
   return haversineMeters(centerLat, centerLng, lat, lng);
+}
+
+export const DEFAULT_GEOFENCE_RADIUS_METERS = 150;
+
+export type GeofenceEvaluation = {
+  configured: boolean;
+  withinGeofence: boolean;
+  distanceMeters: number;
+  radiusMeters: number;
+  siteName?: string;
+};
+
+/**
+ * Evaluate if a given GPS coordinate falls within a site's geofence perimeter.
+ * Returns null if the site does not have geofence coordinates configured.
+ */
+export function evaluateSiteGeofence(
+  site: {
+    name?: string;
+    latitude: unknown;
+    longitude: unknown;
+    geofenceRadiusMeters?: number | null;
+  },
+  lat: number,
+  lng: number
+): GeofenceEvaluation | null {
+  if (!siteHasGeofence(site)) return null;
+  const rawDist = distanceFromSiteCenterMeters(site, lat, lng);
+  if (rawDist == null) return null;
+
+  const distanceMeters = Math.round(rawDist);
+  const radiusMeters = site.geofenceRadiusMeters && site.geofenceRadiusMeters > 0
+    ? site.geofenceRadiusMeters
+    : DEFAULT_GEOFENCE_RADIUS_METERS;
+
+  return {
+    configured: true,
+    withinGeofence: distanceMeters <= radiusMeters,
+    distanceMeters,
+    radiusMeters,
+    siteName: site.name,
+  };
+}
+
+/** Format distance in meters to a human-readable string. */
+export function formatDistance(meters: number): string {
+  if (meters >= 1000) {
+    return `${(meters / 1000).toFixed(1)}km`;
+  }
+  return `${meters}m`;
 }

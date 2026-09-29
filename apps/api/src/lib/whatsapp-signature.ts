@@ -9,11 +9,16 @@ export function verifyWhatsAppWebhookSignature(
   signatureHeader: string | undefined,
   appSecret: string
 ): boolean {
-  if (!signatureHeader?.startsWith("sha256=")) return false;
-  const expected = signatureHeader.slice("sha256=".length);
+  if (!signatureHeader?.startsWith("sha256=") || !appSecret) return false;
+  const expected = signatureHeader.slice("sha256=".length).trim();
+  if (!/^[0-9a-fA-F]{64}$/.test(expected)) return false;
+
   const computed = createHmac("sha256", appSecret).update(rawBody, "utf8").digest("hex");
   try {
-    return timingSafeEqual(Buffer.from(computed, "utf8"), Buffer.from(expected, "utf8"));
+    const compBuf = Buffer.from(computed, "hex");
+    const expBuf = Buffer.from(expected, "hex");
+    if (compBuf.length !== expBuf.length) return false;
+    return timingSafeEqual(compBuf, expBuf);
   } catch {
     return false;
   }

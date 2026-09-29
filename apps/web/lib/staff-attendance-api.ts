@@ -19,6 +19,14 @@ export type StaffAttendanceRow = {
   timeIn: string | null;
   timeOut: string | null;
   hoursWorked: number | null;
+  clockInLat?: number | null;
+  clockInLng?: number | null;
+  clockOutLat?: number | null;
+  clockOutLng?: number | null;
+  clockInDistanceMeters?: number | null;
+  clockOutDistanceMeters?: number | null;
+  siteId?: string | null;
+  siteName?: string | null;
   notes: string | null;
   onApprovedLeave: boolean;
   approvedLeaveType: string | null;

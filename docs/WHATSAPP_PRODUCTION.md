@@ -234,3 +234,65 @@ The long-term reliability fix is to make each command's business mutation idempo
 Plethora is a multi-tenant platform:
 - Inbound WhatsApp senders have no tenant header. Senders are mapped to employees via normalized international phone format (`27821234567`).
 - If a phone number matches active employees across multiple companies (or multiple records within one company), **Plethora will never guess the tenant**. The event is rejected with an audit log warning.
+
+---
+
+## Conversational State Machine & Client UX Design
+
+Plethora WhatsApp integration features an interactive conversational state machine engineered specifically for security personnel on shift and field managers.
+
+### 1. Inbound Routing & Interactive Menus
+- **Greeting / Help Trigger**: Sending `hi`, `hello`, `menu`, `help`, or `options` presents the interactive menu.
+- **Interactive Buttons / Numbered Fallback**: Where supported by WhatsApp Cloud API, interactive quick-reply buttons are provided. Numbered triggers `1` to `8` are always supported for rapid entry:
+  - `1` / `in` / `clock in`: Clock In (Site shift for guards; Office workday for office staff)
+  - `2` / `out` / `clock out`: Clock Out (Site shift for guards; Office workday for office staff)
+  - `3` / `incident`: Guided Incident Report (with photo evidence)
+  - `4` / `roster`: Upcoming rostered shifts (guards) or standard office work schedule (office staff)
+  - `5` / `payslip`: Latest confirmed payroll/payslip summary
+  - `6` / `leave`: Guided Leave Request or legacy single-line syntax
+  - `7` / `status`: Current duty status, elapsed time, next shift/schedule, and pending requests
+  - `8` / `supervisor`: Direct escalation / human handoff
+- **Session Lifecycle & Global Escapes**:
+  - Inactive sessions expire after **15 minutes**.
+  - Sending `cancel`, `exit`, `stop`, or `0` at any point aborts active multi-step flows and resets the session to `IDLE`.
+
+### 2. Dual-Track Attendance: Field Guards vs Office Staff
+
+Plethora distinguishes between field security officers and general office personnel via `Employee.employeeType`:
+
+| Aspect | Security Officers (`security_officer`) | Office Staff (`general`) |
+|---|---|---|
+| **Pay Structure** | Hourly / shift rate under PSIRA / NBCPSS | Fixed monthly salary under BCEA |
+| **Data Entity** | `Shift` & `Attendance` | `StaffAttendanceDay` (`workDate`, `timeIn`, `timeOut`, `hoursWorked`) |
+| **Pre-Conditions** | Assigned shift within 15-min start window; optional site geofence | Active employee status; cannot clock in on approved leave date |
+| **Clock In** | Validates shift eligibility & site geofence | Records `timeIn` & `status: "present"` for today |
+| **Clock Out** | Completes `Shift`, computes basic & overtime hours, triggers exception sync | Records `timeOut`, computes elapsed working hours |
+| **Payroll Impact** | Gated through site timesheets & attendance approval | **Zero payroll impact** (completely isolated from hourly payroll) |
+| **Schedule / Roster** | Up to 45-day shift horizon PDF | Standard weekly hours & days (e.g. Mon–Fri 08:00–17:00) |
+
+### 3. Multi-Step Micro-Prompt Flows
+Instead of long walls of text, operational actions use concise micro-prompts:
+
+- **Incident Reporting Flow**:
+  1. *Category Selection*: Prompts user to select from `1` (Emergency / SOS), `2` (Break-in / Theft), `3` (Guard Misconduct), `4` (Damage / Maintenance), or `5` (Other / Complaint).
+  2. *Site Confirmation*: Automatically suggests the currently clocked-in site or lists recent sites.
+  3. *Incident Details*: Collects description (minimum 5 characters), records the `Incident` entity in DB, creates an immutable audit log, and raises an `OperationalAlert`.
+  4. *Evidence / Photo Upload*: Transitions to `INCIDENT_AWAITING_PHOTO`. When the guard sends an image or document, it is automatically attached as an `IncidentAttachment` evidence record.
+
+- **Leave Application Flow**:
+  1. *Leave Type*: Selection between Annual, Sick, Family Responsibility, or Study leave.
+  2. *Date Validation*: Accepts `YYYY-MM-DD`, `today`, or `tomorrow`. End date must be greater than or equal to start date.
+  3. *Confirmation*: Summarizes leave type, dates, and calculated working days before submission.
+  4. *Medical Certificates*: Guards can submit sick leave certificates directly via WhatsApp document/photo attachment with caption `leave <REQUEST_ID>`.
+
+- **Operational Status Inquiry**:
+  - Returns whether the officer is currently on active duty, site name, elapsed duty time, next scheduled shift date/time, and pending leave count.
+
+### 4. Progressive Fallback & Human Handoff
+- **First Unrecognized Input**: Provides helpful suggestions and reminders of main command triggers (`1`–`8`).
+- **Consecutive Unrecognized Input**: Automatically offers immediate escalation to a supervisor.
+- **Supervisor Handoff**:
+  - Dispatching an escalation generates a trackable reference ID (e.g., `SUP-20260924-XXXX`).
+  - Raises a `CRITICAL` `OperationalAlert` tagged with `sourceModule: "WHATSAPP"`.
+  - Creates an audit log entry for management visibility.
+

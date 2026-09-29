@@ -1,0 +1,271 @@
+================================================================================
+PLETHORA ERP — WHATSAPP USER GUIDE FOR OFFICE STAFF
+Quick, Easy & Mobile Daily Attendance, Leave, Payslips & Office Services
+================================================================================
+
+1. INTRODUCTION
+--------------------------------------------------------------------------------
+Welcome to Plethora ERP on WhatsApp. 
+
+As an office staff member (Administration, HR, Finance, Operations, Logistics,
+Management, or Support), you can manage your daily workday attendance, check
+leave balances, apply for leave, download payslips, and request assistance directly
+from your smartphone through WhatsApp.
+
+There is no need to install new apps or log into complex web portals for routine
+daily tasks.
+
+
+2. GETTING STARTED & PREREQUISITES
+--------------------------------------------------------------------------------
+Before you can interact with Plethora on WhatsApp:
+
+1. Registered Phone Number:
+   Ensure your mobile phone number is registered with your HR / Payroll
+   department in your Plethora employee profile. Plethora automatically links
+   your WhatsApp number to your employee profile.
+
+2. Company WhatsApp Contact:
+   Save your company's official Plethora WhatsApp number in your phone contacts
+   (e.g., "Company Office Assistant" or "Plethora").
+
+3. Starting the Chat:
+   Open WhatsApp, find the contact, and send any greeting:
+   • Type: hi, hello, menu, or help
+
+   Plethora will immediately reply with your interactive main menu.
+
+
+3. THE MAIN MENU & QUICK SHORTCUTS
+--------------------------------------------------------------------------------
+When you send "menu" or "help", Plethora displays the main command list. You can
+tap an interactive button, or simply reply with any number from 1 to 8:
+
+  [1] Clock In          — Start your office workday
+  [2] Clock Out         — Finish your office workday and record hours
+  [3] Report Incident   — Log office maintenance, hazards, or security issues
+  [4] Work Schedule     — View your contracted working days and hours
+  [5] Latest Payslip    — Receive your latest monthly payslip as a PDF
+  [6] Leave Services    — Apply for leave, check balances, or track requests
+  [7] Office Status     — View today's attendance time, schedule, and pending items
+  [8] Contact HR/Support— Request assistance from HR or management
+
+* Pro-Tip: You don't need to navigate through menus. You can simply send "1" to 
+  clock in in the morning and "2" to clock out when leaving!
+
+
+4. DAILY ATTENDANCE (CLOCK IN & CLOCK OUT)
+--------------------------------------------------------------------------------
+
+A. CLOCKING IN (MORNING)
+   When you arrive at work or begin your workday:
+   • Send: 1  (or type: clock in, in)
+
+   Plethora will verify your status and confirm:
+   -----------------------------------------------------------------------------
+   Good day, Nomsa! 🏢
+
+   You are clocked in for today at 08:02 (HR Officer).
+
+   Have a productive day! Reply *2* or *clock out* when you finish work.
+   -----------------------------------------------------------------------------
+
+   Important Notes on Clocking In:
+   • Leave Protection: If you have approved annual or sick leave scheduled for
+     today, Plethora will block accidental clock-ins and notify you:
+     "❌ You are on approved annual leave today. Contact HR if your dates changed."
+   • Already Clocked In: If you already clocked in earlier, Plethora will remind
+     you of your clock-in time rather than creating duplicates.
+
+
+B. CLOCKING OUT (AFTERNOON / END OF DAY)
+   When your workday is complete:
+   • Send: 2  (or type: clock out, out)
+
+   Plethora will calculate your total hours worked for the day and confirm:
+   -----------------------------------------------------------------------------
+   🏢 *Clock Out Confirmed*
+
+   • Clock In: 08:02
+   • Clock Out: 17:05
+   • Hours Worked: 9.05 hrs
+
+   Have a great evening, Nomsa!
+   -----------------------------------------------------------------------------
+
+   Important Notes on Clocking Out:
+   • If you haven't clocked in today, Plethora will prompt you to clock in first.
+   • If you already clocked out earlier, Plethora will show your completed summary.
+
+
+5. CHECKING YOUR STATUS & WORKING SCHEDULE
+--------------------------------------------------------------------------------
+
+A. CHECKING YOUR CURRENT STATUS
+   To see whether you are currently clocked in, how long you've been working today,
+   and if you have any pending leave requests:
+   • Send: 7  (or type: status)
+
+   Example Response:
+   -----------------------------------------------------------------------------
+   📊 *Your Office Status*
+
+   👤 *Today's Attendance*:
+   🟢 *Active at Office*
+     Clocked in: 08:02 (4h 15m elapsed)
+
+   🕒 *Working Schedule*:
+   📅 *Office Schedule*:
+     Monday – Friday (40 hours/week, 08:00 - 17:00)
+
+   📋 *Leave Requests*:
+   • No pending leave applications
+
+   Reply *1* to Clock In, *2* to Clock Out, *6* for Leave, or *menu* for all options.
+   -----------------------------------------------------------------------------
+
+
+B. VIEWING YOUR WORK SCHEDULE
+   • Send: 4  (or type: roster, schedule)
+
+   Because office personnel work standard business schedules rather than rotating
+   security guard shifts, Plethora provides your contracted work details:
+   -----------------------------------------------------------------------------
+   📅 *Office Staff Work Schedule*
+
+   You are registered as office staff (HR Officer).
+   Office staff follow standard working schedules rather than site-based shifts.
+
+   • *Working Days*: Monday – Friday
+   • *Working Hours*: 08:00 – 17:00 (40 hours/week)
+
+   Reply *1* to Clock In or *2* to Clock Out for your workday.
+   -----------------------------------------------------------------------------
+
+
+6. LEAVE SERVICES (BALANCES, APPLICATIONS & SICK NOTES)
+--------------------------------------------------------------------------------
+
+A. CHECKING LEAVE BALANCES
+   Want to know how many days of Annual, Sick, or Family leave you have available?
+   • Send: leave balance  (or send: balance)
+
+   Plethora replies with your up-to-date statutory balances in days.
+
+
+B. CHECKING RECENT LEAVE APPLICATIONS
+   To check the status of recent leave requests (Approved, Pending, or Rejected):
+   • Send: leave status  (or send: leave history)
+
+
+C. APPLYING FOR LEAVE (GUIDED MICRO-PROMPT)
+   Applying for leave is a simple step-by-step guided conversation:
+   1. Send: 6  (or send: leave, apply leave)
+   2. Choose leave type:
+      Reply 1 for Annual Leave
+      Reply 2 for Sick Leave
+      Reply 3 for Family Responsibility Leave
+      Reply 4 for Study Leave
+   3. Enter start date:
+      Type the start date (e.g. 2026-10-05, or "today", or "tomorrow")
+   4. Enter end date:
+      Type the end date (e.g. 2026-10-09, or press 1 if single day)
+   5. Enter reason (optional):
+      Type a brief note (e.g. "Family wedding") or reply "skip"
+   6. Confirm:
+      Plethora summarizes the request and working days. Reply "1" to confirm.
+      Your request is immediately submitted to management for review!
+
+   * Quick One-Liner Shortcut:
+     You can also apply in a single line if you prefer:
+     • leave 2026-10-05 to 2026-10-09 annual Family holiday
+
+
+D. SUBMITTING MEDICAL CERTIFICATES / SICK NOTES
+   If you applied for sick leave and need to provide a doctor's note:
+   1. Take a clear photo of your medical certificate or locate the PDF document.
+   2. Send the image/PDF to the WhatsApp chat with the caption:
+      leave <REQUEST_NUMBER>
+      Example caption: leave REQ-1042
+   3. Plethora will automatically attach the document to your leave record and
+      notify HR for verification.
+
+
+E. WITHDRAWING A LEAVE APPLICATION
+   If your plans change and your leave request has not yet been taken:
+   • Send: leave withdraw <REQUEST_NUMBER>
+     Example: leave withdraw REQ-1042
+
+
+7. DOWNLOADING MONTHLY PAYSLIPS
+--------------------------------------------------------------------------------
+You can download your latest official payslip directly to WhatsApp:
+• Send: 5  (or type: payslip, pay slip)
+
+Plethora will locate your latest confirmed payroll run and send your payslip
+directly as a PDF document. You can open, save, or print it right from your phone.
+
+
+8. REPORTING OFFICE INCIDENTS OR MAINTENANCE ISSUES
+--------------------------------------------------------------------------------
+If you notice an office safety hazard, facility defect, broken air conditioning,
+water leak, electrical fault, or security concern:
+1. Send: 3  (or type: incident, report)
+2. Select Category:
+   [1] Emergency / Safety Hazard
+   [2] Break-in / Theft / Loss
+   [3] Staff Misconduct
+   [4] Office Damage / Facility Maintenance
+   [5] Other / General Complaint
+3. Provide Details:
+   Type a clear description (e.g. "Main board room aircon leaking water onto carpet")
+4. Attach Photos:
+   Plethora will prompt you to send photos. Simply take a photo of the issue and
+   send it. It will be attached as evidence and dispatched to facility management.
+
+
+9. CONTACTING HR / SUPERVISOR ESCALATION
+--------------------------------------------------------------------------------
+If you need direct assistance from HR, payroll, or an office administrator:
+• Send: 8  (or type: supervisor, support, help me)
+
+Plethora will:
+1. Generate an official assistance reference code: e.g. SUP-20260924-1234
+2. Alert the HR/Operations desk immediately.
+3. Reply confirming that an administrator has been notified to follow up with you.
+
+
+10. UNIVERSAL COMMANDS & HELPFUL TIPS
+--------------------------------------------------------------------------------
+• CANCEL ANY TIME:
+  If you are in the middle of applying for leave or reporting an incident and
+  want to stop, simply type:
+  cancel, exit, stop, or 0.
+  Plethora will reset back to the main menu.
+
+• AUTOMATIC SESSION TIMEOUT:
+  If you leave a conversation unfinished for more than 15 minutes, Plethora
+  automatically clears the pending step so your next message starts fresh.
+
+• PAYROLL PROTECTION GUARANTEE:
+  Office staff are compensated on a fixed monthly salary. WhatsApp attendance
+  tracking exists for HR daily roll calls, leave reconciliation, and safety
+  auditing. Daily clock-in/out timestamps will NEVER alter or deduct from your
+  fixed basic monthly salary.
+
+• NEED TO UPDATE YOUR PHONE NUMBER?
+  If you change your cell number, contact your HR department to update your
+  Plethora profile so your WhatsApp access remains active.
+
+================================================================================
+Quick Reference Command Cheat Sheet:
+  1  = Clock In
+  2  = Clock Out
+  3  = Report Office Incident / Maintenance
+  4  = Work Schedule / Working Days
+  5  = Download Latest Payslip (PDF)
+  6  = Leave Application & Balances
+  7  = Office Status (Today's Hours & Attendance)
+  8  = Human Assistance / Contact HR
+  0  = Cancel / Main Menu
+================================================================================
