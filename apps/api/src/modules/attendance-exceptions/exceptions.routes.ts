@@ -101,6 +101,7 @@ export async function attendanceExceptionsRoutes(app: FastifyInstance) {
       userId: user.sub,
       action: parsed.data.action,
       reviewNote: parsed.data.reviewNote,
+      obNumber: parsed.data.obNumber,
     });
     if (!updated) {
       return reply.code(404).send({ error: "Not found", message: "Exception not found" });

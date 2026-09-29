@@ -15,6 +15,8 @@ export function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: 
   return EARTH_RADIUS_M * c;
 }
 
+export const haversineDistance = haversineMeters;
+
 export function siteHasGeofence(site: {
   latitude: unknown;
   longitude: unknown;

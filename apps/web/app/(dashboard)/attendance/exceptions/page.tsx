@@ -65,6 +65,7 @@ export default function AttendanceExceptionsPage() {
   const [sites, setSites] = useState<{ id: string; name: string }[]>([]);
   const [actingId, setActingId] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [obNumbers, setObNumbers] = useState<Record<string, string>>({});
   const [openActionsId, setOpenActionsId] = useState<string | null>(null);
   const [detecting, setDetecting] = useState(false);
   const periodStart = searchParams.get("start") ?? undefined;
@@ -140,14 +141,51 @@ export default function AttendanceExceptionsPage() {
     setError("");
     setSuccess("");
     try {
-      await reviewAttendanceException(token, exception.id, action, notes[exception.id]?.trim() || undefined);
+      await reviewAttendanceException(
+        token,
+        exception.id,
+        action,
+        notes[exception.id]?.trim() || undefined,
+        obNumbers[exception.id]?.trim() || undefined
+      );
       const actionCopy = ATTENDANCE_EXCEPTION_ACTIONS.find((item) => item.action === action)?.label ?? "Attendance issue updated";
       setSuccess(`${actionCopy}: ${attendanceExceptionCopy(exception.exceptionType).title}.`);
       setOpenActionsId(null);
       setNotes((current) => ({ ...current, [exception.id]: "" }));
+      setObNumbers((current) => ({ ...current, [exception.id]: "" }));
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to update this attendance issue");
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const handleManualOverride = async (exception: AttendanceException) => {
+    if (!token) return;
+    const ob = obNumbers[exception.id]?.trim();
+    if (!ob) {
+      setError("Please enter an Occurrence Book (OB) number to manually override and approve attendance.");
+      return;
+    }
+    setActingId(exception.id);
+    setError("");
+    setSuccess("");
+    try {
+      await reviewAttendanceException(
+        token,
+        exception.id,
+        "approve",
+        notes[exception.id]?.trim() || undefined,
+        ob
+      );
+      setSuccess(`Attendance exception overridden and approved under OB ${ob}.`);
+      setOpenActionsId(null);
+      setNotes((curr) => ({ ...curr, [exception.id]: "" }));
+      setObNumbers((curr) => ({ ...curr, [exception.id]: "" }));
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to override attendance issue");
     } finally {
       setActingId(null);
     }
@@ -305,6 +343,32 @@ export default function AttendanceExceptionsPage() {
                     </p>
                     {exception.shift && <p className="mt-1 text-xs text-security-navy-500">{new Date(exception.shift.startTime).toLocaleString()} – {new Date(exception.shift.endTime).toLocaleTimeString()}</p>}
                     {exception.reviewNote && <p className="mt-2 rounded-lg bg-security-navy-50 px-3 py-2 text-sm text-security-navy-700 dark:bg-security-navy-900 dark:text-security-navy-300">Previous note: {exception.reviewNote}</p>}
+
+                    {exception.attendance && (exception.exceptionType === "OUTSIDE_GEOFENCE" || exception.attendance.validationStatus === "REJECTED_GEOFENCE") && (
+                      <div className="mt-2.5 rounded-lg border border-red-200 bg-red-50/70 p-3 text-xs text-red-900 dark:border-red-800/40 dark:bg-red-950/30 dark:text-red-200">
+                        <div className="flex flex-wrap items-center gap-2 font-medium">
+                          <span className="inline-flex items-center rounded bg-red-100 px-1.5 py-0.5 font-bold text-red-800 dark:bg-red-900/60 dark:text-red-200">
+                            Geofence Rejection
+                          </span>
+                          {exception.attendance.distanceMeters != null && (
+                            <span>
+                              Distance: <strong>{exception.attendance.distanceMeters}m</strong> (Allowed: {exception.attendance.geofenceRadiusMeters ?? "—"}m)
+                            </span>
+                          )}
+                        </div>
+                        {exception.attendance.rejectionReason && (
+                          <p className="mt-1 text-red-700 dark:text-red-300">
+                            Reason: {exception.attendance.rejectionReason}
+                          </p>
+                        )}
+                        {exception.attendance.submissionLat != null && exception.attendance.submissionLon != null && (
+                          <p className="mt-0.5 text-security-navy-500 dark:text-security-navy-400">
+                            Submitted GPS: {exception.attendance.submissionLat.toFixed(5)}, {exception.attendance.submissionLon.toFixed(5)}
+                            {exception.attendance.whatsappNumber ? ` · Phone: ${exception.attendance.whatsappNumber}` : ""}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
                     <Badge variant={exception.severity === "CRITICAL" ? "error" : "warning"}>{exception.severity}</Badge>
@@ -338,19 +402,49 @@ export default function AttendanceExceptionsPage() {
                     )}
                     {actionsOpen && (
                       <div id={`attendance-outcomes-${exception.id}`} className="mt-3 rounded-security-lg border border-security-navy-100 bg-security-navy-50 p-4 dark:border-security-navy-700 dark:bg-security-navy-900">
-                        <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300">
-                          Supervisor note <span className="font-normal text-security-navy-500">(optional)</span>
-                          <textarea
-                            rows={2}
-                            value={notes[exception.id] ?? ""}
-                            onChange={(event) => setNotes((current) => ({ ...current, [exception.id]: event.target.value }))}
-                            className="input-modern mt-1 w-full"
-                            placeholder="Add context for the audit trail"
-                          />
-                        </label>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300">
+                            Supervisor note <span className="font-normal text-security-navy-500">(optional)</span>
+                            <textarea
+                              rows={2}
+                              value={notes[exception.id] ?? ""}
+                              onChange={(event) => setNotes((current) => ({ ...current, [exception.id]: event.target.value }))}
+                              className="input-modern mt-1 w-full"
+                              placeholder="Add context for the audit trail"
+                            />
+                          </label>
+                          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300">
+                            Occurrence Book (OB) Number <span className="font-normal text-security-navy-500">(for manual override)</span>
+                            <input
+                              type="text"
+                              value={obNumbers[exception.id] ?? ""}
+                              onChange={(event) => setObNumbers((current) => ({ ...current, [exception.id]: event.target.value }))}
+                              className="input-modern mt-1 w-full"
+                              placeholder="e.g. OB 42/2026"
+                            />
+                          </label>
+                        </div>
+
+                        {Boolean(obNumbers[exception.id]?.trim() || exception.exceptionType === "OUTSIDE_GEOFENCE" || exception.attendance?.validationStatus === "REJECTED_GEOFENCE") && (
+                          <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50/70 p-3 dark:border-amber-800/40 dark:bg-amber-950/20">
+                            <div className="text-xs text-amber-900 dark:text-amber-200">
+                              <p className="font-semibold">Supervisor Manual Override</p>
+                              <p className="text-amber-700 dark:text-amber-300">Authorize and approve this attendance with an OB entry in the occurrence book.</p>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={actingId === exception.id}
+                              onClick={() => void handleManualOverride(exception)}
+                              className="btn-amber shrink-0 text-xs px-3 py-2 min-h-9 font-semibold"
+                            >
+                              {actingId === exception.id ? "Overriding…" : "⚡ Override with OB"}
+                            </button>
+                          </div>
+                        )}
+
                         <div className="mt-4">
                           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-security-navy-500">
-                            Select an outcome
+                            Select standard outcome
                           </p>
                           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
                             {ATTENDANCE_EXCEPTION_ACTIONS.map((action) => {

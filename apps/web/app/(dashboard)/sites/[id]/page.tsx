@@ -446,6 +446,16 @@ export default function SiteDetailPage() {
         />
 
         <div className="border-t border-security-navy-100 dark:border-security-navy-700 pt-5">
+          <SiteGeofenceSettings
+            site={site}
+            siteId={siteId}
+            token={token!}
+            canManage={canEdit}
+            onSaved={refresh}
+          />
+        </div>
+
+        <div className="border-t border-security-navy-100 dark:border-security-navy-700 pt-5">
           <h3 className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100">Shift roster sheet</h3>
           <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-1 mb-4 max-w-2xl">
             Text here appears on the shift sheet and PDF for this site (e.g. female-only day shift, male-only night shift). Leave blank to use the default contract lines.
@@ -1089,6 +1099,253 @@ function SiteGuardsAssignment({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function SiteGeofenceSettings({
+  site,
+  siteId,
+  token,
+  canManage,
+  onSaved,
+}: {
+  site: Site;
+  siteId: string;
+  token: string;
+  canManage: boolean;
+  onSaved: () => void;
+}) {
+  const [latitude, setLatitude] = useState(site.latitude != null ? String(site.latitude) : "");
+  const [longitude, setLongitude] = useState(site.longitude != null ? String(site.longitude) : "");
+  const [radius, setRadius] = useState(site.geofenceRadiusMeters != null ? String(site.geofenceRadiusMeters) : "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedFlash, setSavedFlash] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+
+  useEffect(() => {
+    setLatitude(site.latitude != null ? String(site.latitude) : "");
+    setLongitude(site.longitude != null ? String(site.longitude) : "");
+    setRadius(site.geofenceRadiusMeters != null ? String(site.geofenceRadiusMeters) : "");
+  }, [site.latitude, site.longitude, site.geofenceRadiusMeters]);
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setError("Geolocation is not supported by your browser.");
+      return;
+    }
+    setDetecting(true);
+    setError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLatitude(pos.coords.latitude.toFixed(7));
+        setLongitude(pos.coords.longitude.toFixed(7));
+        if (!radius) setRadius("100");
+        setDetecting(false);
+      },
+      (err) => {
+        setError(`Unable to retrieve GPS location: ${err.message}`);
+        setDetecting(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  const handleClear = () => {
+    setLatitude("");
+    setLongitude("");
+    setRadius("");
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canManage) return;
+
+    setError(null);
+
+    const latTrim = latitude.trim();
+    const lonTrim = longitude.trim();
+    const radTrim = radius.trim();
+
+    const anyProvided = Boolean(latTrim || lonTrim || radTrim);
+    const allProvided = Boolean(latTrim && lonTrim && radTrim);
+
+    if (anyProvided && !allProvided) {
+      setError("Geofence requires Latitude, Longitude, and Radius together (or clear all three).");
+      return;
+    }
+
+    let payloadLat: number | null = null;
+    let payloadLon: number | null = null;
+    let payloadRad: number | null = null;
+
+    if (allProvided) {
+      const latNum = parseFloat(latTrim);
+      const lonNum = parseFloat(lonTrim);
+      const radNum = parseInt(radTrim, 10);
+
+      if (Number.isNaN(latNum) || latNum < -90 || latNum > 90) {
+        setError("Latitude must be a valid number between -90 and 90.");
+        return;
+      }
+      if (Number.isNaN(lonNum) || lonNum < -180 || lonNum > 180) {
+        setError("Longitude must be a valid number between -180 and 180.");
+        return;
+      }
+      if (Number.isNaN(radNum) || radNum <= 0 || radNum > 100000) {
+        setError("Geofence radius must be a positive integer in meters (e.g. 100).");
+        return;
+      }
+
+      payloadLat = latNum;
+      payloadLon = lonNum;
+      payloadRad = radNum;
+    }
+
+    setSaving(true);
+    try {
+      const res = await authFetch(`/sites/${siteId}`, token, {
+        method: "PUT",
+        body: JSON.stringify({
+          latitude: payloadLat,
+          longitude: payloadLon,
+          geofenceRadiusMeters: payloadRad,
+        }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || body.error || "Failed to save geofence configuration");
+      }
+
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 2500);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save geofence settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const isConfigured = site.latitude != null && site.longitude != null && site.geofenceRadiusMeters != null;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold text-security-navy-900 dark:text-security-navy-100 flex items-center gap-2">
+            <span>📍 WhatsApp Geofence Configuration</span>
+            {isConfigured ? (
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                Active ({site.geofenceRadiusMeters}m)
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                Not Enforced (Flagged on Clock-in)
+              </span>
+            )}
+          </h3>
+          <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-1 max-w-2xl">
+            Officers clocking in via WhatsApp send their GPS pin. If the distance from this site center exceeds the allowed radius, the clock-in is rejected and logged as an exception.
+          </p>
+        </div>
+        {canManage && (
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleUseCurrentLocation}
+              disabled={detecting || saving}
+              className="text-xs font-medium px-2.5 py-1.5 rounded border border-security-navy-200 dark:border-security-navy-700 text-security-navy-700 dark:text-security-navy-300 hover:bg-security-navy-50 dark:hover:bg-security-navy-800 transition-colors"
+            >
+              {detecting ? "Locating…" : "📍 Pin Current Location"}
+            </button>
+            {(latitude || longitude || radius) && (
+              <button
+                type="button"
+                onClick={handleClear}
+                disabled={saving}
+                className="text-xs font-medium px-2.5 py-1.5 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <div className="p-3 text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-800">
+          {error}
+        </div>
+      )}
+
+      {savedFlash && (
+        <div className="p-3 text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg border border-emerald-200 dark:border-emerald-800">
+          ✅ Geofence coordinates saved successfully.
+        </div>
+      )}
+
+      <form onSubmit={handleSave} className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+            Latitude (WGS84)
+          </label>
+          <input
+            type="number"
+            step="any"
+            value={latitude}
+            onChange={(e) => setLatitude(e.target.value)}
+            disabled={!canManage || saving}
+            placeholder="-26.1952400"
+            className="input-modern w-full text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+            Longitude (WGS84)
+          </label>
+          <input
+            type="number"
+            step="any"
+            value={longitude}
+            onChange={(e) => setLongitude(e.target.value)}
+            disabled={!canManage || saving}
+            placeholder="28.0340500"
+            className="input-modern w-full text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+            Radius (meters)
+          </label>
+          <input
+            type="number"
+            min="1"
+            max="100000"
+            value={radius}
+            onChange={(e) => setRadius(e.target.value)}
+            disabled={!canManage || saving}
+            placeholder="100"
+            className="input-modern w-full text-sm"
+          />
+        </div>
+
+        {canManage && (
+          <div className="sm:col-span-3 flex justify-end">
+            <button
+              type="submit"
+              disabled={saving}
+              className="btn-primary text-xs px-4 py-2 min-h-9"
+            >
+              {saving ? "Saving…" : "Save Geofence Settings"}
+            </button>
+          </div>
+        )}
+      </form>
     </div>
   );
 }

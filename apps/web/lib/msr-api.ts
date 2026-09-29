@@ -558,16 +558,34 @@ export async function getDocumentVersions(
 
 // ——— Attendance exceptions ———
 
+export interface AttendanceAuditDetails {
+  id: string;
+  submissionLat?: number | null;
+  submissionLon?: number | null;
+  distanceMeters?: number | null;
+  geofenceRadiusMeters?: number | null;
+  withinGeofence?: boolean;
+  validationStatus?: string;
+  rejectionReason?: string | null;
+  whatsappMessageId?: string | null;
+  whatsappNumber?: string | null;
+  clockIn?: string | null;
+  clockOut?: string | null;
+}
+
 export interface AttendanceException {
   id: string;
   exceptionType: string;
   severity: string;
   status: string;
   detectedAt: string;
+  description?: string;
   reviewNote?: string | null;
   employee?: { id: string; firstName: string; lastName: string };
   site?: { id: string; name: string };
   shift?: { id: string; startTime: string; endTime: string };
+  attendanceId?: string | null;
+  attendance?: AttendanceAuditDetails | null;
 }
 
 export async function listAttendanceExceptions(
@@ -588,11 +606,12 @@ export async function reviewAttendanceException(
   token: string,
   id: string,
   action: "approve" | "reject" | "resolve" | "under_review" | "mark_absent",
-  reviewNote?: string
+  reviewNote?: string,
+  obNumber?: string
 ): Promise<AttendanceException> {
   const res = await authFetch(`/attendance-exceptions/${id}/review`, token, {
     method: "PATCH",
-    body: JSON.stringify({ action, reviewNote }),
+    body: JSON.stringify({ action, reviewNote, obNumber }),
   });
   return parseJson(res, "Failed to review exception");
 }

@@ -152,7 +152,7 @@ export async function handleInboundMessage(
       `${msg.location.latitude},${msg.location.longitude}`,
       log
     );
-    await processLocationAndSend(from, msg.location.latitude, msg.location.longitude);
+    await processLocationAndSend(from, msg.location.latitude, msg.location.longitude, msg.id);
     return;
   } else if ((msg.type === "image" && msg.image?.id) || (msg.type === "document" && msg.document?.id)) {
     const media = msg.type === "image" ? msg.image! : msg.document!;

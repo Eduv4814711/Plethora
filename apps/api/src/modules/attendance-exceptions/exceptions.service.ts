@@ -477,18 +477,44 @@ export async function listExceptions(
   ]);
 
   const shiftIds = [...new Set(items.flatMap((item) => (item.shiftId ? [item.shiftId] : [])))];
-  const shifts = shiftIds.length
-    ? await prisma.shift.findMany({
-        where: { companyId, id: { in: shiftIds } },
-        select: { id: true, startTime: true, endTime: true },
-      })
-    : [];
+  const attendanceIds = [...new Set(items.flatMap((item) => (item.attendanceId ? [item.attendanceId] : [])))];
+
+  const [shifts, attendances] = await Promise.all([
+    shiftIds.length
+      ? prisma.shift.findMany({
+          where: { companyId, id: { in: shiftIds } },
+          select: { id: true, startTime: true, endTime: true },
+        })
+      : [],
+    attendanceIds.length
+      ? prisma.attendance.findMany({
+          where: { id: { in: attendanceIds } },
+          select: {
+            id: true,
+            submissionLat: true,
+            submissionLon: true,
+            distanceMeters: true,
+            geofenceRadiusMeters: true,
+            withinGeofence: true,
+            validationStatus: true,
+            rejectionReason: true,
+            whatsappMessageId: true,
+            whatsappNumber: true,
+            clockIn: true,
+            clockOut: true,
+          },
+        })
+      : [],
+  ]);
+
   const shiftsById = new Map(shifts.map((shift) => [shift.id, shift]));
+  const attendancesById = new Map(attendances.map((att) => [att.id, att]));
 
   return {
     items: items.map((item) => ({
       ...item,
       shift: item.shiftId ? shiftsById.get(item.shiftId) : undefined,
+      attendance: item.attendanceId ? attendancesById.get(item.attendanceId) : undefined,
     })),
     total,
   };
@@ -500,6 +526,7 @@ export async function reviewException(params: {
   userId: string;
   action: "approve" | "reject" | "resolve" | "under_review" | "mark_absent";
   reviewNote?: string;
+  obNumber?: string;
 }) {
   const exception = await prisma.attendanceException.findFirst({
     where: { id: params.exceptionId, companyId: params.companyId },
@@ -514,21 +541,64 @@ export async function reviewException(params: {
     mark_absent: "RESOLVED",
   } as const;
 
+  const noteParts = [
+    params.obNumber ? `OB: ${params.obNumber}` : null,
+    params.action === "mark_absent" ? "Marked absent by supervisor" : null,
+    params.reviewNote,
+  ].filter(Boolean);
+  const effectiveReviewNote = noteParts.length > 0 ? noteParts.join(" — ") : null;
+
   const updated = await prisma.attendanceException.update({
     where: { id: exception.id },
     data: {
       status: statusMap[params.action],
       reviewedById: params.userId,
       reviewedAt: new Date(),
-      reviewNote:
-        params.action === "mark_absent"
-          ? [params.reviewNote, "Marked absent by supervisor"].filter(Boolean).join(" — ")
-          : params.reviewNote ?? null,
+      reviewNote: effectiveReviewNote,
       ...(params.action === "mark_absent"
         ? { exceptionType: "ABSENT" as const }
         : {}),
     },
   });
+
+  // If approved and linked to an attendance record (e.g. geofence override), update the attendance status
+  if (params.action === "approve") {
+    if (exception.attendanceId) {
+      await prisma.attendance.update({
+        where: { id: exception.attendanceId },
+        data: {
+          validationStatus: "MANUAL_OVERRIDE",
+          status: "VERIFIED",
+          rejectionReason: params.obNumber
+            ? `Manual override approved under OB ${params.obNumber}`
+            : "Manual override approved by supervisor",
+        },
+      }).catch(() => undefined);
+    }
+
+    if (params.obNumber && exception.shiftId) {
+      const row = await prisma.siteTimesheetRow.findFirst({
+        where: {
+          OR: [
+            { sourceShiftId: exception.shiftId },
+            {
+              siteId: exception.siteId ?? undefined,
+              plannedGuardId: exception.employeeId ?? undefined,
+            },
+          ],
+        },
+      });
+      if (row) {
+        await prisma.siteTimesheetRow.update({
+          where: { id: row.id },
+          data: {
+            dutyOnObNumber: row.dutyOnObNumber ?? params.obNumber,
+            attendanceStatus: "present",
+          },
+        }).catch(() => undefined);
+      }
+    }
+  }
 
   await createAuditLog({
     userId: params.userId,
@@ -536,7 +606,11 @@ export async function reviewException(params: {
     action: `attendance_exception.${params.action}`,
     entityType: "AttendanceException",
     entityId: exception.id,
-    metadata: { previousStatus: exception.status, reviewNote: params.reviewNote },
+    metadata: {
+      previousStatus: exception.status,
+      reviewNote: params.reviewNote,
+      obNumber: params.obNumber,
+    },
   });
 
   // Any recorded outcome completes the operator's review. The underlying

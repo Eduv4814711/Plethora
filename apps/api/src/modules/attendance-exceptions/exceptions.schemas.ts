@@ -27,6 +27,7 @@ export const exceptionAnalyticsQuerySchema = z.object({
 export const reviewExceptionBodySchema = z.object({
   action: z.enum(["approve", "reject", "resolve", "under_review", "mark_absent"]),
   reviewNote: z.string().max(2000).optional(),
+  obNumber: z.string().max(100).optional(),
 });
 
 export const detectExceptionsBodySchema = z.object({

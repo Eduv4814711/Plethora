@@ -36,9 +36,10 @@ export function normalizeWhatsAppPhone(phone: string | null | undefined): string
     return digits;
   }
 
-  // Other numbers (international or non-standard): return cleaned digits
   return digits;
 }
+
+export const normalizePhoneNumber = normalizeWhatsAppPhone;
 
 /**
  * Generate a wa.me direct click-to-chat URL.
