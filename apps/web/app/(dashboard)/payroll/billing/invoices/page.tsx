@@ -8,6 +8,7 @@ import { hasCapability } from "@/lib/permissions";
 import {
   createInvoice,
   duplicateInvoice,
+  deleteInvoice,
   downloadInvoicePdf,
   previewInvoicePdf,
   exportInvoicesToCsv,
@@ -64,6 +65,8 @@ export default function InvoicesPage() {
   const currency = currencyFromSettings(settings);
   const canView = user ? hasCapability(user, "/payroll/billing", "view") : false;
   const canCreate = user ? hasCapability(user, "/payroll/billing", "create") : false;
+  const canEdit = user ? hasCapability(user, "/payroll/billing", "edit") : false;
+  const canDelete = user ? hasCapability(user, "/payroll/billing", "delete") : false;
   const canExport = user ? hasCapability(user, "/payroll/billing", "export") : false;
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -155,8 +158,13 @@ export default function InvoicesPage() {
 
   const totals = useMemo(() => computeTotalsPreview(lines, discount, vatRate), [lines, discount, vatRate]);
 
-  // Summary counts
-  const overdueCount = invoices.filter(isOverdueFn).length;
+  // Summary counts & amounts
+  const overdueInvoices = invoices.filter(isOverdueFn);
+  const overdueCount = overdueInvoices.length;
+  const overdueAmount = overdueInvoices.reduce((acc, inv) => acc + Number(inv.amountDue ?? inv.totalAmount), 0);
+  const draftInvoices = invoices.filter((inv) => inv.status === "draft");
+  const draftCount = draftInvoices.length;
+  const draftAmount = draftInvoices.reduce((acc, inv) => acc + Number(inv.totalAmount), 0);
   const totalInvoiced = invoices.reduce((acc, inv) => acc + Number(inv.totalAmount), 0);
   const totalDue = invoices.reduce((acc, inv) => acc + Number(inv.amountDue ?? inv.totalAmount), 0);
   const totalPaid = invoices.reduce((acc, inv) => acc + Number(inv.amountPaid ?? 0), 0);
@@ -218,6 +226,22 @@ export default function InvoicesPage() {
     finally { setActionLoadingId(null); }
   };
 
+  const handleDeleteInvoice = async (id: string, invoiceNumber: string) => {
+    if (!token) return;
+    if (!window.confirm(`Are you sure you want to permanently delete draft invoice ${invoiceNumber}?`)) return;
+    setActionLoadingId(id);
+    try {
+      await deleteInvoice(token, id);
+      setActionSuccess(`Invoice ${invoiceNumber} deleted`);
+      await load();
+      setTimeout(() => setActionSuccess(null), 4000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete invoice");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const hasActiveFilters = Boolean(status !== "all" || search.trim() || clientFilter || siteFilter || fromDate || toDate);
   const resetFilters = () => { setStatus("all"); setSearch(""); setClientFilter(""); setSiteFilter(""); setFromDate(""); setToDate(""); };
 
@@ -252,7 +276,7 @@ export default function InvoicesPage() {
 
       {/* Summary bar */}
       {!loading && invoices.length > 0 && (
-        <section className="grid gap-3 sm:grid-cols-3" aria-label="Invoice summary">
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Invoice summary">
           <div className="rounded-security-lg border border-security-navy-100 bg-white p-4 shadow-security-card">
             <p className="section-title">Total Invoiced</p>
             <p className="mt-1 font-mono text-2xl font-bold tabular-nums text-security-navy-900">
@@ -265,15 +289,27 @@ export default function InvoicesPage() {
             <p className="mt-1 font-mono text-2xl font-bold tabular-nums text-security-emerald-700">
               {formatCurrency(totalPaid, { currency })}
             </p>
+            <p className="text-xs text-security-navy-500">
+              {totalInvoiced > 0 ? `${((totalPaid / totalInvoiced) * 100).toFixed(1)}% recovery` : "0% recovery"}
+            </p>
           </div>
           <div className="rounded-security-lg border border-security-navy-100 bg-white p-4 shadow-security-card">
             <p className="section-title">Outstanding</p>
-            <p className={`mt-1 font-mono text-2xl font-bold tabular-nums ${totalDue > 0 ? "text-red-700" : "text-security-navy-400"}`}>
+            <p className={`mt-1 font-mono text-2xl font-bold tabular-nums ${totalDue > 0 ? (overdueCount > 0 ? "text-red-700" : "text-security-amber-700") : "text-security-navy-400"}`}>
               {formatCurrency(totalDue, { currency })}
             </p>
-            {overdueCount > 0 && (
-              <p className="text-xs font-semibold text-red-600">⚠ {overdueCount} overdue</p>
+            {overdueCount > 0 ? (
+              <p className="text-xs font-semibold text-red-600">⚠ {formatCurrency(overdueAmount, { currency })} ({overdueCount} overdue)</p>
+            ) : (
+              <p className="text-xs text-security-emerald-600">All balances current</p>
             )}
+          </div>
+          <div className="rounded-security-lg border border-security-navy-100 bg-white p-4 shadow-security-card">
+            <p className="section-title">Draft Invoices</p>
+            <p className="mt-1 font-mono text-2xl font-bold tabular-nums text-security-navy-700">
+              {formatCurrency(draftAmount, { currency })}
+            </p>
+            <p className="text-xs text-security-navy-500">{draftCount} in preparation</p>
           </div>
         </section>
       )}
@@ -414,7 +450,7 @@ export default function InvoicesPage() {
             )}
           </div>
 
-          <LineItemsEditor token={token ?? ""} clientId={clientId} lines={lines} onChange={setLines} currency={currency} disabled={saving} />
+          <LineItemsEditor token={token ?? ""} clientId={clientId} siteId={siteId || undefined} lines={lines} onChange={setLines} currency={currency} disabled={saving} />
 
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="space-y-3">
@@ -628,7 +664,7 @@ export default function InvoicesPage() {
                           href={`/payroll/billing/invoices/${invoice.id}`}
                           className="btn-ghost min-h-8 px-2 py-1 text-xs"
                         >
-                          View
+                          {invoice.status === "draft" && canEdit ? "Edit" : "View"}
                         </Link>
                         {canExport && (
                           <button
@@ -655,6 +691,17 @@ export default function InvoicesPage() {
                             title="Duplicate"
                           >
                             Copy
+                          </button>
+                        )}
+                        {invoice.status === "draft" && canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteInvoice(invoice.id, invoice.invoiceNumber)}
+                            disabled={isLoading}
+                            className="btn-ghost min-h-8 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
+                            title="Delete draft invoice"
+                          >
+                            Delete
                           </button>
                         )}
                       </div>

@@ -106,8 +106,14 @@ export async function billingRoutes(app: FastifyInstance) {
       totalBilled: decimalJson(summary.totalBilled),
       totalCollected: decimalJson(summary.totalCollected),
       outstanding: decimalJson(summary.outstanding),
+      overdueAmount: decimalJson(summary.overdueAmount),
       overdueInvoiceCount: summary.overdueInvoiceCount,
       activeInvoiceCount: summary.activeInvoiceCount,
+      unpaidInvoiceCount: summary.unpaidInvoiceCount,
+      partiallyPaidInvoiceCount: summary.partiallyPaidInvoiceCount,
+      paidInvoiceCount: summary.paidInvoiceCount,
+      draftInvoiceCount: summary.draftInvoiceCount,
+      draftTotalAmount: decimalJson(summary.draftTotalAmount),
       aging: serializeAging(aging),
     };
   });
@@ -177,10 +183,11 @@ export async function billingRoutes(app: FastifyInstance) {
   app.get("/clients/:clientId/site-preset", { preHandler: crudProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const { clientId } = request.params as { clientId: string };
+    const { siteId } = request.query as { siteId?: string };
     if (!(await findClient(companyId, clientId))) {
       return reply.code(404).send({ error: "Client not found" });
     }
-    return { lines: await buildSitePresetLines(companyId, clientId) };
+    return { lines: await buildSitePresetLines(companyId, clientId, new Date(), siteId || null) };
   });
 
   app.get("/clients/:clientId/sites", { preHandler: crudProtect }, async (request, reply) => {
@@ -963,6 +970,14 @@ export async function billingRoutes(app: FastifyInstance) {
     const reason = parsed.success ? parsed.data.reason : undefined;
     return transitionQuote(request, reply, "declined", "billing.quote.decline", { reason });
   });
+
+  app.post("/quotes/:id/cancel", { preHandler: crudProtect }, (request, reply) =>
+    transitionQuote(request, reply, "cancelled", "billing.quote.cancel")
+  );
+
+  app.post("/quotes/:id/expire", { preHandler: crudProtect }, (request, reply) =>
+    transitionQuote(request, reply, "expired", "billing.quote.expire")
+  );
 
   app.post("/quotes/:id/convert-to-invoice", { preHandler: crudProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;

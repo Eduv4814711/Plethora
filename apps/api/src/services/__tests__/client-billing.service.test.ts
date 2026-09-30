@@ -236,3 +236,36 @@ describe("classifyAgingBucket", () => {
     expect(classifyAgingBucket(new Date("2026-05-03T00:00:00.000Z"), asOf)).toBe("d90_plus");
   });
 });
+
+describe("quote state machine", () => {
+  it("allows draft to be issued or cancelled", () => {
+    expect(canTransitionQuote("draft", "issued")).toBe(true);
+    expect(canTransitionQuote("draft", "cancelled")).toBe(true);
+    expect(canTransitionQuote("draft", "accepted")).toBe(false);
+  });
+
+  it("allows issued quote to be accepted, declined, expired, or cancelled", () => {
+    expect(canTransitionQuote("issued", "accepted")).toBe(true);
+    expect(canTransitionQuote("issued", "declined")).toBe(true);
+    expect(canTransitionQuote("issued", "expired")).toBe(true);
+    expect(canTransitionQuote("issued", "cancelled")).toBe(true);
+  });
+
+  it("treats terminal states as non-transitionable", () => {
+    for (const from of ["accepted", "declined", "expired", "cancelled"] as const) {
+      for (const to of ["draft", "issued", "accepted", "declined", "expired", "cancelled"] as const) {
+        expect(canTransitionQuote(from, to)).toBe(false);
+      }
+    }
+  });
+
+  it("only allows quotes to be edited when in draft status", () => {
+    expect(isQuoteEditable("draft")).toBe(true);
+    expect(isQuoteEditable("issued")).toBe(false);
+    expect(isQuoteEditable("accepted")).toBe(false);
+    expect(isQuoteEditable("declined")).toBe(false);
+    expect(isQuoteEditable("expired")).toBe(false);
+    expect(isQuoteEditable("cancelled")).toBe(false);
+  });
+});
+

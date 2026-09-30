@@ -20,22 +20,58 @@ export function decimalJson(value: Prisma.Decimal): string {
 
 const money = z.union([z.number(), z.string()]);
 
+const positiveMoney = money.refine(
+  (val) => {
+    try {
+      const dec = toDec(val);
+      return !dec.isNaN() && dec.gt(0);
+    } catch {
+      return false;
+    }
+  },
+  { message: "Must be a positive number greater than zero" }
+);
+
+const nonNegativeMoney = money.refine(
+  (val) => {
+    try {
+      const dec = toDec(val);
+      return !dec.isNaN() && dec.gte(0);
+    } catch {
+      return false;
+    }
+  },
+  { message: "Must be zero or greater" }
+);
+
+const vatRateSchema = money.refine(
+  (val) => {
+    try {
+      const dec = toDec(val);
+      return !dec.isNaN() && dec.gte(0) && dec.lte(100);
+    } catch {
+      return false;
+    }
+  },
+  { message: "VAT rate must be between 0% and 100%" }
+);
+
 export const lineSchema = z.object({
   siteId: z.string().min(1).optional().nullable(),
-  description: z.string().min(1).max(500),
-  quantity: money.default(1),
-  unitAmount: money,
+  description: z.string().trim().min(1, "Description cannot be empty").max(500),
+  quantity: positiveMoney.default(1),
+  unitAmount: nonNegativeMoney,
 });
 
 export type LineInput = z.infer<typeof lineSchema>;
 
 const documentBase = {
-  clientId: z.string().min(1),
+  clientId: z.string().min(1, "Client is required"),
   reference: z.string().max(200).optional().nullable(),
   notes: z.string().max(5000).optional().nullable(),
-  discountAmount: money.optional().default(0),
-  vatRate: money.optional().default(15),
-  items: z.array(lineSchema).min(1),
+  discountAmount: nonNegativeMoney.optional().default(0),
+  vatRate: vatRateSchema.optional().default(15),
+  items: z.array(lineSchema).min(1, "At least one line item is required"),
 };
 
 export const createQuoteSchema = z
@@ -48,9 +84,9 @@ export const createQuoteSchema = z
     prospectAddress: z.string().max(1000).optional().nullable(),
     reference: z.string().max(200).optional().nullable(),
     notes: z.string().max(5000).optional().nullable(),
-    discountAmount: money.optional().default(0),
-    vatRate: money.optional().default(15),
-    items: z.array(lineSchema).min(1),
+    discountAmount: nonNegativeMoney.optional().default(0),
+    vatRate: vatRateSchema.optional().default(15),
+    items: z.array(lineSchema).min(1, "At least one line item is required"),
     quoteNumber: z.string().max(50).optional().nullable(),
     quoteDate: z.string().min(1),
     validUntil: z.string().min(1),
@@ -69,9 +105,9 @@ export const updateQuoteSchema = z.object({
   prospectAddress: z.string().max(1000).optional().nullable(),
   reference: z.string().max(200).optional().nullable(),
   notes: z.string().max(5000).optional().nullable(),
-  discountAmount: money.optional(),
-  vatRate: money.optional(),
-  items: z.array(lineSchema).min(1).optional(),
+  discountAmount: nonNegativeMoney.optional(),
+  vatRate: vatRateSchema.optional(),
+  items: z.array(lineSchema).min(1, "At least one line item is required").optional(),
   quoteDate: z.string().optional(),
   validUntil: z.string().optional(),
 });
@@ -90,9 +126,9 @@ export const updateInvoiceSchema = z.object({
   siteId: z.string().min(1).optional().nullable(),
   reference: z.string().max(200).optional().nullable(),
   notes: z.string().max(5000).optional().nullable(),
-  discountAmount: money.optional(),
-  vatRate: money.optional(),
-  items: z.array(lineSchema).min(1).optional(),
+  discountAmount: nonNegativeMoney.optional(),
+  vatRate: vatRateSchema.optional(),
+  items: z.array(lineSchema).min(1, "At least one line item is required").optional(),
   invoiceDate: z.string().optional(),
   dueDate: z.string().optional(),
 });
@@ -103,8 +139,8 @@ export const declineQuoteSchema = z.object({
 
 export const recordPaymentSchema = z.object({
   paymentDate: z.string().min(1),
-  amount: money,
-  paymentMethod: z.enum(["eft", "cash", "card", "debit_order", "other"]).optional(),
+  amount: positiveMoney,
+  paymentMethod: z.enum(["eft", "cash", "card", "debit_order", "cheque", "other"]).optional(),
   referenceNumber: z.string().max(100).optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
 });

@@ -125,8 +125,14 @@ export interface BillingSummary {
   totalBilled: string;
   totalCollected: string;
   outstanding: string;
+  overdueAmount?: string;
   overdueInvoiceCount: number;
   activeInvoiceCount: number;
+  unpaidInvoiceCount?: number;
+  partiallyPaidInvoiceCount?: number;
+  paidInvoiceCount?: number;
+  draftInvoiceCount?: number;
+  draftTotalAmount?: string;
   aging: AgingTotals;
 }
 
@@ -255,10 +261,12 @@ export async function listBillableClients(token: string): Promise<{ clients: Bil
 
 export async function getClientSitePreset(
   token: string,
-  clientId: string
+  clientId: string,
+  siteId?: string | null
 ): Promise<{ lines: SitePresetLine[] }> {
+  const q = siteId ? `?siteId=${encodeURIComponent(siteId)}` : "";
   return parseJson(
-    await authFetch(`${BASE}/clients/${clientId}/site-preset`, token),
+    await authFetch(`${BASE}/clients/${clientId}/site-preset${q}`, token),
     "Failed to load site presets"
   );
 }
@@ -370,6 +378,20 @@ export async function declineQuote(token: string, id: string, reason?: string): 
   return parseJson(
     await authFetch(`${BASE}/quotes/${id}/decline`, token, jsonInit("POST", { reason })),
     "Failed to decline quote"
+  );
+}
+
+export async function cancelQuote(token: string, id: string): Promise<Quote> {
+  return parseJson(
+    await authFetch(`${BASE}/quotes/${id}/cancel`, token, jsonInit("POST")),
+    "Failed to cancel quote"
+  );
+}
+
+export async function expireQuote(token: string, id: string): Promise<Quote> {
+  return parseJson(
+    await authFetch(`${BASE}/quotes/${id}/expire`, token, jsonInit("POST")),
+    "Failed to expire quote"
   );
 }
 

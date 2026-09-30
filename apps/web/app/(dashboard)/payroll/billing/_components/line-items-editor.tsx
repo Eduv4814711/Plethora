@@ -16,6 +16,7 @@ export function emptyLine(): EditableLine {
 export function LineItemsEditor({
   token,
   clientId,
+  siteId,
   lines,
   onChange,
   currency,
@@ -23,6 +24,7 @@ export function LineItemsEditor({
 }: {
   token: string;
   clientId: string;
+  siteId?: string | null;
   lines: EditableLine[];
   onChange: (lines: EditableLine[]) => void;
   currency?: string;
@@ -50,9 +52,9 @@ export function LineItemsEditor({
     setPresetError(null);
     setPresetNotice(null);
     try {
-      const { lines: preset } = await getClientSitePreset(token, clientId);
+      const { lines: preset } = await getClientSitePreset(token, clientId, siteId || null);
       if (preset.length === 0) {
-        setPresetNotice("This client has no active sites linked yet.");
+        setPresetNotice(siteId ? "This site has no active billing rates configured." : "This client has no active sites linked yet.");
         return;
       }
       const mapped: EditableLine[] = preset.map((p) => ({

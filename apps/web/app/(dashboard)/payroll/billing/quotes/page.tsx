@@ -7,6 +7,7 @@ import { useSettings } from "@/lib/settings-context";
 import { hasCapability } from "@/lib/permissions";
 import {
   createQuote,
+  deleteQuote,
   duplicateQuote,
   downloadQuotePdf,
   previewQuotePdf,
@@ -46,6 +47,10 @@ export default function QuotesPage() {
   const currency = currencyFromSettings(settings);
   const canView = user ? hasCapability(user, "/payroll/billing", "view") : false;
   const canCreate = user ? hasCapability(user, "/payroll/billing", "create") : false;
+  const canEdit = user
+    ? hasCapability(user, "/payroll/billing", "edit") || hasCapability(user, "/payroll/billing", "create")
+    : false;
+  const canDelete = user ? hasCapability(user, "/payroll/billing", "delete") : false;
   const canExport = user ? hasCapability(user, "/payroll/billing", "export") : false;
 
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -232,6 +237,22 @@ export default function QuotesPage() {
 
   const hasActiveFilters = Boolean(status !== "all" || search.trim() || clientFilter || fromDate || toDate);
   const resetFilters = () => { setStatus("all"); setSearch(""); setClientFilter(""); setFromDate(""); setToDate(""); };
+
+  const handleDeleteQuote = async (id: string, quoteNumber: string) => {
+    if (!token) return;
+    if (!window.confirm(`Are you sure you want to delete draft quote ${quoteNumber}?`)) return;
+    setActionLoadingId(id);
+    try {
+      await deleteQuote(token, id);
+      setActionSuccess(`Quote ${quoteNumber} deleted`);
+      await load();
+      setTimeout(() => setActionSuccess(null), 4000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete quote");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
 
   return (
     <main className="animate-fade-in space-y-5 pb-16">
@@ -511,7 +532,15 @@ export default function QuotesPage() {
             </label>
           </div>
 
-          <LineItemsEditor token={token ?? ""} clientId={clientMode === "existing" ? clientId : ""} lines={lines} onChange={setLines} currency={currency} disabled={saving} />
+          <LineItemsEditor
+            token={token ?? ""}
+            clientId={clientMode === "existing" ? clientId : ""}
+            siteId={clientMode === "existing" ? siteId : null}
+            lines={lines}
+            onChange={setLines}
+            currency={currency}
+            disabled={saving}
+          />
 
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="space-y-3">
@@ -682,12 +711,25 @@ export default function QuotesPage() {
                     <td className="hidden px-4 py-3 md:table-cell"><StatusBadge status={isExpired ? "expired" : quote.status} /></td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Link href={`/payroll/billing/quotes/${quote.id}`} className="btn-ghost min-h-8 px-2 py-1 text-xs">View</Link>
+                        <Link href={`/payroll/billing/quotes/${quote.id}`} className="btn-ghost min-h-8 px-2 py-1 text-xs">
+                          {quote.status === "draft" && canEdit ? "Edit" : "View"}
+                        </Link>
                         {canExport && (
-                          <button type="button" onClick={async () => { setActionLoadingId(quote.id); try { await previewQuotePdf(token!, quote.id); } finally { setActionLoadingId(null); } }} disabled={actionLoadingId === quote.id} className="btn-ghost min-h-8 px-2 py-1 text-xs">PDF</button>
+                          <button type="button" onClick={async () => { setActionLoadingId(quote.id); try { await previewQuotePdf(token!, quote.id); } finally { setActionLoadingId(null); } }} disabled={actionLoadingId === quote.id} className="btn-ghost min-h-8 px-2 py-1 text-xs" title="Preview PDF">PDF</button>
                         )}
                         {canCreate && (
-                          <button type="button" onClick={async () => { setActionLoadingId(quote.id); try { const dup = await duplicateQuote(token!, quote.id); setActionSuccess(`Duplicated as ${dup.quoteNumber}`); await load(); setTimeout(() => setActionSuccess(null), 5000); } catch (err) { setError(err instanceof Error ? err.message : "Failed"); } finally { setActionLoadingId(null); }}} disabled={actionLoadingId === quote.id} className="btn-ghost min-h-8 px-2 py-1 text-xs">Copy</button>
+                          <button type="button" onClick={async () => { setActionLoadingId(quote.id); try { const dup = await duplicateQuote(token!, quote.id); setActionSuccess(`Duplicated as ${dup.quoteNumber}`); await load(); setTimeout(() => setActionSuccess(null), 5000); } catch (err) { setError(err instanceof Error ? err.message : "Failed"); } finally { setActionLoadingId(null); }}} disabled={actionLoadingId === quote.id} className="btn-ghost min-h-8 px-2 py-1 text-xs" title="Duplicate">Copy</button>
+                        )}
+                        {quote.status === "draft" && canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteQuote(quote.id, quote.quoteNumber)}
+                            disabled={actionLoadingId === quote.id}
+                            className="btn-ghost min-h-8 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
+                            title="Delete draft quote"
+                          >
+                            Delete
+                          </button>
                         )}
                       </div>
                     </td>

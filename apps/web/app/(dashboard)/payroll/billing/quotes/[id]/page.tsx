@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
@@ -8,15 +8,19 @@ import { useSettings } from "@/lib/settings-context";
 import { hasCapability } from "@/lib/permissions";
 import {
   acceptQuote,
+  cancelQuote,
   convertQuoteToInvoice,
   declineQuote,
+  deleteQuote,
   duplicateQuote,
   downloadQuotePdf,
+  expireQuote,
   getClientSitesBilling,
   previewDocumentNumber,
   previewQuotePdf,
   getQuote,
   issueQuote,
+  updateQuote,
   type Quote,
   type SiteBillingSummary,
 } from "@/lib/billing-api";
@@ -24,6 +28,8 @@ import { currencyFromSettings, formatCurrency } from "@/lib/currency";
 import { StatusBadge } from "../../_components/status-badge";
 import { InvoiceDocument } from "../../_components/invoice-document";
 import { BillingAccessRestricted } from "../../_components/billing-access-restricted";
+import { computeTotalsPreview, DocumentTotals } from "../../_components/document-totals";
+import { emptyLine, LineItemsEditor, type EditableLine } from "../../_components/line-items-editor";
 import { clsx } from "clsx";
 
 // Quote lifecycle pipeline
@@ -37,15 +43,17 @@ function QuoteLifecycleBar({ status }: { status: string }) {
   const declined = status === "declined";
   const expired = status === "expired";
   const cancelled = status === "cancelled";
-  const activeLabel = (declined || expired || cancelled) ? "issued" : status;
+  const activeLabel = declined || expired || cancelled ? "issued" : status;
   const activeIdx = QUOTE_LIFECYCLE.findIndex((s) => s.status === activeLabel);
 
   if (declined || expired || cancelled) {
     return (
-      <div className={clsx(
-        "inline-flex items-center gap-2 rounded-security border px-3 py-2",
-        declined ? "border-red-200 bg-red-50" : "border-security-navy-200 bg-security-navy-50"
-      )}>
+      <div
+        className={clsx(
+          "inline-flex items-center gap-2 rounded-security border px-3 py-2",
+          declined ? "border-red-200 bg-red-50" : "border-security-navy-200 bg-security-navy-50"
+        )}
+      >
         <span className={clsx("h-2 w-2 rounded-full", declined ? "bg-red-500" : "bg-security-navy-400")} />
         <span className={clsx("text-xs font-semibold", declined ? "text-red-700" : "text-security-navy-600")}>
           {declined ? "Quote Declined" : expired ? "Quote Expired" : "Quote Cancelled"}
@@ -63,25 +71,34 @@ function QuoteLifecycleBar({ status }: { status: string }) {
         return (
           <div key={step.status} className="flex items-center">
             <div className="flex flex-col items-center">
-              <div className={clsx(
-                "flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold transition-colors",
-                isPast && "bg-security-emerald-500 text-white",
-                isActive && "bg-security-navy-900 text-white",
-                !isPast && !isActive && "border-2 border-security-navy-200 bg-white text-security-navy-400"
-              )}>
+              <div
+                className={clsx(
+                  "flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold transition-colors",
+                  isPast && "bg-security-emerald-500 text-white",
+                  isActive && "bg-security-navy-900 text-white",
+                  !isPast && !isActive && "border-2 border-security-navy-200 bg-white text-security-navy-400"
+                )}
+              >
                 {isPast ? "✓" : i + 1}
               </div>
-              <span className={clsx(
-                "mt-1 hidden whitespace-nowrap text-[9px] font-semibold uppercase tracking-wide sm:block",
-                isPast && "text-security-emerald-600",
-                isActive && "text-security-navy-900",
-                !isPast && !isActive && "text-security-navy-400"
-              )}>
+              <span
+                className={clsx(
+                  "mt-1 hidden whitespace-nowrap text-[9px] font-semibold uppercase tracking-wide sm:block",
+                  isPast && "text-security-emerald-600",
+                  isActive && "text-security-navy-900",
+                  !isPast && !isActive && "text-security-navy-400"
+                )}
+              >
                 {step.label}
               </span>
             </div>
             {!isLast && (
-              <div className={clsx("mx-1 h-0.5 w-8 sm:w-12 transition-colors", isPast ? "bg-security-emerald-400" : "bg-security-navy-200")} />
+              <div
+                className={clsx(
+                  "mx-1 h-0.5 w-8 sm:w-12 transition-colors",
+                  isPast ? "bg-security-emerald-400" : "bg-security-navy-200"
+                )}
+              />
             )}
           </div>
         );
@@ -100,6 +117,10 @@ export default function QuoteDetailPage() {
   const canView = user ? hasCapability(user, "/payroll/billing", "view") : false;
   const canApprove = user ? hasCapability(user, "/payroll/billing", "approve") : false;
   const canCreate = user ? hasCapability(user, "/payroll/billing", "create") : false;
+  const canEdit = user
+    ? hasCapability(user, "/payroll/billing", "edit") || hasCapability(user, "/payroll/billing", "create")
+    : false;
+  const canDelete = user ? hasCapability(user, "/payroll/billing", "delete") : false;
   const canExport = user ? hasCapability(user, "/payroll/billing", "export") : false;
 
   const [quote, setQuote] = useState<Quote | null>(null);
@@ -118,6 +139,21 @@ export default function QuoteDetailPage() {
   const [convertLoadingPreview, setConvertLoadingPreview] = useState(false);
   const [convertError, setConvertError] = useState<string | null>(null);
 
+  // Edit Quote Modal State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editQuoteDate, setEditQuoteDate] = useState("");
+  const [editValidUntil, setEditValidUntil] = useState("");
+  const [editSiteId, setEditSiteId] = useState("");
+  const [editReference, setEditReference] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editDiscount, setEditDiscount] = useState("0.00");
+  const [editVatRate, setEditVatRate] = useState("15");
+  const [editLines, setEditLines] = useState<EditableLine[]>([emptyLine()]);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  // Delete Confirmation Modal State
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
   const load = useCallback(async () => {
     if (!token || !canView) return;
     setLoading(true);
@@ -131,7 +167,9 @@ export default function QuoteDetailPage() {
     }
   }, [token, canView, params.id]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   // Load client sites if the quote is linked to an existing client
   useEffect(() => {
@@ -177,7 +215,10 @@ export default function QuoteDetailPage() {
     try {
       await fn();
       await load();
-      if (msg) { setSuccessMsg(msg); setTimeout(() => setSuccessMsg(null), 4000); }
+      if (msg) {
+        setSuccessMsg(msg);
+        setTimeout(() => setSuccessMsg(null), 4000);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
     } finally {
@@ -216,6 +257,83 @@ export default function QuoteDetailPage() {
     }
   };
 
+  // Open Edit Quote Modal
+  const openEditModal = () => {
+    if (!quote) return;
+    setEditQuoteDate(quote.quoteDate ? quote.quoteDate.slice(0, 10) : "");
+    setEditValidUntil(quote.validUntil ? quote.validUntil.slice(0, 10) : "");
+    setEditSiteId(quote.siteId || "");
+    setEditReference(quote.reference || "");
+    setEditNotes(quote.notes || "");
+    setEditDiscount(quote.discountAmount || "0.00");
+    setEditVatRate(quote.vatRate || "15");
+    setEditLines(
+      quote.items && quote.items.length > 0
+        ? quote.items.map((it) => ({
+            siteId: it.siteId ?? null,
+            description: it.description,
+            quantity: String(it.quantity),
+            unitAmount: String(it.unitAmount),
+          }))
+        : [emptyLine()]
+    );
+    setEditError(null);
+    setShowEditModal(true);
+  };
+
+  const executeSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !quote) return;
+
+    const validLines = editLines.filter((l) => l.description.trim() !== "");
+    if (validLines.length === 0) {
+      setEditError("Quote must have at least one line item with a description.");
+      return;
+    }
+
+    setBusy(true);
+    setEditError(null);
+    try {
+      await updateQuote(token, quote.id, {
+        quoteDate: editQuoteDate,
+        validUntil: editValidUntil,
+        siteId: editSiteId || null,
+        reference: editReference.trim() || null,
+        notes: editNotes.trim() || null,
+        discountAmount: editDiscount,
+        vatRate: editVatRate,
+        items: validLines,
+      });
+      setShowEditModal(false);
+      await load();
+      setSuccessMsg("Quote updated successfully.");
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Failed to update quote");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const executeDelete = async () => {
+    if (!token || !quote) return;
+    setBusy(true);
+    try {
+      await deleteQuote(token, quote.id);
+      router.push("/payroll/billing/quotes");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete quote");
+      setShowDeleteModal(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const editTotals = useMemo(
+    () => computeTotalsPreview(editLines, editDiscount, editVatRate),
+    [editLines, editDiscount, editVatRate]
+  );
+
   if (user && !canView) {
     return <BillingAccessRestricted />;
   }
@@ -232,21 +350,29 @@ export default function QuoteDetailPage() {
   if (!quote) {
     return (
       <main className="space-y-4">
-        <Link href="/payroll/billing/quotes" className="text-sm font-semibold text-security-navy-700 hover:underline">← Back to quotes</Link>
-        <p className="rounded-security-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error ?? "Quote not found"}</p>
+        <Link href="/payroll/billing/quotes" className="text-sm font-semibold text-security-navy-700 hover:underline">
+          ← Back to quotes
+        </Link>
+        <p className="rounded-security-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error ?? "Quote not found"}
+        </p>
       </main>
     );
   }
 
   const convertedInvoice = quote.invoices?.[0];
-  const isTerminal = ["declined", "expired", "cancelled", "accepted"].includes(quote.status);
+  const isDraft = quote.status === "draft";
+  const isIssued = quote.status === "issued";
+  const isAccepted = quote.status === "accepted";
   const isExpired = new Date(quote.validUntil) < new Date() && quote.status === "issued";
 
   return (
     <main className="animate-fade-in space-y-5 pb-16">
       {/* Header */}
       <header className="space-y-4">
-        <Link href="/payroll/billing/quotes" className="section-title hover:underline">← Quotes</Link>
+        <Link href="/payroll/billing/quotes" className="section-title hover:underline">
+          ← Quotes
+        </Link>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -266,7 +392,8 @@ export default function QuoteDetailPage() {
                   📍 {quote.site.name}
                 </span>
               )}
-              <span>· Valid until{" "}
+              <span>
+                · Valid until{" "}
                 <span className={new Date(quote.validUntil) < new Date() ? "font-semibold text-red-600" : ""}>
                   {new Date(quote.validUntil).toLocaleDateString("en-ZA", { year: "numeric", month: "short", day: "numeric" })}
                 </span>
@@ -278,31 +405,127 @@ export default function QuoteDetailPage() {
           <div className="flex flex-wrap items-center gap-2">
             {canExport && (
               <>
-                <button type="button" disabled={busy} onClick={() => run(() => previewQuotePdf(token!, quote.id))} className="btn-secondary min-h-10">Preview PDF</button>
-                <button type="button" disabled={busy} onClick={() => run(() => downloadQuotePdf(token!, quote.id, `${quote.quoteNumber}.pdf`))} className="btn-secondary min-h-10">Download PDF</button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => run(() => previewQuotePdf(token!, quote.id))}
+                  className="btn-secondary min-h-10"
+                >
+                  Preview PDF
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => run(() => downloadQuotePdf(token!, quote.id, `${quote.quoteNumber}.pdf`))}
+                  className="btn-secondary min-h-10"
+                >
+                  Download PDF
+                </button>
               </>
             )}
+
             {canCreate && (
-              <button type="button" disabled={busy} onClick={async () => { setBusy(true); try { const dup = await duplicateQuote(token!, quote.id); router.push(`/payroll/billing/quotes/${dup.id}`); } catch (err) { setError(err instanceof Error ? err.message : "Failed"); setBusy(false); } }} className="btn-secondary min-h-10">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    const dup = await duplicateQuote(token!, quote.id);
+                    router.push(`/payroll/billing/quotes/${dup.id}`);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "Failed to duplicate");
+                    setBusy(false);
+                  }
+                }}
+                className="btn-secondary min-h-10"
+              >
                 Duplicate
               </button>
             )}
-            {canApprove && quote.status === "draft" && (
-              <button type="button" disabled={busy} onClick={() => run(() => issueQuote(token!, quote.id), "Quote issued.")} className="btn-amber min-h-10">
+
+            {/* Draft Actions: Edit, Delete, Cancel, Issue */}
+            {isDraft && canEdit && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={openEditModal}
+                className="btn-secondary min-h-10 font-semibold"
+                id="edit-quote-btn"
+              >
+                Edit Quote
+              </button>
+            )}
+
+            {isDraft && canDelete && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setShowDeleteModal(true)}
+                className="btn-secondary min-h-10 border-red-200 text-red-700 hover:bg-red-50"
+                id="delete-quote-btn"
+              >
+                Delete
+              </button>
+            )}
+
+            {isDraft && canApprove && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => run(() => issueQuote(token!, quote.id), "Quote issued.")}
+                className="btn-amber min-h-10"
+              >
                 Issue Quote
               </button>
             )}
-            {canApprove && quote.status === "issued" && (
+
+            {/* Issued Actions: Accept, Decline, Expire, Cancel */}
+            {isIssued && canApprove && (
               <>
-                <button type="button" disabled={busy} onClick={() => run(() => declineQuote(token!, quote.id), "Quote declined.")} className="btn-secondary min-h-10 border-red-200 text-red-700 hover:bg-red-50">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => run(() => declineQuote(token!, quote.id), "Quote declined.")}
+                  className="btn-secondary min-h-10 border-red-200 text-red-700 hover:bg-red-50"
+                >
                   Decline
                 </button>
-                <button type="button" disabled={busy} onClick={() => run(() => acceptQuote(token!, quote.id), "Quote accepted.")} className="btn-primary min-h-10">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => run(() => acceptQuote(token!, quote.id), "Quote accepted.")}
+                  className="btn-primary min-h-10"
+                >
                   Accept
                 </button>
               </>
             )}
-            {canCreate && quote.status === "accepted" && !convertedInvoice && (
+
+            {isIssued && canEdit && (
+              <>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => run(() => expireQuote(token!, quote.id), "Quote marked as expired.")}
+                  className="btn-secondary min-h-10 text-security-navy-700"
+                  title="Mark quote as expired"
+                >
+                  Mark Expired
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => run(() => cancelQuote(token!, quote.id), "Quote cancelled.")}
+                  className="btn-secondary min-h-10 text-red-700 border-red-200 hover:bg-red-50"
+                >
+                  Cancel
+                </button>
+              </>
+            )}
+
+            {/* Accepted Action: Convert to Invoice */}
+            {isAccepted && canCreate && !convertedInvoice && (
               <button type="button" disabled={busy} onClick={openConvertModal} className="btn-amber min-h-10">
                 Convert to Invoice →
               </button>
@@ -314,8 +537,16 @@ export default function QuoteDetailPage() {
       </header>
 
       {/* Alert banners */}
-      {error && <div className="rounded-security-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{error}</div>}
-      {successMsg && <div className="rounded-security-lg border border-security-emerald-200 bg-security-emerald-50 px-3 py-2 text-sm text-security-emerald-800" role="status">{successMsg}</div>}
+      {error && (
+        <div className="rounded-security-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+          {error}
+        </div>
+      )}
+      {successMsg && (
+        <div className="rounded-security-lg border border-security-emerald-200 bg-security-emerald-50 px-3 py-2 text-sm text-security-emerald-800" role="status">
+          {successMsg}
+        </div>
+      )}
 
       {/* Converted invoice banner */}
       {convertedInvoice && (
@@ -378,6 +609,239 @@ export default function QuoteDetailPage() {
           <button type="button" disabled={busy} onClick={openConvertModal} className="btn-amber">
             {busy ? "Converting…" : "Convert to Invoice →"}
           </button>
+        </div>
+      )}
+
+      {/* Audit & Document Timeline */}
+      <section className="rounded-security-lg border border-security-navy-200 bg-white p-5 shadow-security-card space-y-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-security-navy-500">
+          Document History & Audit Trail
+        </h3>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs text-security-navy-700">
+          <div className="rounded-security border border-security-navy-100 bg-security-navy-50/50 p-3">
+            <span className="text-[10px] font-semibold uppercase text-security-navy-400 block mb-0.5">Created</span>
+            <span className="font-medium text-security-navy-900">
+              {new Date(quote.quoteDate).toLocaleDateString("en-ZA", { year: "numeric", month: "short", day: "numeric" })}
+            </span>
+          </div>
+          <div className="rounded-security border border-security-navy-100 bg-security-navy-50/50 p-3">
+            <span className="text-[10px] font-semibold uppercase text-security-navy-400 block mb-0.5">Valid Until</span>
+            <span className={clsx("font-medium", isExpired ? "text-red-700 font-bold" : "text-security-navy-900")}>
+              {new Date(quote.validUntil).toLocaleDateString("en-ZA", { year: "numeric", month: "short", day: "numeric" })}
+            </span>
+          </div>
+          <div className="rounded-security border border-security-navy-100 bg-security-navy-50/50 p-3">
+            <span className="text-[10px] font-semibold uppercase text-security-navy-400 block mb-0.5">Status</span>
+            <span className="font-semibold uppercase text-security-navy-900">{quote.status}</span>
+          </div>
+          <div className="rounded-security border border-security-navy-100 bg-security-navy-50/50 p-3">
+            <span className="text-[10px] font-semibold uppercase text-security-navy-400 block mb-0.5">Conversion</span>
+            {convertedInvoice ? (
+              <Link href={`/payroll/billing/invoices/${convertedInvoice.id}`} className="font-semibold text-security-emerald-700 hover:underline">
+                Invoice {convertedInvoice.invoiceNumber}
+              </Link>
+            ) : (
+              <span className="text-security-navy-400">Not converted</span>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Edit Quote Modal */}
+      {showEditModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs animate-fade-in overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-quote-modal-title"
+        >
+          <div className="w-full max-w-3xl rounded-security-lg border border-security-navy-200 bg-white p-6 shadow-xl space-y-5 animate-scale-in my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 id="edit-quote-modal-title" className="text-lg font-bold text-security-navy-900">
+                  Edit Quotation {quote.quoteNumber}
+                </h2>
+                <p className="text-xs text-security-navy-500 mt-0.5">
+                  Update line items, pricing, rates, and notes for this draft quotation.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                className="text-security-navy-400 hover:text-security-navy-600 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {editError && (
+              <div className="rounded-security-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                {editError}
+              </div>
+            )}
+
+            <form onSubmit={executeSaveEdit} className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <label className="block">
+                  <span className="label-text mb-1 block">Quote Date</span>
+                  <input
+                    type="date"
+                    value={editQuoteDate}
+                    onChange={(e) => setEditQuoteDate(e.target.value)}
+                    required
+                    className="input-modern w-full"
+                  />
+                </label>
+                <label className="block">
+                  <span className="label-text mb-1 block">Valid Until</span>
+                  <input
+                    type="date"
+                    value={editValidUntil}
+                    onChange={(e) => setEditValidUntil(e.target.value)}
+                    required
+                    className="input-modern w-full"
+                  />
+                </label>
+                {clientSites.length > 0 && (
+                  <label className="block">
+                    <span className="label-text mb-1 block">Target Site (optional)</span>
+                    <select
+                      value={editSiteId}
+                      onChange={(e) => setEditSiteId(e.target.value)}
+                      className="input-modern w-full"
+                    >
+                      <option value="">All Sites / Client-wide</option>
+                      {clientSites.map((s) => (
+                        <option key={s.siteId} value={s.siteId}>
+                          {s.siteName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="label-text mb-1 block">Reference</span>
+                  <input
+                    type="text"
+                    value={editReference}
+                    onChange={(e) => setEditReference(e.target.value)}
+                    placeholder="e.g. PO-8841 or tender ref"
+                    className="input-modern w-full"
+                  />
+                </label>
+                <label className="block">
+                  <span className="label-text mb-1 block">Notes / Terms</span>
+                  <input
+                    type="text"
+                    value={editNotes}
+                    onChange={(e) => setEditNotes(e.target.value)}
+                    placeholder="Payment terms, exclusions, validity notes"
+                    className="input-modern w-full"
+                  />
+                </label>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="label-text mb-1 block">Discount Amount</span>
+                  <input
+                    type="text"
+                    value={editDiscount}
+                    onChange={(e) => setEditDiscount(e.target.value)}
+                    placeholder="0.00"
+                    className="input-modern w-full font-mono"
+                  />
+                </label>
+                <label className="block">
+                  <span className="label-text mb-1 block">VAT Rate (%)</span>
+                  <input
+                    type="text"
+                    value={editVatRate}
+                    onChange={(e) => setEditVatRate(e.target.value)}
+                    placeholder="15"
+                    className="input-modern w-full font-mono"
+                  />
+                </label>
+              </div>
+
+              <LineItemsEditor
+                token={token!}
+                clientId={quote.clientId || ""}
+                siteId={editSiteId || null}
+                lines={editLines}
+                onChange={setEditLines}
+                currency={currency}
+              />
+
+              <DocumentTotals
+                totals={editTotals}
+                vatRate={editVatRate}
+                currency={currency}
+              />
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-security-navy-100">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  disabled={busy}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="btn-primary"
+                  id="save-quote-edit-btn"
+                >
+                  {busy ? "Saving…" : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Quote Confirmation Modal */}
+      {showDeleteModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs animate-fade-in"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="w-full max-w-md rounded-security-lg border border-red-200 bg-white p-6 shadow-xl space-y-4 animate-scale-in">
+            <h2 className="text-lg font-bold text-red-700">Delete Draft Quote?</h2>
+            <p className="text-sm text-security-navy-600">
+              Are you sure you want to delete quotation <strong>{quote.quoteNumber}</strong>?
+              This action cannot be undone.
+            </p>
+            <div className="rounded-security border border-security-navy-100 bg-security-navy-50/60 p-3 text-xs space-y-1">
+              <div>Client: <strong>{quote.client?.name || quote.prospectName}</strong></div>
+              <div>Total: <strong>{formatCurrency(quote.totalAmount, { currency })}</strong></div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={busy}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={executeDelete}
+                disabled={busy}
+                className="btn-primary bg-red-600 hover:bg-red-700"
+                id="confirm-delete-quote-btn"
+              >
+                {busy ? "Deleting…" : "Confirm Delete"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -497,7 +961,9 @@ export default function QuoteDetailPage() {
                   </div>
                 ) : (
                   <label className="block">
-                    <span className="label-text mb-1 block">Manual Invoice Number <span className="text-red-500">*</span></span>
+                    <span className="label-text mb-1 block">
+                      Manual Invoice Number <span className="text-red-500">*</span>
+                    </span>
                     <input
                       type="text"
                       value={convertManualNumber}

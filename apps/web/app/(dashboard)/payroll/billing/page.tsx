@@ -287,7 +287,7 @@ export default function BillingHubPage() {
                 summaryFailed
                   ? "Failed to load"
                   : summary?.overdueInvoiceCount
-                  ? `${summary.overdueInvoiceCount} overdue invoice${summary.overdueInvoiceCount !== 1 ? "s" : ""}`
+                  ? `${summary.overdueInvoiceCount} overdue (${formatCurrency(summary.overdueAmount ?? 0, { currency })})`
                   : "No overdue invoices"
               }
               variant={summaryFailed ? "warning" : summary?.overdueInvoiceCount ? "danger" : "success"}
@@ -300,6 +300,8 @@ export default function BillingHubPage() {
               sub={
                 summaryFailed
                   ? "Failed to load"
+                  : summary?.draftInvoiceCount
+                  ? `${summary?.activeInvoiceCount ?? 0} active · ${summary.draftInvoiceCount} draft (${formatCurrency(summary.draftTotalAmount ?? 0, { currency })})`
                   : `${summary?.activeInvoiceCount ?? 0} active invoice${(summary?.activeInvoiceCount ?? 0) !== 1 ? "s" : ""}`
               }
               variant={summaryFailed ? "warning" : "info"}
