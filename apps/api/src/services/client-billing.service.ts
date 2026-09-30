@@ -428,7 +428,7 @@ export async function generateNextQuoteNumber(
   companyId: string,
   options?: DocumentNumberOptions
 ): Promise<string> {
-  const result = await allocateNextDocumentNumber(companyId, "quote", options, options?.tx);
+  const result = await allocateNextDocumentNumber(companyId, "quote", options);
   return result.documentNumber;
 }
 
@@ -436,7 +436,7 @@ export async function generateNextInvoiceNumber(
   companyId: string,
   options?: DocumentNumberOptions
 ): Promise<string> {
-  const result = await allocateNextDocumentNumber(companyId, "invoice", options, options?.tx);
+  const result = await allocateNextDocumentNumber(companyId, "invoice", options);
   return result.documentNumber;
 }
 
