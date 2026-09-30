@@ -13,6 +13,7 @@ import {
   canTransitionQuote,
   computeDocumentTotals,
   computeLineTotal,
+  configureSiteBillingNumbering,
   configureSiteBillingRate,
   generateNextInvoiceNumber,
   generateNextQuoteNumber,
@@ -23,19 +24,25 @@ import {
   getClientPurchaseHistory,
   getClientStatement,
   getInvoicePaidAmount,
+  getSiteBillingConfig,
   isInvoiceEditable,
   isQuoteEditable,
+  previewNextDocumentNumber,
   startOfUtcDay,
   syncInvoicePaymentStatus,
+  validateManualDocumentNumber,
 } from "../../services/client-billing.service.js";
 import {
+  configureSiteBillingNumberingSchema,
   configureSiteBillingRateSchema,
+  convertQuoteSchema,
   createInvoiceSchema,
   createQuoteSchema,
   declineQuoteSchema,
   decimalJson,
   type LineInput,
   parseDate,
+  previewNumberQuerySchema,
   recordPaymentSchema,
   serializeDocument,
   statementQuerySchema,
@@ -75,6 +82,7 @@ function serializeAging(aging: Awaited<ReturnType<typeof getAgingTotals>>) {
 
 export async function billingRoutes(app: FastifyInstance) {
   const crudProtect = [authMiddleware, requireCrudCapability({ module: MODULE })];
+  const editProtect = [authMiddleware, requireCapability(MODULE, "edit")];
   const approveProtect = [authMiddleware, requireCapability(MODULE, "approve")];
   const exportProtect = [authMiddleware, requireCapability(MODULE, "export")];
 
@@ -186,6 +194,11 @@ export async function billingRoutes(app: FastifyInstance) {
     const asOfDate = asOf ? new Date(asOf) : new Date();
     const billing = await calculateClientBilling(companyId, clientId, asOfDate);
 
+    const siteConfigs = await prisma.siteBillingConfig.findMany({
+      where: { companyId, siteId: { in: billing.sites.map((s) => s.siteId) } },
+    });
+    const configBySiteId = new Map(siteConfigs.map((c) => [c.siteId, c]));
+
     return {
       clientId: billing.clientId,
       clientName: billing.clientName,
@@ -194,20 +207,36 @@ export async function billingRoutes(app: FastifyInstance) {
       totalBillableGuards: billing.totalBillableGuards,
       sitesConfiguredCount: billing.sitesConfiguredCount,
       sitesUnconfiguredCount: billing.sitesUnconfiguredCount,
-      sites: billing.sites.map((s) => ({
-        siteId: s.siteId,
-        siteName: s.siteName,
-        billingMethod: s.billingMethod,
-        ratePerGuard: s.ratePerGuard ? decimalJson(s.ratePerGuard) : null,
-        billableGuardCount: s.billableGuardCount,
-        siteMonthlyTotal: decimalJson(s.siteMonthlyTotal),
-        billingConfigured: s.billingConfigured,
-        effectiveFrom: s.effectiveFrom ? s.effectiveFrom.toISOString().slice(0, 10) : null,
-        effectiveTo: s.effectiveTo ? s.effectiveTo.toISOString().slice(0, 10) : null,
-        notes: s.notes,
-        rateId: s.rateId,
-        rateUpdatedAt: s.rateUpdatedAt,
-      })),
+      sites: billing.sites.map((s) => {
+        const config = configBySiteId.get(s.siteId);
+        return {
+          siteId: s.siteId,
+          siteName: s.siteName,
+          billingMethod: s.billingMethod,
+          ratePerGuard: s.ratePerGuard ? decimalJson(s.ratePerGuard) : null,
+          billableGuardCount: s.billableGuardCount,
+          siteMonthlyTotal: decimalJson(s.siteMonthlyTotal),
+          billingConfigured: s.billingConfigured,
+          effectiveFrom: s.effectiveFrom ? s.effectiveFrom.toISOString().slice(0, 10) : null,
+          effectiveTo: s.effectiveTo ? s.effectiveTo.toISOString().slice(0, 10) : null,
+          notes: s.notes,
+          rateId: s.rateId,
+          rateUpdatedAt: s.rateUpdatedAt,
+          numbering: config
+            ? {
+                quotePrefix: config.quotePrefix,
+                quoteStartingNumber: config.quoteStartingNumber,
+                quoteNextNumber: config.quoteNextNumber,
+                quotePadding: config.quotePadding,
+                invoicePrefix: config.invoicePrefix,
+                invoiceStartingNumber: config.invoiceStartingNumber,
+                invoiceNextNumber: config.invoiceNextNumber,
+                invoicePadding: config.invoicePadding,
+                updatedAt: config.updatedAt,
+              }
+            : null,
+        };
+      }),
     };
   });
 
@@ -228,7 +257,7 @@ export async function billingRoutes(app: FastifyInstance) {
     }
 
     const asOfDate = asOf ? new Date(asOf) : new Date();
-    const [siteBilling, activeGuards, history] = await Promise.all([
+    const [siteBilling, activeGuards, history, numberingConfig, quotePreview, invoicePreview] = await Promise.all([
       calculateSiteBilling(companyId, siteId, asOfDate),
       getActiveBillableGuards(companyId, siteId, asOfDate),
       prisma.siteBillingRate.findMany({
@@ -236,6 +265,9 @@ export async function billingRoutes(app: FastifyInstance) {
         orderBy: [{ effectiveFrom: "desc" }, { createdAt: "desc" }],
         include: { createdBy: { select: { id: true, name: true, email: true } } },
       }),
+      getSiteBillingConfig(companyId, siteId),
+      previewNextDocumentNumber(companyId, "quote", { siteId, clientId }),
+      previewNextDocumentNumber(companyId, "invoice", { siteId, clientId }),
     ]);
 
     return {
@@ -258,6 +290,24 @@ export async function billingRoutes(app: FastifyInstance) {
         notes: siteBilling.notes,
         rateId: siteBilling.rateId,
         rateUpdatedAt: siteBilling.rateUpdatedAt,
+      },
+      numbering: {
+        config: numberingConfig
+          ? {
+              id: numberingConfig.id,
+              quotePrefix: numberingConfig.quotePrefix,
+              quoteStartingNumber: numberingConfig.quoteStartingNumber,
+              quoteNextNumber: numberingConfig.quoteNextNumber,
+              quotePadding: numberingConfig.quotePadding,
+              invoicePrefix: numberingConfig.invoicePrefix,
+              invoiceStartingNumber: numberingConfig.invoiceStartingNumber,
+              invoiceNextNumber: numberingConfig.invoiceNextNumber,
+              invoicePadding: numberingConfig.invoicePadding,
+              updatedAt: numberingConfig.updatedAt,
+            }
+          : null,
+        quotePreview,
+        invoicePreview,
       },
       activeGuards: activeGuards.map((g) => ({
         id: g.id,
@@ -355,6 +405,137 @@ export async function billingRoutes(app: FastifyInstance) {
     }
   });
 
+  app.get("/numbering/preview", { preHandler: crudProtect }, async (request, reply) => {
+    const companyId = request.user!.companyId;
+    const parsed = previewNumberQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Validation error", details: parsed.error.flatten() });
+    }
+    const preview = await previewNextDocumentNumber(companyId, parsed.data.kind, {
+      clientId: parsed.data.clientId,
+      siteId: parsed.data.siteId,
+    });
+    return preview;
+  });
+
+  app.get("/clients/:clientId/sites/:siteId/numbering", { preHandler: crudProtect }, async (request, reply) => {
+    const companyId = request.user!.companyId;
+    const { clientId, siteId } = request.params as { clientId: string; siteId: string };
+    const client = await findClient(companyId, clientId);
+    if (!client) {
+      return reply.code(404).send({ error: "Client not found" });
+    }
+    const site = await prisma.site.findFirst({
+      where: { id: siteId, companyId, clientId },
+      select: { id: true, name: true },
+    });
+    if (!site) {
+      return reply.code(404).send({ error: "Site not found for this client" });
+    }
+
+    const [config, quotePreview, invoicePreview] = await Promise.all([
+      getSiteBillingConfig(companyId, siteId),
+      previewNextDocumentNumber(companyId, "quote", { siteId, clientId }),
+      previewNextDocumentNumber(companyId, "invoice", { siteId, clientId }),
+    ]);
+
+    return {
+      siteId: site.id,
+      siteName: site.name,
+      config: config
+        ? {
+            id: config.id,
+            quotePrefix: config.quotePrefix,
+            quoteStartingNumber: config.quoteStartingNumber,
+            quoteNextNumber: config.quoteNextNumber,
+            quotePadding: config.quotePadding,
+            invoicePrefix: config.invoicePrefix,
+            invoiceStartingNumber: config.invoiceStartingNumber,
+            invoiceNextNumber: config.invoiceNextNumber,
+            invoicePadding: config.invoicePadding,
+            updatedAt: config.updatedAt,
+          }
+        : null,
+      quotePreview,
+      invoicePreview,
+    };
+  });
+
+  app.post("/clients/:clientId/sites/:siteId/numbering", { preHandler: editProtect }, async (request, reply) => {
+    const user = request.user!;
+    const companyId = user.companyId;
+    const { clientId, siteId } = request.params as { clientId: string; siteId: string };
+
+    const parsed = configureSiteBillingNumberingSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const client = await findClient(companyId, clientId);
+    if (!client) {
+      return reply.code(404).send({ error: "Client not found" });
+    }
+    const site = await prisma.site.findFirst({
+      where: { id: siteId, companyId, clientId },
+      select: { id: true, name: true },
+    });
+    if (!site) {
+      return reply.code(404).send({ error: "Site not found for this client" });
+    }
+
+    try {
+      const updated = await configureSiteBillingNumbering(companyId, siteId, parsed.data, user.sub);
+
+      await createAuditLog({
+        userId: user.sub,
+        companyId,
+        action: "site_billing_numbering.configure",
+        entityType: "site_billing_config",
+        entityId: updated.id,
+        metadata: {
+          siteId,
+          clientId,
+          quotePrefix: updated.quotePrefix,
+          quoteStartingNumber: updated.quoteStartingNumber,
+          quoteNextNumber: updated.quoteNextNumber,
+          quotePadding: updated.quotePadding,
+          invoicePrefix: updated.invoicePrefix,
+          invoiceStartingNumber: updated.invoiceStartingNumber,
+          invoiceNextNumber: updated.invoiceNextNumber,
+          invoicePadding: updated.invoicePadding,
+        },
+      });
+
+      const [quotePreview, invoicePreview] = await Promise.all([
+        previewNextDocumentNumber(companyId, "quote", { siteId, clientId }),
+        previewNextDocumentNumber(companyId, "invoice", { siteId, clientId }),
+      ]);
+
+      return reply.code(200).send({
+        config: {
+          id: updated.id,
+          quotePrefix: updated.quotePrefix,
+          quoteStartingNumber: updated.quoteStartingNumber,
+          quoteNextNumber: updated.quoteNextNumber,
+          quotePadding: updated.quotePadding,
+          invoicePrefix: updated.invoicePrefix,
+          invoiceStartingNumber: updated.invoiceStartingNumber,
+          invoiceNextNumber: updated.invoiceNextNumber,
+          invoicePadding: updated.invoicePadding,
+          updatedAt: updated.updatedAt,
+        },
+        quotePreview,
+        invoicePreview,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to configure site numbering";
+      return reply.code(400).send({ error: "Configuration error", message });
+    }
+  });
+
   app.get("/clients/:clientId/history", { preHandler: crudProtect }, async (request, reply) => {
     const companyId = request.user!.companyId;
     const { clientId } = request.params as { clientId: string };
@@ -430,6 +611,7 @@ export async function billingRoutes(app: FastifyInstance) {
     const andConditions: Prisma.ClientQuoteWhereInput[] = [
       { companyId },
       ...(q.clientId ? [{ clientId: q.clientId }] : []),
+      ...(q.siteId ? [{ siteId: q.siteId }] : []),
       ...(q.status ? [{ status: q.status as ClientQuoteStatus }] : []),
     ];
 
@@ -463,6 +645,7 @@ export async function billingRoutes(app: FastifyInstance) {
         skip: offset,
         include: {
           client: { select: { id: true, name: true } },
+          site: { select: { id: true, name: true } },
           items: { orderBy: { sortOrder: "asc" } },
         },
       }),
@@ -504,36 +687,67 @@ export async function billingRoutes(app: FastifyInstance) {
       });
     }
 
+    if (data.siteId) {
+      const site = await prisma.site.findFirst({
+        where: { id: data.siteId, companyId, ...(data.clientId ? { clientId: data.clientId } : {}) },
+      });
+      if (!site) {
+        return reply.code(400).send({ error: "Validation error", message: "siteId not found for this client" });
+      }
+    }
+
     const lines = buildLineRows(data.items);
     const totals = computeDocumentTotals(lines, toDec(data.discountAmount), toDec(data.vatRate));
     if (totals.subtotal.sub(totals.discountAmount).lt(0)) {
       return reply.code(400).send({ error: "Validation error", message: "Discount cannot exceed the subtotal" });
     }
 
-    const quoteNumber = data.quoteNumber?.trim() || (await generateNextQuoteNumber(companyId));
+    let manualQuoteNumber: string | undefined;
+    if (data.quoteNumber?.trim()) {
+      manualQuoteNumber = data.quoteNumber.trim();
+      const validation = await validateManualDocumentNumber(companyId, "quote", manualQuoteNumber);
+      if (!validation.valid) {
+        return reply.code(409).send({ error: "Conflict", message: validation.error });
+      }
+    }
 
     try {
-      const quote = await prisma.clientQuote.create({
-        data: {
-          companyId,
-          clientId: data.clientId || null,
-          prospectName: data.clientId ? null : (data.prospectName?.trim() ?? null),
-          prospectEmail: data.clientId ? null : (data.prospectEmail?.trim() ?? null),
-          prospectPhone: data.clientId ? null : (data.prospectPhone?.trim() ?? null),
-          prospectAddress: data.clientId ? null : (data.prospectAddress?.trim() ?? null),
-          quoteNumber,
-          quoteDate,
-          validUntil,
-          reference: data.reference ?? null,
-          notes: data.notes ?? null,
-          vatRate: toDec(data.vatRate),
-          subtotal: totals.subtotal,
-          discountAmount: totals.discountAmount,
-          vatAmount: totals.vatAmount,
-          totalAmount: totals.totalAmount,
-          items: { create: lines },
-        },
-        include: { client: { select: { id: true, name: true } }, items: { orderBy: { sortOrder: "asc" } } },
+      const quote = await prisma.$transaction(async (tx) => {
+        const finalQuoteNumber =
+          manualQuoteNumber ??
+          (await generateNextQuoteNumber(companyId, {
+            siteId: data.siteId,
+            clientId: data.clientId,
+            tx,
+          }));
+
+        return tx.clientQuote.create({
+          data: {
+            companyId,
+            clientId: data.clientId || null,
+            siteId: data.siteId || null,
+            prospectName: data.clientId ? null : (data.prospectName?.trim() ?? null),
+            prospectEmail: data.clientId ? null : (data.prospectEmail?.trim() ?? null),
+            prospectPhone: data.clientId ? null : (data.prospectPhone?.trim() ?? null),
+            prospectAddress: data.clientId ? null : (data.prospectAddress?.trim() ?? null),
+            quoteNumber: finalQuoteNumber,
+            quoteDate,
+            validUntil,
+            reference: data.reference ?? null,
+            notes: data.notes ?? null,
+            vatRate: toDec(data.vatRate),
+            subtotal: totals.subtotal,
+            discountAmount: totals.discountAmount,
+            vatAmount: totals.vatAmount,
+            totalAmount: totals.totalAmount,
+            items: { create: lines },
+          },
+          include: {
+            client: { select: { id: true, name: true } },
+            site: { select: { id: true, name: true } },
+            items: { orderBy: { sortOrder: "asc" } },
+          },
+        });
       });
 
       await createAuditLog({
@@ -543,8 +757,9 @@ export async function billingRoutes(app: FastifyInstance) {
         entityType: "client_quote",
         entityId: quote.id,
         metadata: {
-          quoteNumber,
+          quoteNumber: quote.quoteNumber,
           clientId: data.clientId || null,
+          siteId: data.siteId || null,
           prospectName: data.prospectName || null,
           totalAmount: decimalJson(totals.totalAmount),
         },
@@ -553,7 +768,7 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.code(201).send(serializeDocument(quote as unknown as Record<string, unknown>));
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-        return reply.code(409).send({ error: "Conflict", message: `Quote number ${quoteNumber} already exists` });
+        return reply.code(409).send({ error: "Conflict", message: `Quote number already exists` });
       }
       throw err;
     }
@@ -565,6 +780,7 @@ export async function billingRoutes(app: FastifyInstance) {
       where: { id, companyId: request.user!.companyId },
       include: {
         client: true,
+        site: { select: { id: true, name: true } },
         items: { orderBy: { sortOrder: "asc" } },
         invoices: { select: { id: true, invoiceNumber: true, status: true } },
       },
@@ -591,8 +807,18 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.code(409).send({ error: "Cannot edit", message: `A ${existing.status} quote cannot be edited` });
     }
 
+    const targetClientId = data.clientId !== undefined ? data.clientId : existing.clientId;
     if (data.clientId && !(await findClient(companyId, data.clientId))) {
       return reply.code(400).send({ error: "Validation error", message: "clientId not found" });
+    }
+
+    if (data.siteId !== undefined && data.siteId !== null) {
+      const site = await prisma.site.findFirst({
+        where: { id: data.siteId, companyId, ...(targetClientId ? { clientId: targetClientId } : {}) },
+      });
+      if (!site) {
+        return reply.code(400).send({ error: "Validation error", message: "siteId not found for this client" });
+      }
     }
 
     const quoteDate = data.quoteDate ? parseDate(data.quoteDate) : existing.quoteDate;
@@ -626,6 +852,7 @@ export async function billingRoutes(app: FastifyInstance) {
         where: { id },
         data: {
           ...(data.clientId !== undefined ? { clientId: data.clientId } : {}),
+          ...(data.siteId !== undefined ? { siteId: data.siteId } : {}),
           ...(data.prospectName !== undefined ? { prospectName: data.prospectName } : {}),
           ...(data.prospectEmail !== undefined ? { prospectEmail: data.prospectEmail } : {}),
           ...(data.prospectPhone !== undefined ? { prospectPhone: data.prospectPhone } : {}),
@@ -641,7 +868,11 @@ export async function billingRoutes(app: FastifyInstance) {
           totalAmount: totals.totalAmount,
           ...(data.items ? { items: { create: lines } } : {}),
         },
-        include: { client: { select: { id: true, name: true } }, items: { orderBy: { sortOrder: "asc" } } },
+        include: {
+          client: { select: { id: true, name: true } },
+          site: { select: { id: true, name: true } },
+          items: { orderBy: { sortOrder: "asc" } },
+        },
       });
     });
 
@@ -738,6 +969,9 @@ export async function billingRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const { force } = request.query as { force?: string };
 
+    const parsedBody = convertQuoteSchema.safeParse(request.body ?? {});
+    const conversionData = parsedBody.success ? parsedBody.data : {};
+
     const quote = await prisma.clientQuote.findFirst({
       where: { id, companyId },
       include: { items: { orderBy: { sortOrder: "asc" } }, client: true, invoices: { select: { id: true } } },
@@ -780,40 +1014,72 @@ export async function billingRoutes(app: FastifyInstance) {
       });
     }
 
+    const targetSiteId = (conversionData.siteId !== undefined ? conversionData.siteId : quote.siteId) ?? null;
+    if (targetSiteId) {
+      const site = await prisma.site.findFirst({
+        where: { id: targetSiteId, companyId, ...(clientId ? { clientId } : {}) },
+      });
+      if (!site) {
+        return reply.code(400).send({ error: "Validation error", message: "siteId not found for this client" });
+      }
+    }
+
+    let manualInvoiceNumber: string | undefined;
+    if (conversionData.invoiceNumber?.trim()) {
+      manualInvoiceNumber = conversionData.invoiceNumber.trim();
+      const validation = await validateManualDocumentNumber(companyId, "invoice", manualInvoiceNumber);
+      if (!validation.valid) {
+        return reply.code(409).send({ error: "Conflict", message: validation.error });
+      }
+    }
+
     const invoiceDate = startOfUtcDay(new Date());
     const dueDate = new Date(invoiceDate);
     dueDate.setUTCDate(dueDate.getUTCDate() + paymentTermsDays);
 
-    const invoiceNumber = await generateNextInvoiceNumber(companyId);
-
     try {
-      const invoice = await prisma.clientInvoice.create({
-        data: {
-          companyId,
-          clientId,
-          quoteId: quote.id,
-          invoiceNumber,
-          invoiceDate,
-          dueDate,
-          reference: quote.reference,
-          notes: quote.notes,
-          vatRate: quote.vatRate,
-          subtotal: quote.subtotal,
-          discountAmount: quote.discountAmount,
-          vatAmount: quote.vatAmount,
-          totalAmount: quote.totalAmount,
-          items: {
-            create: quote.items.map((item) => ({
-              siteId: item.siteId,
-              description: item.description,
-              quantity: item.quantity,
-              unitAmount: item.unitAmount,
-              lineTotal: item.lineTotal,
-              sortOrder: item.sortOrder,
-            })),
+      const invoice = await prisma.$transaction(async (tx) => {
+        const finalInvoiceNumber =
+          manualInvoiceNumber ??
+          (await generateNextInvoiceNumber(companyId, {
+            siteId: targetSiteId,
+            clientId,
+            tx,
+          }));
+
+        return tx.clientInvoice.create({
+          data: {
+            companyId,
+            clientId,
+            siteId: targetSiteId,
+            quoteId: quote.id,
+            invoiceNumber: finalInvoiceNumber,
+            invoiceDate,
+            dueDate,
+            reference: quote.reference,
+            notes: quote.notes,
+            vatRate: quote.vatRate,
+            subtotal: quote.subtotal,
+            discountAmount: quote.discountAmount,
+            vatAmount: quote.vatAmount,
+            totalAmount: quote.totalAmount,
+            items: {
+              create: quote.items.map((item) => ({
+                siteId: item.siteId,
+                description: item.description,
+                quantity: item.quantity,
+                unitAmount: item.unitAmount,
+                lineTotal: item.lineTotal,
+                sortOrder: item.sortOrder,
+              })),
+            },
           },
-        },
-        include: { client: { select: { id: true, name: true } }, items: { orderBy: { sortOrder: "asc" } } },
+          include: {
+            client: { select: { id: true, name: true } },
+            site: { select: { id: true, name: true } },
+            items: { orderBy: { sortOrder: "asc" } },
+          },
+        });
       });
 
       await createAuditLog({
@@ -822,13 +1088,18 @@ export async function billingRoutes(app: FastifyInstance) {
         action: "billing.quote.convert",
         entityType: "client_invoice",
         entityId: invoice.id,
-        metadata: { quoteId: quote.id, quoteNumber: quote.quoteNumber, invoiceNumber },
+        metadata: {
+          quoteId: quote.id,
+          quoteNumber: quote.quoteNumber,
+          invoiceNumber: invoice.invoiceNumber,
+          siteId: targetSiteId,
+        },
       });
 
       return reply.code(201).send(serializeDocument(invoice as unknown as Record<string, unknown>));
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-        return reply.code(409).send({ error: "Conflict", message: `Invoice number ${invoiceNumber} already exists` });
+        return reply.code(409).send({ error: "Conflict", message: `Invoice number already exists` });
       }
       throw err;
     }
@@ -847,7 +1118,10 @@ export async function billingRoutes(app: FastifyInstance) {
     const validUntil = new Date(quoteDate);
     validUntil.setUTCDate(validUntil.getUTCDate() + 30);
 
-    const quoteNumber = await generateNextQuoteNumber(companyId);
+    const quoteNumber = await generateNextQuoteNumber(companyId, {
+      siteId: existing.siteId,
+      clientId: existing.clientId,
+    });
     const lines = existing.items.map((item) => ({
       siteId: item.siteId,
       description: item.description,
@@ -861,6 +1135,7 @@ export async function billingRoutes(app: FastifyInstance) {
       data: {
         companyId,
         clientId: existing.clientId,
+        siteId: existing.siteId,
         prospectName: existing.prospectName,
         prospectEmail: existing.prospectEmail,
         prospectPhone: existing.prospectPhone,
@@ -878,7 +1153,11 @@ export async function billingRoutes(app: FastifyInstance) {
         status: "draft",
         items: { create: lines },
       },
-      include: { client: { select: { id: true, name: true } }, items: { orderBy: { sortOrder: "asc" } } },
+      include: {
+        client: { select: { id: true, name: true } },
+        site: { select: { id: true, name: true } },
+        items: { orderBy: { sortOrder: "asc" } },
+      },
     });
 
     await createAuditLog({
@@ -887,7 +1166,7 @@ export async function billingRoutes(app: FastifyInstance) {
       action: "billing.quote.duplicate",
       entityType: "client_quote",
       entityId: duplicate.id,
-      metadata: { originalQuoteId: existing.id, quoteNumber: duplicate.quoteNumber },
+      metadata: { originalQuoteId: existing.id, quoteNumber: duplicate.quoteNumber, siteId: existing.siteId },
     });
 
     return reply.code(201).send(serializeDocument(duplicate as unknown as Record<string, unknown>));
@@ -910,6 +1189,7 @@ export async function billingRoutes(app: FastifyInstance) {
     const andConditions: Prisma.ClientInvoiceWhereInput[] = [
       { companyId },
       ...(q.clientId ? [{ clientId: q.clientId }] : []),
+      ...(q.siteId ? [{ siteId: q.siteId }] : []),
       ...(q.status ? [{ status: q.status as ClientInvoiceStatus }] : []),
     ];
 
@@ -942,6 +1222,7 @@ export async function billingRoutes(app: FastifyInstance) {
         skip: offset,
         include: {
           client: { select: { id: true, name: true } },
+          site: { select: { id: true, name: true } },
           items: { orderBy: { sortOrder: "asc" } },
           payments: { select: { amount: true } },
         },
@@ -983,6 +1264,15 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "Validation error", message: "clientId not found" });
     }
 
+    if (data.siteId) {
+      const site = await prisma.site.findFirst({
+        where: { id: data.siteId, companyId, clientId: data.clientId },
+      });
+      if (!site) {
+        return reply.code(400).send({ error: "Validation error", message: "siteId not found for this client" });
+      }
+    }
+
     let dueDate: Date;
     if (data.dueDate) {
       const parsedDue = parseDate(data.dueDate);
@@ -1002,26 +1292,48 @@ export async function billingRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: "Validation error", message: "Discount cannot exceed the subtotal" });
     }
 
-    const invoiceNumber = data.invoiceNumber?.trim() || (await generateNextInvoiceNumber(companyId));
+    let manualInvoiceNumber: string | undefined;
+    if (data.invoiceNumber?.trim()) {
+      manualInvoiceNumber = data.invoiceNumber.trim();
+      const validation = await validateManualDocumentNumber(companyId, "invoice", manualInvoiceNumber);
+      if (!validation.valid) {
+        return reply.code(409).send({ error: "Conflict", message: validation.error });
+      }
+    }
 
     try {
-      const invoice = await prisma.clientInvoice.create({
-        data: {
-          companyId,
-          clientId: data.clientId,
-          invoiceNumber,
-          invoiceDate,
-          dueDate,
-          reference: data.reference ?? null,
-          notes: data.notes ?? null,
-          vatRate: toDec(data.vatRate),
-          subtotal: totals.subtotal,
-          discountAmount: totals.discountAmount,
-          vatAmount: totals.vatAmount,
-          totalAmount: totals.totalAmount,
-          items: { create: lines },
-        },
-        include: { client: { select: { id: true, name: true } }, items: { orderBy: { sortOrder: "asc" } } },
+      const invoice = await prisma.$transaction(async (tx) => {
+        const finalInvoiceNumber =
+          manualInvoiceNumber ??
+          (await generateNextInvoiceNumber(companyId, {
+            siteId: data.siteId,
+            clientId: data.clientId,
+            tx,
+          }));
+
+        return tx.clientInvoice.create({
+          data: {
+            companyId,
+            clientId: data.clientId,
+            siteId: data.siteId || null,
+            invoiceNumber: finalInvoiceNumber,
+            invoiceDate,
+            dueDate,
+            reference: data.reference ?? null,
+            notes: data.notes ?? null,
+            vatRate: toDec(data.vatRate),
+            subtotal: totals.subtotal,
+            discountAmount: totals.discountAmount,
+            vatAmount: totals.vatAmount,
+            totalAmount: totals.totalAmount,
+            items: { create: lines },
+          },
+          include: {
+            client: { select: { id: true, name: true } },
+            site: { select: { id: true, name: true } },
+            items: { orderBy: { sortOrder: "asc" } },
+          },
+        });
       });
 
       await createAuditLog({
@@ -1030,13 +1342,18 @@ export async function billingRoutes(app: FastifyInstance) {
         action: "billing.invoice.create",
         entityType: "client_invoice",
         entityId: invoice.id,
-        metadata: { invoiceNumber, clientId: data.clientId, totalAmount: decimalJson(totals.totalAmount) },
+        metadata: {
+          invoiceNumber: invoice.invoiceNumber,
+          clientId: data.clientId,
+          siteId: data.siteId || null,
+          totalAmount: decimalJson(totals.totalAmount),
+        },
       });
 
       return reply.code(201).send(serializeDocument(invoice as unknown as Record<string, unknown>));
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-        return reply.code(409).send({ error: "Conflict", message: `Invoice number ${invoiceNumber} already exists` });
+        return reply.code(409).send({ error: "Conflict", message: `Invoice number already exists` });
       }
       throw err;
     }
@@ -1048,6 +1365,7 @@ export async function billingRoutes(app: FastifyInstance) {
       where: { id, companyId: request.user!.companyId },
       include: {
         client: true,
+        site: { select: { id: true, name: true } },
         items: { orderBy: { sortOrder: "asc" } },
         payments: { orderBy: { paymentDate: "desc" }, include: { receipt: true } },
         quote: { select: { id: true, quoteNumber: true } },
@@ -1085,8 +1403,18 @@ export async function billingRoutes(app: FastifyInstance) {
         .send({ error: "Cannot edit", message: `A ${existing.status} invoice cannot be edited` });
     }
 
+    const targetClientId = data.clientId !== undefined ? data.clientId : existing.clientId;
     if (data.clientId && !(await findClient(companyId, data.clientId))) {
       return reply.code(400).send({ error: "Validation error", message: "clientId not found" });
+    }
+
+    if (data.siteId !== undefined && data.siteId !== null) {
+      const site = await prisma.site.findFirst({
+        where: { id: data.siteId, companyId, clientId: targetClientId },
+      });
+      if (!site) {
+        return reply.code(400).send({ error: "Validation error", message: "siteId not found for this client" });
+      }
     }
 
     const invoiceDate = data.invoiceDate ? parseDate(data.invoiceDate) : existing.invoiceDate;
@@ -1123,6 +1451,7 @@ export async function billingRoutes(app: FastifyInstance) {
         where: { id },
         data: {
           ...(data.clientId ? { clientId: data.clientId } : {}),
+          ...(data.siteId !== undefined ? { siteId: data.siteId } : {}),
           invoiceDate,
           dueDate,
           ...(data.reference !== undefined ? { reference: data.reference } : {}),
@@ -1134,7 +1463,11 @@ export async function billingRoutes(app: FastifyInstance) {
           totalAmount: totals.totalAmount,
           ...(data.items ? { items: { create: lines } } : {}),
         },
-        include: { client: { select: { id: true, name: true } }, items: { orderBy: { sortOrder: "asc" } } },
+        include: {
+          client: { select: { id: true, name: true } },
+          site: { select: { id: true, name: true } },
+          items: { orderBy: { sortOrder: "asc" } },
+        },
       });
     });
 
@@ -1258,7 +1591,10 @@ export async function billingRoutes(app: FastifyInstance) {
     const dueDate = new Date(invoiceDate);
     dueDate.setUTCDate(dueDate.getUTCDate() + (existing.client.paymentTermsDays ?? 30));
 
-    const invoiceNumber = await generateNextInvoiceNumber(companyId);
+    const invoiceNumber = await generateNextInvoiceNumber(companyId, {
+      siteId: existing.siteId,
+      clientId: existing.clientId,
+    });
     const lines = existing.items.map((item) => ({
       siteId: item.siteId,
       description: item.description,
@@ -1272,6 +1608,7 @@ export async function billingRoutes(app: FastifyInstance) {
       data: {
         companyId,
         clientId: existing.clientId,
+        siteId: existing.siteId,
         invoiceNumber,
         invoiceDate,
         dueDate,
@@ -1285,7 +1622,11 @@ export async function billingRoutes(app: FastifyInstance) {
         status: "draft",
         items: { create: lines },
       },
-      include: { client: { select: { id: true, name: true } }, items: { orderBy: { sortOrder: "asc" } } },
+      include: {
+        client: { select: { id: true, name: true } },
+        site: { select: { id: true, name: true } },
+        items: { orderBy: { sortOrder: "asc" } },
+      },
     });
 
     await createAuditLog({
@@ -1294,7 +1635,7 @@ export async function billingRoutes(app: FastifyInstance) {
       action: "billing.invoice.duplicate",
       entityType: "client_invoice",
       entityId: duplicate.id,
-      metadata: { originalInvoiceId: existing.id, invoiceNumber: duplicate.invoiceNumber },
+      metadata: { originalInvoiceId: existing.id, invoiceNumber: duplicate.invoiceNumber, siteId: existing.siteId },
     });
 
     return reply.code(201).send(serializeDocument(duplicate as unknown as Record<string, unknown>));

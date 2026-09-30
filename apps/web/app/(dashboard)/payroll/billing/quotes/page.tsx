@@ -13,6 +13,7 @@ import {
   exportQuotesToCsv,
   listBillableClients,
   listQuotes,
+  previewDocumentNumber,
   type BillableClient,
   type Quote,
   type QuoteStatus,
@@ -52,6 +53,7 @@ export default function QuotesPage() {
   const [status, setStatus] = useState<QuoteStatus | "all">("all");
   const [search, setSearch] = useState("");
   const [clientFilter, setClientFilter] = useState("");
+  const [siteFilter, setSiteFilter] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -63,6 +65,12 @@ export default function QuotesPage() {
   const [saving, setSaving] = useState(false);
   const [clientMode, setClientMode] = useState<"existing" | "prospect">("existing");
   const [clientId, setClientId] = useState("");
+  const [siteId, setSiteId] = useState("");
+  const [numberingMode, setNumberingMode] = useState<"auto" | "manual">("auto");
+  const [manualQuoteNumber, setManualQuoteNumber] = useState("");
+  const [nextQuoteNumberPreview, setNextQuoteNumberPreview] = useState("");
+  const [loadingPreview, setLoadingPreview] = useState(false);
+
   const [prospectName, setProspectName] = useState("");
   const [prospectEmail, setProspectEmail] = useState("");
   const [prospectPhone, setProspectPhone] = useState("");
@@ -84,6 +92,7 @@ export default function QuotesPage() {
         listQuotes(token, {
           ...(status === "all" ? {} : { status }),
           ...(clientFilter ? { clientId: clientFilter } : {}),
+          ...(siteFilter ? { siteId: siteFilter } : {}),
           ...(search.trim() ? { search: search.trim() } : {}),
           ...(fromDate ? { from: fromDate } : {}),
           ...(toDate ? { to: toDate } : {}),
@@ -97,9 +106,36 @@ export default function QuotesPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, canView, status, clientFilter, search, fromDate, toDate]);
+  }, [token, canView, status, clientFilter, siteFilter, search, fromDate, toDate]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Preview quote number dynamically based on selected client & site
+  useEffect(() => {
+    if (!showForm || !token) return;
+    if (clientMode === "existing" && !clientId) {
+      setNextQuoteNumberPreview("");
+      return;
+    }
+    let cancelled = false;
+    setLoadingPreview(true);
+    previewDocumentNumber(token, "quote", {
+      clientId: clientMode === "existing" ? clientId : null,
+      siteId: clientMode === "existing" && siteId ? siteId : null,
+    })
+      .then((res) => {
+        if (!cancelled) setNextQuoteNumberPreview(res.nextNumber);
+      })
+      .catch(() => {
+        if (!cancelled) setNextQuoteNumberPreview("");
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPreview(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, showForm, clientMode, clientId, siteId]);
 
   if (user && !canView) {
     return <BillingAccessRestricted />;
@@ -128,6 +164,10 @@ export default function QuotesPage() {
   const resetForm = () => {
     setClientMode("existing");
     setClientId("");
+    setSiteId("");
+    setNumberingMode("auto");
+    setManualQuoteNumber("");
+    setNextQuoteNumberPreview("");
     setProspectName("");
     setProspectEmail("");
     setProspectPhone("");
@@ -153,6 +193,10 @@ export default function QuotesPage() {
       setError("Enter the business name for the potential client.");
       return;
     }
+    if (numberingMode === "manual" && !manualQuoteNumber.trim()) {
+      setError("Please enter a manual quote number.");
+      return;
+    }
     if (usable.length === 0) {
       setError("Add at least one line item.");
       return;
@@ -162,6 +206,8 @@ export default function QuotesPage() {
     try {
       await createQuote(token, {
         clientId: clientMode === "existing" ? clientId : null,
+        siteId: clientMode === "existing" && siteId ? siteId : null,
+        quoteNumber: numberingMode === "manual" && manualQuoteNumber.trim() ? manualQuoteNumber.trim() : undefined,
         prospectName: clientMode === "prospect" ? prospectName.trim() : null,
         prospectEmail: clientMode === "prospect" && prospectEmail.trim() ? prospectEmail.trim() : null,
         prospectPhone: clientMode === "prospect" && prospectPhone.trim() ? prospectPhone.trim() : null,
@@ -294,12 +340,15 @@ export default function QuotesPage() {
             </div>
 
             {clientMode === "existing" ? (
-              <div>
+              <div className="space-y-3">
                 <label className="block">
                   <span className="label-text mb-1 block">Choose Existing Client <span className="text-red-500">*</span></span>
                   <select
                     value={clientId}
-                    onChange={(e) => setClientId(e.target.value)}
+                    onChange={(e) => {
+                      setClientId(e.target.value);
+                      setSiteId("");
+                    }}
                     className="input-modern w-full"
                     required={clientMode === "existing"}
                     id="new-quote-client"
@@ -308,6 +357,29 @@ export default function QuotesPage() {
                     {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </label>
+
+                {(() => {
+                  const selClient = clients.find((c) => c.id === clientId);
+                  if (!selClient?.sites || selClient.sites.length === 0) return null;
+                  return (
+                    <label className="block">
+                      <span className="label-text mb-1 block">Site (optional)</span>
+                      <select
+                        value={siteId}
+                        onChange={(e) => setSiteId(e.target.value)}
+                        className="input-modern w-full"
+                        id="new-quote-site"
+                      >
+                        <option value="">All Sites / Client-wide</option>
+                        {selClient.sites.map((s) => (
+                          <option key={s.siteId} value={s.siteId}>
+                            {s.siteName}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  );
+                })()}
               </div>
             ) : (
               <div className="space-y-3">
@@ -364,6 +436,66 @@ export default function QuotesPage() {
             )}
           </div>
 
+          {/* Quote Numbering Section */}
+          <div className="rounded-security-md border border-security-navy-200 bg-security-navy-50/70 p-3.5 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-security-navy-700">Quote Numbering</span>
+              <div className="inline-flex rounded-security bg-security-navy-200/60 p-0.5" role="radiogroup" aria-label="Quote numbering mode">
+                <button
+                  type="button"
+                  onClick={() => setNumberingMode("auto")}
+                  className={clsx(
+                    "px-3 py-1 text-xs font-semibold rounded-security transition-all",
+                    numberingMode === "auto"
+                      ? "bg-white text-security-navy-900 shadow-sm"
+                      : "text-security-navy-600 hover:text-security-navy-900"
+                  )}
+                  id="quote-number-mode-auto"
+                >
+                  ● Automatic
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNumberingMode("manual")}
+                  className={clsx(
+                    "px-3 py-1 text-xs font-semibold rounded-security transition-all",
+                    numberingMode === "manual"
+                      ? "bg-white text-security-navy-900 shadow-sm"
+                      : "text-security-navy-600 hover:text-security-navy-900"
+                  )}
+                  id="quote-number-mode-manual"
+                >
+                  ○ Manual
+                </button>
+              </div>
+            </div>
+
+            {numberingMode === "auto" ? (
+              <div className="flex items-center justify-between rounded-security border border-security-navy-200 bg-white px-3 py-2 text-xs">
+                <span className="text-security-navy-600">Next number to be generated:</span>
+                <span className="font-mono font-bold text-security-amber-700">
+                  {loadingPreview ? "Checking…" : nextQuoteNumberPreview || "Generated on save (e.g. QT-0001)"}
+                </span>
+              </div>
+            ) : (
+              <label className="block">
+                <span className="label-text mb-1 block">Manual Quote Number <span className="text-red-500">*</span></span>
+                <input
+                  type="text"
+                  value={manualQuoteNumber}
+                  onChange={(e) => setManualQuoteNumber(e.target.value)}
+                  placeholder="e.g. QBS-WOL-0045"
+                  className="input-modern w-full font-mono text-sm"
+                  required={numberingMode === "manual"}
+                  id="manual-quote-number"
+                />
+                <span className="text-[10px] text-security-navy-500 mt-1 block">
+                  Must be unique across the company.
+                </span>
+              </label>
+            )}
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="block">
               <span className="label-text mb-1.5 block">Quote date</span>
@@ -410,16 +542,44 @@ export default function QuotesPage() {
 
       {/* Filter toolbar */}
       <div className="space-y-3 rounded-security-lg border border-security-navy-100 bg-white p-4 shadow-security-card">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <label className="block">
             <span className="label-text mb-1 block">Search</span>
             <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Quote #, client, reference…" className="input-modern w-full" id="quote-search" />
           </label>
           <label className="block">
             <span className="label-text mb-1 block">Client</span>
-            <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className="input-modern w-full" id="quote-client-filter">
+            <select
+              value={clientFilter}
+              onChange={(e) => {
+                setClientFilter(e.target.value);
+                setSiteFilter("");
+              }}
+              className="input-modern w-full"
+              id="quote-client-filter"
+            >
               <option value="">All clients</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="label-text mb-1 block">Site</span>
+            <select
+              value={siteFilter}
+              onChange={(e) => setSiteFilter(e.target.value)}
+              className="input-modern w-full"
+              disabled={!clientFilter}
+              id="quote-site-filter"
+            >
+              <option value="">All Sites</option>
+              {(() => {
+                const sel = clients.find((c) => c.id === clientFilter);
+                return sel?.sites?.map((s) => (
+                  <option key={s.siteId} value={s.siteId}>
+                    {s.siteName}
+                  </option>
+                ));
+              })()}
             </select>
           </label>
           <label className="block">
@@ -444,7 +604,16 @@ export default function QuotesPage() {
             ))}
           </div>
           {hasActiveFilters && (
-            <button type="button" onClick={resetFilters} className="text-xs font-semibold text-security-navy-500 hover:underline">Reset filters</button>
+            <button
+              type="button"
+              onClick={() => {
+                resetFilters();
+                setSiteFilter("");
+              }}
+              className="text-xs font-semibold text-security-navy-500 hover:underline"
+            >
+              Reset filters
+            </button>
           )}
         </div>
       </div>
@@ -486,11 +655,16 @@ export default function QuotesPage() {
                       {quote.reference && <p className="text-[11px] text-security-navy-500">{quote.reference}</p>}
                     </td>
                     <td className="px-4 py-3 font-medium text-security-navy-800">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span>{quote.client?.name || quote.prospectName || "—"}</span>
                         {!quote.clientId && quote.prospectName && (
                           <span className="inline-flex items-center rounded-full bg-security-amber-50 px-2 py-0.5 text-[10px] font-semibold text-security-amber-700 ring-1 ring-inset ring-security-amber-600/20">
                             Potential
+                          </span>
+                        )}
+                        {quote.site?.name && (
+                          <span className="inline-flex items-center rounded bg-security-navy-100 px-1.5 py-0.5 text-[10px] font-medium text-security-navy-700">
+                            📍 {quote.site.name}
                           </span>
                         )}
                       </div>

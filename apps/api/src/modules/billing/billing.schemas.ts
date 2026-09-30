@@ -41,6 +41,7 @@ const documentBase = {
 export const createQuoteSchema = z
   .object({
     clientId: z.string().min(1).optional().nullable(),
+    siteId: z.string().min(1).optional().nullable(),
     prospectName: z.string().max(250).optional().nullable(),
     prospectEmail: z.string().max(250).optional().nullable(),
     prospectPhone: z.string().max(50).optional().nullable(),
@@ -50,7 +51,7 @@ export const createQuoteSchema = z
     discountAmount: money.optional().default(0),
     vatRate: money.optional().default(15),
     items: z.array(lineSchema).min(1),
-    quoteNumber: z.string().max(50).optional(),
+    quoteNumber: z.string().max(50).optional().nullable(),
     quoteDate: z.string().min(1),
     validUntil: z.string().min(1),
   })
@@ -61,6 +62,7 @@ export const createQuoteSchema = z
 
 export const updateQuoteSchema = z.object({
   clientId: z.string().min(1).optional().nullable(),
+  siteId: z.string().min(1).optional().nullable(),
   prospectName: z.string().max(250).optional().nullable(),
   prospectEmail: z.string().max(250).optional().nullable(),
   prospectPhone: z.string().max(50).optional().nullable(),
@@ -76,7 +78,8 @@ export const updateQuoteSchema = z.object({
 
 export const createInvoiceSchema = z.object({
   ...documentBase,
-  invoiceNumber: z.string().max(50).optional(),
+  siteId: z.string().min(1).optional().nullable(),
+  invoiceNumber: z.string().max(50).optional().nullable(),
   invoiceDate: z.string().min(1),
   /** Omit to derive from the client's paymentTermsDays. */
   dueDate: z.string().optional(),
@@ -84,6 +87,7 @@ export const createInvoiceSchema = z.object({
 
 export const updateInvoiceSchema = z.object({
   clientId: z.string().min(1).optional(),
+  siteId: z.string().min(1).optional().nullable(),
   reference: z.string().max(200).optional().nullable(),
   notes: z.string().max(5000).optional().nullable(),
   discountAmount: money.optional(),
@@ -126,6 +130,38 @@ export const configureSiteBillingRateSchema = z.object({
       z.string().max(2000).nullable()
     )
     .optional(),
+});
+
+export const configureSiteBillingNumberingSchema = z.object({
+  quotePrefix: z
+    .preprocess(
+      (val) => (val === "" || val === undefined ? null : val),
+      z.string().max(30).nullable()
+    )
+    .optional(),
+  quoteStartingNumber: z.coerce.number().int().min(1).default(1),
+  quoteNextNumber: z.coerce.number().int().min(1).optional(),
+  quotePadding: z.coerce.number().int().min(1).max(10).default(4),
+  invoicePrefix: z
+    .preprocess(
+      (val) => (val === "" || val === undefined ? null : val),
+      z.string().max(30).nullable()
+    )
+    .optional(),
+  invoiceStartingNumber: z.coerce.number().int().min(1).default(1),
+  invoiceNextNumber: z.coerce.number().int().min(1).optional(),
+  invoicePadding: z.coerce.number().int().min(1).max(10).default(4),
+});
+
+export const previewNumberQuerySchema = z.object({
+  kind: z.enum(["quote", "invoice"]),
+  clientId: z.string().optional().nullable(),
+  siteId: z.string().optional().nullable(),
+});
+
+export const convertQuoteSchema = z.object({
+  invoiceNumber: z.string().max(50).optional().nullable(),
+  siteId: z.string().min(1).optional().nullable(),
 });
 
 /** Serializes a quote/invoice row, converting every Decimal field to a string. */

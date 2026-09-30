@@ -12,10 +12,13 @@ import {
   declineQuote,
   duplicateQuote,
   downloadQuotePdf,
+  getClientSitesBilling,
+  previewDocumentNumber,
   previewQuotePdf,
   getQuote,
   issueQuote,
   type Quote,
+  type SiteBillingSummary,
 } from "@/lib/billing-api";
 import { currencyFromSettings, formatCurrency } from "@/lib/currency";
 import { StatusBadge } from "../../_components/status-badge";
@@ -105,6 +108,16 @@ export default function QuoteDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // Convert to Invoice Modal State
+  const [showConvertModal, setShowConvertModal] = useState(false);
+  const [clientSites, setClientSites] = useState<SiteBillingSummary[]>([]);
+  const [convertSiteId, setConvertSiteId] = useState("");
+  const [convertNumberingMode, setConvertNumberingMode] = useState<"auto" | "manual">("auto");
+  const [convertManualNumber, setConvertManualNumber] = useState("");
+  const [convertNumberPreview, setConvertNumberPreview] = useState("");
+  const [convertLoadingPreview, setConvertLoadingPreview] = useState(false);
+  const [convertError, setConvertError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     if (!token || !canView) return;
     setLoading(true);
@@ -120,6 +133,44 @@ export default function QuoteDetailPage() {
 
   useEffect(() => { void load(); }, [load]);
 
+  // Load client sites if the quote is linked to an existing client
+  useEffect(() => {
+    if (!token || !quote?.clientId) {
+      setClientSites([]);
+      return;
+    }
+    getClientSitesBilling(token, quote.clientId)
+      .then((res) => {
+        setClientSites(res.sites || []);
+      })
+      .catch(() => {
+        setClientSites([]);
+      });
+  }, [token, quote?.clientId]);
+
+  // Live preview for invoice number when convert modal is open
+  useEffect(() => {
+    if (!showConvertModal || !token) return;
+    let cancelled = false;
+    setConvertLoadingPreview(true);
+    previewDocumentNumber(token, "invoice", {
+      clientId: quote?.clientId || null,
+      siteId: convertSiteId || null,
+    })
+      .then((res) => {
+        if (!cancelled) setConvertNumberPreview(res.nextNumber);
+      })
+      .catch(() => {
+        if (!cancelled) setConvertNumberPreview("");
+      })
+      .finally(() => {
+        if (!cancelled) setConvertLoadingPreview(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showConvertModal, token, quote?.clientId, convertSiteId]);
+
   const run = async (fn: () => Promise<unknown>, msg?: string) => {
     setBusy(true);
     setError(null);
@@ -134,15 +185,32 @@ export default function QuoteDetailPage() {
     }
   };
 
-  const convert = async () => {
+  const openConvertModal = () => {
+    setConvertSiteId(quote?.siteId || "");
+    setConvertNumberingMode("auto");
+    setConvertManualNumber("");
+    setConvertError(null);
+    setShowConvertModal(true);
+  };
+
+  const executeConvert = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!token || !quote) return;
+    if (convertNumberingMode === "manual" && !convertManualNumber.trim()) {
+      setConvertError("Please enter a manual invoice number.");
+      return;
+    }
     setBusy(true);
-    setError(null);
+    setConvertError(null);
     try {
-      const invoice = await convertQuoteToInvoice(token, quote.id);
+      const invoice = await convertQuoteToInvoice(token, quote.id, {
+        siteId: convertSiteId || null,
+        invoiceNumber: convertNumberingMode === "manual" ? convertManualNumber.trim() : undefined,
+      });
+      setShowConvertModal(false);
       router.push(`/payroll/billing/invoices/${invoice.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to convert quote to invoice");
+      setConvertError(err instanceof Error ? err.message : "Failed to convert quote to invoice");
     } finally {
       setBusy(false);
     }
@@ -193,6 +261,11 @@ export default function QuoteDetailPage() {
                   Potential Client
                 </span>
               )}
+              {quote.site?.name && (
+                <span className="inline-flex items-center rounded-full bg-security-navy-100 px-2 py-0.5 text-[10px] font-medium text-security-navy-700">
+                  📍 {quote.site.name}
+                </span>
+              )}
               <span>· Valid until{" "}
                 <span className={new Date(quote.validUntil) < new Date() ? "font-semibold text-red-600" : ""}>
                   {new Date(quote.validUntil).toLocaleDateString("en-ZA", { year: "numeric", month: "short", day: "numeric" })}
@@ -230,7 +303,7 @@ export default function QuoteDetailPage() {
               </>
             )}
             {canCreate && quote.status === "accepted" && !convertedInvoice && (
-              <button type="button" disabled={busy} onClick={convert} className="btn-amber min-h-10">
+              <button type="button" disabled={busy} onClick={openConvertModal} className="btn-amber min-h-10">
                 Convert to Invoice →
               </button>
             )}
@@ -302,9 +375,165 @@ export default function QuoteDetailPage() {
               Converting will automatically onboard <strong>{quote.prospectName}</strong> as a client record in your system.
             </p>
           )}
-          <button type="button" disabled={busy} onClick={convert} className="btn-amber">
+          <button type="button" disabled={busy} onClick={openConvertModal} className="btn-amber">
             {busy ? "Converting…" : "Convert to Invoice →"}
           </button>
+        </div>
+      )}
+
+      {/* Convert to Invoice Modal */}
+      {showConvertModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs animate-fade-in"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="convert-modal-title"
+        >
+          <div className="w-full max-w-lg rounded-security-lg border border-security-navy-200 bg-white p-6 shadow-xl space-y-5 animate-scale-in">
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 id="convert-modal-title" className="text-lg font-bold text-security-navy-900">
+                  Convert Quote to Tax Invoice
+                </h2>
+                <p className="text-xs text-security-navy-500 mt-0.5">
+                  Quote <span className="font-mono font-semibold text-security-navy-700">{quote.quoteNumber}</span> → New Invoice
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConvertModal(false)}
+                className="text-security-navy-400 hover:text-security-navy-600 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {convertError && (
+              <div className="rounded-security-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                {convertError}
+              </div>
+            )}
+
+            <form onSubmit={executeConvert} className="space-y-4">
+              {/* Client & Target Site */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-security-navy-700">
+                  Target Client
+                </label>
+                <div className="rounded-security border border-security-navy-100 bg-security-navy-50/50 px-3 py-2 text-sm text-security-navy-900 font-medium">
+                  {quote.client?.name || quote.prospectName || "—"}
+                  {!quote.clientId && (
+                    <span className="ml-2 text-xs text-security-amber-700">
+                      (Will be created as a new billable client)
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {clientSites.length > 0 && (
+                <label className="block">
+                  <span className="label-text mb-1.5 block">Target Site (optional)</span>
+                  <select
+                    value={convertSiteId}
+                    onChange={(e) => setConvertSiteId(e.target.value)}
+                    className="input-modern w-full"
+                    id="convert-target-site"
+                  >
+                    <option value="">All Sites / Client-wide</option>
+                    {clientSites.map((s) => (
+                      <option key={s.siteId} value={s.siteId}>
+                        {s.siteName}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="mt-1 block text-[11px] text-security-navy-500">
+                    Selecting a site applies that site's invoice prefix and sequence configuration.
+                  </span>
+                </label>
+              )}
+
+              {/* Invoice Numbering Section */}
+              <div className="rounded-security-md border border-security-navy-200 bg-security-navy-50/70 p-3.5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-security-navy-700">
+                    Invoice Numbering
+                  </span>
+                  <div className="inline-flex rounded-security bg-security-navy-200/60 p-0.5" role="radiogroup" aria-label="Invoice numbering mode">
+                    <button
+                      type="button"
+                      onClick={() => setConvertNumberingMode("auto")}
+                      className={clsx(
+                        "px-3 py-1 text-xs font-semibold rounded-security transition-all",
+                        convertNumberingMode === "auto"
+                          ? "bg-white text-security-navy-900 shadow-sm"
+                          : "text-security-navy-600 hover:text-security-navy-900"
+                      )}
+                      id="convert-number-mode-auto"
+                    >
+                      ● Automatic
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConvertNumberingMode("manual")}
+                      className={clsx(
+                        "px-3 py-1 text-xs font-semibold rounded-security transition-all",
+                        convertNumberingMode === "manual"
+                          ? "bg-white text-security-navy-900 shadow-sm"
+                          : "text-security-navy-600 hover:text-security-navy-900"
+                      )}
+                      id="convert-number-mode-manual"
+                    >
+                      ○ Manual
+                    </button>
+                  </div>
+                </div>
+
+                {convertNumberingMode === "auto" ? (
+                  <div className="flex items-center justify-between rounded-security border border-security-navy-200 bg-white px-3 py-2 text-xs">
+                    <span className="text-security-navy-600">Next number to be generated:</span>
+                    <span className="font-mono font-bold text-security-amber-700">
+                      {convertLoadingPreview ? "Checking…" : convertNumberPreview || "Generated on save (e.g. INV-0001)"}
+                    </span>
+                  </div>
+                ) : (
+                  <label className="block">
+                    <span className="label-text mb-1 block">Manual Invoice Number <span className="text-red-500">*</span></span>
+                    <input
+                      type="text"
+                      value={convertManualNumber}
+                      onChange={(e) => setConvertManualNumber(e.target.value)}
+                      placeholder="e.g. INV-WOL-0027"
+                      className="input-modern w-full font-mono text-sm"
+                      required={convertNumberingMode === "manual"}
+                      id="convert-manual-number"
+                    />
+                    <span className="mt-1 block text-[11px] text-security-navy-500">
+                      Specify a custom or historical invoice number. It will be validated to prevent collisions.
+                    </span>
+                  </label>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowConvertModal(false)}
+                  disabled={busy}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="btn-amber"
+                  id="confirm-convert-btn"
+                >
+                  {busy ? "Converting…" : "Confirm & Create Invoice"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </main>

@@ -13,6 +13,7 @@ import {
   exportInvoicesToCsv,
   listBillableClients,
   listInvoices,
+  previewDocumentNumber,
   type BillableClient,
   type Invoice,
   type InvoiceStatus,
@@ -70,6 +71,7 @@ export default function InvoicesPage() {
   const [status, setStatus] = useState<InvoiceStatus | "all">("all");
   const [search, setSearch] = useState("");
   const [clientFilter, setClientFilter] = useState("");
+  const [siteFilter, setSiteFilter] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -80,6 +82,12 @@ export default function InvoicesPage() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [clientId, setClientId] = useState("");
+  const [siteId, setSiteId] = useState("");
+  const [numberingMode, setNumberingMode] = useState<"auto" | "manual">("auto");
+  const [manualInvoiceNumber, setManualInvoiceNumber] = useState("");
+  const [nextInvoiceNumberPreview, setNextInvoiceNumberPreview] = useState("");
+  const [loadingPreview, setLoadingPreview] = useState(false);
+
   const [invoiceDate, setInvoiceDate] = useState(today);
   const [dueDate, setDueDate] = useState("");
   const [reference, setReference] = useState("");
@@ -97,6 +105,7 @@ export default function InvoicesPage() {
         listInvoices(token, {
           ...(status === "all" ? {} : { status }),
           ...(clientFilter ? { clientId: clientFilter } : {}),
+          ...(siteFilter ? { siteId: siteFilter } : {}),
           ...(search.trim() ? { search: search.trim() } : {}),
           ...(fromDate ? { from: fromDate } : {}),
           ...(toDate ? { to: toDate } : {}),
@@ -110,9 +119,35 @@ export default function InvoicesPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, canView, status, clientFilter, search, fromDate, toDate]);
+  }, [token, canView, status, clientFilter, siteFilter, search, fromDate, toDate]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Preview invoice number dynamically based on selected client & site
+  useEffect(() => {
+    if (!showForm || !token || !clientId) {
+      setNextInvoiceNumberPreview("");
+      return;
+    }
+    let cancelled = false;
+    setLoadingPreview(true);
+    previewDocumentNumber(token, "invoice", {
+      clientId,
+      siteId: siteId || null,
+    })
+      .then((res) => {
+        if (!cancelled) setNextInvoiceNumberPreview(res.nextNumber);
+      })
+      .catch(() => {
+        if (!cancelled) setNextInvoiceNumberPreview("");
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPreview(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, showForm, clientId, siteId]);
 
   if (user && !canView) {
     return <BillingAccessRestricted />;
@@ -126,24 +161,48 @@ export default function InvoicesPage() {
   const totalDue = invoices.reduce((acc, inv) => acc + Number(inv.amountDue ?? inv.totalAmount), 0);
   const totalPaid = invoices.reduce((acc, inv) => acc + Number(inv.amountPaid ?? 0), 0);
 
+  const resetForm = () => {
+    setClientId("");
+    setSiteId("");
+    setNumberingMode("auto");
+    setManualInvoiceNumber("");
+    setNextInvoiceNumberPreview("");
+    setInvoiceDate(today());
+    setDueDate("");
+    setReference("");
+    setNotes("");
+    setDiscount("0.00");
+    setVatRate("15");
+    setLines([emptyLine()]);
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
     const usable = lines.filter((l) => l.description.trim() !== "");
     if (!clientId) { setError("Select a client for this invoice."); return; }
+    if (numberingMode === "manual" && !manualInvoiceNumber.trim()) {
+      setError("Please enter a manual invoice number.");
+      return;
+    }
     if (usable.length === 0) { setError("Add at least one line item."); return; }
     setSaving(true);
     setError(null);
     try {
       await createInvoice(token, {
-        clientId, invoiceDate,
+        clientId,
+        siteId: siteId || null,
+        invoiceNumber: numberingMode === "manual" && manualInvoiceNumber.trim() ? manualInvoiceNumber.trim() : undefined,
+        invoiceDate,
         ...(dueDate ? { dueDate } : {}),
         reference: reference || null,
         notes: notes || null,
-        discountAmount: discount, vatRate, items: usable,
+        discountAmount: discount,
+        vatRate,
+        items: usable,
       });
-      setClientId(""); setInvoiceDate(today()); setDueDate(""); setReference("");
-      setNotes(""); setDiscount("0.00"); setVatRate("15"); setLines([emptyLine()]); setShowForm(false);
+      resetForm();
+      setShowForm(false);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create invoice");
@@ -159,8 +218,8 @@ export default function InvoicesPage() {
     finally { setActionLoadingId(null); }
   };
 
-  const hasActiveFilters = Boolean(status !== "all" || search.trim() || clientFilter || fromDate || toDate);
-  const resetFilters = () => { setStatus("all"); setSearch(""); setClientFilter(""); setFromDate(""); setToDate(""); };
+  const hasActiveFilters = Boolean(status !== "all" || search.trim() || clientFilter || siteFilter || fromDate || toDate);
+  const resetFilters = () => { setStatus("all"); setSearch(""); setClientFilter(""); setSiteFilter(""); setFromDate(""); setToDate(""); };
 
   return (
     <main className="animate-fade-in space-y-5 pb-16">
@@ -236,26 +295,123 @@ export default function InvoicesPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-security-navy-900">New Invoice</h2>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <label className="block">
-              <span className="label-text mb-1.5 block">Client</span>
-              <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="input-modern w-full" required id="new-invoice-client">
-                <option value="">Select client…</option>
-                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </label>
-            <label className="block">
-              <span className="label-text mb-1.5 block">Invoice date</span>
-              <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className="input-modern w-full" required id="new-invoice-date" />
-            </label>
-            <label className="block">
-              <span className="label-text mb-1.5 block">Due date</span>
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="input-modern w-full" id="new-invoice-due-date" />
-            </label>
-            <label className="block">
-              <span className="label-text mb-1.5 block">Reference</span>
-              <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Optional" className="input-modern w-full" id="new-invoice-ref" />
-            </label>
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <label className="block">
+                <span className="label-text mb-1.5 block">Client <span className="text-red-500">*</span></span>
+                <select
+                  value={clientId}
+                  onChange={(e) => {
+                    setClientId(e.target.value);
+                    setSiteId("");
+                  }}
+                  className="input-modern w-full"
+                  required
+                  id="new-invoice-client"
+                >
+                  <option value="">Select client…</option>
+                  {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </label>
+
+              {(() => {
+                const selClient = clients.find((c) => c.id === clientId);
+                if (!selClient?.sites || selClient.sites.length === 0) return null;
+                return (
+                  <label className="block">
+                    <span className="label-text mb-1.5 block">Site (optional)</span>
+                    <select
+                      value={siteId}
+                      onChange={(e) => setSiteId(e.target.value)}
+                      className="input-modern w-full"
+                      id="new-invoice-site"
+                    >
+                      <option value="">All Sites / Client-wide</option>
+                      {selClient.sites.map((s) => (
+                        <option key={s.siteId} value={s.siteId}>
+                          {s.siteName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                );
+              })()}
+
+              <label className="block">
+                <span className="label-text mb-1.5 block">Invoice date</span>
+                <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className="input-modern w-full" required id="new-invoice-date" />
+              </label>
+
+              <label className="block">
+                <span className="label-text mb-1.5 block">Due date</span>
+                <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="input-modern w-full" id="new-invoice-due-date" />
+              </label>
+
+              <label className="block">
+                <span className="label-text mb-1.5 block">Reference</span>
+                <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Optional" className="input-modern w-full" id="new-invoice-ref" />
+              </label>
+            </div>
+          </div>
+
+          {/* Invoice Numbering Section */}
+          <div className="rounded-security-md border border-security-navy-200 bg-security-navy-50/70 p-3.5 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-security-navy-700">Invoice Numbering</span>
+              <div className="inline-flex rounded-security bg-security-navy-200/60 p-0.5" role="radiogroup" aria-label="Invoice numbering mode">
+                <button
+                  type="button"
+                  onClick={() => setNumberingMode("auto")}
+                  className={clsx(
+                    "px-3 py-1 text-xs font-semibold rounded-security transition-all",
+                    numberingMode === "auto"
+                      ? "bg-white text-security-navy-900 shadow-sm"
+                      : "text-security-navy-600 hover:text-security-navy-900"
+                  )}
+                  id="invoice-number-mode-auto"
+                >
+                  ● Automatic
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNumberingMode("manual")}
+                  className={clsx(
+                    "px-3 py-1 text-xs font-semibold rounded-security transition-all",
+                    numberingMode === "manual"
+                      ? "bg-white text-security-navy-900 shadow-sm"
+                      : "text-security-navy-600 hover:text-security-navy-900"
+                  )}
+                  id="invoice-number-mode-manual"
+                >
+                  ○ Manual
+                </button>
+              </div>
+            </div>
+
+            {numberingMode === "auto" ? (
+              <div className="flex items-center justify-between rounded-security border border-security-navy-200 bg-white px-3 py-2 text-xs">
+                <span className="text-security-navy-600">Next number to be generated:</span>
+                <span className="font-mono font-bold text-security-amber-700">
+                  {loadingPreview ? "Checking…" : nextInvoiceNumberPreview || (clientId ? "Generated on save (e.g. INV-0001)" : "Select a client first")}
+                </span>
+              </div>
+            ) : (
+              <label className="block">
+                <span className="label-text mb-1 block">Manual Invoice Number <span className="text-red-500">*</span></span>
+                <input
+                  type="text"
+                  value={manualInvoiceNumber}
+                  onChange={(e) => setManualInvoiceNumber(e.target.value)}
+                  placeholder="e.g. INV-WOL-0027"
+                  className="input-modern w-full font-mono text-sm"
+                  required={numberingMode === "manual"}
+                  id="manual-invoice-number"
+                />
+                <span className="mt-1 block text-[11px] text-security-navy-500">
+                  Specify a custom or historical invoice number. It will be verified to prevent duplicates.
+                </span>
+              </label>
+            )}
           </div>
 
           <LineItemsEditor token={token ?? ""} clientId={clientId} lines={lines} onChange={setLines} currency={currency} disabled={saving} />
@@ -296,11 +452,41 @@ export default function InvoicesPage() {
           </label>
           <label className="block">
             <span className="label-text mb-1 block">Client</span>
-            <select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className="input-modern w-full" id="invoice-client-filter">
+            <select
+              value={clientFilter}
+              onChange={(e) => {
+                setClientFilter(e.target.value);
+                setSiteFilter("");
+              }}
+              className="input-modern w-full"
+              id="invoice-client-filter"
+            >
               <option value="">All clients</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </label>
+          {(() => {
+            const selClient = clients.find((c) => c.id === clientFilter);
+            if (!selClient?.sites || selClient.sites.length === 0) return null;
+            return (
+              <label className="block">
+                <span className="label-text mb-1 block">Site</span>
+                <select
+                  value={siteFilter}
+                  onChange={(e) => setSiteFilter(e.target.value)}
+                  className="input-modern w-full"
+                  id="invoice-site-filter"
+                >
+                  <option value="">All sites</option>
+                  {selClient.sites.map((s) => (
+                    <option key={s.siteId} value={s.siteId}>
+                      {s.siteName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            );
+          })()}
           <label className="block">
             <span className="label-text mb-1 block">From</span>
             <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="input-modern w-full" id="invoice-from-date" />
@@ -396,9 +582,16 @@ export default function InvoicesPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="font-medium text-security-navy-800">
-                        {invoice.client?.name ?? "—"}
-                      </span>
+                      <div className="flex flex-col items-start gap-0.5">
+                        <span className="font-medium text-security-navy-800">
+                          {invoice.client?.name ?? "—"}
+                        </span>
+                        {invoice.site?.name && (
+                          <span className="inline-flex items-center rounded-full bg-security-navy-100 px-2 py-0.5 text-[10px] font-medium text-security-navy-700">
+                            📍 {invoice.site.name}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="hidden px-4 py-3 tabular-nums text-security-navy-600 sm:table-cell">
                       {invoice.invoiceDate?.slice(0, 10)}

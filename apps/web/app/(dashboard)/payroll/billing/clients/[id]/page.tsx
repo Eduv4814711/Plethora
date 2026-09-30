@@ -18,11 +18,14 @@ import {
   getClientSitesBilling,
   getSiteBillingDetail,
   updateSiteBillingRate,
+  getSiteBillingNumbering,
+  updateSiteBillingNumbering,
   type ClientStatement,
   type Invoice,
   type Quote,
   type ClientSitesBillingResponse,
   type SiteBillingDetailResponse,
+  type SiteBillingNumberingConfig,
 } from "@/lib/billing-api";
 import { currencyFromSettings, formatCurrency } from "@/lib/currency";
 import { StatusBadge } from "../../_components/status-badge";
@@ -103,6 +106,36 @@ export default function ClientStatementPage() {
   const [rateModalError, setRateModalError] = useState<string | null>(null);
   const [rateModalSuccess, setRateModalSuccess] = useState<string | null>(null);
 
+  // Numbering modal state
+  const [numberingModalSite, setNumberingModalSite] = useState<{
+    siteId: string;
+    siteName: string;
+    config: SiteBillingNumberingConfig | null;
+  } | null>(null);
+  const [quotePrefixInput, setQuotePrefixInput] = useState("");
+  const [quoteStartingNoInput, setQuoteStartingNoInput] = useState(1);
+  const [quoteNextNoInput, setQuoteNextNoInput] = useState(1);
+  const [quotePaddingInput, setQuotePaddingInput] = useState(4);
+  const [invoicePrefixInput, setInvoicePrefixInput] = useState("");
+  const [invoiceStartingNoInput, setInvoiceStartingNoInput] = useState(1);
+  const [invoiceNextNoInput, setInvoiceNextNoInput] = useState(1);
+  const [invoicePaddingInput, setInvoicePaddingInput] = useState(4);
+  const [savingNumbering, setSavingNumbering] = useState(false);
+  const [numberingModalError, setNumberingModalError] = useState<string | null>(null);
+  const [numberingModalSuccess, setNumberingModalSuccess] = useState<string | null>(null);
+
+  const formatPreview = (prefix: string, seq: number, pad: number) => {
+    const cleanPrefix = (prefix || "").trim();
+    const safeSeq = Math.max(1, isNaN(seq) ? 1 : seq);
+    const safePad = Math.min(10, Math.max(1, isNaN(pad) ? 4 : pad));
+    const padded = String(safeSeq).padStart(safePad, "0");
+    if (!cleanPrefix) return padded;
+    if (cleanPrefix.endsWith("-") || cleanPrefix.endsWith("_") || cleanPrefix.endsWith("/")) {
+      return `${cleanPrefix}${padded}`;
+    }
+    return `${cleanPrefix}-${padded}`;
+  };
+
   const load = useCallback(async () => {
     if (!token || !canView) return;
     setLoading(true);
@@ -169,6 +202,51 @@ export default function ClientStatementPage() {
       setRateModalError(err instanceof Error ? err.message : "Failed to save rate");
     } finally {
       setSavingRate(false);
+    }
+  };
+
+  const openSiteNumberingModal = async (siteId: string, siteName: string) => {
+    if (!token) return;
+    setNumberingModalError(null);
+    setNumberingModalSuccess(null);
+    try {
+      const data = await getSiteBillingNumbering(token, params.id, siteId);
+      setNumberingModalSite({ siteId, siteName, config: data.config });
+      setQuotePrefixInput(data.config?.quotePrefix ?? "");
+      setQuoteStartingNoInput(data.config?.quoteStartingNumber ?? 1);
+      setQuoteNextNoInput(data.config?.quoteNextNumber ?? data.config?.quoteStartingNumber ?? 1);
+      setQuotePaddingInput(data.config?.quotePadding ?? 4);
+      setInvoicePrefixInput(data.config?.invoicePrefix ?? "");
+      setInvoiceStartingNoInput(data.config?.invoiceStartingNumber ?? 1);
+      setInvoiceNextNoInput(data.config?.invoiceNextNumber ?? data.config?.invoiceStartingNumber ?? 1);
+      setInvoicePaddingInput(data.config?.invoicePadding ?? 4);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load numbering configuration");
+    }
+  };
+
+  const handleSaveNumbering = async () => {
+    if (!token || !numberingModalSite) return;
+    setSavingNumbering(true);
+    setNumberingModalError(null);
+    try {
+      await updateSiteBillingNumbering(token, params.id, numberingModalSite.siteId, {
+        quotePrefix: quotePrefixInput.trim() || null,
+        quoteStartingNumber: Number(quoteStartingNoInput) || 1,
+        quoteNextNumber: Number(quoteNextNoInput) || Number(quoteStartingNoInput) || 1,
+        quotePadding: Number(quotePaddingInput) || 4,
+        invoicePrefix: invoicePrefixInput.trim() || null,
+        invoiceStartingNumber: Number(invoiceStartingNoInput) || 1,
+        invoiceNextNumber: Number(invoiceNextNoInput) || Number(invoiceStartingNoInput) || 1,
+        invoicePadding: Number(invoicePaddingInput) || 4,
+      });
+      setNumberingModalSuccess("Numbering configuration saved.");
+      const updatedSites = await getClientSitesBilling(token, params.id);
+      setClientSitesBilling(updatedSites);
+    } catch (err) {
+      setNumberingModalError(err instanceof Error ? err.message : "Failed to save numbering configuration");
+    } finally {
+      setSavingNumbering(false);
     }
   };
 

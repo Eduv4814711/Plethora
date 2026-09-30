@@ -82,6 +82,7 @@ model Company {
   siteTimesheetRows         SiteTimesheetRow[]
   staffAttendanceDays       StaffAttendanceDay[]
   siteBillingRates          SiteBillingRate[]
+  siteBillingConfigs        SiteBillingConfig[]
 
   academyBranches            AcademyBranch[]
   academyStudents            Student[]
@@ -427,9 +428,12 @@ model Site {
   company                   Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
   supervisor                User?                      @relation("SiteSupervisor", fields: [supervisorId], references: [id], onDelete: SetNull)
   client                    Client?                    @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  quotes                    ClientQuote[]              @relation("ClientQuoteSite")
   quoteLines                ClientQuoteLine[]          @relation("ClientQuoteLineSite")
+  invoices                  ClientInvoice[]            @relation("ClientInvoiceSite")
   invoiceLines              ClientInvoiceLine[]        @relation("ClientInvoiceLineSite")
   billingRates              SiteBillingRate[]
+  billingConfig             SiteBillingConfig?
   contractSites             ClientContractSite[]
   posts                     SitePost[]
   assignedGuards            SiteAssignment[]
@@ -2873,6 +2877,7 @@ model Client {
   invoices              ClientInvoice[]
   payments              ClientPayment[]
   billingRates          SiteBillingRate[]
+  billingConfigs        SiteBillingConfig[]
   contacts              ClientContact[]
   relatedParties        ClientRelatedParty[]
   contracts             ClientContract[]
@@ -3104,6 +3109,7 @@ model ClientQuote {
   prospectEmail   String?
   prospectPhone   String?
   prospectAddress String?           @db.Text
+  siteId          String?
   quoteNumber     String
   quoteDate       DateTime          @db.Date
   validUntil      DateTime          @db.Date
@@ -3123,6 +3129,7 @@ model ClientQuote {
 
   company   Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   client    Client?           @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  site      Site?             @relation("ClientQuoteSite", fields: [siteId], references: [id], onDelete: SetNull)
   decidedBy User?             @relation("ClientQuoteDecidedBy", fields: [decidedByUserId], references: [id], onDelete: SetNull)
   items     ClientQuoteLine[]
   invoices  ClientInvoice[]
@@ -3130,6 +3137,7 @@ model ClientQuote {
   @@unique([companyId, quoteNumber])
   @@index([companyId, status])
   @@index([clientId])
+  @@index([siteId])
   @@index([companyId, quoteDate])
   @@index([companyId, prospectName])
 }
@@ -3160,6 +3168,7 @@ model ClientInvoice {
   clientId       String
   /// Set when this invoice was generated from an accepted quote.
   quoteId        String?
+  siteId         String?
   invoiceNumber  String
   invoiceDate    DateTime            @db.Date
   dueDate        DateTime            @db.Date
@@ -3177,6 +3186,7 @@ model ClientInvoice {
 
   company  Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   client   Client              @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  site     Site?               @relation("ClientInvoiceSite", fields: [siteId], references: [id], onDelete: SetNull)
   quote    ClientQuote?        @relation(fields: [quoteId], references: [id], onDelete: SetNull)
   items    ClientInvoiceLine[]
   payments ClientPayment[]
@@ -3184,6 +3194,7 @@ model ClientInvoice {
   @@unique([companyId, invoiceNumber])
   @@index([companyId, status])
   @@index([clientId])
+  @@index([siteId])
   @@index([quoteId])
   @@index([companyId, dueDate])
   @@index([companyId, invoiceDate])
@@ -3277,6 +3288,31 @@ model SiteBillingRate {
   @@index([companyId, clientId])
   @@index([siteId, effectiveFrom])
   @@index([siteId, isActive])
+  @@index([clientId])
+}
+
+/// Site/client billing configuration for automated document numbering and prefixes.
+model SiteBillingConfig {
+  id                    String   @id @default(cuid())
+  companyId             String
+  clientId              String?
+  siteId                String?  @unique
+  quotePrefix           String?
+  quoteStartingNumber   Int      @default(1)
+  quoteNextNumber       Int      @default(1)
+  quotePadding          Int      @default(4)
+  invoicePrefix         String?
+  invoiceStartingNumber Int      @default(1)
+  invoiceNextNumber     Int      @default(1)
+  invoicePadding        Int      @default(4)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client  Client? @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  site    Site?   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
   @@index([clientId])
 }
 

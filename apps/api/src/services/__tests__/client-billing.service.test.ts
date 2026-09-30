@@ -10,6 +10,7 @@ import {
   highestNumberForPrefix,
   isInvoiceEditable,
   isQuoteEditable,
+  validatePrefix,
 } from "../client-billing.service.js";
 
 describe("computeLineTotal", () => {
@@ -115,6 +116,32 @@ describe("document numbering", () => {
   it("pads to four digits and beyond", () => {
     expect(formatDocumentNumber("RCT", 7)).toBe("RCT-0007");
     expect(formatDocumentNumber("RCT", 12345)).toBe("RCT-12345");
+  });
+
+  it("avoids duplicate delimiters when prefix already ends with hyphen, underscore, or slash", () => {
+    expect(formatDocumentNumber("QBS-WOL-", 1)).toBe("QBS-WOL-0001");
+    expect(formatDocumentNumber("INV_WOL_", 2)).toBe("INV_WOL_0002");
+    expect(formatDocumentNumber("QT/2026/", 3)).toBe("QT/2026/0003");
+  });
+
+  it("respects custom padding", () => {
+    expect(formatDocumentNumber("QBS-WOL-", 1, 6)).toBe("QBS-WOL-000001");
+    expect(formatDocumentNumber("QT", 15, 3)).toBe("QT-015");
+    expect(formatDocumentNumber("INV", 9999, 4)).toBe("INV-9999");
+    expect(formatDocumentNumber("INV", 10000, 4)).toBe("INV-10000");
+  });
+
+  it("validates prefixes correctly", () => {
+    expect(validatePrefix("QBS-WOL-")).toEqual({ valid: true });
+    expect(validatePrefix("  INV-WOL-  ")).toEqual({ valid: true });
+    expect(validatePrefix("INV_2026/")).toEqual({ valid: true });
+
+    expect(validatePrefix("")).toEqual({ valid: false, error: "Prefix cannot be empty" });
+    expect(validatePrefix("   ")).toEqual({ valid: false, error: "Prefix cannot be empty" });
+    expect(validatePrefix("A".repeat(31))).toEqual({ valid: false, error: "Prefix cannot exceed 30 characters" });
+    expect(validatePrefix("INV#123").valid).toBe(false);
+    expect(validatePrefix("INV 123").valid).toBe(false);
+    expect(validatePrefix("INV?TEST").valid).toBe(false);
   });
 });
 

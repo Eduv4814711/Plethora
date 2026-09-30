@@ -66,6 +66,8 @@ export interface Quote extends DocumentTotals {
   status: QuoteStatus;
   clientId?: string | null;
   client?: ClientSummaryRef | null;
+  siteId?: string | null;
+  site?: ClientSummaryRef | null;
   prospectName?: string | null;
   prospectEmail?: string | null;
   prospectPhone?: string | null;
@@ -100,6 +102,8 @@ export interface Invoice extends DocumentTotals {
   notes?: string | null;
   status: InvoiceStatus;
   clientId: string;
+  siteId?: string | null;
+  site?: ClientSummaryRef | null;
   quoteId?: string | null;
   quote?: { id: string; quoteNumber: string } | null;
   client?: ClientSummaryRef;
@@ -187,6 +191,7 @@ export interface ClientStatement {
 
 export interface DocumentPayload {
   clientId: string;
+  siteId?: string | null;
   reference?: string | null;
   notes?: string | null;
   discountAmount?: string | number;
@@ -196,6 +201,7 @@ export interface DocumentPayload {
 
 export interface CreateQuotePayload {
   clientId?: string | null;
+  siteId?: string | null;
   prospectName?: string | null;
   prospectEmail?: string | null;
   prospectPhone?: string | null;
@@ -211,6 +217,7 @@ export interface CreateQuotePayload {
 }
 
 export interface CreateInvoicePayload extends DocumentPayload {
+  siteId?: string | null;
   invoiceDate: string;
   dueDate?: string;
   invoiceNumber?: string;
@@ -283,6 +290,7 @@ export async function getClientStatement(
 
 export interface ListQuotesParams {
   clientId?: string;
+  siteId?: string;
   status?: string;
   search?: string;
   from?: string;
@@ -297,6 +305,7 @@ export async function listQuotes(
 ): Promise<{ quotes: Quote[]; total: number; limit: number; offset: number }> {
   const q = new URLSearchParams();
   if (params.clientId) q.set("clientId", params.clientId);
+  if (params.siteId) q.set("siteId", params.siteId);
   if (params.status) q.set("status", params.status);
   if (params.search) q.set("search", params.search);
   if (params.from) q.set("from", params.from);
@@ -364,14 +373,20 @@ export async function declineQuote(token: string, id: string, reason?: string): 
   );
 }
 
+export interface ConvertQuoteToInvoicePayload {
+  invoiceNumber?: string | null;
+  siteId?: string | null;
+}
+
 export async function convertQuoteToInvoice(
   token: string,
   id: string,
+  payload?: ConvertQuoteToInvoicePayload,
   force = false
 ): Promise<Invoice> {
   const q = force ? "?force=true" : "";
   return parseJson(
-    await authFetch(`${BASE}/quotes/${id}/convert-to-invoice${q}`, token, jsonInit("POST")),
+    await authFetch(`${BASE}/quotes/${id}/convert-to-invoice${q}`, token, jsonInit("POST", payload ?? {})),
     "Failed to convert quote"
   );
 }
@@ -380,6 +395,7 @@ export async function convertQuoteToInvoice(
 
 export interface ListInvoicesParams {
   clientId?: string;
+  siteId?: string;
   status?: string;
   search?: string;
   from?: string;
@@ -394,6 +410,7 @@ export async function listInvoices(
 ): Promise<{ invoices: Invoice[]; total: number; limit: number; offset: number }> {
   const q = new URLSearchParams();
   if (params.clientId) q.set("clientId", params.clientId);
+  if (params.siteId) q.set("siteId", params.siteId);
   if (params.status) q.set("status", params.status);
   if (params.search) q.set("search", params.search);
   if (params.from) q.set("from", params.from);
@@ -667,6 +684,17 @@ export interface SiteBillingSummary {
   notes?: string | null;
   rateId?: string | null;
   rateUpdatedAt?: string | null;
+  numbering?: {
+    quotePrefix: string | null;
+    quoteStartingNumber: number;
+    quoteNextNumber: number;
+    quotePadding: number;
+    invoicePrefix: string | null;
+    invoiceStartingNumber: number;
+    invoiceNextNumber: number;
+    invoicePadding: number;
+    updatedAt: string;
+  } | null;
 }
 
 export interface ClientSitesBillingResponse {
@@ -702,6 +730,38 @@ export interface SiteBillingRateHistoryEntry {
   updatedAt: string;
 }
 
+export interface SiteBillingNumberingConfig {
+  id: string;
+  quotePrefix: string | null;
+  quoteStartingNumber: number;
+  quoteNextNumber: number;
+  quotePadding: number;
+  invoicePrefix: string | null;
+  invoiceStartingNumber: number;
+  invoiceNextNumber: number;
+  invoicePadding: number;
+  updatedAt?: string;
+}
+
+export interface ConfigureSiteBillingNumberingPayload {
+  quotePrefix?: string | null;
+  quoteStartingNumber?: number;
+  quoteNextNumber?: number;
+  quotePadding?: number;
+  invoicePrefix?: string | null;
+  invoiceStartingNumber?: number;
+  invoiceNextNumber?: number;
+  invoicePadding?: number;
+}
+
+export interface NumberingPreviewResponse {
+  nextNumber: string;
+  prefix: string;
+  sequence: number;
+  padding: number;
+  scope: string;
+}
+
 export interface SiteBillingDetailResponse {
   site: {
     id: string;
@@ -710,6 +770,11 @@ export interface SiteBillingDetailResponse {
     siteStatus: string;
   };
   billing: SiteBillingSummary;
+  numbering?: {
+    config: SiteBillingNumberingConfig | null;
+    quotePreview: NumberingPreviewResponse;
+    invoicePreview: NumberingPreviewResponse;
+  };
   activeGuards: ActiveBillableGuardInfo[];
   history: SiteBillingRateHistoryEntry[];
 }
@@ -764,5 +829,50 @@ export async function updateSiteBillingRate(
     body: JSON.stringify(data),
   });
   return parseJson(res, "Failed to configure site billing rate");
+}
+
+export async function getSiteBillingNumbering(
+  token: string,
+  clientId: string,
+  siteId: string
+): Promise<{
+  siteId: string;
+  siteName: string;
+  config: SiteBillingNumberingConfig | null;
+  quotePreview: NumberingPreviewResponse;
+  invoicePreview: NumberingPreviewResponse;
+}> {
+  const res = await authFetch(`${BASE}/clients/${clientId}/sites/${siteId}/numbering`, token);
+  return parseJson(res, "Failed to load site billing numbering");
+}
+
+export async function updateSiteBillingNumbering(
+  token: string,
+  clientId: string,
+  siteId: string,
+  payload: ConfigureSiteBillingNumberingPayload
+): Promise<{
+  config: SiteBillingNumberingConfig;
+  quotePreview: NumberingPreviewResponse;
+  invoicePreview: NumberingPreviewResponse;
+}> {
+  const res = await authFetch(
+    `${BASE}/clients/${clientId}/sites/${siteId}/numbering`,
+    token,
+    jsonInit("POST", payload)
+  );
+  return parseJson(res, "Failed to update site billing numbering");
+}
+
+export async function previewDocumentNumber(
+  token: string,
+  kind: "quote" | "invoice",
+  options?: { clientId?: string | null; siteId?: string | null }
+): Promise<NumberingPreviewResponse> {
+  const q = new URLSearchParams({ kind });
+  if (options?.clientId) q.set("clientId", options.clientId);
+  if (options?.siteId) q.set("siteId", options.siteId);
+  const res = await authFetch(`${BASE}/numbering/preview?${q}`, token);
+  return parseJson(res, "Failed to preview document number");
 }
 

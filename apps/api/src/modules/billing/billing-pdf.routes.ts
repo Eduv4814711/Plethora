@@ -116,7 +116,7 @@ export async function registerBillingPdfRoutes(
 
     return reply
       .header("Content-Type", "application/pdf")
-      .header("Content-Disposition", `attachment; filename="${quote.quoteNumber}.pdf"`)
+      .header("Content-Disposition", `attachment; filename="${safeFilenamePart(quote.quoteNumber, "quote")}.pdf"`)
       .send(pdf);
   });
 
@@ -171,7 +171,7 @@ export async function registerBillingPdfRoutes(
 
     return reply
       .header("Content-Type", "application/pdf")
-      .header("Content-Disposition", `attachment; filename="${invoice.invoiceNumber}.pdf"`)
+      .header("Content-Disposition", `attachment; filename="${safeFilenamePart(invoice.invoiceNumber, "invoice")}.pdf"`)
       .send(pdf);
   });
 

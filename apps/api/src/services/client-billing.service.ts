@@ -17,8 +17,44 @@ function round2(value: Prisma.Decimal): Prisma.Decimal {
   return value.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
 }
 
+export interface DocumentNumberOptions {
+  siteId?: string | null;
+  clientId?: string | null;
+  tx?: Prisma.TransactionClient;
+}
+
+export interface ConfigureSiteBillingNumberingInput {
+  quotePrefix?: string | null;
+  quoteStartingNumber?: number;
+  quoteNextNumber?: number;
+  quotePadding?: number;
+  invoicePrefix?: string | null;
+  invoiceStartingNumber?: number;
+  invoiceNextNumber?: number;
+  invoicePadding?: number;
+}
+
+export const PREFIX_REGEX = /^[a-zA-Z0-9_\-\/]+$/;
+
+export function validatePrefix(prefix: string): { valid: boolean; error?: string } {
+  const trimmed = prefix.trim();
+  if (!trimmed) {
+    return { valid: false, error: "Prefix cannot be empty" };
+  }
+  if (trimmed.length > 30) {
+    return { valid: false, error: "Prefix cannot exceed 30 characters" };
+  }
+  if (!PREFIX_REGEX.test(trimmed)) {
+    return {
+      valid: false,
+      error: "Prefix contains invalid characters. Use alphanumeric characters, hyphens, underscores, or slashes only",
+    };
+  }
+  return { valid: true };
+}
+
 /** Reads a company's configured document prefix, falling back to the built-in default. */
-async function resolvePrefix(companyId: string, kind: DocumentKind): Promise<string> {
+export async function resolvePrefix(companyId: string, kind: DocumentKind): Promise<string> {
   const company = await prisma.company.findUnique({
     where: { id: companyId },
     select: { settings: true },
@@ -31,7 +67,11 @@ async function resolvePrefix(companyId: string, kind: DocumentKind): Promise<str
 
 /** Highest numeric suffix already used for `prefix`, ignoring rows in any other format. */
 export function highestNumberForPrefix(existing: readonly string[], prefix: string): number {
-  const pattern = new RegExp(`^${prefix}-(\\d+)$`, "i");
+  const cleanPrefix = prefix.trim();
+  const escaped = cleanPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = cleanPrefix.endsWith("-") || cleanPrefix.endsWith("_") || cleanPrefix.endsWith("/")
+    ? new RegExp(`^${escaped}(\\d+)$`, "i")
+    : new RegExp(`^${escaped}-?(\\d+)$`, "i");
   let max = 0;
   for (const value of existing) {
     const match = value.match(pattern);
@@ -40,20 +80,364 @@ export function highestNumberForPrefix(existing: readonly string[], prefix: stri
   return max;
 }
 
-export function formatDocumentNumber(prefix: string, sequence: number): string {
-  return `${prefix}-${String(sequence).padStart(4, "0")}`;
+export function formatDocumentNumber(prefix: string, sequence: number, padding = 4): string {
+  const cleanPrefix = prefix.trim();
+  const padded = String(sequence).padStart(padding, "0");
+  if (cleanPrefix.endsWith("-") || cleanPrefix.endsWith("_") || cleanPrefix.endsWith("/")) {
+    return `${cleanPrefix}${padded}`;
+  }
+  return `${cleanPrefix}-${padded}`;
 }
 
-export async function generateNextQuoteNumber(companyId: string): Promise<string> {
-  const prefix = await resolvePrefix(companyId, "quote");
-  const rows = await prisma.clientQuote.findMany({ where: { companyId }, select: { quoteNumber: true } });
-  return formatDocumentNumber(prefix, highestNumberForPrefix(rows.map((r) => r.quoteNumber), prefix) + 1);
+export interface ResolvedNumberingConfig {
+  prefix: string;
+  nextNumber: number;
+  padding: number;
+  configId: string | null;
+  scope: "site" | "client" | "company";
 }
 
-export async function generateNextInvoiceNumber(companyId: string): Promise<string> {
-  const prefix = await resolvePrefix(companyId, "invoice");
-  const rows = await prisma.clientInvoice.findMany({ where: { companyId }, select: { invoiceNumber: true } });
-  return formatDocumentNumber(prefix, highestNumberForPrefix(rows.map((r) => r.invoiceNumber), prefix) + 1);
+export async function resolveDocumentNumberingConfig(
+  companyId: string,
+  kind: "quote" | "invoice",
+  options?: { siteId?: string | null; clientId?: string | null },
+  tx: Prisma.TransactionClient = prisma
+): Promise<ResolvedNumberingConfig> {
+  const prefixField = kind === "quote" ? "quotePrefix" : "invoicePrefix";
+  const nextField = kind === "quote" ? "quoteNextNumber" : "invoiceNextNumber";
+  const paddingField = kind === "quote" ? "quotePadding" : "invoicePadding";
+
+  // 1. Try Site-level configuration
+  if (options?.siteId) {
+    const siteConfig = await tx.siteBillingConfig.findFirst({
+      where: { companyId, siteId: options.siteId },
+    });
+    if (siteConfig && siteConfig[prefixField] && siteConfig[prefixField]!.trim()) {
+      return {
+        prefix: siteConfig[prefixField]!.trim(),
+        nextNumber: siteConfig[nextField],
+        padding: siteConfig[paddingField],
+        configId: siteConfig.id,
+        scope: "site",
+      };
+    }
+  }
+
+  // 2. Try Client-level configuration
+  if (options?.clientId) {
+    const clientConfig = await tx.siteBillingConfig.findFirst({
+      where: { companyId, clientId: options.clientId, siteId: null },
+    });
+    if (clientConfig && clientConfig[prefixField] && clientConfig[prefixField]!.trim()) {
+      return {
+        prefix: clientConfig[prefixField]!.trim(),
+        nextNumber: clientConfig[nextField],
+        padding: clientConfig[paddingField],
+        configId: clientConfig.id,
+        scope: "client",
+      };
+    }
+
+    const sites = await tx.site.findMany({
+      where: { companyId, clientId: options.clientId, siteStatus: "ACTIVE" },
+      select: { id: true },
+      take: 2,
+    });
+    if (sites.length === 1) {
+      const singleSiteConfig = await tx.siteBillingConfig.findFirst({
+        where: { companyId, siteId: sites[0].id },
+      });
+      if (singleSiteConfig && singleSiteConfig[prefixField] && singleSiteConfig[prefixField]!.trim()) {
+        return {
+          prefix: singleSiteConfig[prefixField]!.trim(),
+          nextNumber: singleSiteConfig[nextField],
+          padding: singleSiteConfig[paddingField],
+          configId: singleSiteConfig.id,
+          scope: "site",
+        };
+      }
+    }
+  }
+
+  // 3. Fallback to Company settings default
+  const defaultPrefix = await resolvePrefix(companyId, kind);
+  return {
+    prefix: defaultPrefix,
+    nextNumber: 1,
+    padding: 4,
+    configId: null,
+    scope: "company",
+  };
+}
+
+export async function allocateNextDocumentNumber(
+  companyId: string,
+  kind: "quote" | "invoice",
+  options?: DocumentNumberOptions
+): Promise<{ documentNumber: string; configId: string | null }> {
+  const run = async (client: Prisma.TransactionClient): Promise<{ documentNumber: string; configId: string | null }> => {
+    const lockKey = `billing-sequence:${companyId}:${kind}:${options?.siteId ?? options?.clientId ?? "company"}`;
+    try {
+      await client.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
+    } catch {
+      // In mock/test environments without pg_advisory_xact_lock, continue
+    }
+
+    const resolved = await resolveDocumentNumberingConfig(companyId, kind, options, client);
+
+    if (resolved.configId) {
+      const currentConfig = await client.siteBillingConfig.findUnique({
+        where: { id: resolved.configId },
+      });
+      const nextField = kind === "quote" ? "quoteNextNumber" : "invoiceNextNumber";
+      let candidateSeq = currentConfig ? currentConfig[nextField] : resolved.nextNumber;
+
+      let chosenNumber = "";
+      while (true) {
+        const candidateFormatted = formatDocumentNumber(resolved.prefix, candidateSeq, resolved.padding);
+        const exists = kind === "quote"
+          ? await client.clientQuote.findFirst({
+              where: { companyId, quoteNumber: candidateFormatted },
+              select: { id: true },
+            })
+          : await client.clientInvoice.findFirst({
+              where: { companyId, invoiceNumber: candidateFormatted },
+              select: { id: true },
+            });
+        if (!exists) {
+          chosenNumber = candidateFormatted;
+          break;
+        }
+        candidateSeq++;
+      }
+
+      await client.siteBillingConfig.update({
+        where: { id: resolved.configId },
+        data: { [nextField]: candidateSeq + 1 },
+      });
+
+      return { documentNumber: chosenNumber, configId: resolved.configId };
+    }
+
+    // Company fallback
+    const rows = kind === "quote"
+      ? await client.clientQuote.findMany({ where: { companyId }, select: { quoteNumber: true } })
+      : await client.clientInvoice.findMany({ where: { companyId }, select: { invoiceNumber: true } });
+    const existing = rows.map((r) => (kind === "quote" ? (r as { quoteNumber: string }).quoteNumber : (r as { invoiceNumber: string }).invoiceNumber));
+    let candidateSeq = highestNumberForPrefix(existing, resolved.prefix) + 1;
+
+    while (true) {
+      const candidateFormatted = formatDocumentNumber(resolved.prefix, candidateSeq, resolved.padding);
+      const exists = kind === "quote"
+        ? await client.clientQuote.findFirst({
+            where: { companyId, quoteNumber: candidateFormatted },
+            select: { id: true },
+          })
+        : await client.clientInvoice.findFirst({
+            where: { companyId, invoiceNumber: candidateFormatted },
+            select: { id: true },
+          });
+      if (!exists) {
+        return { documentNumber: candidateFormatted, configId: null };
+      }
+      candidateSeq++;
+    }
+  };
+
+  if (options?.tx) {
+    return run(options.tx);
+  }
+  return prisma.$transaction(async (innerTx) => run(innerTx));
+}
+
+export async function previewNextDocumentNumber(
+  companyId: string,
+  kind: "quote" | "invoice",
+  options?: { siteId?: string | null; clientId?: string | null }
+): Promise<{ nextNumber: string; prefix: string; sequence: number; padding: number; scope: string }> {
+  const resolved = await resolveDocumentNumberingConfig(companyId, kind, options, prisma);
+  let candidateSeq = resolved.nextNumber;
+
+  if (resolved.configId) {
+    while (true) {
+      const candidateFormatted = formatDocumentNumber(resolved.prefix, candidateSeq, resolved.padding);
+      const exists = kind === "quote"
+        ? await prisma.clientQuote.findFirst({
+            where: { companyId, quoteNumber: candidateFormatted },
+            select: { id: true },
+          })
+        : await prisma.clientInvoice.findFirst({
+            where: { companyId, invoiceNumber: candidateFormatted },
+            select: { id: true },
+          });
+      if (!exists) {
+        break;
+      }
+      candidateSeq++;
+    }
+  } else {
+    const rows = kind === "quote"
+      ? await prisma.clientQuote.findMany({ where: { companyId }, select: { quoteNumber: true } })
+      : await prisma.clientInvoice.findMany({ where: { companyId }, select: { invoiceNumber: true } });
+    const existing = rows.map((r) => (kind === "quote" ? (r as { quoteNumber: string }).quoteNumber : (r as { invoiceNumber: string }).invoiceNumber));
+    candidateSeq = highestNumberForPrefix(existing, resolved.prefix) + 1;
+  }
+
+  return {
+    nextNumber: formatDocumentNumber(resolved.prefix, candidateSeq, resolved.padding),
+    prefix: resolved.prefix,
+    sequence: candidateSeq,
+    padding: resolved.padding,
+    scope: resolved.scope,
+  };
+}
+
+export async function validateManualDocumentNumber(
+  companyId: string,
+  kind: "quote" | "invoice",
+  documentNumber: string,
+  tx: Prisma.TransactionClient = prisma
+): Promise<{ valid: boolean; error?: string }> {
+  const trimmed = documentNumber.trim();
+  if (!trimmed) {
+    return { valid: false, error: `${kind === "quote" ? "Quote" : "Invoice"} number cannot be empty` };
+  }
+  if (trimmed.length > 50) {
+    return { valid: false, error: `${kind === "quote" ? "Quote" : "Invoice"} number cannot exceed 50 characters` };
+  }
+  if (!/^[a-zA-Z0-9_\-\/.\s]+$/.test(trimmed)) {
+    return { valid: false, error: `${kind === "quote" ? "Quote" : "Invoice"} number contains invalid characters` };
+  }
+
+  const existing = kind === "quote"
+    ? await tx.clientQuote.findFirst({
+        where: { companyId, quoteNumber: trimmed },
+        select: { id: true },
+      })
+    : await tx.clientInvoice.findFirst({
+        where: { companyId, invoiceNumber: trimmed },
+        select: { id: true },
+      });
+
+  if (existing) {
+    return {
+      valid: false,
+      error: `${kind === "quote" ? "Quote" : "Invoice"} number "${trimmed}" already exists`,
+    };
+  }
+
+  return { valid: true };
+}
+
+export async function getSiteBillingConfig(
+  companyId: string,
+  siteId: string
+) {
+  return prisma.siteBillingConfig.findFirst({
+    where: { companyId, siteId },
+  });
+}
+
+export async function configureSiteBillingNumbering(
+  companyId: string,
+  siteId: string,
+  input: ConfigureSiteBillingNumberingInput,
+  userId?: string | null
+) {
+  const site = await prisma.site.findFirst({
+    where: { id: siteId, companyId },
+    select: { id: true, clientId: true, name: true },
+  });
+  if (!site) throw new Error("Site not found");
+
+  if (input.quotePrefix !== undefined && input.quotePrefix !== null && input.quotePrefix.trim() !== "") {
+    const val = validatePrefix(input.quotePrefix);
+    if (!val.valid) throw new Error(`Invalid quote prefix: ${val.error}`);
+  }
+  if (input.invoicePrefix !== undefined && input.invoicePrefix !== null && input.invoicePrefix.trim() !== "") {
+    const val = validatePrefix(input.invoicePrefix);
+    if (!val.valid) throw new Error(`Invalid invoice prefix: ${val.error}`);
+  }
+
+  const existingConfig = await prisma.siteBillingConfig.findUnique({
+    where: { siteId },
+  });
+
+  const quotePrefix = input.quotePrefix !== undefined
+    ? (input.quotePrefix && input.quotePrefix.trim() ? input.quotePrefix.trim() : null)
+    : existingConfig?.quotePrefix ?? null;
+
+  const quoteStartingNumber = input.quoteStartingNumber !== undefined
+    ? Math.max(1, input.quoteStartingNumber)
+    : existingConfig?.quoteStartingNumber ?? 1;
+
+  const quoteNextNumber = input.quoteNextNumber !== undefined
+    ? Math.max(1, input.quoteNextNumber)
+    : existingConfig?.quoteNextNumber ?? quoteStartingNumber;
+
+  const quotePadding = input.quotePadding !== undefined
+    ? Math.min(10, Math.max(1, input.quotePadding))
+    : existingConfig?.quotePadding ?? 4;
+
+  const invoicePrefix = input.invoicePrefix !== undefined
+    ? (input.invoicePrefix && input.invoicePrefix.trim() ? input.invoicePrefix.trim() : null)
+    : existingConfig?.invoicePrefix ?? null;
+
+  const invoiceStartingNumber = input.invoiceStartingNumber !== undefined
+    ? Math.max(1, input.invoiceStartingNumber)
+    : existingConfig?.invoiceStartingNumber ?? 1;
+
+  const invoiceNextNumber = input.invoiceNextNumber !== undefined
+    ? Math.max(1, input.invoiceNextNumber)
+    : existingConfig?.invoiceNextNumber ?? invoiceStartingNumber;
+
+  const invoicePadding = input.invoicePadding !== undefined
+    ? Math.min(10, Math.max(1, input.invoicePadding))
+    : existingConfig?.invoicePadding ?? 4;
+
+  return prisma.siteBillingConfig.upsert({
+    where: { siteId },
+    create: {
+      companyId,
+      clientId: site.clientId ?? null,
+      siteId,
+      quotePrefix,
+      quoteStartingNumber,
+      quoteNextNumber,
+      quotePadding,
+      invoicePrefix,
+      invoiceStartingNumber,
+      invoiceNextNumber,
+      invoicePadding,
+    },
+    update: {
+      clientId: site.clientId ?? null,
+      quotePrefix,
+      quoteStartingNumber,
+      quoteNextNumber,
+      quotePadding,
+      invoicePrefix,
+      invoiceStartingNumber,
+      invoiceNextNumber,
+      invoicePadding,
+    },
+  });
+}
+
+export async function generateNextQuoteNumber(
+  companyId: string,
+  options?: DocumentNumberOptions
+): Promise<string> {
+  const result = await allocateNextDocumentNumber(companyId, "quote", options, options?.tx);
+  return result.documentNumber;
+}
+
+export async function generateNextInvoiceNumber(
+  companyId: string,
+  options?: DocumentNumberOptions
+): Promise<string> {
+  const result = await allocateNextDocumentNumber(companyId, "invoice", options, options?.tx);
+  return result.documentNumber;
 }
 
 export async function generateNextReceiptNumber(

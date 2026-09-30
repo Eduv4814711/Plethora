@@ -249,9 +249,14 @@ export default function InvoiceDetailPage() {
                 </span>
               )}
             </div>
-            <p className="mt-1 text-sm text-security-navy-500">
-              {invoice.client?.name} ·{" "}
-              {new Date(invoice.invoiceDate).toLocaleDateString("en-ZA", { year: "numeric", month: "short", day: "numeric" })}
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-security-navy-500">
+              <span className="font-semibold text-security-navy-900">{invoice.client?.name}</span>
+              {invoice.site?.name && (
+                <span className="inline-flex items-center rounded-full bg-security-navy-100 px-2 py-0.5 text-[10px] font-medium text-security-navy-700">
+                  📍 {invoice.site.name}
+                </span>
+              )}
+              <span>· {new Date(invoice.invoiceDate).toLocaleDateString("en-ZA", { year: "numeric", month: "short", day: "numeric" })}</span>
             </p>
           </div>
 
