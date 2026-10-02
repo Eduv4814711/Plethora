@@ -10,6 +10,11 @@ import { canAccessSensitiveData, hasCapability } from "@/lib/permissions";
 import { PayPeriodSelect } from "@/components/pay-period-select";
 import { attendanceExceptionCopy } from "@/lib/attendance-exception-copy";
 import {
+  determineAttendanceBlockerState,
+  buildPayrollWorkflowSteps,
+  type WorkflowStepItem,
+} from "@/lib/payroll-checklist-utils";
+import {
   AlertBanner,
   Badge,
   Button,
@@ -192,29 +197,13 @@ const statusConfig: Record<string, { label: string; variant: "neutral" | "warnin
   paid: { label: "Paid", variant: "success" },
 };
 
-const PAYROLL_WORKFLOW_STEPS = [
-  { step: 1, title: "Attendance", caption: "Guard attendance (office staff use fixed salary)" },
-  { step: 2, title: "Create run", caption: "Open a pay period" },
-  { step: 3, title: "Calculate", caption: "Pay, tax & compliance — relievers with approved attendance are included", highlight: "amber" as const },
-  { step: 4, title: "Approve", caption: "Review & sign off" },
-  { step: 5, title: "Mark paid", caption: "Close the period", highlight: "emerald" as const },
-] as const;
+export type { WorkflowStepItem };
 
 const INTELLIGENCE_TABS = [
   { id: "reserve" as const, label: "Reserve Summary" },
   { id: "contracts" as const, label: "Contract Labour Cost" },
   { id: "employees" as const, label: "Employee Cost Summary" },
 ];
-
-function workflowStepClass(highlight?: "amber" | "emerald") {
-  if (highlight === "amber") {
-    return "border-security-amber-300 bg-security-amber-50 text-security-amber-800";
-  }
-  if (highlight === "emerald") {
-    return "border-security-emerald-300 bg-security-emerald-50 text-security-emerald-800";
-  }
-  return "border-security-navy-100 bg-white text-security-navy";
-}
 
 export default function PayrollPage() {
   const { token, user } = useAuth();
@@ -234,6 +223,22 @@ export default function PayrollPage() {
     totalComplianceIssues: number;
   }>({ pendingApprovals: 0, reserve: null, latestRunSummary: null, totalComplianceIssues: 0 });
   const [metricsLoading, setMetricsLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState<{
+    payrollReadiness?: {
+      status: string;
+      openExceptions: number;
+      periodStart?: string;
+      periodEnd?: string;
+    } | null;
+    currentPayPeriod?: {
+      periodStart: string;
+      periodEnd: string;
+      label: string;
+    } | null;
+    pendingSiteTimesheetRows?: number;
+    pendingPayrollRunApprovals?: number;
+    alerts?: Array<{ type: string; message: string; count?: number; priority?: string }>;
+  } | null>(null);
 
   const refresh = useCallback(() => {
     if (!token) return;
@@ -261,6 +266,7 @@ export default function PayrollPage() {
       authFetch("/payroll/reserve", token).then((r) => r.ok ? r.json() : null).catch(() => null),
     ])
       .then(([dashboard, reserve]) => {
+        setDashboardData(dashboard);
         const pa =
           dashboard?.pendingPayrollRunApprovals ??
           dashboard?.alerts?.find(
@@ -304,6 +310,7 @@ export default function PayrollPage() {
       authFetch("/payroll/reserve", token).then((r) => r.ok ? r.json() : null).catch(() => null),
     ])
       .then(([dashboard, reserve]) => {
+        setDashboardData(dashboard);
         const pa =
           dashboard?.pendingPayrollRunApprovals ??
           dashboard?.alerts?.find(
@@ -366,65 +373,204 @@ export default function PayrollPage() {
         }
       />
 
-      {/* Payroll workflow */}
-      <section className="card-wireframe overflow-hidden" aria-label="Payroll workflow steps">
-        <div className="border-b border-security-navy-100 px-5 py-4 sm:px-6">
-          <p className="section-title mb-1">Process guide</p>
-          <h2 className="text-base font-semibold text-security-navy-900">Payroll workflow</h2>
-          <p className="mt-1 max-w-2xl text-sm text-security-navy-600">
-            Follow these stages in order for every period: capture guard attendance, create the run, calculate pay and statutory amounts, approve, then mark as paid. Office staff are paid a fixed monthly salary and do not need attendance.
-          </p>
-        </div>
+      {/* Live Payroll workflow checklist */}
+      {(() => {
+        const openRun = runs.find((r) => r.status === "draft" || r.status === "calculated") ?? runs[0];
+        const {
+          isAttendanceBlocked,
+          isAttendanceClear,
+          blockerCount,
+          attendanceBlockerMessage,
+          attendanceBlockerHref,
+        } = determineAttendanceBlockerState({
+          payrollReadiness: dashboardData?.payrollReadiness,
+          pendingSiteTimesheetRows: dashboardData?.pendingSiteTimesheetRows,
+        });
 
-        <div className="px-5 py-5 sm:px-6">
-          <div className="relative hidden md:block">
-            <div className="absolute left-[10%] right-[10%] top-5 h-px bg-security-navy-100" aria-hidden />
-            <ol className="relative grid grid-cols-5 gap-2">
-              {PAYROLL_WORKFLOW_STEPS.map((s) => (
-                <li key={s.step} className="flex flex-col items-center text-center">
-                  <div
-                    className={clsx(
-                      "relative z-[1] flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold tabular-nums",
-                      workflowStepClass("highlight" in s ? s.highlight : undefined)
-                    )}
-                  >
-                    {s.step}
-                  </div>
-                  <p className="mt-3 text-xs font-semibold text-security-navy">{s.title}</p>
-                  <p className="mt-1 max-w-[9rem] text-[11px] leading-snug text-security-navy-600">{s.caption}</p>
-                </li>
-              ))}
-            </ol>
-          </div>
+        const workflowSteps = buildPayrollWorkflowSteps({
+          openRun,
+          isAttendanceClear,
+          isAttendanceBlocked,
+          blockerCount,
+          attendanceBlockerHref,
+        });
 
-          <div className="relative md:hidden">
-            <div className="absolute left-[19px] top-3 bottom-3 w-px bg-security-navy-100" aria-hidden />
-            <ol className="relative m-0 list-none space-y-0 p-0">
-              {PAYROLL_WORKFLOW_STEPS.map((s) => (
-                <li key={s.step} className="relative flex gap-4 pb-6 last:pb-0">
-                  <div
-                    className={clsx(
-                      "relative z-[1] flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold tabular-nums",
-                      workflowStepClass("highlight" in s ? s.highlight : undefined)
-                    )}
-                  >
-                    {s.step}
-                  </div>
-                  <div className="min-w-0 pt-1">
-                    <p className="text-sm font-semibold text-security-navy">{s.title}</p>
-                    <p className="mt-0.5 text-xs leading-relaxed text-security-navy-600">{s.caption}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
+        return (
+          <section className="card-wireframe overflow-hidden" aria-label="Payroll workflow steps">
+            <div className="border-b border-security-navy-100 px-5 py-4 sm:px-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div>
+                  <p className="section-title mb-1">Process guide</p>
+                  <h2 className="text-base font-semibold text-security-navy-900">Payroll workflow</h2>
+                </div>
+                {dashboardData?.currentPayPeriod && (
+                  <span className="inline-flex items-center rounded-full border border-security-navy-200 bg-security-navy-50/80 px-3 py-1 text-xs font-medium text-security-navy-700">
+                    <span className="mr-1.5 h-2 w-2 rounded-full bg-security-amber-500" />
+                    {dashboardData.currentPayPeriod.label ? `${dashboardData.currentPayPeriod.label.replace(/\s*\d{4}$/, "")} roster` : "Current roster"} ·{" "}
+                    {format(new Date(dashboardData.currentPayPeriod.periodStart), "d MMM")} –{" "}
+                    {format(new Date(dashboardData.currentPayPeriod.periodEnd), "d MMM")}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 max-w-2xl text-sm text-security-navy-600">
+                Follow these stages in order for every period: capture guard attendance, create the run, calculate pay and statutory amounts, approve, then mark as paid. Office staff are paid a fixed monthly salary and do not need attendance.
+              </p>
+            </div>
 
-          <AlertBanner variant="info" className="mt-5">
-            Always run <strong className="font-semibold">Calculate</strong> before <strong className="font-semibold">Approve</strong>, then{" "}
-            <strong className="font-semibold">Mark paid</strong> when funds have cleared.
-          </AlertBanner>
-        </div>
-      </section>
+            <div className="px-5 py-5 sm:px-6">
+              {/* Desktop view */}
+              <div className="relative hidden md:block">
+                <div className="absolute left-[10%] right-[10%] top-5 h-px bg-security-navy-100" aria-hidden />
+                <ol className="relative grid grid-cols-5 gap-2">
+                  {workflowSteps.map((s) => {
+                    const stepCircle = (
+                      <div
+                        className={clsx(
+                          "relative z-[1] flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold tabular-nums transition-transform duration-150",
+                          s.status === "done" && "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm",
+                          s.status === "ready" && "border-security-amber-500 bg-security-amber-50 text-security-amber-800 shadow-sm ring-2 ring-security-amber-200",
+                          s.status === "blocked" && "border-red-500 bg-red-50 text-red-700 shadow-sm ring-2 ring-red-200",
+                          s.status === "waiting" && "border-security-navy-200 bg-white text-security-navy-400"
+                        )}
+                      >
+                        {s.status === "done" ? (
+                          <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : s.status === "blocked" ? (
+                          <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                        ) : (
+                          s.step
+                        )}
+                      </div>
+                    );
+
+                    const stepContent = (
+                      <div className="flex flex-col items-center text-center">
+                        {stepCircle}
+                        <div className="mt-2.5 flex items-center gap-1.5">
+                          <p className="text-xs font-semibold text-security-navy-900">{s.title}</p>
+                          <span
+                            className={clsx(
+                              "rounded px-1.5 py-0.2 text-[9px] font-semibold uppercase tracking-wider",
+                              s.status === "done" && "bg-emerald-100 text-emerald-800",
+                              s.status === "ready" && "bg-amber-100 text-amber-800 animate-pulse",
+                              s.status === "blocked" && "bg-red-100 text-red-800",
+                              s.status === "waiting" && "bg-security-navy-100 text-security-navy-500"
+                            )}
+                          >
+                            {s.statusLabel}
+                          </span>
+                        </div>
+                        <p className="mt-1 max-w-[10rem] text-[11px] leading-snug text-security-navy-600">
+                          {s.caption}
+                        </p>
+                        {s.href && s.status === "blocked" && (
+                          <span className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-red-600 underline hover:text-red-800">
+                            Clear blockers →
+                          </span>
+                        )}
+                      </div>
+                    );
+
+                    return (
+                      <li key={s.step}>
+                        {s.href && s.status === "blocked" ? (
+                          <Link href={s.href} className="group block focus:outline-none">
+                            {stepContent}
+                          </Link>
+                        ) : (
+                          stepContent
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+
+              {/* Mobile view */}
+              <div className="relative md:hidden">
+                <div className="absolute left-[19px] top-3 bottom-3 w-px bg-security-navy-100" aria-hidden />
+                <ol className="relative m-0 list-none space-y-0 p-0">
+                  {workflowSteps.map((s) => (
+                    <li key={s.step} className="relative flex gap-4 pb-6 last:pb-0">
+                      <div
+                        className={clsx(
+                          "relative z-[1] flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold tabular-nums",
+                          s.status === "done" && "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm",
+                          s.status === "ready" && "border-security-amber-500 bg-security-amber-50 text-security-amber-800 shadow-sm ring-2 ring-security-amber-200",
+                          s.status === "blocked" && "border-red-500 bg-red-50 text-red-700 shadow-sm ring-2 ring-red-200",
+                          s.status === "waiting" && "border-security-navy-200 bg-white text-security-navy-400"
+                        )}
+                      >
+                        {s.status === "done" ? (
+                          <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : s.status === "blocked" ? (
+                          <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                        ) : (
+                          s.step
+                        )}
+                      </div>
+                      <div className="min-w-0 pt-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold text-security-navy-900">{s.title}</p>
+                          <span
+                            className={clsx(
+                              "rounded px-1.5 py-0.2 text-[9px] font-semibold uppercase tracking-wider",
+                              s.status === "done" && "bg-emerald-100 text-emerald-800",
+                              s.status === "ready" && "bg-amber-100 text-amber-800 animate-pulse",
+                              s.status === "blocked" && "bg-red-100 text-red-800",
+                              s.status === "waiting" && "bg-security-navy-100 text-security-navy-500"
+                            )}
+                          >
+                            {s.statusLabel}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-xs leading-relaxed text-security-navy-600">{s.caption}</p>
+                        {s.href && s.status === "blocked" && (
+                          <Link href={s.href} className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-red-600 underline">
+                            Clear blockers →
+                          </Link>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+
+              {isAttendanceBlocked ? (
+                <AlertBanner variant="error" className="mt-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-red-900">Attendance is blocking payroll calculation</p>
+                      <p className="mt-0.5 text-xs text-red-700">
+                        {attendanceBlockerMessage} The Calculate action remains disabled until all actual attendance is reviewed and approved.
+                      </p>
+                    </div>
+                    <Link
+                      href={attendanceBlockerHref}
+                      className="inline-flex shrink-0 items-center justify-center rounded-security border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 shadow-sm hover:bg-red-50"
+                    >
+                      Resolve Attendance Blockers →
+                    </Link>
+                  </div>
+                </AlertBanner>
+              ) : (
+                <AlertBanner variant="info" className="mt-5">
+                  Always run <strong className="font-semibold">Calculate</strong> before <strong className="font-semibold">Approve</strong>, then{" "}
+                  <strong className="font-semibold">Mark paid</strong> when funds have cleared.
+                </AlertBanner>
+              )}
+            </div>
+          </section>
+        );
+      })()}
 
       {showForm && canCreatePayroll && (
         <PayrollRunForm
@@ -543,17 +689,31 @@ export default function PayrollPage() {
             <h2 className="section-title">Payroll runs</h2>
             <p className="text-sm text-security-navy-600">{runs.length} run{runs.length === 1 ? "" : "s"}</p>
           </div>
-          {runs.map((run) => (
-            <PayrollRunCard
-              key={run.id}
-              run={run}
-              token={token!}
-              canEdit={canEditPayroll}
-              canApprove={canApprovePayroll}
-              canExport={canExportPayroll}
-              onAction={refresh}
-            />
-          ))}
+          {runs.map((run) => {
+            const {
+              isAttendanceBlocked,
+              attendanceBlockerMessage,
+              attendanceBlockerHref,
+            } = determineAttendanceBlockerState({
+              payrollReadiness: dashboardData?.payrollReadiness,
+              pendingSiteTimesheetRows: dashboardData?.pendingSiteTimesheetRows,
+            });
+
+            return (
+              <PayrollRunCard
+                key={run.id}
+                run={run}
+                token={token!}
+                canEdit={canEditPayroll}
+                canApprove={canApprovePayroll}
+                canExport={canExportPayroll}
+                onAction={refresh}
+                isAttendanceBlocked={isAttendanceBlocked}
+                attendanceBlockerMessage={attendanceBlockerMessage}
+                attendanceBlockerHref={attendanceBlockerHref}
+              />
+            );
+          })}
         </section>
       ) : (
         <EmptyState
@@ -1196,6 +1356,9 @@ function PayrollRunCard({
   canApprove,
   canExport,
   onAction,
+  isAttendanceBlocked,
+  attendanceBlockerMessage,
+  attendanceBlockerHref,
 }: {
   run: PayrollRun;
   token: string;
@@ -1203,6 +1366,9 @@ function PayrollRunCard({
   canApprove: boolean;
   canExport: boolean;
   onAction: () => void;
+  isAttendanceBlocked?: boolean;
+  attendanceBlockerMessage?: string | null;
+  attendanceBlockerHref?: string | null;
 }) {
   const [items, setItems] = useState<PayrollItem[]>([]);
   const [showItems, setShowItems] = useState(false);
@@ -1544,11 +1710,31 @@ function PayrollRunCard({
             </div>
           )}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canEdit && run.status === "draft" && (
-            <Button type="button" size="sm" onClick={handleCalculate} loading={actionLoading}>
-              Calculate
-            </Button>
+            <div className="flex flex-col items-end gap-1">
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleCalculate}
+                loading={actionLoading}
+                disabled={isAttendanceBlocked}
+                className={isAttendanceBlocked ? "opacity-60 cursor-not-allowed" : ""}
+                title={isAttendanceBlocked ? attendanceBlockerMessage ?? "Attendance is blocked" : undefined}
+              >
+                Calculate
+              </Button>
+              {isAttendanceBlocked && attendanceBlockerMessage && (
+                <div className="flex items-center gap-1.5 text-[11px] text-red-600 font-medium max-w-xs text-right">
+                  <span>{attendanceBlockerMessage}</span>
+                  {attendanceBlockerHref && (
+                    <Link href={attendanceBlockerHref} className="underline hover:text-red-800 shrink-0">
+                      Fix →
+                    </Link>
+                  )}
+                </div>
+              )}
+            </div>
           )}
           {run.status === "calculated" && (
             <>

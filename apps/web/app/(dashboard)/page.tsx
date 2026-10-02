@@ -8,6 +8,7 @@ import { useSettings } from "@/lib/settings-context";
 import { NAV_ITEMS, canAccessRoute } from "@/lib/permissions";
 import { MODULE_DESCRIPTIONS, MODULE_ICONS, MODULE_ICON_FALLBACK } from "@/lib/module-presentation";
 import { DASHBOARD_TILE_LIMIT, PINNED_LIMIT, useDashboardModules } from "@/lib/dashboard-modules";
+import { TodayWorkList } from "@/components/today-work-list";
 
 interface Tile {
   href: string;
@@ -70,10 +71,9 @@ export default function ModuleLauncher() {
   const pinnedSet = new Set(pinned);
 
   return (
-    // The launcher owns exactly the height DashboardLayout gives it and never
-    // scrolls: the grid takes the leftover space and the tiles divide it, so the
-    // whole module set stays on one screen at any window size.
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-5xl flex-col items-center overflow-hidden">
+    // The launcher owns the height DashboardLayout gives it, allowing smooth
+    // scrolling when action items are present while keeping full-screen harmony.
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-5xl flex-col items-center overflow-y-auto sm:overflow-hidden pb-2">
       <header className="flex shrink-0 flex-col items-center text-center">
         {/* Eight rows of tiles need every pixel on a phone, so the date and the
             strapline are desktop-only trim. */}
@@ -93,8 +93,11 @@ export default function ModuleLauncher() {
         <p className="mt-1.5 text-sm text-security-navy-500 max-sm:hidden [@media(max-height:620px)]:hidden">
           {settings?.name ? `${settings.name} — pick up where you left off` : "Pick a module to get started"}
         </p>
-        <span className="mb-5 mt-4 h-0.5 w-10 rounded-full bg-security-amber-500 max-sm:my-2 [@media(max-height:700px)]:my-3" />
+        <span className="mb-4 mt-3 h-0.5 w-10 rounded-full bg-security-amber-500 max-sm:my-2 [@media(max-height:700px)]:my-2" />
       </header>
+
+      {/* Front door work list above tiles */}
+      <TodayWorkList />
 
       {available.length === 0 ? (
         <div className="w-full rounded-security-lg border border-dashed border-security-navy-200 bg-white/60 px-6 py-12 text-center">

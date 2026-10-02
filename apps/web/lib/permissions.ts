@@ -1,4 +1,5 @@
 import type { AuthUser, Capability, CapabilityMap } from "./api";
+export type { AuthUser, Capability, CapabilityMap };
 import { CAPABILITY_CATALOG, CATALOG_PATHS } from "./capability-catalog.generated";
 
 export interface NavItem {

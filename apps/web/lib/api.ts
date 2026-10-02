@@ -899,16 +899,57 @@ export interface SearchSite {
   location: string | null;
 }
 
+export interface SearchClient {
+  id: string;
+  name: string;
+  contactPerson?: string | null;
+  phone?: string | null;
+}
+
+export interface SearchTask {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  dueDate?: string | null;
+}
+
+export interface SearchIncident {
+  id: string;
+  incidentNumber: string;
+  title?: string | null;
+  incidentType: string;
+  severity: string;
+  status: string;
+}
+
+export interface SearchInvoice {
+  id: string;
+  invoiceNumber: string;
+  totalAmount: number;
+  status: string;
+  dueDate?: string | null;
+  client?: { id: string; name: string } | null;
+}
+
 export interface SearchResults {
   employees: SearchEmployee[];
   sites: SearchSite[];
+  clients?: SearchClient[];
+  tasks?: SearchTask[];
+  incidents?: SearchIncident[];
+  invoices?: SearchInvoice[];
 }
 
 export async function search(token: string, q: string): Promise<SearchResults> {
   const trimmed = q.trim();
-  if (trimmed.length < 2) return { employees: [], sites: [] };
+  if (trimmed.length < 2) {
+    return { employees: [], sites: [], clients: [], tasks: [], incidents: [], invoices: [] };
+  }
   const res = await authFetch(`/search?q=${encodeURIComponent(trimmed)}`, token);
-  if (!res.ok) return { employees: [], sites: [] };
+  if (!res.ok) {
+    return { employees: [], sites: [], clients: [], tasks: [], incidents: [], invoices: [] };
+  }
   return res.json();
 }
 
