@@ -59,6 +59,7 @@ import {
   completeOfficeClockInWithLocation,
   completeOfficeClockOutWithLocation,
 } from "./office-clock.service.js";
+import { findOfficeSiteForEmployee } from "./office-geofence.service.js";
 import { evaluateSiteGeofence, formatDistance } from "../../lib/geo.js";
 import { upsertAlert } from "../../modules/alerts/alerts.service.js";
 
@@ -747,13 +748,15 @@ export async function processIncomingLocation(
 
   // 1. Office Staff Clock In with Location
   if (pending.intent === "office_clock_in") {
-    const site = pending.siteId ? await prisma.site.findUnique({ where: { id: pending.siteId } }) : null;
+    const site = (pending.siteId ? await prisma.site.findUnique({ where: { id: pending.siteId } }) : null)
+      ?? (await findOfficeSiteForEmployee(employee.id, employee.companyId));
     return completeOfficeClockInWithLocation(employee as any, from, site, latitude, longitude);
   }
 
   // 2. Office Staff Clock Out with Location
   if (pending.intent === "office_clock_out") {
-    const site = pending.siteId ? await prisma.site.findUnique({ where: { id: pending.siteId } }) : null;
+    const site = (pending.siteId ? await prisma.site.findUnique({ where: { id: pending.siteId } }) : null)
+      ?? (await findOfficeSiteForEmployee(employee.id, employee.companyId));
     return completeOfficeClockOutWithLocation(employee as any, from, site, latitude, longitude);
   }
 

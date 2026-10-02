@@ -44,6 +44,11 @@ const businessSettingsSchema = z.object({
   autoRosterHorizonPeriods: z.number().int().min(1).max(6).optional(),
   rosterPeriodCalendars: z.array(rosterPeriodCalendarSchema).min(1).max(8).optional(),
   defaultRosterPeriodCalendarId: z.string().min(1).max(64).optional(),
+  adminGeofenceEnabled: z.boolean().optional(),
+  adminOfficeName: z.string().max(100).optional().nullable(),
+  adminOfficeLatitude: z.number().min(-90).max(90).optional().nullable(),
+  adminOfficeLongitude: z.number().min(-180).max(180).optional().nullable(),
+  adminGeofenceRadiusMeters: z.number().int().min(10).max(100000).optional().nullable(),
 });
 
 const updateSettingsSchema = z.object({

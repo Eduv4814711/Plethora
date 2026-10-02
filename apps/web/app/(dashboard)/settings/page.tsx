@@ -439,7 +439,7 @@ function BusinessSettingsSection({
   settings: ReturnType<typeof useSettings>["settings"];
   saving: boolean;
   saveError: string | null;
-  onSave: (data: Record<string, string | number | null | RosterPeriodCalendarConfig[]>) => Promise<void>;
+  onSave: (data: Record<string, string | number | boolean | null | undefined | RosterPeriodCalendarConfig[]>) => Promise<void>;
   readOnly?: boolean;
 }) {
   const bizSettings = settings?.settings ?? {};
@@ -454,7 +454,14 @@ function BusinessSettingsSection({
     autoRosterHorizonPeriods: "2",
     rosterPeriodCalendars: [] as RosterPeriodCalendarConfig[],
     defaultRosterPeriodCalendarId: "pay-aligned",
+    adminGeofenceEnabled: true,
+    adminOfficeName: "",
+    adminOfficeLatitude: "",
+    adminOfficeLongitude: "",
+    adminGeofenceRadiusMeters: "200",
   });
+  const [geoDetecting, setGeoDetecting] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
 
   useEffect(() => {
     if (settings?.settings) {
@@ -480,9 +487,49 @@ function BusinessSettingsSection({
                 },
               ],
         defaultRosterPeriodCalendarId: s.defaultRosterPeriodCalendarId ?? "pay-aligned",
+        adminGeofenceEnabled: s.adminGeofenceEnabled ?? true,
+        adminOfficeName: s.adminOfficeName ?? "",
+        adminOfficeLatitude: s.adminOfficeLatitude != null ? String(s.adminOfficeLatitude) : "",
+        adminOfficeLongitude: s.adminOfficeLongitude != null ? String(s.adminOfficeLongitude) : "",
+        adminGeofenceRadiusMeters: s.adminGeofenceRadiusMeters != null ? String(s.adminGeofenceRadiusMeters) : "200",
       });
     }
   }, [settings?.settings]);
+
+  const handleUseCurrentLocation = () => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setGeoError("Geolocation is not supported by your browser.");
+      return;
+    }
+    setGeoDetecting(true);
+    setGeoError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setForm((f) => ({
+          ...f,
+          adminOfficeLatitude: pos.coords.latitude.toFixed(7),
+          adminOfficeLongitude: pos.coords.longitude.toFixed(7),
+          adminGeofenceRadiusMeters: f.adminGeofenceRadiusMeters || "200",
+          adminOfficeName: f.adminOfficeName || "Head Office",
+        }));
+        setGeoDetecting(false);
+      },
+      (err) => {
+        setGeoError(`Unable to retrieve GPS location: ${err.message}`);
+        setGeoDetecting(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  const handleClearGeo = () => {
+    setForm((f) => ({
+      ...f,
+      adminOfficeLatitude: "",
+      adminOfficeLongitude: "",
+    }));
+    setGeoError(null);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -496,6 +543,35 @@ function BusinessSettingsSection({
     const defaultCalendarId = calendars.some((c) => c.id === form.defaultRosterPeriodCalendarId)
       ? form.defaultRosterPeriodCalendarId
       : calendars[0]!.id;
+
+    const latStr = form.adminOfficeLatitude.trim();
+    const lngStr = form.adminOfficeLongitude.trim();
+    if ((latStr && !lngStr) || (!latStr && lngStr)) {
+      setGeoError("Both Latitude and Longitude are required together (or clear both).");
+      return;
+    }
+    let latNum: number | null = null;
+    let lngNum: number | null = null;
+    let radiusNum: number | null = null;
+    if (latStr && lngStr) {
+      latNum = parseFloat(latStr);
+      lngNum = parseFloat(lngStr);
+      radiusNum = parseInt(form.adminGeofenceRadiusMeters, 10);
+      if (Number.isNaN(latNum) || latNum < -90 || latNum > 90) {
+        setGeoError("Latitude must be a valid number between -90 and 90.");
+        return;
+      }
+      if (Number.isNaN(lngNum) || lngNum < -180 || lngNum > 180) {
+        setGeoError("Longitude must be a valid number between -180 and 180.");
+        return;
+      }
+      if (Number.isNaN(radiusNum) || radiusNum < 10 || radiusNum > 100000) {
+        setGeoError("Geofence radius must be between 10 and 100,000 meters.");
+        return;
+      }
+    }
+    setGeoError(null);
+
     onSave({
       currency: form.currency,
       dateFormat: form.dateFormat,
@@ -511,8 +587,15 @@ function BusinessSettingsSection({
         endDay: Math.min(31, Math.max(1, calendar.endDay)),
       })),
       defaultRosterPeriodCalendarId: defaultCalendarId,
+      adminGeofenceEnabled: form.adminGeofenceEnabled,
+      adminOfficeName: form.adminOfficeName.trim() || null,
+      adminOfficeLatitude: latNum,
+      adminOfficeLongitude: lngNum,
+      adminGeofenceRadiusMeters: radiusNum ?? (latNum != null ? 200 : null),
     });
   };
+
+  const hasGeoCoords = Boolean(form.adminOfficeLatitude.trim() && form.adminOfficeLongitude.trim());
 
   return (
     <div>
@@ -770,6 +853,156 @@ function BusinessSettingsSection({
             </button>
           )}
         </div>
+
+        {/* Admin & Office Staff Geofence Configuration */}
+        <div className="rounded-security-lg border border-security-navy-100 dark:border-security-navy-700 bg-security-navy-50/60 dark:bg-security-navy-900/40 p-4 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <h4 className="text-sm font-medium text-security-navy-900 dark:text-security-navy-100 flex items-center gap-2">
+                <span>📍 Admin &amp; Office Staff Geofence</span>
+                {hasGeoCoords ? (
+                  form.adminGeofenceEnabled ? (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                      Active ({form.adminGeofenceRadiusMeters || 200}m)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                      Disabled
+                    </span>
+                  )
+                ) : (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                    Not Configured
+                  </span>
+                )}
+              </h4>
+              <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-1">
+                Central geolocation coordinates for administrative and head office staff clocking in/out via WhatsApp.
+              </p>
+            </div>
+            {!readOnly && (
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleUseCurrentLocation}
+                  disabled={geoDetecting || saving}
+                  className="text-xs font-medium px-2.5 py-1.5 rounded border border-security-navy-200 dark:border-security-navy-700 text-security-navy-700 dark:text-security-navy-300 hover:bg-white dark:hover:bg-security-navy-800 transition-colors shadow-sm"
+                >
+                  {geoDetecting ? "Locating…" : "📍 Pin Current Location"}
+                </button>
+                {hasGeoCoords && (
+                  <button
+                    type="button"
+                    onClick={handleClearGeo}
+                    disabled={saving}
+                    className="text-xs font-medium px-2 py-1 text-red-600 dark:text-red-400 hover:underline"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {geoError && (
+            <div className="p-3 text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30 rounded-lg border border-red-200 dark:border-red-800">
+              {geoError}
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="adminGeofenceEnabled"
+                checked={form.adminGeofenceEnabled}
+                onChange={(e) => setForm((f) => ({ ...f, adminGeofenceEnabled: e.target.checked }))}
+                disabled={readOnly}
+                className="rounded border-security-navy-300 text-security-navy-600 focus:ring-security-navy-500"
+              />
+              <label htmlFor="adminGeofenceEnabled" className="text-sm text-security-navy-800 dark:text-security-navy-200 cursor-pointer">
+                Enforce geofence verification for admin staff clocking via WhatsApp
+              </label>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+                Office / HQ Label
+              </label>
+              <input
+                type="text"
+                value={form.adminOfficeName}
+                onChange={(e) => setForm((f) => ({ ...f, adminOfficeName: e.target.value }))}
+                className="input-modern w-full"
+                placeholder="e.g. Head Office / Corporate HQ"
+                disabled={readOnly}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+                  Latitude (WGS84)
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={form.adminOfficeLatitude}
+                  onChange={(e) => setForm((f) => ({ ...f, adminOfficeLatitude: e.target.value }))}
+                  className="input-modern w-full"
+                  placeholder="-26.1952400"
+                  disabled={readOnly}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+                  Longitude (WGS84)
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={form.adminOfficeLongitude}
+                  onChange={(e) => setForm((f) => ({ ...f, adminOfficeLongitude: e.target.value }))}
+                  className="input-modern w-full"
+                  placeholder="28.0345600"
+                  disabled={readOnly}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+                  Radius (meters)
+                </label>
+                <input
+                  type="number"
+                  min={10}
+                  max={100000}
+                  value={form.adminGeofenceRadiusMeters}
+                  onChange={(e) => setForm((f) => ({ ...f, adminGeofenceRadiusMeters: e.target.value }))}
+                  className="input-modern w-full"
+                  placeholder="200"
+                  disabled={readOnly}
+                />
+              </div>
+            </div>
+
+            {hasGeoCoords && (
+              <div className="flex items-center justify-between text-xs text-security-navy-500 dark:text-security-navy-400 pt-1">
+                <span>
+                  Coordinates: {form.adminOfficeLatitude}, {form.adminOfficeLongitude}
+                </span>
+                <a
+                  href={`https://www.google.com/maps?q=${form.adminOfficeLatitude},${form.adminOfficeLongitude}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-security-navy-600 dark:text-security-navy-300 hover:underline flex items-center gap-1 font-medium"
+                >
+                  🗺️ View on Google Maps ↗
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Team Member ID Prefix</label>
           <input

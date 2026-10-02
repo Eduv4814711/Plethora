@@ -2,6 +2,16 @@ import { prisma } from "../../lib/prisma.js";
 import { siteHasGeofence } from "../../lib/geo.js";
 import type { Site } from "@prisma/client";
 
+export type OfficeGeofenceTarget = {
+  id?: string | null;
+  name: string;
+  companyId: string;
+  latitude: number | null;
+  longitude: number | null;
+  geofenceRadiusMeters?: number | null;
+  isCompanyAdminDefault?: boolean;
+};
+
 /**
  * Resolve the applicable office site and geofence for an office/admin staff member.
  *
@@ -9,14 +19,15 @@ import type { Site } from "@prisma/client";
  * 1. Employee Geofence Exemption: If employee.geofenceExempt === true, returns null (no perimeter check).
  * 2. Active SiteAssignment: SiteAssignment linking the employee to a Site with coordinates.
  * 3. Place of Work match: Site matching the employee's `placeOfWork` string.
- * 4. Company Head Office fallback: Site matching "Head Office", "HQ", or "Office".
+ * 4. Company Business Settings Geofence: Admin coordinates configured in Business Settings.
+ * 5. Company Head Office fallback: Site matching "Head Office", "HQ", or "Office".
  *
  * If no geofenced site is found, returns null (allowing normal clock-in).
  */
 export async function findOfficeSiteForEmployee(
   employeeId: string,
   companyId: string
-): Promise<Site | null> {
+): Promise<Site | OfficeGeofenceTarget | null> {
   const employee = await prisma.employee.findUnique({
     where: { id: employeeId },
     select: {
@@ -65,7 +76,39 @@ export async function findOfficeSiteForEmployee(
     }
   }
 
-  // 3. Fallback: search for standard Head Office / Office site in the company
+  // 3. Fallback: Company Business Settings admin geofence coordinates
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { id: true, name: true, settings: true },
+  });
+  const rawSettings = (company?.settings as Record<string, unknown>) ?? {};
+  const adminGeofenceEnabled = rawSettings.adminGeofenceEnabled !== false;
+  if (
+    adminGeofenceEnabled &&
+    rawSettings.adminOfficeLatitude != null &&
+    rawSettings.adminOfficeLongitude != null
+  ) {
+    const lat = Number(rawSettings.adminOfficeLatitude);
+    const lng = Number(rawSettings.adminOfficeLongitude);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      const radius = Number(rawSettings.adminGeofenceRadiusMeters);
+      const officeName =
+        typeof rawSettings.adminOfficeName === "string" && rawSettings.adminOfficeName.trim()
+          ? rawSettings.adminOfficeName.trim()
+          : `${company?.name || "Company"} Head Office`;
+      return {
+        id: null,
+        name: officeName,
+        companyId,
+        latitude: lat,
+        longitude: lng,
+        geofenceRadiusMeters: Number.isFinite(radius) && radius > 0 ? radius : 200,
+        isCompanyAdminDefault: true,
+      };
+    }
+  }
+
+  // 4. Fallback: search for standard Head Office / Office site in the company
   const officeKeywords = ["Head Office", "HQ", "Main Office", "Corporate Office", "Office"];
   if (prisma.site?.findFirst) {
     for (const keyword of officeKeywords) {
@@ -85,3 +128,4 @@ export async function findOfficeSiteForEmployee(
 
   return null;
 }
+

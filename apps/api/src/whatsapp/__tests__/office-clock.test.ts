@@ -663,4 +663,129 @@ describe("Office Staff WhatsApp Clock In & Clock Out", () => {
       expect(upsertStaffAttendance).toHaveBeenCalled();
     });
   });
+
+  describe("Company Business Settings Admin Geofence", () => {
+    it("resolves company admin geofence from company.settings when employee has no specific site", async () => {
+      vi.mocked(prisma.siteAssignment.findFirst).mockResolvedValueOnce(null);
+      vi.mocked(prisma.company.findUnique).mockResolvedValueOnce({
+        id: "co-101",
+        name: "Acme Security HQ",
+        settings: {
+          adminGeofenceEnabled: true,
+          adminOfficeName: "Acme Main Office",
+          adminOfficeLatitude: -26.2041,
+          adminOfficeLongitude: 28.0473,
+          adminGeofenceRadiusMeters: 250,
+        },
+      } as any);
+
+      const { findOfficeSiteForEmployee } = await import("../services/office-geofence.service.js");
+      const target = await findOfficeSiteForEmployee("emp-office-1", "co-101");
+
+      expect(target).not.toBeNull();
+      expect(target?.name).toBe("Acme Main Office");
+      expect(target?.latitude).toBe(-26.2041);
+      expect(target?.longitude).toBe(28.0473);
+      expect(target?.geofenceRadiusMeters).toBe(250);
+      expect(target?.id).toBeNull();
+    });
+
+    it("rejects office clock-in when outside company settings admin geofence", async () => {
+      const companyAdminTarget = {
+        id: null,
+        name: "Acme Main Office",
+        companyId: "co-101",
+        latitude: -26.2041,
+        longitude: 28.0473,
+        geofenceRadiusMeters: 200,
+        isCompanyAdminDefault: true,
+      };
+
+      const { completeOfficeClockInWithLocation } = await import("../services/office-clock.service.js");
+      // Pretoria coordinates ~55km away
+      const result = await completeOfficeClockInWithLocation(
+        mockOfficeEmployee,
+        "27829998877",
+        companyAdminTarget as any,
+        -25.7479,
+        28.2293
+      );
+
+      expect(result.reply).toContain("❌ *Clock In Failed: Outside Office Geofence*");
+      expect(result.reply).toContain("Acme Main Office");
+      expect(result.reply).toContain("You must be within *200m*");
+      expect(upsertStaffAttendance).not.toHaveBeenCalled();
+    });
+
+    it("accepts office clock-in when inside company settings admin geofence and stores siteId as null", async () => {
+      const companyAdminTarget = {
+        id: null,
+        name: "Acme Main Office",
+        companyId: "co-101",
+        latitude: -26.2041,
+        longitude: 28.0473,
+        geofenceRadiusMeters: 200,
+        isCompanyAdminDefault: true,
+      };
+
+      upsertStaffAttendance.mockResolvedValueOnce({
+        id: "staff-att-biz-1",
+        companyId: "co-101",
+        employeeId: "emp-office-1",
+        workDate: new Date(),
+        status: "present",
+        timeIn: new Date(),
+        siteId: null,
+      });
+
+      const { completeOfficeClockInWithLocation } = await import("../services/office-clock.service.js");
+      // Pin ~30m away
+      const result = await completeOfficeClockInWithLocation(
+        mockOfficeEmployee,
+        "27829998877",
+        companyAdminTarget as any,
+        -26.2043,
+        28.0474
+      );
+
+      expect(result.reply).toContain("Good day, Nomsa! 🏢");
+      expect(result.reply).toContain("Verified at *Acme Main Office*");
+      expect(upsertStaffAttendance).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            siteId: null,
+            clockInLat: -26.2043,
+            clockInLng: 28.0474,
+          }),
+        })
+      );
+      expect(createAuditLogMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            siteName: "Acme Main Office",
+            siteId: null,
+          }),
+        })
+      );
+    });
+
+    it("ignores company settings geofence when adminGeofenceEnabled is false", async () => {
+      vi.mocked(prisma.siteAssignment.findFirst).mockResolvedValueOnce(null);
+      vi.mocked(prisma.company.findUnique).mockResolvedValueOnce({
+        id: "co-101",
+        name: "Acme Security HQ",
+        settings: {
+          adminGeofenceEnabled: false,
+          adminOfficeLatitude: -26.2041,
+          adminOfficeLongitude: 28.0473,
+        },
+      } as any);
+
+      const { findOfficeSiteForEmployee } = await import("../services/office-geofence.service.js");
+      const target = await findOfficeSiteForEmployee("emp-office-1", "co-101");
+
+      expect(target).toBeNull();
+    });
+  });
 });
+

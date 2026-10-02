@@ -269,6 +269,11 @@ export interface CompanySettings {
     autoRosterHorizonPeriods?: number;
     rosterPeriodCalendars?: RosterPeriodCalendarConfig[];
     defaultRosterPeriodCalendarId?: string;
+    adminGeofenceEnabled?: boolean;
+    adminOfficeName?: string | null;
+    adminOfficeLatitude?: number | null;
+    adminOfficeLongitude?: number | null;
+    adminGeofenceRadiusMeters?: number | null;
   } | null;
 }
 
@@ -325,6 +330,11 @@ export async function updateSettings(
       autoRosterHorizonPeriods?: number;
       rosterPeriodCalendars?: RosterPeriodCalendarConfig[];
       defaultRosterPeriodCalendarId?: string;
+      adminGeofenceEnabled?: boolean;
+      adminOfficeName?: string | null;
+      adminOfficeLatitude?: number | null;
+      adminOfficeLongitude?: number | null;
+      adminGeofenceRadiusMeters?: number | null;
     }>;
   }>
 ): Promise<CompanySettings> {

@@ -2,7 +2,7 @@ import { prisma } from "../../lib/prisma.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { getCompanyTimezone } from "../../lib/timezone.js";
 import { formatInTimeZone } from "date-fns-tz";
-import { findOfficeSiteForEmployee } from "./office-geofence.service.js";
+import { findOfficeSiteForEmployee, type OfficeGeofenceTarget } from "./office-geofence.service.js";
 import { siteHasGeofence, evaluateSiteGeofence, formatDistance } from "../../lib/geo.js";
 import { sessionManager } from "./session.service.js";
 import type { Site } from "@prisma/client";
@@ -250,7 +250,7 @@ export async function handleOfficeClockOut(
 export async function completeOfficeClockInWithLocation(
   employee: OfficeEmployee,
   fromWaId: string,
-  site: Site | null,
+  site: Site | OfficeGeofenceTarget | null,
   latitude: number,
   longitude: number
 ): Promise<{ reply: string }> {
@@ -346,7 +346,7 @@ export async function completeOfficeClockInWithLocation(
 export async function completeOfficeClockOutWithLocation(
   employee: OfficeEmployee,
   fromWaId: string,
-  site: Site | null,
+  site: Site | OfficeGeofenceTarget | null,
   latitude: number,
   longitude: number
 ): Promise<{ reply: string }> {
