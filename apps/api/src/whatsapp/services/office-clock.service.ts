@@ -4,6 +4,7 @@ import { getCompanyTimezone } from "../../lib/timezone.js";
 import { formatInTimeZone } from "date-fns-tz";
 import { findOfficeSiteForEmployee } from "./office-geofence.service.js";
 import { siteHasGeofence, evaluateSiteGeofence, formatDistance } from "../../lib/geo.js";
+import { sessionManager } from "./session.service.js";
 import type { Site } from "@prisma/client";
 
 export type OfficeEmployee = {
@@ -34,7 +35,7 @@ const WHATSAPP_LOCATION_PENDING_MS = 10 * 60 * 1000;
 export async function handleOfficeClockIn(
   employee: OfficeEmployee,
   fromWaId: string
-): Promise<{ reply: string }> {
+): Promise<{ reply: string } | { sendInteractiveLocation: { body: string } }> {
   const now = new Date();
   const timeZone = await getCompanyTimezone(employee.companyId);
   const todayDateStr = formatInTimeZone(now, timeZone, "yyyy-MM-dd");
@@ -86,83 +87,53 @@ export async function handleOfficeClockIn(
     }
   }
 
-  // 3. Resolve office geofence for employee
+  // 3. Resolve office site
   const officeSite = await findOfficeSiteForEmployee(employee.id, employee.companyId);
-  if (officeSite && siteHasGeofence(officeSite)) {
-    const expiresAt = new Date(Date.now() + WHATSAPP_LOCATION_PENDING_MS);
-    await prisma.whatsAppClockPending.upsert({
-      where: { waFrom: fromWaId },
-      create: {
-        waFrom: fromWaId,
-        employeeId: employee.id,
-        companyId: employee.companyId,
-        intent: "office_clock_in",
-        siteId: officeSite.id,
-        expiresAt,
-      },
-      update: {
-        employeeId: employee.id,
-        companyId: employee.companyId,
-        intent: "office_clock_in",
-        siteId: officeSite.id,
-        failedAttempts: 0,
-        expiresAt,
-      },
-    });
 
-    return {
-      reply:
-        `🏢 *Office Location Required*\n\n` +
-        `Office: *${officeSite.name}*\n\n` +
-        `Please share your current WhatsApp location within 10 minutes to verify your arrival:\n` +
-        `1. Tap 📎 (or + on iPhone)\n` +
-        `2. Select *Location*\n` +
-        `3. Tap *Send your current location*`,
-    };
+  // 4. Check for recently sent location within 3 minutes (Location First flow)
+  const session = sessionManager.getSession(fromWaId);
+  const recentLocation = session?.data?.lastLocation as
+    | { latitude: number; longitude: number; timestamp: number }
+    | undefined;
+
+  if (recentLocation && Date.now() - recentLocation.timestamp < 3 * 60 * 1000) {
+    if (session) delete session.data.lastLocation;
+    return completeOfficeClockInWithLocation(
+      employee,
+      fromWaId,
+      officeSite,
+      recentLocation.latitude,
+      recentLocation.longitude
+    );
   }
 
-  // 4. Fallback: Immediate clock-in when no office geofence applies
-  const record = await prisma.staffAttendanceDay.upsert({
-    where: {
-      companyId_employeeId_workDate: {
-        companyId: employee.companyId,
-        employeeId: employee.id,
-        workDate,
-      },
-    },
+  // 5. Mandatory location submission: create pending record and request location
+  const expiresAt = new Date(Date.now() + WHATSAPP_LOCATION_PENDING_MS);
+  await prisma.whatsAppClockPending.upsert({
+    where: { waFrom: fromWaId },
     create: {
-      companyId: employee.companyId,
+      waFrom: fromWaId,
       employeeId: employee.id,
-      workDate,
-      status: "present",
-      timeIn: now,
+      companyId: employee.companyId,
+      intent: "office_clock_in",
+      siteId: officeSite?.id ?? null,
+      expiresAt,
     },
     update: {
-      status: "present",
-      timeIn: now,
+      employeeId: employee.id,
+      companyId: employee.companyId,
+      intent: "office_clock_in",
+      siteId: officeSite?.id ?? null,
+      failedAttempts: 0,
+      expiresAt,
     },
   });
 
-  await createAuditLog({
-    companyId: employee.companyId,
-    action: "staff_attendance.clock_in",
-    entityType: "StaffAttendanceDay",
-    entityId: record?.id ?? "staff-att-unknown",
-    metadata: {
-      source: "whatsapp",
-      from: employee.phone,
-      timeIn: now,
-      workDate: todayDateStr,
-    },
-  });
-
-  const timeFmt = formatInTimeZone(now, timeZone, "HH:mm");
-  const roleStr = employee.jobRole ? ` (${employee.jobRole})` : "";
+  const officeLabel = officeSite?.name ? ` for *${officeSite.name}*` : "";
   return {
-    reply:
-      `Good day, ${employee.firstName}! 🏢\n\n` +
-      `You are clocked in for today at *${timeFmt}*${roleStr}.\n\n` +
-      `Have a productive day! Reply *2* or *clock out* when you finish work.`,
+    sendInteractiveLocation: {
+      body: `🏢 Clock in${officeLabel}. Tap 'Send Location' below to verify your arrival.`,
+    },
   };
 }
 
@@ -175,7 +146,7 @@ export async function handleOfficeClockIn(
 export async function handleOfficeClockOut(
   employee: OfficeEmployee,
   fromWaId: string
-): Promise<{ reply: string }> {
+): Promise<{ reply: string } | { sendInteractiveLocation: { body: string } }> {
   const now = new Date();
   const timeZone = await getCompanyTimezone(employee.companyId);
   const todayDateStr = formatInTimeZone(now, timeZone, "yyyy-MM-dd");
@@ -192,7 +163,7 @@ export async function handleOfficeClockOut(
     },
   });
 
-  // 2. If no open clock-in on today's record, check the most recent unclosed clock-in (e.g. overnight or recent)
+  // 2. If no open clock-in on today's record, check unclosed clock-in (e.g. overnight or recent)
   if (!record || !record.timeIn || record.timeOut) {
     const unclosed = await prisma.staffAttendanceDay.findFirst({
       where: {
@@ -223,77 +194,53 @@ export async function handleOfficeClockOut(
     };
   }
 
-  // 4. Resolve office geofence for employee
+  // 4. Resolve office site
   const officeSite = await findOfficeSiteForEmployee(employee.id, employee.companyId);
-  if (officeSite && siteHasGeofence(officeSite)) {
-    const expiresAt = new Date(Date.now() + WHATSAPP_LOCATION_PENDING_MS);
-    await prisma.whatsAppClockPending.upsert({
-      where: { waFrom: fromWaId },
-      create: {
-        waFrom: fromWaId,
-        employeeId: employee.id,
-        companyId: employee.companyId,
-        intent: "office_clock_out",
-        siteId: officeSite.id,
-        expiresAt,
-      },
-      update: {
-        employeeId: employee.id,
-        companyId: employee.companyId,
-        intent: "office_clock_out",
-        siteId: officeSite.id,
-        failedAttempts: 0,
-        expiresAt,
-      },
-    });
 
-    return {
-      reply:
-        `🏢 *Office Location Required to Clock Out*\n\n` +
-        `Office: *${officeSite.name}*\n\n` +
-        `Please share your current WhatsApp location within 10 minutes to verify your departure:\n` +
-        `1. Tap 📎 (or + on iPhone)\n` +
-        `2. Select *Location*\n` +
-        `3. Tap *Send your current location*`,
-    };
+  // 5. Check for recently sent location within 3 minutes (Location First flow)
+  const session = sessionManager.getSession(fromWaId);
+  const recentLocation = session?.data?.lastLocation as
+    | { latitude: number; longitude: number; timestamp: number }
+    | undefined;
+
+  if (recentLocation && Date.now() - recentLocation.timestamp < 3 * 60 * 1000) {
+    if (session) delete session.data.lastLocation;
+    return completeOfficeClockOutWithLocation(
+      employee,
+      fromWaId,
+      officeSite,
+      recentLocation.latitude,
+      recentLocation.longitude
+    );
   }
 
-  // 5. Fallback: Immediate clock-out when no office geofence applies
-  const timeIn = record.timeIn;
-  const msWorked = now.getTime() - timeIn.getTime();
-  const hoursWorked = Math.max(0, Math.round((msWorked / (1000 * 60 * 60)) * 100) / 100);
-
-  const updated = await prisma.staffAttendanceDay.update({
-    where: { id: record.id },
-    data: {
-      timeOut: now,
-      hoursWorked,
+  // 6. Mandatory location submission: create pending record and request location
+  const expiresAt = new Date(Date.now() + WHATSAPP_LOCATION_PENDING_MS);
+  await prisma.whatsAppClockPending.upsert({
+    where: { waFrom: fromWaId },
+    create: {
+      waFrom: fromWaId,
+      employeeId: employee.id,
+      companyId: employee.companyId,
+      intent: "office_clock_out",
+      siteId: officeSite?.id ?? null,
+      expiresAt,
+    },
+    update: {
+      employeeId: employee.id,
+      companyId: employee.companyId,
+      intent: "office_clock_out",
+      siteId: officeSite?.id ?? null,
+      failedAttempts: 0,
+      expiresAt,
     },
   });
 
-  await createAuditLog({
-    companyId: employee.companyId,
-    action: "staff_attendance.clock_out",
-    entityType: "StaffAttendanceDay",
-    entityId: updated?.id ?? record.id,
-    metadata: {
-      source: "whatsapp",
-      from: employee.phone,
-      timeIn,
-      timeOut: now,
-      hoursWorked,
-    },
-  });
-
-  const inFmt = formatInTimeZone(timeIn, timeZone, "HH:mm");
-  const outFmt = formatInTimeZone(now, timeZone, "HH:mm");
+  const officeLabel = officeSite?.name ? ` for *${officeSite.name}*` : "";
   return {
-    reply:
-      `🏢 *Clock Out Confirmed*\n\n` +
-      `• Clock In: *${inFmt}*\n` +
-      `• Clock Out: *${outFmt}*\n` +
-      `• Hours Worked: *${hoursWorked.toFixed(2)} hrs*\n\n` +
-      `Have a great evening, ${employee.firstName}!`,
+    sendInteractiveLocation: {
+      body: `🏢 Clock out${officeLabel}. Tap 'Send Location' below to verify your departure.`,
+    },
   };
 }
 
@@ -303,13 +250,13 @@ export async function handleOfficeClockOut(
 export async function completeOfficeClockInWithLocation(
   employee: OfficeEmployee,
   fromWaId: string,
-  site: Site,
+  site: Site | null,
   latitude: number,
   longitude: number
 ): Promise<{ reply: string }> {
-  const geoResult = evaluateSiteGeofence(site, latitude, longitude);
+  const geoResult = site && siteHasGeofence(site) ? evaluateSiteGeofence(site, latitude, longitude) : null;
 
-  if (geoResult && !geoResult.withinGeofence) {
+  if (geoResult && !geoResult.withinGeofence && !employee.geofenceExempt) {
     await prisma.whatsAppClockPending.update({
       where: { waFrom: fromWaId },
       data: { failedAttempts: { increment: 1 } },
@@ -319,7 +266,7 @@ export async function completeOfficeClockInWithLocation(
     return {
       reply:
         `❌ *Clock In Failed: Outside Office Geofence*\n\n` +
-        `You are *${distStr}* away from *${site.name}*.\n` +
+        `You are *${distStr}* away from *${site?.name}*.\n` +
         `You must be within *${geoResult.radiusMeters}m* of the office to clock in.\n\n` +
         `Please move to the office and send your location again.`,
     };
@@ -346,7 +293,7 @@ export async function completeOfficeClockInWithLocation(
       workDate,
       status: "present",
       timeIn: now,
-      siteId: site.id,
+      siteId: site?.id ?? null,
       clockInLat: latitude,
       clockInLng: longitude,
       clockInDistanceMeters: geoResult ? geoResult.distanceMeters : null,
@@ -354,7 +301,7 @@ export async function completeOfficeClockInWithLocation(
     update: {
       status: "present",
       timeIn: now,
-      siteId: site.id,
+      siteId: site?.id ?? null,
       clockInLat: latitude,
       clockInLng: longitude,
       clockInDistanceMeters: geoResult ? geoResult.distanceMeters : null,
@@ -371,8 +318,8 @@ export async function completeOfficeClockInWithLocation(
       from: employee.phone,
       timeIn: now,
       workDate: todayDateStr,
-      siteId: site.id,
-      siteName: site.name,
+      siteId: site?.id,
+      siteName: site?.name,
       latitude,
       longitude,
       distanceMeters: geoResult?.distanceMeters,
@@ -381,7 +328,9 @@ export async function completeOfficeClockInWithLocation(
 
   const timeFmt = formatInTimeZone(now, timeZone, "HH:mm");
   const roleStr = employee.jobRole ? ` (${employee.jobRole})` : "";
-  const distNote = geoResult ? `\n📍 Verified at *${site.name}* (${formatDistance(geoResult.distanceMeters)} from office)` : "";
+  const distNote = geoResult
+    ? `\n📍 Verified at *${site?.name}* (${formatDistance(geoResult.distanceMeters)} from office)`
+    : `\n📍 Location recorded (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`;
 
   return {
     reply:
@@ -397,13 +346,13 @@ export async function completeOfficeClockInWithLocation(
 export async function completeOfficeClockOutWithLocation(
   employee: OfficeEmployee,
   fromWaId: string,
-  site: Site,
+  site: Site | null,
   latitude: number,
   longitude: number
 ): Promise<{ reply: string }> {
-  const geoResult = evaluateSiteGeofence(site, latitude, longitude);
+  const geoResult = site && siteHasGeofence(site) ? evaluateSiteGeofence(site, latitude, longitude) : null;
 
-  if (geoResult && !geoResult.withinGeofence) {
+  if (geoResult && !geoResult.withinGeofence && !employee.geofenceExempt) {
     await prisma.whatsAppClockPending.update({
       where: { waFrom: fromWaId },
       data: { failedAttempts: { increment: 1 } },
@@ -413,7 +362,7 @@ export async function completeOfficeClockOutWithLocation(
     return {
       reply:
         `❌ *Clock Out Failed: Outside Office Geofence*\n\n` +
-        `You are *${distStr}* away from *${site.name}*.\n` +
+        `You are *${distStr}* away from *${site?.name}*.\n` +
         `You must be within *${geoResult.radiusMeters}m* of the office to clock out.\n\n` +
         `Please return to the office and send your location again.`,
     };
@@ -483,8 +432,8 @@ export async function completeOfficeClockOutWithLocation(
       timeIn,
       timeOut: now,
       hoursWorked,
-      siteId: site.id,
-      siteName: site.name,
+      siteId: site?.id,
+      siteName: site?.name,
       latitude,
       longitude,
       distanceMeters: geoResult?.distanceMeters,
@@ -493,7 +442,9 @@ export async function completeOfficeClockOutWithLocation(
 
   const inFmt = formatInTimeZone(timeIn, timeZone, "HH:mm");
   const outFmt = formatInTimeZone(now, timeZone, "HH:mm");
-  const distNote = geoResult ? `\n• Location: Verified at *${site.name}* (${formatDistance(geoResult.distanceMeters)} from office)` : "";
+  const distNote = geoResult
+    ? `\n• Location: Verified at *${site?.name}* (${formatDistance(geoResult.distanceMeters)} from office)`
+    : `\n• Location: (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`;
 
   return {
     reply:

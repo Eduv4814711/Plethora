@@ -17,10 +17,19 @@ const clockPendingDelete = vi.fn();
 const clockPendingDeleteMany = vi.fn();
 
 const recordOfficeAttendance = vi.fn();
+const completeOfficeClockInWithLocation = vi.fn();
+const completeOfficeClockOutWithLocation = vi.fn();
+const handleOfficeClockIn = vi.fn();
+const handleOfficeClockOut = vi.fn();
+
 vi.mock("../services/office-clock.service.js", () => ({
   officeClockService: {
     recordOfficeAttendance,
   },
+  completeOfficeClockInWithLocation,
+  completeOfficeClockOutWithLocation,
+  handleOfficeClockIn,
+  handleOfficeClockOut,
 }));
 
 const validateAndRecordOperationalAttendance = vi.fn();
@@ -33,11 +42,14 @@ vi.mock("../services/operational-attendance.service.js", () => ({
 vi.mock("../../lib/prisma.js", () => ({
   prisma: {
     employee: { findMany, findUnique: findEmployeeUnique },
+    site: { findUnique: vi.fn().mockResolvedValue(null) },
+    staffAttendanceDay: { findFirst: vi.fn().mockResolvedValue(null) },
     whatsAppClockPending: {
       findUnique: clockPendingFindUnique,
       delete: clockPendingDelete,
       deleteMany: clockPendingDeleteMany,
       upsert: vi.fn(),
+      update: vi.fn(),
     },
     attendance: { findFirst: vi.fn(), update: vi.fn(), create: vi.fn() },
     shift: { findMany: vi.fn() },
@@ -143,9 +155,13 @@ describe("processIncomingLocation", () => {
     findMany.mockReset();
     findEmployeeUnique.mockReset();
     clockPendingFindUnique.mockReset();
-    clockPendingDelete.mockReset();
-    clockPendingDeleteMany.mockReset();
+    clockPendingDelete.mockReset().mockResolvedValue({});
+    clockPendingDeleteMany.mockReset().mockResolvedValue({});
     recordOfficeAttendance.mockReset();
+    completeOfficeClockInWithLocation.mockReset();
+    completeOfficeClockOutWithLocation.mockReset();
+    handleOfficeClockIn.mockReset();
+    handleOfficeClockOut.mockReset();
     validateAndRecordOperationalAttendance.mockReset();
   });
 
@@ -156,22 +172,48 @@ describe("processIncomingLocation", () => {
     expect(result.reply).toContain("Phone number not registered");
   });
 
-  it("routes office employees (employeeType === 'general') to officeClockService", async () => {
-    const officeEmp = { id: "emp-office", companyId: "co-1", phone: "0821234567" };
+  it("routes office employees with pending clock-in to completeOfficeClockInWithLocation", async () => {
+    const officeEmp = { id: "emp-office", companyId: "co-1", phone: "0821234567", employeeType: "general" };
     findMany.mockResolvedValue([officeEmp]);
     findEmployeeUnique.mockResolvedValue({ id: "emp-office", employeeType: "general", status: "ACTIVE" });
-    recordOfficeAttendance.mockResolvedValue({
-      success: true,
-      message: "✅ Office attendance recorded. Clock-in at 08:30.",
+    clockPendingFindUnique.mockResolvedValue({
+      waFrom: "27821234567",
+      employeeId: "emp-office",
+      companyId: "co-1",
+      intent: "office_clock_in",
+      expiresAt: new Date(Date.now() + 600000),
+    });
+    completeOfficeClockInWithLocation.mockResolvedValue({
+      reply: "✅ Office attendance recorded. Clock-in at 08:30.",
     });
 
     const { processIncomingLocation } = await import("../services/handler.service.js");
     const result = await processIncomingLocation("27821234567", -26.1, 28.0);
 
-    expect(recordOfficeAttendance).toHaveBeenCalledWith("emp-office", -26.1, 28.0);
+    expect(completeOfficeClockInWithLocation).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "emp-office" }),
+      "27821234567",
+      null,
+      -26.1,
+      28.0
+    );
     expect(validateAndRecordOperationalAttendance).not.toHaveBeenCalled();
-    expect(clockPendingDeleteMany).toHaveBeenCalledWith({ where: { waFrom: "27821234567" } });
     expect(result.reply).toBe("✅ Office attendance recorded. Clock-in at 08:30.");
+  });
+
+  it("prompts office employees who send location without pending request to clock in or out", async () => {
+    const officeEmp = { id: "emp-office", companyId: "co-1", phone: "0821234567", employeeType: "general" };
+    findMany.mockResolvedValue([officeEmp]);
+    findEmployeeUnique.mockResolvedValue({ id: "emp-office", employeeType: "general", status: "ACTIVE" });
+    clockPendingFindUnique.mockResolvedValue(null);
+
+    const { processIncomingLocation } = await import("../services/handler.service.js");
+    const result = await processIncomingLocation("27821234567", -26.1, 28.0);
+
+    expect(result.reply).toContain("Location Received");
+    expect("buttons" in result ? result.buttons : []).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "clock_in" })])
+    );
   });
 
   it("handles expired pending clock request for operational guards", async () => {

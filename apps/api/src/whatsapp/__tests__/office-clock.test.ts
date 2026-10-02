@@ -74,6 +74,7 @@ vi.mock("../../lib/prisma.js", () => ({
       upsert: vi.fn().mockResolvedValue({}),
       update: vi.fn().mockResolvedValue({}),
       delete: vi.fn().mockResolvedValue({}),
+      deleteMany: vi.fn().mockResolvedValue({}),
     },
     operationalAlert: {
       findFirst: vi.fn().mockResolvedValue(null),
@@ -91,18 +92,23 @@ vi.mock("../../lib/timezone.js", () => ({
 }));
 
 describe("Office Staff WhatsApp Clock In & Clock Out", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
-    findManyEmployees.mockResolvedValue([mockOfficeEmployee]);
-    findUniqueEmployee.mockResolvedValue(mockOfficeEmployee);
-    findFirstLeaveRequest.mockResolvedValue(null);
-    countLeaveRequests.mockResolvedValue(0);
-    findUniqueStaffAttendance.mockResolvedValue(null);
-    findFirstStaffAttendance.mockResolvedValue(null);
+    const { sessionManager } = await import("../services/session.service.js");
+    sessionManager.resetAllSessions();
+    findManyEmployees.mockReset().mockResolvedValue([mockOfficeEmployee]);
+    findUniqueEmployee.mockReset().mockResolvedValue(mockOfficeEmployee);
+    findFirstLeaveRequest.mockReset().mockResolvedValue(null);
+    countLeaveRequests.mockReset().mockResolvedValue(0);
+    findUniqueStaffAttendance.mockReset().mockResolvedValue(null);
+    findFirstStaffAttendance.mockReset().mockResolvedValue(null);
+    upsertStaffAttendance.mockReset().mockResolvedValue({});
+    updateStaffAttendance.mockReset().mockResolvedValue({});
+    createAuditLogMock.mockReset().mockResolvedValue({});
   });
 
   describe("handleOfficeClockIn", () => {
-    it("successfully clocks in office employee and records StaffAttendanceDay", async () => {
+    it("prompts office employee for location to clock in and completes attendance on location", async () => {
       upsertStaffAttendance.mockResolvedValueOnce({
         id: "staff-att-1",
         companyId: "co-101",
@@ -112,8 +118,29 @@ describe("Office Staff WhatsApp Clock In & Clock Out", () => {
         timeIn: new Date(),
       });
 
-      const { handleOfficeClockIn } = await import("../services/office-clock.service.js");
-      const result = await handleOfficeClockIn(mockOfficeEmployee, "27829998877");
+      const { handleOfficeClockIn, completeOfficeClockInWithLocation } = await import("../services/office-clock.service.js");
+      const initResult = await handleOfficeClockIn(mockOfficeEmployee, "27829998877");
+
+      expect("sendInteractiveLocation" in initResult).toBe(true);
+      if ("sendInteractiveLocation" in initResult) {
+        expect(initResult.sendInteractiveLocation.body).toContain("Clock in");
+      }
+      expect(prisma.whatsAppClockPending.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { waFrom: "27829998877" },
+          create: expect.objectContaining({
+            intent: "office_clock_in",
+          }),
+        })
+      );
+
+      const result = await completeOfficeClockInWithLocation(
+        mockOfficeEmployee,
+        "27829998877",
+        null,
+        -26.1,
+        28.0
+      );
 
       expect(result.reply).toContain("Good day, Nomsa! 🏢");
       expect(result.reply).toContain("clocked in for today at");
@@ -139,6 +166,33 @@ describe("Office Staff WhatsApp Clock In & Clock Out", () => {
           entityType: "StaffAttendanceDay",
         })
       );
+    });
+
+    it("immediately clocks in when office employee sent location within 3 minutes (Location First flow)", async () => {
+      upsertStaffAttendance.mockResolvedValueOnce({
+        id: "staff-att-1",
+        companyId: "co-101",
+        employeeId: "emp-office-1",
+        workDate: new Date(),
+        status: "present",
+        timeIn: new Date(),
+      });
+
+      const { sessionManager } = await import("../services/session.service.js");
+      sessionManager.getOrCreateSession("27829998877", "emp-office-1", "co-101");
+      sessionManager.updateSession("27829998877", {
+        lastLocation: { latitude: -26.1, longitude: 28.0, timestamp: Date.now() },
+      });
+
+      const { handleOfficeClockIn } = await import("../services/office-clock.service.js");
+      const result = await handleOfficeClockIn(mockOfficeEmployee, "27829998877");
+
+      expect("reply" in result).toBe(true);
+      if ("reply" in result) {
+        expect(result.reply).toContain("Good day, Nomsa! 🏢");
+        expect(result.reply).toContain("Location recorded");
+      }
+      expect(upsertStaffAttendance).toHaveBeenCalled();
     });
 
     it("prevents clocking in if office employee has approved leave today", async () => {
@@ -203,10 +257,10 @@ describe("Office Staff WhatsApp Clock In & Clock Out", () => {
   });
 
   describe("handleOfficeClockOut", () => {
-    it("successfully clocks out office employee and calculates hours worked", async () => {
+    it("prompts office employee for location to clock out and completes attendance on location", async () => {
       const timeIn = new Date(Date.now() - 4 * 60 * 60 * 1000); // 4 hours ago
 
-      findUniqueStaffAttendance.mockResolvedValueOnce({
+      findUniqueStaffAttendance.mockResolvedValue({
         id: "staff-att-1",
         companyId: "co-101",
         employeeId: "emp-office-1",
@@ -221,8 +275,29 @@ describe("Office Staff WhatsApp Clock In & Clock Out", () => {
         hoursWorked: 4,
       });
 
-      const { handleOfficeClockOut } = await import("../services/office-clock.service.js");
-      const result = await handleOfficeClockOut(mockOfficeEmployee, "27829998877");
+      const { handleOfficeClockOut, completeOfficeClockOutWithLocation } = await import("../services/office-clock.service.js");
+      const initResult = await handleOfficeClockOut(mockOfficeEmployee, "27829998877");
+
+      expect("sendInteractiveLocation" in initResult).toBe(true);
+      if ("sendInteractiveLocation" in initResult) {
+        expect(initResult.sendInteractiveLocation.body).toContain("Clock out");
+      }
+      expect(prisma.whatsAppClockPending.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { waFrom: "27829998877" },
+          create: expect.objectContaining({
+            intent: "office_clock_out",
+          }),
+        })
+      );
+
+      const result = await completeOfficeClockOutWithLocation(
+        mockOfficeEmployee,
+        "27829998877",
+        null,
+        -26.1,
+        28.0
+      );
 
       expect(result.reply).toContain("🏢 *Clock Out Confirmed*");
       expect(result.reply).toContain("Clock In:");
@@ -242,6 +317,40 @@ describe("Office Staff WhatsApp Clock In & Clock Out", () => {
           entityType: "StaffAttendanceDay",
         })
       );
+    });
+
+    it("immediately clocks out when office employee sent location within 3 minutes (Location First flow)", async () => {
+      const timeIn = new Date(Date.now() - 4 * 60 * 60 * 1000);
+
+      findUniqueStaffAttendance.mockResolvedValue({
+        id: "staff-att-1",
+        companyId: "co-101",
+        employeeId: "emp-office-1",
+        status: "present",
+        timeIn,
+        timeOut: null,
+      });
+
+      updateStaffAttendance.mockResolvedValueOnce({
+        id: "staff-att-1",
+        timeOut: new Date(),
+        hoursWorked: 4,
+      });
+
+      const { sessionManager } = await import("../services/session.service.js");
+      sessionManager.getOrCreateSession("27829998877", "emp-office-1", "co-101");
+      sessionManager.updateSession("27829998877", {
+        lastLocation: { latitude: -26.1, longitude: 28.0, timestamp: Date.now() },
+      });
+
+      const { handleOfficeClockOut } = await import("../services/office-clock.service.js");
+      const result = await handleOfficeClockOut(mockOfficeEmployee, "27829998877");
+
+      expect("reply" in result).toBe(true);
+      if ("reply" in result) {
+        expect(result.reply).toContain("🏢 *Clock Out Confirmed*");
+      }
+      expect(updateStaffAttendance).toHaveBeenCalled();
     });
 
     it("informs office employee if no active clock-in is found", async () => {
@@ -278,7 +387,7 @@ describe("Office Staff WhatsApp Clock In & Clock Out", () => {
   });
 
   describe("Inbound Message Ingestion Integration", () => {
-    it("routes '1' or 'clock in' from office staff to handleOfficeClockIn", async () => {
+    it("routes '1' or 'clock in' from office staff to handleOfficeClockIn and completes via location", async () => {
       upsertStaffAttendance.mockResolvedValue({
         id: "staff-att-1",
         companyId: "co-101",
@@ -288,15 +397,24 @@ describe("Office Staff WhatsApp Clock In & Clock Out", () => {
         timeIn: new Date(),
       });
 
-      const { processIncomingMessage } = await import("../services/handler.service.js");
+      const { processIncomingMessage, processIncomingLocation } = await import("../services/handler.service.js");
       const res1 = await processIncomingMessage("27829998877", "1");
-      expect("reply" in res1 ? res1.reply : "").toContain("Good day, Nomsa! 🏢");
+      expect("sendInteractiveLocation" in res1).toBe(true);
 
-      const res2 = await processIncomingMessage("27829998877", "clock in");
-      expect("reply" in res2 ? res2.reply : "").toContain("Good day, Nomsa! 🏢");
+      vi.mocked(prisma.whatsAppClockPending.findUnique).mockResolvedValueOnce({
+        waFrom: "27829998877",
+        employeeId: "emp-office-1",
+        companyId: "co-101",
+        intent: "office_clock_in",
+        siteId: null,
+        expiresAt: new Date(Date.now() + 600000),
+      } as any);
+
+      const locRes = await processIncomingLocation("27829998877", -26.1, 28.0);
+      expect(locRes.reply).toContain("Good day, Nomsa! 🏢");
     });
 
-    it("routes '2' or 'clock out' from office staff to handleOfficeClockOut", async () => {
+    it("routes '2' or 'clock out' from office staff to handleOfficeClockOut and completes via location", async () => {
       const timeIn = new Date(Date.now() - 3600000);
       findUniqueStaffAttendance.mockResolvedValue({
         id: "staff-att-1",
@@ -311,9 +429,21 @@ describe("Office Staff WhatsApp Clock In & Clock Out", () => {
         hoursWorked: 1,
       });
 
-      const { processIncomingMessage } = await import("../services/handler.service.js");
+      const { processIncomingMessage, processIncomingLocation } = await import("../services/handler.service.js");
       const res = await processIncomingMessage("27829998877", "2");
-      expect("reply" in res ? res.reply : "").toContain("🏢 *Clock Out Confirmed*");
+      expect("sendInteractiveLocation" in res).toBe(true);
+
+      vi.mocked(prisma.whatsAppClockPending.findUnique).mockResolvedValueOnce({
+        waFrom: "27829998877",
+        employeeId: "emp-office-1",
+        companyId: "co-101",
+        intent: "office_clock_out",
+        siteId: null,
+        expiresAt: new Date(Date.now() + 600000),
+      } as any);
+
+      const locRes = await processIncomingLocation("27829998877", -26.1, 28.0);
+      expect(locRes.reply).toContain("🏢 *Clock Out Confirmed*");
     });
 
     it("returns office schedule on '4' or 'roster' for office staff", async () => {
@@ -371,9 +501,11 @@ describe("Office Staff WhatsApp Clock In & Clock Out", () => {
       const { handleOfficeClockIn } = await import("../services/office-clock.service.js");
       const result = await handleOfficeClockIn(mockOfficeEmployee, "27829998877");
 
-      expect(result.reply).toContain("🏢 *Office Location Required*");
-      expect(result.reply).toContain("Sandton Head Office");
-      expect(result.reply).toContain("Send your current location");
+      expect("sendInteractiveLocation" in result).toBe(true);
+      if ("sendInteractiveLocation" in result) {
+        expect(result.sendInteractiveLocation.body).toContain("Sandton Head Office");
+        expect(result.sendInteractiveLocation.body).toContain("Send Location");
+      }
       expect(prisma.whatsAppClockPending.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { waFrom: "27829998877" },
@@ -461,8 +593,11 @@ describe("Office Staff WhatsApp Clock In & Clock Out", () => {
       const { handleOfficeClockOut } = await import("../services/office-clock.service.js");
       const result = await handleOfficeClockOut(mockOfficeEmployee, "27829998877");
 
-      expect(result.reply).toContain("🏢 *Office Location Required to Clock Out*");
-      expect(result.reply).toContain("Sandton Head Office");
+      expect("sendInteractiveLocation" in result).toBe(true);
+      if ("sendInteractiveLocation" in result) {
+        expect(result.sendInteractiveLocation.body).toContain("Sandton Head Office");
+        expect(result.sendInteractiveLocation.body).toContain("Send Location");
+      }
       expect(prisma.whatsAppClockPending.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           create: expect.objectContaining({
@@ -503,12 +638,7 @@ describe("Office Staff WhatsApp Clock In & Clock Out", () => {
       expect(prisma.whatsAppClockPending.delete).toHaveBeenCalledWith({ where: { waFrom: "27829998877" } });
     });
 
-    it("bypasses geofence when employee has geofenceExempt set to true", async () => {
-      findUniqueStaffAttendance.mockResolvedValueOnce(null);
-      findUniqueEmployee.mockResolvedValueOnce({
-        ...mockOfficeEmployee,
-        geofenceExempt: true,
-      });
+    it("bypasses geofence distance check when employee has geofenceExempt set to true", async () => {
       upsertStaffAttendance.mockResolvedValueOnce({
         id: "staff-att-exempt-1",
         companyId: "co-101",
@@ -516,14 +646,21 @@ describe("Office Staff WhatsApp Clock In & Clock Out", () => {
         workDate: new Date(),
         status: "present",
         timeIn: new Date(),
+        siteId: "site-office-hq",
       });
 
       const exemptEmployee = { ...mockOfficeEmployee, geofenceExempt: true };
-      const { handleOfficeClockIn } = await import("../services/office-clock.service.js");
-      const result = await handleOfficeClockIn(exemptEmployee, "27829998877");
+      const { completeOfficeClockInWithLocation } = await import("../services/office-clock.service.js");
+      const result = await completeOfficeClockInWithLocation(
+        exemptEmployee,
+        "27829998877",
+        mockOfficeSite as any,
+        -25.7479,
+        28.2293
+      );
 
       expect(result.reply).toContain("Good day, Nomsa! 🏢");
-      expect(prisma.whatsAppClockPending.upsert).not.toHaveBeenCalled();
+      expect(upsertStaffAttendance).toHaveBeenCalled();
     });
   });
 });

@@ -142,6 +142,10 @@ class SessionStore {
     return session;
   }
 
+  updateSession(waFrom: string, updates: Record<string, any>): ConversationSession {
+    return this.updateSessionData(waFrom, updates);
+  }
+
   clearSession(waFrom: string): void {
     const session = this.sessions.get(waFrom);
     if (session) {

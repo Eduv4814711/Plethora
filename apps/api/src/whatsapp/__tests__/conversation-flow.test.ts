@@ -19,6 +19,7 @@ const mockEmployee = {
   lastName: "Dlamini",
   phone: "27821234567",
   email: "sipho@security.co.za",
+  status: "active",
 };
 
 const mockSite = {
@@ -89,8 +90,15 @@ vi.mock("../../services/attendance.service.js", () => ({
   validateClockIn: vi.fn().mockResolvedValue(undefined),
   calculateHours: vi.fn().mockReturnValue({ hoursWorked: 8, overtimeHours: 0 }),
   assertWithinSiteGeofence: vi.fn(),
+  findApprovedLeaveConflict: vi.fn().mockResolvedValue(null),
   AttendanceValidationError: class AttendanceValidationError extends Error {},
 }));
+
+const clockPendingFindUnique = vi.fn().mockResolvedValue(null);
+const clockPendingDelete = vi.fn().mockResolvedValue({});
+const clockPendingDeleteMany = vi.fn().mockResolvedValue({});
+const clockPendingUpsert = vi.fn().mockResolvedValue({});
+const clockPendingUpdate = vi.fn().mockResolvedValue({});
 
 vi.mock("../../lib/prisma.js", () => ({
   prisma: {
@@ -130,13 +138,20 @@ vi.mock("../../lib/prisma.js", () => ({
       findFirst: vi.fn().mockResolvedValue(null),
     },
     whatsAppClockPending: {
-      findUnique: vi.fn().mockResolvedValue(null),
-      delete: vi.fn().mockResolvedValue({}),
-      upsert: vi.fn().mockResolvedValue({}),
-      update: vi.fn().mockResolvedValue({}),
+      findUnique: (...args: any[]) => clockPendingFindUnique(...args),
+      delete: (...args: any[]) => clockPendingDelete(...args),
+      deleteMany: (...args: any[]) => clockPendingDeleteMany(...args),
+      upsert: (...args: any[]) => clockPendingUpsert(...args),
+      update: (...args: any[]) => clockPendingUpdate(...args),
     },
     staffAttendanceDay: {
       findFirst: vi.fn().mockResolvedValue(null),
+    },
+    siteTimesheetRow: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
+      create: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({}),
     },
   },
 }));
@@ -164,6 +179,7 @@ vi.mock("../../services/leave-v3.service.js", () => ({
 
 vi.mock("../../lib/timezone.js", () => ({
   getCompanyTimezone: vi.fn().mockResolvedValue("Africa/Johannesburg"),
+  dateKeyInTimeZone: vi.fn().mockReturnValue("2026-10-02"),
 }));
 
 describe("WhatsApp Conversation State Machine & Micro-Prompts", () => {
@@ -493,9 +509,11 @@ describe("WhatsApp Conversation State Machine & Micro-Prompts", () => {
   });
 
   describe("6. Quick Numbered Menus & Backward Compatibility", () => {
-    it("handles numbered menu '1' or 'in' to trigger clock in", async () => {
+
+
+    it("handles numbered menu '1' or 'in' to trigger clock in flow requiring location", async () => {
       const now = new Date();
-      findManyShifts.mockResolvedValueOnce([
+      findManyShifts.mockResolvedValue([
         {
           id: "shift-today-1",
           employeeId: "emp-101",
@@ -507,32 +525,82 @@ describe("WhatsApp Conversation State Machine & Micro-Prompts", () => {
         },
       ]);
 
-      const { processIncomingMessage } = await import("../services/handler.service.js");
+      const { processIncomingMessage, processIncomingLocation } = await import("../services/handler.service.js");
       const result = await processIncomingMessage(phone, "1");
 
-      expect("reply" in result).toBe(true);
-      if ("reply" in result) {
-        expect(result.reply).toMatch(/Clocked in for Sandton City Mall/i);
+      expect("sendInteractiveLocation" in result).toBe(true);
+      if ("sendInteractiveLocation" in result) {
+        expect(result.sendInteractiveLocation.body).toMatch(/Sandton City Mall/i);
+      }
+      expect(clockPendingUpsert).toHaveBeenCalled();
+
+      clockPendingFindUnique.mockResolvedValueOnce({
+        waFrom: phone,
+        employeeId: "emp-101",
+        companyId: "co-101",
+        intent: "clock_in",
+        shiftId: "shift-today-1",
+        siteId: "site-201",
+        expiresAt: new Date(Date.now() + 600000),
+      } as any);
+
+      const locResult = await processIncomingLocation(phone, -26.1, 28.0);
+      expect("reply" in locResult).toBe(true);
+      if ("reply" in locResult) {
+        expect(locResult.reply).toMatch(/Clock-in successful/i);
       }
       expect(createAttendance).toHaveBeenCalled();
     });
 
-    it("handles numbered menu '2' or 'out' to trigger clock out", async () => {
+    it("handles numbered menu '2' or 'out' to trigger clock out flow requiring location", async () => {
+      const now = new Date();
+      findManyShifts.mockResolvedValue([
+        {
+          id: "shift-today-1",
+          employeeId: "emp-101",
+          companyId: "co-101",
+          startTime: new Date(now.getTime() - 4 * 3600 * 1000),
+          endTime: new Date(now.getTime() + 4 * 3600 * 1000),
+          status: "assigned",
+          site: { id: "site-201", name: "Sandton City Mall", geofenceLatitude: null, geofenceLongitude: null },
+        },
+      ]);
       const mockActiveAttendance = {
         id: "att-clocked-in",
         clockIn: new Date(Date.now() - 4 * 3600 * 1000),
-        shiftId: "shift-101",
-        shift: { employeeId: "emp-101", companyId: "co-101", siteId: "site-201", site: null },
+        clockOut: null,
+        status: "clocked_in",
+        validationStatus: "VERIFIED",
+        shiftId: "shift-today-1",
+        shift: { employeeId: "emp-101", companyId: "co-101", siteId: "site-201", site: { id: "site-201", name: "Sandton City Mall" } },
       };
-      findFirstAttendance.mockResolvedValueOnce(mockActiveAttendance).mockResolvedValueOnce(mockActiveAttendance);
+      findFirstAttendance.mockResolvedValue(mockActiveAttendance);
 
-      const { processIncomingMessage } = await import("../services/handler.service.js");
+      const { processIncomingMessage, processIncomingLocation } = await import("../services/handler.service.js");
       const result = await processIncomingMessage(phone, "2");
 
-      expect("reply" in result).toBe(true);
-      if ("reply" in result) {
-        expect(result.reply).toMatch(/Clocked out/i);
+      expect("sendInteractiveLocation" in result).toBe(true);
+      if ("sendInteractiveLocation" in result) {
+        expect(result.sendInteractiveLocation.body).toMatch(/Clock out/i);
       }
+      expect(clockPendingUpsert).toHaveBeenCalled();
+
+      clockPendingFindUnique.mockResolvedValueOnce({
+        waFrom: phone,
+        employeeId: "emp-101",
+        companyId: "co-101",
+        intent: "clock_out",
+        shiftId: "shift-today-1",
+        siteId: "site-201",
+        expiresAt: new Date(Date.now() + 600000),
+      } as any);
+
+      const locResult = await processIncomingLocation(phone, -26.1, 28.0);
+      expect("reply" in locResult).toBe(true);
+      if ("reply" in locResult) {
+        expect(locResult.reply).toMatch(/Clock-out successful/i);
+      }
+      expect(updateAttendance).toHaveBeenCalled();
     });
 
     it("preserves single-line leave commands (e.g. 'leave YYYY-MM-DD ...')", async () => {

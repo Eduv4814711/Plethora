@@ -224,6 +224,7 @@ export async function processIncomingMessage(
   // Universal abort / cancel commands
   if (cmd === "cancel" || cmd === "exit" || cmd === "stop" || cmd === "abort") {
     sessionManager.clearSession(from);
+    await prisma.whatsAppClockPending.deleteMany({ where: { waFrom: from } }).catch(() => undefined);
     return {
       reply: "Operation cancelled. Reply with *menu* or a command to continue.",
       buttons: [
@@ -521,70 +522,54 @@ async function handleClockIn(
   }
 
   const site = shift.site;
-  if (site && siteHasGeofence(site)) {
-    const expiresAt = new Date(Date.now() + WHATSAPP_LOCATION_PENDING_MS);
-    await prisma.whatsAppClockPending.upsert({
-      where: { waFrom: fromWaId },
-      create: {
-        waFrom: fromWaId,
-        employeeId: employee.id,
-        companyId: employee.companyId,
-        intent: "clock_in",
-        shiftId: shift.id,
-        siteId: site.id,
-        expiresAt,
-      },
-      update: {
-        employeeId: employee.id,
-        companyId: employee.companyId,
-        intent: "clock_in",
-        shiftId: shift.id,
-        siteId: site.id,
-        failedAttempts: 0,
-        expiresAt,
-      },
-    });
 
-    return {
-      sendInteractiveLocation: {
-        body: `📍 Clock in for ${site.name}. Tap 'Send Location' below to verify your geofence.`,
-      },
-    };
+  // Check for recently sent location within 3 minutes (Location First flow)
+  const session = sessionManager.getSession(fromWaId);
+  const recentLocation = session?.data?.lastLocation as
+    | { latitude: number; longitude: number; timestamp: number }
+    | undefined;
+
+  if (recentLocation && Date.now() - recentLocation.timestamp < 3 * 60 * 1000) {
+    if (session) delete session.data.lastLocation;
+    const result = await operationalAttendanceService.validateAndRecordOperationalAttendance({
+      employeeId: employee.id,
+      latitude: recentLocation.latitude,
+      longitude: recentLocation.longitude,
+      intent: "clock_in",
+      whatsappNumber: fromWaId,
+    });
+    return { reply: result.message };
   }
 
-  const now = new Date();
-  const attendance = await prisma.attendance.create({
-    data: {
+  // Mandatory location verification: create pending record and prompt for location
+  const expiresAt = new Date(Date.now() + WHATSAPP_LOCATION_PENDING_MS);
+  await prisma.whatsAppClockPending.upsert({
+    where: { waFrom: fromWaId },
+    create: {
+      waFrom: fromWaId,
+      employeeId: employee.id,
+      companyId: employee.companyId,
+      intent: "clock_in",
       shiftId: shift.id,
-      clockIn: now,
-      status: "clocked_in",
+      siteId: site?.id ?? null,
+      expiresAt,
     },
-    include: {
-      shift: {
-        include: {
-          site: true,
-        },
-      },
+    update: {
+      employeeId: employee.id,
+      companyId: employee.companyId,
+      intent: "clock_in",
+      shiftId: shift.id,
+      siteId: site?.id ?? null,
+      failedAttempts: 0,
+      expiresAt,
     },
   });
 
-  await prisma.shift.update({
-    where: { id: shift.id },
-    data: { status: "active" },
-  });
-
-  await createAuditLog({
-    companyId: employee.companyId,
-    action: "attendance.clock_in",
-    entityType: "attendance",
-    entityId: attendance.id,
-    metadata: { source: "whatsapp", from: employee.phone, shiftId: shift.id },
-  });
-
-  const siteName = shift.site?.name ?? "your post";
-  const timeZone = await getCompanyTimezone(employee.companyId);
+  const siteName = site?.name ?? "your post";
   return {
-    reply: `Clocked in for ${siteName} at ${formatInTimeZone(now, timeZone, "HH:mm")}.`,
+    sendInteractiveLocation: {
+      body: `📍 Clock in for ${siteName}. Tap 'Send Location' below to verify your geofence.`,
+    },
   };
 }
 
@@ -611,38 +596,55 @@ async function handleClockOut(
   }
 
   const outSite = attendance.shift.site;
-  if (outSite && siteHasGeofence(outSite)) {
-    const expiresAt = new Date(Date.now() + WHATSAPP_LOCATION_PENDING_MS);
-    await prisma.whatsAppClockPending.upsert({
-      where: { waFrom: fromWaId },
-      create: {
-        waFrom: fromWaId,
-        employeeId: employee.id,
-        companyId: employee.companyId,
-        intent: "clock_out",
-        shiftId: attendance.shiftId,
-        siteId: outSite.id,
-        expiresAt,
-      },
-      update: {
-        employeeId: employee.id,
-        companyId: employee.companyId,
-        intent: "clock_out",
-        shiftId: attendance.shiftId,
-        siteId: outSite.id,
-        failedAttempts: 0,
-        expiresAt,
-      },
-    });
 
-    return {
-      sendInteractiveLocation: {
-        body: `📍 Clock out for ${outSite.name}. Tap 'Send Location' below to verify your geofence.`,
-      },
-    };
+  // Check for recently sent location within 3 minutes (Location First flow)
+  const session = sessionManager.getSession(fromWaId);
+  const recentLocation = session?.data?.lastLocation as
+    | { latitude: number; longitude: number; timestamp: number }
+    | undefined;
+
+  if (recentLocation && Date.now() - recentLocation.timestamp < 3 * 60 * 1000) {
+    if (session) delete session.data.lastLocation;
+    const result = await operationalAttendanceService.validateAndRecordOperationalAttendance({
+      employeeId: employee.id,
+      latitude: recentLocation.latitude,
+      longitude: recentLocation.longitude,
+      intent: "clock_out",
+      whatsappNumber: fromWaId,
+    });
+    return { reply: result.message };
   }
 
-  return completeWhatsAppClockOut(attendance.id, employee);
+  // Mandatory location verification on clock-out
+  const expiresAt = new Date(Date.now() + WHATSAPP_LOCATION_PENDING_MS);
+  await prisma.whatsAppClockPending.upsert({
+    where: { waFrom: fromWaId },
+    create: {
+      waFrom: fromWaId,
+      employeeId: employee.id,
+      companyId: employee.companyId,
+      intent: "clock_out",
+      shiftId: attendance.shiftId,
+      siteId: outSite?.id ?? null,
+      expiresAt,
+    },
+    update: {
+      employeeId: employee.id,
+      companyId: employee.companyId,
+      intent: "clock_out",
+      shiftId: attendance.shiftId,
+      siteId: outSite?.id ?? null,
+      failedAttempts: 0,
+      expiresAt,
+    },
+  });
+
+  const siteName = outSite?.name ?? "your post";
+  return {
+    sendInteractiveLocation: {
+      body: `📍 Clock out for ${siteName}. Tap 'Send Location' below to verify your geofence.`,
+    },
+  };
 }
 
 export async function processIncomingLocation(
@@ -656,27 +658,17 @@ export async function processIncomingLocation(
     return { reply: "Phone number not registered. Contact HR to update your details." };
   }
 
-  const emp = await prisma.employee.findUnique({
-    where: { id: employee.id },
-    select: { employeeType: true, status: true },
-  });
-
-  // 1. Differentiate Office Staff vs Operational Staff (Guards)
-  if (emp?.employeeType === "general") {
-    const officeResult = await officeClockService.recordOfficeAttendance(
-      employee.id,
-      latitude,
-      longitude
-    );
-    await prisma.whatsAppClockPending.deleteMany({ where: { waFrom: from } });
-    return { reply: officeResult.message };
-  }
-
-  // 2. Operational Guard:
   const pending = await prisma.whatsAppClockPending.findUnique({
     where: { waFrom: from },
   });
+
   if (!pending) {
+    // Cache the location coordinates in the session for instant 1-tap confirmation
+    const session = sessionManager.getSession(from);
+    if (session) {
+      session.data.lastLocation = { latitude, longitude, timestamp: Date.now() };
+    }
+
     const isGeneral = (employee.employeeType ?? "security_officer") === "general";
     if (isGeneral) {
       const activeOffice = await prisma.staffAttendanceDay.findFirst({
@@ -736,41 +728,33 @@ export async function processIncomingLocation(
   }
 
   if (pending.expiresAt.getTime() < Date.now()) {
-    await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
+    try {
+      await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
+    } catch {
+      // ignore
+    }
     return { reply: "That request expired (10 minute limit). Send clock in or clock out again." };
   }
 
   if (pending.employeeId !== employee.id || pending.companyId !== employee.companyId) {
-    await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
+    try {
+      await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
+    } catch {
+      // ignore
+    }
     return { reply: "Could not verify your session. Try again." };
   }
 
   // 1. Office Staff Clock In with Location
   if (pending.intent === "office_clock_in") {
-    if (!pending.siteId) {
-      await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
-      return handleOfficeClockIn(employee, from);
-    }
-    const site = await prisma.site.findUnique({ where: { id: pending.siteId } });
-    if (!site) {
-      await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
-      return { reply: "Office location not found. Please contact HR." };
-    }
-    return completeOfficeClockInWithLocation(employee, from, site, latitude, longitude);
+    const site = pending.siteId ? await prisma.site.findUnique({ where: { id: pending.siteId } }) : null;
+    return completeOfficeClockInWithLocation(employee as any, from, site, latitude, longitude);
   }
 
   // 2. Office Staff Clock Out with Location
   if (pending.intent === "office_clock_out") {
-    if (!pending.siteId) {
-      await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
-      return handleOfficeClockOut(employee, from);
-    }
-    const site = await prisma.site.findUnique({ where: { id: pending.siteId } });
-    if (!site) {
-      await prisma.whatsAppClockPending.delete({ where: { waFrom: from } });
-      return { reply: "Office location not found. Please contact HR." };
-    }
-    return completeOfficeClockOutWithLocation(employee, from, site, latitude, longitude);
+    const site = pending.siteId ? await prisma.site.findUnique({ where: { id: pending.siteId } }) : null;
+    return completeOfficeClockOutWithLocation(employee as any, from, site, latitude, longitude);
   }
 
   // 3. Security Guard Clock In / Clock Out with Location
