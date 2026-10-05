@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import { fetchCurrentPayPeriod, fetchPayPeriods, type PayPeriodOption } from "@/lib/api";
 import { PayPeriodSelect } from "@/components/pay-period-select";
 import { AttendanceCaptureDashboard } from "@/components/attendance-capture-dashboard";
+import { ControllerTodayWorkspace } from "@/components/controller-today-workspace";
 import { StaffRollCall } from "@/components/staff-rollcall";
 import { ShiftRollCallModal } from "@/components/shift-rollcall-modal";
 import { fetchStaffAttendanceDay } from "@/lib/staff-attendance-api";
@@ -110,6 +111,7 @@ export default function AttendancePage() {
     params.set("end", format(dateRange.end, "yyyy-MM-dd"));
     params.set("shiftType", shiftType);
     if (view === "staff") params.set("view", "staff");
+    else if (view === "sites") params.set("view", "sites");
     else params.delete("view");
     if (siteQuery.trim()) params.set("q", siteQuery.trim());
     else params.delete("q");
@@ -194,9 +196,11 @@ export default function AttendancePage() {
           </p>
           <h1 className="page-title mt-1">Attendance</h1>
           <p className="mt-1 max-w-2xl text-sm text-security-navy-600 dark:text-security-navy-400">
-            {view === "staff"
+            {view === "today"
+              ? "Live control-room workspace: guards expected to work today, attendance status, and quick capture."
+              : view === "staff"
               ? "Mark who was at the office today. Salaried staff are recorded for leave and reporting only."
-              : "Start with a site that needs attention, confirm who worked, then approve its timesheet for payroll."}
+              : "Pay-period review and approvals: verify site timesheets before locking for payroll."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0 self-start">
@@ -217,35 +221,63 @@ export default function AttendancePage() {
         </div>
       </header>
 
-      {/* Two populations, one entry point. Guards keep their existing flow untouched. */}
-      {officeStaffCount !== 0 && (
-        <div
-          className="flex flex-wrap rounded-lg border border-security-navy-100 bg-security-navy-50 p-1 dark:border-security-navy-700 dark:bg-security-navy-900"
-          role="group"
-          aria-label="Attendance type"
+      {/* Operational Mode Tabs: Today (Daily Control Room) vs Timesheets/History vs Staff */}
+      <div
+        className="flex flex-wrap rounded-lg border border-security-navy-100 bg-security-navy-50 p-1 dark:border-security-navy-700 dark:bg-security-navy-900"
+        role="group"
+        aria-label="Attendance view mode"
+      >
+        <button
+          type="button"
+          onClick={() => setView("today")}
+          aria-pressed={view === "today"}
+          className={clsx(
+            "min-h-11 rounded-md px-4 text-sm font-semibold flex items-center gap-2",
+            view === "today"
+              ? "bg-security-navy-800 text-white shadow-security-card dark:bg-security-navy-600"
+              : "text-security-navy-700 hover:bg-white dark:text-security-navy-300 dark:hover:bg-security-navy-800"
+          )}
         >
-          {(
-            [
-              ["sites", "Guards (by site)"],
-              ["staff", "Office staff (daily)"],
-            ] as const
-          ).map(([value, text]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setView(value)}
-              aria-pressed={view === value}
-              className={clsx(
-                "min-h-11 rounded-md px-4 text-sm font-medium",
-                view === value
-                  ? "bg-security-navy-800 text-white shadow-security-card dark:bg-security-navy-600"
-                  : "text-security-navy-700 hover:bg-white dark:text-security-navy-300 dark:hover:bg-security-navy-800"
-              )}
-            >
-              {text}
-            </button>
-          ))}
-        </div>
+          <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
+          Today&apos;s Operations
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setView("sites")}
+          aria-pressed={view === "sites"}
+          className={clsx(
+            "min-h-11 rounded-md px-4 text-sm font-medium",
+            view === "sites"
+              ? "bg-security-navy-800 text-white shadow-security-card dark:bg-security-navy-600"
+              : "text-security-navy-700 hover:bg-white dark:text-security-navy-300 dark:hover:bg-security-navy-800"
+          )}
+        >
+          Pay-Period Timesheets & History
+        </button>
+
+        {officeStaffCount !== 0 && (
+          <button
+            type="button"
+            onClick={() => setView("staff")}
+            aria-pressed={view === "staff"}
+            className={clsx(
+              "min-h-11 rounded-md px-4 text-sm font-medium",
+              view === "staff"
+                ? "bg-security-navy-800 text-white shadow-security-card dark:bg-security-navy-600"
+                : "text-security-navy-700 hover:bg-white dark:text-security-navy-300 dark:hover:bg-security-navy-800"
+            )}
+          >
+            Office Staff (Daily)
+          </button>
+        )}
+      </div>
+
+      {view === "today" && token && (
+        <ControllerTodayWorkspace
+          token={token}
+          onOpenHistory={() => setView("sites")}
+        />
       )}
 
       {view === "staff" && token && (

@@ -63,11 +63,11 @@ describe("attendance view", () => {
     expect(parseAttendanceView("sites")).toBe("sites");
   });
 
-  // Guards are the default so an unknown or missing value never lands somewhere surprising.
+  // Today operations workspace is the default so an unknown or missing value lands on the live control-room view.
   it.each([null, undefined, "", "guards", "STAFF"])(
-    "falls back to the guard view for %s",
+    "falls back to the today view for %s",
     (value) => {
-      expect(parseAttendanceView(value)).toBe("sites");
+      expect(parseAttendanceView(value)).toBe("today");
     }
   );
 

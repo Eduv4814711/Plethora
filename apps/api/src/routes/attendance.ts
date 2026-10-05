@@ -15,6 +15,9 @@ import { createAuditLog } from "../lib/audit.js";
 import { triggerPostClockExceptionSync } from "../modules/attendance-exceptions/post-clock-sync.js";
 import { dateKeyInTimeZone, getCompanyTimezone } from "../lib/timezone.js";
 import { normalizeLeaveDate } from "../services/leave-availability.service.js";
+import { getTodayAttendance } from "../modules/attendance-today/attendance-today.service.js";
+import { syncAttendanceToTimesheetRow } from "../modules/attendance-today/attendance-timesheet-sync.js";
+import { recordAttendanceEvent, attendanceSnapshot } from "../modules/attendance-today/attendance-events.js";
 const optionalCoords = z
   .object({
     latitude: z.number().min(-90).max(90).optional(),
@@ -45,6 +48,430 @@ export async function attendanceRoutes(app: FastifyInstance) {
     authMiddleware,
     requireCrudCapability({ module: "/attendance" }),
   ];
+
+  // ==========================================
+  // Controller Daily Workspace Endpoints
+  // ==========================================
+
+  app.get("/today", { preHandler: protect }, async (request, reply) => {
+    const user = request.user!;
+    const q = request.query as Record<string, string | undefined>;
+    const date = q.date;
+    const shiftType = (q.shiftType as "day" | "night" | "all") || "all";
+    const siteId = q.siteId;
+    const searchQuery = q.q || q.search;
+
+    const result = await getTodayAttendance(user.companyId, {
+      date,
+      shiftType,
+      siteId,
+      searchQuery,
+    });
+
+    return reply.send(result);
+  });
+
+  const quickClockInSchema = z.object({
+    shiftId: z.string().min(1),
+    timestamp: z.string().datetime().optional(),
+    reason: z.string().min(3).optional(),
+  }).and(optionalCoords);
+
+  app.post("/quick-clock-in", { preHandler: protect }, async (request, reply) => {
+    const parsed = quickClockInSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const user = request.user!;
+    const companyId = user.companyId;
+    const { shiftId, timestamp, reason, latitude, longitude } = parsed.data;
+
+    const shift = await prisma.shift.findFirst({
+      where: { id: shiftId, companyId },
+      include: {
+        site: true,
+        employee: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+
+    if (!shift) {
+      return reply.code(404).send({ error: "Shift not found" });
+    }
+
+    const clockInTime = timestamp ? new Date(timestamp) : new Date();
+
+    // Check geofence if coordinates are provided
+    if (shift.site && latitude !== undefined && longitude !== undefined) {
+      try {
+        assertWithinSiteGeofence(shift.site, latitude, longitude);
+      } catch (err) {
+        if (err instanceof AttendanceValidationError) {
+          return reply.code(400).send({
+            error: "Clock-in validation failed",
+            message: err.message,
+          });
+        }
+        throw err;
+      }
+    }
+
+    // Leave conflict check
+    const shiftDate = normalizeLeaveDate(dateKeyInTimeZone(shift.startTime, await getCompanyTimezone(companyId)));
+    const leaveConflict = await findApprovedLeaveConflict(companyId, shift.employeeId, shiftDate);
+    if (leaveConflict) {
+      return reply.code(409).send({
+        error: "Approved leave conflict",
+        code: "APPROVED_LEAVE_CONFLICT",
+        message: "Guard has approved leave on this date.",
+      });
+    }
+
+    // Check existing attendance
+    const existing = await prisma.attendance.findFirst({
+      where: { shiftId },
+    });
+
+    if (existing && existing.clockIn) {
+      return reply.code(409).send({
+        error: "Already clocked in",
+        message: "This guard has already clocked in for this shift.",
+      });
+    }
+
+    const beforeSnapshot = attendanceSnapshot(existing);
+
+    const attendance = await prisma.$transaction(async (tx) => {
+      let rec;
+      if (existing) {
+        rec = await tx.attendance.update({
+          where: { id: existing.id },
+          data: {
+            clockIn: clockInTime,
+            clockInLat: latitude,
+            clockInLng: longitude,
+            status: "clocked_in",
+            source: "manual",
+          },
+        });
+      } else {
+        rec = await tx.attendance.create({
+          data: {
+            shiftId,
+            clockIn: clockInTime,
+            clockInLat: latitude,
+            clockInLng: longitude,
+            status: "clocked_in",
+            source: "manual",
+          },
+        });
+      }
+
+      await tx.shift.update({
+        where: { id: shiftId },
+        data: { status: "active" },
+      });
+
+      return rec;
+    });
+
+    // Record audit event
+    await recordAttendanceEvent({
+      companyId,
+      attendanceId: attendance.id,
+      shiftId: shift.id,
+      employeeId: shift.employeeId,
+      siteId: shift.siteId,
+      eventType: "CLOCK_IN",
+      source: "manual",
+      occurredAt: clockInTime,
+      actorUserId: user.sub,
+      reason: reason || "Controller quick clock-in",
+      before: beforeSnapshot,
+      after: attendanceSnapshot(attendance),
+    });
+
+    await createAuditLog({
+      userId: user.sub,
+      companyId,
+      action: "attendance.quick_clock_in",
+      entityType: "attendance",
+      entityId: attendance.id,
+      metadata: { shiftId, reason: reason || "Controller quick clock-in" },
+    });
+
+    // Sync to site timesheet row if exists
+    await syncAttendanceToTimesheetRow(shift, attendance).catch((err) => {
+      request.log.warn({ err, shiftId }, "Failed to sync attendance to site timesheet row");
+    });
+
+    triggerPostClockExceptionSync(companyId, shift.siteId);
+
+    return reply.code(200).send(attendance);
+  });
+
+  const quickClockOutSchema = z.object({
+    shiftId: z.string().min(1),
+    timestamp: z.string().datetime().optional(),
+    reason: z.string().min(3).optional(),
+  }).and(optionalCoords);
+
+  app.post("/quick-clock-out", { preHandler: protect }, async (request, reply) => {
+    const parsed = quickClockOutSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const user = request.user!;
+    const companyId = user.companyId;
+    const { shiftId, timestamp, reason, latitude, longitude } = parsed.data;
+
+    const shift = await prisma.shift.findFirst({
+      where: { id: shiftId, companyId },
+      include: {
+        site: true,
+        attendances: { orderBy: { createdAt: "desc" }, take: 1 },
+      },
+    });
+
+    if (!shift) {
+      return reply.code(404).send({ error: "Shift not found" });
+    }
+
+    const attendance = shift.attendances[0];
+    if (!attendance || !attendance.clockIn) {
+      return reply.code(400).send({
+        error: "Invalid state",
+        message: "Guard has not clocked in yet. Cannot clock out.",
+      });
+    }
+
+    if (attendance.clockOut) {
+      return reply.code(409).send({
+        error: "Already clocked out",
+        message: "Guard has already clocked out for this shift.",
+      });
+    }
+
+    const clockOutTime = timestamp ? new Date(timestamp) : new Date();
+
+    if (clockOutTime <= attendance.clockIn) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: "Clock-out time must be after clock-in time.",
+      });
+    }
+
+    if (shift.site && latitude !== undefined && longitude !== undefined) {
+      try {
+        assertWithinSiteGeofence(shift.site, latitude, longitude);
+      } catch (err) {
+        if (err instanceof AttendanceValidationError) {
+          return reply.code(400).send({
+            error: "Clock-out validation failed",
+            message: err.message,
+          });
+        }
+        throw err;
+      }
+    }
+
+    const { hoursWorked, overtimeHours } = calculateHours(
+      attendance.clockIn,
+      clockOutTime,
+      shift.startTime,
+      shift.endTime
+    );
+
+    const beforeSnapshot = attendanceSnapshot(attendance);
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const rec = await tx.attendance.update({
+        where: { id: attendance.id },
+        data: {
+          clockOut: clockOutTime,
+          clockOutLat: latitude,
+          clockOutLng: longitude,
+          hoursWorked,
+          overtimeHours,
+          status: "completed",
+        },
+      });
+
+      await tx.shift.update({
+        where: { id: shiftId },
+        data: { status: "completed" },
+      });
+
+      return rec;
+    });
+
+    // Record audit event
+    await recordAttendanceEvent({
+      companyId,
+      attendanceId: updated.id,
+      shiftId: shift.id,
+      employeeId: shift.employeeId,
+      siteId: shift.siteId,
+      eventType: "CLOCK_OUT",
+      source: "manual",
+      occurredAt: clockOutTime,
+      actorUserId: user.sub,
+      reason: reason || "Controller quick clock-out",
+      before: beforeSnapshot,
+      after: attendanceSnapshot(updated),
+    });
+
+    await createAuditLog({
+      userId: user.sub,
+      companyId,
+      action: "attendance.quick_clock_out",
+      entityType: "attendance",
+      entityId: updated.id,
+      metadata: { shiftId, hoursWorked, overtimeHours, reason: reason || "Controller quick clock-out" },
+    });
+
+    // Sync to site timesheet row if exists
+    await syncAttendanceToTimesheetRow(shift, updated).catch((err) => {
+      request.log.warn({ err, shiftId }, "Failed to sync attendance to site timesheet row");
+    });
+
+    triggerPostClockExceptionSync(companyId, shift.siteId);
+
+    return reply.code(200).send(updated);
+  });
+
+  const markAbsentSchema = z.object({
+    shiftId: z.string().min(1),
+    reason: z.string().min(3, "A reason of at least 3 characters is required to mark absent"),
+  });
+
+  app.post("/mark-absent", { preHandler: protect }, async (request, reply) => {
+    const parsed = markAbsentSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const user = request.user!;
+    const companyId = user.companyId;
+    const { shiftId, reason } = parsed.data;
+
+    const shift = await prisma.shift.findFirst({
+      where: { id: shiftId, companyId },
+      include: {
+        attendances: { orderBy: { createdAt: "desc" }, take: 1 },
+      },
+    });
+
+    if (!shift) {
+      return reply.code(404).send({ error: "Shift not found" });
+    }
+
+    const existingAttendance = shift.attendances[0];
+    if (existingAttendance && existingAttendance.clockIn) {
+      return reply.code(400).send({
+        error: "Cannot mark absent",
+        message: "Guard has already clocked in for this shift. Mark absent is not allowed.",
+      });
+    }
+
+    const beforeSnapshot = attendanceSnapshot(existingAttendance);
+
+    const result = await prisma.$transaction(async (tx) => {
+      let attRec;
+      if (existingAttendance) {
+        attRec = await tx.attendance.update({
+          where: { id: existingAttendance.id },
+          data: {
+            status: "absent",
+            hoursWorked: 0,
+            overtimeHours: 0,
+            source: "manual",
+          },
+        });
+      } else {
+        attRec = await tx.attendance.create({
+          data: {
+            shiftId,
+            status: "absent",
+            hoursWorked: 0,
+            overtimeHours: 0,
+            source: "manual",
+          },
+        });
+      }
+
+      // ShiftStatus enum values: created | assigned | active | completed | verified
+      // Attendance status is set to "absent" and 0 hours. We mark the shift completed.
+      await tx.shift.update({
+        where: { id: shiftId },
+        data: { status: "completed" },
+      });
+
+      return attRec;
+    });
+
+    await recordAttendanceEvent({
+      companyId,
+      attendanceId: result.id,
+      shiftId: shift.id,
+      employeeId: shift.employeeId,
+      siteId: shift.siteId,
+      eventType: "MARK_ABSENT",
+      source: "manual",
+      occurredAt: new Date(),
+      actorUserId: user.sub,
+      reason,
+      before: beforeSnapshot,
+      after: attendanceSnapshot(result),
+    });
+
+    await createAuditLog({
+      userId: user.sub,
+      companyId,
+      action: "attendance.mark_absent",
+      entityType: "attendance",
+      entityId: result.id,
+      metadata: { shiftId, reason },
+    });
+
+    // Sync absent status to SiteTimesheetRow if exists
+    const timeZone = await getCompanyTimezone(shift.companyId);
+    const workDate = new Date(`${dateKeyInTimeZone(shift.startTime, timeZone)}T00:00:00.000Z`);
+    const row = await prisma.siteTimesheetRow.findFirst({
+      where: {
+        OR: [
+          { sourceShiftId: shift.id },
+          { siteId: shift.siteId, workDate, plannedGuardId: shift.employeeId },
+        ],
+      },
+      include: { siteTimesheet: { select: { status: true } } },
+    });
+
+    if (row && row.approvalStatus !== "approved" && row.siteTimesheet?.status !== "locked") {
+      await prisma.siteTimesheetRow.update({
+        where: { id: row.id },
+        data: {
+          attendanceStatus: "absent",
+          hoursWorked: 0,
+          overtimeHours: 0,
+          sourceAttendanceId: result.id,
+          sourceShiftId: shift.id,
+        },
+      });
+    }
+
+    return reply.code(200).send(result);
+  });
 
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
@@ -621,8 +1048,9 @@ export async function attendanceRoutes(app: FastifyInstance) {
   app.put("/:id", { preHandler: updateAttendanceProtect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const schema = z.object({
-      clockIn: z.string().datetime().optional(),
-      clockOut: z.string().datetime().optional(),
+      clockIn: z.string().datetime().optional().nullable(),
+      clockOut: z.string().datetime().optional().nullable(),
+      reason: z.string().min(3, "A valid reason of at least 3 characters is required for manual adjustments"),
     });
     const parsed = schema.safeParse(request.body);
     if (!parsed.success) {
@@ -639,7 +1067,14 @@ export async function attendanceRoutes(app: FastifyInstance) {
         id,
         shift: { companyId: user.companyId },
       },
-      include: { shift: true },
+      include: {
+        shift: {
+          include: {
+            employee: { select: { id: true, firstName: true, lastName: true } },
+            site: true,
+          },
+        },
+      },
     });
 
     if (!attendance) {
@@ -671,9 +1106,11 @@ export async function attendanceRoutes(app: FastifyInstance) {
       });
     }
 
+    const beforeSnapshot = attendanceSnapshot(attendance);
+
     const updateData: {
-      clockIn?: Date;
-      clockOut?: Date;
+      clockIn?: Date | null;
+      clockOut?: Date | null;
       hoursWorked?: number | null;
       overtimeHours?: number | null;
       status?: string;
@@ -681,12 +1118,12 @@ export async function attendanceRoutes(app: FastifyInstance) {
     let newClockIn = attendance.clockIn ? new Date(attendance.clockIn) : null;
     let newClockOut = attendance.clockOut ? new Date(attendance.clockOut) : null;
 
-    if (parsed.data.clockIn) {
-      newClockIn = new Date(parsed.data.clockIn);
+    if (parsed.data.clockIn !== undefined) {
+      newClockIn = parsed.data.clockIn ? new Date(parsed.data.clockIn) : null;
       updateData.clockIn = newClockIn;
     }
-    if (parsed.data.clockOut) {
-      newClockOut = new Date(parsed.data.clockOut);
+    if (parsed.data.clockOut !== undefined) {
+      newClockOut = parsed.data.clockOut ? new Date(parsed.data.clockOut) : null;
       updateData.clockOut = newClockOut;
     }
 
@@ -737,14 +1174,41 @@ export async function attendanceRoutes(app: FastifyInstance) {
       },
     });
 
+    // Record audit event with before and after snapshots
+    await recordAttendanceEvent({
+      companyId: user.companyId,
+      attendanceId: id,
+      shiftId: attendance.shiftId,
+      employeeId: attendance.shift.employeeId,
+      siteId: attendance.shift.siteId,
+      eventType: "MANUAL_CORRECTION",
+      source: "manual",
+      occurredAt: new Date(),
+      actorUserId: user.sub,
+      reason: parsed.data.reason,
+      before: beforeSnapshot,
+      after: attendanceSnapshot(updated),
+    });
+
     await createAuditLog({
       userId: user.sub,
       companyId: user.companyId,
       action: "attendance.update",
       entityType: "attendance",
       entityId: id,
-      metadata: { clockIn: parsed.data.clockIn, clockOut: parsed.data.clockOut },
+      metadata: {
+        clockIn: parsed.data.clockIn,
+        clockOut: parsed.data.clockOut,
+        reason: parsed.data.reason,
+      },
     });
+
+    // Sync changes to draft SiteTimesheetRow
+    await syncAttendanceToTimesheetRow(attendance.shift, updated).catch((err) => {
+      request.log.warn({ err, attendanceId: id }, "Failed to sync manual correction to timesheet row");
+    });
+
+    triggerPostClockExceptionSync(user.companyId, attendance.shift.siteId);
 
     return reply.send(updated);
   });

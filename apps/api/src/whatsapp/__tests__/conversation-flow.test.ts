@@ -163,6 +163,32 @@ vi.mock("../../lib/prisma.js", () => ({
     whatsAppMessage: {
       create: vi.fn().mockResolvedValue({}),
     },
+    attendanceEvent: {
+      create: vi.fn().mockResolvedValue({ id: "evt-1" }),
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
+    $transaction: vi.fn().mockImplementation((cb: any) =>
+      typeof cb === "function"
+        ? cb({
+            attendance: {
+              findFirst: (...args: any[]) => findFirstAttendance(...args),
+              create: (...args: any[]) => createAttendance(...args),
+              update: (...args: any[]) => updateAttendance(...args),
+              updateMany: (...args: any[]) => {
+                updateAttendance(...args);
+                return Promise.resolve({ count: 1 });
+              },
+            },
+            shift: {
+              findFirst: (...args: any[]) => findFirstShift(...args),
+              update: (...args: any[]) => updateShift(...args),
+            },
+            attendanceEvent: {
+              create: vi.fn().mockResolvedValue({ id: "evt-1" }),
+            },
+          })
+        : Promise.resolve(cb)
+    ),
   },
 }));
 

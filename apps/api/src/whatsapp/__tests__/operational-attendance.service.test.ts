@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockPrisma = {
+  company: {
+    findUnique: vi.fn(),
+  },
   employee: {
     findUnique: vi.fn(),
   },
@@ -10,8 +13,14 @@ const mockPrisma = {
   },
   attendance: {
     findFirst: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
+  },
+  attendanceEvent: {
+    findFirst: vi.fn(),
+    create: vi.fn(),
   },
   attendanceException: {
     create: vi.fn(),
@@ -20,6 +29,7 @@ const mockPrisma = {
     findFirst: vi.fn(),
     update: vi.fn(),
   },
+  $transaction: vi.fn(async (cb: any) => cb(mockPrisma)),
 };
 
 vi.mock("../../lib/prisma.js", () => ({
@@ -44,10 +54,16 @@ vi.mock("../../services/attendance.service.js", () => ({
 describe("operationalAttendanceService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPrisma.company.findUnique.mockResolvedValue({ id: "comp-1", settings: { timezone: "Africa/Johannesburg" } });
     mockPrisma.attendanceException.create.mockResolvedValue({});
+    mockPrisma.attendanceEvent.create.mockResolvedValue({});
+    mockPrisma.attendanceEvent.findFirst.mockResolvedValue(null);
     mockPrisma.shift.update.mockResolvedValue({});
+    (mockPrisma.shift as any).updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    mockPrisma.attendance.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.siteTimesheetRow.findFirst.mockResolvedValue(null);
     mockPrisma.siteTimesheetRow.update.mockResolvedValue({});
+    mockCreateAuditLog.mockResolvedValue({});
   });
 
   describe("findActiveRosterShift", () => {
@@ -317,7 +333,8 @@ describe("operationalAttendanceService", () => {
           metadata: expect.objectContaining({
             validationStatus: "FLAGGED_NO_GEOFENCE",
           }),
-        })
+        }),
+        expect.anything()
       );
     });
 
@@ -378,7 +395,8 @@ describe("operationalAttendanceService", () => {
           metadata: expect.objectContaining({
             source: "whatsapp",
           }),
-        })
+        }),
+        expect.anything()
       );
     });
 
@@ -548,7 +566,7 @@ describe("operationalAttendanceService", () => {
         expect.objectContaining({
           where: { id: existingRejectedAttendance.id },
           data: expect.objectContaining({
-            status: "VERIFIED",
+            status: "clocked_in",
             validationStatus: "VERIFIED",
             withinGeofence: true,
             rejectionReason: null,

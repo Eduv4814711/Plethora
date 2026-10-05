@@ -3790,3 +3790,34 @@ model EmploymentExit {
   @@index([employeeId])
   @@index([companyId, terminationStatus])
 }
+/// Append-only ledger of every attendance capture and correction (WhatsApp, manual, REST).
+/// Rows are never updated or deleted, and deliberately have no FKs so history survives
+/// shift/attendance deletion. (whatsappMessageId, eventType) is unique so a replayed
+/// webhook can never record the same clock event twice.
+model AttendanceEvent {
+  id                String   @id @default(cuid())
+  companyId         String
+  attendanceId      String?
+  shiftId           String?
+  employeeId        String?
+  siteId            String?
+  /// CLOCK_IN | CLOCK_OUT | MANUAL_CAPTURE | MANUAL_CORRECTION | MARK_ABSENT | REJECTED_GEOFENCE | NO_SHIFT | DUPLICATE
+  eventType         String
+  /// whatsapp | manual | rest
+  source            String
+  /// The clock timestamp this event is about (not when it was written).
+  occurredAt        DateTime?
+  before            Json?
+  after             Json?
+  reason            String?
+  actorUserId       String?
+  whatsappMessageId String?
+  metadata          Json?
+  createdAt         DateTime @default(now())
+
+  @@unique([whatsappMessageId, eventType])
+  @@index([companyId, createdAt])
+  @@index([attendanceId])
+  @@index([shiftId])
+  @@index([employeeId, createdAt])
+}

@@ -67,11 +67,13 @@ export function attendanceOverviewHref(state: AttendanceRouteState): string {
   return `/attendance?${attendanceQuery(state)}`;
 }
 
-/** Which population the attendance screen is showing: rostered guards, or office staff. */
-export type AttendanceView = "sites" | "staff";
+/** Which population / workflow the attendance screen is showing: controller today workspace, pay-period timesheets (sites), or office staff. */
+export type AttendanceView = "today" | "sites" | "staff";
 
 export function parseAttendanceView(value: string | null | undefined): AttendanceView {
-  return value === "staff" ? "staff" : "sites";
+  if (value === "staff") return "staff";
+  if (value === "sites") return "sites";
+  return "today";
 }
 
 export function attendanceStaffHref(date: string): string {
