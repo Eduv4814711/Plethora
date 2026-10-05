@@ -135,6 +135,19 @@ async function reconcileDatabase() {
     } catch (compErr) {
       console.warn("[deploy-migrations] Compliance migration reconciliation note:", compErr?.message || compErr);
     }
+
+    // 4. Ensure Site roster shift time columns exist (forward-compatible for 20261005120000_site_shift_times)
+    try {
+      await client.query(`
+        ALTER TABLE "Site" ADD COLUMN IF NOT EXISTS "rosterDayShiftStartTime" TEXT DEFAULT '06:00';
+        ALTER TABLE "Site" ADD COLUMN IF NOT EXISTS "rosterDayShiftEndTime" TEXT DEFAULT '18:00';
+        ALTER TABLE "Site" ADD COLUMN IF NOT EXISTS "rosterNightShiftStartTime" TEXT DEFAULT '18:00';
+        ALTER TABLE "Site" ADD COLUMN IF NOT EXISTS "rosterNightShiftEndTime" TEXT DEFAULT '06:00';
+      `);
+      console.log("[deploy-migrations] Ensured Site roster shift time columns exist.");
+    } catch (siteErr) {
+      console.warn("[deploy-migrations] Site shift time columns note:", siteErr?.message || siteErr);
+    }
   } catch (err) {
     console.warn("[deploy-migrations] Pre-migration connection note:", err?.message || err);
   } finally {
