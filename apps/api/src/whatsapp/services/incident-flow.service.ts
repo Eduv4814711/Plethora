@@ -3,6 +3,8 @@ import { createAuditLog } from "../../lib/audit.js";
 import { upsertAlert } from "../../modules/alerts/alerts.service.js";
 import { nextIncidentNumber, severityToAlertPriority } from "../../modules/incidents/incidents.service.js";
 import { sessionManager, type ConversationSession } from "./session.service.js";
+import { operationalEventBus } from "../../lib/events.js";
+import { dispatchSupervisorEscalation } from "./supervisor-escalation.service.js";
 import type { IncidentSeverity, IncidentType } from "@prisma/client";
 
 export interface IncidentFlowResult {
@@ -425,12 +427,19 @@ export async function handleIncidentEnterDetails(
   const title = `${categoryLabel}: ${siteName}`;
   const fullDescription = `[WhatsApp Report by ${employeeName} (${from})]\n\n${details}`;
 
+  const siteRecord = await prisma.site.findUnique({
+    where: { id: siteId },
+    select: { supervisorId: true, name: true },
+  });
+  const assignedSupervisorId = siteRecord?.supervisorId ?? null;
+
   const incident = await prisma.incident.create({
     data: {
       companyId: session.companyId,
       incidentNumber,
       siteId,
       reportedById: reporterUser.id,
+      assignedSupervisorId,
       incidentDateTime: now,
       incidentType: incidentType as IncidentType,
       severity: severity as IncidentSeverity,
@@ -441,7 +450,26 @@ export async function handleIncidentEnterDetails(
       status: "SUBMITTED",
       supervisorApprovalStatus: "PENDING",
     },
-    select: { id: true, incidentNumber: true },
+    select: {
+      id: true,
+      incidentNumber: true,
+      title: true,
+      description: true,
+      severity: true,
+      status: true,
+      incidentDateTime: true,
+      siteId: true,
+      assignedSupervisorId: true,
+      createdAt: true,
+    },
+  });
+
+  // Broadcast real-time incident event to Control Room Operator dashboard
+  operationalEventBus.broadcast("INCIDENT_CREATED", session.companyId, {
+    ...incident,
+    siteName,
+    site: { id: siteId, name: siteName },
+    reportedBy: { name: employeeName, phone: from },
   });
 
   // Create Operational Alert for control room and supervisors
@@ -456,6 +484,19 @@ export async function handleIncidentEnterDetails(
     siteId,
     employeeId: session.employeeId,
   }).catch((err) => console.warn("[WhatsApp Incident Alert Error]", err));
+
+  // Automated supervisor WhatsApp dispatch for CRITICAL and HIGH severity incidents
+  if (severity === "CRITICAL" || severity === "HIGH") {
+    void dispatchSupervisorEscalation({
+      companyId: session.companyId,
+      siteId,
+      guardName: employeeName,
+      guardPhone: from,
+      reason: `🚨 ${severity} INCIDENT: ${categoryLabel} at ${siteName} (${incidentNumber}) - ${details.slice(0, 100)}`,
+      incidentId: incident.id,
+      severity: severity as string,
+    }).catch((err) => console.warn("[Supervisor Escalation Incident Error]", err));
+  }
 
   // Log audit trail
   await createAuditLog({

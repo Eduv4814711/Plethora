@@ -153,6 +153,16 @@ vi.mock("../../lib/prisma.js", () => ({
       create: vi.fn().mockResolvedValue({}),
       update: vi.fn().mockResolvedValue({}),
     },
+    company: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: "co-101",
+        name: "Test Security Co",
+        settings: {},
+      }),
+    },
+    whatsAppMessage: {
+      create: vi.fn().mockResolvedValue({}),
+    },
   },
 }));
 

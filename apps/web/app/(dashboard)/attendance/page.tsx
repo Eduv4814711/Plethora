@@ -10,6 +10,7 @@ import { fetchCurrentPayPeriod, fetchPayPeriods, type PayPeriodOption } from "@/
 import { PayPeriodSelect } from "@/components/pay-period-select";
 import { AttendanceCaptureDashboard } from "@/components/attendance-capture-dashboard";
 import { StaffRollCall } from "@/components/staff-rollcall";
+import { ShiftRollCallModal } from "@/components/shift-rollcall-modal";
 import { fetchStaffAttendanceDay } from "@/lib/staff-attendance-api";
 import type { AttendanceShiftTypeFilter } from "@/lib/roster-api";
 import {
@@ -61,6 +62,7 @@ export default function AttendancePage() {
   const [periodLabel, setPeriodLabel] = useState("");
   const [payPeriodOptions, setPayPeriodOptions] = useState<PayPeriodOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rollCallOpen, setRollCallOpen] = useState(false);
   const readyRef = useRef(false);
 
   useEffect(() => {
@@ -197,12 +199,22 @@ export default function AttendancePage() {
               : "Start with a site that needs attention, confirm who worked, then approve its timesheet for payroll."}
           </p>
         </div>
-        <Link
-          href={`/attendance/exceptions?${exceptionParams}`}
-          className="btn-secondary min-h-11 shrink-0 self-start text-sm"
-        >
-          Review attendance issues
-        </Link>
+        <div className="flex flex-wrap items-center gap-2 shrink-0 self-start">
+          <button
+            type="button"
+            onClick={() => setRollCallOpen(true)}
+            className="btn-primary min-h-11 text-sm flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800"
+          >
+            <span>💬</span>
+            Shift Roll-Call
+          </button>
+          <Link
+            href={`/attendance/exceptions?${exceptionParams}`}
+            className="btn-secondary min-h-11 text-sm"
+          >
+            Review attendance issues
+          </Link>
+        </div>
       </header>
 
       {/* Two populations, one entry point. Guards keep their existing flow untouched. */}
@@ -336,6 +348,13 @@ export default function AttendancePage() {
         />
       )}
         </>
+      )}
+      {token && (
+        <ShiftRollCallModal
+          token={token}
+          isOpen={rollCallOpen}
+          onClose={() => setRollCallOpen(false)}
+        />
       )}
     </main>
   );

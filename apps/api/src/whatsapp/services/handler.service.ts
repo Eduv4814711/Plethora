@@ -21,6 +21,7 @@ import {
 } from "./send.service.js";
 import { createAuditLog } from "../../lib/audit.js";
 import { storage } from "../../lib/storage.js";
+import { operationalEventBus } from "../../lib/events.js";
 import { extensionForMime, matchesMagicBytes } from "../../lib/upload-validation.js";
 import { triggerPostClockExceptionSync } from "../../modules/attendance-exceptions/post-clock-sync.js";
 import { operationalAttendanceService, findActiveRosterShift } from "./operational-attendance.service.js";
@@ -1264,7 +1265,7 @@ async function attachIncidentEvidence(
   const key = `incident-attachments/${employee.companyId}/${incident.id}/${randomUUID()}.${extensionForMime(mimeType)}`;
   await storage.uploadFile({ key, body: buffer, contentType: mimeType });
 
-  await prisma.incidentAttachment.create({
+  const attachment = await prisma.incidentAttachment.create({
     data: {
       incidentId: incident.id,
       filename: filename || `whatsapp-evidence-${Date.now()}.${extensionForMime(mimeType)}`,
@@ -1273,6 +1274,13 @@ async function attachIncidentEvidence(
       url: storage.getAssetUrl(key),
       uploadedById: incident.reportedById,
     },
+  });
+
+  // Broadcast real-time attachment arrival to Control Room
+  operationalEventBus.broadcast("INCIDENT_ATTACHMENT_ADDED", employee.companyId, {
+    incidentId: incident.id,
+    incidentNumber: incident.incidentNumber,
+    attachment,
   });
 
   return {

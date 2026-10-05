@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { authFetch } from "@/lib/api";
 import { hasCapability } from "@/lib/permissions";
 import { createIncident, listIncidents, type Incident } from "@/lib/msr-api";
+import { useOperationalEvents } from "@/lib/use-operational-events";
 import { AlertBanner, Badge, EmptyState, PageHeader } from "@/components/ui";
 
 const INCIDENT_TYPES = [
@@ -51,6 +52,8 @@ export default function IncidentsPage() {
   const [formDescription, setFormDescription] = useState("");
   const [formDateTime, setFormDateTime] = useState("");
   const [formClientVisible, setFormClientVisible] = useState(false);
+  const [liveBanner, setLiveBanner] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!token) return;
@@ -67,6 +70,41 @@ export default function IncidentsPage() {
       setItems([]);
     }
   }, [token, statusFilter, severityFilter]);
+
+  const { isConnected } = useOperationalEvents({
+    token,
+    onIncidentCreated: (event) => {
+      const p = event.payload as {
+        id?: string;
+        incidentNumber?: string;
+        siteName?: string;
+        severity?: string;
+        title?: string;
+      };
+      setLiveBanner(
+        `🚨 Live WhatsApp Report: ${p.incidentNumber || "Incident"} at ${p.siteName || "Site"} (${p.severity || "Reported"})`
+      );
+      if (p.id) setHighlightId(p.id);
+      void refresh();
+    },
+    onIncidentUpdated: () => {
+      void refresh();
+    },
+    onIncidentAttachmentAdded: (event) => {
+      const p = event.payload as { incidentNumber?: string };
+      setLiveBanner(`📸 Photo/Evidence attached via WhatsApp for incident ${p.incidentNumber || ""}`);
+      void refresh();
+    },
+  });
+
+  // Background fallback poll every 15s to guarantee fresh incident log
+  useEffect(() => {
+    if (!token) return;
+    const interval = setInterval(() => {
+      void refresh();
+    }, 15_000);
+    return () => clearInterval(interval);
+  }, [token, refresh]);
 
   useEffect(() => {
     if (!token) return;
@@ -121,12 +159,49 @@ export default function IncidentsPage() {
       <PageHeader
         title="Incidents"
         description="Report and track security incidents across your sites."
-        actions={canCreate ? (
-          <button type="button" className="btn-primary" onClick={() => setShowForm(true)}>
-            Report incident
-          </button>
-        ) : undefined}
+        actions={
+          <div className="flex items-center gap-3">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold tracking-wide border transition-all ${
+                isConnected
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-300 shadow-sm"
+                  : "bg-security-navy-50 text-security-navy-600 border-security-navy-200"
+              }`}
+            >
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  isConnected ? "bg-emerald-500 animate-pulse" : "bg-security-navy-400"
+                }`}
+              />
+              {isConnected ? "Live Feed Active" : "Connecting Live Feed..."}
+            </span>
+            {canCreate && (
+              <button type="button" className="btn-primary" onClick={() => setShowForm(true)}>
+                Report incident
+              </button>
+            )}
+          </div>
+        }
       />
+
+      {liveBanner && (
+        <div
+          role="status"
+          className="mb-4 flex items-center justify-between gap-3 rounded-security-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900 shadow-sm animate-fade-in"
+        >
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-red-600 animate-ping" />
+            <p className="font-semibold">{liveBanner}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setLiveBanner(null)}
+            className="text-xs font-semibold text-red-700 hover:text-red-900 underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       <div className="mb-4 flex flex-wrap gap-2">
         <select
@@ -233,7 +308,9 @@ export default function IncidentsPage() {
           <Link
             key={item.id}
             href={`/incidents/${item.id}`}
-            className="card-dashboard block p-4 hover:border-security-navy-200 transition-colors"
+            className={`card-dashboard block p-4 hover:border-security-navy-200 transition-all ${
+              highlightId === item.id ? "ring-2 ring-emerald-500 bg-emerald-50/40" : ""
+            }`}
           >
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">

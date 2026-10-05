@@ -149,4 +149,44 @@ export async function internalCronRoutes(app: FastifyInstance) {
       results,
     });
   });
+
+  /**
+   * Automated Shift Attendance Roll-Call:
+   * Aggregates verified guards on duty across company sites and dispatches
+   * parade state WhatsApp message to designated office numbers at shift close cutoffs.
+   */
+  app.post("/cron/shift-roll-call", async (request, reply) => {
+    if (!authorizeCron(request)) {
+      return reply.code(env.cronSecret ? 401 : 503).send({
+        error: env.cronSecret ? "Unauthorized" : "Cron not configured",
+        message: env.cronSecret
+          ? "Invalid or missing Authorization bearer token"
+          : "Set CRON_SECRET on the API service to enable scheduled roll-call",
+      });
+    }
+
+    const { dispatchShiftRollCall } = await import("../services/shift-roll-call.service.js");
+    const companies = await prisma.company.findMany({ select: { id: true } });
+    const results: Array<{ companyId: string; success: boolean; recipientCount: number; coveragePercentage: number }> = [];
+
+    for (const company of companies) {
+      try {
+        const res = await dispatchShiftRollCall(company.id);
+        results.push({
+          companyId: company.id,
+          success: res.success,
+          recipientCount: res.recipientCount,
+          coveragePercentage: res.summary.coveragePercentage,
+        });
+      } catch (err) {
+        request.log.error({ err, companyId: company.id }, "shift-roll-call cron failed for company");
+      }
+    }
+
+    return reply.send({
+      ok: true,
+      companiesProcessed: companies.length,
+      results,
+    });
+  });
 }

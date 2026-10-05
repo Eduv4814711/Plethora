@@ -30,6 +30,7 @@ import {
 } from "recharts";
 import { CHART_PRIMARY, CHART_SECONDARY, CHART_SERIES } from "@/lib/chart-theme";
 import { ComplianceSummaryWidget } from "@/components/dashboard/ComplianceSummaryWidget";
+import { useOperationalEvents } from "@/lib/use-operational-events";
 
 interface Site {
   id: string;
@@ -113,6 +114,15 @@ export default function DashboardPage() {
   const [priorityTab, setPriorityTab] = useState<PriorityTab>("all");
   const [alertActionId, setAlertActionId] = useState<string | null>(null);
   const [alertsSectionOpen, setAlertsSectionOpen] = useState(true);
+  const [liveEscalation, setLiveEscalation] = useState<{
+    guardName?: string;
+    guardPhone?: string;
+    siteName?: string;
+    reason?: string;
+    refCode?: string;
+    timestamp?: string;
+  } | null>(null);
+  const [liveIncidentNotice, setLiveIncidentNotice] = useState<string | null>(null);
 
   const canSites = user ? canAccessRoute("/sites", user) : false;
   const canCreateSites = Boolean(user && hasCapability(user, "/sites", "create"));
@@ -181,6 +191,35 @@ export default function DashboardPage() {
       inFlight?.abort();
     };
   }, [token, fetchDashboard]);
+
+  useOperationalEvents({
+    token,
+    onIncidentCreated: (event) => {
+      const p = event.payload as { incidentNumber?: string; siteName?: string; severity?: string };
+      if (p.severity === "CRITICAL" || p.severity === "HIGH") {
+        setLiveIncidentNotice(`🚨 Urgent Incident Logged: ${p.incidentNumber || ""} at ${p.siteName || "Site"}`);
+      }
+      fetchDashboard();
+    },
+    onSupervisorEscalation: (event) => {
+      const p = event.payload as {
+        guardName?: string;
+        guardPhone?: string;
+        siteName?: string;
+        reason?: string;
+        refCode?: string;
+        timestamp?: string;
+      };
+      setLiveEscalation(p);
+      fetchDashboard();
+    },
+    onAttendanceVerified: () => {
+      fetchDashboard();
+    },
+    onRollCallDispatched: () => {
+      fetchDashboard();
+    },
+  });
 
   useEffect(() => {
     if (!token || !canSites) return;
@@ -397,6 +436,66 @@ export default function DashboardPage() {
           </div>
         </div>
       </header>
+
+      {liveEscalation && (
+        <div
+          role="alert"
+          className="mb-3 mt-3 flex flex-col gap-2 rounded-security-lg border-2 border-red-500 bg-red-50 p-3 shadow-md sm:flex-row sm:items-center sm:justify-between animate-fade-in"
+        >
+          <div className="flex items-start gap-2.5">
+            <span className="flex h-3 w-3 relative mt-1">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600" />
+            </span>
+            <div>
+              <p className="font-bold text-red-900 text-sm">
+                🚨 Supervisor Escalation Dispatched: {liveEscalation.guardName} ({liveEscalation.guardPhone || "Guard"})
+              </p>
+              <p className="text-xs text-red-800">
+                Site: <span className="font-semibold">{liveEscalation.siteName || "Field Post"}</span> · Ref:{" "}
+                <span className="font-mono font-bold">{liveEscalation.refCode || "SUP"}</span> · Context:{" "}
+                {liveEscalation.reason || "Urgent assistance requested"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link href="/incidents" className="btn-primary text-xs py-1 px-3 bg-red-700 hover:bg-red-800">
+              View Control Feed
+            </Link>
+            <button
+              type="button"
+              onClick={() => setLiveEscalation(null)}
+              className="text-xs font-semibold text-red-700 hover:text-red-900 px-2 py-1"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {liveIncidentNotice && (
+        <div
+          role="status"
+          className="mb-2 mt-2 flex items-center justify-between gap-3 rounded-security-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 shadow-sm animate-fade-in"
+        >
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-amber-600 animate-ping" />
+            <p className="font-medium">{liveIncidentNotice}</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link href="/incidents" className="text-xs font-semibold text-amber-800 hover:text-amber-950 underline">
+              View Log
+            </Link>
+            <button
+              type="button"
+              onClick={() => setLiveIncidentNotice(null)}
+              className="text-xs font-semibold text-amber-700 hover:text-amber-900"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div

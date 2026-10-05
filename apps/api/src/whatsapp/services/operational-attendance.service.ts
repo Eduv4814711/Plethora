@@ -3,6 +3,7 @@ import { haversineDistance, toGeoNumber } from "../../lib/geo.js";
 import { calculateHours } from "../../services/attendance.service.js";
 import { triggerPostClockExceptionSync } from "../../modules/attendance-exceptions/post-clock-sync.js";
 import { createAuditLog } from "../../lib/audit.js";
+import { operationalEventBus } from "../../lib/events.js";
 import type { Shift, Site, Attendance, Employee } from "@prisma/client";
 
 export type ShiftWithRelations = Shift & {
@@ -279,6 +280,16 @@ export async function validateAndRecordOperationalAttendance(
 
     triggerPostClockExceptionSync(shift.companyId, shift.siteId);
 
+    operationalEventBus.broadcast("ATTENDANCE_VERIFIED", shift.companyId, {
+      attendanceId: attendance.id,
+      shiftId: shift.id,
+      siteId: shift.siteId,
+      employeeId: shift.employeeId,
+      intent,
+      validationStatus: "FLAGGED_NO_GEOFENCE",
+      status: "VERIFIED",
+    });
+
     const actionText = intent === "clock_out" ? "Clock-out" : "Clock-in";
     return {
       success: true,
@@ -372,6 +383,16 @@ export async function validateAndRecordOperationalAttendance(
     });
 
     triggerPostClockExceptionSync(shift.companyId, shift.siteId);
+
+    operationalEventBus.broadcast("ATTENDANCE_VERIFIED", shift.companyId, {
+      attendanceId: attendance.id,
+      shiftId: shift.id,
+      siteId: shift.siteId,
+      employeeId: shift.employeeId,
+      intent,
+      validationStatus: "VERIFIED",
+      status: "VERIFIED",
+    });
 
     const actionText = intent === "clock_out" ? "Clock-out" : "Clock-in";
     return {

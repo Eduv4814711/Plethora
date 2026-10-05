@@ -4,12 +4,24 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { listNotifications, markNotificationRead, markAllNotificationsRead } from "@/lib/msr-api";
+import { useOperationalEvents } from "@/lib/use-operational-events";
 
 export function NotificationBell() {
   const { token } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<{ id: string; title: string; message: string; linkUrl?: string | null; createdAt: string }[]>([]);
+
+  useOperationalEvents({
+    token,
+    onAnyEvent: () => {
+      if (token) {
+        listNotifications(token, true)
+          .then((r) => setUnreadCount(r.unreadCount))
+          .catch(() => setUnreadCount(0));
+      }
+    },
+  });
 
   useEffect(() => {
     if (!token) return;

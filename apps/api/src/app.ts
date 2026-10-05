@@ -23,6 +23,7 @@ import { sitesRoutes } from "./routes/sites.js";
 import { rosteringRoutes } from "./modules/rostering/rostering.routes.js";
 import { rostersRoutes } from "./modules/rosters/rosters.routes.js";
 import { attendanceRoutes } from "./routes/attendance.js";
+import { rollCallRoutes } from "./routes/roll-call.js";
 import { staffAttendanceRoutes } from "./modules/staff-attendance/staff-attendance.routes.js";
 import { payrollRoutes } from "./routes/payroll.js";
 import { payrollIntelligenceRoutes } from "./routes/payroll-intelligence.js";
@@ -64,6 +65,7 @@ import { notificationsRoutes } from "./modules/notifications/notifications.route
 import { clientsRoutes, clientPortalRoutes } from "./modules/clients/clients.routes.js";
 import { reportsExtendedRoutes } from "./modules/reports-extended/reports-extended.routes.js";
 import { complianceRoutes } from "./modules/compliance/compliance.routes.js";
+import { eventsRoutes } from "./routes/events.js";
 import { corsOriginFromEnv, env } from "./lib/env.js";
 import { verifyDatabaseReadiness } from "./lib/db-connectivity.js";
 
@@ -228,6 +230,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(rosteringRoutes, { prefix: "/shifts" });
   await app.register(rostersRoutes, { prefix: "/rosters" });
   await app.register(attendanceRoutes, { prefix: "/attendance" });
+  await app.register(rollCallRoutes, { prefix: "/attendance/roll-call" });
   await app.register(staffAttendanceRoutes, { prefix: "/staff-attendance" });
   await app.register(payrollRoutes, { prefix: "/payroll" });
   await app.register(payrollIntelligenceRoutes, { prefix: "/payroll" });
@@ -268,6 +271,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(clientPortalRoutes, { prefix: "/client-portal" });
   await app.register(academyRoutes, { prefix: "/academy" });
   await app.register(complianceRoutes, { prefix: "/compliance" });
+  await app.register(eventsRoutes, { prefix: "/events" });
   await app.register(internalCronRoutes, { prefix: "/internal" });
 
   return app;
