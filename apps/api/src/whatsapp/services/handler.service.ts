@@ -1262,7 +1262,7 @@ async function attachIncidentEvidence(
     return { reply: "The document failed file type or format validation." };
   }
 
-  const key = `incident-attachments/${employee.companyId}/${incident.id}/${randomUUID()}.${extensionForMime(mimeType)}`;
+  const key = `incidents/${employee.companyId}/${incident.id}/${randomUUID()}.${extensionForMime(mimeType)}`;
   await storage.uploadFile({ key, body: buffer, contentType: mimeType });
 
   const attachment = await prisma.incidentAttachment.create({

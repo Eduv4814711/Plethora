@@ -148,7 +148,11 @@ export async function incidentsRoutes(app: FastifyInstance) {
       }
       return sendPrivateStoredFile(reply, {
         storedReference: attachment.url,
-        allowedPrefixes: [`incidents/${user.companyId}/${id}`],
+        allowedPrefixes: [
+          `incidents/${user.companyId}/${id}`,
+          // Legacy prefix used by WhatsApp evidence uploads before the key was aligned.
+          `incident-attachments/${user.companyId}/${id}`,
+        ],
         fileName: attachment.filename,
         mimeType: attachment.mimeType,
       });
