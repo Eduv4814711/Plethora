@@ -39,6 +39,9 @@ export interface GuardAttendanceItem {
   needsAction: boolean;
   exceptionDescription?: string | null;
   postName?: string | null;
+  siteId?: string;
+  isReplacement?: boolean;
+  originalGuardName?: string | null;
 }
 
 export interface SiteAttendanceGroup {
@@ -192,4 +195,56 @@ export async function adjustAttendance(
     throw new Error(err.message || err.error || "Failed to adjust attendance");
   }
   return res.json();
+}
+
+export async function replaceGuard(
+  token: string,
+  payload: {
+    shiftId: string;
+    replacementEmployeeId: string;
+    reason: string;
+  }
+): Promise<any> {
+  const res = await fetch(`${API_BASE}/attendance/replace-guard`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || "Failed to replace guard");
+  }
+  return res.json();
+}
+
+export interface AvailableGuardOption {
+  id: string;
+  firstName: string;
+  lastName: string;
+  employeeNumber: string;
+  status: string;
+  phone: string | null;
+}
+
+export async function fetchAvailableGuards(token: string): Promise<AvailableGuardOption[]> {
+  const res = await fetch(`${API_BASE}/employees?status=active&limit=100`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || "Failed to fetch guards list");
+  }
+  const body = await res.json();
+  const list = body.data || body || [];
+  return list.map((e: any) => ({
+    id: e.id,
+    firstName: e.firstName,
+    lastName: e.lastName,
+    employeeNumber: e.employeeNumber,
+    status: e.status,
+    phone: e.phone ?? null,
+  }));
 }

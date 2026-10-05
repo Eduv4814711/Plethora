@@ -31,6 +31,9 @@ export interface GuardAttendanceItem {
   needsAction: boolean;
   exceptionDescription?: string | null;
   postName?: string | null;
+  siteId: string;
+  isReplacement?: boolean;
+  originalGuardName?: string | null;
 }
 
 export interface SiteAttendanceGroup {
@@ -123,20 +126,40 @@ export async function getTodayAttendance(
 
   // Also query open AttendanceExceptions for these shifts to flag them
   const shiftIds = shifts.map((s) => s.id);
-  const exceptions = shiftIds.length > 0
-    ? await prisma.attendanceException.findMany({
-        where: {
-          companyId,
-          shiftId: { in: shiftIds },
-          status: "OPEN",
-        },
-        select: { shiftId: true, exceptionType: true, description: true, severity: true },
-      })
-    : [];
+  const [exceptions, replacementEvents] = await Promise.all([
+    shiftIds.length > 0
+      ? prisma.attendanceException.findMany({
+          where: {
+            companyId,
+            shiftId: { in: shiftIds },
+            status: "OPEN",
+          },
+          select: { shiftId: true, exceptionType: true, description: true, severity: true },
+        })
+      : [],
+    shiftIds.length > 0
+      ? prisma.attendanceEvent.findMany({
+          where: {
+            companyId,
+            shiftId: { in: shiftIds },
+            eventType: "REPLACE_GUARD",
+          },
+          select: { shiftId: true, metadata: true },
+          orderBy: { occurredAt: "desc" },
+        })
+      : [],
+  ]);
 
   const exceptionsByShift = new Map<string, (typeof exceptions)[0]>();
   for (const exc of exceptions) {
     if (exc.shiftId) exceptionsByShift.set(exc.shiftId, exc);
+  }
+
+  const replacementsByShift = new Map<string, Record<string, unknown>>();
+  for (const rep of replacementEvents) {
+    if (rep.shiftId && !replacementsByShift.has(rep.shiftId)) {
+      replacementsByShift.set(rep.shiftId, (rep.metadata as Record<string, unknown>) ?? {});
+    }
   }
 
   // Grouping by Shift Window (e.g. Day Shift 06:00 - 18:00 vs Night Shift 18:00 - 06:00)
@@ -207,6 +230,8 @@ export async function getTodayAttendance(
       siteId: shift.siteId,
       siteName: shift.site?.name ?? "Unassigned Site",
       supervisorName: shift.site?.supervisor?.name ?? null,
+      isReplacement: Boolean(replacementsByShift.has(shift.id)),
+      originalGuardName: (replacementsByShift.get(shift.id)?.originalGuardName as string) ?? null,
     };
 
     allItems.push(item);

@@ -23,6 +23,8 @@ export interface DashboardWorkData {
   } | null;
   pendingApprovalsInbox?: number;
   pendingSiteTimesheetRows?: number;
+  openCriticalIncidents?: number;
+  activeSitesCount?: number;
 }
 
 export interface TodayWorkItem {
@@ -34,6 +36,8 @@ export interface TodayWorkItem {
   href: string;
   priority: "CRITICAL" | "MEDIUM" | "LOW";
   badge?: string;
+  focalCount?: string;
+  description?: string;
 }
 
 /** Formats the period in plain language: "September roster · 26 Aug – 25 Sep" */
@@ -82,6 +86,8 @@ export function buildTodayWorkItems(params: {
         sourceModule: "ATTENDANCE",
         title: `${count} site${count === 1 ? "" : "s"} waiting for ${currentShift}-shift confirmation`,
         count,
+        focalCount: `${count} site${count === 1 ? "" : "s"}`,
+        description: `Waiting for ${currentShift}-shift confirmation`,
         verb: count === 1 ? "Confirm 1 site" : `Confirm ${count} sites`,
         href: count === 1 ? `/attendance?siteId=${unconfirmed[0].siteId}` : "/attendance",
         priority: "CRITICAL",
@@ -94,6 +100,8 @@ export function buildTodayWorkItems(params: {
         sourceModule: "ATTENDANCE",
         title: `${rowCount} unconfirmed attendance shift${rowCount === 1 ? "" : "s"}`,
         count: rowCount,
+        focalCount: `${rowCount} shift${rowCount === 1 ? "" : "s"}`,
+        description: "Unconfirmed attendance shifts require review",
         verb: rowCount === 1 ? "Confirm 1 shift" : `Confirm ${rowCount} shifts`,
         href: "/attendance",
         priority: "CRITICAL",
@@ -110,6 +118,8 @@ export function buildTodayWorkItems(params: {
         sourceModule: "ATTENDANCE",
         title: `${openExceptions} open attendance exception${openExceptions === 1 ? "" : "s"} need review`,
         count: openExceptions,
+        focalCount: `${openExceptions} exception${openExceptions === 1 ? "" : "s"}`,
+        description: `Open attendance exception${openExceptions === 1 ? "" : "s"} need review`,
         verb: openExceptions === 1 ? "Clear 1 exception" : `Clear ${openExceptions} exceptions`,
         href: "/attendance/exceptions?status=OPEN",
         priority: "CRITICAL",
@@ -133,6 +143,8 @@ export function buildTodayWorkItems(params: {
         sourceModule: "PAYROLL",
         title: `${pr.openExceptions} critical attendance issue${pr.openExceptions === 1 ? "" : "s"} blocking payroll calculation`,
         count: pr.openExceptions,
+        focalCount: `${pr.openExceptions} blocker${pr.openExceptions === 1 ? "" : "s"}`,
+        description: `Critical attendance issue${pr.openExceptions === 1 ? "" : "s"} blocking payroll calculation`,
         verb: pr.openExceptions === 1 ? "Clear 1 blocker" : `Clear ${pr.openExceptions} blockers`,
         href,
         priority: "CRITICAL",
@@ -151,6 +163,8 @@ export function buildTodayWorkItems(params: {
         sourceModule: "ROSTERING",
         title: `${attentionCount} site roster${attentionCount === 1 ? "" : "s"} need coverage attention`,
         count: attentionCount,
+        focalCount: `${attentionCount} roster${attentionCount === 1 ? "" : "s"}`,
+        description: `Site roster${attentionCount === 1 ? "" : "s"} need coverage attention`,
         verb: attentionCount === 1 ? "Fix 1 roster" : `Fix ${attentionCount} rosters`,
         href: attentionSites.length === 1 ? `/rostering/sites/${attentionSites[0].siteId}` : "/rostering",
         priority: "MEDIUM",
@@ -173,6 +187,8 @@ export function buildTodayWorkItems(params: {
         sourceModule: "DOCUMENTS",
         title: `${docAlerts.length} compliance or PSIRA record${docAlerts.length > 1 ? "" : "s"} expiring soon`,
         count: docAlerts.length,
+        focalCount: `${docAlerts.length} record${docAlerts.length > 1 ? "" : "s"}`,
+        description: `Compliance or PSIRA record${docAlerts.length > 1 ? "" : "s"} expiring soon`,
         verb: docAlerts.length === 1 ? "Review 1 document" : `Review ${docAlerts.length} documents`,
         href: firstTarget?.href ?? "/documents",
         priority: "LOW",
@@ -189,6 +205,8 @@ export function buildTodayWorkItems(params: {
         sourceModule: "APPROVALS",
         title: `${pendingApprovals} approval request${pendingApprovals === 1 ? "" : "s"} waiting for review`,
         count: pendingApprovals,
+        focalCount: `${pendingApprovals} request${pendingApprovals === 1 ? "" : "s"}`,
+        description: `Approval request${pendingApprovals === 1 ? "" : "s"} waiting for review`,
         verb: pendingApprovals === 1 ? "Review 1 approval" : `Review ${pendingApprovals} approvals`,
         href: "/approvals",
         priority: "MEDIUM",

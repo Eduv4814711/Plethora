@@ -61,6 +61,11 @@ const ROSTER_SHIFT_DAYS = z
   .optional()
   .transform((v) => (v === undefined ? undefined : normalizeCoverageDays(v)));
 const PAY_EFFECTIVE_FROM = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD").optional();
+const SHIFT_TIME_STRING = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Time must be in HH:mm format (e.g. 06:00 or 18:00)")
+  .nullable()
+  .optional();
 
 function refinePayProfilePair(
   data: { payAreaId?: string; payGradeId?: string },
@@ -158,6 +163,10 @@ const createSiteSchema = z
     rosterNightShiftGuardsRequired: ROSTER_SHIFT_GUARDS_REQUIRED,
     rosterDayShiftDays: ROSTER_SHIFT_DAYS,
     rosterNightShiftDays: ROSTER_SHIFT_DAYS,
+    rosterDayShiftStartTime: SHIFT_TIME_STRING,
+    rosterDayShiftEndTime: SHIFT_TIME_STRING,
+    rosterNightShiftStartTime: SHIFT_TIME_STRING,
+    rosterNightShiftEndTime: SHIFT_TIME_STRING,
     autoRosterEnabled: z.boolean().optional(),
     autoRosterMinCoveragePercent: z.number().int().min(0).max(100).optional(),
     payAreaId: z.string().min(1).optional(),
@@ -205,6 +214,10 @@ const updateSiteSchema = z
     rosterNightShiftGuardsRequired: ROSTER_SHIFT_GUARDS_REQUIRED,
     rosterDayShiftDays: ROSTER_SHIFT_DAYS,
     rosterNightShiftDays: ROSTER_SHIFT_DAYS,
+    rosterDayShiftStartTime: SHIFT_TIME_STRING,
+    rosterDayShiftEndTime: SHIFT_TIME_STRING,
+    rosterNightShiftStartTime: SHIFT_TIME_STRING,
+    rosterNightShiftEndTime: SHIFT_TIME_STRING,
     autoRosterEnabled: z.boolean().optional(),
     autoRosterMinCoveragePercent: z.number().int().min(0).max(100).optional(),
     payAreaId: z.string().min(1).optional(),
@@ -381,6 +394,10 @@ export async function sitesRoutes(app: FastifyInstance) {
         rosterNightShiftGuardsRequired: d.rosterNightShiftGuardsRequired ?? undefined,
         rosterDayShiftDays: d.rosterDayShiftDays ?? undefined,
         rosterNightShiftDays: d.rosterNightShiftDays ?? undefined,
+        rosterDayShiftStartTime: d.rosterDayShiftStartTime ?? "06:00",
+        rosterDayShiftEndTime: d.rosterDayShiftEndTime ?? "18:00",
+        rosterNightShiftStartTime: d.rosterNightShiftStartTime ?? "18:00",
+        rosterNightShiftEndTime: d.rosterNightShiftEndTime ?? "06:00",
         autoRosterEnabled: d.autoRosterEnabled ?? undefined,
         autoRosterMinCoveragePercent: d.autoRosterMinCoveragePercent ?? undefined,
       },
@@ -526,6 +543,10 @@ export async function sitesRoutes(app: FastifyInstance) {
       rosterNightShiftGuardsRequired,
       rosterDayShiftDays,
       rosterNightShiftDays,
+      rosterDayShiftStartTime,
+      rosterDayShiftEndTime,
+      rosterNightShiftStartTime,
+      rosterNightShiftEndTime,
       autoRosterEnabled,
       autoRosterMinCoveragePercent,
       payAreaId,
@@ -563,6 +584,18 @@ export async function sitesRoutes(app: FastifyInstance) {
     }
     if (rosterNightShiftDays !== undefined) {
       rosterPatch.rosterNightShiftDays = rosterNightShiftDays;
+    }
+    if (rosterDayShiftStartTime !== undefined) {
+      rosterPatch.rosterDayShiftStartTime = rosterDayShiftStartTime || "06:00";
+    }
+    if (rosterDayShiftEndTime !== undefined) {
+      rosterPatch.rosterDayShiftEndTime = rosterDayShiftEndTime || "18:00";
+    }
+    if (rosterNightShiftStartTime !== undefined) {
+      rosterPatch.rosterNightShiftStartTime = rosterNightShiftStartTime || "18:00";
+    }
+    if (rosterNightShiftEndTime !== undefined) {
+      rosterPatch.rosterNightShiftEndTime = rosterNightShiftEndTime || "06:00";
     }
     const dayShiftRuns = shiftRunsWith(rosterDayShiftGuardsRequired, rosterDayShiftDays, {
       guardsRequired: existing.rosterDayShiftGuardsRequired,

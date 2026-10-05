@@ -278,7 +278,7 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
 
   return (
     <div ref={containerRef} className="relative">
-      <div className="relative">
+      <div className="relative flex items-center">
         <input
           ref={inputRef}
           type="search"
@@ -287,23 +287,23 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => debouncedQuery.length >= 2 && setOpen(true)}
           onKeyDown={handleKeyDown}
-          className="peer w-[min(18rem,calc(100vw-10rem))] min-w-0 max-w-[calc(100vw-2rem)] rounded-security border border-white/15 bg-white/10 py-2 pl-10 pr-10 text-sm text-white outline-none transition-[background-color,border-color,width] duration-200 placeholder:text-white/65 hover:border-white/25 hover:bg-white/[0.14] focus:border-security-amber-500 focus:bg-white focus:text-security-navy-900 focus:placeholder:text-security-navy-400 sm:w-64 sm:max-w-none lg:focus:w-84 [&::-webkit-search-cancel-button]:appearance-none"
+          className="peer h-9 w-[min(17rem,calc(100vw-10rem))] min-w-0 max-w-[calc(100vw-2rem)] rounded-security border border-white/10 bg-white/[0.08] py-1.5 pl-9 pr-9 text-xs sm:text-[13px] text-white outline-none transition-[background-color,border-color,width] duration-200 placeholder:text-white/55 hover:border-white/20 hover:bg-white/[0.12] focus:border-security-amber-500 focus:bg-white focus:text-security-navy-900 focus:placeholder:text-security-navy-400 sm:w-64 sm:max-w-none lg:focus:w-80 [&::-webkit-search-cancel-button]:appearance-none"
           aria-label="Global search across modules"
           aria-expanded={open}
           aria-autocomplete="list"
         />
         <svg
-          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/65 peer-focus:text-security-navy-500"
+          className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/55 peer-focus:text-security-navy-500"
           fill="none"
           stroke="currentColor"
-          strokeWidth={1.5}
+          strokeWidth={1.7}
           viewBox="0 0 24 24"
           aria-hidden="true"
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
 
-        <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 hidden items-center rounded border border-white/20 bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-white/70 transition-colors peer-focus:border-security-navy-200 peer-focus:bg-security-navy-100 peer-focus:text-security-navy-600 sm:inline-flex">
+        <kbd className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 hidden items-center rounded border border-white/15 bg-white/[0.08] px-1 py-0.5 font-mono text-[9px] text-white/60 transition-colors peer-focus:border-security-navy-200 peer-focus:bg-security-navy-100 peer-focus:text-security-navy-600 sm:inline-flex">
           ⌘K
         </kbd>
       </div>

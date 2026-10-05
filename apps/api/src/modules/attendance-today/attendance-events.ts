@@ -9,6 +9,7 @@ export type AttendanceEventType =
   | "MANUAL_CAPTURE"
   | "MANUAL_CORRECTION"
   | "MARK_ABSENT"
+  | "REPLACE_GUARD"
   | "REJECTED_GEOFENCE"
   | "NO_SHIFT"
   | "DUPLICATE";

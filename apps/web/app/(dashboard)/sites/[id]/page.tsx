@@ -70,6 +70,10 @@ interface Site {
   rosterNightShiftGuardsRequired?: number;
   rosterDayShiftDays?: number[] | null;
   rosterNightShiftDays?: number[] | null;
+  rosterDayShiftStartTime?: string | null;
+  rosterDayShiftEndTime?: string | null;
+  rosterNightShiftStartTime?: string | null;
+  rosterNightShiftEndTime?: string | null;
   autoRosterEnabled?: boolean;
   autoRosterMinCoveragePercent?: number;
   autoRosterLastRunAt?: string | null;
@@ -683,6 +687,7 @@ export default function SiteDetailPage() {
       {editingPost && canEdit && (
         <EditPostModal
           post={editingPost}
+          site={site}
           siteId={siteId}
           token={token!}
           onClose={() => setEditingPost(null)}
@@ -1363,6 +1368,10 @@ function SiteRosterSheetFields({
   canManage: boolean;
   onSaved: () => void;
 }) {
+  const [dayStartTime, setDayStartTime] = useState(site.rosterDayShiftStartTime ?? "06:00");
+  const [dayEndTime, setDayEndTime] = useState(site.rosterDayShiftEndTime ?? "18:00");
+  const [nightStartTime, setNightStartTime] = useState(site.rosterNightShiftStartTime ?? "18:00");
+  const [nightEndTime, setNightEndTime] = useState(site.rosterNightShiftEndTime ?? "06:00");
   const [dayGender, setDayGender] = useState<RosterShiftGenderUi>(
     (site.rosterDayShiftGender as RosterShiftGenderUi) || ""
   );
@@ -1376,12 +1385,20 @@ function SiteRosterSheetFields({
   const [savedFlash, setSavedFlash] = useState(false);
 
   useEffect(() => {
+    setDayStartTime(site.rosterDayShiftStartTime ?? "06:00");
+    setDayEndTime(site.rosterDayShiftEndTime ?? "18:00");
+    setNightStartTime(site.rosterNightShiftStartTime ?? "18:00");
+    setNightEndTime(site.rosterNightShiftEndTime ?? "06:00");
     setDayGender((site.rosterDayShiftGender as RosterShiftGenderUi) || "");
     setNightGender((site.rosterNightShiftGender as RosterShiftGenderUi) || "");
     setRules(site.rosterSiteRules ?? "");
     setNotes(site.rosterSheetNotes ?? "");
   }, [
     site.id,
+    site.rosterDayShiftStartTime,
+    site.rosterDayShiftEndTime,
+    site.rosterNightShiftStartTime,
+    site.rosterNightShiftEndTime,
     site.rosterSiteRules,
     site.rosterSheetNotes,
     site.rosterDayShiftGender,
@@ -1395,6 +1412,10 @@ function SiteRosterSheetFields({
       const res = await authFetch(`/sites/${siteId}`, token, {
         method: "PUT",
         body: JSON.stringify({
+          rosterDayShiftStartTime: dayStartTime || "06:00",
+          rosterDayShiftEndTime: dayEndTime || "18:00",
+          rosterNightShiftStartTime: nightStartTime || "18:00",
+          rosterNightShiftEndTime: nightEndTime || "06:00",
           rosterSiteRules: rules,
           rosterSheetNotes: notes,
           rosterDayShiftGender: dayGender === "" ? null : dayGender,
@@ -1419,6 +1440,8 @@ function SiteRosterSheetFields({
 
   if (!canManage) {
     const hasExplicitConfig =
+      site.rosterDayShiftStartTime != null ||
+      site.rosterNightShiftStartTime != null ||
       site.rosterDayShiftGender != null ||
       site.rosterNightShiftGender != null ||
       Boolean(site.rosterSiteRules?.trim()) ||
@@ -1431,6 +1454,19 @@ function SiteRosterSheetFields({
     );
     return (
       <div className="space-y-3 text-sm text-security-navy-600 dark:text-security-navy-400">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-security-navy-500 dark:text-security-navy-400 mb-1">
+            Site shift hours
+          </p>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <span className="font-mono text-security-navy-800 dark:text-security-navy-200">
+              Day: {site.rosterDayShiftStartTime ?? "06:00"} – {site.rosterDayShiftEndTime ?? "18:00"}
+            </span>
+            <span className="font-mono text-security-navy-800 dark:text-security-navy-200">
+              Night: {site.rosterNightShiftStartTime ?? "18:00"} – {site.rosterNightShiftEndTime ?? "06:00"}
+            </span>
+          </div>
+        </div>
         {hasExplicitConfig ? (
           <>
             <div>
@@ -1469,6 +1505,101 @@ function SiteRosterSheetFields({
       {savedFlash && (
         <p className="text-xs font-medium text-security-emerald-700 dark:text-security-emerald-300">Saved.</p>
       )}
+
+      {/* Shift Operating Hours */}
+      <div className="p-4 rounded-lg border border-security-navy-200 dark:border-security-navy-700 bg-security-navy-50/50 dark:bg-security-navy-800/40 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-security-navy-800 dark:text-security-navy-200">
+              Shift Operating Hours
+            </h4>
+            <p className="text-[11px] text-security-navy-500 dark:text-security-navy-400 mt-0.5">
+              Standard South African security shifts run 06:00–18:00 (Day) and 18:00–06:00 (Night). You can adjust shift times for this site below.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setDayStartTime("06:00");
+              setDayEndTime("18:00");
+              setNightStartTime("18:00");
+              setNightEndTime("06:00");
+            }}
+            className="text-xs text-security-amber-700 dark:text-security-amber-400 hover:underline font-medium self-start sm:self-auto shrink-0"
+          >
+            Reset to Standard (06:00 / 18:00)
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          {/* Day Shift */}
+          <div className="p-3 rounded-md bg-white dark:bg-security-navy-900 border border-security-navy-200 dark:border-security-navy-700">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+                Day Shift
+              </span>
+              <span className="text-[11px] text-security-navy-500 font-mono font-medium">
+                {dayStartTime} – {dayEndTime}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] text-security-navy-500 dark:text-security-navy-400 mb-0.5">Start Time</label>
+                <input
+                  type="time"
+                  value={dayStartTime}
+                  onChange={(e) => setDayStartTime(e.target.value)}
+                  className="input-modern w-full text-xs font-mono py-1.5 px-2"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] text-security-navy-500 dark:text-security-navy-400 mb-0.5">End Time</label>
+                <input
+                  type="time"
+                  value={dayEndTime}
+                  onChange={(e) => setDayEndTime(e.target.value)}
+                  className="input-modern w-full text-xs font-mono py-1.5 px-2"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Night Shift */}
+          <div className="p-3 rounded-md bg-white dark:bg-security-navy-900 border border-security-navy-200 dark:border-security-navy-700">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-indigo-500 inline-block" />
+                Night Shift
+              </span>
+              <span className="text-[11px] text-security-navy-500 font-mono font-medium">
+                {nightStartTime} – {nightEndTime}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[11px] text-security-navy-500 dark:text-security-navy-400 mb-0.5">Start Time</label>
+                <input
+                  type="time"
+                  value={nightStartTime}
+                  onChange={(e) => setNightStartTime(e.target.value)}
+                  className="input-modern w-full text-xs font-mono py-1.5 px-2"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] text-security-navy-500 dark:text-security-navy-400 mb-0.5">End Time</label>
+                <input
+                  type="time"
+                  value={nightEndTime}
+                  onChange={(e) => setNightEndTime(e.target.value)}
+                  className="input-modern w-full text-xs font-mono py-1.5 px-2"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div>
         <p className="text-xs font-medium text-security-navy-600 dark:text-security-navy-400 mb-2">
           Shift gender rules (shift roster & PDF)
@@ -2074,12 +2205,14 @@ function PostCard({
 
 function EditPostModal({
   post,
+  site,
   siteId,
   token,
   onClose,
   onSuccess,
 }: {
   post: Post;
+  site: Site;
   siteId: string;
   token: string;
   onClose: () => void;
@@ -2149,8 +2282,12 @@ function EditPostModal({
             onChange={(e) => setShiftType(e.target.value as "day" | "night")}
             className="input-modern w-full"
           >
-            <option value="day">Day Shift (06:00 – 18:00)</option>
-            <option value="night">Night Shift (18:00 – 06:00)</option>
+            <option value="day">
+              Day Shift ({site.rosterDayShiftStartTime || "06:00"} – {site.rosterDayShiftEndTime || "18:00"})
+            </option>
+            <option value="night">
+              Night Shift ({site.rosterNightShiftStartTime || "18:00"} – {site.rosterNightShiftEndTime || "06:00"})
+            </option>
           </select>
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose} className="flex-1 btn-secondary">
@@ -2337,8 +2474,12 @@ function AddPostForm({
           onChange={(e) => setShiftType(e.target.value as "day" | "night")}
           className="input-modern"
         >
-          <option value="day">Day Shift (06:00 – 18:00)</option>
-          <option value="night">Night Shift (18:00 – 06:00)</option>
+          <option value="day">
+            Day Shift ({site.rosterDayShiftStartTime || "06:00"} – {site.rosterDayShiftEndTime || "18:00"})
+          </option>
+          <option value="night">
+            Night Shift ({site.rosterNightShiftStartTime || "18:00"} – {site.rosterNightShiftEndTime || "06:00"})
+          </option>
         </select>
       </div>
       <div className="mt-4">

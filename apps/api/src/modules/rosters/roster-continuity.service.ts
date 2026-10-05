@@ -748,7 +748,7 @@ export async function reconcileRosterContinuityForSite(
         const existingGenerated = generatedByKey.get(key);
         const shiftType = item.code === "N" ? "night" : "day";
         const isWorking = WORKING_CODES.has(item.code);
-        const { shiftStart, shiftEnd } = getShiftTimes(item.date, shiftType, timeZone);
+        const { shiftStart, shiftEnd } = getShiftTimes(item.date, shiftType, timeZone, site);
         const linkedShift = existingGenerated?.publishedShift ?? null;
 
         let generatedRow = existingGenerated;
@@ -1524,7 +1524,7 @@ export async function getReplacementSuggestions(
   ]);
   const leaveIds = new Set(leaveRequests.map((row) => row.employeeId));
   const timeZone = await getCompanyTimezone(companyId);
-  const { shiftStart, shiftEnd } = getShiftTimes(workDate, metadata.shiftType, timeZone);
+  const { shiftStart, shiftEnd } = getShiftTimes(workDate, metadata.shiftType, timeZone, site);
 
   const suggestions: ReplacementSuggestion[] = [];
   for (const assignment of candidateAssignments) {

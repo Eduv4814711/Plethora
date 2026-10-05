@@ -5,10 +5,13 @@ import { Badge, Button, Spinner } from "@/components/ui";
 import {
   type GuardAttendanceItem,
   type ControllerAttendanceStatus,
+  type AvailableGuardOption,
   quickClockIn,
   quickClockOut,
   markAbsent,
   adjustAttendance,
+  replaceGuard,
+  fetchAvailableGuards,
 } from "@/lib/attendance-today-api";
 
 interface GuardRowProps {
@@ -66,10 +69,20 @@ export function ControllerGuardRow({ guard, token, onRefresh }: GuardRowProps) {
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [absentModalOpen, setAbsentModalOpen] = useState(false);
+  const [replaceModalOpen, setReplaceModalOpen] = useState(false);
+
   const [absentReason, setAbsentReason] = useState("");
   const [customIn, setCustomIn] = useState(guard.clockInTime || "");
   const [customOut, setCustomOut] = useState(guard.clockOutTime || "");
   const [adjustReason, setAdjustReason] = useState("");
+
+  // Replacement modal state
+  const [availableGuards, setAvailableGuards] = useState<AvailableGuardOption[]>([]);
+  const [loadingGuards, setLoadingGuards] = useState(false);
+  const [selectedReplacementId, setSelectedReplacementId] = useState("");
+  const [replacementReason, setReplacementReason] = useState("");
+  const [guardSearch, setGuardSearch] = useState("");
+
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleClockIn = async () => {
@@ -154,9 +167,65 @@ export function ControllerGuardRow({ guard, token, onRefresh }: GuardRowProps) {
     }
   };
 
+  const openReplaceModal = async () => {
+    setErrorMsg(null);
+    setReplacementReason("");
+    setSelectedReplacementId("");
+    setGuardSearch("");
+    setReplaceModalOpen(true);
+    setLoadingGuards(true);
+    try {
+      const guards = await fetchAvailableGuards(token);
+      // Filter out the currently assigned guard
+      setAvailableGuards(guards.filter((g) => g.id !== guard.employeeId));
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to load active guards");
+    } finally {
+      setLoadingGuards(false);
+    }
+  };
+
+  const handleReplaceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedReplacementId) {
+      setErrorMsg("Please select a replacement guard.");
+      return;
+    }
+    if (!replacementReason.trim() || replacementReason.trim().length < 3) {
+      setErrorMsg("Please provide a reason for the replacement (at least 3 characters).");
+      return;
+    }
+
+    try {
+      setLoadingAction("replace");
+      setErrorMsg(null);
+      await replaceGuard(token, {
+        shiftId: guard.shiftId,
+        replacementEmployeeId: selectedReplacementId,
+        reason: replacementReason.trim(),
+      });
+      setReplaceModalOpen(false);
+      onRefresh();
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to replace guard");
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
   const isClockedIn = guard.status === "clocked_in" || (guard.clockInTime && !guard.clockOutTime);
   const isCompleted = guard.status === "clocked_out" || (guard.clockInTime && guard.clockOutTime);
   const isAbsent = guard.status === "absent";
+
+  const filteredReplacementGuards = availableGuards.filter((g) => {
+    if (!guardSearch.trim()) return true;
+    const term = guardSearch.toLowerCase();
+    return (
+      g.firstName.toLowerCase().includes(term) ||
+      g.lastName.toLowerCase().includes(term) ||
+      g.employeeNumber.toLowerCase().includes(term)
+    );
+  });
 
   return (
     <div
@@ -177,6 +246,11 @@ export function ControllerGuardRow({ guard, token, onRefresh }: GuardRowProps) {
             <span className="font-semibold text-security-navy-950 text-sm dark:text-security-navy-50">
               {guard.guardName}
             </span>
+            {guard.isReplacement && (
+              <span className="inline-flex items-center gap-1 rounded bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950/40 dark:text-purple-300">
+                🔄 Replacement {guard.originalGuardName ? `for ${guard.originalGuardName}` : ""}
+              </span>
+            )}
             {guard.postName && (
               <span className="text-xs text-security-navy-500 bg-security-navy-50 px-2 py-0.5 rounded dark:bg-security-navy-800">
                 {guard.postName}
@@ -231,6 +305,14 @@ export function ControllerGuardRow({ guard, token, onRefresh }: GuardRowProps) {
               Clock In
             </Button>
             <Button
+              variant="secondary"
+              size="sm"
+              onClick={openReplaceModal}
+              className="text-security-navy-800 hover:bg-security-navy-100 min-h-9 text-xs"
+            >
+              🔄 Replace
+            </Button>
+            <Button
               variant="ghost"
               size="sm"
               loading={loadingAction === "absent"}
@@ -239,11 +321,22 @@ export function ControllerGuardRow({ guard, token, onRefresh }: GuardRowProps) {
                 setErrorMsg(null);
                 setAbsentModalOpen(true);
               }}
-              className="text-red-700 hover:bg-red-50 dark:text-red-400 min-h-9"
+              className="text-red-700 hover:bg-red-50 dark:text-red-400 min-h-9 text-xs"
             >
               Absent
             </Button>
           </>
+        )}
+
+        {isAbsent && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={openReplaceModal}
+            className="text-security-navy-800 hover:bg-security-navy-100 min-h-9 text-xs"
+          >
+            🔄 Assign Replacement
+          </Button>
         )}
 
         {isClockedIn && !isCompleted && (
@@ -275,6 +368,136 @@ export function ControllerGuardRow({ guard, token, onRefresh }: GuardRowProps) {
           </Button>
         )}
       </div>
+
+      {/* Replacement Guard Modal */}
+      {replaceModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-security-lg border border-security-navy-200 bg-white p-6 shadow-xl dark:border-security-navy-700 dark:bg-security-navy-900">
+            <div className="flex items-center justify-between border-b border-security-navy-100 pb-3 dark:border-security-navy-800">
+              <div>
+                <h3 className="text-base font-bold text-security-navy-950 dark:text-security-navy-50">
+                  Assign Replacement Guard
+                </h3>
+                <p className="mt-0.5 text-xs text-security-navy-500 dark:text-security-navy-400">
+                  Replacing <strong>{guard.guardName}</strong> for shift ({guard.scheduledStartTime} – {guard.scheduledEndTime})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReplaceModalOpen(false)}
+                className="text-security-navy-400 hover:text-security-navy-700 text-lg leading-none p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleReplaceSubmit} className="mt-4 space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-security-navy-800 dark:text-security-navy-200">
+                  Search & Select Replacement Guard <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="search"
+                  value={guardSearch}
+                  onChange={(e) => setGuardSearch(e.target.value)}
+                  placeholder="Filter by name or employee number..."
+                  className="input-modern mt-1 w-full text-xs"
+                />
+
+                <div className="mt-2 max-h-48 overflow-y-auto rounded border border-security-navy-200 bg-security-navy-50/50 p-1 divide-y divide-security-navy-100 dark:border-security-navy-800 dark:bg-security-navy-950">
+                  {loadingGuards ? (
+                    <div className="p-4 text-center">
+                      <Spinner className="h-5 w-5 mx-auto text-security-navy-600 mb-1" />
+                      <p className="text-xs text-security-navy-500">Loading active guards...</p>
+                    </div>
+                  ) : filteredReplacementGuards.length === 0 ? (
+                    <p className="p-4 text-center text-xs text-security-navy-500">
+                      No active replacement guards found matching your search.
+                    </p>
+                  ) : (
+                    filteredReplacementGuards.map((g) => (
+                      <label
+                        key={g.id}
+                        className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors text-xs ${
+                          selectedReplacementId === g.id
+                            ? "bg-security-navy-800 text-white font-semibold"
+                            : "hover:bg-white dark:hover:bg-security-navy-900 text-security-navy-800 dark:text-security-navy-200"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name="replacementGuard"
+                            value={g.id}
+                            checked={selectedReplacementId === g.id}
+                            onChange={() => setSelectedReplacementId(g.id)}
+                            className="sr-only"
+                          />
+                          <span>
+                            {g.firstName} {g.lastName}
+                          </span>
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded ${
+                              selectedReplacementId === g.id
+                                ? "bg-security-navy-700 text-white"
+                                : "bg-security-navy-100 text-security-navy-600 dark:bg-security-navy-800 dark:text-security-navy-400"
+                            }`}
+                          >
+                            #{g.employeeNumber}
+                          </span>
+                        </div>
+                        {g.phone && (
+                          <span className="text-[11px] opacity-80">{g.phone}</span>
+                        )}
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-security-navy-800 dark:text-security-navy-200">
+                  Reason for Replacement <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  rows={2}
+                  value={replacementReason}
+                  onChange={(e) => setReplacementReason(e.target.value)}
+                  placeholder="e.g. Original guard reported sick / AWOL no-show on morning roll call"
+                  required
+                  className="input-modern mt-1 w-full text-xs"
+                />
+              </div>
+
+              {errorMsg && (
+                <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700 font-medium">
+                  {errorMsg}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-security-navy-100 dark:border-security-navy-800">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setReplaceModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  type="submit"
+                  disabled={!selectedReplacementId || !replacementReason.trim()}
+                  loading={loadingAction === "replace"}
+                  className="bg-security-navy-800 text-white"
+                >
+                  Confirm & Assign Reliever
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Manual Correction Modal */}
       {modalOpen && (

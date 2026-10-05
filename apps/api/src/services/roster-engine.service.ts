@@ -588,7 +588,7 @@ export async function generateRosterPlan(input: GenerateRosterPlanInput): Promis
     const post = postById.get(slot.postId);
     if (!post) continue;
 
-    const { shiftStart, shiftEnd } = getShiftTimes(slot.date, slot.shiftType, timeZone);
+    const { shiftStart, shiftEnd } = getShiftTimes(slot.date, slot.shiftType, timeZone, site);
     const dayIndex = dayIndexByDateKey.get(slot.dateKey) ?? 0;
     const prevDateKey =
       dayIndex > 0 ? formatDateKey(calendarDays[dayIndex - 1]!) : null;

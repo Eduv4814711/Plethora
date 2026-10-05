@@ -26,12 +26,26 @@ function normalizeShiftType(value: string | null | undefined): "day" | "night" |
 export const SHIFT_TIME_MORNING = "06:00";
 export const SHIFT_TIME_EVENING = "18:00";
 
+export interface SiteShiftHoursConfig {
+  rosterDayShiftStartTime?: string | null;
+  rosterDayShiftEndTime?: string | null;
+  rosterNightShiftStartTime?: string | null;
+  rosterNightShiftEndTime?: string | null;
+}
+
 export function defaultShiftTime(
   shiftType: "day" | "night" | null,
-  which: "start" | "end"
+  which: "start" | "end",
+  siteConfig?: SiteShiftHoursConfig | null
 ): string {
-  if (shiftType === "night") return which === "start" ? SHIFT_TIME_EVENING : SHIFT_TIME_MORNING;
-  if (shiftType === "day") return which === "start" ? SHIFT_TIME_MORNING : SHIFT_TIME_EVENING;
+  if (shiftType === "night") {
+    if (which === "start") return siteConfig?.rosterNightShiftStartTime || SHIFT_TIME_EVENING;
+    return siteConfig?.rosterNightShiftEndTime || SHIFT_TIME_MORNING;
+  }
+  if (shiftType === "day") {
+    if (which === "start") return siteConfig?.rosterDayShiftStartTime || SHIFT_TIME_MORNING;
+    return siteConfig?.rosterDayShiftEndTime || SHIFT_TIME_EVENING;
+  }
   return "";
 }
 
@@ -41,7 +55,7 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 /**
  * Combine a work date (yyyy-MM-dd) and an HH:mm wall-clock time into an instant.
  *
- * The browser helper builds `new Date(\`${date}T${time}:00\`)`, which resolves in the
+ * The browser helper builds `new Date(`${date}T${time}:00`)`, which resolves in the
  * *viewer's* zone. Payroll buckets Sunday and public-holiday hours by the shift-start
  * calendar day in company time (`classifyShiftHours`), so the company timezone — not
  * whoever happens to be logged in — is the correct basis.
@@ -86,13 +100,18 @@ export function hoursBetween(clockIn: Date | null, clockOut: Date | null): numbe
 export function defaultShiftClockTimes(
   workDate: string,
   shiftType: "day" | "night" | null,
-  timeZone: string
+  timeZone: string,
+  siteConfig?: SiteShiftHoursConfig | null
 ): { clockIn: Date | null; clockOut: Date | null; hoursWorked: number | null } {
   if (!shiftType) return { clockIn: null, clockOut: null, hoursWorked: null };
-  const clockIn = combineDateTimeInZone(workDate, defaultShiftTime(shiftType, "start"), timeZone);
+  const clockIn = combineDateTimeInZone(
+    workDate,
+    defaultShiftTime(shiftType, "start", siteConfig),
+    timeZone
+  );
   const clockOut = combineClockOutInZone(
     workDate,
-    defaultShiftTime(shiftType, "end"),
+    defaultShiftTime(shiftType, "end", siteConfig),
     clockIn,
     timeZone
   );

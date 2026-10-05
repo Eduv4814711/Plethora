@@ -126,3 +126,73 @@ export const MODULE_DESCRIPTIONS: Record<string, string> = {
   "/settings": "Company, users and access",
   "/settings/migrate": "Bulk import and export",
 };
+
+export type ModuleCategoryKey = "operations" | "finance" | "management" | "administration";
+
+export interface ModuleCategoryInfo {
+  key: ModuleCategoryKey;
+  label: string;
+  tagline: string;
+}
+
+export const MODULE_CATEGORIES: Record<ModuleCategoryKey, ModuleCategoryInfo> = {
+  operations: {
+    key: "operations",
+    label: "Operations",
+    tagline: "Active shifts, guards, posts & site coverage",
+  },
+  finance: {
+    key: "finance",
+    label: "People & Finance",
+    tagline: "Leave balances, payroll processing & client billing",
+  },
+  management: {
+    key: "management",
+    label: "Management",
+    tagline: "Client accounts, assigned tasks, reports & approvals",
+  },
+  administration: {
+    key: "administration",
+    label: "Administration",
+    tagline: "Statutory compliance, legal registers & credentials",
+  },
+};
+
+export const MODULE_CATEGORY_ORDER: ModuleCategoryKey[] = [
+  "operations",
+  "finance",
+  "management",
+  "administration",
+];
+
+export const MODULE_CATEGORY_MAP: Record<string, ModuleCategoryKey> = {
+  "/overview": "operations",
+  "/employees": "operations",
+  "/sites": "operations",
+  "/rostering": "operations",
+  "/attendance": "operations",
+  "/incidents": "operations",
+  "/whatsapp": "operations",
+
+  "/employees/leave": "finance",
+  "/payroll": "finance",
+  "/payroll/billing": "finance",
+
+  "/clients": "management",
+  "/tasks": "management",
+  "/reports": "management",
+  "/approvals": "management",
+  "/client-portal": "management",
+
+  "/compliance": "administration",
+  "/documents": "administration",
+  "/academy": "administration",
+  "/audit": "administration",
+  "/settings": "administration",
+  "/settings/migrate": "administration",
+};
+
+export function getModuleCategory(href: string): ModuleCategoryKey {
+  return MODULE_CATEGORY_MAP[href] ?? "administration";
+}
+

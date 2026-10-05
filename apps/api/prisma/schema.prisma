@@ -400,6 +400,11 @@ model Site {
   /// Not every site needs 7-day cover; days left out produce no roster demand and no coverage-gap alerts.
   rosterDayShiftDays             Int[]                 @default([0, 1, 2, 3, 4, 5, 6])
   rosterNightShiftDays           Int[]                 @default([0, 1, 2, 3, 4, 5, 6])
+  /// Site-level shift operating hours (defaults: Day 06:00-18:00, Night 18:00-06:00)
+  rosterDayShiftStartTime        String?               @default("06:00")
+  rosterDayShiftEndTime          String?               @default("18:00")
+  rosterNightShiftStartTime      String?               @default("18:00")
+  rosterNightShiftEndTime        String?               @default("06:00")
   /// Extra lines on the shift roster sheet / PDF (operational notes).
   rosterSheetNotes               String?               @db.Text
   rosterDayShiftGenderMode       String?

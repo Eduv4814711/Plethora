@@ -23,19 +23,38 @@ export function normalizeShiftTime(time: string | null | undefined): ShiftTimeVa
   return hour < 12 ? SHIFT_TIME_MORNING : SHIFT_TIME_EVENING;
 }
 
-/** Day 06:00–18:00, night 18:00–06:00 — matches site shift defaults. */
-export function defaultShiftTime(shiftType: "day" | "night" | null, which: "start" | "end"): string {
-  if (shiftType === "night") return which === "start" ? SHIFT_TIME_EVENING : SHIFT_TIME_MORNING;
-  if (shiftType === "day") return which === "start" ? SHIFT_TIME_MORNING : SHIFT_TIME_EVENING;
+export interface SiteShiftHoursConfig {
+  rosterDayShiftStartTime?: string | null;
+  rosterDayShiftEndTime?: string | null;
+  rosterNightShiftStartTime?: string | null;
+  rosterNightShiftEndTime?: string | null;
+}
+
+/** Day default 06:00–18:00, night default 18:00–06:00 — matches site shift defaults. */
+export function defaultShiftTime(
+  shiftType: "day" | "night" | null,
+  which: "start" | "end",
+  siteConfig?: SiteShiftHoursConfig | null
+): string {
+  if (shiftType === "night") {
+    if (which === "start") return siteConfig?.rosterNightShiftStartTime || SHIFT_TIME_EVENING;
+    return siteConfig?.rosterNightShiftEndTime || SHIFT_TIME_MORNING;
+  }
+  if (shiftType === "day") {
+    if (which === "start") return siteConfig?.rosterDayShiftStartTime || SHIFT_TIME_MORNING;
+    return siteConfig?.rosterDayShiftEndTime || SHIFT_TIME_EVENING;
+  }
   return "";
 }
 
 export function displayShiftTime(
   iso: string | null | undefined,
   shiftType: "day" | "night" | null,
-  which: "start" | "end"
+  which: "start" | "end",
+  siteConfig?: SiteShiftHoursConfig | null
 ): string {
   const stored = normalizeShiftTime(timeValueFromIso(iso));
   if (stored) return stored;
-  return defaultShiftTime(shiftType, which);
+  return defaultShiftTime(shiftType, which, siteConfig);
 }
+

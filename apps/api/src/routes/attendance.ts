@@ -473,6 +473,179 @@ export async function attendanceRoutes(app: FastifyInstance) {
     return reply.code(200).send(result);
   });
 
+  const replaceGuardSchema = z.object({
+    shiftId: z.string().min(1),
+    replacementEmployeeId: z.string().min(1),
+    reason: z.string().min(3, "A reason of at least 3 characters is required to assign a replacement guard"),
+  });
+
+  app.post("/replace-guard", { preHandler: protect }, async (request, reply) => {
+    const parsed = replaceGuardSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "Validation error",
+        message: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const user = request.user!;
+    const companyId = user.companyId;
+    const { shiftId, replacementEmployeeId, reason } = parsed.data;
+
+    const shift = await prisma.shift.findFirst({
+      where: { id: shiftId, companyId },
+      include: {
+        site: true,
+        employee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
+        attendances: { orderBy: { createdAt: "desc" }, take: 1 },
+      },
+    });
+
+    if (!shift) {
+      return reply.code(404).send({ error: "Shift not found" });
+    }
+
+    if (shift.status === "verified") {
+      return reply.code(400).send({
+        error: "Cannot replace guard",
+        message: "This shift has already been verified for payroll and cannot be reassigned.",
+      });
+    }
+
+    const replacementEmployee = await prisma.employee.findFirst({
+      where: { id: replacementEmployeeId, companyId },
+      select: { id: true, firstName: true, lastName: true, employeeNumber: true, status: true },
+    });
+
+    if (!replacementEmployee) {
+      return reply.code(404).send({
+        error: "Replacement guard not found",
+        message: "Selected replacement guard does not exist.",
+      });
+    }
+
+    if (replacementEmployee.id === shift.employeeId) {
+      return reply.code(400).send({
+        error: "Invalid replacement",
+        message: "Replacement guard is already the scheduled guard for this shift.",
+      });
+    }
+
+    // Leave conflict check for replacement guard
+    const shiftDate = normalizeLeaveDate(dateKeyInTimeZone(shift.startTime, await getCompanyTimezone(companyId)));
+    const leaveConflict = await findApprovedLeaveConflict(companyId, replacementEmployeeId, shiftDate);
+    if (leaveConflict) {
+      return reply.code(409).send({
+        error: "Approved leave conflict",
+        code: "APPROVED_LEAVE_CONFLICT",
+        message: `Replacement guard ${replacementEmployee.firstName} ${replacementEmployee.lastName} has approved leave on this date.`,
+      });
+    }
+
+    // Check if replacement is already scheduled on an overlapping active shift
+    const overlappingShift = await prisma.shift.findFirst({
+      where: {
+        companyId,
+        employeeId: replacementEmployeeId,
+        id: { not: shiftId },
+        startTime: { lt: shift.endTime },
+        endTime: { gt: shift.startTime },
+        status: { in: ["assigned", "active"] },
+      },
+      include: { site: { select: { name: true } } },
+    });
+
+    if (overlappingShift) {
+      return reply.code(409).send({
+        error: "Double booking warning",
+        message: `Guard ${replacementEmployee.firstName} ${replacementEmployee.lastName} is already rostered at ${overlappingShift.site?.name || "another site"} during this time window.`,
+      });
+    }
+
+    const originalGuardName = shift.employee
+      ? `${shift.employee.firstName} ${shift.employee.lastName}`.trim()
+      : "Unknown";
+
+    const replacementGuardName = `${replacementEmployee.firstName} ${replacementEmployee.lastName}`.trim();
+
+    // Update shift to assign the replacement guard
+    const updatedShift = await prisma.shift.update({
+      where: { id: shiftId },
+      data: {
+        employeeId: replacementEmployeeId,
+      },
+      include: {
+        employee: { select: { id: true, firstName: true, lastName: true, phone: true } },
+        site: true,
+      },
+    });
+
+    // Record immutable audit event
+    await recordAttendanceEvent({
+      companyId,
+      shiftId: shift.id,
+      employeeId: replacementEmployeeId,
+      siteId: shift.siteId,
+      eventType: "REPLACE_GUARD",
+      source: "manual",
+      occurredAt: new Date(),
+      actorUserId: user.sub,
+      reason,
+      metadata: {
+        originalGuardId: shift.employeeId,
+        originalGuardName,
+        replacementGuardId: replacementEmployeeId,
+        replacementGuardName,
+        reason,
+      },
+    });
+
+    await createAuditLog({
+      userId: user.sub,
+      companyId,
+      action: "attendance.replace_guard",
+      entityType: "shift",
+      entityId: shift.id,
+      metadata: {
+        originalGuardId: shift.employeeId,
+        originalGuardName,
+        replacementGuardId: replacementEmployeeId,
+        replacementGuardName,
+        reason,
+      },
+    });
+
+    // Sync to draft SiteTimesheetRow: planned stays original, actual becomes replacement with reliever status
+    const timeZone = await getCompanyTimezone(companyId);
+    const workDate = new Date(`${dateKeyInTimeZone(shift.startTime, timeZone)}T00:00:00.000Z`);
+    const row = await prisma.siteTimesheetRow.findFirst({
+      where: {
+        OR: [
+          { sourceShiftId: shift.id },
+          { siteId: shift.siteId, workDate, plannedGuardId: shift.employeeId },
+        ],
+      },
+      include: { siteTimesheet: { select: { status: true } } },
+    });
+
+    if (row && row.approvalStatus !== "approved" && row.siteTimesheet?.status !== "locked") {
+      await prisma.siteTimesheetRow.update({
+        where: { id: row.id },
+        data: {
+          actualGuardId: replacementEmployeeId,
+          attendanceStatus: "reliever",
+          sourceShiftId: shift.id,
+        },
+      });
+    }
+
+    return reply.code(200).send({
+      success: true,
+      shift: updatedShift,
+      message: `Guard ${originalGuardName} replaced with ${replacementGuardName}.`,
+    });
+  });
+
   app.get("/", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as Record<string, string | undefined>;

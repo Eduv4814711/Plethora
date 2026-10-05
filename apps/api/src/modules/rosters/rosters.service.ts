@@ -276,10 +276,10 @@ export async function getSiteRosterConfig(companyId: string, siteId: string) {
     rosterNightShiftDays: site.rosterNightShiftDays,
     rosterDayShiftGender: site.rosterDayShiftGender,
     rosterNightShiftGender: site.rosterNightShiftGender,
-    rosterDayShiftStartTime: "06:00",
-    rosterDayShiftEndTime: "18:00",
-    rosterNightShiftStartTime: "18:00",
-    rosterNightShiftEndTime: "06:00",
+    rosterDayShiftStartTime: site.rosterDayShiftStartTime ?? "06:00",
+    rosterDayShiftEndTime: site.rosterDayShiftEndTime ?? "18:00",
+    rosterNightShiftStartTime: site.rosterNightShiftStartTime ?? "18:00",
+    rosterNightShiftEndTime: site.rosterNightShiftEndTime ?? "06:00",
     rosterSiteMode: "day_and_night",
     rosterPeriodStartDay: 26,
     rosterPeriodEndDay: 25,
@@ -1108,7 +1108,13 @@ export async function publishRoster(
 ) {
   const continuitySite = await prisma.site.findFirst({
     where: { id: input.siteId, companyId },
-    select: { rosterContinuityState: true },
+    select: {
+      rosterContinuityState: true,
+      rosterDayShiftStartTime: true,
+      rosterDayShiftEndTime: true,
+      rosterNightShiftStartTime: true,
+      rosterNightShiftEndTime: true,
+    },
   });
   if (
     continuitySite &&
@@ -1196,7 +1202,12 @@ export async function publishRoster(
         continue;
       }
       const shiftType = code === "N" ? "night" : "day";
-      const { shiftStart, shiftEnd } = getShiftTimes(dateOnly(cell.dateKey), shiftType, timeZone);
+      const { shiftStart, shiftEnd } = getShiftTimes(
+        dateOnly(cell.dateKey),
+        shiftType,
+        timeZone,
+        continuitySite
+      );
       shiftsToCreate.push({
         companyId,
         employeeId: row.guardId,

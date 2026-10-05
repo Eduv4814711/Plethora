@@ -154,8 +154,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   ];
 
   const hasAccess = canAccessRoute(pathname, user);
-  // The dense chart grid needs a tighter, non-scrolling frame. It moved to
-  // /overview when `/` became the module launcher, which takes standard padding.
+  const isLauncherPage = pathname === "/";
   const isOverviewPage = pathname === "/overview";
   const isWhatsAppPage = pathname === "/whatsapp" || pathname.startsWith("/whatsapp/");
   const isAcademyPage = pathname === "/academy" || (pathname != null && pathname.startsWith("/academy/"));
@@ -167,7 +166,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     : user.jobTitle?.trim() || (user.accountType === "client" ? "Client" : "Staff");
 
   const iconButton =
-    "inline-flex h-10 w-10 items-center justify-center rounded-security text-white/75 transition-colors hover:bg-white/10 hover:text-white touch-manipulation";
+    "inline-flex h-9 w-9 items-center justify-center rounded-security text-white/75 transition-colors hover:bg-white/10 hover:text-white touch-manipulation";
 
   return (
     <div className="flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-[var(--bg-canvas)]">
@@ -252,35 +251,36 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Brand header — fixed so it stays visible while main scrolls. */}
-      <header className="surface-chrome fixed left-0 right-0 top-0 z-[45] flex min-h-14 items-center justify-between gap-2 px-2 sm:px-4 pt-[env(safe-area-inset-top,0px)]">
-        <div className="flex min-w-0 items-center gap-1 sm:gap-2">
+      <header className="surface-chrome fixed left-0 right-0 top-0 z-[45] flex h-14 items-center justify-between gap-2 border-b border-white/[0.08] px-3 sm:px-5 backdrop-blur-md pt-[env(safe-area-inset-top,0px)]">
+        <div className="flex min-w-0 items-center gap-1.5 sm:gap-3">
           <button
             type="button"
             onClick={() => setMobileNavOpen(true)}
-            className={clsx(iconButton, "h-11 w-11 shrink-0 lg:hidden")}
+            className={clsx(iconButton, "shrink-0 lg:hidden")}
             aria-expanded={mobileNavOpen}
             aria-controls="dashboard-mobile-nav"
             aria-label="Open navigation menu"
           >
-            <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
           <Link
             href="/"
-            className="flex min-w-0 shrink-0 items-center overflow-hidden rounded-security px-1"
+            className="flex min-w-0 shrink-0 items-center overflow-hidden rounded-security px-0.5 py-0.5"
             aria-label="All modules"
           >
             <img
               src="/plethora-logo-header.svg"
               alt="Plethora"
-              className="h-8 w-auto object-contain object-left sm:h-9 lg:h-7"
+              className="h-7 w-auto object-contain object-left sm:h-8"
             />
           </Link>
-          {/* The company name is the one piece of orientation the header owes
-              you on a small screen; the module name is already the page title. */}
-          <span className="hidden min-w-0 truncate border-l border-white/15 pl-3 text-sm font-medium text-white/75 lg:inline">
-            {companyName}
+          {/* Company identity badge */}
+          <span className="hidden min-w-0 items-center border-l border-white/15 pl-3 lg:inline-flex">
+            <span className="truncate rounded border border-white/10 bg-white/[0.06] px-2 py-0.5 text-xs font-semibold tracking-wide text-white/90">
+              {companyName}
+            </span>
           </span>
         </div>
 
@@ -332,11 +332,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           {canAccessSettings && (
             <Link
               href="/settings"
-              className={clsx(iconButton, "h-11 w-11", isActive("/settings") && "bg-white/10 text-white")}
+              className={clsx(iconButton, isActive("/settings") && "bg-white/10 text-white")}
               title="Settings"
               aria-label="Settings"
             >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
@@ -347,18 +347,18 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               onClick={() => setProfileOpen((o) => !o)}
-              className="flex min-h-11 items-center gap-2 rounded-security py-1.5 pl-1.5 pr-2 text-white/75 transition-colors hover:bg-white/10 hover:text-white touch-manipulation sm:pr-3"
+              className="flex h-9 items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] py-1 pl-1 pr-2.5 text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.1] hover:text-white touch-manipulation sm:pr-3"
               title={user.name ?? "Profile"}
               aria-expanded={profileOpen}
               aria-label={user.name ? `Profile, ${user.name}` : "Profile"}
             >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-security-amber-500 font-display text-sm font-semibold text-security-navy-900">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-security-amber-500 font-display text-xs font-bold text-security-navy-950 shadow-sm">
                 {user.name?.charAt(0)?.toUpperCase() ?? "U"}
               </span>
-              <span className="hidden max-w-[9rem] text-sm font-medium leading-tight sm:inline md:max-w-[12rem] xl:max-w-none xl:whitespace-nowrap">
+              <span className="hidden max-w-[8rem] truncate text-xs font-medium sm:inline md:max-w-[10rem]">
                 {user.name}
               </span>
-              <svg className="hidden h-4 w-4 shrink-0 opacity-60 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="hidden h-3.5 w-3.5 shrink-0 opacity-60 sm:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
@@ -390,22 +390,26 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         id="dashboard-main"
         className={clsx(
           "flex min-h-0 flex-1 flex-col box-border bg-[var(--bg-canvas)]",
-          /* Reserve space for the fixed header: safe area + the 3.5rem row. */
-          "pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1rem)] pb-5 pl-4 pr-4 sm:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.5rem)] sm:pb-6 sm:pl-6 sm:pr-6 md:pb-8 md:pl-8 md:pr-8 lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+2rem)] lg:pb-10 lg:pl-8 lg:pr-8 xl:pl-10 xl:pr-10",
-          isOverviewPage &&
-            "lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.25rem)] lg:pb-4 xl:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.5rem)] xl:pb-5 [@media(max-height:860px)]:lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+0.75rem)] [@media(max-height:860px)]:lg:pb-3",
-          "overscroll-y-contain",
-          isOverviewPage
-            ? "overflow-y-auto"
-            : isWhatsAppPage
-              ? "overflow-hidden"
-              : isAcademyPage
-                ? "overflow-y-auto lg:overflow-hidden"
-                : "overflow-y-auto"
+          isLauncherPage
+            ? "pt-[calc(env(safe-area-inset-top,0px)+3.5rem+0.5rem)] pb-2 px-3 sm:px-5 lg:px-6 max-sm:overflow-y-auto sm:overflow-hidden h-[100dvh]"
+            : clsx(
+                /* Reserve space for the fixed header: safe area + the 3.5rem row. */
+                "pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1rem)] pb-5 pl-4 pr-4 sm:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.5rem)] sm:pb-6 sm:pl-6 sm:pr-6 md:pb-8 md:pl-8 md:pr-8 lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+2rem)] lg:pb-10 lg:pl-8 lg:pr-8 xl:pl-10 xl:pr-10",
+                isOverviewPage &&
+                  "lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.25rem)] lg:pb-4 xl:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.5rem)] xl:pb-5 [@media(max-height:860px)]:lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+0.75rem)] [@media(max-height:860px)]:lg:pb-3",
+                "overscroll-y-contain",
+                isOverviewPage
+                  ? "overflow-y-auto"
+                  : isWhatsAppPage
+                    ? "overflow-hidden"
+                    : isAcademyPage
+                      ? "overflow-y-auto lg:overflow-hidden"
+                      : "overflow-y-auto"
+              )
         )}
       >
         {hasAccess ? (
-          isAcademyPage || isOverviewPage ? (
+          isAcademyPage || isOverviewPage || isLauncherPage ? (
             <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">{children}</div>
           ) : (
             children
