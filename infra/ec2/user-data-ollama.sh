@@ -2,7 +2,8 @@
 set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
-OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.3:3b}"
+export HOME=/root
+OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.2:3b}"
 
 apt-get update -y
 apt-get install -y ca-certificates curl

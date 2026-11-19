@@ -12,7 +12,7 @@ EnvironmentFile=/run/plethora/web.env
 Environment=NODE_ENV=production
 Environment=PORT=3000
 Environment=HOSTNAME=0.0.0.0
-ExecStart=/opt/plethora/current/node_modules/.bin/next start --hostname 0.0.0.0 --port 3000
+ExecStart=/usr/bin/node /opt/plethora/current/node_modules/next/dist/bin/next start --hostname 0.0.0.0 --port 3000
 Restart=always
 RestartSec=5
 StandardOutput=journal

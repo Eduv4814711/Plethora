@@ -48,6 +48,10 @@ systemctl enable codedeploy-agent
 systemctl start codedeploy-agent
 rm -f /tmp/codedeploy-install
 
+# Install AWS RDS Global CA Bundle for verified PostgreSQL TLS
+curl -fsSL https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o /etc/ssl/certs/rds-global-bundle.pem
+chmod 0644 /etc/ssl/certs/rds-global-bundle.pem
+
 # Create dedicated service user and application directories
 id -u plethora >/dev/null 2>&1 || useradd --system --create-home --shell /usr/sbin/nologin plethora
 mkdir -p /opt/plethora/current /opt/plethora/release /run/plethora
