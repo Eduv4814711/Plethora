@@ -390,7 +390,6 @@ export async function detectAndPersistExceptions(params: {
     cursor = shifts.at(-1)!.id;
   }
 
-  await refreshCurrentPayrollReadiness(params.companyId);
   return { scanned, created };
 }
 
@@ -630,7 +629,6 @@ export async function reviewException(params: {
     });
   }
 
-  await refreshCurrentPayrollReadiness(params.companyId);
   return updated;
 }
 
@@ -740,92 +738,6 @@ export async function getExceptionAnalytics(
   };
 }
 
-/**
- * Refreshes payroll readiness for a company's actual current pay period (which may not
- * be a calendar month) rather than refreshPayrollReadiness's calendar-month default —
- * otherwise this can upsert a readiness row under the wrong period key, leaving the row
- * getPayrollReadiness actually reads stale.
- */
-async function refreshCurrentPayrollReadiness(companyId: string) {
-  const company = await prisma.company.findUnique({
-    where: { id: companyId },
-    select: { settings: true },
-  });
-  const period = getCurrentPayPeriod(parsePayrollCalendarSettings(company?.settings));
-  await refreshPayrollReadiness(companyId, period.periodStart, period.periodEnd);
-}
-
-export async function refreshPayrollReadiness(
-  companyId: string,
-  periodStart?: Date,
-  periodEnd?: Date
-) {
-  const now = new Date();
-  const start =
-    periodStart ??
-    new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const end =
-    periodEnd ??
-    new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999)
-    );
-  const periodShiftIds = await shiftIdsForWorkedPeriod(companyId, start, end);
-
-  const openCritical = await prisma.attendanceException.count({
-    where: {
-      companyId,
-      shiftId: { in: periodShiftIds },
-      severity: "CRITICAL",
-      status: { in: [...ACTIVE_EXCEPTION_STATUSES] },
-    },
-  });
-  const openAny = await prisma.attendanceException.count({
-    where: {
-      companyId,
-      shiftId: { in: periodShiftIds },
-      status: { in: [...ACTIVE_EXCEPTION_STATUSES] },
-    },
-  });
-
-  const status: "READY" | "PENDING_ATTENDANCE_REVIEW" =
-    openAny > 0 ? "PENDING_ATTENDANCE_REVIEW" : "READY";
-
-  await prisma.payrollPeriodReadiness.upsert({
-    where: {
-      companyId_periodStart_periodEnd: {
-        companyId,
-        periodStart: start,
-        periodEnd: end,
-      },
-    },
-    create: {
-      companyId,
-      periodStart: start,
-      periodEnd: end,
-      status,
-      openExceptions: openAny,
-    },
-    update: {
-      status,
-      openExceptions: openAny,
-    },
-  });
-
-  // Exception review is advisory and must never lock payroll calculation. Close
-  // any legacy blocker alert created under the previous policy.
-  await prisma.operationalAlert.updateMany({
-    where: {
-      companyId,
-      sourceModule: "PAYROLL",
-      dedupeKey: `payroll_blocked:${start.toISOString().slice(0, 10)}`,
-      status: { in: ["OPEN", "ACKNOWLEDGED"] },
-    },
-    data: { status: "RESOLVED", resolvedAt: new Date() },
-  });
-
-  return { status, openExceptions: openAny, openCritical };
-}
-
 export interface BlockingExceptionGroup {
   exceptionType: string;
   label: string;
@@ -850,9 +762,6 @@ export interface BlockingExceptionBreakdown {
 
 /**
  * Active critical exceptions, grouped for operational review.
- *
- * The bare count ("97 critical issues") is not actionable on its own — this
- * gives the UI enough to explain each category and link straight to it.
  */
 export async function getBlockingExceptionBreakdown(
   companyId: string,
@@ -918,43 +827,112 @@ export async function getBlockingExceptionBreakdown(
   };
 }
 
-/** Attendance exceptions are advisory; payroll calculation and approval remain available. */
-export async function assertPayrollNotBlocked(
-  companyId: string,
-  periodStart: Date,
-  periodEnd: Date
-): Promise<{
-  blocked: boolean;
-  message?: string;
-  status: string;
+export interface PeriodExportReadiness {
+  periodKey: string;
+  periodStart: Date;
+  periodEnd: Date;
+  status: "READY" | "PENDING_ATTENDANCE_REVIEW";
   openExceptions: number;
-  blockingExceptions?: BlockingExceptionBreakdown;
-}> {
-  const readiness = await refreshPayrollReadiness(companyId, periodStart, periodEnd);
-  return {
-    blocked: false,
-    status: readiness.status,
-    openExceptions: readiness.openExceptions,
-  };
+  openCritical: number;
+  totalActiveSites: number;
+  approvedSiteTimesheets: number;
+  unapprovedSiteTimesheets: number;
+  pendingLeaveRequests: number;
+  missingExternalPayrollCodes: number;
 }
 
-export async function getPayrollReadiness(companyId: string) {
+/**
+ * Live operational readiness summary for exporting approved hours & leave to
+ * external payroll software (Sage / Generic CSV) over the company's 26th-25th cycle.
+ */
+export async function getPeriodExportReadiness(
+  companyId: string,
+  periodStart?: Date,
+  periodEnd?: Date,
+  periodKeyOverride?: string
+): Promise<PeriodExportReadiness> {
   const company = await prisma.company.findUnique({
     where: { id: companyId },
     select: { settings: true },
   });
   const calendarSettings = parsePayrollCalendarSettings(company?.settings);
-  const period = getCurrentPayPeriod(calendarSettings);
-  const start = period.periodStart;
-  const end = period.periodEnd;
-  await refreshPayrollReadiness(companyId, start, end);
-  return prisma.payrollPeriodReadiness.findUnique({
-    where: {
-      companyId_periodStart_periodEnd: {
+  const currentPeriod = getCurrentPayPeriod(calendarSettings);
+  const start = periodStart ?? currentPeriod.periodStart;
+  const end = periodEnd ?? currentPeriod.periodEnd;
+  const periodKey = periodKeyOverride ?? currentPeriod.periodKey;
+
+  const periodShiftIds = await shiftIdsForWorkedPeriod(companyId, start, end);
+
+  const [
+    openExceptions,
+    openCritical,
+    totalActiveSites,
+    approvedSiteTimesheets,
+    pendingLeaveRequests,
+    missingExternalPayrollCodes,
+  ] = await Promise.all([
+    periodShiftIds.length > 0
+      ? prisma.attendanceException.count({
+          where: {
+            companyId,
+            shiftId: { in: periodShiftIds },
+            status: { in: [...ACTIVE_EXCEPTION_STATUSES] },
+          },
+        })
+      : Promise.resolve(0),
+    periodShiftIds.length > 0
+      ? prisma.attendanceException.count({
+          where: {
+            companyId,
+            shiftId: { in: periodShiftIds },
+            severity: "CRITICAL",
+            status: { in: [...ACTIVE_EXCEPTION_STATUSES] },
+          },
+        })
+      : Promise.resolve(0),
+    prisma.site.count({ where: { companyId, siteStatus: "ACTIVE" } }),
+    prisma.siteTimesheet.count({
+      where: {
         companyId,
-        periodStart: start,
-        periodEnd: end,
+        status: { in: ["approved", "locked"] },
+        periodStart: { lte: end },
+        periodEnd: { gte: start },
       },
-    },
-  });
+    }),
+    prisma.leaveRequest.count({
+      where: {
+        companyId,
+        status: "PENDING",
+        startDate: { lte: end },
+        endDate: { gte: start },
+      },
+    }),
+    prisma.employee.count({
+      where: {
+        companyId,
+        status: { in: ["active", "reliever", "hired", "training"] },
+        OR: [{ externalPayrollCode: null }, { externalPayrollCode: "" }],
+      },
+    }),
+  ]);
+
+  const unapprovedSiteTimesheets = Math.max(0, totalActiveSites - approvedSiteTimesheets);
+  const status: "READY" | "PENDING_ATTENDANCE_REVIEW" =
+    openExceptions > 0 || pendingLeaveRequests > 0 || unapprovedSiteTimesheets > 0
+      ? "PENDING_ATTENDANCE_REVIEW"
+      : "READY";
+
+  return {
+    periodKey,
+    periodStart: start,
+    periodEnd: end,
+    status,
+    openExceptions,
+    openCritical,
+    totalActiveSites,
+    approvedSiteTimesheets,
+    unapprovedSiteTimesheets,
+    pendingLeaveRequests,
+    missingExternalPayrollCodes,
+  };
 }

@@ -34,7 +34,7 @@ const SYSTEM_PROMPT = [
   "- CLOCK_IN: starting shift, arrived at site/gate/office, booking on duty",
   "- CLOCK_OUT: ending shift, leaving site/office, booking off duty",
   "- ROSTER: asking when they work, upcoming shifts, schedule, duty roster",
-  "- PAYSLIP: asking for payslip, salary slip, pay stub, earnings PDF",
+  "- PAYSLIP: asking for payslip, salary slip, pay stub (handled externally via Sage Payroll)",
   "- LEAVE_APPLY: requesting time off, sick leave, annual leave, family responsibility leave",
   "- LEAVE_BALANCE: asking how many leave/vacation/sick days they have left",
   "- LEAVE_HISTORY: checking status of a submitted leave application",

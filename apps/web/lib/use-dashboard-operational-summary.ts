@@ -117,7 +117,7 @@ export function useDashboardOperationalSummary() {
     // Attendance
     if (canAttendance) {
       const unconfirmed = captureOverview?.sites.filter((s) => s.status === "needs_capture") ?? [];
-      const exceptions = dashboard?.payrollReadiness?.openExceptions ?? 0;
+      const exceptions = dashboard?.exportReadiness?.openExceptions ?? 0;
       if (unconfirmed.length > 0) {
         statuses["/attendance"] = {
           label: `${unconfirmed.length} need capture`,
@@ -148,17 +148,17 @@ export function useDashboardOperationalSummary() {
       }
     }
 
-    // Payroll
-    if (dashboard?.payrollReadiness) {
-      const pr = dashboard.payrollReadiness;
-      if (pr.status === "READY" && pr.openExceptions === 0) {
-        statuses["/payroll"] = {
+    // Payroll Export
+    if (dashboard?.exportReadiness) {
+      const er = dashboard.exportReadiness;
+      if (er.status === "READY" && er.openExceptions === 0) {
+        statuses["/payroll-exports"] = {
           label: "Ready",
           variant: "success",
         };
-      } else if (pr.openExceptions > 0) {
-        statuses["/payroll"] = {
-          label: `${pr.openExceptions} blocker${pr.openExceptions === 1 ? "" : "s"}`,
+      } else if (er.openExceptions > 0) {
+        statuses["/payroll-exports"] = {
+          label: `${er.openExceptions} blocker${er.openExceptions === 1 ? "" : "s"}`,
           variant: "critical",
         };
       }
@@ -206,21 +206,6 @@ export function useDashboardOperationalSummary() {
       statuses["/incidents"] = {
         label: `${dashboard!.openCriticalIncidents} critical`,
         variant: "critical",
-      };
-    }
-
-    // Tasks
-    const overdueTasks = dashboard?.taskStats?.overdue ?? 0;
-    const dueTodayTasks = dashboard?.taskStats?.dueToday ?? 0;
-    if (overdueTasks > 0) {
-      statuses["/tasks"] = {
-        label: `${overdueTasks} overdue`,
-        variant: "critical",
-      };
-    } else if (dueTodayTasks > 0) {
-      statuses["/tasks"] = {
-        label: `${dueTodayTasks} due today`,
-        variant: "warning",
       };
     }
 

@@ -45,12 +45,6 @@ const crud = ["view", "create", "edit", "delete"] as const;
 
 export const LEGACY_MODULE_FALLBACKS: readonly LegacyFallback[] = [
   {
-    from: "/payroll",
-    to: "/employees",
-    capabilities: crud,
-    reason: "employees routes accepted /payroll via anyOfModules",
-  },
-  {
     from: "/rostering",
     to: "/employees",
     capabilities: ["view"],
@@ -61,12 +55,6 @@ export const LEGACY_MODULE_FALLBACKS: readonly LegacyFallback[] = [
     to: "/employees",
     capabilities: ["view"],
     reason: "employee list was readable by attendance for site timesheets",
-  },
-  {
-    from: "/payroll",
-    to: "/employees/leave",
-    capabilities: ["view", "create", "edit", "delete", "approve", "export"],
-    reason: "leave routes accepted /payroll via anyOfModules",
   },
   {
     from: "/rostering",

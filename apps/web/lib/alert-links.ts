@@ -36,22 +36,6 @@ export function alertFixTarget(alert: OperationalAlert): AlertFixTarget | null {
       return { href: `/attendance/exceptions?${params}`, label: "Review exception" };
     }
 
-    case "PAYROLL": {
-      // Legacy payroll-attendance alerts point to the review workspace, where
-      // operators can investigate them without interrupting payroll calculation.
-      const params = new URLSearchParams({ status: "OPEN", severity: "CRITICAL" });
-      const periodStart = metaString(alert, "periodStart");
-      const periodEnd = metaString(alert, "periodEnd");
-      if (periodStart) params.set("start", periodStart);
-      if (periodEnd) params.set("end", periodEnd);
-      return { href: `/attendance/exceptions?${params}`, label: "Clear blockers" };
-    }
-
-    case "TASKS":
-      return alert.sourceId
-        ? { href: `/tasks/${alert.sourceId}`, label: "Open task" }
-        : { href: "/tasks", label: "Open tasks" };
-
     case "INCIDENTS":
       return alert.sourceId
         ? { href: `/incidents/${alert.sourceId}`, label: "Open incident" }

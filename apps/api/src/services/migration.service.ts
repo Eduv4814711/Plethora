@@ -49,6 +49,7 @@ const employeeTypeEnum = z.enum(["general", "security_officer"]);
 const employeeRowBaseSchema = z.object({
   companyName: z.string().optional().transform(emptyToUndefined),
   employeeNumber: z.string().optional().transform(emptyToUndefined),
+  externalPayrollCode: z.string().optional().transform(emptyToUndefined),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   idNumber: z.string().optional().transform(emptyToUndefined),
@@ -56,10 +57,7 @@ const employeeRowBaseSchema = z.object({
   email: z.string().optional().transform(emptyToUndefined),
   status: employeeStatusEnum.default("applicant"),
   employeeType: employeeTypeEnum.default("security_officer"),
-  hourlyRate: z.string().optional().transform((v) => parseOptionalNumber(v)),
-  monthlySalary: z.string().optional().transform((v) => parseOptionalNumber(v)),
   jobRole: z.string().optional().transform(emptyToUndefined),
-  gradeName: z.string().optional().transform(emptyToUndefined),
   psiraRegistrationNumber: z.string().optional().transform(emptyToUndefined),
   securityServiceType: z.string().optional().transform(emptyToUndefined),
   dateOfBirth: z.string().optional().transform((v) => sanitizeDate(v)),
@@ -77,8 +75,6 @@ const employeeRowBaseSchema = z.object({
   placeOfWork: z.string().optional().transform(emptyToUndefined),
   ordinaryHours: z.string().optional().transform(emptyToUndefined),
   ordinaryDays: z.string().optional().transform(emptyToUndefined),
-  overtimeRate: z.string().optional().transform((v) => parseOptionalNumber(v)),
-  payFrequency: z.string().optional().transform(emptyToUndefined),
   leaveEntitlement: z.string().optional().transform(emptyToUndefined),
   noticePeriod: z.string().optional().transform(emptyToUndefined),
   previousService: z.string().optional().transform(emptyToUndefined),
@@ -100,15 +96,9 @@ const employeeRowSchema = employeeRowBaseSchema.superRefine((data, ctx) => {
   if (data.employeeType === "security_officer" && (!data.psiraRegistrationNumber || !String(data.psiraRegistrationNumber).trim())) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["psiraRegistrationNumber"], message: "PSIRA number is required for security guards" });
   }
-  if (data.employeeType === "security_officer" && !data.hourlyRate && !data.monthlySalary) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["hourlyRate"], message: "Security staff need hourlyRate or monthlySalary" });
-  }
-  if (data.employeeType === "general" && !data.monthlySalary && !data.hourlyRate) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["monthlySalary"], message: "Office staff need monthlySalary or hourlyRate" });
-  }
 });
 
-/** Same fields as strict schema but does not require PSIRA or pay rates (manual cleanup in app). */
+/** Same fields as strict schema but does not require PSIRA (manual cleanup in app). */
 const employeeRowSchemaRelaxed = employeeRowBaseSchema;
 
 const employeeGroupRowSchema = z.object({
@@ -120,6 +110,7 @@ const employeeGroupRowSchema = z.object({
 const siteRowSchema = z.object({
   companyName: z.string().optional().transform(emptyToUndefined),
   name: z.string().min(1, "Site name is required"),
+  costCenterCode: z.string().optional().transform(emptyToUndefined),
   location: z.string().optional().transform(emptyToUndefined),
   physicalAddress: z.string().optional().transform(emptyToUndefined),
   contactPersonName: z.string().optional().transform(emptyToUndefined),
@@ -350,6 +341,7 @@ export async function executeSelfImport(
         data: {
           companyId,
           employeeNumber,
+          externalPayrollCode: e.externalPayrollCode ?? null,
           firstName: e.firstName,
           lastName: e.lastName,
           idNumber: e.idNumber ?? null,
@@ -357,8 +349,6 @@ export async function executeSelfImport(
           email: e.email ?? null,
           status: e.status,
           employeeType: e.employeeType,
-          hourlyRate: e.hourlyRate ?? null,
-          monthlySalary: e.monthlySalary ?? null,
           jobRole: e.jobRole ?? null,
           psiraRegistrationNumber: e.psiraRegistrationNumber ?? null,
           securityServiceType: e.securityServiceType ?? null,
@@ -377,8 +367,6 @@ export async function executeSelfImport(
           placeOfWork: e.placeOfWork ?? null,
           ordinaryHours: e.ordinaryHours ?? null,
           ordinaryDays: e.ordinaryDays ?? null,
-          overtimeRate: e.overtimeRate ?? null,
-          payFrequency: e.payFrequency ?? null,
           leaveEntitlement: e.leaveEntitlement ?? null,
           noticePeriod: e.noticePeriod ?? null,
           previousService: e.previousService ?? null,
@@ -404,6 +392,7 @@ export async function executeSelfImport(
         data: {
           companyId,
           name: s.name,
+          costCenterCode: s.costCenterCode ?? null,
           location: s.location ?? null,
           physicalAddress: s.physicalAddress ?? null,
           contactPersonName: s.contactPersonName ?? null,
@@ -476,7 +465,7 @@ function formatDecimal(val: unknown): string {
 export async function exportEmployeesToCsv(companyId: string, companyName: string): Promise<string> {
   const employees = await prisma.employee.findMany({
     where: { companyId },
-    include: { grade: { select: { name: true } }, group: { select: { name: true } } },
+    include: { group: { select: { name: true } } },
     orderBy: { employeeNumber: "asc" },
     take: MAX_EMPLOYEES,
   });
@@ -484,6 +473,7 @@ export async function exportEmployeesToCsv(companyId: string, companyName: strin
   const headers = [
     "Company Name",
     "Employee Number",
+    "External Payroll Code",
     "First Name",
     "Last Name",
     "ID Number",
@@ -496,8 +486,6 @@ export async function exportEmployeesToCsv(companyId: string, companyName: strin
     "Job Role",
     "Occupation",
     "Commencement Date",
-    "Hourly Rate",
-    "Monthly Salary",
     "PSIRA Registration Number",
     "Security Service Type",
   ];
@@ -505,6 +493,7 @@ export async function exportEmployeesToCsv(companyId: string, companyName: strin
   const rows = employees.map((e) => [
     csvEscape(companyName),
     csvEscape(e.employeeNumber),
+    csvEscape(e.externalPayrollCode),
     csvEscape(e.firstName),
     csvEscape(e.lastName),
     csvEscape(e.idNumber),
@@ -517,8 +506,6 @@ export async function exportEmployeesToCsv(companyId: string, companyName: strin
     csvEscape(e.jobRole),
     csvEscape(e.occupation),
     csvEscape(formatDate(e.commencementDate)),
-    csvEscape(formatDecimal(e.hourlyRate)),
-    csvEscape(formatDecimal(e.monthlySalary)),
     csvEscape(e.psiraRegistrationNumber),
     csvEscape(e.securityServiceType),
   ]);
@@ -553,6 +540,7 @@ export async function exportSitesToCsv(companyId: string, companyName: string): 
   const headers = [
     "Company Name",
     "Site Name",
+    "Cost Center Code",
     "Location",
     "Physical Address",
     "Contact Person Name",
@@ -564,6 +552,7 @@ export async function exportSitesToCsv(companyId: string, companyName: string): 
   const rows = sites.map((s) => [
     csvEscape(companyName),
     csvEscape(s.name),
+    csvEscape(s.costCenterCode),
     csvEscape(s.location),
     csvEscape(s.physicalAddress),
     csvEscape(s.contactPersonName),

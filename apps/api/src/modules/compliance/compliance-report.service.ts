@@ -57,7 +57,7 @@ export async function generateTenderCompliancePack(companyId: string) {
 export async function generateExecutiveRiskReport(companyId: string) {
   const summary = await getComplianceSummary(companyId);
 
-  const [highRiskObligations, criticalLegalCases, overdueStatutory] = await Promise.all([
+  const [highRiskObligations, criticalLegalCases] = await Promise.all([
     prisma.complianceObligation.findMany({
       where: {
         companyId,
@@ -73,13 +73,6 @@ export async function generateExecutiveRiskReport(companyId: string) {
       },
       include: { employee: { select: { firstName: true, lastName: true } } },
     }),
-    prisma.statutoryPeriod.findMany({
-      where: {
-        companyId,
-        status: { in: ["OVERDUE", "FAILED", "PARTIALLY_PAID"] },
-        outstandingAmount: { gt: 0 },
-      },
-    }),
   ]);
 
   return {
@@ -88,7 +81,6 @@ export async function generateExecutiveRiskReport(companyId: string) {
     criticalRisks: {
       obligations: highRiskObligations,
       legalCases: criticalLegalCases,
-      statutoryOverdue: overdueStatutory,
     },
   };
 }

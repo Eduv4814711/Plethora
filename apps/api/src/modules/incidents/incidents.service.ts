@@ -203,7 +203,6 @@ export async function getIncident(companyId: string, id: string) {
       reportedBy: { select: { id: true, name: true } },
       assignedSupervisor: { select: { id: true, name: true } },
       attachments: true,
-      followUpTask: { select: { id: true, title: true, status: true } },
     },
   });
 }
@@ -214,7 +213,6 @@ export async function reviewIncident(params: {
   reviewerId: string;
   action: "approve" | "reject" | "query" | "close" | "submit";
   note?: string;
-  createFollowUpTask?: boolean;
 }) {
   const incident = await prisma.incident.findFirst({
     where: { id: params.incidentId, companyId: params.companyId },
@@ -246,26 +244,6 @@ export async function reviewIncident(params: {
     data = { status: "CLOSED", closedAt: new Date(), supervisorNote: params.note };
   }
 
-  let followUpTaskId: string | undefined;
-  if (params.createFollowUpTask || (params.action === "approve" && incident.followUpRequired)) {
-    const task = await prisma.task.create({
-      data: {
-        companyId: params.companyId,
-        title: `Follow-up: ${incident.title}`,
-        description: `Follow-up for incident ${incident.incidentNumber}`,
-        status: "todo",
-        priority: incident.severity === "CRITICAL" ? "critical" : "high",
-        siteId: incident.siteId,
-        createdById: params.reviewerId,
-        assigneeType: "user",
-        assigneeId: incident.assignedSupervisorId ?? params.reviewerId,
-      },
-    });
-    followUpTaskId = task.id;
-    data.followUpTask = { connect: { id: task.id } };
-    data.followUpRequired = true;
-  }
-
   const updated = await prisma.incident.update({
     where: { id: incident.id },
     data,
@@ -277,7 +255,7 @@ export async function reviewIncident(params: {
     action: `incident.${params.action}`,
     entityType: "Incident",
     entityId: incident.id,
-    metadata: { note: params.note, followUpTaskId },
+    metadata: { note: params.note },
   });
 
   if (params.action === "submit") {
@@ -304,7 +282,7 @@ export async function reviewIncident(params: {
     linkUrl: `/incidents/${incident.id}`,
   });
 
-  return { incident: updated, followUpTaskId };
+  return { incident: updated };
 }
 
 export async function updateIncident(params: {

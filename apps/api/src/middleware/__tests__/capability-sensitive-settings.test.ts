@@ -44,13 +44,13 @@ describe("capability normalization and validation", () => {
       "/employees": ["view", "edit"],
     })).toBeNull();
     expect(findUnassignableCapability(manager, {
-      "/payroll": ["view"],
-    })).toEqual({ path: "/payroll", capability: "view" });
+      "/payroll-exports": ["view"],
+    })).toEqual({ path: "/payroll-exports", capability: "view" });
     expect(findUnassignableCapability(manager, {
       "/settings/access": ["manage_access"],
     })).toEqual({ path: "/settings/access", capability: "manage_access" });
     expect(findUnassignableCapability(user({}, true), {
-      "/payroll": ["approve"],
+      "/payroll-exports": ["approve"],
     })).toBeNull();
   });
 });
@@ -59,7 +59,7 @@ describe("sensitive company fields", () => {
   it("allows the owner or an explicitly authorized module user", () => {
     expect(canViewSensitiveCompanyFields(user({}, true) as never)).toBe(true);
     expect(canViewSensitiveCompanyFields(user({ "/settings": ["edit"] }) as never)).toBe(true);
-    expect(canViewSensitiveCompanyFields(user({ "/payroll": ["view_sensitive"] }) as never)).toBe(true);
+    expect(canViewSensitiveCompanyFields(user({ "/compliance": ["view_sensitive"] }) as never)).toBe(true);
   });
 
   it("denies unrelated and inactive users", () => {

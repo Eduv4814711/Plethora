@@ -11,9 +11,20 @@ const createPublicHolidaySchema = z.object({
 });
 
 export async function publicHolidaysRoutes(app: FastifyInstance) {
-  const protect = [authMiddleware, requireCrudCapability({ module: "/payroll" })];
+  const readProtect = [
+    authMiddleware,
+    requireCrudCapability({
+      anyOfModules: ["/settings", "/attendance", "/rostering", "/payroll-exports"],
+    }),
+  ];
+  const writeProtect = [
+    authMiddleware,
+    requireCrudCapability({
+      anyOfModules: ["/settings", "/attendance"],
+    }),
+  ];
 
-  app.get("/", { preHandler: protect }, async (request, reply) => {
+  app.get("/", { preHandler: readProtect }, async (request, reply) => {
     const user = request.user!;
     const q = request.query as Record<string, string | undefined>;
     const year = q.year ? parseInt(q.year, 10) : new Date().getFullYear();
@@ -31,7 +42,7 @@ export async function publicHolidaysRoutes(app: FastifyInstance) {
     return reply.send({ data: holidays });
   });
 
-  app.post("/", { preHandler: protect }, async (request, reply) => {
+  app.post("/", { preHandler: writeProtect }, async (request, reply) => {
     const parsed = createPublicHolidaySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({
@@ -67,7 +78,7 @@ export async function publicHolidaysRoutes(app: FastifyInstance) {
     return reply.code(201).send(holiday);
   });
 
-  app.delete("/:id", { preHandler: protect }, async (request, reply) => {
+  app.delete("/:id", { preHandler: writeProtect }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const companyId = request.user!.companyId;
 

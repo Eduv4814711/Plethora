@@ -32,12 +32,9 @@ const SUBROUTE_LABELS: Record<string, string> = {
   "/attendance/exceptions": "Exceptions",
   "/attendance/staff": "Staff Attendance",
   "/employees/compliance": "Compliance",
-  "/payroll/configuration": "Configuration",
-  "/payroll/leave-requests": "Leave Requests",
-  "/payroll/billing/clients": "Client Accounts",
-  "/payroll/billing/invoices": "Invoices",
-  "/payroll/billing/quotes": "Quotes",
-  "/tasks/projects": "Projects",
+  "/billing/clients": "Client Accounts",
+  "/billing/invoices": "Invoices",
+  "/billing/quotes": "Quotes",
 };
 
 /**
@@ -195,7 +192,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const navItemByHref = new Map(navItems.map((item) => [item.href, item]));
 
   // Desktop quick-links: show user's pinned modules first, filled up to 4 with core operational modules
-  const defaultCoreHrefs = ["/overview", "/rostering", "/attendance", "/payroll", "/employees", "/sites"];
+  const defaultCoreHrefs = ["/overview", "/rostering", "/attendance", "/payroll-exports", "/billing", "/employees", "/sites"];
   const quickLinkHrefs: string[] = [];
   for (const href of [...pinned, ...defaultCoreHrefs]) {
     if (quickLinkHrefs.length >= 4) break;
@@ -240,17 +237,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       ? "Incident Details"
                       : pathname.startsWith("/documents/")
                         ? "Document Details"
-                        : pathname.startsWith("/tasks/projects/")
-                          ? "Project Details"
-                          : pathname.startsWith("/tasks/")
-                            ? "Task Details"
-                            : pathname.startsWith("/payroll/billing/invoices/")
-                              ? "Invoice Details"
-                              : pathname.startsWith("/payroll/billing/quotes/")
-                                ? "Quote Details"
-                                : pathname.startsWith("/payroll/billing/clients/")
-                                  ? "Client Account"
-                                  : null);
+                        : pathname.startsWith("/billing/invoices/")
+                          ? "Invoice Details"
+                          : pathname.startsWith("/billing/quotes/")
+                            ? "Quote Details"
+                            : pathname.startsWith("/billing/clients/")
+                              ? "Client Account"
+                              : null);
           if (subLabel) {
             breadcrumbs.push({ href: pathname, label: subLabel });
           }
@@ -263,7 +256,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const isLauncherPage = pathname === "/";
   const isOverviewPage = pathname === "/overview";
   const isWhatsAppPage = pathname === "/whatsapp" || pathname.startsWith("/whatsapp/");
-  const isAcademyPage = pathname === "/academy" || (pathname != null && pathname.startsWith("/academy/"));
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
@@ -685,14 +677,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   ? "overflow-y-auto"
                   : isWhatsAppPage
                     ? "overflow-hidden"
-                    : isAcademyPage
-                      ? "overflow-y-auto lg:overflow-hidden"
-                      : "overflow-y-auto"
+                    : "overflow-y-auto"
               )
         )}
       >
         {hasAccess ? (
-          isAcademyPage || isOverviewPage || isLauncherPage ? (
+          isOverviewPage || isLauncherPage ? (
             <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">{children}</div>
           ) : (
             children

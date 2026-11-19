@@ -7,16 +7,14 @@ export const employeeListSelect = {
   id: true,
   companyId: true,
   employeeNumber: true,
+  externalPayrollCode: true,
   firstName: true,
   lastName: true,
   phone: true,
   status: true,
-  hourlyRate: true,
-  monthlySalary: true,
   employeeType: true,
   jobRole: true,
   gender: true,
-  gradeId: true,
   groupId: true,
   psiraRegistrationNumber: true,
   psiraRegistrationExpiry: true,
@@ -39,8 +37,6 @@ export const employeeDetailSelect = {
   placeOfWork: true,
   ordinaryHours: true,
   ordinaryDays: true,
-  overtimeRate: true,
-  payFrequency: true,
   leaveEntitlement: true,
   noticePeriod: true,
   previousService: true,
@@ -58,7 +54,7 @@ export const employeeDetailSelect = {
   trainingCompleted: true,
 } satisfies Prisma.EmployeeSelect;
 
-export const employeePayrollSelect = {
+export const employeeSensitiveSelect = {
   ...employeeDetailSelect,
   taxNumber: true,
   bankName: true,
@@ -66,21 +62,21 @@ export const employeePayrollSelect = {
   bankBranchCode: true,
 } satisfies Prisma.EmployeeSelect;
 
-export const employeePrivateAdminSelect = employeePayrollSelect;
+export const employeePrivateAdminSelect = employeeSensitiveSelect;
 
 export function canViewEmployeeSensitiveFields(user: AuthenticatedUser): boolean {
-  return canAccessSensitiveData(user, "/employees") || canAccessSensitiveData(user, "/payroll");
+  return canAccessSensitiveData(user, "/employees");
 }
 
 export function canWriteEmployeeSensitiveFields(
   user: AuthenticatedUser,
   action: "create" | "edit"
 ): boolean {
-  return hasCapability(user, "/employees", action) || hasCapability(user, "/payroll", action);
+  return hasCapability(user, "/employees", action);
 }
 
 export function canEditEmployeeDetails(user: AuthenticatedUser): boolean {
-  return hasCapability(user, "/employees", "edit") || hasCapability(user, "/payroll", "edit");
+  return hasCapability(user, "/employees", "edit");
 }
 
 export function sanitizeEmployeeForList<T extends Record<string, unknown>>(

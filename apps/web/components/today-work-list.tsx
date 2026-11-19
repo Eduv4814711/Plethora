@@ -45,7 +45,7 @@ export function TodayWorkList({ summary: externalSummary }: TodayWorkListProps) 
                 All operational gates clear for today
               </p>
               <p className="text-[10px] text-security-navy-500 leading-tight">
-                No shift capture delays, payroll blockers, or coverage gaps requiring attention.
+                No shift capture delays, export blockers, or coverage gaps requiring attention.
               </p>
             </div>
           </div>

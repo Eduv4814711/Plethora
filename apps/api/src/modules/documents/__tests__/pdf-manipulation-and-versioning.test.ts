@@ -123,7 +123,7 @@ describe("GeneratedDocumentService", () => {
 
     expect(info.isGenerated).toBe(true);
     expect(info.sourceLabel).toContain("Invoice");
-    expect(info.editSourceUrl).toBe("/payroll/billing?tab=invoices&invoiceId=inv-12345");
+    expect(info.editSourceUrl).toBe("/billing?tab=invoices&invoiceId=inv-12345");
   });
 
   it("resolves source entity edit link for billing quotes", () => {
@@ -131,15 +131,15 @@ describe("GeneratedDocumentService", () => {
 
     expect(info.isGenerated).toBe(true);
     expect(info.sourceLabel).toContain("Quotation");
-    expect(info.editSourceUrl).toBe("/payroll/billing?tab=quotes&quoteId=quote-9988");
+    expect(info.editSourceUrl).toBe("/billing?tab=quotes&quoteId=quote-9988");
   });
 
-  it("resolves source entity edit link for payslips", () => {
-    const info = getSourceEntityInfo("PAYROLL", "PayrollItem", "pay-67890");
+  it("resolves source entity edit link for workforce rosters", () => {
+    const info = getSourceEntityInfo("ROSTER", "Roster", "roster-67890");
 
     expect(info.isGenerated).toBe(true);
-    expect(info.sourceLabel).toContain("Payroll");
-    expect(info.editSourceUrl).toBe("/payroll?runId=pay-67890");
+    expect(info.sourceLabel).toContain("Roster");
+    expect(info.editSourceUrl).toBe("/rostering");
   });
 
   it("returns uploaded status when source references are absent", () => {
@@ -154,7 +154,7 @@ describe("Document Category Resolution", () => {
     expect(resolveDocumentCategory("EMPLOYEE")).toBe("EMPLOYEE");
     expect(resolveDocumentCategory("COMPLIANCE")).toBe("COMPLIANCE");
     expect(resolveDocumentCategory("billing")).toBe("BILLING");
-    expect(resolveDocumentCategory("ACADEMY")).toBe("ACADEMY");
+    expect(resolveDocumentCategory("INCIDENT")).toBe("INCIDENT");
   });
 
   it("safely maps legacy aliases to valid enum values", () => {

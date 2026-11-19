@@ -27,11 +27,11 @@ import {
 import { CHART_PRIMARY, CHART_SERIES } from "@/lib/chart-theme";
 
 interface ReportsData {
-  payrollByStatus: { name: string; value: number }[];
+  exportByStatus: { name: string; value: number }[];
   employeesByStatus: { name: string; value: number }[];
   shiftsByStatus: { name: string; value: number }[];
   shiftsOverTime: { month: string; shifts: number }[];
-  payrollOverTime: { month: string; gross: number; net: number }[];
+  exportsOverTime: { month: string; workedHours: number; overtimeHours: number; leaveHours: number }[];
   hoursBySite: { name: string; hours: number }[];
 }
 
@@ -146,7 +146,7 @@ export default function ReportsPage() {
         <div>
           <h1 className="page-title">Reports</h1>
           <p className="text-security-navy-600 dark:text-security-navy-400 mt-0.5 text-sm">
-            Charts showing your team, shifts, attendance, and payroll over time.
+            Charts showing your team, shifts, attendance, and payroll export batches over time.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -251,15 +251,15 @@ export default function ReportsPage() {
       </div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Payroll by status - Pie */}
+        {/* Export batches by status - Pie */}
         <div className="card-elevated p-6">
-          <h2 className="section-title text-security-navy-900 dark:text-security-navy-100 mb-4">Payroll Runs by Status</h2>
-          {data?.payrollByStatus?.length ? (
+          <h2 className="section-title text-security-navy-900 dark:text-security-navy-100 mb-4">Payroll Export Batches by Status</h2>
+          {data?.exportByStatus?.length ? (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={data.payrollByStatus}
+                    data={data.exportByStatus}
                     dataKey="value"
                     nameKey="name"
                     cx="50%"
@@ -268,17 +268,17 @@ export default function ReportsPage() {
                     label={({ name, percent }: { name?: string; percent?: number }) =>
                       `${name ?? ""} ${((percent ?? 0) * 100).toFixed(0)}%`}
                   >
-                    {data.payrollByStatus.map((_, i) => (
+                    {data.exportByStatus.map((_, i) => (
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(v) => [v ?? 0, "Runs"]} />
+                  <Tooltip formatter={(v) => [v ?? 0, "Batches"]} />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-security-navy-500 dark:text-security-navy-400 py-12 text-center">No payroll runs have been calculated for this period.</p>
+            <p className="text-security-navy-500 dark:text-security-navy-400 py-12 text-center">No payroll export batches have been created for this period.</p>
           )}
         </div>
 
@@ -339,18 +339,18 @@ export default function ReportsPage() {
           )}
         </div>
 
-        {/* Payroll over time - Line */}
+        {/* Exported hours over time - Line */}
         <div className="card-elevated p-6 lg:col-span-2">
-          <h2 className="section-title text-security-navy-900 dark:text-security-navy-100 mb-4">Payroll Totals Over Time</h2>
-          {data?.payrollOverTime?.length ? (
+          <h2 className="section-title text-security-navy-900 dark:text-security-navy-100 mb-4">Exported Hours Over Time</h2>
+          {data?.exportsOverTime?.length ? (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data.payrollOverTime} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <LineChart data={data.exportsOverTime} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-security-navy-200 dark:stroke-security-navy-700" />
                   <XAxis dataKey="month" className="text-xs" stroke="currentColor" />
-                  <YAxis className="text-xs" stroke="currentColor" tickFormatter={(v) => `R${(v / 1000).toFixed(0)}k`} />
+                  <YAxis className="text-xs" stroke="currentColor" tickFormatter={(v) => `${v}h`} />
                   <Tooltip
-                    formatter={(v) => [`R${Number(v ?? 0).toLocaleString("en-ZA", { minimumFractionDigits: 2 })}`, ""]}
+                    formatter={(v) => [`${Number(v ?? 0).toLocaleString("en-ZA", { minimumFractionDigits: 2 })} hrs`, ""]}
                     contentStyle={{
                       backgroundColor: "var(--card)",
                       border: "1px solid var(--card-border)",
@@ -358,13 +358,14 @@ export default function ReportsPage() {
                     }}
                   />
                   <Legend />
-                  <Line type="monotone" dataKey="gross" stroke={CHART_PRIMARY} name="Gross Pay" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="net" stroke="#22c55e" name="Net Pay" strokeWidth={2} dot={{ r: 4 }} />
+                  <Line type="monotone" dataKey="workedHours" stroke={CHART_PRIMARY} name="Worked Hours" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="overtimeHours" stroke="#f59e0b" name="Overtime Hours" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="leaveHours" stroke="#22c55e" name="Paid Leave Hours" strokeWidth={2} dot={{ r: 4 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-security-navy-500 dark:text-security-navy-400 py-12 text-center">No payroll totals are available for this period.</p>
+            <p className="text-security-navy-500 dark:text-security-navy-400 py-12 text-center">No locked or exported payroll batches are available for this period.</p>
           )}
         </div>
 

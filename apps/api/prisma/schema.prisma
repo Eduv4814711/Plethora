@@ -1,4 +1,4 @@
-// Plethora - Workforce & Payroll Management
+// Plethora - Security Workforce Operations & Compliance ERP
 // Multi-tenant ready schema
 
 generator client {
@@ -25,23 +25,21 @@ model Company {
   updatedAt   DateTime @updatedAt
 
   // Business details
-  legalName            String?
-  registrationNumber   String?
-  taxNumber            String?
+  legalName          String?
+  registrationNumber String?
+  taxNumber          String?
   /// SA VAT registration number — legally distinct from taxNumber (income tax ref).
-  vatNumber            String?
-  address              String?
-  phone                String?
-  email                String?
-  logoUrl              String?
-  website              String?
-  fax                  String?
-  psiraRegistration    String?
-  uifReference         String?
-  payeReference        String? // PAYE ref starts with '7'
-  sdlReference         String? // SDL ref starts with 'L'
-  sdlLiableFrom        DateTime? // When company first exceeded R500k payroll
-  monthlyPayrollTotals Json? // { "YYYY-MM": total } for rolling 12-month SDL tracking
+  vatNumber          String?
+  address            String?
+  phone              String?
+  email              String?
+  logoUrl            String?
+  website            String?
+  fax                String?
+  psiraRegistration  String?
+  uifReference       String?
+  payeReference      String? // External Sage / SARS employer PAYE ref
+  sdlReference       String? // External Sage / SARS employer SDL ref
 
   // Business settings & theme (JSON for flexibility)
   settings Json? // { currency, dateFormat, timezone, payrollPeriod, etc. }
@@ -53,26 +51,10 @@ model Company {
   sites                 Site[]
   whatsAppClockPendings WhatsAppClockPending[]
   shifts                Shift[]
-  payrollRuns           PayrollRun[]
   auditLogs             AuditLog[]
   rosterAutomationRuns  RosterAutomationRun[]
-  payRules              PayRule[]
-  payGrades             PayGrade[]
-  payAreas              PayArea[]
-  payGradeDefinitions   PayGradeDefinition[]
-  payAreaGradeRates     PayAreaGradeRate[]
-  sitePayProfiles       SitePayProfile[]
-  employeePayrollHomes  EmployeePayrollHomeSite[]
   employeeGroups        EmployeeGroup[]
-  groupPayRules         GroupPayRule[]
-  groupEarningsRules    GroupEarningsRule[]
-  groupDeductionRules   GroupDeductionRule[]
-  earningsRules         EarningsRule[]
-  deductionRules        DeductionRule[]
   publicHolidays        PublicHoliday[]
-  timesheets            Timesheet[]
-  taskProjects          TaskProject[]
-  tasks                 Task[]
   whatsappMessages      WhatsAppMessage[]
 
   siteRosterPatterns        SiteRosterPattern[]
@@ -84,63 +66,39 @@ model Company {
   siteBillingRates          SiteBillingRate[]
   siteBillingConfigs        SiteBillingConfig[]
 
-  academyBranches            AcademyBranch[]
-  academyStudents            Student[]
-  academyStudentDocuments    StudentDocument[]
-  academyCourses             Course[]
-  academyCourseRuns          CourseRun[]
-  academyFeePlans            FeePlan[]
-  academyEnrolments          Enrolment[]
-  academyInvoices            AcademyInvoice[]
-  academyPayments            AcademyPayment[]
-  academyReceipts            AcademyReceipt[]
-  academyProfile             AcademyProfile?
-  academyInstructors         AcademyInstructor[]
-  academyInstructorDocuments AcademyInstructorDocument[]
-  academyClassrooms          AcademyClassroom[]
-  academyAttendanceSessions  AcademyAttendanceSession[]
-  academyAttendanceRecords   AcademyAttendanceRecord[]
-  academyAssessments         AcademyAssessment[]
-  academyCertificates        AcademyCertificate[]
-  academyComplianceDocuments AcademyComplianceDocument[]
-  academyPolicyDocuments     AcademyPolicyDocument[]
-  academyRenewalAlerts       AcademyRenewalAlert[]
-  leaveRequests              LeaveRequest[]
-  leaveAdjustments           LeaveAdjustment[]
-  leaveAuditLogs             LeaveAuditLog[]
+  leaveRequests    LeaveRequest[]
+  leaveAdjustments LeaveAdjustment[]
+  leaveAuditLogs   LeaveAuditLog[]
 
-  // Management System Review — operational modules
-  operationalAlerts      OperationalAlert[]
-  attendanceExceptions   AttendanceException[]
-  managedDocuments       ManagedDocument[]
-  documentVersions       DocumentVersion[]
-  incidents              Incident[]
-  approvalRequests       ApprovalRequest[]
-  appNotifications       AppNotification[]
-  clients                Client[]
-  clientQuotes           ClientQuote[]
-  clientInvoices         ClientInvoice[]
-  clientPayments         ClientPayment[]
-  clientReceipts         ClientReceipt[]
-  clientContacts         ClientContact[]
-  clientRelatedParties   ClientRelatedParty[]
-  clientContracts        ClientContract[]
-  clientContractSites    ClientContractSite[]
+  // Operational modules
+  operationalAlerts            OperationalAlert[]
+  attendanceExceptions         AttendanceException[]
+  managedDocuments             ManagedDocument[]
+  documentVersions             DocumentVersion[]
+  incidents                    Incident[]
+  approvalRequests             ApprovalRequest[]
+  appNotifications             AppNotification[]
+  clients                      Client[]
+  clientQuotes                 ClientQuote[]
+  clientInvoices               ClientInvoice[]
+  clientPayments               ClientPayment[]
+  clientReceipts               ClientReceipt[]
+  clientContacts               ClientContact[]
+  clientRelatedParties         ClientRelatedParty[]
+  clientContracts              ClientContract[]
+  clientContractSites          ClientContractSite[]
   clientDataProcessingProfiles ClientDataProcessingProfile[]
-  payrollPeriodReadiness PayrollPeriodReadiness[]
-  accessChangeRequests   AccessChangeRequest[]
+  accessChangeRequests         AccessChangeRequest[]
 
-  // Compliance & Financial Control Hub
-  complianceObligations           ComplianceObligation[]
-  statutoryPeriods                StatutoryPeriod[]
-  statutoryPayments               StatutoryPayment[]
-  employeeStatutoryContributions  EmployeeStatutoryContribution[]
-  statutoryRateConfigs            StatutoryRateConfig[]
-  complianceRemediationPlans      ComplianceRemediationPlan[]
-  complianceLegalCases            ComplianceLegalCase[]
-  cashCommitments                 CashCommitment[]
-  cashPositionSnapshots           CashPositionSnapshot[]
-  employmentExits                 EmploymentExit[]
+  // External Payroll Export (Sage / Generic adapters)
+  payrollExportProfiles PayrollExportProfile[]
+  payrollExportBatches  PayrollExportBatch[]
+
+  // Operational Compliance & Legal Register
+  complianceObligations      ComplianceObligation[]
+  complianceRemediationPlans ComplianceRemediationPlan[]
+  complianceLegalCases       ComplianceLegalCase[]
+  employmentExits            EmploymentExit[]
 }
 
 model User {
@@ -161,51 +119,37 @@ model User {
   createdAt                    DateTime    @default(now())
   updatedAt                    DateTime    @updatedAt
 
-  company                            Company                     @relation("CompanyUsers", fields: [companyId], references: [id], onDelete: Cascade)
-  ownedCompany                       Company?                    @relation("CompanyOwner")
-  auditLogs                          AuditLog[]
-  tasksCreated                       Task[]
-  taskComments                       TaskComment[]
-  taskAttachments                    TaskAttachment[]
-  studentDocumentsUploaded           StudentDocument[]
-  academyPaymentsVerified            AcademyPayment[]            @relation("AcademyPaymentVerifiedBy")
-  academyReceiptsIssued              AcademyReceipt[]            @relation("AcademyReceiptIssuedBy")
-  academyAttendanceMarked            AcademyAttendanceRecord[]   @relation("AcademyAttendanceMarkedBy")
-  academyCertificatesIssued          AcademyCertificate[]        @relation("AcademyCertificateIssuedBy")
-  academyComplianceVerified          AcademyComplianceDocument[] @relation("AcademyComplianceVerifiedBy")
-  academyInstructorDocumentsUploaded AcademyInstructorDocument[] @relation("AcademyInstructorDocumentUploadedBy")
-  academyInstructorDocumentsVerified AcademyInstructorDocument[] @relation("AcademyInstructorDocumentVerifiedBy")
-  refreshTokens                      RefreshToken[]
+  company       Company        @relation("CompanyUsers", fields: [companyId], references: [id], onDelete: Cascade)
+  ownedCompany  Company?       @relation("CompanyOwner")
+  auditLogs     AuditLog[]
+  refreshTokens RefreshToken[]
 
-  // MSR relations
-  supervisedSites        Site[]                @relation("SiteSupervisor")
-  alertsAssigned         OperationalAlert[]    @relation("AlertAssignedTo")
-  alertsResolved         OperationalAlert[]    @relation("AlertResolvedBy")
-  exceptionsReviewed     AttendanceException[] @relation("ExceptionReviewedBy")
-  documentsUploaded      ManagedDocument[]     @relation("DocumentUploadedBy")
-  documentsVerified      ManagedDocument[]     @relation("DocumentVerifiedBy")
-  documentVersionsCreated DocumentVersion[]    @relation("DocumentVersionCreatedBy")
-  incidentsReported      Incident[]            @relation("IncidentReportedBy")
-  incidentsSupervised    Incident[]            @relation("IncidentAssignedSupervisor")
-  approvalsRequested     ApprovalRequest[]     @relation("ApprovalRequestedBy")
-  approvalsToReview      ApprovalRequest[]     @relation("ApprovalApprover")
-  notificationsReceived  AppNotification[]
-  clientProfile          Client?
+  // Operational relations
+  supervisedSites         Site[]                @relation("SiteSupervisor")
+  alertsAssigned          OperationalAlert[]    @relation("AlertAssignedTo")
+  alertsResolved          OperationalAlert[]    @relation("AlertResolvedBy")
+  exceptionsReviewed      AttendanceException[] @relation("ExceptionReviewedBy")
+  documentsUploaded       ManagedDocument[]     @relation("DocumentUploadedBy")
+  documentsVerified       ManagedDocument[]     @relation("DocumentVerifiedBy")
+  documentVersionsCreated DocumentVersion[]     @relation("DocumentVersionCreatedBy")
+  incidentsReported       Incident[]            @relation("IncidentReportedBy")
+  incidentsSupervised     Incident[]            @relation("IncidentAssignedSupervisor")
+  approvalsRequested      ApprovalRequest[]     @relation("ApprovalRequestedBy")
+  approvalsToReview       ApprovalRequest[]     @relation("ApprovalApprover")
+  notificationsReceived   AppNotification[]
+  clientProfile           Client?
 
-  // Compliance & Financial Control Hub
-  obligationsOwned               ComplianceObligation[]        @relation("ObligationOwner")
-  obligationsVerified            ComplianceObligation[]        @relation("ObligationVerifiedBy")
-  obligationsOverridden          ComplianceObligation[]        @relation("ObligationManagementOverride")
-  statutoryPaymentsCaptured      StatutoryPayment[]            @relation("StatutoryPaymentCapturedBy")
-  statutoryRateConfigsVerified   StatutoryRateConfig[]         @relation("StatutoryRateConfigVerifiedBy")
-  remediationPlansOwned          ComplianceRemediationPlan[]   @relation("RemediationPlanOwner")
-  legalCasesAssigned             ComplianceLegalCase[]         @relation("LegalCaseAssignedTo")
-  cashPositionSnapshots          CashPositionSnapshot[]        @relation("CashPositionCapturedBy")
-  employmentExitsProcessed       EmploymentExit[]              @relation("EmploymentExitProcessedBy")
-  clientQuotesDecided    ClientQuote[]         @relation("ClientQuoteDecidedBy")
-  clientPaymentsRecorded ClientPayment[]       @relation("ClientPaymentRecordedBy")
-  clientReceiptsIssued   ClientReceipt[]       @relation("ClientReceiptIssuedBy")
-  siteBillingRatesCreated SiteBillingRate[]     @relation("SiteBillingRateCreatedBy")
+  // Operational Compliance & Legal Register + Client Billing
+  obligationsOwned        ComplianceObligation[]      @relation("ObligationOwner")
+  obligationsVerified     ComplianceObligation[]      @relation("ObligationVerifiedBy")
+  obligationsOverridden   ComplianceObligation[]      @relation("ObligationManagementOverride")
+  remediationPlansOwned   ComplianceRemediationPlan[] @relation("RemediationPlanOwner")
+  legalCasesAssigned      ComplianceLegalCase[]       @relation("LegalCaseAssignedTo")
+  employmentExitsProcessed EmploymentExit[]           @relation("EmploymentExitProcessedBy")
+  clientQuotesDecided     ClientQuote[]               @relation("ClientQuoteDecidedBy")
+  clientPaymentsRecorded  ClientPayment[]             @relation("ClientPaymentRecordedBy")
+  clientReceiptsIssued    ClientReceipt[]             @relation("ClientReceiptIssuedBy")
+  siteBillingRatesCreated SiteBillingRate[]           @relation("SiteBillingRateCreatedBy")
 
   // Access change requests (maker-checker on user access)
   accessChangesTargeting AccessChangeRequest[] @relation("AccessChangeTarget")
@@ -242,48 +186,43 @@ enum AccountType {
 }
 
 model Employee {
-  id             String         @id @default(cuid())
-  companyId      String
-  employeeNumber String         @default(cuid()) // Unique per company - auto-generated for existing rows, can be set on create
-  firstName      String
-  lastName       String
-  idNumber       String?
-  phone          String?
-  status         EmployeeStatus
-  hourlyRate     Decimal?       @db.Decimal(10, 2) // For Guards
-  monthlySalary  Decimal?       @db.Decimal(12, 2) // For Office staff (fixed monthly)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id                  String         @id @default(cuid())
+  companyId           String
+  employeeNumber      String         @default(cuid()) // Unique per company - auto-generated for existing rows, can be set on create
+  externalPayrollCode String?        // External payroll identifier (e.g. Sage employee code)
+  firstName           String
+  lastName            String
+  idNumber            String?
+  phone               String?
+  status              EmployeeStatus
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
 
   // Employee type: general (Labour Law) vs security_officer (PSIRA/NBCPSS)
   employeeType String  @default("security_officer") // "general" | "security_officer"
   jobRole      String? // e.g. "Security Officer", "HR Manager"
 
-  // Labour Law (BCEA) - office staff
-  dateOfBirth        DateTime?
-  gender             String? // M/F
-  maritalStatus      String? // single, married, divorced, widowed
-  email              String?
-  physicalAddress    String?
-  postalAddress      String?
-  postalCode         String?
-  taxNumber          String?
-  taxDirectiveNumber String?
-  taxDirectiveRate   Decimal?  @db.Decimal(5, 2) // Fixed PAYE % from SARS directive (0–100)
-  bankName           String?
-  bankAccountNumber  String?
-  bankBranchCode     String?
-  commencementDate   DateTime?
-  occupation         String?
-  placeOfWork        String?
-  geofenceExempt     Boolean   @default(false)
-  ordinaryHours      String? // e.g. "45 hours/week"
-  ordinaryDays       String? // e.g. "Mon-Fri"
-  overtimeRate       Decimal?  @db.Decimal(10, 2)
-  payFrequency       String? // weekly, bi-weekly, monthly
-  leaveEntitlement   String?
-  noticePeriod       String?
-  previousService    String?
+  // Labour Law (BCEA) & HR Master Data (exported to external payroll on onboarding)
+  dateOfBirth       DateTime?
+  gender            String? // M/F
+  maritalStatus     String? // single, married, divorced, widowed
+  email             String?
+  physicalAddress   String?
+  postalAddress     String?
+  postalCode        String?
+  taxNumber         String?
+  bankName          String?
+  bankAccountNumber String?
+  bankBranchCode    String?
+  commencementDate  DateTime?
+  occupation        String?
+  placeOfWork       String?
+  geofenceExempt    Boolean   @default(false)
+  ordinaryHours     String? // e.g. "45 hours/week"
+  ordinaryDays      String? // e.g. "Mon-Fri"
+  leaveEntitlement  String?
+  noticePeriod      String?
+  previousService   String?
 
   // Simple leave rebuild: only needs a value if the 36-month sick-leave
   // cycle should start on a different date than commencementDate (e.g.
@@ -294,7 +233,7 @@ model Employee {
   // PSIRA - security staff
   psiraRegistrationNumber String?
   psiraRegistrationExpiry DateTime?
-  psiraGrade              String? // "E" | "D" | "C" | "B" | "A" — stored only, not validated/alerted on
+  psiraGrade              String? // "E" | "D" | "C" | "B" | "A"
   securityServiceType     String? // guarding, patrolling, close_protection, etc.
   nextOfKin1Name          String?
   nextOfKin1Phone         String?
@@ -308,45 +247,35 @@ model Employee {
   mentallyUnstable        Boolean?
   trainingCompleted       Boolean?
 
-  gradeId                     String?
-  groupId                     String?
-  company                     Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  grade                       PayGrade?                  @relation(fields: [gradeId], references: [id], onDelete: SetNull)
-  group                       EmployeeGroup?             @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  shifts                      Shift[]
-  payrollItems                PayrollItem[]
-  siteAssignments             SiteAssignment[]
-  guardSiteEligibilities      GuardSiteEligibility[]
-  siteRosterPatternCells      SiteRosterPatternCell[]
-  siteRosterManualOverrides   SiteRosterManualOverride[]
-  siteRosterGeneratedShifts   SiteRosterGeneratedShift[]
-  plannedSiteTimesheetRows    SiteTimesheetRow[]         @relation("PlannedTimesheetGuard")
-  actualSiteTimesheetRows     SiteTimesheetRow[]         @relation("ActualTimesheetGuard")
-  timesheets                  Timesheet[]
-  employeeDeductions          EmployeeDeduction[]
-  whatsappMessages            WhatsAppMessage[]
-  whatsAppClockPendings       WhatsAppClockPending[]
-  academyLinkedStudents       Student[]                  @relation("AcademyStudentEmployee")
-  academyCourseRunsInstructed CourseRun[]                @relation("CourseRunInstructor")
-  attendanceExceptions        AttendanceException[]
-  managedDocuments            ManagedDocument[]
-  operationalAlerts           OperationalAlert[]
-  leaveRequests               LeaveRequest[]
-  leaveAdjustments            LeaveAdjustment[]
-  staffAttendanceDays         StaffAttendanceDay[]
-  payrollHomeSites            EmployeePayrollHomeSite[]
-
-  // Compliance & Financial Control Hub
-  employeeStatutoryContributions EmployeeStatutoryContribution[]
-  complianceLegalCases           ComplianceLegalCase[]
-  employmentExits                EmploymentExit[]
+  groupId                   String?
+  company                   Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  group                     EmployeeGroup?             @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  shifts                    Shift[]
+  siteAssignments           SiteAssignment[]
+  guardSiteEligibilities    GuardSiteEligibility[]
+  siteRosterPatternCells    SiteRosterPatternCell[]
+  siteRosterManualOverrides SiteRosterManualOverride[]
+  siteRosterGeneratedShifts SiteRosterGeneratedShift[]
+  plannedSiteTimesheetRows  SiteTimesheetRow[]         @relation("PlannedTimesheetGuard")
+  actualSiteTimesheetRows   SiteTimesheetRow[]         @relation("ActualTimesheetGuard")
+  whatsappMessages          WhatsAppMessage[]
+  whatsAppClockPendings     WhatsAppClockPending[]
+  attendanceExceptions      AttendanceException[]
+  managedDocuments          ManagedDocument[]
+  operationalAlerts         OperationalAlert[]
+  leaveRequests             LeaveRequest[]
+  leaveAdjustments          LeaveAdjustment[]
+  staffAttendanceDays       StaffAttendanceDay[]
+  payrollExportLines        PayrollExportLine[]
+  complianceLegalCases      ComplianceLegalCase[]
+  employmentExits           EmploymentExit[]
 
   @@unique([companyId, employeeNumber])
+  @@unique([companyId, externalPayrollCode])
   @@index([companyId])
   @@index([companyId, status])
   @@index([companyId, employeeType])
   @@index([companyId, groupId])
-  @@index([gradeId])
   @@index([groupId])
   @@index([status])
   @@index([employeeType])
@@ -367,6 +296,7 @@ model Site {
   companyId                      String
   name                           String
   location                       String? // Legacy/short name
+  costCenterCode                 String? // External payroll department / cost centre code (e.g. Sage)
   physicalAddress                String? // Full physical address
   contactPersonName              String?
   contactPersonPhone             String?
@@ -383,7 +313,6 @@ model Site {
   riskLevel                      SiteRiskLevel         @default(LOW)
   siteStatus                     SiteOperationalStatus @default(ACTIVE)
   siteInstructions               String?               @db.Text
-  /// Linked client for portal isolation (optional)
   clientId                       String?
   /// Geofence center (WGS84). All three geofence fields must be set to enforce clock-in location on WhatsApp.
   latitude                       Decimal?              @db.Decimal(10, 7)
@@ -415,7 +344,7 @@ model Site {
   rosterNightShiftCustomFemales  Int?
   dayShiftEnabled                Boolean               @default(true)
   nightShiftEnabled              Boolean               @default(true)
-  /// Automatic roster generation from payroll calendar.
+  /// Automatic roster generation from cycle calendar.
   autoRosterEnabled              Boolean               @default(false)
   autoRosterMinCoveragePercent   Int                   @default(100)
   autoRosterLastRunAt            DateTime?
@@ -455,9 +384,7 @@ model Site {
   attendanceExceptions      AttendanceException[]
   managedDocuments          ManagedDocument[]
   incidents                 Incident[]
-  tasks                     Task[]
-  payProfiles               SitePayProfile[]
-  employeePayrollHomes      EmployeePayrollHomeSite[]
+  payrollExportLines        PayrollExportLine[]
   employmentExits           EmploymentExit[]           @relation("EmploymentExitSite")
   newEmploymentExits        EmploymentExit[]           @relation("EmploymentExitNewSite")
   staffAttendanceDays       StaffAttendanceDay[]
@@ -644,190 +571,6 @@ model Attendance {
   @@index([shiftId])
 }
 
-model PayrollRun {
-  id                  String        @id @default(cuid())
-  companyId           String
-  periodStart         DateTime
-  periodEnd           DateTime
-  payPeriod           String        @default("monthly") // weekly | biweekly | monthly; frozen when the run is created
-  status              PayrollStatus
-  lockedAt            DateTime?
-  calculatedAt        DateTime?
-  calculationSnapshot Json?
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
-
-  company    Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  items      PayrollItem[]
-  timesheets Timesheet[]
-
-  @@index([companyId])
-  @@index([companyId, periodStart, periodEnd])
-  @@index([companyId, status])
-  @@index([periodStart])
-  @@index([periodEnd])
-  @@index([status])
-}
-
-enum PayrollStatus {
-  draft
-  calculated
-  approved
-  paid
-}
-
-model PayrollItem {
-  id               String   @id @default(cuid())
-  payrollRunId     String
-  employeeId       String
-  hoursWorked      Decimal  @db.Decimal(10, 2)
-  overtimeHours    Decimal  @db.Decimal(10, 2)
-  basePay          Decimal  @db.Decimal(12, 2)
-  overtimePay      Decimal  @db.Decimal(12, 2)
-  sundayPay        Decimal? @db.Decimal(12, 2)
-  publicHolidayPay Decimal? @db.Decimal(12, 2)
-  grossPay         Decimal  @default(0) @db.Decimal(12, 2)
-  deductions       Decimal  @db.Decimal(12, 2)
-  netPay           Decimal  @db.Decimal(12, 2)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  payrollRun PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
-  employee   Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  payslip    Payslip?
-
-  @@unique([payrollRunId, employeeId])
-  @@index([payrollRunId])
-  @@index([employeeId])
-}
-
-model PayRule {
-  id         String   @id @default(cuid())
-  companyId  String
-  ruleType   String // "overtime" | "sunday" | "public_holiday"
-  multiplier Decimal  @db.Decimal(5, 2)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@unique([companyId, ruleType])
-  @@index([companyId])
-}
-
-model PayGrade {
-  id         String   @id @default(cuid())
-  companyId  String
-  groupId    String? // null = company default; set = group-specific
-  name       String // e.g. "Grade A", "Senior Guard"
-  hourlyRate Decimal  @db.Decimal(10, 2)
-  sortOrder  Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  group     EmployeeGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  employees Employee[]
-
-  @@index([companyId])
-  @@index([groupId])
-}
-
-/// Company-wide wage area used by the site payroll pricing matrix.
-model PayArea {
-  id        String   @id @default(cuid())
-  companyId String
-  name      String
-  sortOrder Int      @default(0)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  company      Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  rates        PayAreaGradeRate[]
-  siteProfiles SitePayProfile[]
-
-  @@unique([companyId, name])
-  @@index([companyId, isActive])
-}
-
-/// Company-wide grade label. Rates live on PayAreaGradeRate, not on employees.
-model PayGradeDefinition {
-  id        String   @id @default(cuid())
-  companyId String
-  name      String
-  sortOrder Int      @default(0)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  company      Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  rates        PayAreaGradeRate[]
-  siteProfiles SitePayProfile[]
-
-  @@unique([companyId, name])
-  @@index([companyId, isActive])
-}
-
-/// Immutable, effective-dated Area x Grade hourly price.
-/// The applicable version is the latest effectiveFrom on or before the work date.
-model PayAreaGradeRate {
-  id            String   @id @default(cuid())
-  companyId     String
-  areaId        String
-  gradeId       String
-  hourlyRate    Decimal  @db.Decimal(10, 2)
-  effectiveFrom DateTime @db.Date
-  createdAt     DateTime @default(now())
-
-  company Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  area    PayArea             @relation(fields: [areaId], references: [id], onDelete: Restrict)
-  grade   PayGradeDefinition @relation(fields: [gradeId], references: [id], onDelete: Restrict)
-
-  @@unique([areaId, gradeId, effectiveFrom])
-  @@index([companyId, effectiveFrom])
-  @@index([areaId, gradeId, effectiveFrom])
-}
-
-/// Effective-dated payroll classification for a site.
-model SitePayProfile {
-  id            String   @id @default(cuid())
-  companyId     String
-  siteId        String
-  areaId        String
-  gradeId       String
-  effectiveFrom DateTime @db.Date
-  createdAt     DateTime @default(now())
-
-  company Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  site    Site               @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  area    PayArea            @relation(fields: [areaId], references: [id], onDelete: Restrict)
-  grade   PayGradeDefinition @relation(fields: [gradeId], references: [id], onDelete: Restrict)
-
-  @@unique([siteId, effectiveFrom])
-  @@index([companyId, effectiveFrom])
-  @@index([siteId, effectiveFrom])
-}
-
-/// Effective-dated primary site used to price paid leave for hourly employees.
-model EmployeePayrollHomeSite {
-  id            String   @id @default(cuid())
-  companyId     String
-  employeeId    String
-  siteId        String
-  effectiveFrom DateTime @db.Date
-  createdAt     DateTime @default(now())
-
-  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  site     Site     @relation(fields: [siteId], references: [id], onDelete: Restrict)
-
-  @@unique([employeeId, effectiveFrom])
-  @@index([companyId, effectiveFrom])
-  @@index([employeeId, effectiveFrom])
-  @@index([siteId])
-}
-
 model EmployeeGroup {
   id          String   @id @default(cuid())
   companyId   String
@@ -837,130 +580,10 @@ model EmployeeGroup {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employees           Employee[]
-  payGrades           PayGrade[]
-  groupPayRules       GroupPayRule[]
-  groupEarningsRules  GroupEarningsRule[]
-  groupDeductionRules GroupDeductionRule[]
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employees Employee[]
 
   @@index([companyId])
-}
-
-model GroupPayRule {
-  id         String   @id @default(cuid())
-  companyId  String
-  groupId    String
-  ruleType   String // "overtime" | "sunday" | "public_holiday"
-  multiplier Decimal  @db.Decimal(5, 2)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  company Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  group   EmployeeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-
-  @@unique([groupId, ruleType])
-  @@index([companyId])
-  @@index([groupId])
-}
-
-model GroupEarningsRule {
-  id        String   @id @default(cuid())
-  companyId String
-  groupId   String
-  name      String // e.g. "Transport", "Uniform allowance"
-  type      String // "fixed" | "percentage"
-  amount    Decimal? @db.Decimal(12, 2)
-  rate      Decimal? @db.Decimal(5, 2)
-  appliesTo String   @default("all") // "all" | "security_officer" | "general"
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  company Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  group   EmployeeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-
-  @@index([companyId])
-  @@index([groupId])
-}
-
-model GroupDeductionRule {
-  id          String   @id @default(cuid())
-  companyId   String
-  groupId     String
-  name        String
-  type        String // "fixed" | "percentage"
-  amount      Decimal? @db.Decimal(12, 2)
-  rate        Decimal? @db.Decimal(5, 2)
-  appliesTo   String   @default("all") // "all" | "security_officer" | "general"
-  employeeIds Json?
-  isOptional  Boolean  @default(false)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  company Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  group   EmployeeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-
-  @@index([companyId])
-  @@index([groupId])
-}
-
-model EarningsRule {
-  id        String   @id @default(cuid())
-  companyId String
-  name      String // e.g. "Transport", "Uniform allowance"
-  type      String // "fixed" | "percentage"
-  amount    Decimal? @db.Decimal(12, 2)
-  rate      Decimal? @db.Decimal(5, 2)
-  appliesTo String   @default("all") // "all" | "security_officer" | "general"
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@index([companyId])
-}
-
-model DeductionRule {
-  id          String   @id @default(cuid())
-  companyId   String
-  name        String
-  type        String // "fixed" | "percentage"
-  amount      Decimal? @db.Decimal(12, 2)
-  rate        Decimal? @db.Decimal(5, 2)
-  appliesTo   String   @default("all") // "all" | "security_officer" | "general"
-  employeeIds Json?
-  isOptional  Boolean  @default(false)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employeeDeductions EmployeeDeduction[]
-
-  @@index([companyId])
-}
-
-model EmployeeDeduction {
-  id              String    @id @default(cuid())
-  employeeId      String
-  deductionRuleId String?
-  name            String
-  type            String // "fixed" | "percentage"
-  amount          Decimal   @db.Decimal(12, 2)
-  rate            Decimal?  @db.Decimal(5, 2)
-  appliesFrom     DateTime  @default(now())
-  appliesTo       DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  employee      Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  deductionRule DeductionRule? @relation(fields: [deductionRuleId], references: [id], onDelete: SetNull)
-
-  @@index([employeeId])
-  @@index([deductionRuleId])
 }
 
 model PublicHoliday {
@@ -974,32 +597,6 @@ model PublicHoliday {
 
   @@unique([companyId, date])
   @@index([companyId])
-}
-
-model Timesheet {
-  id                 String   @id @default(cuid())
-  companyId          String
-  employeeId         String
-  payrollRunId       String?
-  periodStart        DateTime
-  periodEnd          DateTime
-  basicHours         Decimal  @db.Decimal(10, 2)
-  overtimeHours      Decimal  @db.Decimal(10, 2)
-  sundayHours        Decimal  @default(0) @db.Decimal(10, 2)
-  publicHolidayHours Decimal  @default(0) @db.Decimal(10, 2)
-  leaveDays          Decimal  @default(0) @db.Decimal(5, 2)
-  source             String   @default("auto") // "auto" | "manual"
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee   Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  payrollRun PayrollRun? @relation(fields: [payrollRunId], references: [id], onDelete: SetNull)
-
-  @@unique([companyId, employeeId, periodStart])
-  @@index([companyId])
-  @@index([employeeId])
-  @@index([payrollRunId])
 }
 
 model SiteTimesheet {
@@ -1210,7 +807,7 @@ model LeaveRequest {
   reviewedBy String?
   reviewedAt DateTime?
 
-  payrollRunId String? // set when a payroll run has consumed this leave; cleared on run revert
+  payrollExportBatchId String? // set when an approved export batch consumes this leave; cleared on batch void
 
   retentionUntil DateTime // POPIA: 3 years after last entry. Stored only, no automated deletion yet.
 
@@ -1219,10 +816,12 @@ model LeaveRequest {
 
   company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   employee           Employee            @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  payrollExportBatch PayrollExportBatch? @relation(fields: [payrollExportBatchId], references: [id], onDelete: SetNull)
   medicalCertificate MedicalCertificate?
 
   @@index([companyId, employeeId, leaveType])
   @@index([companyId, status])
+  @@index([payrollExportBatchId])
 }
 
 model MedicalCertificate {
@@ -1275,26 +874,6 @@ model LeaveAuditLog {
   @@index([entityType, entityId])
 }
 
-model Payslip {
-  id              String   @id @default(cuid())
-  payrollItemId   String   @unique
-  earnings        Json // [{ name, amount }]
-  deductions      Json // [{ name, amount }]
-  grossPay        Decimal  @db.Decimal(12, 2)
-  totalDeductions Decimal  @db.Decimal(12, 2)
-  netPay          Decimal  @db.Decimal(12, 2)
-  generatedAt     DateTime @default(now())
-
-  // SARS tax fields
-  tax             Decimal? @db.Decimal(12, 2) // PAYE
-  taxableEarnings Decimal? @db.Decimal(12, 2)
-  uifEmployee     Decimal? @db.Decimal(12, 2)
-  uifEmployer     Decimal? @db.Decimal(12, 2)
-  sdl             Decimal? @db.Decimal(12, 2)
-
-  payrollItem PayrollItem @relation(fields: [payrollItemId], references: [id], onDelete: Cascade)
-}
-
 model AuditLog {
   id         String   @id @default(cuid())
   userId     String?
@@ -1325,126 +904,6 @@ model AuditLog {
   @@index([entityType])
   @@index([entityId])
   @@index([timestamp])
-}
-
-// Task Manager
-model TaskProject {
-  id          String   @id @default(cuid())
-  companyId   String
-  name        String
-  description String?
-  color       String?
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  tasks   Task[]
-
-  @@index([companyId])
-}
-
-enum TaskStatus {
-  todo
-  in_progress
-  blocked
-  done
-  cancelled
-}
-
-enum TaskPriority {
-  low
-  medium
-  high
-  urgent
-  critical
-}
-
-model Task {
-  id                   String       @id @default(cuid())
-  companyId            String
-  projectId            String?
-  siteId               String?
-  title                String
-  description          String?
-  status               TaskStatus   @default(todo)
-  priority             TaskPriority @default(medium)
-  dueDate              DateTime?
-  completedAt          DateTime?
-  completionPercentage Int          @default(0)
-  assigneeType         String? // "employee" | "user"
-  assigneeId           String?
-  recurrenceRule       Json? // { frequency, interval?, daysOfWeek?, endDate? }
-  recurrenceEnabled    Boolean      @default(false)
-  parentTaskId         String?
-  notificationSettings Json?
-  createdById          String
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
-
-  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project          TaskProject?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  site             Site?             @relation(fields: [siteId], references: [id], onDelete: SetNull)
-  parentTask       Task?             @relation("TaskRecurrence", fields: [parentTaskId], references: [id], onDelete: SetNull)
-  childTasks       Task[]            @relation("TaskRecurrence")
-  createdBy        User              @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  comments         TaskComment[]
-  attachments      TaskAttachment[]
-  reminders        TaskReminder[]
-  managedDocuments ManagedDocument[]
-  incidents        Incident[]        @relation("IncidentFollowUpTask")
-
-  @@index([companyId])
-  @@index([projectId])
-  @@index([siteId])
-  @@index([assigneeId])
-  @@index([status])
-  @@index([dueDate])
-  @@index([priority])
-  @@index([parentTaskId])
-}
-
-model TaskComment {
-  id        String   @id @default(cuid())
-  taskId    String
-  userId    String
-  body      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([taskId])
-}
-
-model TaskAttachment {
-  id           String   @id @default(cuid())
-  taskId       String
-  filename     String
-  mimeType     String
-  size         Int
-  url          String
-  uploadedById String
-  createdAt    DateTime @default(now())
-
-  task       Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  uploadedBy User @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
-
-  @@index([taskId])
-}
-
-model TaskReminder {
-  id        String    @id @default(cuid())
-  taskId    String
-  remindAt  DateTime
-  sentAt    DateTime?
-  createdAt DateTime  @default(now())
-
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-
-  @@index([taskId])
-  @@index([remindAt])
 }
 
 model WhatsAppMessage {
@@ -1499,749 +958,6 @@ model WhatsAppWebhookEvent {
   processedAt   DateTime?
 
   @@index([receivedAt])
-}
-
-// --- Academy Management (training provider operations) ---
-
-enum AcademyStudentStatus {
-  prospect
-  registered
-  active
-  completed
-  inactive
-  blocked
-}
-
-enum AcademyPsiraPreRegistrationStatus {
-  unknown
-  not_required
-  pending
-  completed
-}
-
-enum AcademyStudentDocumentType {
-  id_copy
-  proof_of_address
-  passport_permit
-  qualification
-  application_form
-  payment_proof
-  consent
-  psira_other
-  other
-}
-
-enum AcademyAdminFeeStatus {
-  unpaid
-  paid
-  waived
-}
-
-enum AcademyCourseRunStatus {
-  planned
-  open
-  in_progress
-  completed
-  reported
-  closed
-}
-
-enum AcademyEnrolmentFinancialStatus {
-  unpaid
-  partial
-  paid
-}
-
-enum AcademyEnrolmentAttendanceStatus {
-  pending
-  in_progress
-  compliant
-  non_compliant
-}
-
-enum AcademyEnrolmentCompletionStatus {
-  pending
-  in_progress
-  completed
-  failed
-}
-
-enum AcademyReportingReadinessStatus {
-  not_started
-  incomplete
-  ready
-  blocked
-}
-
-enum AcademyPsiraSubmissionStatus {
-  not_applicable
-  not_started
-  pending
-  submitted
-  approved
-  rejected
-}
-
-enum AcademyInvoiceStatus {
-  draft
-  issued
-  partially_paid
-  paid
-  overdue
-  cancelled
-}
-
-enum AcademyPaymentVerificationStatus {
-  pending
-  verified
-  rejected
-}
-
-model AcademyBranch {
-  id           String   @id @default(cuid())
-  companyId    String
-  name         String
-  addressLine1 String?
-  addressLine2 String?
-  city         String?
-  province     String?
-  postalCode   String?
-  phone        String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  courseRuns  CourseRun[]
-  instructors AcademyInstructor[]
-  classrooms  AcademyClassroom[]
-
-  @@index([companyId])
-}
-
-model Student {
-  id                         String                            @id @default(cuid())
-  companyId                  String
-  studentNumber              String
-  firstName                  String
-  middleName                 String?
-  lastName                   String
-  preferredName              String?
-  idType                     String? // national_id | passport | etc.
-  idNumber                   String?
-  dateOfBirth                DateTime?
-  gender                     String?
-  nationality                String?
-  phone                      String?
-  alternatePhone             String?
-  email                      String?
-  addressLine1               String?
-  addressLine2               String?
-  city                       String?
-  province                   String?
-  postalCode                 String?
-  nextOfKinName              String?
-  nextOfKinPhone             String?
-  psiraProfileReference      String?
-  psiraPreRegistrationStatus AcademyPsiraPreRegistrationStatus @default(unknown)
-  status                     AcademyStudentStatus              @default(prospect)
-  employeeId                 String?
-  adminFeeStatus             AcademyAdminFeeStatus             @default(unpaid)
-  adminFeePaidAt             DateTime?
-  adminFeeAmount             Decimal?                          @db.Decimal(12, 2)
-  adminFeeMethod             String?
-  adminFeeReference          String?
-  adminFeeNotes              String?                           @db.Text
-  adminFeeRecordedByUserId   String?
-  createdAt                  DateTime                          @default(now())
-  updatedAt                  DateTime                          @updatedAt
-
-  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee            Employee?            @relation("AcademyStudentEmployee", fields: [employeeId], references: [id], onDelete: SetNull)
-  documents           StudentDocument[]
-  enrolments          Enrolment[]
-  academyInvoices     AcademyInvoice[]
-  academyPayments     AcademyPayment[]
-  academyAssessments  AcademyAssessment[]
-  academyCertificates AcademyCertificate[]
-
-  @@unique([companyId, studentNumber])
-  @@index([companyId])
-  @@index([companyId, createdAt])
-  @@index([employeeId])
-  @@index([status])
-}
-
-model StudentDocument {
-  id               String                     @id @default(cuid())
-  companyId        String
-  studentId        String
-  documentType     AcademyStudentDocumentType
-  fileName         String
-  mimeType         String
-  sizeBytes        Int
-  storagePath      String
-  uploadedByUserId String
-  deletedAt        DateTime?
-  createdAt        DateTime                   @default(now())
-
-  company                Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  student                Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  uploadedBy             User             @relation(fields: [uploadedByUserId], references: [id], onDelete: Cascade)
-  academyPaymentsAsProof AcademyPayment[] @relation("AcademyPaymentProofDocument")
-
-  @@index([companyId])
-  @@index([studentId])
-  @@index([uploadedByUserId])
-  @@index([deletedAt])
-}
-
-model Course {
-  id                       String   @id @default(cuid())
-  companyId                String
-  code                     String
-  title                    String
-  description              String?  @db.Text
-  psiraCategory            String?
-  durationDays             Int?
-  deliveryMode             String?
-  feeAmount                Decimal? @db.Decimal(12, 2)
-  minimumAttendancePercent Int?
-  requiresAssessment       Boolean  @default(false)
-  requiresDocuments        Boolean  @default(true)
-  active                   Boolean  @default(true)
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
-
-  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  courseRuns          CourseRun[]
-  academyAssessments  AcademyAssessment[]
-  academyCertificates AcademyCertificate[]
-
-  @@unique([companyId, code])
-  @@index([companyId])
-  @@index([active])
-}
-
-model CourseRun {
-  id                   String                 @id @default(cuid())
-  companyId            String
-  courseId             String
-  runCode              String
-  intakeName           String?
-  academyBranchId      String
-  venueText            String?
-  instructorEmployeeId String?
-  startDate            DateTime               @db.Date
-  endDate              DateTime               @db.Date
-  capacity             Int                    @default(0)
-  enrolledCount        Int                    @default(0)
-  status               AcademyCourseRunStatus @default(planned)
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime               @updatedAt
-
-  company                   Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  course                    Course                     @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  branch                    AcademyBranch              @relation(fields: [academyBranchId], references: [id], onDelete: Restrict)
-  instructorEmployee        Employee?                  @relation("CourseRunInstructor", fields: [instructorEmployeeId], references: [id], onDelete: SetNull)
-  enrolments                Enrolment[]
-  academyAttendanceSessions AcademyAttendanceSession[]
-
-  @@unique([companyId, runCode])
-  @@index([companyId])
-  @@index([companyId, createdAt])
-  @@index([courseId])
-  @@index([academyBranchId])
-  @@index([instructorEmployeeId])
-  @@index([status])
-}
-
-model FeePlan {
-  id        String   @id @default(cuid())
-  companyId String
-  name      String
-  notes     String?  @db.Text
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  enrolments Enrolment[]
-
-  @@index([companyId])
-}
-
-model Enrolment {
-  id                       String                           @id @default(cuid())
-  companyId                String
-  studentId                String
-  courseRunId              String
-  enrolmentDate            DateTime                         @default(now()) @db.Date
-  feePlanId                String?
-  financialStatus          AcademyEnrolmentFinancialStatus  @default(unpaid)
-  attendanceStatus         AcademyEnrolmentAttendanceStatus @default(pending)
-  completionStatus         AcademyEnrolmentCompletionStatus @default(pending)
-  reportingReadinessStatus AcademyReportingReadinessStatus  @default(not_started)
-  psiraSubmissionStatus    AcademyPsiraSubmissionStatus     @default(not_applicable)
-  remarks                  String?                          @db.Text
-  createdAt                DateTime                         @default(now())
-  updatedAt                DateTime                         @updatedAt
-
-  company                  Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  student                  Student                   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  courseRun                CourseRun                 @relation(fields: [courseRunId], references: [id], onDelete: Cascade)
-  feePlan                  FeePlan?                  @relation(fields: [feePlanId], references: [id], onDelete: SetNull)
-  academyInvoices          AcademyInvoice[]
-  academyAttendanceRecords AcademyAttendanceRecord[]
-  academyCertificates      AcademyCertificate[]
-
-  @@unique([studentId, courseRunId])
-  @@index([companyId])
-  @@index([companyId, enrolmentDate])
-  @@index([courseRunId])
-  @@index([studentId])
-}
-
-model AcademyInvoice {
-  id             String               @id @default(cuid())
-  companyId      String
-  studentId      String
-  enrolmentId    String?
-  invoiceNumber  String
-  invoiceDate    DateTime             @db.Date
-  dueDate        DateTime             @db.Date
-  subtotal       Decimal              @default(0) @db.Decimal(12, 2)
-  discountAmount Decimal              @default(0) @db.Decimal(12, 2)
-  totalAmount    Decimal              @default(0) @db.Decimal(12, 2)
-  status         AcademyInvoiceStatus @default(draft)
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
-
-  company   Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  student   Student              @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  enrolment Enrolment?           @relation(fields: [enrolmentId], references: [id], onDelete: SetNull)
-  items     AcademyInvoiceLine[]
-  payments  AcademyPayment[]
-
-  @@unique([companyId, invoiceNumber])
-  @@index([companyId])
-  @@index([studentId])
-  @@index([enrolmentId])
-  @@index([status])
-  @@index([dueDate])
-}
-
-model AcademyInvoiceLine {
-  id          String  @id @default(cuid())
-  invoiceId   String
-  description String
-  quantity    Int     @default(1)
-  unitAmount  Decimal @db.Decimal(12, 2)
-  lineTotal   Decimal @db.Decimal(12, 2)
-
-  invoice AcademyInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-
-  @@index([invoiceId])
-}
-
-model AcademyPayment {
-  id                 String                           @id @default(cuid())
-  companyId          String
-  invoiceId          String
-  studentId          String
-  paymentDate        DateTime                         @db.Date
-  amount             Decimal                          @db.Decimal(12, 2)
-  paymentMethod      String?
-  referenceNumber    String?
-  proofDocumentId    String?
-  verificationStatus AcademyPaymentVerificationStatus @default(pending)
-  verifiedByUserId   String?
-  verifiedAt         DateTime?
-  rejectionRemarks   String?                          @db.Text
-  createdAt          DateTime                         @default(now())
-  updatedAt          DateTime                         @updatedAt
-
-  company       Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  invoice       AcademyInvoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  student       Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  proofDocument StudentDocument? @relation("AcademyPaymentProofDocument", fields: [proofDocumentId], references: [id], onDelete: SetNull)
-  verifiedBy    User?            @relation("AcademyPaymentVerifiedBy", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
-  receipt       AcademyReceipt?
-
-  @@index([companyId])
-  @@index([invoiceId])
-  @@index([studentId])
-  @@index([verificationStatus])
-  @@index([companyId, verificationStatus, invoiceId])
-}
-
-model AcademyReceipt {
-  id             String   @id @default(cuid())
-  companyId      String
-  paymentId      String   @unique
-  receiptNumber  String
-  receiptDate    DateTime @db.Date
-  amount         Decimal  @db.Decimal(12, 2)
-  issuedByUserId String
-  createdAt      DateTime @default(now())
-
-  company  Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  payment  AcademyPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  issuedBy User           @relation("AcademyReceiptIssuedBy", fields: [issuedByUserId], references: [id], onDelete: Restrict)
-
-  @@unique([companyId, receiptNumber])
-  @@index([companyId])
-  @@index([issuedByUserId])
-}
-
-enum AcademyAccreditationStatus {
-  active
-  pending
-  suspended
-  expired
-}
-
-enum AcademyInstructorStatus {
-  active
-  inactive
-  suspended
-  contract_ended
-}
-
-enum AcademyClassroomStatus {
-  available
-  in_use
-  maintenance
-  closed
-}
-
-enum AcademyAttendanceMethod {
-  manual
-  qr_code
-  otp
-  biometric
-}
-
-enum AcademySessionAttendanceStatus {
-  present
-  absent
-  late
-  excused
-}
-
-enum AcademyAssessmentResult {
-  pass
-  fail
-  competent
-  not_yet_competent
-}
-
-enum AcademyCertificateStatus {
-  active
-  reprinted
-  revoked
-  void
-}
-
-enum AcademyComplianceDocumentStatus {
-  active
-  expired
-  pending_review
-  missing
-}
-
-enum AcademyRenewalSeverity {
-  green
-  amber
-  red
-}
-
-model AcademyProfile {
-  id                              String                     @id @default(cuid())
-  companyId                       String                     @unique
-  trainingCentreName              String
-  tradingName                     String?
-  psiraTrainingProviderNumber     String?
-  psiraBusinessRegistrationNumber String?
-  accreditationStatus             AcademyAccreditationStatus @default(pending)
-  accreditationIssueDate          DateTime?                  @db.Date
-  reAccreditationDueDate          DateTime?                  @db.Date
-  province                        String?
-  city                            String?
-  physicalAddress                 String?                    @db.Text
-  postalAddress                   String?                    @db.Text
-  contactPerson                   String?
-  phoneNumber                     String?
-  landline                        String?
-  email                           String?
-  verificationReference           String?
-  notes                           String?                    @db.Text
-  createdAt                       DateTime                   @default(now())
-  updatedAt                       DateTime                   @updatedAt
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@index([companyId])
-}
-
-model AcademyInstructor {
-  id                    String                  @id @default(cuid())
-  companyId             String
-  fullName              String
-  idNumber              String?
-  dateOfBirth           DateTime?               @db.Date
-  gender                String?
-  residentialAddress    String?                 @db.Text
-  emergencyContact      String?
-  psiraInstructorNumber String?
-  qualification         String?
-  instructorGrade       String?
-  accreditationScope    String?
-  accreditationStatus   String?
-  certificateNumber     String?
-  certificateIssueDate  DateTime?               @db.Date
-  certificateExpiryDate DateTime?               @db.Date
-  phone                 String?
-  email                 String?
-  employmentType        String?
-  contractStartDate     DateTime?               @db.Date
-  contractEndDate       DateTime?               @db.Date
-  contractStatus        String?
-  status                AcademyInstructorStatus @default(active)
-  assignedBranchId      String?
-  assignedCourseIds     Json?
-  complianceStatus      String?
-  archivedAt            DateTime?
-  notes                 String?                 @db.Text
-  certificateDocumentId String?
-  contractDocumentId    String?
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-
-  company        Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  assignedBranch AcademyBranch?              @relation(fields: [assignedBranchId], references: [id], onDelete: SetNull)
-  sessions       AcademyAttendanceSession[]
-  assessments    AcademyAssessment[]
-  documents      AcademyInstructorDocument[]
-
-  @@index([companyId])
-  @@index([status])
-  @@index([assignedBranchId])
-  @@index([archivedAt])
-  @@index([complianceStatus])
-  @@index([contractEndDate])
-  @@index([certificateExpiryDate])
-}
-
-model AcademyInstructorDocument {
-  id                 String    @id @default(cuid())
-  companyId          String
-  instructorId       String
-  documentType       String
-  fileUrl            String
-  fileName           String
-  issueDate          DateTime? @db.Date
-  expiryDate         DateTime? @db.Date
-  verificationStatus String    @default("pending_review")
-  uploadedByUserId   String?
-  uploadedAt         DateTime  @default(now())
-  verifiedByUserId   String?
-  verifiedAt         DateTime?
-  notes              String?   @db.Text
-  deletedAt          DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-
-  company    Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  instructor AcademyInstructor @relation(fields: [instructorId], references: [id], onDelete: Cascade)
-  uploadedBy User?             @relation("AcademyInstructorDocumentUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
-  verifiedBy User?             @relation("AcademyInstructorDocumentVerifiedBy", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
-
-  @@index([companyId])
-  @@index([instructorId])
-  @@index([documentType])
-  @@index([verificationStatus])
-  @@index([expiryDate])
-  @@index([deletedAt])
-}
-
-model AcademyClassroom {
-  id                 String                 @id @default(cuid())
-  companyId          String
-  academyBranchId    String
-  classroomName      String
-  capacity           Int                    @default(0)
-  approvedCapacity   Int?
-  equipmentChecklist String?                @db.Text
-  status             AcademyClassroomStatus @default(available)
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
-
-  company  Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  branch   AcademyBranch              @relation(fields: [academyBranchId], references: [id], onDelete: Cascade)
-  sessions AcademyAttendanceSession[]
-
-  @@index([companyId])
-  @@index([academyBranchId])
-  @@index([status])
-}
-
-model AcademyAttendanceSession {
-  id           String   @id @default(cuid())
-  companyId    String
-  courseRunId  String?
-  classroomId  String?
-  instructorId String?
-  sessionDate  DateTime @db.Date
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  company    Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  courseRun  CourseRun?                @relation(fields: [courseRunId], references: [id], onDelete: SetNull)
-  classroom  AcademyClassroom?         @relation(fields: [classroomId], references: [id], onDelete: SetNull)
-  instructor AcademyInstructor?        @relation(fields: [instructorId], references: [id], onDelete: SetNull)
-  records    AcademyAttendanceRecord[]
-
-  @@index([companyId])
-  @@index([companyId, sessionDate])
-  @@index([courseRunId])
-  @@index([sessionDate])
-}
-
-model AcademyAttendanceRecord {
-  id               String                         @id @default(cuid())
-  companyId        String
-  sessionId        String
-  enrolmentId      String
-  checkInTime      DateTime?
-  checkOutTime     DateTime?
-  attendanceStatus AcademySessionAttendanceStatus @default(present)
-  method           AcademyAttendanceMethod        @default(manual)
-  markedByUserId   String?
-  createdAt        DateTime                       @default(now())
-  updatedAt        DateTime                       @updatedAt
-
-  company      Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  session      AcademyAttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  enrolment    Enrolment                @relation(fields: [enrolmentId], references: [id], onDelete: Cascade)
-  markedByUser User?                    @relation("AcademyAttendanceMarkedBy", fields: [markedByUserId], references: [id], onDelete: SetNull)
-
-  @@unique([sessionId, enrolmentId])
-  @@index([companyId])
-  @@index([companyId, attendanceStatus])
-  @@index([sessionId])
-  @@index([attendanceStatus])
-}
-
-model AcademyAssessment {
-  id               String                   @id @default(cuid())
-  companyId        String
-  learnerId        String
-  courseId         String
-  instructorId     String?
-  assessmentType   String
-  assessmentDate   DateTime                 @db.Date
-  venue            String?
-  attemptNumber    Int                      @default(1)
-  mark             Decimal?                 @db.Decimal(5, 2)
-  result           AcademyAssessmentResult?
-  moderationStatus String?
-  reassessmentDate DateTime?                @db.Date
-  createdAt        DateTime                 @default(now())
-  updatedAt        DateTime                 @updatedAt
-
-  company    Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  learner    Student            @relation(fields: [learnerId], references: [id], onDelete: Cascade)
-  course     Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  instructor AcademyInstructor? @relation(fields: [instructorId], references: [id], onDelete: SetNull)
-
-  @@index([companyId])
-  @@index([assessmentDate])
-}
-
-model AcademyCertificate {
-  id                String                   @id @default(cuid())
-  companyId         String
-  certificateNumber String
-  learnerId         String
-  courseId          String
-  enrolmentId       String?
-  completionDate    DateTime?                @db.Date
-  issueDate         DateTime                 @db.Date
-  verificationCode  String                   @unique
-  pdfPath           String?
-  issuedByUserId    String?
-  status            AcademyCertificateStatus @default(active)
-  createdAt         DateTime                 @default(now())
-  updatedAt         DateTime                 @updatedAt
-
-  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  learner   Student    @relation(fields: [learnerId], references: [id], onDelete: Cascade)
-  course    Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  enrolment Enrolment? @relation(fields: [enrolmentId], references: [id], onDelete: SetNull)
-  issuedBy  User?      @relation("AcademyCertificateIssuedBy", fields: [issuedByUserId], references: [id], onDelete: SetNull)
-
-  @@unique([companyId, certificateNumber])
-  @@index([companyId])
-  @@index([status])
-}
-
-model AcademyComplianceDocument {
-  id               String                          @id @default(cuid())
-  companyId        String
-  documentName     String
-  documentType     String
-  issueDate        DateTime?                       @db.Date
-  expiryDate       DateTime?                       @db.Date
-  status           AcademyComplianceDocumentStatus @default(pending_review)
-  filePath         String?
-  verifiedByUserId String?
-  verifiedDate     DateTime?
-  notes            String?                         @db.Text
-  createdAt        DateTime                        @default(now())
-  updatedAt        DateTime                        @updatedAt
-
-  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  verifiedBy User?   @relation("AcademyComplianceVerifiedBy", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
-
-  @@index([companyId])
-  @@index([status])
-}
-
-model AcademyPolicyDocument {
-  id             String    @id @default(cuid())
-  companyId      String
-  policyType     String
-  version        String
-  effectiveDate  DateTime? @db.Date
-  nextReviewDate DateTime? @db.Date
-  approvedBy     String?
-  filePath       String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@index([companyId])
-  @@index([policyType])
-}
-
-model AcademyRenewalAlert {
-  id        String                 @id @default(cuid())
-  companyId String
-  alertType String
-  title     String
-  dueDate   DateTime               @db.Date
-  severity  AcademyRenewalSeverity @default(green)
-  status    String                 @default("open")
-  relatedId String?
-  notes     String?                @db.Text
-  createdAt DateTime               @default(now())
-  updatedAt DateTime               @updatedAt
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@index([companyId])
-  @@index([dueDate])
-  @@index([severity])
 }
 
 enum SiteRosterPatternStatus {
@@ -2415,8 +1131,6 @@ enum AlertSourceModule {
   DASHBOARD
   ATTENDANCE
   ROSTERING
-  PAYROLL
-  TASKS
   SITES
   DOCUMENTS
   INCIDENTS
@@ -2529,15 +1243,12 @@ enum DocumentCategory {
   EMPLOYEE
   SITE
   CLIENT
-  PAYROLL
   ATTENDANCE
   INCIDENT
   EQUIPMENT
   COMPLIANCE
-  TASK
   BILLING
   REPORT
-  ACADEMY
   OTHER
 }
 
@@ -2583,7 +1294,6 @@ model ManagedDocument {
   clientId             String?
   clientContractId     String?
   incidentId           String?
-  taskId               String?
   uploadedById         String
   verificationStatus   String                  @default("PENDING_VERIFICATION")
   verifiedById         String?
@@ -2608,7 +1318,6 @@ model ManagedDocument {
   client         Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
   clientContract ClientContract?   @relation(fields: [clientContractId], references: [id], onDelete: SetNull)
   incident       Incident?         @relation(fields: [incidentId], references: [id], onDelete: SetNull)
-  task           Task?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
   uploadedBy     User              @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: Cascade)
   verifiedBy     User?             @relation("DocumentVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
   currentVersion DocumentVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
@@ -2714,7 +1423,6 @@ model Incident {
   supervisorApprovalStatus SupervisorApprovalStatus @default(PENDING)
   supervisorNote           String?
   followUpRequired         Boolean                  @default(false)
-  followUpTaskId           String?
   closedAt                 DateTime?
   createdAt                DateTime                 @default(now())
   updatedAt                DateTime                 @updatedAt
@@ -2723,7 +1431,6 @@ model Incident {
   site               Site                 @relation(fields: [siteId], references: [id], onDelete: Cascade)
   reportedBy         User                 @relation("IncidentReportedBy", fields: [reportedById], references: [id], onDelete: Cascade)
   assignedSupervisor User?                @relation("IncidentAssignedSupervisor", fields: [assignedSupervisorId], references: [id], onDelete: SetNull)
-  followUpTask       Task?                @relation("IncidentFollowUpTask", fields: [followUpTaskId], references: [id], onDelete: SetNull)
   attachments        IncidentAttachment[]
   managedDocuments   ManagedDocument[]
 
@@ -2759,8 +1466,6 @@ enum ApprovalType {
   SICK_NOTE
   SITE_TIMESHEET
   INCIDENT
-  TASK_COMPLETION
-  PAYROLL_READINESS
   DOCUMENT_REVIEW
 }
 
@@ -3321,33 +2026,6 @@ model SiteBillingConfig {
   @@index([clientId])
 }
 
-enum PayrollReadinessStatus {
-  READY
-  PENDING_ATTENDANCE_REVIEW
-  BLOCKED_BY_EXCEPTIONS
-  APPROVED_MANUALLY
-}
-
-/// Extends payroll period readiness tracking (keyed by company + period)
-model PayrollPeriodReadiness {
-  id             String                 @id @default(cuid())
-  companyId      String
-  periodStart    DateTime
-  periodEnd      DateTime
-  status         PayrollReadinessStatus @default(PENDING_ATTENDANCE_REVIEW)
-  notes          String?
-  reviewedById   String?
-  reviewedAt     DateTime?
-  openExceptions Int                    @default(0)
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@unique([companyId, periodStart, periodEnd])
-  @@index([companyId, status])
-}
-
 enum AccessChangeStatus {
   PENDING
   APPROVED
@@ -3402,7 +2080,7 @@ model AccessChangeRequest {
 }
 
 // =============================================================================
-// Compliance & Financial Control Hub
+// Operational Compliance & Legal Register
 // =============================================================================
 
 enum ComplianceObligationType {
@@ -3434,33 +2112,6 @@ enum ComplianceRiskLevel {
   CRITICAL
 }
 
-enum StatutoryScheme {
-  PAYE
-  UIF
-  SDL
-  PSSPF
-  NBCPSS
-  COIDA
-  OTHER
-}
-
-enum StatutoryPeriodStatus {
-  CALCULATED
-  DECLARED
-  PARTIALLY_PAID
-  PAID
-  FAILED
-  OVERDUE
-  DISPUTED
-}
-
-enum StatutoryPaymentStatus {
-  PENDING
-  SUCCESS
-  FAILED
-  REVERSED
-}
-
 enum LegalCaseType {
   CCMA
   LABOUR_COURT
@@ -3476,26 +2127,6 @@ enum LegalCaseStatus {
   SETTLED
   CLOSED
   WITHDRAWN
-}
-
-enum CashCommitmentCategory {
-  PAYROLL
-  STATUTORY
-  CRITICAL_SUPPLIER
-  OPERATING_EXPENSE
-  REMEDIATION_PAYMENT
-  CAPEX
-  RELATED_PARTY_OR_INVESTMENT
-  OTHER
-}
-
-enum CashCommitmentFrequency {
-  ONCE
-  WEEKLY
-  BIWEEKLY
-  MONTHLY
-  QUARTERLY
-  ANNUAL
 }
 
 enum RemediationPlanStatus {
@@ -3550,126 +2181,12 @@ model ComplianceObligation {
   @@index([ownerUserId])
 }
 
-/// Expected vs declared vs paid liabilities per statutory scheme per period.
-model StatutoryPeriod {
-  id                         String                @id @default(cuid())
-  companyId                  String
-  scheme                     StatutoryScheme
-  periodStart                DateTime              @db.Date
-  periodEnd                  DateTime              @db.Date
-  dueDate                    DateTime              @db.Date
-  expectedEmployeeAmount     Decimal               @default(0) @db.Decimal(14, 2)
-  expectedEmployerAmount     Decimal               @default(0) @db.Decimal(14, 2)
-  expectedOtherAmount        Decimal               @default(0) @db.Decimal(14, 2)
-  expectedTotal              Decimal               @default(0) @db.Decimal(14, 2)
-  declaredTotal              Decimal?              @db.Decimal(14, 2)
-  successfulPaidTotal        Decimal               @default(0) @db.Decimal(14, 2)
-  varianceExpectedVsDeclared Decimal?              @db.Decimal(14, 2)
-  outstandingAmount          Decimal               @default(0) @db.Decimal(14, 2)
-  filedAt                    DateTime?
-  status                     StatutoryPeriodStatus @default(CALCULATED)
-  externalReference          String?
-  notes                      String?               @db.Text
-  sourcePayrollRunIds        Json?
-  createdAt                  DateTime              @default(now())
-  updatedAt                  DateTime              @updatedAt
-
-  company       Company                       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  payments      StatutoryPayment[]
-  contributions EmployeeStatutoryContribution[]
-
-  @@unique([companyId, scheme, periodStart, periodEnd])
-  @@index([companyId, scheme, status])
-  @@index([companyId, dueDate])
-  @@index([companyId, status])
-}
-
-/// Individual payment attempt against a StatutoryPeriod.
-/// FAILED / REVERSED records are stored but never counted in successfulPaidTotal.
-model StatutoryPayment {
-  id                String                 @id @default(cuid())
-  companyId         String
-  statutoryPeriodId String
-  amount            Decimal                @db.Decimal(14, 2)
-  paymentDate       DateTime               @db.Date
-  status            StatutoryPaymentStatus @default(PENDING)
-  paymentReference  String?
-  externalReference String?
-  failureReason     String?                @db.Text
-  proofDocumentId   String?
-  capturedById      String
-  createdAt         DateTime               @default(now())
-  updatedAt         DateTime               @updatedAt
-
-  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  statutoryPeriod StatutoryPeriod @relation(fields: [statutoryPeriodId], references: [id], onDelete: Cascade)
-  capturedBy      User            @relation("StatutoryPaymentCapturedBy", fields: [capturedById], references: [id], onDelete: Restrict)
-
-  @@index([companyId, statutoryPeriodId])
-  @@index([companyId, status])
-  @@index([statutoryPeriodId, status])
-}
-
-/// Employee-level contribution breakdown per statutory period.
-model EmployeeStatutoryContribution {
-  id                        String          @id @default(cuid())
-  companyId                 String
-  statutoryPeriodId         String
-  employeeId                String
-  scheme                    StatutoryScheme
-  pensionableOrFundEarnings Decimal         @db.Decimal(14, 2)
-  employeeRate              Decimal         @db.Decimal(7, 4)
-  employerRate              Decimal         @db.Decimal(7, 4)
-  employeeAmount            Decimal         @db.Decimal(14, 2)
-  employerAmount            Decimal         @db.Decimal(14, 2)
-  totalAmount               Decimal         @db.Decimal(14, 2)
-  rateConfigId              String?
-  rateSnapshot              Json
-  createdAt                 DateTime        @default(now())
-
-  company         Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  statutoryPeriod StatutoryPeriod         @relation(fields: [statutoryPeriodId], references: [id], onDelete: Cascade)
-  employee        Employee                @relation(fields: [employeeId], references: [id], onDelete: Restrict)
-  rateConfig      StatutoryRateConfig?    @relation(fields: [rateConfigId], references: [id], onDelete: SetNull)
-
-  @@unique([companyId, statutoryPeriodId, employeeId, scheme])
-  @@index([companyId, scheme])
-  @@index([statutoryPeriodId])
-  @@index([employeeId])
-}
-
-/// Effective-dated statutory rate configuration. Never overwrite -- create a new version.
-model StatutoryRateConfig {
-  id              String          @id @default(cuid())
-  companyId       String
-  scheme          StatutoryScheme
-  effectiveFrom   DateTime        @db.Date
-  effectiveTo     DateTime?       @db.Date
-  employeeRate    Decimal?        @db.Decimal(7, 4)
-  employerRate    Decimal?        @db.Decimal(7, 4)
-  earningsCeiling Decimal?        @db.Decimal(14, 2)
-  configuration   Json?
-  sourceReference String?
-  verifiedAt      DateTime?
-  verifiedById    String?
-  isProvisional   Boolean         @default(false)
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-
-  company               Company                         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  verifiedBy            User?                           @relation("StatutoryRateConfigVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
-  employeeContributions EmployeeStatutoryContribution[]
-
-  @@index([companyId, scheme, effectiveFrom])
-  @@index([companyId, scheme])
-}
-
-/// Arrears and AOD instalment repayment plan for statutory obligations.
+/// Remediation / repayment plan for compliance obligations.
 model ComplianceRemediationPlan {
   id                         String                @id @default(cuid())
   companyId                  String
   obligationId               String?
-  scheme                     StatutoryScheme?
+  scheme                     String?
   title                      String
   originalBalance            Decimal               @db.Decimal(14, 2)
   currentBalance             Decimal               @db.Decimal(14, 2)
@@ -3728,45 +2245,7 @@ model ComplianceLegalCase {
   @@index([assignedToId])
 }
 
-/// Cash commitments used by the protected cash floor calculation.
-model CashCommitment {
-  id              String                  @id @default(cuid())
-  companyId       String
-  name            String
-  category        CashCommitmentCategory
-  amount          Decimal                 @db.Decimal(14, 2)
-  frequency       CashCommitmentFrequency @default(MONTHLY)
-  dueDay          Int?
-  protected       Boolean                 @default(false)
-  priority        Int                     @default(0)
-  active          Boolean                 @default(true)
-  supplierOrPayee String?
-  notes           String?                 @db.Text
-  createdAt       DateTime                @default(now())
-  updatedAt       DateTime                @updatedAt
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@index([companyId, active])
-  @@index([companyId, category])
-}
-
-/// Manual cash position snapshot for protected cash floor calculations.
-model CashPositionSnapshot {
-  id            String   @id @default(cuid())
-  companyId     String
-  availableCash Decimal  @db.Decimal(14, 2)
-  capturedAt    DateTime @default(now())
-  capturedById  String
-  notes         String?  @db.Text
-
-  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  capturedBy User    @relation("CashPositionCapturedBy", fields: [capturedById], references: [id], onDelete: Restrict)
-
-  @@index([companyId, capturedAt])
-}
-
-/// Termination workflow tracker for HR and payroll compliance.
+/// Termination workflow tracker for HR and external payroll exits.
 model EmploymentExit {
   id                            String   @id @default(cuid())
   companyId                     String
@@ -3825,4 +2304,115 @@ model AttendanceEvent {
   @@index([attendanceId])
   @@index([shiftId])
   @@index([employeeId, createdAt])
+}
+
+// =============================================================================
+// External Payroll Export (Sage Business Cloud / VIP / 300 People / Generic)
+// =============================================================================
+
+enum PayrollExportProvider {
+  SAGE_BUSINESS_CLOUD_ZA
+  SAGE_VIP
+  SAGE_300_PEOPLE
+  GENERIC_CSV
+  JSON_WEBHOOK
+}
+
+enum PayrollExportBatchStatus {
+  DRAFT
+  LOCKED
+  EXPORTED
+  VOIDED
+}
+
+model PayrollExportProfile {
+  id                String                @id @default(cuid())
+  companyId         String
+  name              String
+  provider          PayrollExportProvider @default(SAGE_BUSINESS_CLOUD_ZA)
+  isDefault         Boolean               @default(false)
+  splitBySite       Boolean               @default(true)
+  delimiter         String                @default(",")
+  dateFormat        String                @default("yyyy-MM-dd")
+  /// Maps Plethora hour/leave buckets to external payroll earning/leave codes
+  codeMappingJson   Json                  @default("{}")
+  /// Optional custom column layout for GENERIC_CSV / PaySpace / SimplePay / Xero
+  customColumnsJson Json?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  company Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  batches PayrollExportBatch[]
+
+  @@index([companyId])
+  @@index([companyId, isDefault])
+}
+
+model PayrollExportBatch {
+  id                      String                   @id @default(cuid())
+  companyId               String
+  profileId               String
+  periodKey               String // e.g. "2026-09" (26 Aug - 25 Sep)
+  periodStart             DateTime                 @db.Date
+  periodEnd               DateTime                 @db.Date
+  status                  PayrollExportBatchStatus @default(DRAFT)
+  employeeCount           Int                      @default(0)
+  totalBasicHours         Decimal                  @default(0) @db.Decimal(12, 2)
+  totalOvertimeHours      Decimal                  @default(0) @db.Decimal(12, 2)
+  totalSundayHours        Decimal                  @default(0) @db.Decimal(12, 2)
+  totalPublicHolidayHours Decimal                  @default(0) @db.Decimal(12, 2)
+  totalNightShiftHours    Decimal                  @default(0) @db.Decimal(12, 2)
+  totalPaidLeaveHours     Decimal                  @default(0) @db.Decimal(12, 2)
+  totalUnpaidLeaveHours   Decimal                  @default(0) @db.Decimal(12, 2)
+  readinessSnapshotJson   Json?
+  overrideReason          String?                  @db.Text
+  checksumSha256          String?
+  lockedBy                String?
+  lockedAt                DateTime?
+  exportedBy              String?
+  exportedAt              DateTime?
+  voidedBy                String?
+  voidedAt                DateTime?
+  voidReason              String?                  @db.Text
+  createdBy               String
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+
+  company       Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  profile       PayrollExportProfile @relation(fields: [profileId], references: [id], onDelete: Restrict)
+  lines         PayrollExportLine[]
+  leaveRequests LeaveRequest[]
+
+  @@index([companyId, periodKey])
+  @@index([companyId, status])
+}
+
+model PayrollExportLine {
+  id                  String   @id @default(cuid())
+  batchId             String
+  companyId           String
+  employeeId          String
+  externalPayrollCode String
+  employeeFullName    String
+  siteId              String?
+  costCenterCode      String?
+  basicHours          Decimal  @default(0) @db.Decimal(10, 2)
+  overtimeHours       Decimal  @default(0) @db.Decimal(10, 2)
+  sundayHours         Decimal  @default(0) @db.Decimal(10, 2)
+  publicHolidayHours  Decimal  @default(0) @db.Decimal(10, 2)
+  nightShiftHours     Decimal  @default(0) @db.Decimal(10, 2)
+  annualLeaveHours    Decimal  @default(0) @db.Decimal(10, 2)
+  sickLeaveHours      Decimal  @default(0) @db.Decimal(10, 2)
+  familyLeaveHours    Decimal  @default(0) @db.Decimal(10, 2)
+  studyLeaveHours     Decimal  @default(0) @db.Decimal(10, 2)
+  unpaidLeaveHours    Decimal  @default(0) @db.Decimal(10, 2)
+  workedShiftsCount   Int      @default(0)
+  sourceSummaryJson   Json?
+
+  batch    PayrollExportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  employee Employee           @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  site     Site?              @relation(fields: [siteId], references: [id], onDelete: SetNull)
+
+  @@index([batchId])
+  @@index([companyId, employeeId])
 }

@@ -27,7 +27,7 @@ describeWithDatabase("access change requests", () => {
   const MANAGER_CAPABILITIES = {
     "/settings/access": ["view", "create", "edit", "delete", "manage_access"],
     "/employees": ["view", "edit"],
-    "/payroll": ["view"],
+    "/payroll-exports": ["view"],
   };
 
   beforeAll(async () => {
@@ -154,14 +154,14 @@ describeWithDatabase("access change requests", () => {
       method: "PUT",
       url: `/users/${targetId}`,
       headers: auth(ownerToken),
-      payload: { capabilities: { "/payroll": ["view", "approve"] } },
+      payload: { capabilities: { "/payroll-exports": ["view", "approve"] } },
     });
     expect(response.statusCode).toBe(200);
     const row = await prisma.user.findUniqueOrThrow({
       where: { id: targetId },
       select: { capabilities: true },
     });
-    expect(row.capabilities).toEqual({ "/payroll": ["view", "approve"] });
+    expect(row.capabilities).toEqual({ "/payroll-exports": ["view", "approve"] });
     expect(await prisma.accessChangeRequest.count({ where: { companyId } })).toBe(0);
   });
 
@@ -199,7 +199,7 @@ describeWithDatabase("access change requests", () => {
       method: "PUT",
       url: `/users/${targetId}`,
       headers: auth(managerToken),
-      payload: { capabilities: { "/payroll": ["view_sensitive"] } },
+      payload: { capabilities: { "/compliance": ["view_sensitive"] } },
     });
     expect(response.statusCode).toBe(403);
     expect(await prisma.accessChangeRequest.count({ where: { companyId } })).toBe(0);
@@ -223,7 +223,7 @@ describeWithDatabase("access change requests", () => {
     // The owner changes the same person directly while the request is open.
     await prisma.user.update({
       where: { id: targetId },
-      data: { capabilities: { "/payroll": ["view"] } },
+      data: { capabilities: { "/payroll-exports": ["view"] } },
     });
 
     const stale = await app.inject({

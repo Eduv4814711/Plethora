@@ -46,7 +46,6 @@ describe.runIf(dbReady)("attendance exception scan respects approved leave (Post
         lastName: `Guard${employeeCounter}`,
         status: "active",
         employeeType: "security_officer",
-        hourlyRate: 100,
         commencementDate: new Date("2022-01-01T00:00:00.000Z"),
       },
     });

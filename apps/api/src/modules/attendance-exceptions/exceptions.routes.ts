@@ -11,9 +11,8 @@ import { parseExceptionPeriodBoundary } from "./exception-period.js";
 import {
   detectAndPersistExceptions,
   getExceptionAnalytics,
-  getPayrollReadiness,
+  getPeriodExportReadiness,
   listExceptions,
-  refreshPayrollReadiness,
   reviewException,
 } from "./exceptions.service.js";
 
@@ -54,10 +53,10 @@ export async function attendanceExceptionsRoutes(app: FastifyInstance) {
     return reply.send(analytics);
   });
 
-  app.get("/payroll-readiness", { preHandler: protect }, async (request, reply) => {
+  app.get("/readiness", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
-    const readiness = await getPayrollReadiness(user.companyId);
-    return reply.send(readiness ?? { status: "PENDING_ATTENDANCE_REVIEW", openExceptions: 0 });
+    const readiness = await getPeriodExportReadiness(user.companyId);
+    return reply.send(readiness);
   });
 
   app.post("/detect", { preHandler: protect }, async (request, reply) => {
@@ -76,9 +75,9 @@ export async function attendanceExceptionsRoutes(app: FastifyInstance) {
     return reply.send(result);
   });
 
-  app.post("/payroll-readiness/refresh", { preHandler: protect }, async (request, reply) => {
+  app.post("/readiness/refresh", { preHandler: protect }, async (request, reply) => {
     const user = request.user!;
-    const result = await refreshPayrollReadiness(user.companyId);
+    const result = await getPeriodExportReadiness(user.companyId);
     return reply.send(result);
   });
 

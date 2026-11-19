@@ -27,9 +27,9 @@ export function ClientsSettingsSection(_props: { token: string }) {
           <Link href="/sites" className="text-security-navy-800 hover:underline">
             Sites
           </Link>
-          . Preview what clients see at{" "}
-          <Link href="/client-portal" className="text-security-navy-800 hover:underline">
-            Client portal
+          , and client quotes or invoices are managed in{" "}
+          <Link href="/billing" className="text-security-navy-800 hover:underline">
+            Client Billing
           </Link>
           .
         </p>

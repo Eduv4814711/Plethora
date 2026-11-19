@@ -5,14 +5,13 @@
  *   npx tsx scripts/import-employees-csv.ts <path-to.csv> --company-id <cuid>
  *   npx tsx scripts/import-employees-csv.ts <path-to.csv> --dry-run
  *
- * By default, rows may omit PSIRA / pay rates (same as other optional fields); complete them in the app.
- * Use --strict to enforce the same PSIRA and pay rules as Settings → Migrate.
+ * By default, rows may omit PSIRA / external payroll codes (same as other optional fields); complete them in the app.
+ * Use --strict to enforce the same PSIRA rules as Settings -> Migrate.
  *
  * Env: DATABASE_URL in .env. Optional: IMPORT_COMPANY_ID if you omit --company-id.
  *
  * Optional flags (after successful import only; skipped on --dry-run):
  *   --default-group-id <cuid>   Set groupId on imported rows (matched by employee number from CSV)
- *   --default-grade-id <cuid>   Set gradeId on those rows
  */
 import { config } from "dotenv";
 import { readFile } from "node:fs/promises";
@@ -31,12 +30,11 @@ import {
 
 function parseArgs(argv: string[]) {
   let dryRun = false;
-  /** When true, require PSIRA + pay for security and pay for office (same as migration UI). */
+  /** When true, require PSIRA for security (same as migration UI). */
   let strictValidation = false;
   let csvPath: string | undefined;
   let companyId = process.env.IMPORT_COMPANY_ID?.trim() || undefined;
   let defaultGroupId: string | undefined;
-  let defaultGradeId: string | undefined;
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -56,17 +54,13 @@ function parseArgs(argv: string[]) {
       defaultGroupId = argv[++i].trim();
       continue;
     }
-    if (a === "--default-grade-id" && argv[i + 1]) {
-      defaultGradeId = argv[++i].trim();
-      continue;
-    }
     if (a.startsWith("-")) {
       throw new Error(`Unknown flag: ${a}`);
     }
     csvPath = resolve(process.cwd(), a);
   }
 
-  return { dryRun, strictValidation, csvPath, companyId, defaultGroupId, defaultGradeId };
+  return { dryRun, strictValidation, csvPath, companyId, defaultGroupId };
 }
 
 function employeeNumbersFromValid(valid: ValidatedEmployee[]): string[] {
@@ -79,7 +73,7 @@ function employeeNumbersFromValid(valid: ValidatedEmployee[]): string[] {
 }
 
 async function main() {
-  const { dryRun, strictValidation, csvPath, companyId, defaultGroupId, defaultGradeId } = parseArgs(
+  const { dryRun, strictValidation, csvPath, companyId, defaultGroupId } = parseArgs(
     process.argv.slice(2)
   );
 
@@ -95,7 +89,7 @@ async function main() {
   if (!csvPath) {
     await exitWith(
       1,
-      "Usage: npx tsx scripts/import-employees-csv.ts <path-to.csv> [--company-id <cuid>] [--dry-run] [--strict] [--default-group-id <id>] [--default-grade-id <id>]\n" +
+      "Usage: npx tsx scripts/import-employees-csv.ts <path-to.csv> [--company-id <cuid>] [--dry-run] [--strict] [--default-group-id <id>]\n" +
         "Env: DATABASE_URL, optional IMPORT_COMPANY_ID. Default: relaxed row rules (omit --strict)."
     );
   }
@@ -110,11 +104,10 @@ async function main() {
 
   const allowIncompleteRows = !strictValidation;
   if (!strictValidation) {
-    console.log("Using relaxed validation (missing PSIRA/pay allowed). Use --strict for migration UI rules.");
+    console.log("Using relaxed validation (missing PSIRA allowed). Use --strict for migration UI rules.");
   }
 
   const { valid, errors } = parseAndValidateEmployees(buffer, {
-    requireCompanyName: false,
     allowIncompleteRows,
   });
 
@@ -155,16 +148,6 @@ async function main() {
     }
   }
 
-  if (defaultGradeId) {
-    const gr = await prisma.payGrade.findFirst({
-      where: { id: defaultGradeId, companyId },
-      select: { id: true },
-    });
-    if (!gr) {
-      await exitWith(1, `--default-grade-id not found or wrong company: ${defaultGradeId}`);
-    }
-  }
-
   const result = await executeSelfImport(companyId, valid, []);
 
   console.log(`Employees created: ${result.employeesCreated}`);
@@ -175,21 +158,17 @@ async function main() {
   }
 
   const numbers = employeeNumbersFromValid(valid);
-  if ((defaultGroupId || defaultGradeId) && numbers.length > 0) {
-    const update: { groupId?: string; gradeId?: string } = {};
-    if (defaultGroupId) update.groupId = defaultGroupId;
-    if (defaultGradeId) update.gradeId = defaultGradeId;
-
+  if (defaultGroupId && numbers.length > 0) {
     const res = await prisma.employee.updateMany({
       where: {
         companyId,
         employeeNumber: { in: numbers },
       },
-      data: update,
+      data: { groupId: defaultGroupId },
     });
-    console.log(`Updated group/grade on ${res.count} employee row(s) (matched by employee number from CSV).`);
-  } else if (defaultGroupId || defaultGradeId) {
-    console.warn("No explicit employee numbers in CSV; skipped --default-group-id / --default-grade-id update.");
+    console.log(`Updated group on ${res.count} employee row(s) (matched by employee number from CSV).`);
+  } else if (defaultGroupId) {
+    console.warn("No explicit employee numbers in CSV; skipped --default-group-id update.");
   }
 
   await prisma.$disconnect();

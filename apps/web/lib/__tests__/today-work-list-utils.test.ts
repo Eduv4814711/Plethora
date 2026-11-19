@@ -36,7 +36,7 @@ describe("formatPayPeriodLabel", () => {
 
 describe("buildTodayWorkItems", () => {
   const sampleDashboard: DashboardWorkData = {
-    payrollReadiness: {
+    exportReadiness: {
       status: "PENDING_ATTENDANCE_REVIEW",
       openExceptions: 3,
       periodStart: "2026-08-26T00:00:00.000Z",
@@ -65,7 +65,7 @@ describe("buildTodayWorkItems", () => {
   it("returns empty work list for a clear / quiet day", () => {
     const user = makeUser({ "/attendance": ["view"] });
     const clearDashboard: DashboardWorkData = {
-      payrollReadiness: {
+      exportReadiness: {
         status: "READY",
         openExceptions: 0,
         periodStart: "2026-08-26T00:00:00.000Z",
@@ -98,24 +98,24 @@ describe("buildTodayWorkItems", () => {
   });
 
   it("filters rows strictly by user capabilities", () => {
-    // User only has payroll capability; attendance and documents are hidden
-    const payrollUser = makeUser({ "/payroll": ["view"] });
+    // User only has payroll-exports capability; attendance and documents are hidden
+    const exportUser = makeUser({ "/payroll-exports": ["view"] });
     const items = buildTodayWorkItems({
-      user: payrollUser,
+      user: exportUser,
       dashboard: sampleDashboard,
     });
 
-    // Should only have the payroll blocker row, no attendance capture, no documents, no approvals
+    // Should only have the payroll export blocker row, no attendance capture, no documents, no approvals
     expect(items.some((i) => i.sourceModule === "ATTENDANCE")).toBe(false);
     expect(items.some((i) => i.sourceModule === "DOCUMENTS")).toBe(false);
     expect(items.some((i) => i.sourceModule === "APPROVALS")).toBe(false);
-    expect(items.some((i) => i.sourceModule === "PAYROLL")).toBe(true);
+    expect(items.some((i) => i.sourceModule === "PAYROLL_EXPORT")).toBe(true);
 
-    const payrollItem = items.find((i) => i.sourceModule === "PAYROLL")!;
-    expect(payrollItem.verb).toBe("Clear 3 blockers");
-    expect(payrollItem.href).toContain("/attendance/exceptions?status=OPEN&severity=CRITICAL");
-    expect(payrollItem.href).toContain("start=2026-08-26");
-    expect(payrollItem.href).toContain("end=2026-09-25");
+    const exportItem = items.find((i) => i.sourceModule === "PAYROLL_EXPORT")!;
+    expect(exportItem.verb).toBe("Clear 3 blockers");
+    expect(exportItem.href).toContain("/attendance/exceptions?status=OPEN&severity=CRITICAL");
+    expect(exportItem.href).toContain("start=2026-08-26");
+    expect(exportItem.href).toContain("end=2026-09-25");
   });
 
   it("builds attendance capture row with deep link for single site", () => {
@@ -187,14 +187,13 @@ describe("buildTodayWorkItems", () => {
     expect(rosterItem?.href).toBe("/rostering/sites/site-hq");
   });
 
-  it("includes critical incidents and overdue tasks when user has capability", () => {
-    const opsUser = makeUser({ "/incidents": ["view"], "/tasks": ["view"] });
+  it("includes critical incidents when user has capability", () => {
+    const opsUser = makeUser({ "/incidents": ["view"] });
     const items = buildTodayWorkItems({
       user: opsUser,
       dashboard: {
         ...sampleDashboard,
         openCriticalIncidents: 2,
-        taskStats: { overdue: 3, dueToday: 1 },
       },
     });
 
@@ -203,11 +202,5 @@ describe("buildTodayWorkItems", () => {
     expect(incidentItem?.priority).toBe("CRITICAL");
     expect(incidentItem?.verb).toBe("Review 2 incidents");
     expect(incidentItem?.href).toBe("/incidents?severity=CRITICAL");
-
-    const taskItem = items.find((i) => i.id === "tasks-overdue");
-    expect(taskItem).toBeDefined();
-    expect(taskItem?.priority).toBe("MEDIUM");
-    expect(taskItem?.verb).toBe("Open 3 tasks");
-    expect(taskItem?.href).toBe("/tasks");
   });
 });

@@ -174,6 +174,6 @@ export function canViewSensitiveCompanyFields(user: FastifyRequest["user"]): boo
   return (
     user.isOwner ||
     hasCapability(user, "/settings", "edit") ||
-    hasCapability(user, "/payroll", "view_sensitive")
+    hasCapability(user, "/compliance", "view_sensitive")
   );
 }

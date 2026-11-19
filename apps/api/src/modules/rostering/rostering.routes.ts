@@ -38,7 +38,7 @@ export async function rosteringRoutes(app: FastifyInstance) {
   ];
   const verifyProtect = [
     authMiddleware,
-    requireAnyCapability(["/rostering", "/payroll"], "approve"),
+    requireAnyCapability(["/rostering", "/payroll-exports"], "approve"),
   ];
   const readProtect = [authMiddleware, requireCapability("/rostering", "view")];
   const editProtect = [authMiddleware, requireCapability("/rostering", "edit")];

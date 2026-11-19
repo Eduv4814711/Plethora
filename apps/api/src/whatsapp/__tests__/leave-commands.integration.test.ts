@@ -23,7 +23,6 @@ describe.runIf(dbReady)("WhatsApp leave commands (integration)", () => {
         lastName: "User",
         status: "active",
         employeeType: "general",
-        monthlySalary: 15000,
         phone,
         commencementDate: new Date("2022-01-01T00:00:00.000Z"),
       },

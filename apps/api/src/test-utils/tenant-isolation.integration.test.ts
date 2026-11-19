@@ -179,70 +179,52 @@ describe.runIf(dbReady)("tenant isolation (integration)", () => {
     });
   });
 
-  describe("payroll", () => {
-    it("reads own payroll run", async () => {
+  describe("payroll exports", () => {
+    it("reads own payroll export batch", async () => {
       const res = await app.inject({
         method: "GET",
-        url: `/payroll/runs/${fx.tenantA.payrollRunId}`,
+        url: `/payroll-exports/batches/${fx.tenantA.exportBatchId}`,
         headers: authHeader(fx.tenantA.accessToken),
       });
       expect(res.statusCode).toBe(200);
-      expect(res.json().id).toBe(fx.tenantA.payrollRunId);
+      expect(res.json().id).toBe(fx.tenantA.exportBatchId);
     });
 
-    it("does not read other tenant payroll run", async () => {
+    it("does not read other tenant payroll export batch", async () => {
       const res = await app.inject({
         method: "GET",
-        url: `/payroll/runs/${fx.tenantB.payrollRunId}`,
+        url: `/payroll-exports/batches/${fx.tenantB.exportBatchId}`,
         headers: authHeader(fx.tenantA.accessToken),
       });
       expect(res.statusCode).toBe(404);
     });
 
-    it("does not approve other tenant payroll run", async () => {
+    it("does not lock other tenant payroll export batch", async () => {
       const res = await app.inject({
         method: "POST",
-        url: `/payroll/runs/${fx.tenantB.payrollRunId}/approve`,
+        url: `/payroll-exports/batches/${fx.tenantB.exportBatchId}/lock`,
         headers: authHeader(fx.tenantA.accessToken),
+        payload: {},
       });
       expect(res.statusCode).toBe(404);
     });
   });
 
-  describe("tasks", () => {
-    it("reads own task", async () => {
-      const res = await app.inject({
-        method: "GET",
-        url: `/tasks/${fx.tenantA.taskId}`,
-        headers: authHeader(fx.tenantA.accessToken),
-      });
-      expect(res.statusCode).toBe(200);
-      expect(res.json().id).toBe(fx.tenantA.taskId);
-    });
-
-    it("does not read other tenant task", async () => {
-      const res = await app.inject({
-        method: "GET",
-        url: `/tasks/${fx.tenantB.taskId}`,
-        headers: authHeader(fx.tenantA.accessToken),
-      });
-      expect(res.statusCode).toBe(404);
-    });
-
-    it("does not update other tenant task", async () => {
+  describe("payroll export profiles", () => {
+    it("does not update other tenant payroll export profile", async () => {
       const res = await app.inject({
         method: "PATCH",
-        url: `/tasks/${fx.tenantB.taskId}`,
+        url: `/payroll-exports/profiles/${fx.tenantB.exportProfileId}`,
         headers: { ...authHeader(fx.tenantA.accessToken), "content-type": "application/json" },
-        payload: { title: "Stolen task" },
+        payload: { name: "Stolen profile" },
       });
       expect(res.statusCode).toBe(404);
     });
 
-    it("does not delete other tenant task", async () => {
+    it("does not delete other tenant payroll export profile", async () => {
       const res = await app.inject({
         method: "DELETE",
-        url: `/tasks/${fx.tenantB.taskId}`,
+        url: `/payroll-exports/profiles/${fx.tenantB.exportProfileId}`,
         headers: authHeader(fx.tenantA.accessToken),
       });
       expect(res.statusCode).toBe(404);

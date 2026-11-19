@@ -9,7 +9,7 @@ import { hasCapability } from "@/lib/permissions";
 import {
   detectAttendanceExceptions,
   getExceptionAnalytics,
-  getPayrollReadiness,
+  getExportReadiness,
   listAttendanceExceptions,
   reviewAttendanceException,
   type AttendanceExceptionAnalytics,
@@ -54,7 +54,7 @@ export default function AttendanceExceptionsPage() {
   const requestIdRef = useRef(0);
   const [items, setItems] = useState<AttendanceException[]>([]);
   const [analytics, setAnalytics] = useState<AttendanceExceptionAnalytics | null>(null);
-  const [payrollReadiness, setPayrollReadiness] = useState<{ status: string; openExceptions: number } | null>(null);
+  const [exportReadiness, setExportReadiness] = useState<{ status: string; openExceptions: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -116,12 +116,12 @@ export default function AttendanceExceptionsPage() {
       });
       const [analyticsResult, readiness] = await Promise.all([
         getExceptionAnalytics(token, { periodStart, periodEnd }),
-        getPayrollReadiness(token),
+        getExportReadiness(token),
       ]);
       if (requestId !== requestIdRef.current) return;
       setItems(listResult.items);
       setAnalytics(analyticsResult);
-      setPayrollReadiness(readiness);
+      setExportReadiness(readiness);
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
       setError(err instanceof Error ? err.message : "Unable to load attendance issues");
@@ -239,7 +239,7 @@ export default function AttendanceExceptionsPage() {
 
       <PageHeader
         title="Attendance issues"
-        description="Review missing clock events, late arrivals, and other attendance items without interrupting payroll calculation."
+        description="Review missing clock events, late arrivals, and other attendance items before exporting hours to Sage."
         actions={canCreate ? (
           <button type="button" className="btn-secondary min-h-11" onClick={() => void handleDetect()} disabled={detecting}>
             {detecting ? "Scanning…" : "Scan for new issues"}
@@ -247,10 +247,10 @@ export default function AttendanceExceptionsPage() {
         ) : undefined}
       />
 
-      {payrollReadiness && payrollReadiness.status !== "READY" && (
+      {exportReadiness && exportReadiness.status !== "READY" && (
         <AlertBanner variant="warning">
-          Attendance review is recommended, but payroll calculation can continue
-          {payrollReadiness.openExceptions > 0 ? ` · ${payrollReadiness.openExceptions} open issue${payrollReadiness.openExceptions === 1 ? "" : "s"}` : ""}.
+          Attendance review is recommended before locking an external payroll export batch
+          {exportReadiness.openExceptions > 0 ? ` · ${exportReadiness.openExceptions} open issue${exportReadiness.openExceptions === 1 ? "" : "s"}` : ""}.
         </AlertBanner>
       )}
       {error && (

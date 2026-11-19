@@ -1,4 +1,4 @@
-import type { PayPeriod } from "../services/tax.service.js";
+export type PayPeriod = "weekly" | "biweekly" | "monthly";
 
 export type RosterPeriodCalendarConfig = {
   id: string;

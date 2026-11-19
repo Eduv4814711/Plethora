@@ -14,7 +14,8 @@ export interface NavItem {
  */
 const NAV_LABEL_OVERRIDES: Record<string, string> = {
   "/employees/leave": "Leave",
-  "/payroll/billing": "Client Billing",
+  "/payroll-exports": "Payroll Export",
+  "/billing": "Client Billing",
   "/settings/migrate": "Data Import / Export",
 };
 
@@ -37,18 +38,16 @@ export const NAV_ITEMS: NavItem[] = CAPABILITY_CATALOG
     label: NAV_LABEL_OVERRIDES[definition.path] ?? definition.label,
   }));
 
-export const MAIN_NAV_HREFS = ["/", "/employees", "/employees/leave", "/sites", "/rostering", "/attendance", "/payroll", "/tasks"];
+export const MAIN_NAV_HREFS = ["/", "/employees", "/employees/leave", "/sites", "/rostering", "/attendance", "/payroll-exports"];
 export const MORE_NAV_HREFS = [
   "/clients",
-  "/payroll/billing",
+  "/billing",
   "/compliance",
   "/whatsapp",
   "/reports",
   "/approvals",
   "/incidents",
   "/documents",
-  "/client-portal",
-  "/academy",
   "/audit",
   "/settings/migrate",
 ];
@@ -83,7 +82,7 @@ const MODULE_PATH_ALIASES: Record<string, string> = {
 /**
  * Resolves an application path to the catalog module that owns it, mirroring
  * resolveModulePath in apps/api/src/lib/capabilities.ts. `/sites/abc` resolves
- * to `/sites`, but `/payroll/billing` resolves to itself — a parent grant never
+ * to `/sites`, and `/billing` resolves to itself — a parent grant never
  * confers a separately grantable sub-module.
  */
 export function resolveModulePath(path: string): string | null {
@@ -142,7 +141,7 @@ export function getDefaultRouteForUser(user: AccessSubject): string {
 }
 
 export function canManageEmployeeDetails(user: AccessSubject): boolean {
-  return hasCapability(user, "/employees", "edit") || hasCapability(user, "/payroll", "edit");
+  return hasCapability(user, "/employees", "edit");
 }
 
 export function canAccessSensitiveData(user: AccessSubject, module: string): boolean {

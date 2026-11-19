@@ -13,7 +13,6 @@ vi.mock("../../../lib/prisma.js", () => ({
     siteTimesheetRow: { findMany: vi.fn() },
     siteTimesheet: { findMany: vi.fn() },
     approvalRequest: { findMany: vi.fn(), updateMany: vi.fn() },
-    payrollPeriodReadiness: { upsert: vi.fn() },
     operationalAlert: { updateMany: vi.fn() },
     leaveRequest: { findFirst: vi.fn() },
     company: { findUnique: vi.fn() },
@@ -42,14 +41,12 @@ describe("attendance exception scan pagination", () => {
     vi.mocked(prisma.attendanceException.updateMany).mockReset().mockResolvedValue({ count: 0 } as never);
     vi.mocked(prisma.attendanceException.findFirst).mockReset();
     vi.mocked(prisma.attendanceException.create).mockReset();
-    vi.mocked(prisma.payrollPeriodReadiness.upsert).mockReset();
     vi.mocked(prisma.siteTimesheetRow.findMany).mockReset().mockResolvedValue([] as never);
     vi.mocked(prisma.siteTimesheet.findMany).mockReset().mockResolvedValue([] as never);
     vi.mocked(prisma.operationalAlert.updateMany).mockReset().mockResolvedValue({ count: 0 } as never);
     vi.mocked(prisma.approvalRequest.findMany).mockReset().mockResolvedValue([] as never);
     vi.mocked(prisma.approvalRequest.updateMany).mockReset().mockResolvedValue({ count: 0 } as never);
     vi.mocked(prisma.attendanceException.count).mockResolvedValue(0);
-    vi.mocked(prisma.payrollPeriodReadiness.upsert).mockResolvedValue({} as never);
     vi.mocked(prisma.leaveRequest.findFirst).mockReset().mockResolvedValue(null as never);
     vi.mocked(prisma.company.findUnique).mockReset().mockResolvedValue({ settings: null } as never);
   });
@@ -74,8 +71,7 @@ describe("attendance exception scan pagination", () => {
     const secondPage = [makeShift("shift-0500")];
     vi.mocked(prisma.shift.findMany)
       .mockResolvedValueOnce(firstPage as never)
-      .mockResolvedValueOnce(secondPage as never)
-      .mockResolvedValueOnce([] as never);
+      .mockResolvedValueOnce(secondPage as never);
 
     const result = await detectAndPersistExceptions({
       companyId: "co-1",
@@ -83,7 +79,7 @@ describe("attendance exception scan pagination", () => {
     });
 
     expect(result).toEqual({ scanned: 501, created: 0 });
-    expect(prisma.shift.findMany).toHaveBeenCalledTimes(3);
+    expect(prisma.shift.findMany).toHaveBeenCalledTimes(2);
     expect(vi.mocked(prisma.shift.findMany).mock.calls[1]?.[0]).toEqual(
       expect.objectContaining({
         cursor: { id: firstPage.at(-1)!.id },

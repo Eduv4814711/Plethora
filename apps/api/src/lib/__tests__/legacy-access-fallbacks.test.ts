@@ -19,7 +19,7 @@ describe("legacy access fallbacks", () => {
   it("back-fills the sub-modules that really were inherited", () => {
     const children = LEGACY_PARENT_INHERITANCE.map((rule) => rule.child);
     expect(children).toContain("/employees/leave");
-    expect(children).toContain("/payroll/billing");
+    expect(children).toContain("/compliance/legal");
   });
 
   it("never carries manage_access through any fallback", () => {

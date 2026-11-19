@@ -9,9 +9,8 @@ import type { ReactNode } from "react";
  * step needed to make it appear — a module with no entry here falls back to
  * MODULE_ICON_FALLBACK and renders with no descriptor rather than disappearing.
  *
- * Icons follow the house style used everywhere else (see the academy sidebar in
- * app/(dashboard)/academy/layout.tsx): inline Heroicons-style outline paths, no
- * icon dependency.
+ * Icons follow the house style used throughout the app: inline Heroicons-style
+ * outline paths, with no external icon dependency.
  */
 
 function icon(path: ReactNode) {
@@ -59,14 +58,11 @@ export const MODULE_ICONS: Record<string, ReactNode> = {
   "/attendance": p(
     "M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
   ),
-  "/payroll": p(
-    "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+  "/payroll-exports": p(
+    "M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
   ),
-  "/payroll/billing": p(
+  "/billing": p(
     "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-  ),
-  "/tasks": p(
-    "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
   ),
   "/whatsapp": p(
     "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
@@ -82,12 +78,6 @@ export const MODULE_ICONS: Record<string, ReactNode> = {
   ),
   "/documents": p(
     "M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2zm2-9h6m-6 4h6"
-  ),
-  "/client-portal": p(
-    "M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-18 0h18M12 3a15 15 0 010 18 15 15 0 010-18z"
-  ),
-  "/academy": p(
-    "M12 14l9-5-9-5-9 5 9 5zm0 0v7m-5-9.5V17c0 1.1 2.24 2 5 2s5-.9 5-2v-5.5"
   ),
   "/compliance": p(
     "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
@@ -111,17 +101,14 @@ export const MODULE_DESCRIPTIONS: Record<string, string> = {
   "/clients": "Accounts and contacts",
   "/rostering": "Shift patterns and coverage",
   "/attendance": "Clock records and exceptions",
-  "/payroll": "Runs, payslips and PAYE",
-  "/payroll/billing": "Quotes, invoices and month-end",
-  "/tasks": "Work items and projects",
+  "/payroll-exports": "Sage, CSV & external payroll handoff",
+  "/billing": "Quotes, invoices and month-end",
   "/whatsapp": "Messages to guards and clients",
   "/reports": "Exports and scheduled reports",
   "/approvals": "Items waiting on you",
   "/incidents": "Reports and investigations",
   "/documents": "Certificates and expiry tracking",
-  "/client-portal": "What your clients can see",
-  "/academy": "Training, courses and enrolments",
-  "/compliance": "Statutory, funds, legal & cash floor",
+  "/compliance": "Company obligations & legal register",
   "/audit": "Who changed what, and when",
   "/settings": "Company, users and access",
   "/settings/migrate": "Bulk import and export",
@@ -144,17 +131,17 @@ export const MODULE_CATEGORIES: Record<ModuleCategoryKey, ModuleCategoryInfo> = 
   finance: {
     key: "finance",
     label: "People & Finance",
-    tagline: "Leave balances, payroll processing & client billing",
+    tagline: "Leave balances, Sage payroll exports & client billing",
   },
   management: {
     key: "management",
     label: "Management",
-    tagline: "Client accounts, assigned tasks, reports & approvals",
+    tagline: "Client accounts, reports & approvals",
   },
   administration: {
     key: "administration",
     label: "Administration",
-    tagline: "Statutory compliance, legal registers & credentials",
+    tagline: "Compliance registers, documents & credentials",
   },
 };
 
@@ -175,18 +162,15 @@ export const MODULE_CATEGORY_MAP: Record<string, ModuleCategoryKey> = {
   "/whatsapp": "operations",
 
   "/employees/leave": "finance",
-  "/payroll": "finance",
-  "/payroll/billing": "finance",
+  "/payroll-exports": "finance",
+  "/billing": "finance",
 
   "/clients": "management",
-  "/tasks": "management",
   "/reports": "management",
   "/approvals": "management",
-  "/client-portal": "management",
 
   "/compliance": "administration",
   "/documents": "administration",
-  "/academy": "administration",
   "/audit": "administration",
   "/settings": "administration",
   "/settings/migrate": "administration",

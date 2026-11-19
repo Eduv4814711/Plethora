@@ -11,12 +11,10 @@ import type { ListAlertsQuery } from "./alerts.schemas.js";
 
 const MODULE_PATH_BY_SOURCE: Partial<Record<AlertSourceModule, string>> = {
   ATTENDANCE: "/attendance",
-  TASKS: "/tasks",
   INCIDENTS: "/incidents",
   SITES: "/sites",
   DOCUMENTS: "/documents",
   APPROVALS: "/approvals",
-  PAYROLL: "/payroll",
   ROSTERING: "/rostering",
   COMPLIANCE: "/compliance",
 };
@@ -40,8 +38,6 @@ function alertLinkUrl(
         : "/rostering";
     case "ATTENDANCE":
       return "/attendance/exceptions";
-    case "TASKS":
-      return sourceId ? `/tasks/${sourceId}` : "/tasks";
     case "INCIDENTS":
       return sourceId ? `/incidents/${sourceId}` : "/incidents";
     case "SITES":
@@ -50,8 +46,6 @@ function alertLinkUrl(
       return "/documents";
     case "APPROVALS":
       return "/approvals";
-    case "PAYROLL":
-      return "/payroll";
     case "COMPLIANCE":
       return sourceId ? `/compliance?id=${sourceId}` : "/compliance";
     default:

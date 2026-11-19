@@ -285,7 +285,15 @@
     },
     "TimeoutInMinutes": 30,
     "Triggers": {
-     "Webhook": false
+     "FilterGroups": [
+      [
+       {
+        "Pattern": "PULL_REQUEST_CREATED, PULL_REQUEST_UPDATED, PULL_REQUEST_REOPENED",
+        "Type": "EVENT"
+       }
+      ]
+     ],
+     "Webhook": true
     }
    },
    "Metadata": {
@@ -604,7 +612,19 @@
     "SourceVersion": "main",
     "TimeoutInMinutes": 30,
     "Triggers": {
-     "Webhook": false
+     "FilterGroups": [
+      [
+       {
+        "Pattern": "PUSH",
+        "Type": "EVENT"
+       },
+       {
+        "Pattern": "refs/heads/main",
+        "Type": "HEAD_REF"
+       }
+      ]
+     ],
+     "Webhook": true
     },
     "VpcConfig": {
      "SecurityGroupIds": [

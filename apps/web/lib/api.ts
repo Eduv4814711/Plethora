@@ -256,8 +256,6 @@ export interface CompanySettings {
   uifReference?: string | null;
   payeReference?: string | null;
   sdlReference?: string | null;
-  sdlLiableFrom?: string | null;
-  monthlyPayrollTotals?: Record<string, number> | null;
   settings?: {
     currency?: string;
     dateFormat?: string;
@@ -407,13 +405,10 @@ export async function fetchRosterPeriodCalendars(token: string): Promise<{
 }
 
 export const FACTORY_RESET_MODULES = [
-  { id: "employees", label: "Team", description: "Clear all team members, assignments, leave records, and deductions" },
+  { id: "employees", label: "Team", description: "Clear all team members, assignments, and leave records" },
   { id: "sites", label: "Sites", description: "Clear sites, posts, and site/post assignments" },
   { id: "shifts", label: "Shifts", description: "Clear shifts and attendance records" },
   { id: "attendance", label: "Attendance", description: "Clear attendance records only (shifts remain). Optionally for one person." },
-  { id: "payroll", label: "Payroll", description: "Clear payroll runs, items, and payslips" },
-  { id: "timesheets", label: "Timesheets", description: "Clear all timesheet records" },
-  { id: "payRules", label: "Pay Rules", description: "Reset to defaults: overtime, sunday, public holiday rates; UIF, PSIRA" },
   { id: "publicHolidays", label: "Public Holidays", description: "Reset to SA public holidays (2025–2026)" },
   { id: "auditLogs", label: "Audit Logs", description: "Clear activity and audit history" },
   { id: "companySettings", label: "Company Settings", description: "Reset company name, business details, and settings to defaults" },
@@ -898,6 +893,7 @@ export async function listCompanies(token: string): Promise<{ data: CompanyListI
 export interface SearchEmployee {
   id: string;
   employeeNumber: string;
+  externalPayrollCode?: string | null;
   firstName: string;
   lastName: string;
   status: string;
@@ -907,6 +903,7 @@ export interface SearchSite {
   id: string;
   name: string;
   location: string | null;
+  costCenterCode?: string | null;
 }
 
 export interface SearchClient {
@@ -914,14 +911,6 @@ export interface SearchClient {
   name: string;
   contactPerson?: string | null;
   phone?: string | null;
-}
-
-export interface SearchTask {
-  id: string;
-  title: string;
-  status: string;
-  priority: string;
-  dueDate?: string | null;
 }
 
 export interface SearchIncident {
@@ -946,7 +935,6 @@ export interface SearchResults {
   employees: SearchEmployee[];
   sites: SearchSite[];
   clients?: SearchClient[];
-  tasks?: SearchTask[];
   incidents?: SearchIncident[];
   invoices?: SearchInvoice[];
 }
@@ -954,11 +942,11 @@ export interface SearchResults {
 export async function search(token: string, q: string): Promise<SearchResults> {
   const trimmed = q.trim();
   if (trimmed.length < 2) {
-    return { employees: [], sites: [], clients: [], tasks: [], incidents: [], invoices: [] };
+    return { employees: [], sites: [], clients: [], incidents: [], invoices: [] };
   }
   const res = await authFetch(`/search?q=${encodeURIComponent(trimmed)}`, token);
   if (!res.ok) {
-    return { employees: [], sites: [], clients: [], tasks: [], incidents: [], invoices: [] };
+    return { employees: [], sites: [], clients: [], incidents: [], invoices: [] };
   }
   return res.json();
 }
@@ -1213,840 +1201,47 @@ export async function migrationImport(
   return res.json();
 }
 
-// Task Manager
-export type TaskStatus = "todo" | "in_progress" | "blocked" | "done" | "cancelled";
-export type TaskPriority = "low" | "medium" | "high" | "urgent" | "critical";
-
-export interface TaskProject {
+// Public Holidays
+export interface PublicHolidayItem {
   id: string;
+  date: string;
   name: string;
-  description?: string | null;
-  color?: string | null;
-  sortOrder: number;
-  _count?: { tasks: number };
+  createdAt?: string;
 }
 
-export interface Task {
-  id: string;
-  title: string;
-  description?: string | null;
-  projectId?: string | null;
-  status: TaskStatus;
-  priority: TaskPriority;
-  dueDate?: string | null;
-  completedAt?: string | null;
-  assigneeType?: string | null;
-  assigneeId?: string | null;
-  assigneeDisplayName?: string | null;
-  completionPercentage?: number | null;
-  siteId?: string | null;
-  site?: { id: string; name: string } | null;
-  recurrenceRule?: Record<string, unknown> | null;
-  project?: { id: string; name: string; color?: string | null } | null;
-  createdBy?: { id: string; name: string; email: string };
-  comments?: TaskComment[];
-  attachments?: TaskAttachment[];
-  reminders?: TaskReminder[];
-}
-
-export interface TaskComment {
-  id: string;
-  body: string;
-  userId: string;
-  createdAt: string;
-  user?: { id: string; name: string; email: string };
-}
-
-export interface TaskAttachment {
-  id: string;
-  taskId: string;
-  filename: string;
-  mimeType: string;
-  size: number;
-  downloadUrl?: string;
-}
-
-export interface TaskReminder {
-  id: string;
-  taskId: string;
-  remindAt: string;
-  sentAt?: string | null;
-}
-
-export async function listTaskProjects(token: string): Promise<{ data: TaskProject[] }> {
-  const res = await authFetch("/task-projects", token);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to fetch projects");
-  }
+export async function listPublicHolidays(
+  token: string,
+  year?: number
+): Promise<{ data: PublicHolidayItem[]; year?: number }> {
+  const q = year ? `?year=${year}` : "";
+  const res = await authFetch(`/settings/public-holidays${q}`, token);
+  if (!res.ok) throw new Error("Failed to load public holidays");
   return res.json();
 }
 
-export async function createTaskProject(
+export async function createPublicHoliday(
   token: string,
-  data: { name: string; description?: string; color?: string; sortOrder?: number }
-): Promise<TaskProject> {
-  const res = await authFetch("/task-projects", token, {
+  data: { date: string; name: string }
+): Promise<PublicHolidayItem> {
+  const res = await authFetch("/settings/public-holidays", token, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to create project");
-  }
-  return res.json();
-}
-
-export async function getTaskProject(token: string, id: string): Promise<TaskProject & { tasks: Task[] }> {
-  const res = await authFetch(`/task-projects/${id}`, token);
-  if (!res.ok) {
-    if (res.status === 404) throw new Error("Project not found");
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to fetch project");
-  }
-  return res.json();
-}
-
-export async function updateTaskProject(
-  token: string,
-  id: string,
-  data: Partial<{ name: string; description: string | null; color: string | null; sortOrder: number }>
-): Promise<TaskProject> {
-  const res = await authFetch(`/task-projects/${id}`, token, {
-    method: "PATCH",
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to update project");
-  }
-  return res.json();
-}
-
-export async function deleteTaskProject(token: string, id: string): Promise<void> {
-  const res = await authFetch(`/task-projects/${id}`, token, { method: "DELETE" });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to delete project");
-  }
-}
-
-export interface AssigneeOption {
-  id: string;
-  type: "user" | "employee";
-  displayName: string;
-  subtitle: string;
-}
-
-export async function listTaskAssignees(
-  token: string
-): Promise<{ users: AssigneeOption[]; employees: AssigneeOption[] }> {
-  const res = await authFetch("/tasks/assignees", token);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to fetch assignees");
-  }
-  return res.json();
-}
-
-export async function listTasks(
-  token: string,
-  params?: {
-    projectId?: string;
-    status?: TaskStatus;
-    assigneeId?: string;
-    filter?: "overdue" | "due_today" | "my" | "critical";
-    limit?: number;
-    offset?: number;
-  }
-): Promise<{ data: Task[]; total: number; limit: number; offset: number }> {
-  const q = new URLSearchParams();
-  if (params?.projectId) q.set("projectId", params.projectId);
-  if (params?.status) q.set("status", params.status);
-  if (params?.assigneeId) q.set("assigneeId", params.assigneeId);
-  if (params?.filter) q.set("filter", params.filter);
-  if (params?.limit) q.set("limit", String(params.limit));
-  if (params?.offset) q.set("offset", String(params.offset));
-  const res = await authFetch(`/tasks?${q.toString()}`, token);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to fetch tasks");
-  }
-  return res.json();
-}
-
-export async function createTask(
-  token: string,
-  data: {
-    title: string;
-    description?: string;
-    projectId?: string | null;
-    status?: TaskStatus;
-    priority?: TaskPriority;
-    dueDate?: string | null;
-    assigneeType?: "employee" | "user" | null;
-    assigneeId?: string | null;
-    recurrenceRule?: Record<string, unknown> | null;
-  }
-): Promise<Task> {
-  const res = await authFetch("/tasks", token, {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    const msg = err?.message ?? "Failed to create task";
-    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
-  }
-  return res.json();
-}
-
-export async function getTask(token: string, id: string): Promise<Task> {
-  const res = await authFetch(`/tasks/${id}`, token);
-  if (!res.ok) {
-    if (res.status === 404) throw new Error("Task not found");
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to fetch task");
-  }
-  return res.json();
-}
-
-export async function updateTask(
-  token: string,
-  id: string,
-  data: Partial<{
-    title: string;
-    description: string | null;
-    projectId: string | null;
-    status: TaskStatus;
-    priority: TaskPriority;
-    dueDate: string | null;
-    assigneeType: "employee" | "user" | null;
-    assigneeId: string | null;
-    siteId: string | null;
-    completionPercentage: number;
-    recurrenceRule: Record<string, unknown> | null;
-  }>
-): Promise<Task> {
-  const res = await authFetch(`/tasks/${id}`, token, {
-    method: "PATCH",
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to update task");
-  }
-  return res.json();
-}
-
-export async function deleteTask(token: string, id: string): Promise<void> {
-  const res = await authFetch(`/tasks/${id}`, token, { method: "DELETE" });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to delete task");
-  }
-}
-
-export async function completeTask(token: string, id: string): Promise<Task> {
-  const res = await authFetch(`/tasks/${id}/complete`, token, { method: "POST" });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to complete task");
-  }
-  return res.json();
-}
-
-export async function reopenTask(token: string, id: string): Promise<Task> {
-  const res = await authFetch(`/tasks/${id}/reopen`, token, { method: "POST" });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to reopen task");
-  }
-  return res.json();
-}
-
-export async function listTaskComments(token: string, taskId: string): Promise<{ data: TaskComment[] }> {
-  const res = await authFetch(`/task-comments/tasks/${taskId}/comments`, token);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to fetch comments");
-  }
-  return res.json();
-}
-
-export async function addTaskComment(token: string, taskId: string, body: string): Promise<TaskComment> {
-  const res = await authFetch(`/task-comments/tasks/${taskId}/comments`, token, {
-    method: "POST",
-    body: JSON.stringify({ body }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to add comment");
-  }
-  return res.json();
-}
-
-export async function uploadTaskAttachment(token: string, taskId: string, file: File): Promise<TaskAttachment> {
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const res = await authFetch(`/task-attachments/tasks/${taskId}/attachments`, token, {
-    method: "POST",
-    body: formData,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Upload failed");
-  }
-  return res.json();
-}
-
-export async function deleteTaskAttachment(token: string, id: string): Promise<void> {
-  const res = await authFetch(`/task-attachments/attachments/${id}`, token, { method: "DELETE" });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to delete attachment");
-  }
-}
-
-export async function addTaskReminder(token: string, taskId: string, remindAt: string): Promise<TaskReminder> {
-  const res = await authFetch(`/task-reminders/tasks/${taskId}/reminders`, token, {
-    method: "POST",
-    body: JSON.stringify({ remindAt }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to add reminder");
-  }
-  return res.json();
-}
-
-export async function listUpcomingReminders(token: string): Promise<{ data: (TaskReminder & { task: { id: string; title: string; dueDate?: string | null } })[] }> {
-  const res = await authFetch("/task-reminders/reminders/upcoming", token);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to fetch reminders");
-  }
-  return res.json();
-}
-
-export async function deleteTaskReminder(token: string, id: string): Promise<void> {
-  const res = await authFetch(`/task-reminders/reminders/${id}`, token, { method: "DELETE" });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || "Failed to delete reminder");
-  }
-}
-
-// --- Academy Management ---
-
-function academyErrorMessage(err: Record<string, unknown>): string {
-  if (typeof err.message === "string" && err.message) return err.message;
-  if (typeof err.error === "string" && err.error) return err.error;
-  const details = err.details as { fieldErrors?: Record<string, string[]> } | undefined;
-  const fe = details?.fieldErrors;
-  if (fe) {
-    const first = Object.values(fe).flat()[0];
-    if (first) return first;
-  }
-  return "Academy request failed";
-}
-
-async function academyRequest<T>(token: string, path: string, init?: RequestInit): Promise<T> {
-  const res = await authFetch(`/academy${path}`, token, init);
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    throw new Error(academyErrorMessage(err));
-  }
-  if (res.status === 204) return undefined as T;
-  const ct = res.headers.get("content-type");
-  if (!ct?.includes("application/json")) return undefined as T;
-  return res.json();
-}
-
-export async function uploadAcademyStudentDocument(
-  token: string,
-  studentId: string,
-  file: File,
-  documentType: string
-): Promise<{ document: Record<string, unknown> }> {
-  const fd = new FormData();
-  fd.append("file", file);
-  const q = new URLSearchParams({ documentType });
-  const res = await authFetch(`/academy/students/${studentId}/documents?${q}`, token, {
-    method: "POST",
-    body: fd,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || err.error || "Upload failed");
-  }
-  return res.json();
-}
-
-export * from "./academy-types";
-export const uploadStudentDocument = uploadAcademyStudentDocument;
-
-export const academyApi = {
-  uploadStudentDocument: uploadAcademyStudentDocument,
-  listBranches: (token: string) => academyRequest<{ branches: unknown[] }>(token, "/branches"),
-  createBranch: (token: string, body: Record<string, unknown>) =>
-    academyRequest<{ branch: unknown }>(token, "/branches", { method: "POST", body: JSON.stringify(body) }),
-  deleteBranch: (token: string, id: string) =>
-    academyRequest<void>(token, `/branches/${id}`, { method: "DELETE" }),
-
-  listStudents: (token: string, q?: string, limit?: number) => {
-    const params = new URLSearchParams();
-    if (q && q.trim().length >= 2) params.set("q", q.trim());
-    if (limit != null && limit > 0) params.set("limit", String(Math.min(limit, 200)));
-    const s = params.toString();
-    return academyRequest<{ students: unknown[]; total: number }>(token, `/students${s ? `?${s}` : ""}`);
-  },
-  createStudent: (token: string, body: Record<string, unknown>) =>
-    academyRequest<{ student: unknown }>(token, "/students", { method: "POST", body: JSON.stringify(body) }),
-  getStudent: (token: string, id: string) => academyRequest<{ student: unknown }>(token, `/students/${id}`),
-  updateStudent: (token: string, id: string, body: Record<string, unknown>) =>
-    academyRequest<{ student: unknown }>(token, `/students/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(body),
-    }),
-  deleteStudent: (token: string, id: string) => academyRequest<void>(token, `/students/${id}`, { method: "DELETE" }),
-  recordStudentAdminFee: (
-    token: string,
-    id: string,
-    body: {
-      status: "paid" | "waived" | "unpaid";
-      amount?: number | string;
-      method?: string | null;
-      reference?: string | null;
-      notes?: string | null;
-    }
-  ) =>
-    academyRequest<{ student: unknown }>(token, `/students/${id}/admin-fee`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-  listStudentDocuments: (token: string, studentId: string) =>
-    academyRequest<{ documents: unknown[] }>(token, `/students/${studentId}/documents`),
-  deleteStudentDocument: (token: string, studentId: string, documentId: string) =>
-    academyRequest<{ ok: boolean }>(token, `/students/${studentId}/documents/${documentId}`, {
-      method: "DELETE",
-    }),
-
-  listCourses: (token: string, activeOnly?: boolean) =>
-    academyRequest<{ courses: unknown[] }>(
-      token,
-      `/courses${activeOnly ? "?active=true" : ""}`
-    ),
-  createCourse: (token: string, body: Record<string, unknown>) =>
-    academyRequest<{ course: unknown }>(token, "/courses", { method: "POST", body: JSON.stringify(body) }),
-  updateCourse: (token: string, id: string, body: Record<string, unknown>) =>
-    academyRequest<{ course: unknown }>(token, `/courses/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(body),
-    }),
-  deleteCourse: (token: string, id: string) => academyRequest<void>(token, `/courses/${id}`, { method: "DELETE" }),
-
-  listCourseRuns: (token: string, courseId?: string, options?: { enrollable?: boolean }) => {
-    const q = new URLSearchParams();
-    if (courseId) q.set("courseId", courseId);
-    if (options?.enrollable) q.set("enrollable", "true");
-    const s = q.toString();
-    return academyRequest<{ courseRuns: unknown[] }>(token, `/course-runs${s ? `?${s}` : ""}`);
-  },
-  createCourseRun: (token: string, body: Record<string, unknown>) =>
-    academyRequest<{ courseRun: unknown }>(token, "/course-runs", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-  getCourseRun: (token: string, id: string) =>
-    academyRequest<{ courseRun: unknown }>(token, `/course-runs/${id}`),
-  updateCourseRun: (token: string, id: string, body: Record<string, unknown>) =>
-    academyRequest<{ courseRun: unknown }>(token, `/course-runs/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(body),
-    }),
-
-  listFeePlans: (token: string) => academyRequest<{ feePlans: unknown[] }>(token, "/fee-plans"),
-  createFeePlan: (token: string, body: { name: string; notes?: string | null }) =>
-    academyRequest<{ feePlan: unknown }>(token, "/fee-plans", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-
-  listEnrolments: (token: string, params?: { courseRunId?: string; studentId?: string }) => {
-    const q = new URLSearchParams();
-    if (params?.courseRunId) q.set("courseRunId", params.courseRunId);
-    if (params?.studentId) q.set("studentId", params.studentId);
-    const s = q.toString();
-    return academyRequest<{ enrolments: unknown[]; total: number }>(token, `/enrolments${s ? `?${s}` : ""}`);
-  },
-  createEnrolment: (token: string, body: Record<string, unknown>) =>
-    academyRequest<{ enrolment: unknown }>(token, "/enrolments", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-  createEnrolmentsBatch: (token: string, body: { studentId: string; courseRunIds: string[] }) =>
-    academyRequest<{ enrolments: unknown[] }>(token, "/enrolments/batch", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-  deleteEnrolment: (token: string, id: string) =>
-    academyRequest<void>(token, `/enrolments/${id}`, { method: "DELETE" }),
-  updateEnrolment: (token: string, id: string, body: Record<string, unknown>) =>
-    academyRequest<{ enrolment: unknown }>(token, `/enrolments/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(body),
-    }),
-
-  getFinanceDashboard: (token: string) =>
-    academyRequest<{ summary: Record<string, unknown>; recentPayments: unknown[] }>(token, "/finance/dashboard"),
-
-  getHubSummary: (token: string) =>
-    academyRequest<{
-      totalStudents: number;
-      activeCourseRunCount: number;
-      enrolmentsInCurrentMonth: number;
-      outstanding: string;
-      overdueInvoiceCount: number;
-      summary: {
-        totalBilled: string;
-        totalCollected: string;
-        activeInvoiceCount: number;
-      };
-      deltas: {
-        totalStudents: number | null;
-        newEnrolments: number | null;
-        activeCourseRuns: number | null;
-        newStudents: number | null;
-        outstanding: null;
-      };
-    }>(token, "/hub/summary"),
-
-  getActivity: (token: string, options?: { limit?: number }) => {
-    const q = new URLSearchParams();
-    if (options?.limit != null && options.limit > 0) q.set("limit", String(options.limit));
-    const s = q.toString();
-    return academyRequest<{
-      items: Array<{
-        id: string;
-        at: string;
-        label: string;
-        action: string;
-        entityType: string;
-        userName: string | null;
-        link: string | null;
-      }>;
-    }>(token, `/activity${s ? `?${s}` : ""}`);
-  },
-  getProfile: (token: string) => academyRequest<{ profile: unknown | null; readiness: { compliant: boolean; blockers: string[] } }>(token, "/profile"),
-  updateProfile: (token: string, body: Record<string, unknown>) =>
-    academyRequest<{ profile: unknown; readiness: { compliant: boolean; blockers: string[] } }>(token, "/profile", { method: "PATCH", body: JSON.stringify(body) }),
-  listInstructors: (
-    token: string,
-    params?: {
-      status?: string;
-      search?: string;
-      complianceStatus?: string;
-      contractExpiry?: string;
-      branchId?: string;
-      courseId?: string;
-      sort?: string;
-      includeArchived?: boolean;
-      limit?: number;
-      offset?: number;
-    }
-  ) => {
-    const q = new URLSearchParams();
-    if (params?.status) q.set("status", params.status);
-    if (params?.search) q.set("search", params.search);
-    if (params?.complianceStatus) q.set("complianceStatus", params.complianceStatus);
-    if (params?.contractExpiry) q.set("contractExpiry", params.contractExpiry);
-    if (params?.branchId) q.set("branchId", params.branchId);
-    if (params?.courseId) q.set("courseId", params.courseId);
-    if (params?.sort) q.set("sort", params.sort);
-    if (params?.includeArchived) q.set("includeArchived", "true");
-    if (params?.limit != null) q.set("limit", String(params.limit));
-    if (params?.offset != null) q.set("offset", String(params.offset));
-    const s = q.toString();
-    return academyRequest<{
-      instructors: unknown[];
-      total: number;
-      limit: number;
-      offset: number;
-      summary: {
-        totalInstructors: number;
-        activeInstructors: number;
-        expiringContracts: number;
-        missingDocuments: number;
-        suspendedInactive: number;
-        psiraComplianceScore: number;
-        highRisk: number;
-        attentionNeeded: number;
-      };
-    }>(token, `/instructors${s ? `?${s}` : ""}`);
-  },
-  getInstructor: (token: string, id: string) =>
-    academyRequest<{ instructor: unknown }>(token, `/instructors/${id}`),
-  createInstructor: (token: string, body: Record<string, unknown>) =>
-    academyRequest<{ instructor: unknown }>(token, "/instructors", { method: "POST", body: JSON.stringify(body) }),
-  updateInstructor: (token: string, id: string, body: Record<string, unknown>) =>
-    academyRequest<{ instructor: unknown }>(token, `/instructors/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-  archiveInstructor: (token: string, id: string) =>
-    academyRequest<{ ok: boolean }>(token, `/instructors/${id}/archive`, { method: "POST" }),
-  restoreInstructor: (token: string, id: string) =>
-    academyRequest<{ ok: boolean }>(token, `/instructors/${id}/restore`, { method: "POST" }),
-  bulkInstructorAction: (
-    token: string,
-    body: {
-      ids: string[];
-      action: "archive" | "delete" | "assign_branch" | "assign_courses" | "status" | "mark_documents_requested";
-      assignedBranchId?: string | null;
-      assignedCourseIds?: string[] | null;
-      status?: "active" | "inactive" | "suspended" | "contract_ended";
-    }
-  ) =>
-    academyRequest<{ ok: boolean; count: number }>(token, "/instructors/bulk", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-  deleteInstructor: (token: string, id: string, options?: { permanent?: boolean }) => {
-    const q = new URLSearchParams();
-    if (options?.permanent) q.set("permanent", "true");
-    const s = q.toString();
-    return academyRequest<{ ok: boolean } | void>(token, `/instructors/${id}${s ? `?${s}` : ""}`, {
-      method: "DELETE",
-    });
-  },
-  listInstructorDocuments: (token: string, instructorId: string) =>
-    academyRequest<{ documents: unknown[] }>(token, `/instructors/${instructorId}/documents`),
-  uploadInstructorDocument: (
-    token: string,
-    instructorId: string,
-    file: File,
-    metadata: {
-      documentType: string;
-      issueDate?: string | null;
-      expiryDate?: string | null;
-      verificationStatus?: "verified" | "pending_review" | "missing" | "expired";
-      notes?: string | null;
-    }
-  ) => {
-    const fd = new FormData();
-    fd.append("file", file);
-    const q = new URLSearchParams();
-    q.set("documentType", metadata.documentType);
-    if (metadata.issueDate) q.set("issueDate", metadata.issueDate);
-    if (metadata.expiryDate) q.set("expiryDate", metadata.expiryDate);
-    if (metadata.verificationStatus) q.set("verificationStatus", metadata.verificationStatus);
-    if (metadata.notes) q.set("notes", metadata.notes);
-    return authFetch(`/academy/instructors/${instructorId}/documents?${q.toString()}`, token, {
-      method: "POST",
-      body: fd,
-    }).then(async (res) => {
-      if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-        throw new Error(academyErrorMessage(err));
-      }
-      return res.json() as Promise<{ document: unknown }>;
-    });
-  },
-  updateInstructorDocument: (
-    token: string,
-    instructorId: string,
-    documentId: string,
-    body: {
-      documentType?: string | null;
-      issueDate?: string | null;
-      expiryDate?: string | null;
-      verificationStatus?: "verified" | "pending_review" | "missing" | "expired";
-      notes?: string | null;
-    }
-  ) =>
-    academyRequest<{ document: unknown }>(
-      token,
-      `/instructors/${instructorId}/documents/${documentId}`,
-      { method: "PATCH", body: JSON.stringify(body) }
-    ),
-  deleteInstructorDocument: (token: string, instructorId: string, documentId: string) =>
-    academyRequest<{ ok: boolean }>(token, `/instructors/${instructorId}/documents/${documentId}`, {
-      method: "DELETE",
-    }),
-  listClassrooms: (token: string, params?: { academyBranchId?: string; status?: string; limit?: number; offset?: number }) => {
-    const q = new URLSearchParams();
-    if (params?.academyBranchId) q.set("academyBranchId", params.academyBranchId);
-    if (params?.status) q.set("status", params.status);
-    if (params?.limit != null) q.set("limit", String(params.limit));
-    if (params?.offset != null) q.set("offset", String(params.offset));
-    const s = q.toString();
-    return academyRequest<{ classrooms: unknown[]; total: number; limit: number; offset: number }>(token, `/classrooms${s ? `?${s}` : ""}`);
-  },
-  createClassroom: (token: string, body: Record<string, unknown>) =>
-    academyRequest<{ classroom: unknown }>(token, "/classrooms", { method: "POST", body: JSON.stringify(body) }),
-  updateClassroom: (token: string, id: string, body: Record<string, unknown>) =>
-    academyRequest<{ classroom: unknown }>(token, `/classrooms/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-  deleteClassroom: (token: string, id: string) => academyRequest<void>(token, `/classrooms/${id}`, { method: "DELETE" }),
-  listAttendanceSessions: (token: string, params?: { courseRunId?: string; limit?: number; offset?: number }) => {
-    const q = new URLSearchParams();
-    if (params?.courseRunId) q.set("courseRunId", params.courseRunId);
-    if (params?.limit != null) q.set("limit", String(params.limit));
-    if (params?.offset != null) q.set("offset", String(params.offset));
-    const s = q.toString();
-    return academyRequest<{ sessions: unknown[]; total: number; limit: number; offset: number }>(token, `/attendance/sessions${s ? `?${s}` : ""}`);
-  },
-  getAttendanceSession: (token: string, id: string) =>
-    academyRequest<{ session: unknown }>(token, `/attendance/sessions/${id}`),
-  createAttendanceSession: (token: string, body: Record<string, unknown>) =>
-    academyRequest<{ session: unknown }>(token, "/attendance/sessions", { method: "POST", body: JSON.stringify(body) }),
-  updateAttendanceSession: (token: string, id: string, body: Record<string, unknown>) =>
-    academyRequest<{ session: unknown }>(token, `/attendance/sessions/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-  deleteAttendanceSession: (token: string, id: string) => academyRequest<void>(token, `/attendance/sessions/${id}`, { method: "DELETE" }),
-  markAttendance: (token: string, body: Record<string, unknown>) =>
-    academyRequest<{ record: unknown }>(token, "/attendance/mark", { method: "POST", body: JSON.stringify(body) }),
-  markAttendanceBulk: (token: string, body: Record<string, unknown>) =>
-    academyRequest<{ records: unknown[] }>(token, "/attendance/mark-bulk", { method: "POST", body: JSON.stringify(body) }),
-  listAssessments: (token: string, params?: { learnerId?: string; courseId?: string; result?: string; limit?: number; offset?: number }) => {
-    const q = new URLSearchParams();
-    if (params?.learnerId) q.set("learnerId", params.learnerId);
-    if (params?.courseId) q.set("courseId", params.courseId);
-    if (params?.result) q.set("result", params.result);
-    if (params?.limit != null) q.set("limit", String(params.limit));
-    if (params?.offset != null) q.set("offset", String(params.offset));
-    const s = q.toString();
-    return academyRequest<{ assessments: unknown[]; total: number; limit: number; offset: number }>(token, `/assessments${s ? `?${s}` : ""}`);
-  },
-  createAssessment: (token: string, body: Record<string, unknown>) =>
-    academyRequest<{ assessment: unknown }>(token, "/assessments", { method: "POST", body: JSON.stringify(body) }),
-  updateAssessment: (token: string, id: string, body: Record<string, unknown>) =>
-    academyRequest<{ assessment: unknown }>(token, `/assessments/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-  deleteAssessment: (token: string, id: string) => academyRequest<void>(token, `/assessments/${id}`, { method: "DELETE" }),
-  listCertificates: (token: string, params?: { learnerId?: string; courseId?: string; status?: string; limit?: number; offset?: number }) => {
-    const q = new URLSearchParams();
-    if (params?.learnerId) q.set("learnerId", params.learnerId);
-    if (params?.courseId) q.set("courseId", params.courseId);
-    if (params?.status) q.set("status", params.status);
-    if (params?.limit != null) q.set("limit", String(params.limit));
-    if (params?.offset != null) q.set("offset", String(params.offset));
-    const s = q.toString();
-    return academyRequest<{ certificates: unknown[]; total: number; limit: number; offset: number }>(token, `/certificates${s ? `?${s}` : ""}`);
-  },
-  createCertificate: (token: string, body: Record<string, unknown>) =>
-    academyRequest<{ certificate: unknown }>(token, "/certificates", { method: "POST", body: JSON.stringify(body) }),
-  updateCertificate: (token: string, id: string, body: Record<string, unknown>) =>
-    academyRequest<{ certificate: unknown }>(token, `/certificates/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-  deleteCertificate: (token: string, id: string) => academyRequest<void>(token, `/certificates/${id}`, { method: "DELETE" }),
-  reprintCertificate: (token: string, id: string) =>
-    academyRequest<{ certificate: unknown }>(token, `/certificates/${id}/reprint`, { method: "POST" }),
-  revokeCertificate: (token: string, id: string) =>
-    academyRequest<{ certificate: unknown }>(token, `/certificates/${id}/revoke`, { method: "POST" }),
-  verifyCertificate: (token: string, code: string) =>
-    academyRequest<{ valid: boolean; certificate: unknown }>(token, `/certificates/verify/${code}`),
-  listComplianceDocuments: (token: string, params?: { status?: string; documentType?: string; search?: string; limit?: number; offset?: number }) => {
-    const q = new URLSearchParams();
-    if (params?.status) q.set("status", params.status);
-    if (params?.documentType) q.set("documentType", params.documentType);
-    if (params?.search) q.set("search", params.search);
-    if (params?.limit != null) q.set("limit", String(params.limit));
-    if (params?.offset != null) q.set("offset", String(params.offset));
-    const s = q.toString();
-    return academyRequest<{ documents: unknown[]; total: number; limit: number; offset: number }>(token, `/compliance-documents${s ? `?${s}` : ""}`);
-  },
-  createComplianceDocument: (token: string, body: Record<string, unknown>) =>
-    academyRequest<{ document: unknown }>(token, "/compliance-documents", { method: "POST", body: JSON.stringify(body) }),
-  updateComplianceDocument: (token: string, id: string, body: Record<string, unknown>) =>
-    academyRequest<{ document: unknown }>(token, `/compliance-documents/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-  deleteComplianceDocument: (token: string, id: string) => academyRequest<void>(token, `/compliance-documents/${id}`, { method: "DELETE" }),
-  listPolicies: (token: string, params?: { policyType?: string; limit?: number; offset?: number }) => {
-    const q = new URLSearchParams();
-    if (params?.policyType) q.set("policyType", params.policyType);
-    if (params?.limit != null) q.set("limit", String(params.limit));
-    if (params?.offset != null) q.set("offset", String(params.offset));
-    const s = q.toString();
-    return academyRequest<{ policies: unknown[]; total: number; limit: number; offset: number }>(token, `/policies${s ? `?${s}` : ""}`);
-  },
-  createPolicy: (token: string, body: Record<string, unknown>) =>
-    academyRequest<{ policy: unknown }>(token, "/policies", { method: "POST", body: JSON.stringify(body) }),
-  updatePolicy: (token: string, id: string, body: Record<string, unknown>) =>
-    academyRequest<{ policy: unknown }>(token, `/policies/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-  deletePolicy: (token: string, id: string) => academyRequest<void>(token, `/policies/${id}`, { method: "DELETE" }),
-  listRenewals: (token: string, params?: { severity?: string; status?: string; alertType?: string; limit?: number; offset?: number }) => {
-    const q = new URLSearchParams();
-    if (params?.severity) q.set("severity", params.severity);
-    if (params?.status) q.set("status", params.status);
-    if (params?.alertType) q.set("alertType", params.alertType);
-    if (params?.limit != null) q.set("limit", String(params.limit));
-    if (params?.offset != null) q.set("offset", String(params.offset));
-    const s = q.toString();
-    return academyRequest<{ alerts: unknown[]; total: number; limit: number; offset: number }>(token, `/renewals${s ? `?${s}` : ""}`);
-  },
-  createRenewal: (token: string, body: Record<string, unknown>) =>
-    academyRequest<{ alert: unknown }>(token, "/renewals", { method: "POST", body: JSON.stringify(body) }),
-  updateRenewal: (token: string, id: string, body: Record<string, unknown>) =>
-    academyRequest<{ alert: unknown }>(token, `/renewals/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-  deleteRenewal: (token: string, id: string) => academyRequest<void>(token, `/renewals/${id}`, { method: "DELETE" }),
-  getReportsDashboard: (token: string, params?: { from?: string; to?: string }) => {
-    const q = new URLSearchParams();
-    if (params?.from) q.set("from", params.from);
-    if (params?.to) q.set("to", params.to);
-    const s = q.toString();
-    return academyRequest<Record<string, unknown>>(token, `/reports/dashboard${s ? `?${s}` : ""}`);
-  },
-  listAuditLogs: (token: string, params?: { entityType?: string; entityId?: string; action?: string; userId?: string; from?: string; to?: string; limit?: number; offset?: number }) => {
-    const q = new URLSearchParams();
-    if (params?.entityType) q.set("entityType", params.entityType);
-    if (params?.entityId) q.set("entityId", params.entityId);
-    if (params?.action) q.set("action", params.action);
-    if (params?.userId) q.set("userId", params.userId);
-    if (params?.from) q.set("from", params.from);
-    if (params?.to) q.set("to", params.to);
-    if (params?.limit != null) q.set("limit", String(params.limit));
-    if (params?.offset != null) q.set("offset", String(params.offset));
-    const s = q.toString();
-    return academyRequest<{ logs: unknown[]; total: number; limit: number; offset: number }>(token, `/audit${s ? `?${s}` : ""}`);
-  },
-
-  listInvoices: (
-    token: string,
-    params?: { studentId?: string; enrolmentId?: string; status?: string; limit?: number; offset?: number }
-  ) => {
-    const q = new URLSearchParams();
-    if (params?.studentId) q.set("studentId", params.studentId);
-    if (params?.enrolmentId) q.set("enrolmentId", params.enrolmentId);
-    if (params?.status) q.set("status", params.status);
-    if (params?.limit != null) q.set("limit", String(params.limit));
-    if (params?.offset != null) q.set("offset", String(params.offset));
-    const s = q.toString();
-    return academyRequest<{ invoices: unknown[]; total: number; limit: number; offset: number }>(
-      token,
-      `/invoices${s ? `?${s}` : ""}`
+    throw new Error(
+      (err as { message?: string; error?: string }).message ||
+        (err as { error?: string }).error ||
+        "Failed to add public holiday"
     );
-  },
-  getInvoice: (token: string, id: string) => academyRequest<{ invoice: unknown }>(token, `/invoices/${id}`),
-  createInvoice: (token: string, body: Record<string, unknown>) =>
-    academyRequest<{ invoice: unknown }>(token, "/invoices", { method: "POST", body: JSON.stringify(body) }),
-  updateInvoice: (token: string, id: string, body: Record<string, unknown>) =>
-    academyRequest<{ invoice: unknown }>(token, `/invoices/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-  issueInvoice: (token: string, id: string) =>
-    academyRequest<{ invoice: unknown }>(token, `/invoices/${id}/issue`, { method: "POST" }),
-  cancelInvoice: (token: string, id: string) =>
-    academyRequest<{ invoice: unknown }>(token, `/invoices/${id}/cancel`, { method: "POST" }),
+  }
+  return res.json();
+}
 
-  listPayments: (token: string, params?: { invoiceId?: string; studentId?: string; verificationStatus?: string }) => {
-    const q = new URLSearchParams();
-    if (params?.invoiceId) q.set("invoiceId", params.invoiceId);
-    if (params?.studentId) q.set("studentId", params.studentId);
-    if (params?.verificationStatus) q.set("verificationStatus", params.verificationStatus);
-    const s = q.toString();
-    return academyRequest<{ payments: unknown[] }>(token, `/payments${s ? `?${s}` : ""}`);
-  },
-  createPayment: (token: string, body: Record<string, unknown>) =>
-    academyRequest<{ payment: unknown }>(token, "/payments", { method: "POST", body: JSON.stringify(body) }),
-  verifyPayment: (token: string, id: string) =>
-    academyRequest<{ payment: unknown }>(token, `/payments/${id}/verify`, { method: "POST" }),
-  rejectPayment: (token: string, id: string, remarks?: string | null) =>
-    academyRequest<{ payment: unknown }>(token, `/payments/${id}/reject`, {
-      method: "POST",
-      body: JSON.stringify({ remarks: remarks ?? null }),
-    }),
-  getReceipt: (token: string, id: string) => academyRequest<{ receipt: unknown }>(token, `/receipts/${id}`),
-};
+export async function deletePublicHoliday(token: string, id: string): Promise<void> {
+  const res = await authFetch(`/settings/public-holidays/${id}`, token, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Failed to delete public holiday");
+}

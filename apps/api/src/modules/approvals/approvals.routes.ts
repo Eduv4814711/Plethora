@@ -23,8 +23,6 @@ const createBodySchema = z.object({
     "SICK_NOTE",
     "SITE_TIMESHEET",
     "INCIDENT",
-    "TASK_COMPLETION",
-    "PAYROLL_READINESS",
     "DOCUMENT_REVIEW",
   ]),
   entityType: z.string().min(1),

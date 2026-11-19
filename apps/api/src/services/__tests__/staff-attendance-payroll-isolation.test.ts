@@ -25,7 +25,6 @@ vi.mock("../../lib/prisma.js", () => ({
 }));
 
 import { prisma } from "../../lib/prisma.js";
-import { findSitesNeedingApproval } from "../payroll.service.js";
 import { aggregateTimesheets } from "../timesheet.service.js";
 
 const companyId = "co-1";
@@ -83,17 +82,5 @@ describe("office staff attendance is isolated from payroll", () => {
     expect(before.find((row) => row.employeeId === "guard-1")?.basicHours).toBe(12);
     // No office employee may appear in the payroll aggregate at all.
     expect(before.some((row) => row.employeeId.startsWith("office-"))).toBe(false);
-  });
-
-  it("findSitesNeedingApproval ignores office staff entirely", async () => {
-    vi.mocked(prisma.shift.findMany).mockResolvedValue([] as never);
-
-    const result = await findSitesNeedingApproval(companyId, periodStart, periodEnd);
-
-    expect(result).toEqual([]);
-    // Office attendance has no site, so it can never add a site to the payroll gate.
-    expect(vi.mocked(prisma.site.findMany)).not.toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ employeeType: "general" }) })
-    );
   });
 });

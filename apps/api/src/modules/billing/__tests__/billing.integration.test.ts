@@ -10,7 +10,7 @@ import { hashPassword } from "../../../services/auth.service.js";
 
 const dbReady = await isIntegrationDatabaseAvailable();
 
-const BILLING = "/payroll/billing";
+const BILLING = "/billing";
 
 describe.runIf(dbReady)("client billing (integration)", () => {
   let app: FastifyInstance;
@@ -56,13 +56,13 @@ describe.runIf(dbReady)("client billing (integration)", () => {
     app = await buildApp();
 
     const tenantA = await provision("A", {
-      "/payroll/billing": ["view", "create", "edit", "delete", "approve", "export"],
+      "/billing": ["view", "create", "edit", "delete", "approve", "export"],
     });
     companyId = tenantA.companyId;
     token = tenantA.token;
 
     const tenantB = await provision("B", {
-      "/payroll/billing": ["view", "create", "edit", "delete", "approve", "export"],
+      "/billing": ["view", "create", "edit", "delete", "approve", "export"],
     });
     otherCompanyId = tenantB.companyId;
     otherToken = tenantB.token;
@@ -74,7 +74,7 @@ describe.runIf(dbReady)("client billing (integration)", () => {
         name: "Payroll Viewer",
         email: `billing-viewer-${runId}@plethora-test.local`,
         passwordHash: await hashPassword("billing-test-password-32chars!!"),
-        capabilities: { "/payroll/billing": ["view", "create"] },
+        capabilities: { "/billing": ["view", "create"] },
       },
     });
     viewOnlyToken = jwt.sign(

@@ -16,31 +16,6 @@ import {
   deleteEmploymentExit,
 } from "./compliance.service.js";
 import {
-  listStatutoryPeriods,
-  getStatutoryPeriod,
-  createStatutoryPeriod,
-  advancePeriodStatus,
-  recordStatutoryPayment,
-} from "./statutory-reconciliation.service.js";
-import {
-  listRateConfigs,
-  createRateConfig,
-  verifyRateConfig,
-} from "./statutory-rates.service.js";
-import {
-  listContributions,
-  getFundSummary,
-  captureContributionsFromRun,
-} from "./fund-contributions.service.js";
-import {
-  listCommitments,
-  createCommitment,
-  updateCommitment,
-  deleteCommitment,
-  recordCashSnapshot,
-  evaluateCashFloor,
-} from "./cash-floor.service.js";
-import {
   listLegalCases,
   getLegalCase,
   createLegalCase,
@@ -62,30 +37,19 @@ import {
   updateObligationSchema,
   markCompliantSchema,
   managementOverrideSchema,
-  listStatutoryPeriodsQuerySchema,
-  createStatutoryPeriodSchema,
-  advancePeriodStatusSchema,
-  recordStatutoryPaymentSchema,
-  createCashCommitmentSchema,
-  updateCashCommitmentSchema,
-  createCashSnapshotSchema,
   listLegalCasesQuerySchema,
   createLegalCaseSchema,
   updateLegalCaseSchema,
   listRemediationPlansQuerySchema,
   createRemediationPlanSchema,
   updateRemediationPlanSchema,
-  createStatutoryRateConfigSchema,
   listEmploymentExitsQuerySchema,
   createEmploymentExitSchema,
   updateEmploymentExitSchema,
 } from "./compliance.schemas.js";
 
 const COMPLIANCE = "/compliance";
-const STATUTORY = "/compliance/statutory";
-const FUNDS = "/compliance/funds";
 const LEGAL = "/compliance/legal";
-const CASH = "/compliance/cash-control";
 const COMPANY = "/compliance/company";
 const REPORTS = "/compliance/reports";
 
@@ -199,212 +163,6 @@ export async function complianceRoutes(app: FastifyInstance) {
   );
 
   // ---------------------------------------------------------------------------
-  // Statutory Reconciliation & Payments
-  // ---------------------------------------------------------------------------
-
-  app.get(
-    "/statutory-periods",
-    { preHandler: requireAnyCapability([COMPLIANCE, STATUTORY], "view") },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const query = listStatutoryPeriodsQuerySchema.parse(req.query);
-      const res = await listStatutoryPeriods(req.user!.companyId, query);
-      return reply.send(res);
-    }
-  );
-
-  app.post(
-    "/statutory-periods",
-    { preHandler: requireAnyCapability([COMPLIANCE, STATUTORY], "create") },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const body = createStatutoryPeriodSchema.parse(req.body);
-      const period = await createStatutoryPeriod(req.user!.companyId, body, req.user!.sub);
-      return reply.code(201).send(period);
-    }
-  );
-
-  app.get(
-    "/statutory-periods/:id",
-    { preHandler: requireAnyCapability([COMPLIANCE, STATUTORY], "view") },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const { id } = req.params as { id: string };
-      const period = await getStatutoryPeriod(req.user!.companyId, id);
-      if (!period) return reply.code(404).send({ error: "Statutory period not found" });
-      return reply.send(period);
-    }
-  );
-
-  app.post(
-    "/statutory-periods/:id/advance-status",
-    { preHandler: requireAnyCapability([COMPLIANCE, STATUTORY], "approve") },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const { id } = req.params as { id: string };
-      const body = advancePeriodStatusSchema.parse(req.body);
-      const period = await advancePeriodStatus(req.user!.companyId, id, body, req.user!.sub);
-      return reply.send(period);
-    }
-  );
-
-  app.post(
-    "/statutory-periods/:id/payments",
-    { preHandler: requireAnyCapability([COMPLIANCE, STATUTORY], "create") },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const { id } = req.params as { id: string };
-      const body = recordStatutoryPaymentSchema.parse(req.body);
-      const result = await recordStatutoryPayment(req.user!.companyId, id, body, req.user!.sub);
-      return reply.code(201).send(result);
-    }
-  );
-
-  // ---------------------------------------------------------------------------
-  // Statutory Rates
-  // ---------------------------------------------------------------------------
-
-  app.get(
-    "/statutory-rates",
-    { preHandler: requireAnyCapability([COMPLIANCE, STATUTORY], "view") },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const scheme = (req.query as { scheme?: any }).scheme;
-      const rates = await listRateConfigs(req.user!.companyId, scheme);
-      return reply.send(rates);
-    }
-  );
-
-  app.post(
-    "/statutory-rates",
-    { preHandler: requireAnyCapability([COMPLIANCE, STATUTORY], "create") },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const body = createStatutoryRateConfigSchema.parse(req.body);
-      const config = await createRateConfig(req.user!.companyId, body, req.user!.sub);
-      return reply.code(201).send(config);
-    }
-  );
-
-  app.post(
-    "/statutory-rates/:id/verify",
-    { preHandler: requireAnyCapability([COMPLIANCE, STATUTORY], "approve") },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const { id } = req.params as { id: string };
-      const config = await verifyRateConfig(req.user!.companyId, id, req.user!.sub);
-      return reply.send(config);
-    }
-  );
-
-  // ---------------------------------------------------------------------------
-  // Funds & Contributions
-  // ---------------------------------------------------------------------------
-
-  app.get(
-    "/statutory-periods/:id/contributions",
-    { preHandler: requireAnyCapability([COMPLIANCE, FUNDS], "view_sensitive") },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const { id } = req.params as { id: string };
-      const query = req.query as { scheme?: any; employeeId?: string; limit?: string; offset?: string };
-      const res = await listContributions(req.user!.companyId, id, {
-        scheme: query.scheme,
-        employeeId: query.employeeId,
-        limit: query.limit ? parseInt(query.limit, 10) : 100,
-        offset: query.offset ? parseInt(query.offset, 10) : 0,
-      });
-      return reply.send(res);
-    }
-  );
-
-  app.get(
-    "/statutory-periods/:id/fund-summary",
-    { preHandler: requireAnyCapability([COMPLIANCE, FUNDS], "view") },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const { id } = req.params as { id: string };
-      const summary = await getFundSummary(req.user!.companyId, id);
-      return reply.send(summary);
-    }
-  );
-
-  app.post(
-    "/statutory-periods/:id/capture-contributions",
-    { preHandler: requireAnyCapability([COMPLIANCE, FUNDS], "create") },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const { id } = req.params as { id: string };
-      const body = req.body as { payrollRunId: string; scheme?: any };
-      if (!body?.payrollRunId) return reply.code(400).send({ error: "payrollRunId is required" });
-      const result = await captureContributionsFromRun(
-        req.user!.companyId,
-        id,
-        body.payrollRunId,
-        body.scheme ?? "PSSPF"
-      );
-      return reply.send(result);
-    }
-  );
-
-  // ---------------------------------------------------------------------------
-  // Cash Floor & Commitments
-  // ---------------------------------------------------------------------------
-
-  app.get(
-    "/cash-floor",
-    { preHandler: requireAnyCapability([COMPLIANCE, CASH], "view") },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const evaluation = await evaluateCashFloor(req.user!.companyId);
-      return reply.send(evaluation);
-    }
-  );
-
-  app.get(
-    "/cash-commitments",
-    { preHandler: requireAnyCapability([COMPLIANCE, CASH], "view") },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const commitments = await listCommitments(req.user!.companyId);
-      return reply.send(commitments);
-    }
-  );
-
-  app.post(
-    "/cash-commitments",
-    { preHandler: requireAnyCapability([COMPLIANCE, CASH], "create") },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const body = createCashCommitmentSchema.parse(req.body);
-      const commitment = await createCommitment(req.user!.companyId, body, req.user!.sub);
-      return reply.code(201).send(commitment);
-    }
-  );
-
-  app.patch(
-    "/cash-commitments/:id",
-    { preHandler: requireAnyCapability([COMPLIANCE, CASH], "edit") },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const { id } = req.params as { id: string };
-      const body = updateCashCommitmentSchema.parse(req.body);
-      const commitment = await updateCommitment(req.user!.companyId, id, body, req.user!.sub);
-      return reply.send(commitment);
-    }
-  );
-
-  app.delete(
-    "/cash-commitments/:id",
-    { preHandler: requireAnyCapability([COMPLIANCE, CASH], "delete") },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const { id } = req.params as { id: string };
-      const deleted = await deleteCommitment(req.user!.companyId, id, req.user!.sub);
-      return reply.send({ ok: true, deletedId: deleted.id });
-    }
-  );
-
-  app.post(
-    "/cash-snapshots",
-    { preHandler: requireAnyCapability([COMPLIANCE, CASH], "create") },
-    async (req: FastifyRequest, reply: FastifyReply) => {
-      const body = createCashSnapshotSchema.parse(req.body);
-      const snapshot = await recordCashSnapshot(
-        req.user!.companyId,
-        body.availableCash,
-        body.notes,
-        req.user!.sub
-      );
-      return reply.code(201).send(snapshot);
-    }
-  );
-
-  // ---------------------------------------------------------------------------
   // Legal Cases & Remediation Plans
   // ---------------------------------------------------------------------------
 
@@ -464,7 +222,7 @@ export async function complianceRoutes(app: FastifyInstance) {
 
   app.get(
     "/remediation-plans",
-    { preHandler: requireAnyCapability([COMPLIANCE, STATUTORY], "view") },
+    { preHandler: requireAnyCapability([COMPLIANCE, COMPANY, LEGAL], "view") },
     async (req: FastifyRequest, reply: FastifyReply) => {
       const query = listRemediationPlansQuerySchema.parse(req.query);
       const res = await listRemediationPlans(req.user!.companyId, query);
@@ -474,7 +232,7 @@ export async function complianceRoutes(app: FastifyInstance) {
 
   app.post(
     "/remediation-plans",
-    { preHandler: requireAnyCapability([COMPLIANCE, STATUTORY], "create") },
+    { preHandler: requireAnyCapability([COMPLIANCE, COMPANY, LEGAL], "create") },
     async (req: FastifyRequest, reply: FastifyReply) => {
       const body = createRemediationPlanSchema.parse(req.body);
       const plan = await createRemediationPlan(req.user!.companyId, body, req.user!.sub);
@@ -484,7 +242,7 @@ export async function complianceRoutes(app: FastifyInstance) {
 
   app.patch(
     "/remediation-plans/:id",
-    { preHandler: requireAnyCapability([COMPLIANCE, STATUTORY], "edit") },
+    { preHandler: requireAnyCapability([COMPLIANCE, COMPANY, LEGAL], "edit") },
     async (req: FastifyRequest, reply: FastifyReply) => {
       const { id } = req.params as { id: string };
       const body = updateRemediationPlanSchema.parse(req.body);

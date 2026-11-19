@@ -197,18 +197,10 @@ function statusClass(status: string): string {
 
 export default function LeaveManagementPage() {
   const { token, user } = useAuth();
-  const canCreate = Boolean(
-    user && (hasCapability(user, "/employees/leave", "create") || hasCapability(user, "/payroll", "create"))
-  );
-  const canEdit = Boolean(
-    user && (hasCapability(user, "/employees/leave", "edit") || hasCapability(user, "/payroll", "edit"))
-  );
-  const canApprove = Boolean(
-    user && (hasCapability(user, "/employees/leave", "approve") || hasCapability(user, "/payroll", "approve"))
-  );
-  const canExport = Boolean(
-    user && (hasCapability(user, "/employees/leave", "export") || hasCapability(user, "/payroll", "export"))
-  );
+  const canCreate = Boolean(user && hasCapability(user, "/employees/leave", "create"));
+  const canEdit = Boolean(user && hasCapability(user, "/employees/leave", "edit"));
+  const canApprove = Boolean(user && hasCapability(user, "/employees/leave", "approve"));
+  const canExport = Boolean(user && hasCapability(user, "/employees/leave", "export"));
 
   const [tab, setTab] = useState<Tab>("queue");
   const [employees, setEmployees] = useState<GuardPickerOption[]>([]);

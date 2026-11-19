@@ -24,30 +24,29 @@ The system is being developed using a real security company as its live operatin
 
 This means the application must solve real operational problems rather than theoretical software problems.
 
-The platform should eventually allow a security company to manage:
+The platform should allow a security company to manage:
 
-* employees/security officers
+* employees/security officers (`externalPayrollCode` for Sage/external payroll sync)
 * employee documentation
 * regulatory information
-* security grades
+* PSIRA grades and registrations
 * employment information
 * clients
-* sites
+* sites (including `costCenterCode` for payroll/billing allocation)
 * posts
 * deployment requirements
-* rostering
+* rostering (26th–25th cycle)
 * shift allocation
 * attendance
 * site timesheets
 * leave
-* overtime
-* payroll
-* deductions
-* regulatory contributions
-* compliance
+* overtime, Sunday, public holiday, and night-shift classifications
+* external payroll exports (Sage Business Cloud ZA, Sage VIP, Sage 300 People, Generic CSV, JSON)
+* operational compliance (obligations register, legal cases, remediation, tender/executive reports)
 * incidents
 * disciplinary documentation
-* invoicing/billing
+* client billing (quotes, invoices, payments, receipts at `/billing`)
+* WhatsApp guard self-service & escalations
 * operational reporting
 * management dashboards
 * audit trails
@@ -56,14 +55,14 @@ Plethora should reduce reliance on:
 
 * spreadsheets
 * handwritten rosters
-* WhatsApp instructions
+* unstructured WhatsApp instructions
 * paper attendance registers
-* disconnected payroll calculations
+* manual attendance-to-Sage re-keying
 * manual compliance registers
 * duplicate data capture
 * institutional knowledge stored in individual employees' heads
 
-The long-term goal is for security companies to run significant portions of their workforce operations through Plethora.
+The long-term goal is for security companies to run their workforce operations, attendance verification, compliance, and client billing cleanly through Plethora, while exporting verified hours to Sage or other downstream payroll systems.
 
 ---
 
@@ -77,13 +76,13 @@ Every major feature should connect logically to the information that came before
 
 The central operational chain is:
 
-Employee
+Employee (`externalPayrollCode`)
 ↓
 Employment & Compliance Profile
 ↓
 Client
 ↓
-Site
+Site (`costCenterCode`)
 ↓
 Post
 ↓
@@ -95,15 +94,15 @@ Scheduled Shift
 ↓
 Actual Attendance / Site Timesheet
 ↓
-Approved Hours
+Approved Hours & Approved Leave
 ↓
-Payroll
+External Payroll Export (`/payroll-exports` → Sage / CSV / JSON)
 ↓
-Employee Payslip / Statutory Contributions
+Client Billing (`/billing`)
 ↓
-Client Billing
-↓
-Operational / Financial / Compliance Reporting
+Operational / Billing / Compliance Reporting
+
+Retired non-core modules (Internal Payroll Calculation & Payslips, Academy, Tasks & Projects, Client Portal, and Compliance Finance) must remain removed to keep Plethora lightweight, focused, and fast.
 
 Whenever you modify one section of this chain, consider how that modification affects the rest of the chain.
 
@@ -129,7 +128,7 @@ The employee record may contain:
 * department
 * PSIRA grade
 * employment status
-* salary/rate information
+* external payroll mapping code (`externalPayrollCode`) — pay rates and tax calculations reside in external payroll software such as Sage
 * documents
 * certifications
 * leave information
@@ -335,90 +334,66 @@ The underlying data model should not assume that only one attendance mechanism w
 
 ---
 
-# 7. PAYROLL
+# 7. EXTERNAL PAYROLL EXPORT (`/payroll-exports`)
 
-Payroll is one of the highest-risk areas in Plethora.
+Attendance-to-payroll export is one of the highest-risk areas in Plethora.
 
-Do not modify payroll behaviour casually.
+Do not modify payroll export aggregation or locking behaviour casually.
 
-Payroll should derive information from authoritative operational records wherever possible.
+Plethora acts as the authoritative upstream **workforce operations, attendance, and leave** engine, while salary rates, PAYE/UIF/SDL tax calculations, and employee payslips execute downstream in **Sage** (Sage Business Cloud Payroll ZA, Sage VIP, Sage 300 People) or another configured external payroll system.
+
+Payroll export must derive strictly from authoritative approved operational records — never from unapproved scheduled shifts alone.
 
 Conceptually:
 
-Employee employment information
+Employee (`externalPayrollCode`) + Site (`costCenterCode`)
 
-* Approved attendance
+* Approved actual attendance (`SiteTimesheet` / `SiteTimesheetRow`)
 * Ordinary hours
-* Overtime
-* Public holiday work
-* Leave
-* Allowances
-* Deductions
-* Regulatory/statutory contributions
-  = Gross and net payroll result
+* Overtime hours
+* Sunday work hours
+* Public holiday hours
+* Night shift allowance hours
+* Approved leave breakdown (annual, sick, family responsibility, study, unpaid)
+  = Locked Export Batch (`PayrollExportBatch`) → Sage / Generic CSV / JSON Webhook + SHA-256 checksum
 
-The platform should be designed around South African payroll requirements.
+Every export batch must be:
 
-Relevant concepts may include:
-
-* PAYE
-* UIF
-* SDL
-* provident fund
-* bargaining council requirements
-* security-industry contributions
-* PSIRA-related requirements
-* BCEA requirements
-* overtime
-* public holidays
-* leave
-* statutory deductions
-
-Do not hard-code rules unnecessarily.
-
-Where possible, design calculation rules so that rates and regulatory parameters can eventually be configured.
-
-Payroll must be:
-
-* auditable
-* reproducible
-* explainable
-
-For any payslip result, an administrator should eventually be able to understand how Plethora arrived at that number.
+* strictly gated by approved actual attendance and readiness checks
+* auditable (who created, locked, downloaded, or voided each batch, with SHA-256 integrity hash)
+* reproducible and reversible (voiding a batch unlinks exported leave requests)
 
 ---
 
 # 8. COMPLIANCE
 
-Compliance should become a major strategic capability of Plethora.
+Operational compliance is a major strategic capability of Plethora.
 
-A security company may need to demonstrate compliance involving:
+A security company needs to demonstrate compliance involving:
 
 * employee documentation
-* PSIRA registration
-* security grades
+* PSIRA registration and security grades
 * employment contracts
-* identity documentation
-* banking records
-* leave
-* training
-* statutory contributions
-* payroll records
-* employee registrations
-* company regulatory requirements
+* identity and vetted screening records
+* medical certificates and leave compliance
+* disciplinary and legal cases
+* company regulatory obligations (PSIRA, COIDA, OHS, POPIA, SARS/UIF/SDL registrations tracked as operational compliance obligations, not in-app statutory ledger payments)
+* tender readiness and executive compliance reporting
+
+(Note: Financial statutory reconciliation ledger payments, cash floor reserves, and academy student management are outside Plethora's streamlined operational scope.)
 
 The goal is not simply to upload documents.
 
-Plethora should eventually understand:
+Plethora understands:
 
 * what is required
 * whether it exists
 * whether it is valid
 * when it expires
 * who is responsible
-* what action is outstanding
+* what remediation action is outstanding
 
-Long-term conceptual model:
+Conceptual model:
 
 Requirement
 ↓
@@ -428,13 +403,13 @@ Validation
 ↓
 Status
 ↓
-Expiry / Renewal
+Expiry / Renewal / Remediation
 ↓
 Notification
 ↓
 Audit Trail
 
-This enables Plethora to move from being a passive document repository toward becoming an active compliance-management platform.
+This makes Plethora an active operational compliance-management platform.
 
 ---
 
@@ -521,31 +496,31 @@ Incident information should become useful operational intelligence rather than m
 
 ---
 
-# 12. CLIENT BILLING
+# 12. CLIENT BILLING (`/billing`)
 
-Long term, Plethora should connect operational activity to client billing.
+Plethora connects verified operational service delivery directly to top-level Client Billing at `/billing` (quotes, tax invoices, payments, receipts, and client statements).
 
 Conceptually:
 
 Client Contract
 ↓
-Site
+Site (`costCenterCode`)
 ↓
 Post / Staffing Requirement
 ↓
 Deployment
 ↓
-Verified Service Delivery
+Verified Service Delivery (`SiteTimesheet`)
 ↓
 Billing Calculation
 ↓
-Invoice
+Quote / Invoice PDF (`puppeteer-core`)
 ↓
-Payment / Reconciliation
+Payment / Receipt / Reconciliation
 
-This makes operational records valuable beyond payroll.
+This makes operational records valuable beyond external payroll export.
 
-The system should eventually be able to reconcile:
+The system reconciles:
 
 **what the client contracted for**
 

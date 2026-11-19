@@ -729,7 +729,6 @@ export async function getCompanyComplianceReport(
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     include: {
       group: { select: { id: true, name: true } },
-      grade: { select: { id: true, name: true } },
     },
   });
 

@@ -3,18 +3,16 @@ import { randomBytes } from "node:crypto";
 import { prisma } from "../../lib/prisma.js";
 import { isIntegrationDatabaseAvailable } from "../../test-utils/tenant-harness.js";
 import { aggregateTimesheets } from "../timesheet.service.js";
-import { fetchPayslipData } from "../payslip-data.service.js";
-import { getLeaveReadiness, postLeaveToPayroll, unpostLeaveFromPayroll } from "../leave-v3.service.js";
+import { getLeaveExportReadiness, markLeaveExported, unmarkLeaveExported } from "../leave-v3.service.js";
 
 const dbReady = await isIntegrationDatabaseAvailable();
 
 /**
- * Covers the leave-rebuild touchpoints that have no other test coverage:
- * timesheet aggregation's leave-hours bucketing, the payslip leave breakdown,
- * and the payroll-readiness/posting functions that replaced the old
- * LeavePayrollPosting/LeaveOccurrence lifecycle.
+ * Covers the leave-rebuild touchpoints:
+ * timesheet aggregation's leave-hours bucketing, separate annual/sick/family/study
+ * breakdown fields, and export-readiness / batch-marking lifecycle.
  */
-describe.runIf(dbReady)("leave rebuild — payroll touchpoints (integration)", () => {
+describe.runIf(dbReady)("leave rebuild — payroll export touchpoints (integration)", () => {
   let companyId: string;
   let generalEmployeeId: string;
   let securityEmployeeId: string;
@@ -23,7 +21,7 @@ describe.runIf(dbReady)("leave rebuild — payroll touchpoints (integration)", (
   const periodEnd = new Date("2026-06-30T00:00:00.000Z");
 
   beforeAll(async () => {
-    const company = await prisma.company.create({ data: { name: `Leave Payroll Touchpoints ${runId}` } });
+    const company = await prisma.company.create({ data: { name: `Leave Export Touchpoints ${runId}` } });
     companyId = company.id;
 
     const commencementDate = new Date("2022-01-01T00:00:00.000Z");
@@ -35,7 +33,6 @@ describe.runIf(dbReady)("leave rebuild — payroll touchpoints (integration)", (
         lastName: "Staffer",
         status: "active",
         employeeType: "general",
-        monthlySalary: 15000,
         commencementDate,
       },
     });
@@ -49,7 +46,6 @@ describe.runIf(dbReady)("leave rebuild — payroll touchpoints (integration)", (
         lastName: "Officer",
         status: "active",
         employeeType: "security_officer",
-        hourlyRate: 100,
         commencementDate,
       },
     });
@@ -128,7 +124,7 @@ describe.runIf(dbReady)("leave rebuild — payroll touchpoints (integration)", (
     await prisma.leaveRequest.delete({ where: { id: request.id } });
   });
 
-  it("fetchPayslipData buckets ANNUAL and SICK leave hours separately, ignoring other leave types", async () => {
+  it("aggregateTimesheets buckets ANNUAL and SICK leave hours separately alongside total leaveHours", async () => {
     const [annual, sick] = await Promise.all([
       prisma.leaveRequest.create({
         data: {
@@ -156,33 +152,16 @@ describe.runIf(dbReady)("leave rebuild — payroll touchpoints (integration)", (
       }),
     ]);
 
-    const run = await prisma.payrollRun.create({
-      data: { companyId, periodStart, periodEnd, payPeriod: "monthly", status: "draft" },
-    });
-    const item = await prisma.payrollItem.create({
-      data: {
-        payrollRunId: run.id,
-        employeeId: generalEmployeeId,
-        hoursWorked: 160,
-        overtimeHours: 0,
-        basePay: 15000,
-        overtimePay: 0,
-        grossPay: 15000,
-        deductions: 0,
-        netPay: 15000,
-      },
-    });
+    const aggregates = await aggregateTimesheets(companyId, periodStart, periodEnd);
+    const mine = aggregates.find((a) => a.employeeId === generalEmployeeId);
+    expect(mine?.annualLeaveHours).toBe(8);
+    expect(mine?.sickLeaveHours).toBe(8);
+    expect(mine?.leaveHours).toBe(16);
 
-    const data = await fetchPayslipData(run.id, item.id, companyId);
-    expect(data?.leaveBreakdown?.annualHours).toBe(8);
-    expect(data?.leaveBreakdown?.sickHours).toBe(8);
-
-    await prisma.payrollItem.delete({ where: { id: item.id } });
-    await prisma.payrollRun.delete({ where: { id: run.id } });
     await prisma.leaveRequest.deleteMany({ where: { id: { in: [annual.id, sick.id] } } });
   });
 
-  it("getLeaveReadiness blocks a payroll period with an unresolved (PENDING) leave request", async () => {
+  it("getLeaveExportReadiness blocks an export period with an unresolved (PENDING) leave request", async () => {
     const pending = await prisma.leaveRequest.create({
       data: {
         companyId,
@@ -196,16 +175,16 @@ describe.runIf(dbReady)("leave rebuild — payroll touchpoints (integration)", (
       },
     });
 
-    const readiness = await getLeaveReadiness(companyId, periodStart, periodEnd);
+    const readiness = await getLeaveExportReadiness(companyId, periodStart, periodEnd);
     expect(readiness.blocked).toBe(true);
     expect(readiness.unresolved.map((r) => r.id)).toContain(pending.id);
 
     await prisma.leaveRequest.delete({ where: { id: pending.id } });
-    const clear = await getLeaveReadiness(companyId, periodStart, periodEnd);
+    const clear = await getLeaveExportReadiness(companyId, periodStart, periodEnd);
     expect(clear.blocked).toBe(false);
   });
 
-  it("postLeaveToPayroll links approved requests in the period to the run; unpostLeaveFromPayroll clears it", async () => {
+  it("markLeaveExported links approved requests in the cycle to the batch; unmarkLeaveExported clears it", async () => {
     const approved = await prisma.leaveRequest.create({
       data: {
         companyId,
@@ -218,25 +197,42 @@ describe.runIf(dbReady)("leave rebuild — payroll touchpoints (integration)", (
         retentionUntil: new Date("2029-06-20T00:00:00.000Z"),
       },
     });
-    const run = await prisma.payrollRun.create({
-      data: { companyId, periodStart, periodEnd, payPeriod: "monthly", status: "draft" },
+    const profile = await prisma.payrollExportProfile.create({
+      data: {
+        companyId,
+        name: "Test Sage Profile",
+        provider: "SAGE_BUSINESS_CLOUD_ZA",
+        isDefault: true,
+      },
+    });
+    const batch = await prisma.payrollExportBatch.create({
+      data: {
+        companyId,
+        profileId: profile.id,
+        periodKey: "2026-06",
+        periodStart,
+        periodEnd,
+        status: "DRAFT",
+        createdBy: "usr-test",
+      },
     });
 
-    const posted = await postLeaveToPayroll(companyId, run.id, periodStart, periodEnd);
-    expect(posted.posted).toBe(1);
-    const afterPost = await prisma.leaveRequest.findUnique({ where: { id: approved.id } });
-    expect(afterPost?.payrollRunId).toBe(run.id);
+    const marked = await markLeaveExported(companyId, batch.id, periodStart, periodEnd);
+    expect(marked.exported).toBe(1);
+    const afterMark = await prisma.leaveRequest.findUnique({ where: { id: approved.id } });
+    expect(afterMark?.payrollExportBatchId).toBe(batch.id);
 
-    // Posting again is a no-op — the request is already linked to a run.
-    const postedAgain = await postLeaveToPayroll(companyId, run.id, periodStart, periodEnd);
-    expect(postedAgain.posted).toBe(0);
+    // Marking again is a no-op — the request is already linked to a batch.
+    const markedAgain = await markLeaveExported(companyId, batch.id, periodStart, periodEnd);
+    expect(markedAgain.exported).toBe(0);
 
-    const unposted = await unpostLeaveFromPayroll(companyId, run.id);
-    expect(unposted.cleared).toBe(1);
-    const afterUnpost = await prisma.leaveRequest.findUnique({ where: { id: approved.id } });
-    expect(afterUnpost?.payrollRunId).toBeNull();
+    const unmarked = await unmarkLeaveExported(companyId, batch.id);
+    expect(unmarked.cleared).toBe(1);
+    const afterUnmark = await prisma.leaveRequest.findUnique({ where: { id: approved.id } });
+    expect(afterUnmark?.payrollExportBatchId).toBeNull();
 
     await prisma.leaveRequest.delete({ where: { id: approved.id } });
-    await prisma.payrollRun.delete({ where: { id: run.id } });
+    await prisma.payrollExportBatch.delete({ where: { id: batch.id } });
+    await prisma.payrollExportProfile.delete({ where: { id: profile.id } });
   });
 });

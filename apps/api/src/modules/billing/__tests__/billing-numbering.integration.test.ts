@@ -10,7 +10,7 @@ import { hashPassword } from "../../../services/auth.service.js";
 
 const dbReady = await isIntegrationDatabaseAvailable();
 
-const BILLING = "/payroll/billing";
+const BILLING = "/billing";
 
 describe.runIf(dbReady)("quote and invoice numbering (integration)", () => {
   let app: FastifyInstance;
@@ -51,7 +51,7 @@ describe.runIf(dbReady)("quote and invoice numbering (integration)", () => {
     app = await buildApp();
 
     const tenantA = await provision("Finance", {
-      "/payroll/billing": ["view", "create", "edit", "delete", "approve", "export"],
+      "/billing": ["view", "create", "edit", "delete", "approve", "export"],
     });
     companyId = tenantA.companyId;
     token = tenantA.token;
@@ -63,7 +63,7 @@ describe.runIf(dbReady)("quote and invoice numbering (integration)", () => {
         name: "Ops User",
         email: `billing-ops-${runId}@plethora-test.local`,
         passwordHash: await hashPassword("billing-test-password-32chars!!"),
-        capabilities: { "/payroll/billing": ["view", "create"] },
+        capabilities: { "/billing": ["view", "create"] },
       },
     });
     opsToken = jwt.sign(

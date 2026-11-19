@@ -16,7 +16,6 @@ import { runDuplicatesAudit } from "./duplicates.mjs";
 import { runRelationshipsAudit } from "./relationships.mjs";
 import { runDateRangesAudit } from "./date-ranges.mjs";
 import { runRosterPeriodsAudit } from "./roster-periods.mjs";
-import { runAttendancePayrollAudit } from "./attendance-payroll.mjs";
 import { runDashboardReconciliationAudit } from "./dashboard-reconciliation.mjs";
 import { runStatusConsistencyAudit } from "./status-consistency.mjs";
 
@@ -25,8 +24,7 @@ const AUDITS = [
   { category: "duplicates", label: "Duplicate records", run: runDuplicatesAudit },
   { category: "relationships", label: "Relationship integrity", run: runRelationshipsAudit },
   { category: "date-ranges", label: "Date ranges & overlaps", run: runDateRangesAudit },
-  { category: "roster-periods", label: "Roster/pay period alignment", run: runRosterPeriodsAudit },
-  { category: "attendance-payroll", label: "Attendance → payroll chain", run: runAttendancePayrollAudit },
+  { category: "roster-periods", label: "Roster/cycle period alignment", run: runRosterPeriodsAudit },
   { category: "dashboard-reconciliation", label: "Dashboard reconciliation", run: runDashboardReconciliationAudit },
   { category: "status-consistency", label: "Status consistency", run: runStatusConsistencyAudit },
 ];

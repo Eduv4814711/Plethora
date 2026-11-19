@@ -28,7 +28,7 @@ export function ClientOverviewTab({
   onTabChange,
 }: ClientOverviewTabProps) {
   const canAccessBilling = Boolean(
-    user && (user.isOwner || hasCapability(user, "/payroll/billing", "view"))
+    user && (user.isOwner || hasCapability(user, "/billing", "view"))
   );
 
   const activeContracts = contracts.filter((c) => c.status === "ACTIVE");
@@ -198,7 +198,7 @@ export function ClientOverviewTab({
             </h2>
             {canAccessBilling && (
               <Link
-                href={`/payroll/billing/clients/${client.id}`}
+                href={`/billing/clients/${client.id}`}
                 className="text-xs font-medium text-security-emerald-700 hover:underline dark:text-security-emerald-400"
               >
                 Open Client Billing →
@@ -240,7 +240,7 @@ export function ClientOverviewTab({
                 Site pricing, billing rates and credit notes are strictly managed under Client Billing.
               </p>
               <Link
-                href={`/payroll/billing/clients/${client.id}`}
+                href={`/billing/clients/${client.id}`}
                 className="mt-2 inline-block font-semibold underline"
               >
                 Manage Rates & Invoicing in Billing Module
@@ -249,7 +249,7 @@ export function ClientOverviewTab({
           ) : (
             <div className="rounded-security bg-security-navy-50 p-3 text-xs text-security-navy-600 dark:bg-security-navy-800 dark:text-security-navy-400">
               Pricing and billing rates are restricted to authorised Finance personnel under{" "}
-              <code>/payroll/billing</code>.
+              <code>/billing</code>.
             </div>
           )}
         </div>

@@ -62,9 +62,6 @@ const FACTORY_RESET_MODULES = [
   "sites",
   "shifts",
   "attendance",
-  "payroll",
-  "timesheets",
-  "payRules",
   "publicHolidays",
   "auditLogs",
   "companySettings",
@@ -140,8 +137,6 @@ export async function settingsRoutes(app: FastifyInstance) {
         uifReference: true,
         payeReference: true,
         sdlReference: true,
-        sdlLiableFrom: true,
-        monthlyPayrollTotals: true,
         settings: true,
       },
     });
@@ -246,8 +241,6 @@ export async function settingsRoutes(app: FastifyInstance) {
         uifReference: true,
         payeReference: true,
         sdlReference: true,
-        sdlLiableFrom: true,
-        monthlyPayrollTotals: true,
         settings: true,
       },
     });
@@ -323,17 +316,6 @@ export async function settingsRoutes(app: FastifyInstance) {
       payPeriodEndDay: 25,
       autoRosterHorizonPeriods: 2,
     };
-
-    const DEFAULT_PAY_RULES = [
-      { ruleType: "overtime", multiplier: 1.5 },
-      { ruleType: "sunday", multiplier: 2.0 },
-      { ruleType: "public_holiday", multiplier: 2.0 },
-    ];
-
-    const DEFAULT_DEDUCTION_RULES = [
-      // UIF is calculated by tax service (with R17,712 ceiling) - do not add as deduction rule
-      { name: "PSIRA", type: "fixed" as const, amount: 75, appliesTo: "security_officer" as const },
-    ];
 
     const SA_PUBLIC_HOLIDAYS = [
       { date: "2025-01-01", name: "New Year's Day" },
@@ -432,17 +414,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         await tx.site.deleteMany({ where: { companyId } });
       }
 
-      // Payroll: cascade deletes Payslip + PayrollItem via PayrollRun
-      if (has("payroll")) {
-        await tx.payrollRun.deleteMany({ where: { companyId } });
-      }
-
-      // Timesheets
-      if (has("timesheets")) {
-        await tx.timesheet.deleteMany({ where: { companyId } });
-      }
-
-      // Employees: GuardSiteEligibility, SiteAssignment, LeaveRecord, EmployeeDeduction, Shift, PayrollItem, Timesheet, Employee
+      // Employees: GuardSiteEligibility, SiteAssignment, LeaveRecord, Shift, PayrollExportLine, Employee
       if (has("employees")) {
         if (postIds.length > 0) {
           await tx.guardSiteEligibility.deleteMany({ where: { sitePostId: { in: postIds } } });
@@ -451,47 +423,15 @@ export async function settingsRoutes(app: FastifyInstance) {
           await tx.siteAssignment.deleteMany({ where: { siteId: { in: siteIds } } });
         }
         await tx.shift.deleteMany({ where: { companyId } });
-        await tx.payrollRun.deleteMany({ where: { companyId } });
-        await tx.timesheet.deleteMany({ where: { companyId } });
+        await tx.payrollExportLine.deleteMany({ where: { batch: { companyId } } });
+        await tx.payrollExportBatch.deleteMany({ where: { companyId } });
         if (employeeIds.length > 0) {
           // MedicalCertificate rows cascade-delete with their LeaveRequest row.
           await tx.leaveRequest.deleteMany({ where: { companyId } });
           await tx.leaveAdjustment.deleteMany({ where: { companyId } });
           await tx.leaveAuditLog.deleteMany({ where: { companyId } });
-          await tx.employeeDeduction.deleteMany({ where: { employeeId: { in: employeeIds } } });
         }
         await tx.employee.deleteMany({ where: { companyId } });
-      }
-
-      // Pay rules: clear and restore to defaults
-      if (has("payRules")) {
-        await tx.employee.updateMany({ where: { companyId }, data: { gradeId: null } });
-        await tx.payGrade.deleteMany({ where: { companyId } });
-        await tx.payRule.deleteMany({ where: { companyId } });
-        await tx.groupPayRule.deleteMany({ where: { companyId } });
-        await tx.groupEarningsRule.deleteMany({ where: { companyId } });
-        await tx.groupDeductionRule.deleteMany({ where: { companyId } });
-        await tx.earningsRule.deleteMany({ where: { companyId } });
-        await tx.deductionRule.deleteMany({ where: { companyId } });
-        for (const { ruleType, multiplier } of DEFAULT_PAY_RULES) {
-          await tx.payRule.create({
-            data: { companyId, ruleType, multiplier },
-          });
-        }
-        for (const dr of DEFAULT_DEDUCTION_RULES) {
-          const rule = dr as { name: string; type: string; amount?: number; rate?: number; appliesTo: string };
-          await tx.deductionRule.create({
-            data: {
-              companyId,
-              name: rule.name,
-              type: rule.type,
-              rate: rule.rate ?? null,
-              amount: rule.amount ?? null,
-              appliesTo: rule.appliesTo,
-              isOptional: false,
-            },
-          });
-        }
       }
 
       // Public holidays: clear and restore to SA defaults
@@ -540,8 +480,6 @@ export async function settingsRoutes(app: FastifyInstance) {
             uifReference: null,
             payeReference: null,
             sdlReference: null,
-            sdlLiableFrom: null,
-            monthlyPayrollTotals: Prisma.JsonNull,
             settings: DEFAULT_SETTINGS,
             theme: Prisma.JsonNull,
           },
@@ -571,8 +509,6 @@ export async function settingsRoutes(app: FastifyInstance) {
         uifReference: true,
         payeReference: true,
         sdlReference: true,
-        sdlLiableFrom: true,
-        monthlyPayrollTotals: true,
         settings: true,
       },
     });

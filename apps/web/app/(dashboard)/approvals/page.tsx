@@ -16,8 +16,6 @@ const TYPE_LABELS: Record<string, string> = {
   SICK_NOTE: "Sick note",
   SITE_TIMESHEET: "Site timesheet",
   INCIDENT: "Incident",
-  TASK_COMPLETION: "Task completion",
-  PAYROLL_READINESS: "Payroll readiness",
   DOCUMENT_REVIEW: "Document review",
 };
 

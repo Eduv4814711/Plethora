@@ -162,11 +162,11 @@ export function SiteTimesheetsSection({
       return;
     }
     const accepted = await confirm({
-      title: otherShiftPendingCount > 0 ? `Approve ${shiftLabel}` : "Approve timesheet for payroll",
+      title: otherShiftPendingCount > 0 ? `Approve ${shiftLabel}` : "Approve timesheet for export",
       message:
         otherShiftPendingCount > 0
           ? `Approve ${shiftScopedRows.length} confirmed ${shiftLabel} attendance entries? The timesheet will remain open because ${otherShiftPendingCount} other-shift entries still need review.`
-          : `Approve and lock this site timesheet for payroll (${shiftScopedRows.length} ${shiftLabel} attendance entries)?`,
+          : `Approve and lock this site timesheet (${shiftScopedRows.length} ${shiftLabel} attendance entries)?`,
       confirmLabel: "Approve timesheet",
       danger: false,
     });
@@ -175,7 +175,7 @@ export function SiteTimesheetsSection({
     if (result && !result.locked && result.remainingPending > 0) {
       showNotice(
         "Shift approved",
-        `${result.approvedRowCount} attendance entries approved. ${result.remainingPending} entries on the other shift still need review before payroll lock.`
+        `${result.approvedRowCount} attendance entries approved. ${result.remainingPending} entries on the other shift still need review before lock.`
       );
     }
   };
@@ -282,7 +282,7 @@ export function SiteTimesheetsSection({
           </h2>
           <p className="mt-1 text-sm text-security-navy-500 dark:text-security-navy-400">
             Review and edit who actually worked, then approve. The approved timesheet is the official
-            attendance record and the source for payroll actuals.
+            attendance record and the source for Sage payroll export hours.
           </p>
         </div>
         {sheet && (canEdit || canApprove || canExport) && (
@@ -392,10 +392,10 @@ export function SiteTimesheetsSection({
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-security-emerald-200 bg-security-emerald-50 px-3 py-2 text-sm text-security-emerald-700 dark:border-security-emerald-700 dark:bg-security-emerald-700/30 dark:text-security-emerald-300">
           <span>
             Attendance {sheet?.status === "locked" ? "locked" : "approved"} for this period. Next step:
-            process payroll from the verified hours.
+            export verified hours to Sage.
           </span>
-          <Link href="/payroll" className="btn-primary">
-            Go to Payroll
+          <Link href="/payroll-exports" className="btn-primary">
+            Go to Payroll Export
           </Link>
         </div>
       )}
@@ -474,7 +474,7 @@ export function SiteTimesheetsSection({
             <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-200">
               All visible {shiftLabel} rows are reviewed. Switch to the other shift to finish{" "}
               <span className="font-medium">{otherShiftPendingCount}</span> pending row
-              {otherShiftPendingCount === 1 ? "" : "s"} before the timesheet can lock for payroll.
+              {otherShiftPendingCount === 1 ? "" : "s"} before the timesheet locks for export.
             </div>
           )}
 
@@ -730,8 +730,8 @@ export function SiteTimesheetsSection({
             </p>
             <p className="mt-0.5 text-xs text-security-navy-500 dark:text-security-navy-400">
               {otherShiftPendingCount > 0
-                ? `${otherShiftPendingCount} entries on the other shift will still need attention before payroll lock.`
-                : "Approving the final shift locks this site timesheet for payroll."}
+                ? `${otherShiftPendingCount} entries on the other shift will still need attention before export lock.`
+                : "Approving the final shift locks this site timesheet for payroll export."}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">

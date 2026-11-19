@@ -26,7 +26,7 @@ interface SearchDropdownProps {
 
 interface FlatSearchResult {
   key: string;
-  type: "module" | "employee" | "site" | "client" | "task" | "incident" | "invoice";
+  type: "module" | "employee" | "site" | "client" | "incident" | "invoice";
   category: string;
   title: string;
   subtitle?: string;
@@ -37,13 +37,11 @@ interface FlatSearchResult {
 
 const EXTRA_SEARCHABLE_PAGES: { href: string; label: string; description: string }[] = [
   { href: "/overview", label: "Overview & Analytics", description: "Live KPIs, charts, and operational alerts" },
-  { href: "/attendance/exceptions", label: "Attendance Exceptions", description: "Resolve unconfirmed shifts and payroll blockers" },
+  { href: "/attendance/exceptions", label: "Attendance Exceptions", description: "Resolve unconfirmed shifts and export blockers" },
   { href: "/attendance/staff", label: "Staff Attendance", description: "Office and administrative staff roll-call" },
   { href: "/employees/compliance", label: "Workforce Compliance", description: "PSIRA grades, expiring documents, and missing records" },
-  { href: "/payroll/configuration", label: "Payroll Configuration", description: "Pay areas, grade rates, earnings, and deductions" },
-  { href: "/payroll/leave-requests", label: "Payroll Leave Requests", description: "Leave approvals and payroll integration" },
-  { href: "/payroll/billing/invoices", label: "Client Invoices", description: "Billing invoices and payment status" },
-  { href: "/payroll/billing/quotes", label: "Client Quotes", description: "Service quotes for active and prospective clients" },
+  { href: "/billing/invoices", label: "Client Invoices", description: "Billing invoices and payment status" },
+  { href: "/billing/quotes", label: "Client Quotes", description: "Service quotes for active and prospective clients" },
 ];
 
 export function SearchDropdown({ onClose }: SearchDropdownProps) {
@@ -60,11 +58,8 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
   const showEmployees = user ? canAccessRoute("/employees", user) : false;
   const showSites = user ? canAccessRoute("/sites", user) : false;
   const showClients = user ? canAccessRoute("/clients", user) : false;
-  const showTasks = user ? canAccessRoute("/tasks", user) : false;
   const showIncidents = user ? canAccessRoute("/incidents", user) : false;
-  const showInvoices = user
-    ? canAccessRoute("/payroll/billing", user) || canAccessRoute("/payroll", user)
-    : false;
+  const showInvoices = user ? canAccessRoute("/billing", user) : false;
 
   const router = useRouter();
   const debouncedQuery = useDebounce(query, 300);
@@ -172,7 +167,6 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
         employees: [],
         sites: [],
         clients: [],
-        tasks: [],
         incidents: [],
         invoices: [],
       });
@@ -208,12 +202,16 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
 
     if (showEmployees && results.employees?.length) {
       for (const emp of results.employees) {
+        const subParts = [
+          emp.employeeNumber ? `No: ${emp.employeeNumber}` : null,
+          emp.externalPayrollCode ? `Sage: ${emp.externalPayrollCode}` : null,
+        ].filter(Boolean);
         items.push({
           key: `emp-${emp.id}`,
           type: "employee",
           category: "Team",
           title: `${emp.firstName} ${emp.lastName}`,
-          subtitle: emp.employeeNumber ? `No: ${emp.employeeNumber}` : undefined,
+          subtitle: subParts.length > 0 ? subParts.join(" · ") : undefined,
           href: debouncedQuery ? `/employees?q=${encodeURIComponent(debouncedQuery)}` : "/employees",
         });
       }
@@ -221,12 +219,13 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
 
     if (showSites && results.sites?.length) {
       for (const site of results.sites) {
+        const subParts = [site.location, site.costCenterCode ? `Cost Ctr: ${site.costCenterCode}` : null].filter(Boolean);
         items.push({
           key: `site-${site.id}`,
           type: "site",
           category: "Sites",
           title: site.name,
-          subtitle: site.location ?? undefined,
+          subtitle: subParts.length > 0 ? subParts.join(" · ") : undefined,
           href: `/sites/${site.id}`,
         });
       }
@@ -260,22 +259,7 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
           subtitle: inv.client?.name ? `${inv.client.name} · ${amountStr}` : amountStr,
           badge: inv.status,
           badgeVariant: inv.status === "paid" ? "success" : inv.status === "overdue" ? "error" : "neutral",
-          href: `/payroll/billing/invoices/${inv.id}`,
-        });
-      }
-    }
-
-    if (showTasks && results.tasks?.length) {
-      for (const task of results.tasks) {
-        items.push({
-          key: `task-${task.id}`,
-          type: "task",
-          category: "Tasks",
-          title: task.title,
-          subtitle: task.dueDate ? `Due ${task.dueDate.slice(0, 10)}` : undefined,
-          badge: task.priority,
-          badgeVariant: task.priority === "urgent" || task.priority === "critical" ? "error" : "neutral",
-          href: `/tasks/${task.id}`,
+          href: `/billing/invoices/${inv.id}`,
         });
       }
     }
@@ -296,7 +280,7 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
     }
 
     return items;
-  }, [matchingModules, results, showEmployees, showSites, showClients, showInvoices, showTasks, showIncidents, debouncedQuery]);
+  }, [matchingModules, results, showEmployees, showSites, showClients, showInvoices, showIncidents, debouncedQuery]);
 
   const totalItems = flatItems.length;
 

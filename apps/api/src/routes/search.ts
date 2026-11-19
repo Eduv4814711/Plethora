@@ -6,8 +6,7 @@ import { hasCapability } from "../lib/capabilities.js";
 
 export async function searchRoutes(app: FastifyInstance) {
   // Global search legitimately spans modules, so the route guard is the union.
-  // Each result set is then filtered by its own module capability below, so a
-  // user with only /tasks never sees employee or site records here.
+  // Each result set is then filtered by its own module capability below.
   const protect = [
     authMiddleware,
     requireCrudCapability({
@@ -15,10 +14,9 @@ export async function searchRoutes(app: FastifyInstance) {
         "/employees",
         "/sites",
         "/clients",
-        "/tasks",
         "/incidents",
-        "/payroll/billing",
-        "/payroll",
+        "/billing",
+        "/payroll-exports",
       ],
     }),
   ];
@@ -33,7 +31,6 @@ export async function searchRoutes(app: FastifyInstance) {
         employees: [],
         sites: [],
         clients: [],
-        tasks: [],
         incidents: [],
         invoices: [],
       });
@@ -42,15 +39,12 @@ export async function searchRoutes(app: FastifyInstance) {
     const canSearchEmployees = hasCapability(user, "/employees", "view");
     const canSearchSites = hasCapability(user, "/sites", "view");
     const canSearchClients = hasCapability(user, "/clients", "view");
-    const canSearchTasks = hasCapability(user, "/tasks", "view");
     const canSearchIncidents = hasCapability(user, "/incidents", "view");
-    const canSearchInvoices =
-      hasCapability(user, "/payroll/billing", "view") ||
-      hasCapability(user, "/payroll", "view");
-    // ID numbers are restricted data; only match on them for users who may see them.
+    const canSearchInvoices = hasCapability(user, "/billing", "view");
+    // ID numbers and external payroll codes are restricted/sensitive; ID match stays sensitive-gated.
     const canMatchIdNumber = hasCapability(user, "/employees", "view_sensitive");
 
-    const [employees, sites, rawClients, tasks, incidents, rawInvoices] = await Promise.all([
+    const [employees, sites, rawClients, incidents, rawInvoices] = await Promise.all([
       canSearchEmployees
         ? prisma.employee.findMany({
             where: {
@@ -59,6 +53,7 @@ export async function searchRoutes(app: FastifyInstance) {
                 { firstName: { contains: query, mode: "insensitive" } },
                 { lastName: { contains: query, mode: "insensitive" } },
                 { employeeNumber: { contains: query, mode: "insensitive" } },
+                { externalPayrollCode: { contains: query, mode: "insensitive" } },
                 ...(canMatchIdNumber
                   ? [{ idNumber: { contains: query, mode: "insensitive" as const } }]
                   : []),
@@ -67,6 +62,7 @@ export async function searchRoutes(app: FastifyInstance) {
             select: {
               id: true,
               employeeNumber: true,
+              externalPayrollCode: true,
               firstName: true,
               lastName: true,
               status: true,
@@ -82,12 +78,14 @@ export async function searchRoutes(app: FastifyInstance) {
               OR: [
                 { name: { contains: query, mode: "insensitive" } },
                 { location: { contains: query, mode: "insensitive" } },
+                { costCenterCode: { contains: query, mode: "insensitive" } },
               ],
             },
             select: {
               id: true,
               name: true,
               location: true,
+              costCenterCode: true,
             },
             take: 5,
             orderBy: { name: "asc" },
@@ -114,26 +112,6 @@ export async function searchRoutes(app: FastifyInstance) {
             },
             take: 5,
             orderBy: { name: "asc" },
-          })
-        : Promise.resolve([]),
-      canSearchTasks
-        ? prisma.task.findMany({
-            where: {
-              companyId: user.companyId,
-              OR: [
-                { title: { contains: query, mode: "insensitive" } },
-                { description: { contains: query, mode: "insensitive" } },
-              ],
-            },
-            select: {
-              id: true,
-              title: true,
-              status: true,
-              priority: true,
-              dueDate: true,
-            },
-            take: 5,
-            orderBy: { createdAt: "desc" },
           })
         : Promise.resolve([]),
       canSearchIncidents
@@ -201,7 +179,6 @@ export async function searchRoutes(app: FastifyInstance) {
       employees,
       sites,
       clients,
-      tasks,
       incidents,
       invoices,
     });

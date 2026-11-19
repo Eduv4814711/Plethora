@@ -28,13 +28,10 @@ const CATEGORIES = [
   { value: "CLIENT", label: "Client & Contracts" },
   { value: "SITE", label: "Site Operations" },
   { value: "BILLING", label: "Billing & Invoices" },
-  { value: "PAYROLL", label: "Payroll & Wages" },
   { value: "ATTENDANCE", label: "Attendance & Timesheets" },
   { value: "INCIDENT", label: "Incident & Evidence" },
   { value: "EQUIPMENT", label: "Equipment & Fleet" },
-  { value: "TASK", label: "Tasks & Projects" },
   { value: "REPORT", label: "Reports & Summaries" },
-  { value: "ACADEMY", label: "Academy & Certificates" },
   { value: "OTHER", label: "Other / General" },
 ];
 

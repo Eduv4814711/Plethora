@@ -83,7 +83,7 @@ export default function ClientWorkspacePage() {
   );
 
   const canAccessBilling = Boolean(
-    user && (user.isOwner || hasCapability(user, "/payroll/billing", "view"))
+    user && (user.isOwner || hasCapability(user, "/billing", "view"))
   );
 
   const loadAll = useCallback(async () => {
@@ -189,7 +189,7 @@ export default function ClientWorkspacePage() {
           {/* Finance-controlled Client Billing Link */}
           {canAccessBilling && (
             <Link
-              href={`/payroll/billing/clients/${client.id}`}
+              href={`/billing/clients/${client.id}`}
               className="btn-secondary flex items-center gap-1.5 text-xs text-security-emerald-800 dark:text-security-emerald-300"
             >
               <span>💳</span> Client Billing & Rates
