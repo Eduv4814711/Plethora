@@ -63,15 +63,12 @@ const metaSchema = z.object({
     "EMPLOYEE",
     "SITE",
     "CLIENT",
-    "PAYROLL",
     "ATTENDANCE",
     "INCIDENT",
     "EQUIPMENT",
     "COMPLIANCE",
-    "TASK",
     "BILLING",
     "REPORT",
-    "ACADEMY",
     "OTHER",
   ]).default("EMPLOYEE"),
   documentCategory: z.string().optional().nullable(),
@@ -91,7 +88,6 @@ const metaSchema = z.object({
   clientId: z.string().optional().nullable(),
   clientContractId: z.string().optional().nullable(),
   incidentId: z.string().optional().nullable(),
-  taskId: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
 
@@ -177,7 +173,6 @@ function canUserAccessDocument(
 
   return (
     canAccessSensitiveData(user, "/employees") ||
-    canAccessSensitiveData(user, "/payroll") ||
     hasCapability(user, "/documents", "view_sensitive")
   );
 }
@@ -377,7 +372,6 @@ export async function documentsRoutes(app: FastifyInstance) {
       clientId: parsed.data.clientId,
       clientContractId: parsed.data.clientContractId,
       incidentId: parsed.data.incidentId,
-      taskId: parsed.data.taskId,
       notes: parsed.data.notes,
     });
 

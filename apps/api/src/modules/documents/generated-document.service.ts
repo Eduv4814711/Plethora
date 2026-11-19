@@ -13,7 +13,6 @@ import {
   issuerFrom,
 } from "../../services/company-branding.js";
 import { startOfUtcDay } from "../../services/client-billing.service.js";
-import { generatePayslipPDFFromTemplate, type PayslipTemplateData } from "../../services/payslip-pdf.service.js";
 import { storage } from "../../lib/storage.js";
 import { randomUUID } from "node:crypto";
 
@@ -52,29 +51,21 @@ export function getSourceEntityInfo(
   if (moduleUpper.includes("BILLING") || entityUpper.includes("INVOICE")) {
     if (entityUpper.includes("QUOTE")) {
       return {
-        editSourceUrl: `/payroll/billing?tab=quotes&quoteId=${sourceEntityId}`,
+        editSourceUrl: `/billing?tab=quotes&quoteId=${sourceEntityId}`,
         sourceLabel: "Billing Quotation",
         isGenerated: true,
       };
     }
     if (entityUpper.includes("RECEIPT")) {
       return {
-        editSourceUrl: `/payroll/billing?tab=receipts&receiptId=${sourceEntityId}`,
+        editSourceUrl: `/billing?tab=receipts&receiptId=${sourceEntityId}`,
         sourceLabel: "Payment Receipt",
         isGenerated: true,
       };
     }
     return {
-      editSourceUrl: `/payroll/billing?tab=invoices&invoiceId=${sourceEntityId}`,
+      editSourceUrl: `/billing?tab=invoices&invoiceId=${sourceEntityId}`,
       sourceLabel: "Tax Invoice",
-      isGenerated: true,
-    };
-  }
-
-  if (moduleUpper.includes("PAYROLL") || entityUpper.includes("PAYSLIP") || entityUpper.includes("PAYROLL")) {
-    return {
-      editSourceUrl: `/payroll?runId=${sourceEntityId}`,
-      sourceLabel: "Payroll / Payslip Record",
       isGenerated: true,
     };
   }

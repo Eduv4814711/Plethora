@@ -93,7 +93,7 @@ describeWithDatabase("user capability delegation", () => {
       method: "PUT",
       url: `/users/${managerId}`,
       headers: auth(managerToken),
-      payload: { capabilities: { "/payroll": ["view"] } },
+      payload: { capabilities: { "/payroll-exports": ["view"] } },
     });
     expect(self.statusCode).toBe(403);
 
@@ -102,10 +102,10 @@ describeWithDatabase("user capability delegation", () => {
       url: "/users",
       headers: auth(managerToken),
       payload: {
-        name: "Payroll proxy",
+        name: "Payroll Export proxy",
         email: `proxy-${Date.now()}@test.local`,
         sendSetupLink: true,
-        capabilities: { "/payroll": ["view"] },
+        capabilities: { "/payroll-exports": ["view"] },
       },
     });
     expect(proxy.statusCode).toBe(403);
@@ -150,7 +150,7 @@ describeWithDatabase("user capability delegation", () => {
       headers: auth(ownerToken),
       payload: {
         capabilities: {
-          "/payroll": ["view", "view_sensitive", "approve"],
+          "/compliance": ["view", "view_sensitive", "approve"],
           "/settings/access": ["view", "edit", "manage_access"],
         },
       },

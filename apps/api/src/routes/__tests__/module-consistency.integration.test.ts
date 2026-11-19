@@ -45,7 +45,7 @@ describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
     app = await buildApp();
     fixture = await provisionTenantFixture();
     employeeHrToken = await tokenFor({ "/employees": ["view", "create", "edit"] });
-    payrollHrToken = await tokenFor({ "/payroll": ["view", "create", "edit"] });
+    payrollHrToken = await tokenFor({ "/payroll-exports": ["view", "create", "edit"] });
   }, 120_000);
 
   afterAll(async () => {
@@ -65,11 +65,8 @@ describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
     expect(res.json().message?.groupId).toBeTruthy();
   });
 
-  it("rejects a cross-tenant gradeId on employee create", async () => {
-    const { tenantA, tenantB } = fixture;
-    const foreignGrade = await prisma.payGrade.create({
-      data: { companyId: tenantB.companyId, name: `Foreign ${fixture.runId}`, hourlyRate: 99, sortOrder: 0 },
-    });
+  it("rejects a cross-tenant groupId on employee create", async () => {
+    const { tenantB } = fixture;
     const res = await app.inject({
       method: "POST",
       url: "/employees",
@@ -81,33 +78,29 @@ describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
         status: "active",
         employeeType: "security_officer",
         psiraRegistrationNumber: "PSIRA123",
-        gradeId: foreignGrade.id,
-        groupId: tenantA.employeeGroupId,
+        groupId: tenantB.employeeGroupId,
       },
     });
     expect(res.statusCode).toBe(400);
-    expect(res.json().message?.gradeId).toBeTruthy();
+    expect(res.json().message?.groupId).toBeTruthy();
   });
 
-  it("does not let a Payroll-only user edit an employee", async () => {
-    // Payroll used to reach Team through an anyOfModules fallback. It no longer
-    // does: Team access has to be granted explicitly and show in the matrix.
+  it("does not let a Payroll Export user edit an employee", async () => {
     const { tenantA } = fixture;
     const res = await app.inject({
       method: "PUT",
       url: `/employees/${tenantA.employeeId}`,
       headers: { ...authHeader(payrollHrToken), "content-type": "application/json" },
-      payload: { firstName: "Payroll Edit" },
+      payload: { firstName: "Payroll Export Edit" },
     });
     expect(res.statusCode).toBe(403);
   });
 
-  it("does not let a Payroll grant reach Client Billing", async () => {
-    // /payroll/billing is its own catalog module; prefix inheritance is gone.
-    const token = await tokenFor({ "/payroll": ["view", "create", "edit", "approve"] });
+  it("does not let a Payroll Export grant reach Client Billing", async () => {
+    const token = await tokenFor({ "/payroll-exports": ["view", "create", "edit", "approve"] });
     const res = await app.inject({
       method: "GET",
-      url: "/payroll/billing/invoices",
+      url: "/billing/invoices",
       headers: authHeader(token),
     });
     expect(res.statusCode).toBe(403);
@@ -126,7 +119,7 @@ describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
   });
 
   it("records a denied attempt in the audit log", async () => {
-    const token = await tokenFor({ "/tasks": ["view"] });
+    const token = await tokenFor({ "/incidents": ["view"] });
     const before = new Date();
     const res = await app.inject({
       method: "GET",
@@ -175,7 +168,6 @@ describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
         firstName: "Assigned",
         lastName: "User",
         employeeType: "general",
-        monthlySalary: 15000,
         groupId: tenantA.employeeGroupId,
       },
     });

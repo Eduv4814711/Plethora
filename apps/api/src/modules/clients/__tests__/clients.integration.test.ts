@@ -84,7 +84,7 @@ describe.runIf(dbReady)("clients & month-end reporting (integration)", () => {
     otherToken = tenantB.token;
 
     legacySitesToken = await addUser("Legacy", { "/sites": ["view", "edit", "export"] });
-    outsiderToken = await addUser("Outsider", { "/tasks": ["view"] });
+    outsiderToken = await addUser("Outsider", { "/attendance": ["view"] });
 
     const client = await prisma.client.create({
       data: { companyId, name: `Umbrella Security Co ${runId}` },

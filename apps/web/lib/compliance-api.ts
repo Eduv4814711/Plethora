@@ -26,24 +26,6 @@ export type ComplianceObligationStatus =
 
 export type ComplianceRiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
-export type StatutoryScheme =
-  | "PAYE"
-  | "UIF"
-  | "SDL"
-  | "PSSPF"
-  | "NBCPSS"
-  | "COIDA"
-  | "OTHER";
-
-export type StatutoryPeriodStatus =
-  | "CALCULATED"
-  | "DECLARED"
-  | "PARTIALLY_PAID"
-  | "PAID"
-  | "FAILED"
-  | "OVERDUE"
-  | "DISPUTED";
-
 export interface ComplianceSummary {
   overallHealthScore: number;
   obligations: {
@@ -53,33 +35,6 @@ export interface ComplianceSummary {
     nonCompliant: number;
     pendingVerification: number;
     notApplicable: number;
-  };
-  statutorySchemes: Array<{
-    scheme: StatutoryScheme;
-    latestPeriodEnd: string | null;
-    status: string;
-    expectedTotal: number;
-    successfulPaidTotal: number;
-    outstandingAmount: number;
-    dueDate: string | null;
-  }>;
-  totalOutstandingStatutory: number;
-  cashFloor: {
-    protectedCashFloor: number;
-    availableCash: number;
-    bufferOrShortfall: number;
-    status: "HEALTHY" | "TIGHT" | "CRITICAL_BREACH";
-    runwayMonths: number;
-    latestSnapshotAt: string | null;
-    breakdown: {
-      monthlyPayrollRequirement: number;
-      protectedCommitmentsMonthly: number;
-      totalOutstandingStatutory: number;
-      monthlyRemediationInstallments: number;
-      totalCommitmentsMonthly: number;
-    };
-    commitmentsCount: number;
-    activeRemediationPlansCount: number;
   };
   remediations: {
     activeCount: number;
@@ -113,47 +68,6 @@ export interface ComplianceObligation {
   verifiedBy?: { id: string; name: string; email: string } | null;
   managementOverride?: { id: string; name: string; email: string } | null;
   managementOverrideReason?: string | null;
-}
-
-export interface StatutoryPeriod {
-  id: string;
-  scheme: StatutoryScheme;
-  periodStart: string;
-  periodEnd: string;
-  dueDate: string;
-  expectedEmployeeAmount: number;
-  expectedEmployerAmount: number;
-  expectedOtherAmount: number;
-  expectedTotal: number;
-  declaredTotal?: number | null;
-  successfulPaidTotal: number;
-  varianceExpectedVsDeclared?: number | null;
-  outstandingAmount: number;
-  filedAt?: string | null;
-  status: StatutoryPeriodStatus;
-  externalReference?: string | null;
-  notes?: string | null;
-  payments?: Array<{
-    id: string;
-    amount: number;
-    paymentDate: string;
-    status: string;
-    paymentReference?: string | null;
-  }>;
-}
-
-export interface CashCommitment {
-  id: string;
-  name: string;
-  category: string;
-  amount: number;
-  frequency: string;
-  dueDay?: number | null;
-  protected: boolean;
-  priority: number;
-  active: boolean;
-  supplierOrPayee?: string | null;
-  notes?: string | null;
 }
 
 export interface LegalCase {
@@ -266,84 +180,6 @@ export async function managementOverrideObligation(
 
 export async function deleteObligation(token: string, id: string): Promise<void> {
   const res = await authFetch(`/compliance/obligations/${id}`, token, { method: "DELETE" });
-  return handleResponse(res);
-}
-
-// Statutory Periods
-export async function fetchStatutoryPeriods(
-  token: string,
-  params?: { scheme?: string; status?: string; year?: number }
-): Promise<{ items: StatutoryPeriod[]; total: number }> {
-  const query = new URLSearchParams();
-  if (params?.scheme) query.set("scheme", params.scheme);
-  if (params?.status) query.set("status", params.status);
-  if (params?.year) query.set("year", String(params.year));
-
-  const res = await authFetch(`/compliance/statutory-periods?${query.toString()}`, token);
-  return handleResponse(res);
-}
-
-export async function createStatutoryPeriod(token: string, data: any): Promise<StatutoryPeriod> {
-  const res = await authFetch("/compliance/statutory-periods", token, {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-  return handleResponse<StatutoryPeriod>(res);
-}
-
-export async function advanceStatutoryPeriod(token: string, id: string, data: any): Promise<StatutoryPeriod> {
-  const res = await authFetch(`/compliance/statutory-periods/${id}/advance-status`, token, {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-  return handleResponse<StatutoryPeriod>(res);
-}
-
-export async function recordStatutoryPayment(token: string, id: string, data: any): Promise<any> {
-  const res = await authFetch(`/compliance/statutory-periods/${id}/payments`, token, {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-  return handleResponse(res);
-}
-
-// Cash Floor & Commitments
-export async function fetchCashFloor(token: string): Promise<any> {
-  const res = await authFetch("/compliance/cash-floor", token);
-  return handleResponse(res);
-}
-
-export async function fetchCashCommitments(token: string): Promise<CashCommitment[]> {
-  const res = await authFetch("/compliance/cash-commitments", token);
-  return handleResponse<CashCommitment[]>(res);
-}
-
-export async function createCashCommitment(token: string, data: Partial<CashCommitment>): Promise<CashCommitment> {
-  const res = await authFetch("/compliance/cash-commitments", token, {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-  return handleResponse<CashCommitment>(res);
-}
-
-export async function updateCashCommitment(token: string, id: string, data: Partial<CashCommitment>): Promise<CashCommitment> {
-  const res = await authFetch(`/compliance/cash-commitments/${id}`, token, {
-    method: "PATCH",
-    body: JSON.stringify(data),
-  });
-  return handleResponse<CashCommitment>(res);
-}
-
-export async function deleteCashCommitment(token: string, id: string): Promise<void> {
-  const res = await authFetch(`/compliance/cash-commitments/${id}`, token, { method: "DELETE" });
-  return handleResponse(res);
-}
-
-export async function recordCashSnapshot(token: string, availableCash: number, notes?: string): Promise<any> {
-  const res = await authFetch("/compliance/cash-snapshots", token, {
-    method: "POST",
-    body: JSON.stringify({ availableCash, notes }),
-  });
   return handleResponse(res);
 }
 

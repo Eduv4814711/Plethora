@@ -12,7 +12,7 @@ import { createAuditLog } from "../lib/audit.js";
 import {
   employeeListSelect,
   employeeDetailSelect,
-  employeePayrollSelect,
+  employeeSensitiveSelect,
   sanitizeEmployeeForList,
   sanitizeEmployeeForDetail,
   canEditEmployeeDetails,
@@ -34,19 +34,15 @@ import { privateDownloadUrl } from "../lib/private-download.js";
 
 function rejectEmployeeDetailEdits(request: { user?: import("../lib/types.js").AuthenticatedUser }, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
   if (request.user && canEditEmployeeDetails(request.user)) return false;
-  reply.code(403).send({ error: "Forbidden", message: "Team or Payroll module access is required to edit employee details" });
+  reply.code(403).send({ error: "Forbidden", message: "Team module edit access is required to edit employee details" });
   return true;
 }
 
 function rejectEmployeeCreation(request: { user?: import("../lib/types.js").AuthenticatedUser }, reply: { code: (status: number) => { send: (body: unknown) => unknown } }) {
-  if (
-    request.user &&
-    (hasCapability(request.user, "/employees", "create") ||
-      hasCapability(request.user, "/payroll", "create"))
-  ) {
+  if (request.user && hasCapability(request.user, "/employees", "create")) {
     return false;
   }
-  reply.code(403).send({ error: "Forbidden", message: "Team or Payroll create access is required to add employees" });
+  reply.code(403).send({ error: "Forbidden", message: "Team create access is required to add employees" });
   return true;
 }
 
@@ -63,13 +59,12 @@ function rejectRestrictedEmployeeFields(
   }
   reply.code(403).send({
     error: "Forbidden",
-    message: `Team or Payroll ${action} access is required for sensitive employee data`,
+    message: `Team ${action} access is required for sensitive employee data`,
   });
   return true;
 }
 
 const optionalString = z.string().optional();
-const optionalNumber = z.number().optional();
 
 /**
  * Normalize phone for storage so WhatsApp can match it.
@@ -93,12 +88,11 @@ const optionalDate = z.string().optional().transform(sanitizeDate);
 const optionalBool = z.boolean().optional();
 
 /**
- * Verify referenced group/grade IDs belong to the caller's company.
- * FKs alone don't enforce tenant boundaries, so cross-company IDs must be rejected.
+ * Verify referenced group ID belongs to the caller's company.
  */
 async function validateEmployeeReferences(
   companyId: string,
-  refs: { groupId?: string | null; gradeId?: string | null }
+  refs: { groupId?: string | null }
 ): Promise<Record<string, string[]> | null> {
   const errors: Record<string, string[]> = {};
   if (refs.groupId) {
@@ -107,13 +101,6 @@ async function validateEmployeeReferences(
       select: { id: true },
     });
     if (!group) errors.groupId = ["Group not found"];
-  }
-  if (refs.gradeId) {
-    const grade = await prisma.payGrade.findFirst({
-      where: { id: refs.gradeId, companyId },
-      select: { id: true },
-    });
-    if (!grade) errors.gradeId = ["Pay grade not found"];
   }
   return Object.keys(errors).length > 0 ? errors : null;
 }
@@ -140,6 +127,7 @@ async function generateNextEmployeeNumber(companyId: string, prefix: string = "E
 
 const createEmployeeSchema = z.object({
   employeeNumber: z.string().min(1).max(50),
+  externalPayrollCode: z.string().max(60).optional().nullable(),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
   idNumber: optionalString,
@@ -147,13 +135,10 @@ const createEmployeeSchema = z.object({
   status: z
     .enum(["applicant", "hired", "training", "active", "reliever", "suspended", "offboarded"])
     .default("applicant"),
-  hourlyRate: z.number().positive().optional(),
-  monthlySalary: z.number().positive().optional(),
-  gradeId: z.string().optional().nullable(),
   groupId: z.string().optional().nullable(),
   employeeType: z.enum(["general", "security_officer"]).default("security_officer"),
   jobRole: optionalString,
-  // Labour Law (BCEA)
+  // Labour Law (BCEA) & HR Master
   dateOfBirth: optionalDate,
   gender: optionalString,
   maritalStatus: optionalString,
@@ -170,11 +155,6 @@ const createEmployeeSchema = z.object({
   placeOfWork: optionalString,
   ordinaryHours: optionalString,
   ordinaryDays: optionalString,
-  overtimeRate: optionalNumber,
-  payFrequency: z
-    .enum(["weekly", "bi-weekly", "biweekly", "monthly"])
-    .transform((value) => value === "bi-weekly" ? "biweekly" : value)
-    .optional(),
   leaveEntitlement: optionalString,
   noticePeriod: optionalString,
   previousService: optionalString,
@@ -203,22 +183,14 @@ const createEmployeeSchemaWithRefine = createEmployeeSchema.superRefine((data, c
   if (!data.groupId || !String(data.groupId).trim()) {
     ctx.addIssue({ code: "custom", path: ["groupId"], message: "Group is required for all employees" });
   }
-  if (data.employeeType === "general" && (!data.monthlySalary || data.monthlySalary <= 0)) {
-    ctx.addIssue({ code: "custom", path: ["monthlySalary"], message: "Monthly salary is required for office staff" });
-  }
 });
 
 const updateEmployeeSchema = createEmployeeSchema.omit({ status: true }).partial().extend({
   employeeNumber: z.string().min(1).max(50).optional(),
+  externalPayrollCode: z.string().max(60).optional().nullable(),
   firstName: z.string().min(1).optional(),
   lastName: z.string().min(1).optional(),
-  // Create defaults must not leak into partial updates. Without this override,
-  // an omitted employeeType is parsed as "security_officer" and an existing general
-  // employee incorrectly fails PSIRA/pay-grade validation.
   employeeType: z.enum(["general", "security_officer"]).optional(),
-  hourlyRate: z.number().positive().optional().nullable(),
-  monthlySalary: z.number().positive().optional().nullable(),
-  gradeId: z.string().optional().nullable(),
   groupId: z.string().optional().nullable(),
   phone: z
     .string()
@@ -263,6 +235,7 @@ export async function employeesRoutes(app: FastifyInstance) {
               { firstName: { contains: searchQuery, mode: "insensitive" as const } },
               { lastName: { contains: searchQuery, mode: "insensitive" as const } },
               { employeeNumber: { contains: searchQuery, mode: "insensitive" as const } },
+              { externalPayrollCode: { contains: searchQuery, mode: "insensitive" as const } },
               ...(canViewEmployeeSensitiveFields(user)
                 ? [{ idNumber: { contains: searchQuery, mode: "insensitive" as const } }]
                 : []),
@@ -276,7 +249,6 @@ export async function employeesRoutes(app: FastifyInstance) {
         where,
         select: {
           ...employeeListSelect,
-          grade: { select: { name: true, hourlyRate: true } },
           group: { select: { id: true, name: true } },
           shifts: {
             where: {
@@ -342,6 +314,7 @@ export async function employeesRoutes(app: FastifyInstance) {
 
     const d = parsed.data;
     const employeeNumber = d.employeeNumber.trim();
+    const externalPayrollCode = d.externalPayrollCode?.trim() || null;
     const existing = await prisma.employee.findFirst({
       where: { companyId, employeeNumber },
     });
@@ -351,10 +324,20 @@ export async function employeesRoutes(app: FastifyInstance) {
         message: { employeeNumber: ["Employee ID already exists. Each employee must have a unique employee ID."] },
       });
     }
+    if (externalPayrollCode) {
+      const dupPayrollCode = await prisma.employee.findFirst({
+        where: { companyId, externalPayrollCode },
+      });
+      if (dupPayrollCode) {
+        return reply.code(400).send({
+          error: "Validation error",
+          message: { externalPayrollCode: ["External payroll code already exists on another employee."] },
+        });
+      }
+    }
 
     const refErrors = await validateEmployeeReferences(companyId, {
       groupId: d.groupId,
-      gradeId: d.gradeId,
     });
     if (refErrors) {
       return reply.code(400).send({ error: "Validation error", message: refErrors });
@@ -364,14 +347,12 @@ export async function employeesRoutes(app: FastifyInstance) {
       data: {
         companyId,
         employeeNumber,
+        externalPayrollCode,
         firstName: d.firstName,
         lastName: d.lastName,
         idNumber: d.idNumber,
         phone: d.phone,
         status: d.status,
-        hourlyRate: d.hourlyRate,
-        monthlySalary: d.monthlySalary,
-        gradeId: d.gradeId ?? null,
         groupId: d.groupId ?? null,
         employeeType: d.employeeType ?? "security_officer",
         jobRole: d.jobRole,
@@ -391,8 +372,6 @@ export async function employeesRoutes(app: FastifyInstance) {
         placeOfWork: d.placeOfWork,
         ordinaryHours: d.ordinaryHours,
         ordinaryDays: d.ordinaryDays,
-        overtimeRate: d.overtimeRate,
-        payFrequency: d.payFrequency,
         leaveEntitlement: d.leaveEntitlement,
         noticePeriod: d.noticePeriod,
         previousService: d.previousService,
@@ -505,7 +484,6 @@ export async function employeesRoutes(app: FastifyInstance) {
     const canSeeSensitive =
       user.isOwner ||
       canAccessSensitiveData(user, "/employees") ||
-      canAccessSensitiveData(user, "/payroll") ||
       hasCapability(user, "/documents", "view_sensitive");
 
     const items = result.items
@@ -536,14 +514,13 @@ export async function employeesRoutes(app: FastifyInstance) {
     const user = request.user!;
 
     const select = canViewEmployeeSensitiveFields(user)
-      ? employeePayrollSelect
+      ? employeeSensitiveSelect
       : employeeDetailSelect;
 
     const employee = await prisma.employee.findFirst({
       where: { id, companyId: user.companyId },
       select: {
         ...select,
-        grade: { select: { name: true, hourlyRate: true } },
         group: { select: { id: true, name: true } },
         siteAssignments: {
           where: { isActive: true },
@@ -552,26 +529,9 @@ export async function employeesRoutes(app: FastifyInstance) {
               select: {
                 id: true,
                 name: true,
-                payProfiles: {
-                  where: { effectiveFrom: { lte: new Date() } },
-                  orderBy: { effectiveFrom: "desc" },
-                  take: 1,
-                  select: {
-                    area: { select: { id: true, name: true } },
-                    grade: { select: { id: true, name: true } },
-                  },
-                },
+                costCenterCode: true,
               },
             },
-          },
-        },
-        payrollHomeSites: {
-          where: { effectiveFrom: { lte: new Date() } },
-          orderBy: { effectiveFrom: "desc" },
-          take: 1,
-          select: {
-            siteId: true,
-            site: { select: { id: true, name: true } },
           },
         },
       },
@@ -635,33 +595,11 @@ export async function employeesRoutes(app: FastifyInstance) {
         message: { psiraRegistrationNumber: ["PSIRA number is required for security guards"] },
       });
     }
-    const effectiveGradeId = updateData.gradeId !== undefined ? updateData.gradeId : existing.gradeId;
-    if (effectiveType === "security_officer" && (!effectiveGradeId || !String(effectiveGradeId).trim())) {
-      return reply.code(400).send({
-        error: "Validation error",
-        message: { gradeId: ["Pay grade is required for security guards"] },
-      });
-    }
     const effectiveGroupId = updateData.groupId !== undefined ? updateData.groupId : existing.groupId;
     if (!effectiveGroupId || !String(effectiveGroupId).trim()) {
       return reply.code(400).send({
         error: "Validation error",
         message: { groupId: ["Group is required for all employees"] },
-      });
-    }
-    const effectiveMonthlySalary =
-      updateData.monthlySalary !== undefined
-        ? updateData.monthlySalary
-        : existing.monthlySalary != null
-          ? Number(existing.monthlySalary)
-          : null;
-    if (
-      effectiveType === "general" &&
-      (effectiveMonthlySalary == null || effectiveMonthlySalary <= 0)
-    ) {
-      return reply.code(400).send({
-        error: "Validation error",
-        message: { monthlySalary: ["Monthly salary is required for office staff"] },
       });
     }
 
@@ -685,9 +623,24 @@ export async function employeesRoutes(app: FastifyInstance) {
       updateData.employeeNumber = trimmed;
     }
 
+    if (updateData.externalPayrollCode !== undefined) {
+      const normalizedPayrollCode = updateData.externalPayrollCode?.trim() || null;
+      if (normalizedPayrollCode) {
+        const dupCode = await prisma.employee.findFirst({
+          where: { companyId, externalPayrollCode: normalizedPayrollCode, id: { not: id } },
+        });
+        if (dupCode) {
+          return reply.code(400).send({
+            error: "Validation error",
+            message: { externalPayrollCode: ["External payroll code already exists on another employee."] },
+          });
+        }
+      }
+      updateData.externalPayrollCode = normalizedPayrollCode;
+    }
+
     const refErrors = await validateEmployeeReferences(companyId, {
       groupId: updateData.groupId,
-      gradeId: updateData.gradeId,
     });
     if (refErrors) {
       return reply.code(400).send({ error: "Validation error", message: refErrors });
@@ -729,9 +682,8 @@ export async function employeesRoutes(app: FastifyInstance) {
       where: { id, companyId },
       select: {
         ...(canViewEmployeeSensitiveFields(request.user!)
-          ? employeePayrollSelect
+          ? employeeSensitiveSelect
           : employeeDetailSelect),
-        grade: { select: { name: true, hourlyRate: true } },
         group: { select: { id: true, name: true } },
       },
     });
@@ -751,8 +703,8 @@ export async function employeesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Employee not found" });
     }
 
-    const [payrollItems, shifts, leaveApplications] = await Promise.all([
-      prisma.payrollItem.count({ where: { employeeId: id } }),
+    const [exportLines, shifts, leaveApplications] = await Promise.all([
+      prisma.payrollExportLine.count({ where: { employeeId: id } }),
       prisma.shift.count({ where: { employeeId: id } }),
       prisma.leaveRequest.count({ where: { employeeId: id, companyId: user.companyId } }),
     ]);
@@ -778,7 +730,7 @@ export async function employeesRoutes(app: FastifyInstance) {
         employeeNumber: employee.employeeNumber,
         firstName: employee.firstName,
         lastName: employee.lastName,
-        preservedDependencies: { payrollItems, shifts, leaveApplications },
+        preservedDependencies: { exportLines, shifts, leaveApplications },
       },
     });
 
@@ -786,7 +738,7 @@ export async function employeesRoutes(app: FastifyInstance) {
       success: true,
       archived: true,
       status: "offboarded",
-      preservedDependencies: { payrollItems, shifts, leaveApplications },
+      preservedDependencies: { exportLines, shifts, leaveApplications },
     });
   });
 
@@ -824,9 +776,8 @@ export async function employeesRoutes(app: FastifyInstance) {
       where: { id, companyId },
       select: {
         ...(canViewEmployeeSensitiveFields(request.user!)
-          ? employeePayrollSelect
+          ? employeeSensitiveSelect
           : employeeDetailSelect),
-        grade: { select: { name: true, hourlyRate: true } },
         group: { select: { id: true, name: true } },
       },
     });

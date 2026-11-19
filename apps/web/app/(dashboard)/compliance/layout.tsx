@@ -6,10 +6,7 @@ import { usePathname } from "next/navigation";
 const NAV_TABS = [
   { href: "/compliance", label: "Executive Hub", exact: true },
   { href: "/compliance/company", label: "Obligations Register" },
-  { href: "/compliance/statutory", label: "Statutory & EMP201" },
-  { href: "/compliance/funds", label: "Funds & PSSPF" },
   { href: "/compliance/legal", label: "Legal & CCMA" },
-  { href: "/compliance/cash-control", label: "Protected Cash Floor" },
   { href: "/compliance/reports", label: "Tender & Reports" },
 ];
 

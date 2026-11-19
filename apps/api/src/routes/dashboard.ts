@@ -1,12 +1,11 @@
 import type { FastifyInstance } from "fastify";
-import type { PayrollStatus } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireCrudCapability } from "../middleware/authorization.js";
 import { prisma } from "../lib/prisma.js";
 import { startOfMonth, addDays } from "date-fns";
 import { getAlertCounts } from "../modules/alerts/alerts.service.js";
-import { getPayrollReadiness } from "../modules/attendance-exceptions/exceptions.service.js";
+import { getPeriodExportReadiness } from "../modules/attendance-exceptions/exceptions.service.js";
 import { syncContractExpiryAlerts } from "../modules/documents/documents.service.js";
 import { parsePayrollCalendarSettings } from "../lib/payroll-calendar-settings.js";
 import { getCurrentPayPeriod } from "../services/payroll-period.service.js";
@@ -39,7 +38,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
 
     const now = new Date();
 
-    // Timezone and payroll-calendar settings both come off the company row, so
+    // Timezone and cycle settings both come off the company row, so
     // load it up front: the date window below is company-local, not server-local.
     const companyRow = await prisma.company.findUnique({
       where: { id: companyId },
@@ -73,63 +72,67 @@ export async function dashboardRoutes(app: FastifyInstance) {
       ? { companyId, id: { in: siteIds } }
       : { companyId };
 
-    const [guardsOnDutyByDay, guardsOnDuty, activeSitesCount, activeSitesLastMonth, payrollStatus, pendingApprovals, employeesByStatus, shiftsByStatus] =
-      await Promise.all([
-        computeGuardsOnDutyByDay(companyId, startOfWeek, dayNames, timeZone, { siteIds }),
-        getGuardsOnDutyNow(companyId, now, { siteIds }),
-        prisma.site.count({
-          where: {
-            ...activeSitesWhere,
-            siteStatus: "ACTIVE",
-          },
-        }),
-        prisma.site.count({
-          where: {
-            ...activeSitesWhere,
-            siteStatus: "ACTIVE",
-            createdAt: { lt: startOfMonth(now) },
-          },
-        }),
-        // Pay runs whose period *ends* inside the selected window. Without this
-        // the "Pending payroll" KPI is an all-time tally that only ever grows.
-        // PayrollRun has no siteId, so it cannot be site-scoped.
-        prisma.payrollRun.groupBy({
-          by: ["status"],
-          where: {
-            companyId,
-            periodEnd: { gte: window.start, lt: window.end },
-          },
-          _count: { id: true },
-        }),
-        prisma.payrollRun.count({
-          where: {
-            companyId,
-            status: "calculated",
-            periodEnd: { gte: window.start, lt: window.end },
-          },
-        }),
-        // Employee has no siteId in the schema, so headcount is always
-        // company-wide. The UI labels it as such when a site filter is active.
-        prisma.employee.groupBy({
-          by: ["status"],
-          where: { companyId },
-          _count: { id: true },
-        }),
-        prisma.shift.groupBy({
-          by: ["status"],
-          where: {
-            ...shiftWhereBase,
-            startTime: { gte: window.start, lt: window.end },
-          },
-          _count: { id: true },
-        }),
-      ]);
+    const payPeriod = getCurrentPayPeriod(parsePayrollCalendarSettings(companyRow?.settings));
 
-    const payrollByStatus = payrollStatus.reduce(
-      (acc: Record<string, number>, p: { status: PayrollStatus; _count: { id: number } }) =>
-        ({ ...acc, [p.status]: p._count.id }),
-      {} as Record<string, number>
-    );
+    const [
+      guardsOnDutyByDay,
+      guardsOnDuty,
+      activeSitesCount,
+      activeSitesLastMonth,
+      employeesByStatus,
+      shiftsByStatus,
+      exportBatchStatus,
+      latestExportBatch,
+    ] = await Promise.all([
+      computeGuardsOnDutyByDay(companyId, startOfWeek, dayNames, timeZone, { siteIds }),
+      getGuardsOnDutyNow(companyId, now, { siteIds }),
+      prisma.site.count({
+        where: {
+          ...activeSitesWhere,
+          siteStatus: "ACTIVE",
+        },
+      }),
+      prisma.site.count({
+        where: {
+          ...activeSitesWhere,
+          siteStatus: "ACTIVE",
+          createdAt: { lt: startOfMonth(now) },
+        },
+      }),
+      // Employee has no siteId in the schema, so headcount is always
+      // company-wide. The UI labels it as such when a site filter is active.
+      prisma.employee.groupBy({
+        by: ["status"],
+        where: { companyId },
+        _count: { id: true },
+      }),
+      prisma.shift.groupBy({
+        by: ["status"],
+        where: {
+          ...shiftWhereBase,
+          startTime: { gte: window.start, lt: window.end },
+        },
+        _count: { id: true },
+      }),
+      prisma.payrollExportBatch.groupBy({
+        by: ["status"],
+        where: {
+          companyId,
+          periodEnd: { gte: window.start, lt: window.end },
+        },
+        _count: { id: true },
+      }),
+      prisma.payrollExportBatch.findFirst({
+        where: { companyId, periodKey: payPeriod.periodKey },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          status: true,
+          periodKey: true,
+          exportedAt: true,
+        },
+      }),
+    ]);
 
     const alerts: {
       type: string;
@@ -138,25 +141,17 @@ export async function dashboardRoutes(app: FastifyInstance) {
       priority?: string;
       id?: string;
     }[] = [];
-    if (pendingApprovals > 0) {
-      alerts.push({
-        type: "pending_payroll_run_approvals",
-        message: "Payroll run awaiting final approval",
-        count: pendingApprovals,
-        priority: "MEDIUM",
-      });
-    }
 
     // Best-effort: refresh contract expiry alerts (non-blocking for dashboard)
     void syncContractExpiryAlerts(companyId).catch(() => undefined);
 
-    const [operationalAlertCounts, payrollReadiness, pendingApprovalsInbox, openCriticalIncidents, pendingSiteTimesheetRows] =
+    const [operationalAlertCounts, exportReadiness, pendingApprovalsInbox, openCriticalIncidents, pendingSiteTimesheetRows] =
       await Promise.all([
         // Site-scoped to match the operationalAlerts list below — otherwise the
         // priority tab counts describe the whole company while the list shows
         // only the selected sites.
         getAlertCounts(companyId, siteIds),
-        getPayrollReadiness(companyId),
+        getPeriodExportReadiness(companyId, payPeriod.periodStart, payPeriod.periodEnd, payPeriod.periodKey),
         prisma.approvalRequest.count({ where: { companyId, status: "PENDING" } }),
         prisma.incident.count({
           where: {
@@ -174,16 +169,14 @@ export async function dashboardRoutes(app: FastifyInstance) {
         }),
       ]);
 
-    if (payrollReadiness && payrollReadiness.openExceptions > 0) {
+    if (exportReadiness && exportReadiness.openExceptions > 0) {
       alerts.push({
         type: "attendance_exceptions",
         message: "Attendance issues need review",
-        count: payrollReadiness.openExceptions,
+        count: exportReadiness.openExceptions,
         priority: "CRITICAL",
       });
     }
-
-    const payPeriod = getCurrentPayPeriod(parsePayrollCalendarSettings(companyRow?.settings));
 
     const persistedAlerts = await prisma.operationalAlert.findMany({
       where: {
@@ -221,13 +214,6 @@ export async function dashboardRoutes(app: FastifyInstance) {
     // They are returned separately as `operationalAlerts`, and the dashboard
     // renders that list on its own. Duplicating them here made every alert
     // count two to three times in the "Needs attention" KPI.
-
-    const userId = user.sub;
-    const todayStart = zonedMidnight(todayKey, timeZone);
-    const todayEnd = zonedMidnight(
-      addDays(todayDateOnly, 1).toISOString().slice(0, 10),
-      timeZone
-    );
 
     // Shift volume and distinct rostered guards, bucketed across the selected
     // window. Both `date_trunc` and `to_char` run against the company-local
@@ -272,41 +258,6 @@ export async function dashboardRoutes(app: FastifyInstance) {
       value: guardCountByBucket.get(key) ?? 0,
     }));
 
-    const [tasksOverdue, tasksDueToday, topPriorityTasks] =
-      userId
-        ? await Promise.all([
-            prisma.task.count({
-              where: {
-                companyId,
-                assigneeType: "user",
-                assigneeId: userId,
-                status: { notIn: ["done", "cancelled"] },
-                dueDate: { lt: todayStart },
-              },
-            }),
-            prisma.task.count({
-              where: {
-                companyId,
-                assigneeType: "user",
-                assigneeId: userId,
-                status: { notIn: ["done", "cancelled"] },
-                dueDate: { gte: todayStart, lt: todayEnd },
-              },
-            }),
-            prisma.task.findMany({
-              where: {
-                companyId,
-                assigneeType: "user",
-                assigneeId: userId,
-                status: { notIn: ["done", "cancelled"] },
-              },
-              select: { id: true, title: true, dueDate: true, priority: true },
-              orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
-              take: 3,
-            }),
-          ])
-        : [0, 0, [] as { id: string; title: string; dueDate: Date | null; priority: string }[]];
-
     const employeesByStatusData = employeesByStatus.map((e) => ({
       name: e.status.charAt(0).toUpperCase() + e.status.slice(1),
       value: e._count.id,
@@ -316,6 +267,11 @@ export async function dashboardRoutes(app: FastifyInstance) {
       name: s.status.charAt(0).toUpperCase() + s.status.slice(1),
       value: s._count.id,
     }));
+
+    const exportBatchByStatus = exportBatchStatus.reduce(
+      (acc: Record<string, number>, row) => ({ ...acc, [row.status]: row._count.id }),
+      {}
+    );
 
     const activeSitesDelta = activeSitesCount - activeSitesLastMonth;
 
@@ -328,36 +284,37 @@ export async function dashboardRoutes(app: FastifyInstance) {
       activeSitesCount,
       activeSitesAddedThisMonth: activeSitesDelta,
       activeSitesDelta,
-      payrollStatus: payrollByStatus,
       alerts,
       alertCounts: operationalAlertCounts,
       operationalAlerts: persistedAlerts,
       /** persistedAlerts is capped at 30; the UI uses this to say "showing N of M". */
       operationalAlertsTruncated: operationalAlertCounts.allOpen > persistedAlerts.length,
-      payrollReadiness: payrollReadiness
-        ? {
-            status: payrollReadiness.status,
-            openExceptions: payrollReadiness.openExceptions,
-            periodStart: payrollReadiness.periodStart.toISOString(),
-            periodEnd: payrollReadiness.periodEnd.toISOString(),
-          }
-        : null,
-      pendingPayrollRunApprovals: pendingApprovals,
+      exportReadiness: {
+        status: exportReadiness.status,
+        openExceptions: exportReadiness.openExceptions,
+        openCritical: exportReadiness.openCritical,
+        periodKey: exportReadiness.periodKey,
+        periodStart: exportReadiness.periodStart.toISOString(),
+        periodEnd: exportReadiness.periodEnd.toISOString(),
+        latestBatch: latestExportBatch
+          ? {
+              id: latestExportBatch.id,
+              status: latestExportBatch.status,
+              periodKey: latestExportBatch.periodKey,
+              exportedAt: latestExportBatch.exportedAt?.toISOString() ?? null,
+            }
+          : null,
+      },
+      exportBatchByStatus,
       pendingSiteTimesheetRows,
       currentPayPeriod: {
         periodStart: payPeriod.periodStart.toISOString(),
         periodEnd: payPeriod.periodEnd.toISOString(),
         label: payPeriod.label,
+        periodKey: payPeriod.periodKey,
       },
       pendingApprovalsInbox,
       openCriticalIncidents,
-      taskStats: { overdue: tasksOverdue, dueToday: tasksDueToday },
-      topPriorityTasks: topPriorityTasks.map((t) => ({
-        id: t.id,
-        title: t.title,
-        dueDate: t.dueDate?.toISOString() ?? null,
-        priority: t.priority,
-      })),
       shiftsOverTime,
       rosteredGuardsOverTime,
       employeesByStatus: employeesByStatusData,

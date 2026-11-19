@@ -38,27 +38,32 @@ interface Site {
   name: string;
 }
 
-interface TopTask {
-  id: string;
-  title: string;
-  dueDate: string | null;
-  priority: string;
-}
-
 interface DashboardData {
   guardsOnDuty: number;
   guardsOnDutyByDay?: { name: string; value: number }[];
   activeSitesCount: number;
   activeSitesDelta?: number;
-  payrollStatus: Record<string, number>;
+  exportBatchByStatus?: Record<string, number>;
   alerts: { type: string; message: string; count?: number; priority?: string; id?: string }[];
   alertCounts?: AlertCounts;
   operationalAlerts?: OperationalAlert[];
-  payrollReadiness?: { status: string; openExceptions: number } | null;
+  exportReadiness?: {
+    status: string;
+    openExceptions: number;
+    openCritical?: number;
+    periodKey?: string;
+    periodStart?: string;
+    periodEnd?: string;
+    latestBatch?: {
+      id: string;
+      status: string;
+      periodKey: string;
+      exportedAt?: string | null;
+    } | null;
+  } | null;
   pendingApprovalsInbox?: number;
+  pendingSiteTimesheetRows?: number;
   openCriticalIncidents?: number;
-  taskStats?: { overdue: number; dueToday: number };
-  topPriorityTasks?: TopTask[];
   shiftsOverTime?: { name: string; value: number }[];
   rosteredGuardsOverTime?: { name: string; value: number }[];
   employeesByStatus?: { name: string; value: number }[];
@@ -128,13 +133,13 @@ export default function DashboardPage() {
   const canSites = user ? canAccessRoute("/sites", user) : false;
   const canCreateSites = Boolean(user && hasCapability(user, "/sites", "create"));
   const canWhatsApp = user ? canAccessRoute("/whatsapp", user) : false;
-  const canPayroll = user ? canAccessRoute("/payroll", user) : false;
+  const canPayrollExport = user ? canAccessRoute("/payroll-exports", user) : false;
   const canRostering = user ? canAccessRoute("/rostering", user) : false;
   const canEmployees = user ? canAccessRoute("/employees", user) : false;
   const canAttendance = user ? canAccessRoute("/attendance", user) : false;
   const canEditAlerts = Boolean(
     user &&
-      ["/attendance", "/sites", "/tasks", "/payroll"].some((path) =>
+      ["/attendance", "/sites", "/payroll-exports"].some((path) =>
         hasCapability(user, path, "edit")
       )
   );
@@ -294,7 +299,6 @@ export default function DashboardPage() {
   const rosteredGuardsData = data?.rosteredGuardsOverTime?.length
     ? data.rosteredGuardsOverTime
     : defaultRosteredData;
-  const taskUrgentCount = (data?.taskStats?.overdue ?? 0) + (data?.taskStats?.dueToday ?? 0);
   const alertsList = data?.alerts ?? [];
   const alertCounts = data?.alertCounts;
   const operationalAlerts = data?.operationalAlerts ?? [];
@@ -304,9 +308,8 @@ export default function DashboardPage() {
     (sum, a) => sum + (typeof a.count === "number" ? a.count : 1),
     0
   );
-  const needsAttentionCount =
-    derivedAlertTally + (alertCounts?.allOpen ?? 0) + taskUrgentCount;
-  const pendingPayrollCount = (data?.payrollStatus?.draft ?? 0) + (data?.payrollStatus?.calculated ?? 0);
+  const needsAttentionCount = derivedAlertTally + (alertCounts?.allOpen ?? 0);
+  const openExportExceptions = data?.exportReadiness?.openExceptions ?? 0;
   const siteFilterActive = selectedSiteIds.length > 0;
   const companyWideHint = siteFilterActive ? " · company-wide" : "";
   const filteredOperationalAlerts =
@@ -329,13 +332,10 @@ export default function DashboardPage() {
     }
   };
 
-  const payrollReadinessLabel = (() => {
-    const s = data?.payrollReadiness?.status;
-    if (!s) return null;
-    if (s === "READY" || s === "APPROVED_MANUALLY") return { text: "Payroll ready", variant: "success" as const };
-    // Treat historical rows from the former blocking policy as advisory. The API
-    // refresh will migrate them to the current readiness states on the next read.
-    if (s === "BLOCKED_BY_EXCEPTIONS") return { text: "Attendance review needed", variant: "warning" as const };
+  const exportReadinessLabel = (() => {
+    const er = data?.exportReadiness;
+    if (!er?.status) return null;
+    if (er.status === "READY") return { text: "Export ready (26th–25th)", variant: "success" as const };
     return { text: "Attendance review needed", variant: "warning" as const };
   })();
 
@@ -433,7 +433,7 @@ export default function DashboardPage() {
             Operations Overview &amp; Analytics
           </h1>
           <p className="mt-1 hidden text-sm text-security-navy-600 max-lg:block">
-            Live snapshot of guards, sites, shifts, and tasks.
+            Live snapshot of guards, sites, shifts, and compliance alerts.
           </p>
         </div>
         <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
@@ -618,16 +618,26 @@ export default function DashboardPage() {
           href={canSites ? "/sites" : undefined}
         />
         <KpiTile
-          label="Pending payroll"
-          value={pendingPayrollCount}
-          hint={`Runs not yet paid${companyWideHint}`}
-          accent={pendingPayrollCount > 0 ? "alert" : "default"}
-          href={canPayroll ? "/payroll" : undefined}
+          label="Export blockers"
+          value={openExportExceptions}
+          hint={
+            data?.exportReadiness?.latestBatch
+              ? `Batch: ${data.exportReadiness.latestBatch.status}${companyWideHint}`
+              : `26th–25th Sage cycle${companyWideHint}`
+          }
+          accent={openExportExceptions > 0 ? "alert" : "default"}
+          href={
+            openExportExceptions > 0
+              ? "/attendance/exceptions"
+              : canPayrollExport
+                ? "/payroll-exports"
+                : undefined
+          }
         />
         <KpiTile
           label="Needs attention"
           value={needsAttentionCount}
-          hint="Alerts + urgent tasks"
+          hint="Open operational alerts"
           accent={needsAttentionCount > 0 ? "alert" : "default"}
           onClick={() => {
             setAlertsSectionOpen(true);
@@ -640,20 +650,21 @@ export default function DashboardPage() {
         />
       </section>
 
-      {payrollReadinessLabel && (
+      {exportReadinessLabel && (
         <div className="mb-2 shrink-0">
-          <span
+          <Link
+            href={canPayrollExport ? "/payroll-exports" : "/attendance/exceptions"}
             className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-              payrollReadinessLabel.variant === "success"
+              exportReadinessLabel.variant === "success"
                 ? "bg-security-emerald-100 text-security-emerald-700"
                 : "bg-security-amber-100 text-security-amber-800"
             }`}
           >
-            {payrollReadinessLabel.text}
-            {typeof data?.payrollReadiness?.openExceptions === "number" && data.payrollReadiness.openExceptions > 0
-              ? ` · ${data.payrollReadiness.openExceptions} open exception${data.payrollReadiness.openExceptions === 1 ? "" : "s"}`
+            {exportReadinessLabel.text}
+            {typeof data?.exportReadiness?.openExceptions === "number" && data.exportReadiness.openExceptions > 0
+              ? ` · ${data.exportReadiness.openExceptions} open exception${data.exportReadiness.openExceptions === 1 ? "" : "s"}`
               : ""}
-          </span>
+          </Link>
         </div>
       )}
 
@@ -661,7 +672,7 @@ export default function DashboardPage() {
         <ComplianceSummaryWidget />
       </div>
 
-      <section className="mb-2 grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-3" aria-label="Action items">
+      <section className="mb-2 grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-2" aria-label="Action items">
         {(data?.pendingApprovalsInbox ?? 0) > 0 && (
           <Link
             href="/approvals"
@@ -679,20 +690,6 @@ export default function DashboardPage() {
             <span className="font-medium text-security-navy-900">Critical incidents</span>
             <span className="font-bold tabular-nums text-red-800">{data?.openCriticalIncidents}</span>
           </Link>
-        )}
-        {(data?.topPriorityTasks?.length ?? 0) > 0 && (
-          <div className="rounded-security-lg border border-security-navy-100 bg-white px-3 py-2 text-sm">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-security-navy-600">Tasks needing attention</p>
-            <ul className="space-y-1">
-              {data!.topPriorityTasks!.slice(0, 3).map((t) => (
-                <li key={t.id}>
-                  <Link href={`/tasks/${t.id}`} className="truncate font-medium text-security-navy-800 hover:underline">
-                    {t.title}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
         )}
       </section>
 
@@ -921,29 +918,6 @@ export default function DashboardPage() {
           </div>
         </DashboardCard>
 
-        <DashboardCard
-          title="My tasks"
-          action={
-            <Link href="/tasks" className="text-xs font-semibold text-security-navy-800 hover:text-security-navy-900">
-              View all →
-            </Link>
-          }
-        >
-          <div className="flex flex-1 flex-col gap-2">
-            <div className="flex items-center justify-between rounded-security border border-red-100 bg-red-50/80 px-3 py-2">
-              <span className="text-xs font-medium text-security-navy-900 lg:text-sm">Overdue</span>
-              <span className="text-base font-bold tabular-nums text-security-navy-900">{data?.taskStats?.overdue ?? 0}</span>
-            </div>
-            <div className="flex items-center justify-between rounded-security border border-security-navy-100 bg-security-navy-50/80 px-3 py-2">
-              <span className="text-xs font-medium text-security-navy-900 lg:text-sm">Due today</span>
-              <span className="text-base font-bold tabular-nums text-security-navy-900">{data?.taskStats?.dueToday ?? 0}</span>
-            </div>
-          </div>
-          <Link href="/tasks" className="btn-secondary mt-auto w-full shrink-0 py-1.5 text-center text-xs lg:text-sm">
-            Open tasks
-          </Link>
-        </DashboardCard>
-
         <DashboardCard title="Team by status">
           <div className="flex min-h-0 flex-1 flex-col gap-1.5">
             <ChartWrap>
@@ -1016,49 +990,44 @@ export default function DashboardPage() {
         </DashboardCard>
 
         <DashboardCard
-          title="Payroll status"
+          title="Payroll export readiness (26th–25th)"
           action={
-            canPayroll ? (
-              <Link href="/payroll" className="text-xs font-semibold text-security-navy-800 hover:text-security-navy-900">
+            canPayrollExport ? (
+              <Link href="/payroll-exports" className="text-xs font-semibold text-security-navy-800 hover:text-security-navy-900">
                 Open →
               </Link>
             ) : undefined
           }
         >
           <div className="flex min-h-0 flex-1 flex-col gap-1.5">
-            {canPayroll ? (
-              <>
-                {[
-                  { key: "draft", label: "Draft", href: "/payroll" },
-                  { key: "calculated", label: "Calculated", href: "/payroll" },
-                  { key: "paid", label: "Paid", href: "/payroll", highlight: true },
-                ].map((row) => (
-                  <Link
-                    key={row.key}
-                    href={row.href}
-                    className={`flex shrink-0 items-center justify-between rounded-security border px-3 py-1.5 transition-colors hover:shadow-security-card lg:py-2 ${
-                      row.highlight
-                        ? "border-security-navy-100 bg-security-navy-50/60 hover:bg-security-navy-50"
-                        : "border-security-navy-100 bg-security-navy-50 hover:bg-white"
-                    }`}
-                  >
-                    <span className="text-xs font-medium text-security-navy-900 lg:text-sm">{row.label}</span>
-                    <span className="text-base font-bold tabular-nums text-security-navy-900">{data?.payrollStatus?.[row.key as keyof typeof data.payrollStatus] ?? 0}</span>
-                  </Link>
-                ))}
-                <Link href="/payroll" className="btn-primary mt-auto w-full shrink-0 py-1.5 text-center text-xs lg:text-sm">
-                  Run payroll
-                </Link>
-              </>
-            ) : (
-              <div className="space-y-2 text-sm">
-                {(["draft", "calculated", "paid"] as const).map((key) => (
-                  <div key={key} className="flex justify-between border-b border-security-navy-100 py-2 last:border-0">
-                    <span className="capitalize text-security-navy-600">{key}</span>
-                    <span className="font-bold tabular-nums text-security-navy-900">{data?.payrollStatus?.[key] ?? 0}</span>
-                  </div>
-                ))}
-              </div>
+            <Link
+              href="/attendance/exceptions"
+              className="flex shrink-0 items-center justify-between rounded-security border border-security-navy-100 bg-security-navy-50 px-3 py-1.5 transition-colors hover:bg-white lg:py-2"
+            >
+              <span className="text-xs font-medium text-security-navy-900 lg:text-sm">Open exceptions</span>
+              <span className="text-base font-bold tabular-nums text-security-navy-900">
+                {data?.exportReadiness?.openExceptions ?? 0}
+              </span>
+            </Link>
+            <Link
+              href="/attendance"
+              className="flex shrink-0 items-center justify-between rounded-security border border-security-navy-100 bg-security-navy-50 px-3 py-1.5 transition-colors hover:bg-white lg:py-2"
+            >
+              <span className="text-xs font-medium text-security-navy-900 lg:text-sm">Pending timesheet rows</span>
+              <span className="text-base font-bold tabular-nums text-security-navy-900">
+                {data?.pendingSiteTimesheetRows ?? 0}
+              </span>
+            </Link>
+            <div className="flex shrink-0 items-center justify-between rounded-security border border-security-navy-100 bg-security-navy-50/60 px-3 py-1.5 lg:py-2">
+              <span className="text-xs font-medium text-security-navy-900 lg:text-sm">Latest cycle batch</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-security-navy-900">
+                {data?.exportReadiness?.latestBatch?.status ?? "NOT CREATED"}
+              </span>
+            </div>
+            {canPayrollExport && (
+              <Link href="/payroll-exports" className="btn-primary mt-auto w-full shrink-0 py-1.5 text-center text-xs lg:text-sm">
+                Prepare Sage export
+              </Link>
             )}
           </div>
         </DashboardCard>

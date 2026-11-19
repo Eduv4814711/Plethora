@@ -85,7 +85,7 @@ describe.runIf(dbReady)("Client Module Upgrade — Integration Tests", () => {
 
     tokenANoClients = await addUser(companyAId, "NoClients", {
       "/employees": ["view", "view_sensitive"],
-      "/payroll": ["view", "view_sensitive"],
+      "/compliance": ["view", "view_sensitive"],
     });
 
     tokenALegacySites = await addUser(companyAId, "LegacySites", {

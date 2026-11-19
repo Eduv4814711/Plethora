@@ -26,18 +26,8 @@ export function omitFields<T extends Record<string, unknown>, K extends readonly
 export const EMPLOYEE_RESTRICTED_FIELDS = [
   "idNumber", "dateOfBirth", "gender", "phone", "email", "physicalAddress", "postalAddress", "postalCode",
   "maritalStatus", "nextOfKin1Name", "nextOfKin1Phone", "nextOfKin2Name", "nextOfKin2Phone",
-  "nextOfKin3Name", "nextOfKin3Phone", "taxNumber", "taxDirectiveNumber", "taxDirectiveRate",
-  "bankName", "bankAccountNumber", "bankBranchCode", "hourlyRate", "monthlySalary", "overtimeRate",
+  "nextOfKin3Name", "nextOfKin3Phone", "taxNumber",
+  "bankName", "bankAccountNumber", "bankBranchCode",
   "previousService", "residedOutsideSA", "militaryPoliceService", "criminalInvestigation",
   "mentallyUnstable",
-] as const;
-
-export const STUDENT_RESTRICTED_FIELDS = [
-  "idType", "idNumber", "dateOfBirth", "gender", "nationality", "phone", "alternatePhone", "email",
-  "addressLine1", "addressLine2", "city", "province", "postalCode", "nextOfKinName", "nextOfKinPhone",
-] as const;
-
-export const INSTRUCTOR_RESTRICTED_FIELDS = [
-  "idNumber", "dateOfBirth", "gender", "phone", "email", "residentialAddress", "emergencyContact",
-  "psiraInstructorNumber", "certificateNumber",
 ] as const;

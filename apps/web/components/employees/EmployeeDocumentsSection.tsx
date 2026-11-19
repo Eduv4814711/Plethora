@@ -158,7 +158,6 @@ export function EmployeeDocumentsSection({
   const canViewSensitive = user
     ? user.isOwner ||
       canAccessSensitiveData(user, "/employees") ||
-      canAccessSensitiveData(user, "/payroll") ||
       hasCapability(user, "/documents", "view_sensitive")
     : false;
 

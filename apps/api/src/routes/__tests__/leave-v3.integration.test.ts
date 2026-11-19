@@ -69,7 +69,6 @@ describe.runIf(dbReady)("simple leave management API (/leave, integration)", () 
         lastName: "Staffer",
         status: "active",
         employeeType: "general",
-        monthlySalary: 15000,
         commencementDate,
       },
     });
@@ -83,7 +82,6 @@ describe.runIf(dbReady)("simple leave management API (/leave, integration)", () 
         lastName: "Officer",
         status: "active",
         employeeType: "security_officer",
-        hourlyRate: 100,
         commencementDate,
       },
     });
@@ -99,7 +97,6 @@ describe.runIf(dbReady)("simple leave management API (/leave, integration)", () 
         lastName: "Hire",
         status: "active",
         employeeType: "general",
-        monthlySalary: 15000,
         commencementDate: twoMonthsAgo,
       },
     });

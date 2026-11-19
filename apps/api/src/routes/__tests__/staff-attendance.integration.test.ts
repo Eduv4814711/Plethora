@@ -51,7 +51,6 @@ describe.runIf(dbReady)("office staff attendance (integration)", () => {
         status: "active",
         employeeType: "general",
         jobRole: "HR Manager",
-        monthlySalary: 25000,
       },
     });
     officeEmployeeId = officeEmployee.id;

@@ -52,7 +52,7 @@ import {
 } from "./billing.schemas.js";
 import { registerBillingPdfRoutes } from "./billing-pdf.routes.js";
 
-const MODULE = "/payroll/billing";
+const MODULE = "/billing";
 
 /** Maps validated line input onto persistable rows with computed totals. */
 function buildLineRows(items: readonly LineInput[]) {

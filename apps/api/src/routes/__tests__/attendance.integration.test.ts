@@ -71,7 +71,6 @@ describe.runIf(dbReady)("attendance routes (integration)", () => {
         lastName: "Guard",
         status: "active",
         employeeType: "general",
-        monthlySalary: 15000,
         groupId: group.id,
       },
     });

@@ -6,8 +6,6 @@ export const alertSourceModuleSchema = z.enum([
   "DASHBOARD",
   "ATTENDANCE",
   "ROSTERING",
-  "PAYROLL",
-  "TASKS",
   "SITES",
   "DOCUMENTS",
   "INCIDENTS",

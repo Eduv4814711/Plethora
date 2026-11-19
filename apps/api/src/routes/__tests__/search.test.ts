@@ -6,7 +6,6 @@ const { prismaMock, userState } = vi.hoisted(() => ({
     employee: { findMany: vi.fn() },
     site: { findMany: vi.fn() },
     client: { findMany: vi.fn() },
-    task: { findMany: vi.fn() },
     incident: { findMany: vi.fn() },
     clientInvoice: { findMany: vi.fn() },
   },
@@ -69,7 +68,6 @@ describe("GET /search", () => {
       employees: [],
       sites: [],
       clients: [],
-      tasks: [],
       incidents: [],
       invoices: [],
     });
@@ -80,14 +78,10 @@ describe("GET /search", () => {
   it("queries only modules the user has view capability for", async () => {
     userState.current.capabilities = {
       "/clients": ["view"],
-      "/tasks": ["view"],
     };
 
     prismaMock.client.findMany.mockResolvedValueOnce([
       { id: "cl-1", name: "Acme Corp", contactPersonName: "John", phone: "0821234567" },
-    ]);
-    prismaMock.task.findMany.mockResolvedValueOnce([
-      { id: "tk-1", title: "Review post check", status: "todo", priority: "high", dueDate: null },
     ]);
 
     const res = await app.inject({
@@ -104,15 +98,12 @@ describe("GET /search", () => {
       contactPerson: "John",
       phone: "0821234567",
     });
-    expect(body.tasks).toHaveLength(1);
-    expect(body.tasks[0].title).toBe("Review post check");
     expect(body.employees).toEqual([]);
     expect(body.sites).toEqual([]);
     expect(body.incidents).toEqual([]);
     expect(body.invoices).toEqual([]);
 
     expect(prismaMock.client.findMany).toHaveBeenCalled();
-    expect(prismaMock.task.findMany).toHaveBeenCalled();
     expect(prismaMock.employee.findMany).not.toHaveBeenCalled();
     expect(prismaMock.site.findMany).not.toHaveBeenCalled();
     expect(prismaMock.incident.findMany).not.toHaveBeenCalled();
@@ -142,7 +133,7 @@ describe("GET /search", () => {
 
   it("returns formatted invoices when user has billing capability", async () => {
     userState.current.capabilities = {
-      "/payroll/billing": ["view"],
+      "/billing": ["view"],
     };
 
     prismaMock.clientInvoice.findMany.mockResolvedValueOnce([

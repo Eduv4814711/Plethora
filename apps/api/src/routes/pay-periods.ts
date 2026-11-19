@@ -23,7 +23,7 @@ export async function payPeriodsRoutes(app: FastifyInstance) {
     // deliberate. /settings was dropped: managing company settings is not a
     // reason to read the payroll calendar.
     requireCrudCapability({
-      anyOfModules: ["/payroll", "/rostering", "/attendance", "/reports"],
+      anyOfModules: ["/rostering", "/attendance", "/payroll-exports", "/reports"],
     }),
   ];
 

@@ -83,7 +83,7 @@ export async function aiRoutes(app: FastifyInstance): Promise<void> {
           {
             role: "system",
             content:
-              "You are Plethora ERP's Operations Copilot for a South African security company. Answer concisely using ONLY the verified tenant metrics provided. Never invent figures or approve payroll/attendance changes.",
+              "You are Plethora ERP's Operations Copilot for a South African security company. Answer concisely using ONLY the verified tenant metrics provided. Never invent figures or approve attendance changes.",
           },
           {
             role: "user",

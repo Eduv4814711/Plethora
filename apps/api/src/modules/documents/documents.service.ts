@@ -113,15 +113,12 @@ export const VALID_DOCUMENT_CATEGORIES = new Set<string>([
   "EMPLOYEE",
   "SITE",
   "CLIENT",
-  "PAYROLL",
   "ATTENDANCE",
   "INCIDENT",
   "EQUIPMENT",
   "COMPLIANCE",
-  "TASK",
   "BILLING",
   "REPORT",
-  "ACADEMY",
   "OTHER",
 ]);
 
@@ -236,7 +233,6 @@ export async function validateDocumentReferences(
     clientId?: string | null;
     clientContractId?: string | null;
     incidentId?: string | null;
-    taskId?: string | null;
   }
 ): Promise<string | null> {
   const checks: Array<Promise<boolean>> = [];
@@ -261,10 +257,6 @@ export async function validateDocumentReferences(
   if (refs.incidentId) {
     labels.push("incident");
     checks.push(prisma.incident.findFirst({ where: { id: refs.incidentId, companyId }, select: { id: true } }).then(Boolean));
-  }
-  if (refs.taskId) {
-    labels.push("task");
-    checks.push(prisma.task.findFirst({ where: { id: refs.taskId, companyId }, select: { id: true } }).then(Boolean));
   }
 
   const results = await Promise.all(checks);
@@ -300,7 +292,6 @@ export async function createDocumentRecord(params: {
   clientId?: string | null;
   clientContractId?: string | null;
   incidentId?: string | null;
-  taskId?: string | null;
   notes?: string | null;
   metadata?: Prisma.InputJsonValue;
 }) {
@@ -331,7 +322,6 @@ export async function createDocumentRecord(params: {
       clientId: params.clientId?.trim() || null,
       clientContractId: params.clientContractId?.trim() || null,
       incidentId: params.incidentId?.trim() || null,
-      taskId: params.taskId?.trim() || null,
       notes: params.notes?.trim() || null,
       metadata: params.metadata ?? Prisma.JsonNull,
       uploadedById: params.uploadedById,

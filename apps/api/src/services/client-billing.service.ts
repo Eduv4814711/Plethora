@@ -1,9 +1,11 @@
 import { Prisma } from "@prisma/client";
 import type { ClientInvoiceStatus, ClientQuoteStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
-import { startOfUtcDay } from "./academy-finance.service.js";
 
-export { startOfUtcDay };
+/** Start of UTC day for date-only comparisons. */
+export function startOfUtcDay(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
 
 const DEFAULT_PREFIXES = { quote: "QT", invoice: "INV", receipt: "RCT" } as const;
 

@@ -19,16 +19,16 @@ const user = (capabilities: unknown = {}, isOwner = false) => ({
 });
 
 describe("employee sensitive fields", () => {
-  it("allows view through Team, Payroll, or owner access", () => {
+  it("allows view only through Team sensitive access or owner access", () => {
     expect(canViewEmployeeSensitiveFields(user({ "/employees": ["view_sensitive"] }))).toBe(true);
-    expect(canViewEmployeeSensitiveFields(user({ "/payroll": ["view_sensitive"] }))).toBe(true);
+    expect(canViewEmployeeSensitiveFields(user({ "/payroll-exports": ["view", "export"] }))).toBe(false);
     expect(canViewEmployeeSensitiveFields(user({}, true))).toBe(true);
   });
 
   it("requires edit explicitly for private-data changes", () => {
     expect(canEditEmployeeDetails(user({ "/employees": ["view"] }))).toBe(false);
     expect(canEditEmployeeDetails(user({ "/employees": ["edit"] }))).toBe(true);
-    expect(canEditEmployeeDetails(user({ "/payroll": ["edit"] }))).toBe(true);
+    expect(canEditEmployeeDetails(user({ "/payroll-exports": ["edit"] }))).toBe(false);
   });
 
   it("authorizes sensitive writes by action without implying read access", () => {
@@ -36,7 +36,7 @@ describe("employee sensitive fields", () => {
     expect(canWriteEmployeeSensitiveFields(creator, "create")).toBe(true);
     expect(canWriteEmployeeSensitiveFields(creator, "edit")).toBe(false);
     expect(canViewEmployeeSensitiveFields(creator)).toBe(false);
-    expect(canWriteEmployeeSensitiveFields(user({ "/payroll": ["edit"] }), "edit")).toBe(true);
+    expect(canWriteEmployeeSensitiveFields(user({ "/employees": ["edit"] }), "edit")).toBe(true);
   });
 
   it("strips sensitive fields without relevant view access", () => {

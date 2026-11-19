@@ -1,4 +1,4 @@
-import type { EmployeeStatus, ShiftStatus, PayrollStatus } from "@prisma/client";
+import type { EmployeeStatus, ShiftStatus, PayrollExportBatchStatus } from "@prisma/client";
 
 // Employee lifecycle: Applicant → Hired → Training → Active / Reliever → Suspended → Offboarded
 export const EMPLOYEE_TRANSITIONS: Record<EmployeeStatus, EmployeeStatus[]> = {
@@ -34,17 +34,17 @@ export function canTransitionShift(
   return SHIFT_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
-// Payroll lifecycle: Draft → Calculated → Approved → Paid
-export const PAYROLL_TRANSITIONS: Record<PayrollStatus, PayrollStatus[]> = {
-  draft: ["calculated"],
-  calculated: ["approved", "draft"],
-  approved: ["paid", "draft"],
-  paid: [],
+// Payroll export batch lifecycle: DRAFT -> LOCKED -> EXPORTED (voidable until superseded)
+export const PAYROLL_EXPORT_TRANSITIONS: Record<PayrollExportBatchStatus, PayrollExportBatchStatus[]> = {
+  DRAFT: ["LOCKED", "VOIDED"],
+  LOCKED: ["EXPORTED", "VOIDED"],
+  EXPORTED: ["VOIDED"],
+  VOIDED: [],
 };
 
-export function canTransitionPayroll(
-  from: PayrollStatus,
-  to: PayrollStatus
+export function canTransitionPayrollExport(
+  from: PayrollExportBatchStatus,
+  to: PayrollExportBatchStatus
 ): boolean {
-  return PAYROLL_TRANSITIONS[from]?.includes(to) ?? false;
+  return PAYROLL_EXPORT_TRANSITIONS[from]?.includes(to) ?? false;
 }

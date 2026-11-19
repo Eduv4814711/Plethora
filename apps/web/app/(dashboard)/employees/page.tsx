@@ -58,10 +58,7 @@ interface Employee {
   idNumber?: string | null;
   phone?: string | null;
   status: string;
-  hourlyRate?: number | null;
-  monthlySalary?: number | null;
-  gradeId?: string | null;
-  grade?: { name: string; hourlyRate: number } | null;
+  externalPayrollCode?: string | null;
   groupId?: string | null;
   group?: { id: string; name: string } | null;
   currentSite: string | null;
@@ -84,8 +81,6 @@ interface Employee {
   placeOfWork?: string | null;
   ordinaryHours?: string | null;
   ordinaryDays?: string | null;
-  overtimeRate?: number | null;
-  payFrequency?: string | null;
   leaveEntitlement?: string | null;
   noticePeriod?: string | null;
   previousService?: string | null;
@@ -131,9 +126,7 @@ const TEAM_UNASSIGNED_FOLDER_KEY = "__unassigned__";
 
 export default function EmployeesPage() {
   const { token, user } = useAuth();
-  const canCreateEmployees = user
-    ? hasCapability(user, "/employees", "create") || hasCapability(user, "/payroll", "create")
-    : false;
+  const canCreateEmployees = user ? hasCapability(user, "/employees", "create") : false;
   const canDeleteEmployees = user ? hasCapability(user, "/employees", "delete") : false;
   const canEditEmployeeDetails = user ? canManageEmployeeDetails(user) : false;
   const searchParams = useSearchParams();
@@ -590,23 +583,13 @@ function EmployeeTeamCard({
           {emp.idNumber && <p>ID: {emp.idNumber}</p>}
           {emp.psiraRegistrationNumber && <p>PSIRA: {emp.psiraRegistrationNumber}</p>}
           {emp.phone && <p>PHONE: {emp.phone}</p>}
-          {(emp.grade || emp.hourlyRate != null || emp.monthlySalary != null) && (
-            <p>
-              GRADE: {emp.grade
-                ? `${emp.grade.name} (${Number(emp.grade.hourlyRate).toFixed(2)}/HR)`
-                : emp.employeeType === "general" && emp.monthlySalary != null
-                  ? `R${emp.monthlySalary}/MONTH`
-                  : emp.hourlyRate != null
-                    ? `R${Number(emp.hourlyRate).toFixed(2)}/HR`
-                    : "—"}
-            </p>
-          )}
+          {emp.externalPayrollCode && <p>SAGE CODE: {emp.externalPayrollCode}</p>}
           {(emp.employeeType ?? "security_officer") === "security_officer" && (
             <p>
               SITE: {emp.assignedSites && emp.assignedSites.length > 0 ? emp.assignedSites.join(", ") : "Not assigned"}
             </p>
           )}
-          {!emp.idNumber && !emp.psiraRegistrationNumber && !emp.phone && !emp.grade && emp.hourlyRate == null && emp.monthlySalary == null && (
+          {!emp.idNumber && !emp.psiraRegistrationNumber && !emp.phone && !emp.externalPayrollCode && (
             <p className="text-security-navy-900/70">No details</p>
           )}
         </div>
@@ -730,44 +713,6 @@ function parseSAIdNumber(id: string): { dateOfBirth?: string; gender?: "M" | "F"
   const genderSeq = parseInt(clean.slice(6, 10), 10);
   const gender = genderSeq < 5000 ? "F" : "M";
   return { dateOfBirth, gender };
-}
-
-function PayGradeSelect({
-  token,
-  value,
-  onChange,
-  groupId,
-  className = "input-modern",
-  required = false,
-}: {
-  token: string;
-  value: string;
-  onChange: (v: string) => void;
-  groupId?: string | null;
-  className?: string;
-  required?: boolean;
-}) {
-  const [grades, setGrades] = useState<{ id: string; name: string; hourlyRate: string }[]>([]);
-  useEffect(() => {
-    const url = groupId && groupId.trim()
-      ? `/payroll/pay-grades?groupId=${encodeURIComponent(groupId)}`
-      : "/payroll/pay-grades";
-    authFetch(url, token)
-      .then((r) => r.json())
-      .then((d) => setGrades(d.data || []))
-      .catch(console.error);
-  }, [token, groupId]);
-
-  return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className={className} required={required}>
-      <option value="">{required ? "Select pay grade *" : "Pay grade (optional)"}</option>
-      {grades.map((g) => (
-        <option key={g.id} value={g.id}>
-          {g.name} — R{Number(g.hourlyRate).toFixed(2)}/hr
-        </option>
-      ))}
-    </select>
-  );
 }
 
 function GroupSelect({
@@ -925,8 +870,7 @@ function EmployeeForm({
   const [idNumber, setIdNumber] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [monthlySalary, setMonthlySalary] = useState("");
-  const [gradeId, setGradeId] = useState("");
+  const [externalPayrollCode, setExternalPayrollCode] = useState("");
   const [groupId, setGroupId] = useState("");
   const [status, setStatus] = useState("applicant");
   const [error, setError] = useState("");
@@ -947,8 +891,6 @@ function EmployeeForm({
   const [placeOfWork, setPlaceOfWork] = useState(defaultPlaceOfWork ?? "");
   const [ordinaryHours, setOrdinaryHours] = useState("");
   const [ordinaryDays, setOrdinaryDays] = useState("");
-  const [overtimeRate, setOvertimeRate] = useState("");
-  const [payFrequency, setPayFrequency] = useState("");
   const [leaveEntitlement, setLeaveEntitlement] = useState("");
   const [noticePeriod, setNoticePeriod] = useState("");
   const [previousService, setPreviousService] = useState("");
@@ -1068,32 +1010,21 @@ function EmployeeForm({
       setError("PSIRA number is required for security guards. Enter it on the PSIRA tab.");
       return;
     }
-    if (employeeType === "security_officer" && !gradeId) {
-      setActiveTab("basic");
-      setError("Pay grade is required for security guards. Choose one on the Basic details tab.");
-      return;
-    }
     if (!groupId) {
       setActiveTab("basic");
       setError("Every team member needs a group. Choose one on the Basic details tab.");
-      return;
-    }
-    if (employeeType === "general" && (!monthlySalary || parseFloat(monthlySalary) <= 0)) {
-      setActiveTab("basic");
-      setError("Monthly salary is required for office staff. Enter it on the Basic details tab.");
       return;
     }
     setSubmitting(true);
     try {
       const payload: Record<string, unknown> = {
         employeeNumber: employeeNumber.trim(),
+        externalPayrollCode: externalPayrollCode.trim() || undefined,
         firstName,
         lastName,
         idNumber: idNumber || undefined,
         phone: phone.trim() === "" ? "" : phone.trim() || undefined,
         email: email || undefined,
-        monthlySalary: employeeType === "general" && monthlySalary ? parseFloat(monthlySalary) : undefined,
-        gradeId: employeeType === "security_officer" ? gradeId : undefined,
         groupId,
         status,
         employeeType,
@@ -1112,8 +1043,6 @@ function EmployeeForm({
         placeOfWork: placeOfWork || undefined,
         ordinaryHours: ordinaryHours || undefined,
         ordinaryDays: ordinaryDays || undefined,
-        overtimeRate: overtimeRate ? parseFloat(overtimeRate) : undefined,
-        payFrequency: payFrequency || undefined,
         leaveEntitlement: leaveEntitlement || undefined,
         noticePeriod: noticePeriod || undefined,
         previousService: previousService || undefined,
@@ -1139,7 +1068,7 @@ function EmployeeForm({
       });
       if (!res.ok) {
         const data = await res.json();
-        const msg = data?.message?.psiraRegistrationNumber?.[0] ?? data?.message?.gradeId?.[0] ?? data?.message?.groupId?.[0] ?? data?.message?.monthlySalary?.[0] ?? data?.message?.employeeNumber?.[0] ?? (typeof data?.message === "string" ? data.message : null) ?? "Could not save the team member. Please check the details and try again.";
+        const msg = data?.message?.psiraRegistrationNumber?.[0] ?? data?.message?.externalPayrollCode?.[0] ?? data?.message?.groupId?.[0] ?? data?.message?.employeeNumber?.[0] ?? (typeof data?.message === "string" ? data.message : null) ?? "Could not save the team member. Please check the details and try again.";
         throw new Error(msg);
       }
 
@@ -1303,7 +1232,7 @@ function EmployeeForm({
               <label htmlFor="new-emp-phone" className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">
                 Phone (WhatsApp)
               </label>
-              <input id="new-emp-phone" placeholder="e.g. 0821234567" value={phone} onChange={(e) => setPhone(e.target.value)} className="input-compact" title="WhatsApp number for clock-in, payslip, etc." />
+              <input id="new-emp-phone" placeholder="e.g. 0821234567" value={phone} onChange={(e) => setPhone(e.target.value)} className="input-compact" title="WhatsApp number for clock-in, leave, etc." />
             </div>
             <div className="flex flex-col gap-1">
               <label htmlFor="new-emp-email" className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">
@@ -1311,31 +1240,18 @@ function EmployeeForm({
               </label>
               <input id="new-emp-email" type="email" placeholder="e.g. name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} className="input-compact" />
             </div>
-            {employeeType === "general" ? (
-              <div className="flex flex-col gap-1">
-                <label htmlFor="new-emp-salary" className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">
-                  Monthly salary (R) <span className="text-red-600">*</span>
-                </label>
-                <input
-                  id="new-emp-salary"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="e.g. 15000"
-                  value={monthlySalary}
-                  onChange={(e) => setMonthlySalary(e.target.value)}
-                  className="input-compact"
-                  required
-                />
-              </div>
-            ) : (
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">
-                  Pay grade <span className="text-security-navy-400 font-normal">(Optional)</span>
-                </label>
-                <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} groupId={groupId} className="input-compact" />
-              </div>
-            )}
+            <div className="flex flex-col gap-1">
+              <label htmlFor="new-emp-sage-code" className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">
+                External Payroll Code (Sage)
+              </label>
+              <input
+                id="new-emp-sage-code"
+                placeholder="e.g. SAGE-0001 (optional)"
+                value={externalPayrollCode}
+                onChange={(e) => setExternalPayrollCode(e.target.value)}
+                className="input-compact"
+              />
+            </div>
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-medium uppercase tracking-wider text-security-navy-600">
                 Group <span className="text-red-600">*</span>
@@ -1383,13 +1299,6 @@ function EmployeeForm({
             <input placeholder="Place of work" value={placeOfWork} onChange={(e) => setPlaceOfWork(e.target.value)} className="input-compact" />
             <input placeholder="Ordinary hours" value={ordinaryHours} onChange={(e) => setOrdinaryHours(e.target.value)} className="input-compact" />
             <input placeholder="Ordinary days" value={ordinaryDays} onChange={(e) => setOrdinaryDays(e.target.value)} className="input-compact" />
-            <input type="number" step="0.01" min="0" placeholder="Overtime rate (R)" value={overtimeRate} onChange={(e) => setOvertimeRate(e.target.value)} className="input-compact" />
-            <select value={payFrequency} onChange={(e) => setPayFrequency(e.target.value)} className="input-compact">
-              <option value="">Pay frequency</option>
-              <option value="weekly">Weekly</option>
-              <option value="bi-weekly">Bi-weekly</option>
-              <option value="monthly">Monthly</option>
-            </select>
             <input placeholder="Leave entitlement" value={leaveEntitlement} onChange={(e) => setLeaveEntitlement(e.target.value)} className="input-compact" />
             <input placeholder="Notice period" value={noticePeriod} onChange={(e) => setNoticePeriod(e.target.value)} className="input-compact" />
             <input placeholder="Previous service" value={previousService} onChange={(e) => setPreviousService(e.target.value)} className="input-compact sm:col-span-2" />
@@ -1615,8 +1524,7 @@ function EditModal({
   const [idNumber, setIdNumber] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [monthlySalary, setMonthlySalary] = useState("");
-  const [gradeId, setGradeId] = useState("");
+  const [externalPayrollCode, setExternalPayrollCode] = useState("");
   const [groupId, setGroupId] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1638,8 +1546,6 @@ function EditModal({
   const [placeOfWork, setPlaceOfWork] = useState("");
   const [ordinaryHours, setOrdinaryHours] = useState("");
   const [ordinaryDays, setOrdinaryDays] = useState("");
-  const [overtimeRate, setOvertimeRate] = useState("");
-  const [payFrequency, setPayFrequency] = useState("");
   const [leaveEntitlement, setLeaveEntitlement] = useState("");
   const [noticePeriod, setNoticePeriod] = useState("");
   const [previousService, setPreviousService] = useState("");
@@ -1734,8 +1640,7 @@ function EditModal({
         setIdNumber(emp.idNumber || "");
         setPhone(emp.phone || "");
         setEmail(emp.email || "");
-        setMonthlySalary(emp.monthlySalary != null ? String(emp.monthlySalary) : "");
-        setGradeId(emp.gradeId || "");
+        setExternalPayrollCode(emp.externalPayrollCode || "");
         setGroupId(emp.groupId || "");
         setDateOfBirth(toDateStr(emp.dateOfBirth));
         setGender(emp.gender || "");
@@ -1752,8 +1657,6 @@ function EditModal({
         setPlaceOfWork(emp.placeOfWork || defaultPlaceOfWork || "");
         setOrdinaryHours(emp.ordinaryHours || "");
         setOrdinaryDays(emp.ordinaryDays || "");
-        setOvertimeRate(emp.overtimeRate != null ? String(emp.overtimeRate) : "");
-        setPayFrequency(emp.payFrequency || "");
         setLeaveEntitlement(emp.leaveEntitlement || "");
         setNoticePeriod(emp.noticePeriod || "");
         setPreviousService(emp.previousService || "");
@@ -1785,33 +1688,21 @@ function EditModal({
       setError("PSIRA number is required for security guards. Enter it on the PSIRA tab.");
       return;
     }
-    if (employeeType === "security_officer" && !gradeId) {
-      setActiveTab("basic");
-      setError("Pay grade is required for security guards. Choose one on the Basic details tab.");
-      return;
-    }
     if (!groupId) {
       setActiveTab("basic");
       setError("Every team member needs a group. Choose one on the Basic details tab.");
-      return;
-    }
-    if (employeeType === "general" && (!monthlySalary || parseFloat(monthlySalary) <= 0)) {
-      setActiveTab("basic");
-      setError("Monthly salary is required for office staff. Enter it on the Basic details tab.");
       return;
     }
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {
         employeeNumber: employeeNumber.trim() || undefined,
+        externalPayrollCode: externalPayrollCode.trim() === "" ? null : externalPayrollCode.trim(),
         firstName,
         lastName,
         idNumber: idNumber || undefined,
         phone: phone.trim() === "" ? "" : phone.trim() || undefined,
         email: email || undefined,
-        hourlyRate: employeeType === "general" ? null : undefined,
-        monthlySalary: employeeType === "general" && monthlySalary ? parseFloat(monthlySalary) : employeeType === "security_officer" ? null : undefined,
-        gradeId: employeeType === "security_officer" ? gradeId : null,
         groupId,
         employeeType,
         dateOfBirth: dateOfBirth || undefined,
@@ -1829,8 +1720,6 @@ function EditModal({
         placeOfWork: placeOfWork || undefined,
         ordinaryHours: ordinaryHours || undefined,
         ordinaryDays: ordinaryDays || undefined,
-        overtimeRate: overtimeRate ? parseFloat(overtimeRate) : undefined,
-        payFrequency: payFrequency || undefined,
         leaveEntitlement: leaveEntitlement || undefined,
         noticePeriod: noticePeriod || undefined,
         previousService: previousService || undefined,
@@ -1856,7 +1745,7 @@ function EditModal({
       });
       if (!res.ok) {
         const data = await res.json();
-        const msg = data?.message?.psiraRegistrationNumber?.[0] ?? data?.message?.gradeId?.[0] ?? data?.message?.groupId?.[0] ?? data?.message?.monthlySalary?.[0] ?? data?.message?.employeeNumber?.[0] ?? data?.message ?? "Failed to update";
+        const msg = data?.message?.psiraRegistrationNumber?.[0] ?? data?.message?.externalPayrollCode?.[0] ?? data?.message?.groupId?.[0] ?? data?.message?.employeeNumber?.[0] ?? data?.message ?? "Failed to update";
         throw new Error(typeof msg === "string" ? msg : "Failed to update");
       }
       onSuccess();
@@ -1988,24 +1877,16 @@ function EditModal({
                   title="Enter 13-digit SA ID – date of birth and gender will auto-fill"
                 />
                 <div>
-                  <input placeholder="Phone (e.g. 0821234567 or +27821234567)" value={phone} onChange={(e) => setPhone(e.target.value)} className="input-modern" title="WhatsApp number for clock-in, payslip, etc." />
-                  <p className="text-xs text-security-navy-500 mt-0.5">Saved in WhatsApp-compatible format for clock-in, payslip, and leave commands.</p>
+                  <input placeholder="Phone (e.g. 0821234567 or +27821234567)" value={phone} onChange={(e) => setPhone(e.target.value)} className="input-modern" title="WhatsApp number for clock-in, leave, etc." />
+                  <p className="text-xs text-security-navy-500 mt-0.5">Saved in WhatsApp-compatible format for clock-in and leave commands.</p>
                 </div>
                 <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-modern" />
-                {employeeType === "general" ? (
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="Monthly salary (R) *"
-                    value={monthlySalary}
-                    onChange={(e) => setMonthlySalary(e.target.value)}
-                    className="input-modern"
-                    required
-                  />
-                ) : (
-                  <PayGradeSelect token={token} value={gradeId} onChange={setGradeId} groupId={groupId} />
-                )}
+                <input
+                  placeholder="External Payroll Code (Sage, optional)"
+                  value={externalPayrollCode}
+                  onChange={(e) => setExternalPayrollCode(e.target.value)}
+                  className="input-modern"
+                />
                 <GroupSelect token={token} value={groupId} onChange={setGroupId} required />
               </div>
             </section>
@@ -2048,13 +1929,6 @@ function EditModal({
                 <input placeholder="Place of work" value={placeOfWork} onChange={(e) => setPlaceOfWork(e.target.value)} className="input-modern" />
                 <input placeholder="Ordinary hours" value={ordinaryHours} onChange={(e) => setOrdinaryHours(e.target.value)} className="input-modern" />
                 <input placeholder="Ordinary days" value={ordinaryDays} onChange={(e) => setOrdinaryDays(e.target.value)} className="input-modern" />
-                <input type="number" step="0.01" min="0" placeholder="Overtime rate (R)" value={overtimeRate} onChange={(e) => setOvertimeRate(e.target.value)} className="input-modern" />
-                <select value={payFrequency} onChange={(e) => setPayFrequency(e.target.value)} className="input-modern">
-                  <option value="">Pay frequency</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="bi-weekly">Bi-weekly</option>
-                  <option value="monthly">Monthly</option>
-                </select>
                 <input placeholder="Leave entitlement" value={leaveEntitlement} onChange={(e) => setLeaveEntitlement(e.target.value)} className="input-modern" />
                 <input placeholder="Notice period" value={noticePeriod} onChange={(e) => setNoticePeriod(e.target.value)} className="input-modern" />
                 <input placeholder="Previous service" value={previousService} onChange={(e) => setPreviousService(e.target.value)} className="input-modern sm:col-span-2" />

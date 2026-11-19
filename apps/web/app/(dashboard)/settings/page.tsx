@@ -16,8 +16,12 @@ import {
   transferCompanyOwnership,
   factoryReset,
   FACTORY_RESET_MODULES,
+  listPublicHolidays,
+  createPublicHoliday,
+  deletePublicHoliday,
   authFetch,
   type AccountType,
+  type PublicHolidayItem,
   type Capability,
   type CapabilityDefinition,
   type CapabilityMap,
@@ -32,7 +36,7 @@ import { ClientsSettingsSection } from "@/components/clients-settings-section";
 import { CapabilityUsersSection } from "@/components/capability-users-section";
 import { clsx } from "clsx";
 
-type Tab = "profile" | "business" | "settings" | "users" | "clients" | "migrate" | "factory_reset";
+type Tab = "profile" | "business" | "settings" | "holidays" | "users" | "clients" | "migrate" | "factory_reset";
 
 export default function SettingsPage() {
   const { user, token, logout } = useAuth();
@@ -44,7 +48,7 @@ export default function SettingsPage() {
   const canViewAccess = Boolean(user && hasCapability(user, "/settings/access", "view"));
   const canManageClients = Boolean(user && hasCapability(user, "/clients", "view"));
   const isOwner = Boolean(user?.isOwner);
-  const tabIds: Tab[] = ["profile", "business", "settings", "users", "clients", "migrate", "factory_reset"];
+  const tabIds: Tab[] = ["profile", "business", "settings", "holidays", "users", "clients", "migrate", "factory_reset"];
   const [activeTab, setActiveTab] = useState<Tab>(tabParam && tabIds.includes(tabParam) ? tabParam : "profile");
 
   useEffect(() => {
@@ -59,6 +63,7 @@ export default function SettingsPage() {
     { id: "profile", label: "Profile" },
     { id: "business", label: "Business Details" },
     { id: "settings", label: "Business Settings" },
+    { id: "holidays", label: "Public Holidays" },
     { id: "users", label: "User Access", visible: canViewAccess },
     { id: "clients", label: "Clients", visible: canManageClients },
     { id: "migrate", label: "Bulk Import/Export", visible: canUseMigrationTools, href: "/settings/migrate" },
@@ -164,6 +169,9 @@ export default function SettingsPage() {
               }
             }}
           />
+        )}
+        {activeTab === "holidays" && token && (
+          <PublicHolidaysSection token={token} readOnly={!canEditSettings} />
         )}
         {activeTab === "users" && canViewAccess && token && (
           <CapabilityUsersSection token={token} currentUser={user!} />
@@ -287,15 +295,10 @@ function BusinessDetailsSection({
           />
         </div>
         <div className="border-t border-security-navy-100 dark:border-security-navy-700 pt-6 mt-6">
-          <h4 className="text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-4">Payslip & Compliance</h4>
+          <h4 className="text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-4">Company Statutory &amp; Registration Numbers</h4>
           <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mb-4">
-            These details appear on payslips and reports. Used for PSIRA, UIF, PAYE, SDL, and tax compliance.
+            Used on client billing documents, tender compliance packs, and external payroll exports (Sage).
           </p>
-          {settings?.sdlLiableFrom && (
-            <p className="text-xs text-security-amber-600 dark:text-security-amber-400 mb-4">
-              SDL liable from {new Date(settings.sdlLiableFrom).toLocaleDateString()}. Add SDL reference when registering with SARS.
-            </p>
-          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">PSIRA Registration</label>
@@ -601,7 +604,7 @@ function BusinessSettingsSection({
     <div>
       <h3 className="font-semibold text-security-navy-900 dark:text-white mb-4">Business Settings</h3>
       <p className="text-sm text-security-navy-500 dark:text-security-navy-400 mb-6">
-        Configure defaults used for payroll, dates, and reporting.
+        Configure defaults used for rostering cycles, attendance, export schedules, and reporting.
       </p>
       <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
         <div>
@@ -643,7 +646,7 @@ function BusinessSettingsSection({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">PAYE calculation frequency</label>
+          <label className="block text-sm font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">Payroll export frequency</label>
           <select
             value={form.payrollPeriod}
             onChange={(e) => setForm((f) => ({ ...f, payrollPeriod: e.target.value }))}
@@ -655,11 +658,11 @@ function BusinessSettingsSection({
             <option value="monthly">Monthly</option>
           </select>
           <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-1">
-            Used for PAYE tax calculations only. Pay and roster period dates are configured below.
+            Labeling cadence for external payroll export cycles. Period date bounds are configured below.
           </p>
         </div>
         <div className="rounded-security-lg border border-security-amber-200/80 dark:border-security-amber-800/40 bg-security-amber-50/40 dark:bg-security-amber-950/20 p-4 space-y-3">
-          <p className="text-sm font-medium text-security-navy-900 dark:text-security-navy-100">Pay & roster period calendar</p>
+          <p className="text-sm font-medium text-security-navy-900 dark:text-security-navy-100">Export &amp; roster period calendar</p>
           <p className="text-xs text-security-navy-500 dark:text-security-navy-400">
             Example: start 26, end 25 → 26 Jun–25 Jul is labelled <strong>July</strong> pay/roster period.
             Auto-roster maintains shifts through N pay periods ahead.
@@ -714,8 +717,8 @@ function BusinessSettingsSection({
             <p className="text-sm font-medium text-security-navy-900 dark:text-security-navy-100">Roster period calendars</p>
             <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-1">
               Add different period date ranges for roster planning. Use start ≤ end for one calendar month
-              (e.g. 1–31). Use start &gt; end for cross-month periods (e.g. 26–25). Payroll still uses the pay
-              period dates above.
+              (e.g. 1–31). Use start &gt; end for cross-month periods (e.g. 26–25). Export batches still use
+              the main period dates above.
             </p>
           </div>
           <div className="space-y-3">
@@ -1315,6 +1318,161 @@ function FactoryResetSection({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function PublicHolidaysSection({ token, readOnly }: { token: string; readOnly: boolean }) {
+  const [year, setYear] = useState<number>(() => new Date().getFullYear());
+  const [holidays, setHolidays] = useState<PublicHolidayItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [date, setDate] = useState("");
+  const [name, setName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const loadHolidays = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await listPublicHolidays(token, year);
+      setHolidays(res.data ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load public holidays");
+    } finally {
+      setLoading(false);
+    }
+  }, [token, year]);
+
+  useEffect(() => {
+    void loadHolidays();
+  }, [loadHolidays]);
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!date.trim() || !name.trim()) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await createPublicHoliday(token, { date: date.trim(), name: name.trim() });
+      setDate("");
+      setName("");
+      await loadHolidays();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add public holiday");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    setError(null);
+    try {
+      await deletePublicHoliday(token, id);
+      await loadHolidays();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete public holiday");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-security-navy-900 dark:text-white">Public Holidays</h3>
+          <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-0.5">
+            Dates configured here classify worked attendance into Public Holiday hours for client billing and Sage exports.
+          </p>
+        </div>
+        <select
+          value={year}
+          onChange={(e) => setYear(Number(e.target.value))}
+          className="input-modern w-auto"
+          aria-label="Filter public holidays by year"
+        >
+          {[year - 1, year, year + 1].map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {error && (
+        <div className="p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-sm">
+          {error}
+        </div>
+      )}
+
+      {!readOnly && (
+        <form onSubmit={handleAdd} className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl items-end">
+          <div>
+            <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+              Date
+            </label>
+            <DateInput value={date} onChange={setDate} className="input-modern" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+              Holiday Name
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Human Rights Day"
+              className="input-modern"
+              required
+            />
+          </div>
+          <div>
+            <button type="submit" disabled={submitting} className="btn-primary w-full sm:w-auto">
+              {submitting ? "Adding..." : "Add Public Holiday"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {loading ? (
+        <p className="text-sm text-security-navy-500">Loading public holidays...</p>
+      ) : holidays.length === 0 ? (
+        <p className="text-sm text-security-navy-500">No public holidays configured for {year}.</p>
+      ) : (
+        <div className="overflow-x-auto border border-security-navy-100 dark:border-security-navy-700 rounded-security">
+          <table className="min-w-full divide-y divide-security-navy-100 dark:divide-security-navy-700 text-sm">
+            <thead className="bg-security-navy-50 dark:bg-security-navy-900/40">
+              <tr>
+                <th className="px-4 py-2 text-left text-xs font-semibold text-security-navy-600 uppercase">Date</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold text-security-navy-600 uppercase">Holiday</th>
+                {!readOnly && <th className="px-4 py-2 text-right text-xs font-semibold text-security-navy-600 uppercase">Action</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-700">
+              {holidays.map((h) => (
+                <tr key={h.id}>
+                  <td className="px-4 py-2 font-mono text-security-navy-900 dark:text-white">
+                    {String(h.date).slice(0, 10)}
+                  </td>
+                  <td className="px-4 py-2 text-security-navy-800 dark:text-security-navy-200">
+                    {h.name || "Public Holiday"}
+                  </td>
+                  {!readOnly && (
+                    <td className="px-4 py-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(h.id)}
+                        className="text-xs font-semibold text-red-600 hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

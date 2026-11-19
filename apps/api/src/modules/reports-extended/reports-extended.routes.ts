@@ -2,7 +2,12 @@ import type { FastifyInstance } from "fastify";
 import { authMiddleware } from "../../middleware/auth.js";
 import { requireCapability } from "../../middleware/authorization.js";
 import { prisma } from "../../lib/prisma.js";
-import { getExceptionAnalytics } from "../attendance-exceptions/exceptions.service.js";
+import { parsePayrollCalendarSettings } from "../../lib/payroll-calendar-settings.js";
+import { listPayPeriods } from "../../services/payroll-period.service.js";
+import {
+  getExceptionAnalytics,
+  getPeriodExportReadiness,
+} from "../attendance-exceptions/exceptions.service.js";
 import { toCsv } from "../../lib/csv.js";
 
 function parseRange(q: Record<string, string | undefined>) {
@@ -30,7 +35,7 @@ export async function reportsExtendedRoutes(app: FastifyInstance) {
         { id: "absenteeism", name: "Absenteeism Report" },
         { id: "overtime", name: "Overtime Report" },
         { id: "leave", name: "Leave Report" },
-        { id: "payroll-exceptions", name: "Payroll Exceptions Report" },
+        { id: "export-readiness", name: "Payroll Export Readiness & Exceptions Report" },
         { id: "site-performance", name: "Site Performance Report" },
         { id: "employee-attendance", name: "Employee Attendance Report" },
         { id: "incidents", name: "Incident Report" },
@@ -162,12 +167,18 @@ export async function reportsExtendedRoutes(app: FastifyInstance) {
         l.reason ?? "",
       ]);
       summary = { total: leaves.length };
-    } else if (type === "payroll-exceptions") {
-      const readiness = await prisma.payrollPeriodReadiness.findMany({
-        where: { companyId: user.companyId },
-        orderBy: { periodStart: "desc" },
-        take: 24,
+    } else if (type === "export-readiness" || type === "payroll-exceptions") {
+      const company = await prisma.company.findUnique({
+        where: { id: user.companyId },
+        select: { settings: true },
       });
+      const calendar = parsePayrollCalendarSettings(company?.settings);
+      const periods = listPayPeriods(calendar, { before: 5, after: 0 }).reverse();
+      const readiness = await Promise.all(
+        periods.map((p) =>
+          getPeriodExportReadiness(user.companyId, p.periodStart, p.periodEnd, p.periodKey)
+        )
+      );
       const openEx = await prisma.attendanceException.findMany({
         where: {
           companyId: user.companyId,
@@ -180,15 +191,16 @@ export async function reportsExtendedRoutes(app: FastifyInstance) {
         },
         take: 500,
       });
-      headers = ["Period Start", "Period End", "Readiness", "Open Exceptions"];
+      headers = ["Period Key", "Period Start", "Period End", "Readiness", "Open Exceptions"];
       rows = readiness.map((r) => [
+        r.periodKey,
         r.periodStart.toISOString().slice(0, 10),
         r.periodEnd.toISOString().slice(0, 10),
         r.status,
         r.openExceptions,
       ]);
       summary = {
-        blockedPeriods: readiness.filter((r) => r.status === "BLOCKED_BY_EXCEPTIONS").length,
+        blockedPeriods: readiness.filter((r) => r.status === "PENDING_ATTENDANCE_REVIEW").length,
         openCriticalExceptions: openEx.length,
         exceptions: openEx.map((e) => ({
           id: e.id,

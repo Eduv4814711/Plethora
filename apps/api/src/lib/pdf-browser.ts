@@ -2,7 +2,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import puppeteer from "puppeteer";
 import puppeteerCore from "puppeteer-core";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -107,25 +106,14 @@ function findDownloadedChromeExecutable(): string | null {
 }
 
 async function resolveBundledBrowserPath(): Promise<string | null> {
-  // First, check direct downloaded cache directory
-  const cachedBin = findDownloadedChromeExecutable();
-  if (cachedBin) return cachedBin;
-
-  // Next, query Puppeteer's executablePath
-  try {
-    const executablePath = await puppeteer.executablePath();
-    return executablePath && fs.existsSync(executablePath) ? executablePath : null;
-  } catch {
-    return null;
-  }
+  return findDownloadedChromeExecutable();
 }
 
 /**
- * Launches a browser for HTML→PDF conversion with resilient fallback:
+ * Launches a browser for HTML→PDF conversion using puppeteer-core with resilient discovery:
  * 1. Checks PUPPETEER_EXECUTABLE_PATH if configured and exists on disk.
- * 2. Resolves Puppeteer's downloaded browser from workspace .cache or home cache (avoids collision with desktop browser).
- * 3. Checks installed system browser binaries (e.g. /usr/bin/chromium from Railpack aptPackages in container).
- * 4. Tries standard Puppeteer browser resolution.
+ * 2. Resolves any local cached Chromium binary from workspace .cache or home cache.
+ * 3. Checks installed system browser binaries (e.g. /usr/bin/chromium, Chrome, Edge).
  */
 export async function launchPdfBrowser() {
   const envExe = process.env.PUPPETEER_EXECUTABLE_PATH?.trim();
@@ -148,7 +136,7 @@ export async function launchPdfBrowser() {
     }
   }
 
-  // 2. Resolve downloaded / bundled Chrome from .cache/puppeteer FIRST (isolated headless binary)
+  // 2. Resolve cached Chromium if present
   const bundledExecutablePath = await resolveBundledBrowserPath();
   if (bundledExecutablePath) {
     try {
@@ -161,7 +149,7 @@ export async function launchPdfBrowser() {
     }
   }
 
-  // 3. Try an installed system browser (installed via Railpack aptPackages in railpack.json on Linux)
+  // 3. Try an installed system browser (e.g. /usr/bin/chromium or Edge/Chrome on Windows)
   for (const candidatePath of KNOWN_EXECUTABLE_PATHS) {
     if (fs.existsSync(candidatePath)) {
       try {
@@ -173,20 +161,6 @@ export async function launchPdfBrowser() {
         );
       }
     }
-  }
-
-  // 4. Let Puppeteer resolve its default browser as the final fallback
-  try {
-    return await puppeteer.launch({
-      headless: true,
-      args: LAUNCH_ARGS,
-      timeout: BROWSER_LAUNCH_TIMEOUT_MS,
-    });
-  } catch (err) {
-    console.warn(
-      "[pdf-browser] Failed to launch Puppeteer's bundled browser:",
-      err instanceof Error ? err.message : err
-    );
   }
 
   throw new Error(

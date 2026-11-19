@@ -397,8 +397,8 @@ describe("WhatsApp Conversation State Machine & Micro-Prompts", () => {
       const { processIncomingMessage } = await import("../services/handler.service.js");
       const { sessionManager } = await import("../services/session.service.js");
 
-      // Step 0: Trigger leave flow via '6' or 'leave'
-      const step1 = await processIncomingMessage(phone, "6");
+      // Step 0: Trigger leave flow via '5' or 'leave'
+      const step1 = await processIncomingMessage(phone, "5");
       expect("reply" in step1).toBe(true);
       if ("reply" in step1) {
         expect(step1.reply).toMatch(/Apply for Leave.*Step 1\/4/i);
@@ -474,7 +474,7 @@ describe("WhatsApp Conversation State Machine & Micro-Prompts", () => {
   });
 
   describe("4. Operational Status Inquiry Flow", () => {
-    it("reports shift, duty, and leave status when user replies '7' or 'status'", async () => {
+    it("reports shift, duty, and leave status when user replies '6' or 'status'", async () => {
       findFirstAttendance.mockResolvedValueOnce({
         id: "att-active",
         clockIn: new Date(Date.now() - 3 * 3600 * 1000), // 3 hours ago
@@ -483,7 +483,7 @@ describe("WhatsApp Conversation State Machine & Micro-Prompts", () => {
       countLeaveRequests.mockResolvedValueOnce(2);
 
       const { processIncomingMessage } = await import("../services/handler.service.js");
-      const result = await processIncomingMessage(phone, "7");
+      const result = await processIncomingMessage(phone, "6");
 
       expect("reply" in result).toBe(true);
       if ("reply" in result) {

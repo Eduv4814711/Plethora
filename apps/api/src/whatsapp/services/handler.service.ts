@@ -14,8 +14,6 @@ import {
   AttendanceValidationError,
 } from "../../services/attendance.service.js";
 import { siteHasGeofence } from "../../lib/geo.js";
-import { fetchPayslipData, buildPayslipTemplateData } from "../../services/payslip-data.service.js";
-import { generatePayslipPDFFromTemplate } from "../../services/payslip-pdf.service.js";
 import { generateRosterPDF } from "../../services/roster-pdf.service.js";
 import {
   sendText,
@@ -143,13 +141,12 @@ Welcome to Plethora field & office services.
 2️⃣ *Clock Out* - End shift or office workday
 3️⃣ *Report Incident* - Log emergency, safety hazard, or event
 4️⃣ *My Shifts & Roster* - Upcoming schedule (PDF)
-5️⃣ *Latest Payslip* - Download latest payslip (PDF)
-6️⃣ *Leave Services* - Apply for leave or check balances
-7️⃣ *Operational Status* - Check current duty & next shift
-8️⃣ *Contact Supervisor* - Request human assistance
+5️⃣ *Leave Services* - Apply for leave or check balances
+6️⃣ *Operational Status* - Check current duty & next shift
+7️⃣ *Contact Supervisor* - Request human assistance
 
 • Send evidence/photo with caption *incident REF* or *leave REF*
-• Reply *1–8*, tap an option, or type a keyword (*status*, *in*, *out*)
+• Reply *1–7*, tap an option, or type a keyword (*status*, *in*, *out*)
 • Type *cancel* at any time to return to this menu.`;
 
 const INTERACTIVE_ID_TO_CMD: Record<string, string> = {
@@ -157,7 +154,6 @@ const INTERACTIVE_ID_TO_CMD: Record<string, string> = {
   clock_out: "clock out",
   incident: "incident",
   roster: "roster",
-  payslip: "payslip",
   leave: "leave",
   status: "status",
   supervisor: "supervisor",
@@ -173,10 +169,9 @@ const HELP_INTERACTIVE_ROWS = [
   { id: "clock_out", title: "2. Clock Out", description: "Clock out of shift or office day" },
   { id: "incident", title: "3. Report Incident", description: "Log incident or safety risk" },
   { id: "roster", title: "4. My Roster", description: "Upcoming shifts as PDF" },
-  { id: "payslip", title: "5. Latest Payslip", description: "Request latest payslip PDF" },
-  { id: "leave", title: "6. Apply Leave", description: "Apply for leave or check balance" },
-  { id: "status", title: "7. Status", description: "Check current shift & duty status" },
-  { id: "supervisor", title: "8. Supervisor", description: "Request supervisor assistance" },
+  { id: "leave", title: "5. Apply Leave", description: "Apply for leave or check balance" },
+  { id: "status", title: "6. Status", description: "Check current shift & duty status" },
+  { id: "supervisor", title: "7. Supervisor", description: "Request supervisor assistance" },
   { id: "help", title: "Help Menu", description: "Show commands & help" },
 ];
 
@@ -342,13 +337,13 @@ export async function processIncomingMessage(
     return handleRoster(employee, from);
   }
 
-  // 5. Payslip
-  if (cmd === "5" || cmd.startsWith("payslip") || cmd === "pay slip") {
+  // Payslips are managed externally via Sage Payroll
+  if (cmd.startsWith("payslip") || cmd === "pay slip") {
     sessionManager.resetUnrecognized(from);
-    return handlePayslip(employee);
+    return handlePayslipSageRedirect();
   }
 
-  // 6. Leave Services
+  // 5. Leave Services
   if (cmd === "leave status" || cmd === "leave history") {
     sessionManager.resetUnrecognized(from);
     return handleLeaveHistory(employee);
@@ -361,7 +356,7 @@ export async function processIncomingMessage(
     sessionManager.resetUnrecognized(from);
     return handleLeaveWithdrawal(employee, cmd.slice("leave withdraw ".length).trim());
   }
-  if (cmd === "6" || cmd === "leave" || cmd === "apply leave") {
+  if (cmd === "5" || cmd === "leave" || cmd === "apply leave") {
     sessionManager.resetUnrecognized(from);
     return startLeaveFlow(from, employee.id, employee.companyId);
   }
@@ -370,14 +365,15 @@ export async function processIncomingMessage(
     return handleLeave(employee, cmd);
   }
 
-  // 7. Operational Status
-  if (cmd === "7" || cmd === "status" || cmd === "my status" || cmd === "shift status") {
+  // 6. Operational Status
+  if (cmd === "6" || cmd === "status" || cmd === "my status" || cmd === "shift status") {
     sessionManager.resetUnrecognized(from);
     return handleStatusFlow(employee.id, employee.companyId);
   }
 
-  // 8. Supervisor Handoff / Assistance
+  // 7. Supervisor Handoff / Assistance
   if (
+    cmd === "7" ||
     cmd === "8" ||
     cmd === "supervisor" ||
     cmd === "agent" ||
@@ -420,7 +416,7 @@ export async function processIncomingMessage(
         case "ROSTER":
           return handleRoster(employee, from);
         case "PAYSLIP":
-          return handlePayslip(employee);
+          return handlePayslipSageRedirect();
         case "LEAVE_BALANCE":
           return handleLeaveBalance(employee);
         case "LEAVE_HISTORY":
@@ -463,7 +459,7 @@ export async function processIncomingMessage(
           return {
             reply: "Would you like to *Apply for Leave* or check your balance?",
             buttons: [
-              { id: "leave", title: "6. Apply Leave" },
+              { id: "leave", title: "5. Apply Leave" },
               { id: "help", title: "Main Menu" },
             ],
           };
@@ -471,7 +467,7 @@ export async function processIncomingMessage(
           return {
             reply: "Would you like to alert a *Supervisor / Controller* to contact you?",
             buttons: [
-              { id: "supervisor", title: "8. Alert Supervisor" },
+              { id: "supervisor", title: "7. Alert Supervisor" },
               { id: "help", title: "Main Menu" },
             ],
           };
@@ -508,10 +504,9 @@ export async function processIncomingMessage(
       `• *2* - Clock Out\n` +
       `• *3* - Report Incident\n` +
       `• *4* - My Roster\n` +
-      `• *5* - Payslip\n` +
-      `• *6* - Leave\n` +
-      `• *7* - Status\n` +
-      `• *8* - Call Supervisor`,
+      `• *5* - Leave\n` +
+      `• *6* - Status\n` +
+      `• *7* - Call Supervisor`,
   };
 }
 
@@ -772,7 +767,7 @@ export async function processIncomingLocation(
       if (activeOffice) {
         return {
           reply:
-            "📍 *Location Received*\n\nYou are currently clocked in at the office.\n\nReply *2* or *clock out* to complete your workday, or *7* to view status.",
+            "📍 *Location Received*\n\nYou are currently clocked in at the office.\n\nReply *2* or *clock out* to complete your workday, or *6* to view status.",
           buttons: [
             { id: "clock_out", title: "Clock Out" },
             { id: "status", title: "View Status" },
@@ -896,54 +891,10 @@ export async function processIncomingLocation(
   return { reply: result.message };
 }
 
-async function handlePayslip(
-  employee: EmployeeWithCompany
-): Promise<{ reply: string; sendDocument?: { buffer: Buffer; filename: string } }> {
-  const item = await prisma.payrollItem.findFirst({
-    where: {
-      employeeId: employee.id,
-      payrollRun: {
-        companyId: employee.companyId,
-        status: { in: ["approved", "paid"] },
-      },
-      payslip: { isNot: null },
-    },
-    include: {
-      payrollRun: true,
-      employee: true,
-      payslip: true,
-    },
-    orderBy: { payrollRun: { periodEnd: "desc" } },
-  });
-
-  if (!item) {
-    return { reply: "No payslip available. Contact HR." };
-  }
-
-  const payslipInput = await fetchPayslipData(
-    item.payrollRunId,
-    item.id,
-    employee.companyId
-  );
-  if (!payslipInput) {
-    return { reply: "Could not generate payslip. Contact HR." };
-  }
-
-  const templateData = buildPayslipTemplateData(payslipInput);
-  const pdfBuffer = await generatePayslipPDFFromTemplate(templateData);
-  const filename = `payslip-${employee.firstName}-${employee.lastName}-${format(payslipInput.periodStart, "yyyy-MM")}.pdf`;
-
-  await createAuditLog({
-    companyId: employee.companyId,
-    action: "payslip.request",
-    entityType: "payslip",
-    entityId: item.payslip?.id ?? undefined,
-    metadata: { source: "whatsapp", from: employee.phone },
-  });
-
+function handlePayslipSageRedirect(): { reply: string } {
   return {
-    reply: `Your payslip for ${format(payslipInput.periodStart, "MMM yyyy")} has been sent.`,
-    sendDocument: { buffer: pdfBuffer, filename },
+    reply:
+      "Payslips are issued directly via Sage Payroll. Please check your email/Sage self-service or contact HR.",
   };
 }
 

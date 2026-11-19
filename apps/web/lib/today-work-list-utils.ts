@@ -10,26 +10,32 @@ import type {
 export interface DashboardWorkData {
   operationalAlerts?: OperationalAlert[];
   alertCounts?: AlertCounts;
-  payrollReadiness?: {
+  exportReadiness?: {
     status: string;
     openExceptions: number;
+    openCritical?: number;
+    periodKey?: string;
     periodStart: string;
     periodEnd: string;
+    latestBatch?: {
+      id: string;
+      status: string;
+      periodKey: string;
+      exportedAt?: string | null;
+    } | null;
   } | null;
+  exportBatchByStatus?: Record<string, number>;
   currentPayPeriod?: {
     periodStart: string;
     periodEnd: string;
     label: string;
+    periodKey?: string;
   } | null;
   pendingApprovalsInbox?: number;
   pendingSiteTimesheetRows?: number;
   openCriticalIncidents?: number;
   activeSitesCount?: number;
   guardsOnDuty?: number;
-  taskStats?: {
-    overdue: number;
-    dueToday: number;
-  };
 }
 
 export interface TodayWorkItem {
@@ -37,11 +43,10 @@ export interface TodayWorkItem {
   sourceModule:
     | "ATTENDANCE"
     | "ROSTERING"
-    | "PAYROLL"
+    | "PAYROLL_EXPORT"
     | "DOCUMENTS"
     | "APPROVALS"
-    | "INCIDENTS"
-    | "TASKS";
+    | "INCIDENTS";
   title: string;
   count: number;
   verb: string;
@@ -82,11 +87,10 @@ export function buildTodayWorkItems(params: {
   const currentShift = params.currentShift ?? (new Date().getHours() < 18 ? "day" : "night");
   const canAttendance = canAccessRoute("/attendance", user);
   const canRostering = canAccessRoute("/rostering", user);
-  const canPayroll = canAccessRoute("/payroll", user);
+  const canPayrollExport = canAccessRoute("/payroll-exports", user);
   const canDocuments = canAccessRoute("/documents", user) || canAccessRoute("/employees", user);
   const canApprovals = canAccessRoute("/approvals", user);
   const canIncidents = canAccessRoute("/incidents", user);
-  const canTasks = canAccessRoute("/tasks", user);
 
   const items: TodayWorkItem[] = [];
 
@@ -144,7 +148,7 @@ export function buildTodayWorkItems(params: {
 
   // 2. Open attendance exceptions
   if (canAttendance) {
-    const openExceptions = dashboard.payrollReadiness?.openExceptions ?? 0;
+    const openExceptions = dashboard.exportReadiness?.openExceptions ?? 0;
     if (openExceptions > 0) {
       items.push({
         id: "attendance-exceptions",
@@ -160,28 +164,28 @@ export function buildTodayWorkItems(params: {
     }
   }
 
-  // 3. Payroll readiness for the open 26-25 period (first real blocker)
-  if (canPayroll) {
-    const pr = dashboard.payrollReadiness;
-    if (pr && pr.status !== "READY" && pr.openExceptions > 0) {
-      const startParam = pr.periodStart ? pr.periodStart.slice(0, 10) : "";
-      const endParam = pr.periodEnd ? pr.periodEnd.slice(0, 10) : "";
+  // 3. Payroll export readiness for the open 26-25 period
+  if (canPayrollExport) {
+    const er = dashboard.exportReadiness;
+    if (er && er.status !== "READY" && er.openExceptions > 0) {
+      const startParam = er.periodStart ? er.periodStart.slice(0, 10) : "";
+      const endParam = er.periodEnd ? er.periodEnd.slice(0, 10) : "";
       const href =
         startParam && endParam
           ? `/attendance/exceptions?status=OPEN&severity=CRITICAL&start=${startParam}&end=${endParam}`
           : "/attendance/exceptions?status=OPEN&severity=CRITICAL";
 
       items.push({
-        id: "payroll-readiness",
-        sourceModule: "PAYROLL",
-        title: `${pr.openExceptions} critical attendance issue${pr.openExceptions === 1 ? "" : "s"} blocking payroll calculation`,
-        count: pr.openExceptions,
-        focalCount: `${pr.openExceptions} blocker${pr.openExceptions === 1 ? "" : "s"}`,
-        description: `Critical attendance issue${pr.openExceptions === 1 ? "" : "s"} blocking payroll calculation`,
-        verb: pr.openExceptions === 1 ? "Clear 1 blocker" : `Clear ${pr.openExceptions} blockers`,
+        id: "payroll-export-readiness",
+        sourceModule: "PAYROLL_EXPORT",
+        title: `${er.openExceptions} critical attendance issue${er.openExceptions === 1 ? "" : "s"} blocking payroll export`,
+        count: er.openExceptions,
+        focalCount: `${er.openExceptions} blocker${er.openExceptions === 1 ? "" : "s"}`,
+        description: `Critical attendance issue${er.openExceptions === 1 ? "" : "s"} blocking payroll export`,
+        verb: er.openExceptions === 1 ? "Clear 1 blocker" : `Clear ${er.openExceptions} blockers`,
         href,
         priority: "CRITICAL",
-        badge: "Payroll",
+        badge: "Payroll Export",
       });
     }
   }
@@ -242,24 +246,6 @@ export function buildTodayWorkItems(params: {
         description: `Approval request${pendingApprovals === 1 ? "" : "s"} waiting for review`,
         verb: pendingApprovals === 1 ? "Review 1 approval" : `Review ${pendingApprovals} approvals`,
         href: "/approvals",
-        priority: "MEDIUM",
-      });
-    }
-  }
-
-  // 7. Overdue tasks assigned to the user
-  if (canTasks) {
-    const overdueTasks = dashboard.taskStats?.overdue ?? 0;
-    if (overdueTasks > 0) {
-      items.push({
-        id: "tasks-overdue",
-        sourceModule: "TASKS",
-        title: `${overdueTasks} assigned task${overdueTasks === 1 ? "" : "s"} overdue`,
-        count: overdueTasks,
-        focalCount: `${overdueTasks} task${overdueTasks === 1 ? "" : "s"}`,
-        description: `Overdue assigned task${overdueTasks === 1 ? "" : "s"} need completion`,
-        verb: overdueTasks === 1 ? "Open 1 task" : `Open ${overdueTasks} tasks`,
-        href: "/tasks",
         priority: "MEDIUM",
       });
     }

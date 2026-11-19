@@ -1267,14 +1267,13 @@ export async function addPlaceholderGuardToSite(
   const site = await prisma.site.findFirst({ where: { id: siteId, companyId } });
   if (!site) return null;
 
-  const [group, grade] = await Promise.all([
-    prisma.employeeGroup.findFirst({ where: { companyId }, orderBy: { sortOrder: "asc" } }),
-    prisma.payGrade.findFirst({ where: { companyId }, orderBy: { name: "asc" } }),
-  ]);
-  if (!group || !grade) {
+  const group = await prisma.employeeGroup.findFirst({
+    where: { companyId },
+    orderBy: { sortOrder: "asc" },
+  });
+  if (!group) {
     return {
-      error:
-        "Set up at least one employee group and pay grade before adding placeholder guards.",
+      error: "Set up at least one employee group before adding placeholder guards.",
     };
   }
 
@@ -1312,7 +1311,6 @@ export async function addPlaceholderGuardToSite(
         employeeType: "security_officer",
         jobRole: `${ROSTER_PLACEHOLDER_JOB_ROLE_PREFIX}:${type}`,
         groupId: group.id,
-        gradeId: grade.id,
         psiraRegistrationNumber: `ROSTER-TBD-${employeeNumber}`,
       },
     });

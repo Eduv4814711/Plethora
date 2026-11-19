@@ -120,6 +120,59 @@ async function main() {
       `Site employee groups: created ${groupsCreated}, already present ${groupsSkipped} (${groupsCreated + groupsSkipped} total in list).`
     );
   }
+
+  // Ensure default external payroll export profiles exist for this company
+  const defaultProfiles = [
+    {
+      name: "Sage Business Cloud Payroll ZA",
+      provider: "SAGE_BUSINESS_CLOUD_ZA" as const,
+      isDefault: true,
+      splitBySite: true,
+      delimiter: ",",
+      dateFormat: "yyyy-MM-dd",
+      codeMappingJson: {
+        regularHours: "1000",
+        overtimeHours: "1010",
+        sundayHours: "1020",
+        publicHolidayHours: "1030",
+        nightShiftHours: "1040",
+        annualLeaveHours: "2000",
+        sickLeaveHours: "2010",
+        familyLeaveHours: "2020",
+        studyLeaveHours: "2030",
+        unpaidLeaveHours: "2090",
+      },
+    },
+    {
+      name: "Generic Timesheet CSV",
+      provider: "GENERIC_CSV" as const,
+      isDefault: false,
+      splitBySite: true,
+      delimiter: ",",
+      dateFormat: "yyyy-MM-dd",
+      codeMappingJson: {},
+    },
+  ];
+  for (const profile of defaultProfiles) {
+    const existingProfile = await prisma.payrollExportProfile.findFirst({
+      where: { companyId: company.id, provider: profile.provider, name: profile.name },
+      select: { id: true },
+    });
+    if (!existingProfile) {
+      await prisma.payrollExportProfile.create({
+        data: {
+          companyId: company.id,
+          name: profile.name,
+          provider: profile.provider,
+          isDefault: profile.isDefault,
+          splitBySite: profile.splitBySite,
+          delimiter: profile.delimiter,
+          dateFormat: profile.dateFormat,
+          codeMappingJson: profile.codeMappingJson,
+        },
+      });
+    }
+  }
 }
 
 main()

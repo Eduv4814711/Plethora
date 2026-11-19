@@ -655,12 +655,42 @@ export async function getExceptionAnalytics(
   return parseJson(res, "Failed to load analytics");
 }
 
-export async function getPayrollReadiness(token: string): Promise<{
+export async function getExportReadiness(token: string, periodKey?: string): Promise<{
+  periodKey: string;
+  periodStart: string;
+  periodEnd: string;
   status: string;
   openExceptions: number;
+  openCritical: number;
+  totalActiveSites: number;
+  approvedSiteTimesheets: number;
+  unapprovedSiteTimesheets: number;
+  pendingLeaveRequests: number;
+  missingExternalPayrollCodes: number;
 }> {
-  const res = await authFetch("/attendance-exceptions/payroll-readiness", token);
-  return parseJson(res, "Failed to load payroll readiness");
+  const q = periodKey ? `?periodKey=${encodeURIComponent(periodKey)}` : "";
+  const res = await authFetch(`/attendance-exceptions/readiness${q}`, token);
+  return parseJson(res, "Failed to load export readiness");
+}
+
+export async function refreshExportReadiness(token: string, periodKey?: string): Promise<{
+  periodKey: string;
+  periodStart: string;
+  periodEnd: string;
+  status: string;
+  openExceptions: number;
+  openCritical: number;
+  totalActiveSites: number;
+  approvedSiteTimesheets: number;
+  unapprovedSiteTimesheets: number;
+  pendingLeaveRequests: number;
+  missingExternalPayrollCodes: number;
+}> {
+  const q = periodKey ? `?periodKey=${encodeURIComponent(periodKey)}` : "";
+  const res = await authFetch(`/attendance-exceptions/readiness/refresh${q}`, token, {
+    method: "POST",
+  });
+  return parseJson(res, "Failed to refresh export readiness");
 }
 
 export async function uploadIncidentAttachment(
@@ -1366,8 +1396,6 @@ export function approvalEntityHref(item: ApprovalRequest): string | null {
       return `/documents/${item.entityId}`;
     case "SiteTimesheet":
       return "/attendance";
-    case "Task":
-      return `/tasks/${item.entityId}`;
     default:
       return null;
   }
@@ -1392,41 +1420,6 @@ export async function listNotifications(
   if (unreadOnly) q.set("unreadOnly", "true");
   const res = await authFetch(`/notifications?${q.toString()}`, token);
   return parseJson(res, "Failed to load notifications");
-}
-
-// ——— Client portal ———
-
-export async function getClientPortalDashboard(
-  token: string,
-  clientId?: string
-): Promise<Record<string, unknown>> {
-  const q = clientId ? `?clientId=${encodeURIComponent(clientId)}` : "";
-  const res = await authFetch(`/client-portal/dashboard${q}`, token);
-  return parseJson(res, "Failed to load client dashboard");
-}
-
-export async function getClientPortalSites(token: string, clientId?: string): Promise<unknown[]> {
-  const q = clientId ? `?clientId=${encodeURIComponent(clientId)}` : "";
-  const res = await authFetch(`/client-portal/sites${q}`, token);
-  return parseJson(res, "Failed to load client sites");
-}
-
-export async function getClientPortalIncidents(token: string, clientId?: string): Promise<Incident[]> {
-  const q = clientId ? `?clientId=${encodeURIComponent(clientId)}` : "";
-  const res = await authFetch(`/client-portal/incidents${q}`, token);
-  return parseJson(res, "Failed to load client incidents");
-}
-
-export async function getClientAttendanceSummary(
-  token: string,
-  params?: { clientId?: string; periodStart?: string; periodEnd?: string }
-): Promise<Record<string, unknown>> {
-  const q = new URLSearchParams();
-  if (params?.clientId) q.set("clientId", params.clientId);
-  if (params?.periodStart) q.set("periodStart", params.periodStart);
-  if (params?.periodEnd) q.set("periodEnd", params.periodEnd);
-  const res = await authFetch(`/client-portal/attendance-summary?${q.toString()}`, token);
-  return parseJson(res, "Failed to load attendance summary");
 }
 
 // ——— Extended reports ———

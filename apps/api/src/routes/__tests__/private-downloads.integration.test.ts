@@ -87,16 +87,12 @@ describe.runIf(dbReady)("private stored-file access (integration)", () => {
     fixture = await provisionTenantFixture();
     viewToken = await createUserToken({
       "/documents": ["view"],
-      "/tasks": ["view"],
       "/incidents": ["view"],
-      "/academy": ["view"],
       "/employees/leave": ["view"],
     });
     exportToken = await createUserToken({
       "/documents": ["view", "export"],
-      "/tasks": ["view", "export"],
       "/incidents": ["view", "export"],
-      "/academy": ["view", "export"],
       "/employees/leave": ["view", "export"],
     });
     ownDocumentId = (
@@ -123,44 +119,6 @@ describe.runIf(dbReady)("private stored-file access (integration)", () => {
       url: "/documents",
       collection: "items",
       recordId: ownDocumentId,
-    });
-
-    const ownTaskAttachment = await prisma.taskAttachment.create({
-      data: {
-        taskId: fixture.tenantA.taskId,
-        filename: "task-a.pdf",
-        mimeType: "application/pdf",
-        size: 32,
-        url: await uploadPdf(
-          `tasks/${fixture.tenantA.companyId}/${fixture.tenantA.taskId}/${randomBytes(8).toString("hex")}.pdf`,
-          "task-a"
-        ),
-        uploadedById: fixture.tenantA.userId,
-      },
-    });
-    const foreignTaskAttachment = await prisma.taskAttachment.create({
-      data: {
-        taskId: fixture.tenantB.taskId,
-        filename: "task-b.pdf",
-        mimeType: "application/pdf",
-        size: 32,
-        url: await uploadPdf(
-          `tasks/${fixture.tenantB.companyId}/${fixture.tenantB.taskId}/${randomBytes(8).toString("hex")}.pdf`,
-          "task-b"
-        ),
-        uploadedById: fixture.tenantB.userId,
-      },
-    });
-    privateFiles.push({
-      label: "task attachment",
-      ownUrl: `/task-attachments/attachments/${ownTaskAttachment.id}/download`,
-      foreignUrl: `/task-attachments/attachments/${foreignTaskAttachment.id}/download`,
-    });
-    metadataEndpoints.push({
-      label: "task attachment",
-      url: `/tasks/${fixture.tenantA.taskId}`,
-      collection: "attachments",
-      recordId: ownTaskAttachment.id,
     });
 
     const ownIncident = await prisma.incident.create({
@@ -225,62 +183,6 @@ describe.runIf(dbReady)("private stored-file access (integration)", () => {
       url: `/incidents/${ownIncident.id}`,
       collection: "attachments",
       recordId: ownIncidentAttachment.id,
-    });
-
-    const ownStudent = await prisma.student.create({
-      data: {
-        companyId: fixture.tenantA.companyId,
-        studentNumber: `FILE-A-${fixture.runId}`,
-        firstName: "File",
-        lastName: "Student",
-      },
-    });
-    const foreignStudent = await prisma.student.create({
-      data: {
-        companyId: fixture.tenantB.companyId,
-        studentNumber: `FILE-B-${fixture.runId}`,
-        firstName: "File",
-        lastName: "Student",
-      },
-    });
-    const ownStudentKey = `academy/${fixture.tenantA.companyId}/${ownStudent.id}/${randomBytes(8).toString("hex")}.pdf`;
-    await uploadPdf(ownStudentKey, "student-a");
-    const foreignStudentKey = `academy/${fixture.tenantB.companyId}/${foreignStudent.id}/${randomBytes(8).toString("hex")}.pdf`;
-    await uploadPdf(foreignStudentKey, "student-b");
-    const ownStudentDocument = await prisma.studentDocument.create({
-      data: {
-        companyId: fixture.tenantA.companyId,
-        studentId: ownStudent.id,
-        documentType: "other",
-        fileName: "student-a.pdf",
-        mimeType: "application/pdf",
-        sizeBytes: 32,
-        storagePath: ownStudentKey,
-        uploadedByUserId: fixture.tenantA.userId,
-      },
-    });
-    const foreignStudentDocument = await prisma.studentDocument.create({
-      data: {
-        companyId: fixture.tenantB.companyId,
-        studentId: foreignStudent.id,
-        documentType: "other",
-        fileName: "student-b.pdf",
-        mimeType: "application/pdf",
-        sizeBytes: 32,
-        storagePath: foreignStudentKey,
-        uploadedByUserId: fixture.tenantB.userId,
-      },
-    });
-    privateFiles.push({
-      label: "academy student document",
-      ownUrl: `/academy/students/${ownStudent.id}/documents/${ownStudentDocument.id}/download`,
-      foreignUrl: `/academy/students/${foreignStudent.id}/documents/${foreignStudentDocument.id}/download`,
-    });
-    metadataEndpoints.push({
-      label: "academy student document",
-      url: `/academy/students/${ownStudent.id}/documents`,
-      collection: "documents",
-      recordId: ownStudentDocument.id,
     });
 
     const logoKey = `logos/${randomBytes(8).toString("hex")}.png`;

@@ -40,16 +40,16 @@ export async function reportsRoutes(app: FastifyInstance) {
     );
 
     const [
-      payrollByStatus,
+      exportBatchesByStatus,
       employeesByStatus,
       shiftsByStatus,
       shiftsInRange,
-      payrollByMonth,
+      exportBatchesByMonth,
       rawAttendanceHours,
       approvedTimesheetSites,
       approvedTimesheetRows,
     ] = await Promise.all([
-      prisma.payrollRun.groupBy({
+      prisma.payrollExportBatch.groupBy({
         by: ["status"],
         where: { companyId },
         _count: { id: true },
@@ -74,16 +74,21 @@ export async function reportsRoutes(app: FastifyInstance) {
         },
         select: { startTime: true },
       }),
-      prisma.payrollRun.findMany({
+      prisma.payrollExportBatch.findMany({
         where: {
           companyId,
           periodEnd: { gte: start, lte: end },
-          status: { in: ["calculated", "approved", "paid"] },
+          status: { in: ["LOCKED", "EXPORTED"] },
         },
-        include: {
-          items: {
-            select: { grossPay: true, netPay: true },
-          },
+        select: {
+          periodEnd: true,
+          employeeCount: true,
+          totalBasicHours: true,
+          totalOvertimeHours: true,
+          totalSundayHours: true,
+          totalPublicHolidayHours: true,
+          totalNightShiftHours: true,
+          totalPaidLeaveHours: true,
         },
       }),
       prisma.attendance.findMany({
@@ -135,8 +140,8 @@ export async function reportsRoutes(app: FastifyInstance) {
       }),
     ]);
 
-    const payrollStatusData = payrollByStatus.map((p) => ({
-      name: p.status.charAt(0).toUpperCase() + p.status.slice(1),
+    const exportStatusData = exportBatchesByStatus.map((p) => ({
+      name: p.status.charAt(0).toUpperCase() + p.status.slice(1).toLowerCase(),
       value: p._count.id,
     }));
 
@@ -165,27 +170,35 @@ export async function reportsRoutes(app: FastifyInstance) {
       shifts: shiftsByPeriodKey.get(p.periodKey) ?? 0,
     }));
 
-    const payrollByPeriodKey = new Map<string, { gross: number; net: number }>();
+    const exportsByPeriodKey = new Map<string, { workedHours: number; overtimeHours: number; leaveHours: number }>();
     for (const p of periods) {
-      payrollByPeriodKey.set(p.periodKey, { gross: 0, net: 0 });
+      exportsByPeriodKey.set(p.periodKey, { workedHours: 0, overtimeHours: 0, leaveHours: 0 });
     }
-    for (const run of payrollByMonth) {
-      const key = getPayPeriodContaining(calendar, run.periodEnd).periodKey;
-      if (!payrollByPeriodKey.has(key)) continue;
-      const gross = run.items.reduce((s, i) => s + Number(i.grossPay), 0);
-      const net = run.items.reduce((s, i) => s + Number(i.netPay), 0);
-      const existing = payrollByPeriodKey.get(key)!;
-      payrollByPeriodKey.set(key, {
-        gross: existing.gross + gross,
-        net: existing.net + net,
+    for (const batch of exportBatchesByMonth) {
+      const key = getPayPeriodContaining(calendar, batch.periodEnd).periodKey;
+      if (!exportsByPeriodKey.has(key)) continue;
+      const existing = exportsByPeriodKey.get(key)!;
+      const worked =
+        Number(batch.totalBasicHours) +
+        Number(batch.totalSundayHours) +
+        Number(batch.totalPublicHolidayHours);
+      exportsByPeriodKey.set(key, {
+        workedHours: existing.workedHours + worked,
+        overtimeHours: existing.overtimeHours + Number(batch.totalOvertimeHours),
+        leaveHours: existing.leaveHours + Number(batch.totalPaidLeaveHours),
       });
     }
-    const payrollOverTime = periods.map((p) => {
-      const totals = payrollByPeriodKey.get(p.periodKey) ?? { gross: 0, net: 0 };
+    const exportsOverTime = periods.map((p) => {
+      const totals = exportsByPeriodKey.get(p.periodKey) ?? {
+        workedHours: 0,
+        overtimeHours: 0,
+        leaveHours: 0,
+      };
       return {
         month: periodLabelByKey.get(p.periodKey) ?? p.periodKey,
-        gross: totals.gross,
-        net: totals.net,
+        workedHours: Math.round(totals.workedHours * 100) / 100,
+        overtimeHours: Math.round(totals.overtimeHours * 100) / 100,
+        leaveHours: Math.round(totals.leaveHours * 100) / 100,
       };
     });
 
@@ -208,11 +221,11 @@ export async function reportsRoutes(app: FastifyInstance) {
       .map(([name, hours]) => ({ name, hours: Math.round(hours * 100) / 100 }));
 
     return reply.send({
-      payrollByStatus: payrollStatusData,
+      exportByStatus: exportStatusData,
       employeesByStatus: employeeStatusData,
       shiftsByStatus: shiftStatusData,
       shiftsOverTime,
-      payrollOverTime,
+      exportsOverTime,
       hoursBySite: hoursBySiteData,
     });
   });

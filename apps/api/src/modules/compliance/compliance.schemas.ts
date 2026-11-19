@@ -29,33 +29,6 @@ export const complianceRiskLevelSchema = z.enum([
   "CRITICAL",
 ]);
 
-export const statutorySchemeSchema = z.enum([
-  "PAYE",
-  "UIF",
-  "SDL",
-  "PSSPF",
-  "NBCPSS",
-  "COIDA",
-  "OTHER",
-]);
-
-export const statutoryPeriodStatusSchema = z.enum([
-  "CALCULATED",
-  "DECLARED",
-  "PARTIALLY_PAID",
-  "PAID",
-  "FAILED",
-  "OVERDUE",
-  "DISPUTED",
-]);
-
-export const statutoryPaymentStatusSchema = z.enum([
-  "PENDING",
-  "SUCCESS",
-  "FAILED",
-  "REVERSED",
-]);
-
 export const legalCaseTypeSchema = z.enum([
   "CCMA",
   "LABOUR_COURT",
@@ -71,26 +44,6 @@ export const legalCaseStatusSchema = z.enum([
   "SETTLED",
   "CLOSED",
   "WITHDRAWN",
-]);
-
-export const cashCommitmentCategorySchema = z.enum([
-  "PAYROLL",
-  "STATUTORY",
-  "CRITICAL_SUPPLIER",
-  "OPERATING_EXPENSE",
-  "REMEDIATION_PAYMENT",
-  "CAPEX",
-  "RELATED_PARTY_OR_INVESTMENT",
-  "OTHER",
-]);
-
-export const cashCommitmentFrequencySchema = z.enum([
-  "ONCE",
-  "WEEKLY",
-  "BIWEEKLY",
-  "MONTHLY",
-  "QUARTERLY",
-  "ANNUAL",
 ]);
 
 export const remediationPlanStatusSchema = z.enum([
@@ -146,69 +99,17 @@ export const managementOverrideSchema = z.object({
   reason: z.string().min(5, "Management override reason is required").max(2000),
 });
 
-// Statutory Period schemas
-export const listStatutoryPeriodsQuerySchema = z.object({
-  scheme: statutorySchemeSchema.optional(),
-  status: statutoryPeriodStatusSchema.optional(),
-  year: z.coerce.number().int().optional(),
-  limit: z.coerce.number().int().min(1).max(200).optional().default(50),
-  offset: z.coerce.number().int().min(0).optional().default(0),
-});
-
-export const createStatutoryPeriodSchema = z.object({
-  scheme: statutorySchemeSchema,
-  periodStart: z.coerce.date(),
-  periodEnd: z.coerce.date(),
-  dueDate: z.coerce.date(),
-  expectedEmployeeAmount: z.coerce.number().min(0).default(0),
-  expectedEmployerAmount: z.coerce.number().min(0).default(0),
-  expectedOtherAmount: z.coerce.number().min(0).default(0),
-  notes: z.string().max(2000).optional(),
-  sourcePayrollRunIds: z.array(z.string()).optional(),
-});
-
-export const updateStatutoryPeriodSchema = z.object({
-  declaredTotal: z.coerce.number().min(0).optional(),
-  externalReference: z.string().max(100).optional(),
-  notes: z.string().max(2000).optional(),
-  status: statutoryPeriodStatusSchema.optional(),
-});
-
-export const advancePeriodStatusSchema = z.object({
-  targetStatus: statutoryPeriodStatusSchema,
-  declaredTotal: z.coerce.number().min(0).optional(),
-  externalReference: z.string().max(100).optional(),
-  notes: z.string().max(2000).optional(),
-});
-
-export const recordStatutoryPaymentSchema = z.object({
-  amount: z.coerce.number().positive(),
-  paymentDate: z.coerce.date(),
-  status: statutoryPaymentStatusSchema.default("SUCCESS"),
-  paymentReference: z.string().max(100).optional(),
-  externalReference: z.string().max(100).optional(),
-  failureReason: z.string().max(2000).optional(),
-  proofDocumentId: z.string().optional(),
-});
-
-export const listContributionsFilterSchema = z.object({
-  scheme: statutorySchemeSchema.optional(),
-  employeeId: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(200).optional().default(100),
-  offset: z.coerce.number().int().min(0).optional().default(0),
-});
-
 // Remediation schemas
 export const listRemediationPlansQuerySchema = z.object({
   status: remediationPlanStatusSchema.optional(),
-  scheme: statutorySchemeSchema.optional(),
+  scheme: z.string().max(60).optional(),
   limit: z.coerce.number().int().min(1).max(200).optional().default(50),
   offset: z.coerce.number().int().min(0).optional().default(0),
 });
 
 export const createRemediationPlanSchema = z.object({
   obligationId: z.string().optional(),
-  scheme: statutorySchemeSchema.optional(),
+  scheme: z.string().max(60).optional(),
   title: z.string().min(1).max(200),
   originalBalance: z.coerce.number().min(0),
   currentBalance: z.coerce.number().min(0),
@@ -255,40 +156,6 @@ export const createLegalCaseSchema = z.object({
 export const updateLegalCaseSchema = createLegalCaseSchema.partial().extend({
   outcome: z.string().max(5000).optional(),
   closedAt: z.coerce.date().optional(),
-});
-
-// Cash Commitment schemas
-export const createCashCommitmentSchema = z.object({
-  name: z.string().min(1).max(200),
-  category: cashCommitmentCategorySchema,
-  amount: z.coerce.number().positive(),
-  frequency: cashCommitmentFrequencySchema.optional().default("MONTHLY"),
-  dueDay: z.coerce.number().int().min(1).max(31).optional(),
-  protected: z.boolean().optional().default(false),
-  priority: z.coerce.number().int().min(0).max(100).optional().default(0),
-  active: z.boolean().optional().default(true),
-  supplierOrPayee: z.string().max(200).optional(),
-  notes: z.string().max(2000).optional(),
-});
-
-export const updateCashCommitmentSchema = createCashCommitmentSchema.partial();
-
-export const createCashSnapshotSchema = z.object({
-  availableCash: z.coerce.number(),
-  notes: z.string().max(2000).optional(),
-});
-
-// Statutory Rate Config schemas
-export const createStatutoryRateConfigSchema = z.object({
-  scheme: statutorySchemeSchema,
-  effectiveFrom: z.coerce.date(),
-  effectiveTo: z.coerce.date().optional(),
-  employeeRate: z.coerce.number().min(0).max(1).optional(),
-  employerRate: z.coerce.number().min(0).max(1).optional(),
-  earningsCeiling: z.coerce.number().min(0).optional(),
-  configuration: z.record(z.string(), z.unknown()).optional(),
-  sourceReference: z.string().max(200).optional(),
-  isProvisional: z.boolean().optional().default(false),
 });
 
 // Employment Exit schemas

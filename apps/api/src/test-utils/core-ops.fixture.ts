@@ -23,7 +23,8 @@ export type CoreOpsFixture = {
   dayRowId: string;
   nightRowId: string;
   relieverRowId: string;
-  payrollRunId: string;
+  exportProfileId: string;
+  exportBatchId: string;
   periodStart: Date;
   periodEnd: Date;
   leaveRequestId: string;
@@ -87,7 +88,7 @@ export async function provisionCoreOpsFixture(): Promise<CoreOpsFixture> {
       lastName: "Guard",
       status: "active",
       employeeType: "security_officer",
-      hourlyRate: 45,
+      externalPayrollCode: `SAGE-GRD-${runId}`,
       groupId: group.id,
     },
   });
@@ -100,7 +101,7 @@ export async function provisionCoreOpsFixture(): Promise<CoreOpsFixture> {
       lastName: "Guard",
       status: "active",
       employeeType: "security_officer",
-      hourlyRate: 40,
+      externalPayrollCode: `SAGE-REL-${runId}`,
       groupId: group.id,
     },
   });
@@ -243,12 +244,24 @@ export async function provisionCoreOpsFixture(): Promise<CoreOpsFixture> {
     },
   });
 
-  const payrollRun = await prisma.payrollRun.create({
+  const exportProfile = await prisma.payrollExportProfile.create({
     data: {
       companyId: company.id,
+      name: "Sage Business Cloud ZA",
+      provider: "SAGE_BUSINESS_CLOUD_ZA",
+      isDefault: true,
+    },
+  });
+
+  const exportBatch = await prisma.payrollExportBatch.create({
+    data: {
+      companyId: company.id,
+      profileId: exportProfile.id,
+      periodKey: `${periodEnd.getUTCFullYear()}-${String(periodEnd.getUTCMonth() + 1).padStart(2, "0")}`,
       periodStart,
       periodEnd,
-      status: "draft",
+      status: "DRAFT",
+      createdBy: user.id,
     },
   });
 
@@ -296,7 +309,8 @@ export async function provisionCoreOpsFixture(): Promise<CoreOpsFixture> {
     dayRowId: dayRow.id,
     nightRowId: nightRow.id,
     relieverRowId: relieverRow.id,
-    payrollRunId: payrollRun.id,
+    exportProfileId: exportProfile.id,
+    exportBatchId: exportBatch.id,
     periodStart,
     periodEnd,
     leaveRequestId: leaveRequest.id,

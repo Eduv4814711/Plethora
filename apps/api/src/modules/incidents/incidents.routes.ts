@@ -81,7 +81,6 @@ const updateSchema = z.object({
 const reviewSchema = z.object({
   action: z.enum(["approve", "reject", "query", "close", "submit"]),
   note: z.string().max(2000).optional(),
-  createFollowUpTask: z.boolean().optional(),
 });
 
 export async function incidentsRoutes(app: FastifyInstance) {

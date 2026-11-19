@@ -1,7 +1,7 @@
 import { authFetch } from "./api";
 import { downloadAttachment, previewAttachment } from "./download";
 
-const BASE = "/payroll/billing";
+const BASE = "/billing";
 
 async function parseJson<T>(res: Response, fallback: string): Promise<T> {
   if (!res.ok) {

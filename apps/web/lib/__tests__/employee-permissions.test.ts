@@ -49,15 +49,13 @@ describe("capability access", () => {
   });
 
   it("allows the owner bypass while the account is active", () => {
-    expect(hasCapability(subject({}, true), "/payroll", "delete")).toBe(true);
-    expect(hasCapability({ ...subject({}, true), isActive: false }, "/payroll", "view")).toBe(false);
+    expect(hasCapability(subject({}, true), "/payroll-exports", "export")).toBe(true);
+    expect(hasCapability({ ...subject({}, true), isActive: false }, "/payroll-exports", "view")).toBe(false);
   });
 
   it("opens the leave workspace only through explicit Leave view access", () => {
     expect(canAccessRoute("/employees/leave", subject({ "/employees/leave": ["view"] }))).toBe(true);
-    // Payroll no longer implies Leave; the access migration granted it explicitly
-    // to everyone who relied on that.
-    expect(canAccessRoute("/employees/leave", subject({ "/payroll": ["view"] }))).toBe(false);
+    expect(canAccessRoute("/employees/leave", subject({ "/payroll-exports": ["view"] }))).toBe(false);
     expect(
       canAccessRoute("/employees/leave", subject({ "/employees": ["view"], "/employees/leave": ["edit"] }))
     ).toBe(false);
@@ -84,7 +82,7 @@ describe("capability access", () => {
     const dashboardUser = subject({ "/": ["view"] });
     expect(resolveModulePath("/overview")).toBe("/");
     expect(canAccessRoute("/overview", dashboardUser)).toBe(true);
-    expect(canAccessRoute("/overview", subject({ "/tasks": ["view"] }))).toBe(false);
+    expect(canAccessRoute("/overview", subject({ "/payroll-exports": ["view"] }))).toBe(false);
     expect(canAccessRoute("/overview", subject({}, true))).toBe(true);
   });
 
@@ -96,17 +94,19 @@ describe("capability access", () => {
 });
 
 describe("employee management helpers", () => {
-  it("allows employee edits through Team or Payroll edit capability", () => {
+  it("allows employee edits through Team edit capability only", () => {
     expect(canManageEmployeeDetails(subject({ "/employees": ["edit"] }))).toBe(true);
-    expect(canManageEmployeeDetails(subject({ "/payroll": ["edit"] }))).toBe(true);
+    expect(canManageEmployeeDetails(subject({ "/payroll-exports": ["edit"] }))).toBe(false);
     expect(canManageEmployeeDetails(subject({ "/employees": ["view"] }))).toBe(false);
   });
 });
 
 describe("navigation catalog items", () => {
-  it("includes top-level compliance but excludes compliance sub-module tabs and settings access", () => {
+  it("includes top-level compliance and billing/export routes while excluding settings access", () => {
     const hrefs = NAV_ITEMS.map((item) => item.href);
     expect(hrefs).toContain("/compliance");
+    expect(hrefs).toContain("/payroll-exports");
+    expect(hrefs).toContain("/billing");
     expect(hrefs).not.toContain("/compliance/statutory");
     expect(hrefs).not.toContain("/compliance/funds");
     expect(hrefs).not.toContain("/compliance/legal");

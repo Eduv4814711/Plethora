@@ -1305,21 +1305,23 @@ export async function attendanceRoutes(app: FastifyInstance) {
       });
     }
 
-    const timesheet = await prisma.timesheet.findFirst({
+    const exportedLine = await prisma.payrollExportLine.findFirst({
       where: {
-        companyId: user.companyId,
         employeeId: attendance.shift.employeeId,
-        payrollRunId: { not: null },
-        periodStart: { lte: attendance.shift.endTime },
-        periodEnd: { gte: attendance.shift.startTime },
+        batch: {
+          companyId: user.companyId,
+          status: { in: ["LOCKED", "EXPORTED"] },
+          periodStart: { lte: attendance.shift.endTime },
+          periodEnd: { gte: attendance.shift.startTime },
+        },
       },
-      include: { payrollRun: true },
+      select: { id: true, batch: { select: { status: true } } },
     });
 
-    if (timesheet?.payrollRun && timesheet.payrollRun.status !== "draft") {
+    if (exportedLine) {
       return reply.code(400).send({
         error: "Cannot edit",
-        message: "Attendance is linked to a payroll run that is not in draft",
+        message: `Attendance is included in a ${exportedLine.batch.status.toLowerCase()} payroll export batch`,
       });
     }
 

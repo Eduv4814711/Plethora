@@ -15,8 +15,8 @@ export type TenantCompanyFixture = {
   postId: string;
   shiftId: string;
   attendanceId: string;
-  payrollRunId: string;
-  taskId: string;
+  exportProfileId: string;
+  exportBatchId: string;
   whatsAppMessageId: string;
 };
 
@@ -76,7 +76,7 @@ async function provisionCompany(label: "A" | "B", runId: string): Promise<Tenant
       lastName: `Employee${label}`,
       status: "active",
       employeeType: "general",
-      monthlySalary: 15000,
+      externalPayrollCode: `SAGE-${suffix}`,
       groupId: group.id,
     },
   });
@@ -127,22 +127,24 @@ async function provisionCompany(label: "A" | "B", runId: string): Promise<Tenant
     },
   });
 
-  const payrollRun = await prisma.payrollRun.create({
+  const exportProfile = await prisma.payrollExportProfile.create({
     data: {
       companyId: company.id,
-      periodStart: new Date("2026-07-01T00:00:00.000Z"),
-      periodEnd: new Date("2026-07-31T23:59:59.999Z"),
-      status: "draft",
+      name: `Sage Profile ${label}`,
+      provider: "SAGE_BUSINESS_CLOUD_ZA",
+      isDefault: true,
     },
   });
 
-  const task = await prisma.task.create({
+  const exportBatch = await prisma.payrollExportBatch.create({
     data: {
       companyId: company.id,
-      title: `Task ${label}`,
-      status: "todo",
-      priority: "medium",
-      createdById: user.id,
+      profileId: exportProfile.id,
+      periodKey: "2026-07",
+      periodStart: new Date("2026-06-26T00:00:00.000Z"),
+      periodEnd: new Date("2026-07-25T23:59:59.999Z"),
+      status: "DRAFT",
+      createdBy: user.id,
     },
   });
 
@@ -173,8 +175,8 @@ async function provisionCompany(label: "A" | "B", runId: string): Promise<Tenant
     postId: post.id,
     shiftId: shift.id,
     attendanceId: attendance.id,
-    payrollRunId: payrollRun.id,
-    taskId: task.id,
+    exportProfileId: exportProfile.id,
+    exportBatchId: exportBatch.id,
     whatsAppMessageId: whatsAppMessage.id,
   };
 }

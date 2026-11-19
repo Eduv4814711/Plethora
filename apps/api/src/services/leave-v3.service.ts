@@ -576,14 +576,14 @@ export async function createLeaveAdjustment(params: {
   return created;
 }
 
-export interface LeaveReadiness {
+export interface LeaveExportReadiness {
   blocked: boolean;
   unresolved: Array<{ id: string; employeeId: string; startDate: Date; endDate: Date }>;
   message?: string;
 }
 
-/** Payroll cannot run while a leave request overlapping the period is still awaiting a decision. */
-export async function getLeaveReadiness(companyId: string, start: Date, end: Date): Promise<LeaveReadiness> {
+/** External payroll export warns/blocks while a leave request overlapping the cycle is still pending a decision. */
+export async function getLeaveExportReadiness(companyId: string, start: Date, end: Date): Promise<LeaveExportReadiness> {
   const unresolved = await prisma.leaveRequest.findMany({
     where: { companyId, status: "PENDING", startDate: { lte: end }, endDate: { gte: start } },
     select: { id: true, employeeId: true, startDate: true, endDate: true },
@@ -592,37 +592,37 @@ export async function getLeaveReadiness(companyId: string, start: Date, end: Dat
     blocked: unresolved.length > 0,
     unresolved,
     message: unresolved.length > 0
-      ? `${unresolved.length} leave request(s) affecting this payroll period require a final decision.`
+      ? `${unresolved.length} leave request(s) affecting this export cycle require a final decision.`
       : undefined,
   };
 }
 
-/** Marks approved leave requests in the period as consumed by this payroll run. */
-export async function postLeaveToPayroll(
+/** Marks approved leave requests in the cycle as consumed by this locked export batch. */
+export async function markLeaveExported(
   companyId: string,
-  payrollRunId: string,
+  payrollExportBatchId: string,
   start: Date,
   end: Date,
   transaction?: Prisma.TransactionClient
-): Promise<{ posted: number }> {
+): Promise<{ exported: number }> {
   const db = transaction ?? prisma;
   const result = await db.leaveRequest.updateMany({
-    where: { companyId, status: "APPROVED", payrollRunId: null, startDate: { lte: end }, endDate: { gte: start } },
-    data: { payrollRunId },
+    where: { companyId, status: "APPROVED", payrollExportBatchId: null, startDate: { lte: end }, endDate: { gte: start } },
+    data: { payrollExportBatchId },
   });
-  return { posted: result.count };
+  return { exported: result.count };
 }
 
-/** Clears the payroll-run link from any leave requests it had consumed, e.g. on a payroll run revert. */
-export async function unpostLeaveFromPayroll(
+/** Clears the export-batch link from any leave requests it had consumed, e.g. on batch void. */
+export async function unmarkLeaveExported(
   companyId: string,
-  payrollRunId: string,
+  payrollExportBatchId: string,
   transaction?: Prisma.TransactionClient
 ): Promise<{ cleared: number }> {
   const db = transaction ?? prisma;
   const result = await db.leaveRequest.updateMany({
-    where: { companyId, payrollRunId },
-    data: { payrollRunId: null },
+    where: { companyId, payrollExportBatchId },
+    data: { payrollExportBatchId: null },
   });
   return { cleared: result.count };
 }

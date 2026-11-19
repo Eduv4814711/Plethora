@@ -63,26 +63,11 @@ export default function ComplianceHubPage() {
     return "text-red-700 border-red-500/30 bg-red-50";
   };
 
-  const getSchemeBadgeVariant = (status: string): "neutral" | "success" | "warning" | "error" => {
-    switch (status) {
-      case "PAID":
-        return "success";
-      case "DECLARED":
-      case "PARTIALLY_PAID":
-        return "warning";
-      case "OVERDUE":
-      case "FAILED":
-        return "error";
-      default:
-        return "neutral";
-    }
-  };
-
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Compliance & Financial Control Hub"
-        description="South African private security regulatory compliance, statutory reconciliation, and cash-floor protection."
+        title="Compliance & Risk Register"
+        description="South African private security regulatory compliance, PSIRA & SARS obligation registers, and legal case tracking."
         actions={
           <Button
             variant="secondary"
@@ -106,8 +91,8 @@ export default function ComplianceHubPage() {
         </div>
       ) : summary ? (
         <>
-          {/* Top Row: Overall Score & Big Highlights */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Top Row: Overall Score & Operational Compliance Highlights */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Health Score Card */}
             <Card className="p-5 flex flex-col justify-between">
               <div className="flex items-center justify-between">
@@ -137,65 +122,30 @@ export default function ComplianceHubPage() {
               </div>
             </Card>
 
-            {/* Protected Cash Floor Card */}
+            {/* Company Obligations Overview */}
             <Card className="p-5 flex flex-col justify-between">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-security-navy-500 uppercase tracking-wider">
-                  30-Day Cash Floor
+                  Company Obligations
                 </span>
               </div>
               <div className="my-2">
-                <div className="text-2xl font-bold font-mono text-security-navy-900">
-                  R {summary.cashFloor.protectedCashFloor.toLocaleString()}
-                </div>
-                <div className="text-xs text-security-navy-500 mt-0.5 font-mono">
-                  Avail: R {summary.cashFloor.availableCash.toLocaleString()}
-                </div>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span
-                  className={
-                    summary.cashFloor.bufferOrShortfall >= 0
-                      ? "text-emerald-700 font-semibold"
-                      : "text-red-700 font-semibold"
-                  }
-                >
-                  {summary.cashFloor.bufferOrShortfall >= 0 ? "+" : ""}
-                  R {summary.cashFloor.bufferOrShortfall.toLocaleString()} buffer
-                </span>
-                <Link
-                  href="/compliance/cash-control"
-                  className="text-security-amber-700 hover:underline font-medium"
-                >
-                  Manage →
-                </Link>
-              </div>
-            </Card>
-
-            {/* Outstanding Statutory Liabilities */}
-            <Card className="p-5 flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-security-navy-500 uppercase tracking-wider">
-                  Statutory Liabilities
-                </span>
-              </div>
-              <div className="my-2">
-                <div className="text-2xl font-bold font-mono text-security-navy-900">
-                  R {summary.totalOutstandingStatutory.toLocaleString()}
+                <div className="text-2xl font-bold text-security-navy-900">
+                  {summary.obligations.compliant} / {summary.obligations.total} Compliant
                 </div>
                 <div className="text-xs text-security-navy-500 mt-0.5">
-                  Due across PAYE, UIF, SDL, PSSPF
+                  {summary.obligations.nonCompliant} non-compliant · {summary.obligations.attentionRequired} attention required
                 </div>
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-security-navy-600">
-                  {summary.statutorySchemes.filter((s) => s.status === "OVERDUE").length} overdue periods
+                  {summary.obligations.pendingVerification} pending verification
                 </span>
                 <Link
-                  href="/compliance/statutory"
+                  href="/compliance/company"
                   className="text-security-amber-700 hover:underline font-medium"
                 >
-                  Reconcile →
+                  Register →
                 </Link>
               </div>
             </Card>
@@ -217,7 +167,7 @@ export default function ComplianceHubPage() {
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-security-navy-600">
-                  AOD: R {summary.remediations.totalDebt.toLocaleString()}
+                  AOD ({summary.remediations.activeCount}): R {summary.remediations.totalDebt.toLocaleString()}
                 </span>
                 <Link
                   href="/compliance/legal"
@@ -229,56 +179,8 @@ export default function ComplianceHubPage() {
             </Card>
           </div>
 
-          {/* Statutory Schemes Matrix */}
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-base font-semibold text-security-navy-900">
-                  Statutory Compliance Status (SA Matrix)
-                </h2>
-                <p className="text-xs text-security-navy-500">
-                  SARS EMP201, Unemployment Insurance, Skills Development, PSSPF, NBCPSS & COIDA
-                </p>
-              </div>
-              <Link href="/compliance/statutory">
-                <Button variant="secondary" size="sm">
-                  View Full Schedule
-                </Button>
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              {summary.statutorySchemes.map((scheme) => (
-                <div
-                  key={scheme.scheme}
-                  className="p-3.5 rounded-security border border-security-navy-100 bg-security-navy-50/50 flex flex-col justify-between space-y-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-sm tracking-wide text-security-navy-900">
-                      {scheme.scheme}
-                    </span>
-                    <Badge variant={getSchemeBadgeVariant(scheme.status)}>
-                      {scheme.status}
-                    </Badge>
-                  </div>
-                  <div>
-                    <div className="text-xs text-security-navy-500">Outstanding</div>
-                    <div className="text-sm font-semibold font-mono">
-                      R {scheme.outstandingAmount.toLocaleString()}
-                    </div>
-                  </div>
-                  {scheme.dueDate && (
-                    <div className="text-[11px] text-security-navy-500 truncate">
-                      Due: {scheme.dueDate.slice(0, 10)}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </Card>
-
           {/* Bottom Grid: Quick Modules Navigation */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Obligations Breakdown */}
             <Card className="p-5 flex flex-col justify-between">
               <div>
@@ -316,37 +218,6 @@ export default function ComplianceHubPage() {
               </div>
             </Card>
 
-            {/* Funds & PSSPF */}
-            <Card className="p-5 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-sm text-security-navy-900">
-                    PSSPF & Provident Funds
-                  </h3>
-                </div>
-                <p className="text-xs text-security-navy-500 mb-4">
-                  Track employee & employer contributions (standard 7.5% + 7.5%), generate fund schedules for NBCPSS / PSSPF returns, and reconcile against monthly payroll.
-                </p>
-                <div className="bg-security-navy-50/70 rounded-security p-3 text-xs space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-security-navy-500">Statutory Standard:</span>
-                    <span className="font-medium">NBCPSS Main Agreement</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-security-navy-500">Default Rate:</span>
-                    <span className="font-medium">7.5% Employee / 7.5% Employer</span>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4 pt-3 border-t border-security-navy-100">
-                <Link href="/compliance/funds" className="w-full">
-                  <Button variant="secondary" size="sm" className="w-full">
-                    View Fund Schedules
-                  </Button>
-                </Link>
-              </div>
-            </Card>
-
             {/* Tender & Audit Reports */}
             <Card className="p-5 flex flex-col justify-between">
               <div>
@@ -356,7 +227,7 @@ export default function ComplianceHubPage() {
                   </h3>
                 </div>
                 <p className="text-xs text-security-navy-500 mb-4">
-                  One-click export of state tender compliance pack: PSiRA license, SARS Tax Clearance status, COIDA Letter of Good Standing, and NBCPSS proof of payments.
+                  One-click export of state tender compliance pack: PSiRA license, SARS Tax Clearance status, COIDA Letter of Good Standing, and company register proof.
                 </p>
                 <div className="bg-security-navy-50/70 rounded-security p-3 text-xs space-y-1">
                   <div className="flex justify-between">
