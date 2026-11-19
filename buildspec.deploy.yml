@@ -35,11 +35,13 @@ phases:
       - npm prune --omit=dev
       - |
         BUNDLE_KEY="releases/plethora-${CODEBUILD_RESOLVED_SOURCE_VERSION}.zip"
-        zip -qr /tmp/plethora-release.zip \
+        zip -qry /tmp/plethora-release.zip \
           package.json package-lock.json appspec.yml \
           apps/api/package.json apps/api/dist apps/api/prisma \
           apps/web/package.json apps/web/.next apps/web/public apps/web/next.config.js \
-          node_modules infra/ec2/systemd scripts/codedeploy
+          node_modules infra/ec2/systemd scripts/codedeploy \
+          $( [ -d apps/api/node_modules ] && echo apps/api/node_modules ) \
+          $( [ -d apps/web/node_modules ] && echo apps/web/node_modules )
         aws s3 cp /tmp/plethora-release.zip "s3://${DEPLOY_BUCKET}/${BUNDLE_KEY}"
   post_build:
     commands:
