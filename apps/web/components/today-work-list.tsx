@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { clsx } from "clsx";
 import {
@@ -14,6 +15,7 @@ export function TodayWorkList({ summary: externalSummary }: TodayWorkListProps) 
   const internalSummary = useDashboardOperationalSummary();
   const summary = externalSummary ?? internalSummary;
   const { loading, workItems, periodLabel, shiftInfo } = summary;
+  const [expanded, setExpanded] = useState(false);
 
   if (loading) {
     return (
@@ -23,8 +25,9 @@ export function TodayWorkList({ summary: externalSummary }: TodayWorkListProps) 
     );
   }
 
-  // Cap the list at 4 items for tight layout harmony
-  const visibleItems = workItems.slice(0, 4);
+  // Cap the list at 4 items by default, with an expand toggle when more exist
+  const hasMore = workItems.length > 4;
+  const visibleItems = expanded ? workItems : workItems.slice(0, 4);
 
   // Quiet day: when nothing needs action
   if (visibleItems.length === 0) {
@@ -107,6 +110,15 @@ export function TodayWorkList({ summary: externalSummary }: TodayWorkListProps) 
         </div>
 
         <div className="flex items-center gap-2 text-[11px] text-security-navy-500">
+          {hasMore && (
+            <button
+              type="button"
+              onClick={() => setExpanded((prev) => !prev)}
+              className="inline-flex items-center gap-1 rounded border border-security-navy-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-security-navy-700 transition hover:border-security-amber-400 hover:bg-security-amber-50/50 hover:text-security-navy-900"
+            >
+              <span>{expanded ? "Show top 4" : `Show all (${workItems.length})`}</span>
+            </button>
+          )}
           <span className="hidden sm:inline-flex items-center gap-1 rounded bg-security-navy-50 px-2 py-0.5 font-medium text-security-navy-600">
             {shiftInfo.shiftLabel}
           </span>
@@ -124,10 +136,11 @@ export function TodayWorkList({ summary: externalSummary }: TodayWorkListProps) 
           const isCritical = item.priority === "CRITICAL";
 
           return (
-            <div
+            <Link
               key={item.id}
+              href={item.href}
               className={clsx(
-                "group relative flex items-center justify-between gap-2.5 rounded-security border p-2 sm:p-2.5 transition-all duration-150 hover:shadow-sm",
+                "group relative flex items-center justify-between gap-2.5 rounded-security border p-2 sm:p-2.5 no-underline transition-all duration-150 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-security-amber-500",
                 isCritical
                   ? "border-red-200/90 bg-red-50/35 hover:bg-red-50/60"
                   : "border-security-amber-200/80 bg-security-amber-50/25 hover:bg-security-amber-50/50"
@@ -181,19 +194,18 @@ export function TodayWorkList({ summary: externalSummary }: TodayWorkListProps) 
                 </div>
               </div>
 
-              <Link
-                href={item.href}
+              <span
                 className={clsx(
-                  "inline-flex shrink-0 items-center justify-center gap-1 rounded-security px-2.5 py-1 text-xs font-semibold shadow-sm transition hover:shadow active:scale-[0.98]",
+                  "inline-flex shrink-0 items-center justify-center gap-1 rounded-security px-2.5 py-1 text-xs font-semibold shadow-sm transition group-hover:shadow active:scale-[0.98]",
                   isCritical
-                    ? "bg-red-700 text-white hover:bg-red-800"
-                    : "bg-security-amber-500 text-security-navy-950 hover:bg-security-amber-400"
+                    ? "bg-red-700 text-white group-hover:bg-red-800"
+                    : "bg-security-amber-500 text-security-navy-950 group-hover:bg-security-amber-400"
                 )}
               >
                 <span>{item.verb}</span>
                 <span aria-hidden className="transition-transform group-hover:translate-x-0.5">→</span>
-              </Link>
-            </div>
+              </span>
+            </Link>
           );
         })}
       </div>

@@ -1,0 +1,44 @@
+name: Deploy to AWS (af-south-1)
+
+on:
+  workflow_run:
+    workflows: ["Production readiness"]
+    types:
+      - completed
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      confirm_deploy:
+        description: "Type 'deploy' to release main to AWS af-south-1"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-aws-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.confirm_deploy == 'deploy')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: production
+    steps:
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GITHUB_DEPLOY_ROLE_ARN }}
+          aws-region: af-south-1
+
+      - name: Trigger AWS CodeBuild deployment (main -> RDS migration -> S3 -> CodeDeploy)
+        uses: aws-actions/aws-codebuild-run-build@v1
+        with:
+          project-name: plethora-main-deploy
+          source-version-override: ${{ github.sha }}

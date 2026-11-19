@@ -1,0 +1,1298 @@
+{
+  "/PlethoraAwsStack": [
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    },
+    {
+      "type": "aws:cdk:acknowledged-rules",
+      "data": {
+        "CloudFormation-Validate::W3010": "Literal AZs in template are the result of accessing stack.availabilityZones, this is expected and safe"
+      },
+      "trace": [
+        "    ...new Vpc2 in aws-cdk-lib...",
+        "    at new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:36:16)",
+        "    at <anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "    at <anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "    ...node internals, tsx..."
+      ]
+    },
+    {
+      "type": "aws:cdk:templateFile",
+      "data": "PlethoraAwsStack.template.json"
+    }
+  ],
+  "/PlethoraAwsStack/SsmParameterValue:--aws--service--canonical--ubuntu--server--24.04--stable--current--arm64--hvm--ebs-gp3--ami-id:C96584B6-F00A-464E-AD19-53AFF4B05118.Parameter": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "SsmParameterValueawsservicecanonicalubuntuserver2404stablecurrentarm64hvmebsgp3amiidC96584B6F00A464EAD1953AFF4B05118Parameter"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Instance2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:175:28)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/AlbDnsName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "AlbDnsName"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:341:5)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/UploadsBucketName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "UploadsBucketName"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:342:5)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/DeployBucketName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DeployBucketName"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:343:5)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/OllamaPrivateIp": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "OllamaPrivateIp"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:344:5)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/BootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/CheckBootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CheckBootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcD2542505"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Vpc2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:36:16)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/IGW": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcIGW1D12AAE9"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Vpc2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:36:16)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/VPCGW": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcVPCGWCBEBFDF3"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Vpc2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:36:16)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraPrivateZone/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraPrivateZoneB4936A6B"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new PrivateHostedZone2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:50:25)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraUploadsBucket/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraUploadsBucket29BAEC2D"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Bucket2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:55:26)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraDeployBucket/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraDeployBucket1D83280E"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Bucket2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:63:25)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraDbSecret/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraDbSecret2D5A6E00"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new DatabaseSecret2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:71:21)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraDbSg/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraDbSg8764026E"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new SecurityGroup2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:76:29)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraDbSg/from PlethoraAwsStackPlethoraAppSg0887C2B1:5432": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraDbSgfromPlethoraAwsStackPlethoraAppSg0887C2B1543228F5E573"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...PropertyInjectable.<anonymous> in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:111:21)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraDbSg/from PlethoraAwsStackPlethoraCodeBuildSgCC486003:5432": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraDbSgfromPlethoraAwsStackPlethoraCodeBuildSgCC48600354326E1F448D"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...PropertyInjectable.<anonymous> in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:112:21)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraAppSg/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraAppSg73338C58"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new SecurityGroup2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:82:30)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraAppSg/from PlethoraAwsStackPlethoraAlbSg6DC56DB9:3000": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraAppSgfromPlethoraAwsStackPlethoraAlbSg6DC56DB930009F6EDB04"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...PropertyInjectable.<anonymous> in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:108:22)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraAppSg/from PlethoraAwsStackPlethoraAlbSg6DC56DB9:3001": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraAppSgfromPlethoraAwsStackPlethoraAlbSg6DC56DB93001AC8836ED"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...PropertyInjectable.<anonymous> in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:109:22)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraOllamaSg/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraOllamaSg50EF0B0D"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new SecurityGroup2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:88:33)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraOllamaSg/from PlethoraAwsStackPlethoraAppSg0887C2B1:11434": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraOllamaSgfromPlethoraAwsStackPlethoraAppSg0887C2B111434376338AF"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...PropertyInjectable.<anonymous> in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:110:25)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraCodeBuildSg/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraCodeBuildSg8D148C66"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new SecurityGroup2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:94:35)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraAlbSg/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraAlbSgC6913ECD"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new SecurityGroup2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:100:30)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraPostgres/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraPostgres0B2FDFDD"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new DatabaseInstance2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:114:23)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraAppSecrets/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraAppSecretsEB7738A1"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Secret2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:132:22)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraOllamaRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraOllamaRole3405923C"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Role2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:170:24)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraOllamaInstance/InstanceProfile": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraOllamaInstanceInstanceProfile5812B5C7"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Instance2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:175:28)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraOllamaInstance/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraOllamaInstance4326AE51"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Instance2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:175:28)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/OllamaPrivateDns/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "OllamaPrivateDns6081BDD2"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new ARecord2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:194:5)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraAppInstanceRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraAppInstanceRole178AE496"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Role2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:201:21)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraAppLaunchTemplate/Profile": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraAppLaunchTemplateProfile4F77F8E5"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new LaunchTemplate2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:226:31)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraAppLaunchTemplate/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraAppLaunchTemplateCE113F3C"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new LaunchTemplate2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:226:31)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraAppAsg/ASG": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraAppAsgASG852112F2"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new AutoScalingGroup2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:243:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraAlb/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraAlb97DB386B"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new ApplicationLoadBalancer2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:252:17)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraWebTg/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraWebTg28B7CCAC"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new ApplicationTargetGroup2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:258:28)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraApiTg/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraApiTg3BC875E7"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new ApplicationTargetGroup2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:270:28)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/AutoRosterCronConnection/Connection": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "AutoRosterCronConnection04B0D3DA"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Connection2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:318:28)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/AutoRosterDestination/ApiDestination": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "AutoRosterDestinationApiDestinationA493D44E"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new ApiDestination2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:328:28)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/DailyAutoRosterRule/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DailyAutoRosterRule05BC598B"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Rule2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:335:5)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/CDKMetadata/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CDKMetadata"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/Exports/Output{\"Ref\":\"PlethoraAppAsgASG852112F2\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefPlethoraAppAsgASG852112F25B2B12F6"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/Exports/Output{\"Ref\":\"PlethoraVpcPrivateAppSubnet1SubnetF783893C\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefPlethoraVpcPrivateAppSubnet1SubnetF783893C4368EA2D"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/Exports/Output{\"Ref\":\"PlethoraVpcPrivateAppSubnet2Subnet34238544\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefPlethoraVpcPrivateAppSubnet2Subnet34238544B7252223"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/Exports/Output{\"Fn::GetAtt\":[\"PlethoraDeployBucket1D83280E\",\"Arn\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttPlethoraDeployBucket1D83280EArn732F58F3"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/Exports/Output{\"Ref\":\"PlethoraDbSecret2D5A6E00\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefPlethoraDbSecret2D5A6E009C22E584"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/Exports/Output{\"Ref\":\"PlethoraDeployBucket1D83280E\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefPlethoraDeployBucket1D83280E4CC91C1C"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/Exports/Output{\"Ref\":\"PlethoraPostgres0B2FDFDD\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefPlethoraPostgres0B2FDFDD29E7C763"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/Exports/Output{\"Ref\":\"PlethoraVpcD2542505\"}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputRefPlethoraVpcD254250513A436DA"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/Exports/Output{\"Fn::GetAtt\":[\"PlethoraCodeBuildSg8D148C66\",\"GroupId\"]}": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ExportsOutputFnGetAttPlethoraCodeBuildSg8D148C66GroupIdCC2313B3"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PublicSubnet1/Subnet": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPublicSubnet1Subnet2865C558"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:291 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PublicSubnet1/RouteTable": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPublicSubnet1RouteTableBE4E20D8"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:291 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PublicSubnet1/RouteTableAssociation": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPublicSubnet1RouteTableAssociation6F940112"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:291 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PublicSubnet1/DefaultRoute": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPublicSubnet1DefaultRoute450B3817"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:229 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...new Vpc2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:36:16)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PublicSubnet1/EIP": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPublicSubnet1EIP6550EF30"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Vpc2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:36:16)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PublicSubnet1/NATGateway": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPublicSubnet1NATGatewayF81B203E"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Vpc2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:36:16)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PublicSubnet2/Subnet": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPublicSubnet2SubnetB846346F"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:291 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PublicSubnet2/RouteTable": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPublicSubnet2RouteTable23E307DC"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:291 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PublicSubnet2/RouteTableAssociation": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPublicSubnet2RouteTableAssociationE2C94814"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:291 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PublicSubnet2/DefaultRoute": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPublicSubnet2DefaultRouteFF7BC110"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:229 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...new Vpc2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:36:16)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet1/Subnet": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPrivateAppSubnet1SubnetF783893C"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:293 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet1/RouteTable": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPrivateAppSubnet1RouteTableE75FC21C"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:293 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet1/RouteTableAssociation": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPrivateAppSubnet1RouteTableAssociationEE327D86"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:293 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet1/DefaultRoute": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPrivateAppSubnet1DefaultRouteFF353577"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Vpc2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:36:16)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet2/Subnet": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPrivateAppSubnet2Subnet34238544"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:293 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet2/RouteTable": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPrivateAppSubnet2RouteTableA432B0CA"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:293 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet2/RouteTableAssociation": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPrivateAppSubnet2RouteTableAssociation28D18F2E"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:293 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet2/DefaultRoute": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPrivateAppSubnet2DefaultRouteE2176C86"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Vpc2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:36:16)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PrivateDataSubnet1/Subnet": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPrivateDataSubnet1Subnet96D20C0D"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:295 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PrivateDataSubnet1/RouteTable": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPrivateDataSubnet1RouteTable126CA8A0"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:295 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PrivateDataSubnet1/RouteTableAssociation": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPrivateDataSubnet1RouteTableAssociation79EA7EC1"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:295 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PrivateDataSubnet2/Subnet": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPrivateDataSubnet2Subnet2F2FC2FD"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:295 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PrivateDataSubnet2/RouteTable": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPrivateDataSubnet2RouteTable67E6D40B"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:295 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/PrivateDataSubnet2/RouteTableAssociation": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcPrivateDataSubnet2RouteTableAssociationA438C04B"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\aws-ec2\\lib\\vpc.js:1:295 in aws-cdk-lib...",
+        "Array.forEach (:)",
+        "...aws-cdk-lib..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraVpc/S3GatewayEndpoint/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraVpcS3GatewayEndpointF8C36580"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...PropertyInjectable.addGatewayEndpoint in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:46:14)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraUploadsBucket/Policy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraUploadsBucketPolicy2E7372B5"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Bucket2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:55:26)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraDeployBucket/Policy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraDeployBucketPolicy60791B8D"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Bucket2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:63:25)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraDbSecret/Attachment/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraDbSecretAttachment469939D4"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new DatabaseInstance2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:114:23)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraPostgres/SubnetGroup/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraPostgresSubnetGroup38B46737"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new DatabaseInstance2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:114:23)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraAppInstanceRole/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraAppInstanceRoleDefaultPolicy1FBC272C"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraAlb/HttpsListener/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraAlbHttpsListener4C8C71EA"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...PropertyInjectable.<anonymous> in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:288:33)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraAlb/HttpListener/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraAlbHttpListener32582A65"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...PropertyInjectable.<anonymous> in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:298:11)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/AutoRosterDestination/EventsRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "AutoRosterDestinationEventsRoleED93391A"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Rule2 in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:335:5)"
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/PlethoraAlb/HttpsListener/ApiHostRuleRule/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraAlbHttpsListenerApiHostRuleRuleE91EBB4B"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...PropertyInjectable.<anonymous> in aws-cdk-lib...",
+        "new PlethoraAwsStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-aws-stack.ts:293:21)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:20:19)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraAwsStack/AutoRosterDestination/EventsRole/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "AutoRosterDestinationEventsRoleDefaultPolicyFBB8ED34"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ]
+}

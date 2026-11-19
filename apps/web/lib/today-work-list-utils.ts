@@ -25,11 +25,23 @@ export interface DashboardWorkData {
   pendingSiteTimesheetRows?: number;
   openCriticalIncidents?: number;
   activeSitesCount?: number;
+  guardsOnDuty?: number;
+  taskStats?: {
+    overdue: number;
+    dueToday: number;
+  };
 }
 
 export interface TodayWorkItem {
   id: string;
-  sourceModule: "ATTENDANCE" | "ROSTERING" | "PAYROLL" | "DOCUMENTS" | "APPROVALS";
+  sourceModule:
+    | "ATTENDANCE"
+    | "ROSTERING"
+    | "PAYROLL"
+    | "DOCUMENTS"
+    | "APPROVALS"
+    | "INCIDENTS"
+    | "TASKS";
   title: string;
   count: number;
   verb: string;
@@ -73,8 +85,29 @@ export function buildTodayWorkItems(params: {
   const canPayroll = canAccessRoute("/payroll", user);
   const canDocuments = canAccessRoute("/documents", user) || canAccessRoute("/employees", user);
   const canApprovals = canAccessRoute("/approvals", user);
+  const canIncidents = canAccessRoute("/incidents", user);
+  const canTasks = canAccessRoute("/tasks", user);
 
   const items: TodayWorkItem[] = [];
+
+  // 0. Open critical incidents
+  if (canIncidents) {
+    const criticalIncidents = dashboard.openCriticalIncidents ?? 0;
+    if (criticalIncidents > 0) {
+      items.push({
+        id: "critical-incidents",
+        sourceModule: "INCIDENTS",
+        title: `${criticalIncidents} critical incident${criticalIncidents === 1 ? "" : "s"} requiring investigation`,
+        count: criticalIncidents,
+        focalCount: `${criticalIncidents} incident${criticalIncidents === 1 ? "" : "s"}`,
+        description: `Critical field incident${criticalIncidents === 1 ? "" : "s"} awaiting review`,
+        verb: criticalIncidents === 1 ? "Review 1 incident" : `Review ${criticalIncidents} incidents`,
+        href: "/incidents?severity=CRITICAL",
+        priority: "CRITICAL",
+        badge: "Incident",
+      });
+    }
+  }
 
   // 1. Sites still to capture for the current day or night shift
   if (canAttendance) {
@@ -209,6 +242,24 @@ export function buildTodayWorkItems(params: {
         description: `Approval request${pendingApprovals === 1 ? "" : "s"} waiting for review`,
         verb: pendingApprovals === 1 ? "Review 1 approval" : `Review ${pendingApprovals} approvals`,
         href: "/approvals",
+        priority: "MEDIUM",
+      });
+    }
+  }
+
+  // 7. Overdue tasks assigned to the user
+  if (canTasks) {
+    const overdueTasks = dashboard.taskStats?.overdue ?? 0;
+    if (overdueTasks > 0) {
+      items.push({
+        id: "tasks-overdue",
+        sourceModule: "TASKS",
+        title: `${overdueTasks} assigned task${overdueTasks === 1 ? "" : "s"} overdue`,
+        count: overdueTasks,
+        focalCount: `${overdueTasks} task${overdueTasks === 1 ? "" : "s"}`,
+        description: `Overdue assigned task${overdueTasks === 1 ? "" : "s"} need completion`,
+        verb: overdueTasks === 1 ? "Open 1 task" : `Open ${overdueTasks} tasks`,
+        href: "/tasks",
         priority: "MEDIUM",
       });
     }

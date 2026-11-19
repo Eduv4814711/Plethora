@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { format } from "date-fns";
 import { useAuth } from "./auth-context";
 import { authFetch } from "./api";
@@ -29,9 +29,14 @@ export function useDashboardOperationalSummary() {
   const [captureOverview, setCaptureOverview] = useState<SiteTimesheetCaptureOverview | null>(null);
   const [rosterOverview, setRosterOverview] = useState<RosterContinuityOverview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshTick, setRefreshTick] = useState(0);
 
   const canAttendance = user ? canAccessRoute("/attendance", user) : false;
   const canRostering = user ? canAccessRoute("/rostering", user) : false;
+
+  const refresh = useCallback(() => {
+    setRefreshTick((t) => t + 1);
+  }, []);
 
   useEffect(() => {
     if (!token) {
@@ -39,6 +44,7 @@ export function useDashboardOperationalSummary() {
       return;
     }
     let cancelled = false;
+    setLoading(true);
 
     const now = new Date();
     const todayStr = format(now, "yyyy-MM-dd");
@@ -78,7 +84,7 @@ export function useDashboardOperationalSummary() {
     return () => {
       cancelled = true;
     };
-  }, [token, canAttendance, canRostering]);
+  }, [token, canAttendance, canRostering, refreshTick]);
 
   const currentHour = new Date().getHours();
   const currentShift = currentHour >= 6 && currentHour < 18 ? "day" : "night";
@@ -203,6 +209,21 @@ export function useDashboardOperationalSummary() {
       };
     }
 
+    // Tasks
+    const overdueTasks = dashboard?.taskStats?.overdue ?? 0;
+    const dueTodayTasks = dashboard?.taskStats?.dueToday ?? 0;
+    if (overdueTasks > 0) {
+      statuses["/tasks"] = {
+        label: `${overdueTasks} overdue`,
+        variant: "critical",
+      };
+    } else if (dueTodayTasks > 0) {
+      statuses["/tasks"] = {
+        label: `${dueTodayTasks} due today`,
+        variant: "warning",
+      };
+    }
+
     return statuses;
   }, [dashboard, captureOverview, rosterOverview, canAttendance, canRostering]);
 
@@ -215,5 +236,8 @@ export function useDashboardOperationalSummary() {
     periodLabel,
     shiftInfo,
     moduleStatus,
+    guardsOnDuty: dashboard?.guardsOnDuty ?? 0,
+    activeSitesCount: dashboard?.activeSitesCount ?? 0,
+    refresh,
   };
 }

@@ -1,0 +1,302 @@
+{
+  "/PlethoraCicdStack": [
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    },
+    {
+      "type": "aws:cdk:warning",
+      "data": "No cross-stack-reference strength configured, defaulting to \"strong\". We recommend you set feature flag \"@aws-cdk/core:defaultCrossStackReferences\" to \"both\", then deploy everywhere, then set it to \"weak\". Alternatively, set it to \"strong\" explicitly to lock in the current producer-protecting behavior. (See: https://github.com/aws/aws-cdk/blob/main/packages/aws-cdk-lib/README.md#reference-strength) [ack: @aws-cdk/core:crossStackReferencesDefaultStrong]",
+      "trace": [
+        "Annotations.addMessage (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\core\\lib\\annotations.js:1:4179)",
+        "Annotations.addWarningV2 (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\core\\lib\\annotations.js:1:2785)",
+        "resolveValue (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\core\\lib\\private\\refs.js:1:7188)",
+        "resolveReferencesInElements (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\core\\lib\\private\\refs.js:1:5056)",
+        "resolveReferences (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\core\\lib\\private\\refs.js:1:4718)",
+        "prepareApp (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\core\\lib\\private\\prepare-app.js:1:1240)",
+        "synthesize (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\core\\lib\\private\\synthesis.js:1:2625)",
+        "App.synth (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\core\\lib\\stage.js:1:5061)",
+        "App.synth (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\core\\lib\\app.js:1:5364)",
+        "process.<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\aws-cdk-lib\\core\\lib\\app.js:1:4274)",
+        "Object.onceWrapper (node:events:631:12)",
+        "process.emit (node:events:509:20)",
+        "process.emit (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\node_modules\\tsx\\dist\\suppress-warnings.cjs:1:472)"
+      ]
+    },
+    {
+      "type": "aws:cdk:templateFile",
+      "data": "PlethoraCicdStack.template.json"
+    }
+  ],
+  "/PlethoraCicdStack/GitHubActionsRoleArn": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "GitHubActionsRoleArn"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:140:5)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraCicdStack/PrVerifyProjectName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PrVerifyProjectName"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:141:5)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraCicdStack/MainDeployProjectName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "MainDeployProjectName"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:142:5)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraCicdStack/BootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/PlethoraCicdStack/CheckBootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CheckBootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/PlethoraCicdStack/PlethoraCodeDeployApp/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraCodeDeployApp643E7B15"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new ServerApplication2 in aws-cdk-lib...",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:28:27)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraCicdStack/PlethoraCodeDeployGroup/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraCodeDeployGroup2B42892D"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new ServerDeploymentGroup2 in aws-cdk-lib...",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:32:29)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraCicdStack/GitHubActionsRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "GitHubActionsRole4F1BBA26"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Role2 in aws-cdk-lib...",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:46:31)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraCicdStack/PlethoraPrVerifyProject/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraPrVerifyProject22471069"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Project2 in aws-cdk-lib...",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:75:29)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraCicdStack/PlethoraMainDeployProject/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraMainDeployProject08DB2B2F"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Project2 in aws-cdk-lib...",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:94:27)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraCicdStack/CDKMetadata/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CDKMetadata"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/PlethoraCicdStack/PlethoraCodeDeployGroup/Role/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraCodeDeployGroupRoleA0F8A6B2"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new ServerDeploymentGroup2 in aws-cdk-lib...",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:32:29)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)"
+      ]
+    }
+  ],
+  "/PlethoraCicdStack/GitHubActionsRole/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "GitHubActionsRoleDefaultPolicy69DA0189"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...PropertyInjectable.<anonymous> in aws-cdk-lib...",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:133:23)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)"
+      ]
+    }
+  ],
+  "/PlethoraCicdStack/PlethoraPrVerifyProject/Role/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraPrVerifyProjectRoleAF0C25D0"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Project2 in aws-cdk-lib...",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:75:29)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraCicdStack/PlethoraMainDeployProject/Role/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraMainDeployProjectRole73C33401"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Project2 in aws-cdk-lib...",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:94:27)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "...node internals, tsx..."
+      ]
+    }
+  ],
+  "/PlethoraCicdStack/PlethoraMainDeployProject/PolicyDocument/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraMainDeployProjectPolicyDocumentD0E9CD9F"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Project2 in aws-cdk-lib...",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:94:27)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)"
+      ]
+    }
+  ],
+  "/PlethoraCicdStack/PlethoraPrVerifyProject/Role/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraPrVerifyProjectRoleDefaultPolicy3BEC332E"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Project2 in aws-cdk-lib...",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:75:29)"
+      ]
+    }
+  ],
+  "/PlethoraCicdStack/PlethoraMainDeployProject/Role/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "PlethoraMainDeployProjectRoleDefaultPolicy9F4E42F2"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Project2 in aws-cdk-lib...",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:94:27)"
+      ]
+    }
+  ]
+}

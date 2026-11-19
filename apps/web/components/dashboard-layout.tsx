@@ -2,13 +2,21 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useSettings } from "@/lib/settings-context";
 import { SearchDropdown } from "@/components/search-dropdown";
 import { NotificationBell } from "@/components/notification-bell";
 import { CompanySetupModal } from "@/components/company-setup-modal";
-import { MODULE_ICONS, MODULE_ICON_FALLBACK } from "@/lib/module-presentation";
+import {
+  MODULE_ICONS,
+  MODULE_ICON_FALLBACK,
+  MODULE_CATEGORIES,
+  MODULE_CATEGORY_ORDER,
+  MODULE_DESCRIPTIONS,
+  getModuleCategory,
+} from "@/lib/module-presentation";
+import { useDashboardModules } from "@/lib/dashboard-modules";
 import {
   NAV_ITEMS,
   MAIN_NAV_HREFS,
@@ -16,8 +24,21 @@ import {
   canAccessRoute,
   getDefaultRouteForUser,
   hasAnyModuleView,
+  resolveModulePath,
 } from "@/lib/permissions";
 import { clsx } from "clsx";
+
+const SUBROUTE_LABELS: Record<string, string> = {
+  "/attendance/exceptions": "Exceptions",
+  "/attendance/staff": "Staff Attendance",
+  "/employees/compliance": "Compliance",
+  "/payroll/configuration": "Configuration",
+  "/payroll/leave-requests": "Leave Requests",
+  "/payroll/billing/clients": "Client Accounts",
+  "/payroll/billing/invoices": "Invoices",
+  "/payroll/billing/quotes": "Quotes",
+  "/tasks/projects": "Projects",
+};
 
 /**
  * The console frame: a graphite header over the bright work surface. Modules
@@ -39,8 +60,22 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [modulesFlyoutOpen, setModulesFlyoutOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
+  const modulesFlyoutRef = useRef<HTMLDivElement>(null);
+
+  const availableHrefs = useMemo(() => {
+    if (!user) return [];
+    return [
+      ...(canAccessRoute("/", user) ? ["/overview"] : []),
+      ...NAV_ITEMS.filter((item) => item.href !== "/" && canAccessRoute(item.href, user)).map(
+        (item) => item.href
+      ),
+    ];
+  }, [user]);
+
+  const { pinned } = useDashboardModules(user?.id ?? "anonymous", availableHrefs);
 
   useEffect(() => {
     if (!user || !pathname) return;
@@ -57,6 +92,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMobileNavOpen(false);
+    setModulesFlyoutOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -69,19 +105,23 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   }, [mobileNavOpen]);
 
   useEffect(() => {
-    if (!mobileNavOpen) return;
+    if (!mobileNavOpen && !modulesFlyoutOpen) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setMobileNavOpen(false);
+      if (e.key === "Escape") {
+        setMobileNavOpen(false);
+        setModulesFlyoutOpen(false);
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mobileNavOpen]);
+  }, [mobileNavOpen, modulesFlyoutOpen]);
 
   useEffect(() => {
     function handlePointerDown(e: PointerEvent) {
       const t = e.target as Node;
       if (profileRef.current && !profileRef.current.contains(t)) setProfileOpen(false);
       if (searchRef.current && !searchRef.current.contains(t)) setSearchOpen(false);
+      if (modulesFlyoutRef.current && !modulesFlyoutRef.current.contains(t)) setModulesFlyoutOpen(false);
     }
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
@@ -152,6 +192,72 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     ...mainNavItems.filter((item) => item.href !== "/"),
     ...moreNavItems,
   ];
+  const navItemByHref = new Map(navItems.map((item) => [item.href, item]));
+
+  // Desktop quick-links: show user's pinned modules first, filled up to 4 with core operational modules
+  const defaultCoreHrefs = ["/overview", "/rostering", "/attendance", "/payroll", "/employees", "/sites"];
+  const quickLinkHrefs: string[] = [];
+  for (const href of [...pinned, ...defaultCoreHrefs]) {
+    if (quickLinkHrefs.length >= 4) break;
+    if (navItemByHref.has(href) && !quickLinkHrefs.includes(href)) {
+      quickLinkHrefs.push(href);
+    }
+  }
+  const quickNavItems = quickLinkHrefs
+    .map((href) => navItemByHref.get(href))
+    .filter((item): item is { href: string; label: string } => Boolean(item));
+
+  // Build semantic breadcrumb items when inside a module (`pathname !== "/"`)
+  const breadcrumbs: { href: string; label: string }[] = [];
+  if (pathname && pathname !== "/") {
+    breadcrumbs.push({ href: "/", label: "Command Center" });
+    if (pathname === "/overview") {
+      breadcrumbs.push({ href: "/overview", label: "Overview" });
+    } else if (pathname === "/settings" || pathname.startsWith("/settings/")) {
+      breadcrumbs.push({ href: "/settings", label: "Settings" });
+      if (pathname === "/settings/migrate") {
+        breadcrumbs.push({ href: "/settings/migrate", label: "Data Import / Export" });
+      }
+    } else {
+      const modulePath = resolveModulePath(pathname);
+      const moduleItem = modulePath ? navItemByHref.get(modulePath) : undefined;
+      if (moduleItem) {
+        breadcrumbs.push(moduleItem);
+        if (pathname !== moduleItem.href) {
+          const subLabel =
+            SUBROUTE_LABELS[pathname] ??
+            (pathname.startsWith("/rostering/sites/")
+              ? pathname.endsWith("/advanced")
+                ? "Advanced Pattern Editor"
+                : "Site Roster"
+              : pathname.startsWith("/attendance/sites/")
+                ? "Site Timesheet"
+                : pathname.startsWith("/sites/")
+                  ? "Site Details"
+                  : pathname.startsWith("/clients/")
+                    ? "Client Details"
+                    : pathname.startsWith("/incidents/")
+                      ? "Incident Details"
+                      : pathname.startsWith("/documents/")
+                        ? "Document Details"
+                        : pathname.startsWith("/tasks/projects/")
+                          ? "Project Details"
+                          : pathname.startsWith("/tasks/")
+                            ? "Task Details"
+                            : pathname.startsWith("/payroll/billing/invoices/")
+                              ? "Invoice Details"
+                              : pathname.startsWith("/payroll/billing/quotes/")
+                                ? "Quote Details"
+                                : pathname.startsWith("/payroll/billing/clients/")
+                                  ? "Client Account"
+                                  : null);
+          if (subLabel) {
+            breadcrumbs.push({ href: pathname, label: subLabel });
+          }
+        }
+      }
+    }
+  }
 
   const hasAccess = canAccessRoute(pathname, user);
   const isLauncherPage = pathname === "/";
@@ -268,7 +374,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <Link
             href="/"
             className="flex min-w-0 shrink-0 items-center overflow-hidden rounded-security px-0.5 py-0.5"
-            aria-label="All modules"
+            aria-label="Command Center (All modules)"
           >
             <img
               src="/plethora-logo-header.svg"
@@ -277,11 +383,188 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             />
           </Link>
           {/* Company identity badge */}
-          <span className="hidden min-w-0 items-center border-l border-white/15 pl-3 lg:inline-flex">
+          <span className="hidden min-w-0 items-center border-l border-white/15 pl-3 xl:inline-flex">
             <span className="truncate rounded border border-white/10 bg-white/[0.06] px-2 py-0.5 text-xs font-semibold tracking-wide text-white/90">
               {companyName}
             </span>
           </span>
+
+          {/* Semantic Breadcrumbs when inside a module */}
+          {breadcrumbs.length > 1 && (
+            <nav
+              aria-label="Breadcrumbs"
+              className="hidden min-w-0 items-center border-l border-white/15 pl-3 md:flex"
+            >
+              <ol className="flex flex-wrap items-center gap-1.5 text-xs">
+                {breadcrumbs.map((crumb, idx) => {
+                  const isLast = idx === breadcrumbs.length - 1;
+                  return (
+                    <li key={crumb.href} className="flex items-center gap-1.5 min-w-0">
+                      {idx > 0 && (
+                        <span className="select-none text-white/40" aria-hidden="true">
+                          /
+                        </span>
+                      )}
+                      <Link
+                        href={crumb.href}
+                        aria-current={isLast ? "page" : undefined}
+                        className={clsx(
+                          "truncate rounded px-1.5 py-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-security-amber-400",
+                          isLast
+                            ? "bg-white/10 font-semibold text-white"
+                            : "font-medium text-white/70 underline-offset-2 hover:bg-white/5 hover:text-white hover:underline"
+                        )}
+                      >
+                        {crumb.label}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ol>
+            </nav>
+          )}
+
+          {/* Desktop Quick-Nav & All Modules Flyout */}
+          {navItems.length > 0 && (
+            <div className="hidden items-center gap-1 border-l border-white/15 pl-3 lg:flex">
+              <div ref={modulesFlyoutRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setModulesFlyoutOpen((o) => !o)}
+                  aria-expanded={modulesFlyoutOpen}
+                  aria-controls="header-modules-flyout"
+                  className={clsx(
+                    "inline-flex h-8 items-center gap-1.5 rounded-security border px-2.5 text-xs font-semibold transition-colors",
+                    modulesFlyoutOpen
+                      ? "border-security-amber-400/60 bg-white/15 text-white"
+                      : "border-white/15 bg-white/[0.06] text-white/85 hover:border-white/25 hover:bg-white/10 hover:text-white"
+                  )}
+                >
+                  <svg className="h-3.5 w-3.5 text-security-amber-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                  </svg>
+                  <span>Modules</span>
+                  <svg className={clsx("h-3 w-3 opacity-70 transition-transform", modulesFlyoutOpen && "rotate-180")} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {modulesFlyoutOpen && (
+                  <div
+                    id="header-modules-flyout"
+                    className="absolute left-0 top-full z-[80] mt-2 w-[min(38rem,calc(100vw-2rem))] max-h-[80dvh] animate-slide-up overflow-y-auto rounded-security-lg border border-security-navy-100 bg-white p-4 shadow-security-elevated motion-reduce:animate-none"
+                  >
+                    <div className="mb-3 flex items-center justify-between border-b border-security-navy-100 pb-2.5">
+                      <div>
+                        <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-security-navy-500">
+                          Quick Navigation
+                        </p>
+                        <p className="text-xs font-semibold text-security-navy-900">
+                          Jump directly to any module
+                        </p>
+                      </div>
+                      <Link
+                        href="/"
+                        onClick={() => setModulesFlyoutOpen(false)}
+                        aria-current={pathname === "/" ? "page" : undefined}
+                        className="inline-flex items-center gap-1.5 rounded-security border border-security-navy-200 bg-security-navy-50 px-2.5 py-1 text-xs font-semibold text-security-navy-900 transition hover:border-security-amber-400 hover:bg-security-amber-50"
+                      >
+                        <span>Command Center (/)</span>
+                        <span aria-hidden="true">→</span>
+                      </Link>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      {MODULE_CATEGORY_ORDER.map((catKey) => {
+                        const groupItems = navItems.filter(
+                          (item) => getModuleCategory(item.href) === catKey
+                        );
+                        if (groupItems.length === 0) return null;
+                        const catInfo = MODULE_CATEGORIES[catKey];
+
+                        return (
+                          <div key={catKey}>
+                            <p className="mb-1.5 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-security-navy-500">
+                              {catInfo.label}
+                            </p>
+                            <ul className="space-y-1">
+                              {groupItems.map((item) => {
+                                const active = isActive(item.href);
+                                return (
+                                  <li key={item.href}>
+                                    <Link
+                                      href={item.href}
+                                      onClick={() => setModulesFlyoutOpen(false)}
+                                      aria-current={active ? "page" : undefined}
+                                      className={clsx(
+                                        "flex items-center gap-2.5 rounded-security px-2.5 py-1.5 text-xs transition-colors",
+                                        active
+                                          ? "bg-security-navy-900 font-semibold text-white"
+                                          : "text-security-navy-800 hover:bg-security-navy-50"
+                                      )}
+                                    >
+                                      <span
+                                        className={clsx(
+                                          "flex h-6 w-6 shrink-0 items-center justify-center rounded [&_svg]:h-4 [&_svg]:w-4",
+                                          active
+                                            ? "bg-white/15 text-security-amber-400"
+                                            : "bg-security-navy-50 text-security-navy-600"
+                                        )}
+                                        aria-hidden="true"
+                                      >
+                                        <NavIcon href={item.href} />
+                                      </span>
+                                      <span className="min-w-0 flex-1">
+                                        <span className="block truncate font-semibold">
+                                          {item.label}
+                                        </span>
+                                        {MODULE_DESCRIPTIONS[item.href] && (
+                                          <span
+                                            className={clsx(
+                                              "block truncate text-[10px]",
+                                              active ? "text-white/75" : "text-security-navy-500"
+                                            )}
+                                          >
+                                            {MODULE_DESCRIPTIONS[item.href]}
+                                          </span>
+                                        )}
+                                      </span>
+                                    </Link>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Pinned / Core Quick-Links */}
+              <nav aria-label="Pinned modules" className="hidden items-center gap-1 xl:flex">
+                {quickNavItems.map((item) => {
+                  const active = isActive(item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      aria-current={active ? "page" : undefined}
+                      className={clsx(
+                        "inline-flex h-8 items-center gap-1.5 rounded-security px-2.5 text-xs font-medium transition-colors",
+                        active
+                          ? "bg-white/15 font-semibold text-white shadow-sm ring-1 ring-security-amber-400/50"
+                          : "text-white/75 hover:bg-white/[0.08] hover:text-white"
+                      )}
+                    >
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+          )}
         </div>
 
         <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
@@ -391,7 +674,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         className={clsx(
           "flex min-h-0 flex-1 flex-col box-border bg-[var(--bg-canvas)]",
           isLauncherPage
-            ? "pt-[calc(env(safe-area-inset-top,0px)+3.5rem+0.5rem)] pb-2 px-3 sm:px-5 lg:px-6 max-sm:overflow-y-auto sm:overflow-hidden h-[100dvh]"
+            ? "pt-[calc(env(safe-area-inset-top,0px)+3.5rem+0.5rem)] pb-3 px-3 sm:px-5 lg:px-6 overflow-y-auto overscroll-y-contain h-[100dvh]"
             : clsx(
                 /* Reserve space for the fixed header: safe area + the 3.5rem row. */
                 "pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1rem)] pb-5 pl-4 pr-4 sm:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+1.5rem)] sm:pb-6 sm:pl-6 sm:pr-6 md:pb-8 md:pl-8 md:pr-8 lg:pt-[calc(env(safe-area-inset-top,0px)+3.5rem+2rem)] lg:pb-10 lg:pl-8 lg:pr-8 xl:pl-10 xl:pr-10",

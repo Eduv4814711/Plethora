@@ -41,6 +41,7 @@ export default function ModuleLauncher() {
   const { settings } = useSettings();
   const [picking, setPicking] = useState(false);
   const [activeCategory, setActiveCategory] = useState<ModuleCategoryKey | "all">("all");
+  const [moduleFilter, setModuleFilter] = useState("");
   const [today, setToday] = useState<Date | null>(null);
 
   // Read clock after mount for hydration safety
@@ -48,7 +49,7 @@ export default function ModuleLauncher() {
 
   // Shared operational metrics for Today's Actions and contextual module badges
   const operationalSummary = useDashboardOperationalSummary();
-  const { moduleStatus, shiftInfo, periodLabel } = operationalSummary;
+  const { moduleStatus, shiftInfo, periodLabel, guardsOnDuty, activeSitesCount } = operationalSummary;
 
   useEffect(() => {
     if (!picking) return;
@@ -73,7 +74,18 @@ export default function ModuleLauncher() {
 
   const byHref = useMemo(() => new Map(available.map((tile) => [tile.href, tile])), [available]);
 
-  const { shown, hidden, pinned, atLimit, pinsAtLimit, add, remove, togglePin } = useDashboardModules(
+  const {
+    shown,
+    hidden,
+    pinned,
+    isCustomized,
+    atLimit,
+    pinsAtLimit,
+    add,
+    remove,
+    togglePin,
+    reset,
+  } = useDashboardModules(
     user?.id ?? "anonymous",
     useMemo(() => available.map((tile) => tile.href), [available])
   );
@@ -88,11 +100,21 @@ export default function ModuleLauncher() {
 
   const pinnedSet = useMemo(() => new Set(pinned), [pinned]);
 
-  // Filtered tiles based on category selection
+  // Filtered tiles based on category selection and text filter
   const filteredTiles = useMemo(() => {
-    if (activeCategory === "all") return allShownTiles;
-    return allShownTiles.filter((tile) => tile.category === activeCategory);
-  }, [allShownTiles, activeCategory]);
+    const base =
+      activeCategory === "all"
+        ? allShownTiles
+        : allShownTiles.filter((tile) => tile.category === activeCategory);
+    const q = moduleFilter.trim().toLowerCase();
+    if (!q) return base;
+    return base.filter(
+      (tile) =>
+        tile.label.toLowerCase().includes(q) ||
+        (tile.description?.toLowerCase().includes(q) ?? false) ||
+        MODULE_CATEGORIES[tile.category].label.toLowerCase().includes(q)
+    );
+  }, [allShownTiles, activeCategory, moduleFilter]);
 
   // Counts per category
   const categoryCounts = useMemo(() => {
@@ -115,14 +137,14 @@ export default function ModuleLauncher() {
     : "Operations Duty Board";
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col justify-between max-sm:overflow-y-auto sm:overflow-hidden pb-1 pt-0">
+    <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col justify-between pb-2 pt-0">
       {/* ── Compact Operational Header ── */}
-      <header className="mb-2 shrink-0 flex w-full flex-col justify-between gap-1.5 border-b border-security-navy-100/70 pb-2 sm:flex-row sm:items-center">
+      <header className="mb-2 shrink-0 flex w-full flex-col justify-between gap-2 border-b border-security-navy-100/70 pb-2 lg:flex-row lg:items-center">
         <div>
           <div className="flex items-center gap-1.5">
             <span className="flex h-2 w-2 rounded-full bg-security-amber-500 animate-pulse" />
             <p className="font-mono text-[0.625rem] sm:text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-security-amber-700">
-              Operations Overview · {formattedDate}
+              Operations Command Center · {formattedDate}
             </p>
           </div>
           <h1 className="mt-0.5 flex flex-wrap items-baseline gap-2 font-display text-lg sm:text-xl lg:text-2xl font-bold tracking-tight text-security-navy-900 leading-tight">
@@ -136,10 +158,39 @@ export default function ModuleLauncher() {
           </h1>
         </div>
 
-        {/* Live operational indicators */}
-        <div className="flex flex-wrap items-center gap-1.5 max-sm:pt-1">
+        {/* Live operational indicators & Analytics shortcut */}
+        <div className="flex flex-wrap items-center gap-1.5 max-sm:pt-0.5">
+          {canAccessRoute("/attendance", user) ? (
+            <Link
+              href="/attendance"
+              className="inline-flex items-center gap-1.5 rounded-full border border-security-navy-200/80 bg-white px-2.5 py-0.5 text-[11px] font-semibold text-security-navy-800 shadow-sm transition hover:border-security-amber-400 hover:bg-security-amber-50/40"
+              title="View live attendance"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-security-emerald-500" />
+              <span className="tabular-nums">{guardsOnDuty} on duty</span>
+            </Link>
+          ) : (
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-security-navy-200/80 bg-white px-2.5 py-0.5 text-[11px] font-semibold text-security-navy-800 shadow-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-security-emerald-500" />
+              <span className="tabular-nums">{guardsOnDuty} on duty</span>
+            </div>
+          )}
+
+          {canAccessRoute("/sites", user) ? (
+            <Link
+              href="/sites"
+              className="inline-flex items-center gap-1.5 rounded-full border border-security-navy-200/80 bg-white px-2.5 py-0.5 text-[11px] font-semibold text-security-navy-700 shadow-sm transition hover:border-security-amber-400 hover:bg-security-amber-50/40"
+              title="View active sites"
+            >
+              <span className="tabular-nums">{activeSitesCount} active sites</span>
+            </Link>
+          ) : (
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-security-navy-200/80 bg-white px-2.5 py-0.5 text-[11px] font-semibold text-security-navy-700 shadow-sm">
+              <span className="tabular-nums">{activeSitesCount} active sites</span>
+            </div>
+          )}
+
           <div className="inline-flex items-center gap-1.5 rounded-full border border-security-navy-200/80 bg-white px-2.5 py-0.5 text-[11px] font-semibold text-security-navy-800 shadow-sm">
-            <span className="h-1.5 w-1.5 rounded-full bg-security-emerald-500" />
             <span>{shiftInfo.shiftLabel}</span>
             <span className="text-[10px] font-normal text-security-navy-400">({shiftInfo.timeWindow})</span>
           </div>
@@ -150,18 +201,48 @@ export default function ModuleLauncher() {
               <span>{periodLabel}</span>
             </div>
           )}
+
+          {canAccessRoute("/", user) && (
+            <Link
+              href="/overview"
+              className="inline-flex items-center gap-1 rounded-full bg-security-navy-900 px-3 py-0.5 text-[11px] font-semibold text-white shadow-sm transition hover:bg-security-navy-800"
+            >
+              <span>Live Analytics</span>
+              <span aria-hidden="true">→</span>
+            </Link>
+          )}
         </div>
       </header>
 
       {/* ── Front Door Operations Command Center ── */}
       <TodayWorkList summary={operationalSummary} />
 
-      {/* ── Module Navigation Header & Category Switcher ── */}
-      <div className="mb-2 shrink-0 flex w-full flex-wrap items-center justify-between gap-1.5">
-        <div>
+      {/* ── Module Navigation Header, Filter & Category Switcher ── */}
+      <div className="mb-2 shrink-0 flex w-full flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
           <h2 className="font-mono text-[0.625rem] sm:text-[0.6875rem] font-bold uppercase tracking-[0.14em] text-security-navy-700">
             System Modules
           </h2>
+          <div className="relative">
+            <input
+              type="search"
+              value={moduleFilter}
+              onChange={(e) => setModuleFilter(e.target.value)}
+              placeholder="Filter modules..."
+              aria-label="Filter modules on dashboard"
+              className="h-7 w-36 sm:w-44 rounded-security border border-security-navy-200/80 bg-white pl-7 pr-2 text-xs text-security-navy-900 placeholder:text-security-navy-400 shadow-sm outline-none transition focus:border-security-amber-500 focus:ring-1 focus:ring-security-amber-500"
+            />
+            <svg
+              className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-security-navy-400"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
         </div>
 
         {/* Category filter pills */}
@@ -229,6 +310,22 @@ export default function ModuleLauncher() {
             Access.
           </p>
         </div>
+      ) : filteredTiles.length === 0 ? (
+        <div className="flex flex-1 flex-col items-center justify-center rounded-security-lg border border-dashed border-security-navy-200 bg-white/60 px-6 py-10 text-center">
+          <p className="text-sm font-semibold text-security-navy-900">
+            No modules match &ldquo;{moduleFilter.trim()}&rdquo;
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setModuleFilter("");
+              setActiveCategory("all");
+            }}
+            className="mt-2 inline-flex items-center rounded-security border border-security-navy-200 bg-white px-3 py-1 text-xs font-semibold text-security-navy-800 shadow-sm hover:bg-security-navy-50"
+          >
+            Clear filter
+          </button>
+        </div>
       ) : (
         /* ── Enterprise Module Grid ── */
         <div className="grid min-h-0 w-full flex-1 grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5 lg:grid-cols-4">
@@ -251,7 +348,7 @@ export default function ModuleLauncher() {
                       : "spine-idle border-security-navy-100 hover:before:bg-security-navy-300"
                   )}
                 >
-                  {/* Top row: Icon + Contextual Status Badge */}
+                  {/* Top row: Icon + Contextual Status Badge (never overlapped by hover controls) */}
                   <div className="flex items-start justify-between gap-1.5">
                     <span className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-security border border-security-navy-100 bg-security-navy-50 text-security-navy-700 transition-colors duration-150 group-hover:border-security-amber-200 group-hover:bg-security-amber-50 group-hover:text-security-amber-600 [&_svg]:h-4 [&_svg]:w-4 sm:[&_svg]:h-5 sm:[&_svg]:w-5">
                       <ModuleIcon href={tile.href} />
@@ -291,8 +388,8 @@ export default function ModuleLauncher() {
                     </div>
                   </div>
 
-                  {/* Bottom row: Title + Description */}
-                  <div className="mt-1.5 min-w-0">
+                  {/* Bottom row: Title + Description (leaves room on right for Pin/Remove controls) */}
+                  <div className="mt-1.5 min-w-0 pr-11">
                     <h3 className="truncate font-display text-xs sm:text-[13px] font-semibold tracking-tight text-security-navy-900 group-hover:text-security-navy-950">
                       {tile.label}
                     </h3>
@@ -304,74 +401,75 @@ export default function ModuleLauncher() {
                   </div>
                 </Link>
 
-                {/* Pin button */}
-                <button
-                  type="button"
-                  onClick={() => togglePin(tile.href)}
-                  disabled={!isPinned && pinsAtLimit}
-                  aria-pressed={isPinned}
-                  aria-label={
-                    isPinned
-                      ? `Unpin ${tile.label}`
-                      : pinsAtLimit
-                        ? `Pin ${tile.label} — unpin one first, ${PINNED_LIMIT} is maximum`
-                        : `Pin ${tile.label}`
-                  }
-                  title={
-                    isPinned
-                      ? `Unpin ${tile.label}`
-                      : pinsAtLimit
-                        ? `${PINNED_LIMIT} modules are already pinned`
-                        : `Pin ${tile.label}`
-                  }
-                  className={clsx(
-                    "absolute right-7 top-2 flex h-5 w-5 items-center justify-center rounded-full border shadow-sm transition",
-                    isPinned
-                      ? "border-security-amber-200 bg-security-amber-50 text-security-amber-600 opacity-100"
-                      : "border-security-navy-200 bg-white text-security-navy-400 hover:border-security-amber-300 hover:bg-security-amber-50 hover:text-security-amber-600 disabled:opacity-30 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                  )}
-                >
-                  <svg
-                    className="h-2.5 w-2.5"
-                    fill={isPinned ? "currentColor" : "none"}
-                    stroke="currentColor"
-                    strokeWidth={1.8}
-                    viewBox="0 0 24 24"
-                    aria-hidden
+                {/* Bottom-right Pin + Remove controls (positioned away from the top-right status badge) */}
+                <div className="absolute bottom-2 right-2 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => togglePin(tile.href)}
+                    disabled={!isPinned && pinsAtLimit}
+                    aria-pressed={isPinned}
+                    aria-label={
+                      isPinned
+                        ? `Unpin ${tile.label}`
+                        : pinsAtLimit
+                          ? `Pin ${tile.label} — unpin one first, ${PINNED_LIMIT} is maximum`
+                          : `Pin ${tile.label}`
+                    }
+                    title={
+                      isPinned
+                        ? `Unpin ${tile.label}`
+                        : pinsAtLimit
+                          ? `${PINNED_LIMIT} modules are already pinned`
+                          : `Pin ${tile.label} to header & top of launcher`
+                    }
+                    className={clsx(
+                      "flex h-5 w-5 items-center justify-center rounded-full border shadow-sm transition",
+                      isPinned
+                        ? "border-security-amber-200 bg-security-amber-50 text-security-amber-600 opacity-100"
+                        : "border-security-navy-200 bg-white text-security-navy-400 hover:border-security-amber-300 hover:bg-security-amber-50 hover:text-security-amber-600 disabled:opacity-30 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                    )}
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M15 4l5 5-2.5 1.2-3.2 3.2-.4 4.1-4.4-4.4-4.5 4.5 4.5-4.5-4.4-4.4 4.1-.4 3.2-3.2L15 4z"
-                    />
-                  </svg>
-                </button>
+                    <svg
+                      className="h-2.5 w-2.5"
+                      fill={isPinned ? "currentColor" : "none"}
+                      stroke="currentColor"
+                      strokeWidth={1.8}
+                      viewBox="0 0 24 24"
+                      aria-hidden
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M15 4l5 5-2.5 1.2-3.2 3.2-.4 4.1-4.4-4.4-4.5 4.5 4.5-4.5-4.4-4.4 4.1-.4 3.2-3.2L15 4z"
+                      />
+                    </svg>
+                  </button>
 
-                {/* Remove button */}
-                <button
-                  type="button"
-                  onClick={() => remove(tile.href)}
-                  aria-label={`Remove ${tile.label} from the dashboard`}
-                  title={`Remove ${tile.label} from the dashboard`}
-                  className="absolute right-1.5 top-2 flex h-5 w-5 items-center justify-center rounded-full border border-security-navy-200 bg-white text-security-navy-400 opacity-0 shadow-sm transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 group-hover:opacity-100 focus-visible:opacity-100"
-                >
-                  <svg
-                    className="h-2.5 w-2.5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    viewBox="0 0 24 24"
-                    aria-hidden
+                  <button
+                    type="button"
+                    onClick={() => remove(tile.href)}
+                    aria-label={`Remove ${tile.label} from the dashboard`}
+                    title={`Remove ${tile.label} from the dashboard`}
+                    className="flex h-5 w-5 items-center justify-center rounded-full border border-security-navy-200 bg-white text-security-navy-400 opacity-0 shadow-sm transition hover:border-red-300 hover:bg-red-50 hover:text-red-700 group-hover:opacity-100 focus-visible:opacity-100"
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                    <svg
+                      className="h-2.5 w-2.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      viewBox="0 0 24 24"
+                      aria-hidden
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             );
           })}
 
           {/* Add Module Card in grid when slots are available */}
-          {hidden.length > 0 && !atLimit && activeCategory === "all" && (
+          {hidden.length > 0 && !atLimit && activeCategory === "all" && !moduleFilter.trim() && (
             <button
               type="button"
               onClick={() => setPicking(true)}
@@ -417,11 +515,21 @@ export default function ModuleLauncher() {
                 </>
               )}
               {` · `}
-              <strong className="text-security-navy-900">{pinned.length}</strong> of {PINNED_LIMIT} pinned
+              <strong className="text-security-navy-900">{pinned.length}</strong> of {PINNED_LIMIT} pinned (shown in header)
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {isCustomized && (
+              <button
+                type="button"
+                onClick={reset}
+                className="inline-flex items-center gap-1 rounded-security border border-security-navy-200 bg-white px-2.5 py-1 text-xs font-medium text-security-navy-600 transition hover:border-security-navy-300 hover:bg-security-navy-50 hover:text-security-navy-900"
+                title="Restore default dashboard modules and clear pins"
+              >
+                <span>Reset layout</span>
+              </button>
+            )}
             {hidden.length > 0 && (
               <button
                 type="button"

@@ -1,0 +1,2154 @@
+{
+ "Description": "Plethora ERP core AWS infrastructure in af-south-1 (Zero-Docker EC2, RDS, S3, Ollama)",
+ "Resources": {
+  "PlethoraVpcD2542505": {
+   "Type": "AWS::EC2::VPC",
+   "Properties": {
+    "CidrBlock": "10.0.0.0/16",
+    "EnableDnsHostnames": true,
+    "EnableDnsSupport": true,
+    "InstanceTenancy": "default",
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "PlethoraAwsStack/PlethoraVpc"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/Resource"
+   }
+  },
+  "PlethoraVpcPublicSubnet1Subnet2865C558": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "af-south-1a",
+    "CidrBlock": "10.0.0.0/24",
+    "MapPublicIpOnLaunch": true,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Public"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Public"
+     },
+     {
+      "Key": "Name",
+      "Value": "PlethoraAwsStack/PlethoraVpc/PublicSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PublicSubnet1/Subnet"
+   }
+  },
+  "PlethoraVpcPublicSubnet1RouteTableBE4E20D8": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "PlethoraAwsStack/PlethoraVpc/PublicSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PublicSubnet1/RouteTable"
+   }
+  },
+  "PlethoraVpcPublicSubnet1RouteTableAssociation6F940112": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "PlethoraVpcPublicSubnet1RouteTableBE4E20D8"
+    },
+    "SubnetId": {
+     "Ref": "PlethoraVpcPublicSubnet1Subnet2865C558"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PublicSubnet1/RouteTableAssociation"
+   }
+  },
+  "PlethoraVpcPublicSubnet1DefaultRoute450B3817": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "GatewayId": {
+     "Ref": "PlethoraVpcIGW1D12AAE9"
+    },
+    "RouteTableId": {
+     "Ref": "PlethoraVpcPublicSubnet1RouteTableBE4E20D8"
+    }
+   },
+   "DependsOn": [
+    "PlethoraVpcVPCGWCBEBFDF3"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PublicSubnet1/DefaultRoute"
+   }
+  },
+  "PlethoraVpcPublicSubnet1EIP6550EF30": {
+   "Type": "AWS::EC2::EIP",
+   "Properties": {
+    "Domain": "vpc",
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "PlethoraAwsStack/PlethoraVpc/PublicSubnet1"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PublicSubnet1/EIP"
+   }
+  },
+  "PlethoraVpcPublicSubnet1NATGatewayF81B203E": {
+   "Type": "AWS::EC2::NatGateway",
+   "Properties": {
+    "AllocationId": {
+     "Fn::GetAtt": [
+      "PlethoraVpcPublicSubnet1EIP6550EF30",
+      "AllocationId"
+     ]
+    },
+    "SubnetId": {
+     "Ref": "PlethoraVpcPublicSubnet1Subnet2865C558"
+    },
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "PlethoraAwsStack/PlethoraVpc/PublicSubnet1"
+     }
+    ]
+   },
+   "DependsOn": [
+    "PlethoraVpcPublicSubnet1DefaultRoute450B3817",
+    "PlethoraVpcPublicSubnet1RouteTableAssociation6F940112"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PublicSubnet1/NATGateway"
+   }
+  },
+  "PlethoraVpcPublicSubnet2SubnetB846346F": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "af-south-1b",
+    "CidrBlock": "10.0.1.0/24",
+    "MapPublicIpOnLaunch": true,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Public"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Public"
+     },
+     {
+      "Key": "Name",
+      "Value": "PlethoraAwsStack/PlethoraVpc/PublicSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PublicSubnet2/Subnet"
+   }
+  },
+  "PlethoraVpcPublicSubnet2RouteTable23E307DC": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "PlethoraAwsStack/PlethoraVpc/PublicSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PublicSubnet2/RouteTable"
+   }
+  },
+  "PlethoraVpcPublicSubnet2RouteTableAssociationE2C94814": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "PlethoraVpcPublicSubnet2RouteTable23E307DC"
+    },
+    "SubnetId": {
+     "Ref": "PlethoraVpcPublicSubnet2SubnetB846346F"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PublicSubnet2/RouteTableAssociation"
+   }
+  },
+  "PlethoraVpcPublicSubnet2DefaultRouteFF7BC110": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "GatewayId": {
+     "Ref": "PlethoraVpcIGW1D12AAE9"
+    },
+    "RouteTableId": {
+     "Ref": "PlethoraVpcPublicSubnet2RouteTable23E307DC"
+    }
+   },
+   "DependsOn": [
+    "PlethoraVpcVPCGWCBEBFDF3"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PublicSubnet2/DefaultRoute"
+   }
+  },
+  "PlethoraVpcPrivateAppSubnet1SubnetF783893C": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "af-south-1a",
+    "CidrBlock": "10.0.2.0/24",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "PrivateApp"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Private"
+     },
+     {
+      "Key": "Name",
+      "Value": "PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet1/Subnet"
+   }
+  },
+  "PlethoraVpcPrivateAppSubnet1RouteTableE75FC21C": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet1/RouteTable"
+   }
+  },
+  "PlethoraVpcPrivateAppSubnet1RouteTableAssociationEE327D86": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "PlethoraVpcPrivateAppSubnet1RouteTableE75FC21C"
+    },
+    "SubnetId": {
+     "Ref": "PlethoraVpcPrivateAppSubnet1SubnetF783893C"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet1/RouteTableAssociation"
+   }
+  },
+  "PlethoraVpcPrivateAppSubnet1DefaultRouteFF353577": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "NatGatewayId": {
+     "Ref": "PlethoraVpcPublicSubnet1NATGatewayF81B203E"
+    },
+    "RouteTableId": {
+     "Ref": "PlethoraVpcPrivateAppSubnet1RouteTableE75FC21C"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet1/DefaultRoute"
+   }
+  },
+  "PlethoraVpcPrivateAppSubnet2Subnet34238544": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "af-south-1b",
+    "CidrBlock": "10.0.3.0/24",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "PrivateApp"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Private"
+     },
+     {
+      "Key": "Name",
+      "Value": "PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet2/Subnet"
+   }
+  },
+  "PlethoraVpcPrivateAppSubnet2RouteTableA432B0CA": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet2/RouteTable"
+   }
+  },
+  "PlethoraVpcPrivateAppSubnet2RouteTableAssociation28D18F2E": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "PlethoraVpcPrivateAppSubnet2RouteTableA432B0CA"
+    },
+    "SubnetId": {
+     "Ref": "PlethoraVpcPrivateAppSubnet2Subnet34238544"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet2/RouteTableAssociation"
+   }
+  },
+  "PlethoraVpcPrivateAppSubnet2DefaultRouteE2176C86": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "NatGatewayId": {
+     "Ref": "PlethoraVpcPublicSubnet1NATGatewayF81B203E"
+    },
+    "RouteTableId": {
+     "Ref": "PlethoraVpcPrivateAppSubnet2RouteTableA432B0CA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PrivateAppSubnet2/DefaultRoute"
+   }
+  },
+  "PlethoraVpcPrivateDataSubnet1Subnet96D20C0D": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "af-south-1a",
+    "CidrBlock": "10.0.4.0/24",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "PrivateData"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Isolated"
+     },
+     {
+      "Key": "Name",
+      "Value": "PlethoraAwsStack/PlethoraVpc/PrivateDataSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PrivateDataSubnet1/Subnet"
+   }
+  },
+  "PlethoraVpcPrivateDataSubnet1RouteTable126CA8A0": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "PlethoraAwsStack/PlethoraVpc/PrivateDataSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PrivateDataSubnet1/RouteTable"
+   }
+  },
+  "PlethoraVpcPrivateDataSubnet1RouteTableAssociation79EA7EC1": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "PlethoraVpcPrivateDataSubnet1RouteTable126CA8A0"
+    },
+    "SubnetId": {
+     "Ref": "PlethoraVpcPrivateDataSubnet1Subnet96D20C0D"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PrivateDataSubnet1/RouteTableAssociation"
+   }
+  },
+  "PlethoraVpcPrivateDataSubnet2Subnet2F2FC2FD": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "af-south-1b",
+    "CidrBlock": "10.0.5.0/24",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "PrivateData"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Isolated"
+     },
+     {
+      "Key": "Name",
+      "Value": "PlethoraAwsStack/PlethoraVpc/PrivateDataSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PrivateDataSubnet2/Subnet"
+   }
+  },
+  "PlethoraVpcPrivateDataSubnet2RouteTable67E6D40B": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "PlethoraAwsStack/PlethoraVpc/PrivateDataSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PrivateDataSubnet2/RouteTable"
+   }
+  },
+  "PlethoraVpcPrivateDataSubnet2RouteTableAssociationA438C04B": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "PlethoraVpcPrivateDataSubnet2RouteTable67E6D40B"
+    },
+    "SubnetId": {
+     "Ref": "PlethoraVpcPrivateDataSubnet2Subnet2F2FC2FD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/PrivateDataSubnet2/RouteTableAssociation"
+   }
+  },
+  "PlethoraVpcIGW1D12AAE9": {
+   "Type": "AWS::EC2::InternetGateway",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "PlethoraAwsStack/PlethoraVpc"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/IGW"
+   }
+  },
+  "PlethoraVpcVPCGWCBEBFDF3": {
+   "Type": "AWS::EC2::VPCGatewayAttachment",
+   "Properties": {
+    "InternetGatewayId": {
+     "Ref": "PlethoraVpcIGW1D12AAE9"
+    },
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/VPCGW"
+   }
+  },
+  "PlethoraVpcS3GatewayEndpointF8C36580": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "RouteTableIds": [
+     {
+      "Ref": "PlethoraVpcPrivateAppSubnet1RouteTableE75FC21C"
+     },
+     {
+      "Ref": "PlethoraVpcPrivateAppSubnet2RouteTableA432B0CA"
+     },
+     {
+      "Ref": "PlethoraVpcPublicSubnet1RouteTableBE4E20D8"
+     },
+     {
+      "Ref": "PlethoraVpcPublicSubnet2RouteTable23E307DC"
+     },
+     {
+      "Ref": "PlethoraVpcPrivateDataSubnet1RouteTable126CA8A0"
+     },
+     {
+      "Ref": "PlethoraVpcPrivateDataSubnet2RouteTable67E6D40B"
+     }
+    ],
+    "ServiceName": {
+     "Fn::Join": [
+      "",
+      [
+       "com.amazonaws.",
+       {
+        "Ref": "AWS::Region"
+       },
+       ".s3"
+      ]
+     ]
+    },
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "PlethoraAwsStack/PlethoraVpc"
+     }
+    ],
+    "VpcEndpointType": "Gateway",
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraVpc/S3GatewayEndpoint/Resource"
+   }
+  },
+  "PlethoraPrivateZoneB4936A6B": {
+   "Type": "AWS::Route53::HostedZone",
+   "Properties": {
+    "Name": "plethora.local.",
+    "VPCs": [
+     {
+      "VPCId": {
+       "Ref": "PlethoraVpcD2542505"
+      },
+      "VPCRegion": "af-south-1"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraPrivateZone/Resource"
+   }
+  },
+  "PlethoraUploadsBucket29BAEC2D": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "BucketEncryption": {
+     "ServerSideEncryptionConfiguration": [
+      {
+       "ServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+       }
+      }
+     ]
+    },
+    "PublicAccessBlockConfiguration": {
+     "BlockPublicAcls": true,
+     "BlockPublicPolicy": true,
+     "IgnorePublicAcls": true,
+     "RestrictPublicBuckets": true
+    },
+    "VersioningConfiguration": {
+     "Status": "Enabled"
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraUploadsBucket/Resource"
+   }
+  },
+  "PlethoraUploadsBucketPolicy2E7372B5": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "PlethoraUploadsBucket29BAEC2D"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "Bool": {
+         "aws:SecureTransport": "false"
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "PlethoraUploadsBucket29BAEC2D",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "PlethoraUploadsBucket29BAEC2D",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraUploadsBucket/Policy/Resource"
+   }
+  },
+  "PlethoraDeployBucket1D83280E": {
+   "Type": "AWS::S3::Bucket",
+   "Properties": {
+    "BucketEncryption": {
+     "ServerSideEncryptionConfiguration": [
+      {
+       "ServerSideEncryptionByDefault": {
+        "SSEAlgorithm": "AES256"
+       }
+      }
+     ]
+    },
+    "LifecycleConfiguration": {
+     "Rules": [
+      {
+       "ExpirationInDays": 30,
+       "Status": "Enabled"
+      }
+     ]
+    },
+    "PublicAccessBlockConfiguration": {
+     "BlockPublicAcls": true,
+     "BlockPublicPolicy": true,
+     "IgnorePublicAcls": true,
+     "RestrictPublicBuckets": true
+    }
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraDeployBucket/Resource"
+   }
+  },
+  "PlethoraDeployBucketPolicy60791B8D": {
+   "Type": "AWS::S3::BucketPolicy",
+   "Properties": {
+    "Bucket": {
+     "Ref": "PlethoraDeployBucket1D83280E"
+    },
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "s3:*",
+       "Condition": {
+        "Bool": {
+         "aws:SecureTransport": "false"
+        }
+       },
+       "Effect": "Deny",
+       "Principal": {
+        "AWS": "*"
+       },
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "PlethoraDeployBucket1D83280E",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "PlethoraDeployBucket1D83280E",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraDeployBucket/Policy/Resource"
+   }
+  },
+  "PlethoraDbSecret2D5A6E00": {
+   "Type": "AWS::SecretsManager::Secret",
+   "Properties": {
+    "Description": {
+     "Fn::Join": [
+      "",
+      [
+       "Generated by the CDK for stack: ",
+       {
+        "Ref": "AWS::StackName"
+       }
+      ]
+     ]
+    },
+    "GenerateSecretString": {
+     "ExcludeCharacters": " %+~`#$&*()|[]{}:;<>?!'/@\"\\",
+     "GenerateStringKey": "password",
+     "PasswordLength": 30,
+     "SecretStringTemplate": "{\"username\":\"plethora_admin\"}"
+    },
+    "Name": "plethora-prod-db-secret"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraDbSecret/Resource"
+   }
+  },
+  "PlethoraDbSecretAttachment469939D4": {
+   "Type": "AWS::SecretsManager::SecretTargetAttachment",
+   "Properties": {
+    "SecretId": {
+     "Ref": "PlethoraDbSecret2D5A6E00"
+    },
+    "TargetId": {
+     "Ref": "PlethoraPostgres0B2FDFDD"
+    },
+    "TargetType": "AWS::RDS::DBInstance"
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraDbSecret/Attachment/Resource"
+   }
+  },
+  "PlethoraDbSg8764026E": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "PostgreSQL access from Plethora app instances and VPC CodeBuild",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "255.255.255.255/32",
+      "Description": "Disallow all traffic",
+      "FromPort": 252,
+      "IpProtocol": "icmp",
+      "ToPort": 86
+     }
+    ],
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraDbSg/Resource"
+   }
+  },
+  "PlethoraDbSgfromPlethoraAwsStackPlethoraAppSg0887C2B1543228F5E573": {
+   "Type": "AWS::EC2::SecurityGroupIngress",
+   "Properties": {
+    "Description": "App to RDS Postgres",
+    "FromPort": 5432,
+    "GroupId": {
+     "Fn::GetAtt": [
+      "PlethoraDbSg8764026E",
+      "GroupId"
+     ]
+    },
+    "IpProtocol": "tcp",
+    "SourceSecurityGroupId": {
+     "Fn::GetAtt": [
+      "PlethoraAppSg73338C58",
+      "GroupId"
+     ]
+    },
+    "ToPort": 5432
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraDbSg/from PlethoraAwsStackPlethoraAppSg0887C2B1:5432"
+   }
+  },
+  "PlethoraDbSgfromPlethoraAwsStackPlethoraCodeBuildSgCC48600354326E1F448D": {
+   "Type": "AWS::EC2::SecurityGroupIngress",
+   "Properties": {
+    "Description": "CodeBuild migrations to RDS",
+    "FromPort": 5432,
+    "GroupId": {
+     "Fn::GetAtt": [
+      "PlethoraDbSg8764026E",
+      "GroupId"
+     ]
+    },
+    "IpProtocol": "tcp",
+    "SourceSecurityGroupId": {
+     "Fn::GetAtt": [
+      "PlethoraCodeBuildSg8D148C66",
+      "GroupId"
+     ]
+    },
+    "ToPort": 5432
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraDbSg/from PlethoraAwsStackPlethoraCodeBuildSgCC486003:5432"
+   }
+  },
+  "PlethoraAppSg73338C58": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Plethora EC2 application instances behind ALB",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraAppSg/Resource"
+   }
+  },
+  "PlethoraAppSgfromPlethoraAwsStackPlethoraAlbSg6DC56DB930009F6EDB04": {
+   "Type": "AWS::EC2::SecurityGroupIngress",
+   "Properties": {
+    "Description": "ALB to Web",
+    "FromPort": 3000,
+    "GroupId": {
+     "Fn::GetAtt": [
+      "PlethoraAppSg73338C58",
+      "GroupId"
+     ]
+    },
+    "IpProtocol": "tcp",
+    "SourceSecurityGroupId": {
+     "Fn::GetAtt": [
+      "PlethoraAlbSgC6913ECD",
+      "GroupId"
+     ]
+    },
+    "ToPort": 3000
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraAppSg/from PlethoraAwsStackPlethoraAlbSg6DC56DB9:3000"
+   }
+  },
+  "PlethoraAppSgfromPlethoraAwsStackPlethoraAlbSg6DC56DB93001AC8836ED": {
+   "Type": "AWS::EC2::SecurityGroupIngress",
+   "Properties": {
+    "Description": "ALB to API",
+    "FromPort": 3001,
+    "GroupId": {
+     "Fn::GetAtt": [
+      "PlethoraAppSg73338C58",
+      "GroupId"
+     ]
+    },
+    "IpProtocol": "tcp",
+    "SourceSecurityGroupId": {
+     "Fn::GetAtt": [
+      "PlethoraAlbSgC6913ECD",
+      "GroupId"
+     ]
+    },
+    "ToPort": 3001
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraAppSg/from PlethoraAwsStackPlethoraAlbSg6DC56DB9:3001"
+   }
+  },
+  "PlethoraOllamaSg50EF0B0D": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Internal Ollama LLM access from Plethora app instances only",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraOllamaSg/Resource"
+   }
+  },
+  "PlethoraOllamaSgfromPlethoraAwsStackPlethoraAppSg0887C2B111434376338AF": {
+   "Type": "AWS::EC2::SecurityGroupIngress",
+   "Properties": {
+    "Description": "App to Ollama LLM",
+    "FromPort": 11434,
+    "GroupId": {
+     "Fn::GetAtt": [
+      "PlethoraOllamaSg50EF0B0D",
+      "GroupId"
+     ]
+    },
+    "IpProtocol": "tcp",
+    "SourceSecurityGroupId": {
+     "Fn::GetAtt": [
+      "PlethoraAppSg73338C58",
+      "GroupId"
+     ]
+    },
+    "ToPort": 11434
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraOllamaSg/from PlethoraAwsStackPlethoraAppSg0887C2B1:11434"
+   }
+  },
+  "PlethoraCodeBuildSg8D148C66": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "CodeBuild VPC runner for pre-deploy RDS migrations",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraCodeBuildSg/Resource"
+   }
+  },
+  "PlethoraAlbSgC6913ECD": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Public HTTPS and HTTP ingress to Plethora ALB",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "HTTPS ingress",
+      "FromPort": 443,
+      "IpProtocol": "tcp",
+      "ToPort": 443
+     },
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "HTTP redirect ingress",
+      "FromPort": 80,
+      "IpProtocol": "tcp",
+      "ToPort": 80
+     }
+    ],
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraAlbSg/Resource"
+   }
+  },
+  "PlethoraPostgresSubnetGroup38B46737": {
+   "Type": "AWS::RDS::DBSubnetGroup",
+   "Properties": {
+    "DBSubnetGroupDescription": "Subnet group for PlethoraPostgres database",
+    "SubnetIds": [
+     {
+      "Ref": "PlethoraVpcPrivateDataSubnet1Subnet96D20C0D"
+     },
+     {
+      "Ref": "PlethoraVpcPrivateDataSubnet2Subnet2F2FC2FD"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraPostgres/SubnetGroup/Default"
+   }
+  },
+  "PlethoraPostgres0B2FDFDD": {
+   "Type": "AWS::RDS::DBInstance",
+   "Properties": {
+    "AllocatedStorage": "30",
+    "BackupRetentionPeriod": 7,
+    "CopyTagsToSnapshot": true,
+    "DBInstanceClass": "db.t4g.small",
+    "DBName": "plethora",
+    "DBSubnetGroupName": {
+     "Ref": "PlethoraPostgresSubnetGroup38B46737"
+    },
+    "DeletionProtection": false,
+    "Engine": "postgres",
+    "EngineVersion": "16",
+    "MasterUserPassword": {
+     "Fn::Join": [
+      "",
+      [
+       "{{resolve:secretsmanager:",
+       {
+        "Ref": "PlethoraDbSecret2D5A6E00"
+       },
+       ":SecretString:password::}}"
+      ]
+     ]
+    },
+    "MasterUsername": {
+     "Fn::Join": [
+      "",
+      [
+       "{{resolve:secretsmanager:",
+       {
+        "Ref": "PlethoraDbSecret2D5A6E00"
+       },
+       ":SecretString:username::}}"
+      ]
+     ]
+    },
+    "MaxAllocatedStorage": 200,
+    "PubliclyAccessible": false,
+    "StorageEncrypted": true,
+    "StorageType": "gp2",
+    "VPCSecurityGroups": [
+     {
+      "Fn::GetAtt": [
+       "PlethoraDbSg8764026E",
+       "GroupId"
+      ]
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Snapshot",
+   "DeletionPolicy": "Snapshot",
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraPostgres/Resource"
+   }
+  },
+  "PlethoraAppSecretsEB7738A1": {
+   "Type": "AWS::SecretsManager::Secret",
+   "Properties": {
+    "Description": "Runtime secrets for Plethora ERP API, WhatsApp Cloud API, and Cron",
+    "GenerateSecretString": {
+     "ExcludePunctuation": true,
+     "GenerateStringKey": "CRON_SECRET",
+     "PasswordLength": 48,
+     "SecretStringTemplate": "{\"AI_ENABLED\":\"true\",\"AI_BASE_URL\":\"http://ollama.plethora.local:11434\",\"AI_MODEL\":\"llama3.3:3b\",\"AI_TIMEOUT_MS\":\"8000\",\"CORS_ORIGIN\":\"https://plethora.quickbophasecurity.co.za\",\"FRONTEND_URL\":\"https://plethora.quickbophasecurity.co.za\",\"NEXT_PUBLIC_API_URL\":\"https://api.quickbophasecurity.co.za\",\"WHATSAPP_ENABLED\":\"false\",\"WHATSAPP_API_VERSION\":\"v26.0\",\"WHATSAPP_PHONE_NUMBER_ID\":\"\",\"WHATSAPP_WABA_ID\":\"\",\"WHATSAPP_ACCESS_TOKEN\":\"\",\"WHATSAPP_VERIFY_TOKEN\":\"\",\"WHATSAPP_APP_SECRET\":\"\"}"
+    },
+    "Name": "plethora-prod-app-secrets"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraAppSecrets/Resource"
+   }
+  },
+  "PlethoraOllamaRole3405923C": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ec2.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/AmazonSSMManagedInstanceCore"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraOllamaRole/Resource"
+   }
+  },
+  "PlethoraOllamaInstanceInstanceProfile5812B5C7": {
+   "Type": "AWS::IAM::InstanceProfile",
+   "Properties": {
+    "Roles": [
+     {
+      "Ref": "PlethoraOllamaRole3405923C"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraOllamaInstance/InstanceProfile"
+   }
+  },
+  "PlethoraOllamaInstance4326AE51": {
+   "Type": "AWS::EC2::Instance",
+   "Properties": {
+    "AvailabilityZone": "af-south-1a",
+    "BlockDeviceMappings": [
+     {
+      "DeviceName": "/dev/sda1",
+      "Ebs": {
+       "Encrypted": true,
+       "VolumeSize": 30,
+       "VolumeType": "gp3"
+      }
+     }
+    ],
+    "IamInstanceProfile": {
+     "Ref": "PlethoraOllamaInstanceInstanceProfile5812B5C7"
+    },
+    "ImageId": {
+     "Ref": "SsmParameterValueawsservicecanonicalubuntuserver2404stablecurrentarm64hvmebsgp3amiidC96584B6F00A464EAD1953AFF4B05118Parameter"
+    },
+    "InstanceType": "m7g.large",
+    "SecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "PlethoraOllamaSg50EF0B0D",
+       "GroupId"
+      ]
+     }
+    ],
+    "SubnetId": {
+     "Ref": "PlethoraVpcPrivateAppSubnet1SubnetF783893C"
+    },
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "PlethoraAwsStack/PlethoraOllamaInstance"
+     }
+    ],
+    "UserData": {
+     "Fn::Base64": "#!/bin/bash\n#!/usr/bin/env bash\nset -euo pipefail\n\nexport DEBIAN_FRONTEND=noninteractive\nOLLAMA_MODEL=\"${OLLAMA_MODEL:-llama3.3:3b}\"\n\napt-get update -y\napt-get install -y ca-certificates curl\n\n# Install Ollama natively (no Docker)\ncurl -fsSL https://ollama.com/install.sh | sh\n\n# Bind Ollama to all VPC interfaces on port 11434 and keep model loaded in RAM\nmkdir -p /etc/systemd/system/ollama.service.d\ncat <<'EOF' > /etc/systemd/system/ollama.service.d/override.conf\n[Service]\nEnvironment=\"OLLAMA_HOST=0.0.0.0:11434\"\nEnvironment=\"OLLAMA_KEEP_ALIVE=24h\"\nEnvironment=\"OLLAMA_NUM_PARALLEL=2\"\nEOF\n\nsystemctl daemon-reload\nsystemctl enable ollama\nsystemctl restart ollama\n\n# Wait for Ollama daemon to listen before pulling the model\nfor i in $(seq 1 30); do\n  if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then\n    break\n  fi\n  sleep 2\ndone\n\nollama pull \"$OLLAMA_MODEL\"\n"
+    }
+   },
+   "DependsOn": [
+    "PlethoraOllamaRole3405923C"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraOllamaInstance/Resource"
+   }
+  },
+  "OllamaPrivateDns6081BDD2": {
+   "Type": "AWS::Route53::RecordSet",
+   "Properties": {
+    "HostedZoneId": {
+     "Ref": "PlethoraPrivateZoneB4936A6B"
+    },
+    "Name": "ollama.plethora.local.",
+    "ResourceRecords": [
+     {
+      "Fn::GetAtt": [
+       "PlethoraOllamaInstance4326AE51",
+       "PrivateIp"
+      ]
+     }
+    ],
+    "TTL": "60",
+    "Type": "A"
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/OllamaPrivateDns/Resource"
+   }
+  },
+  "PlethoraAppInstanceRole178AE496": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ec2.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/AmazonSSMManagedInstanceCore"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraAppInstanceRole/Resource"
+   }
+  },
+  "PlethoraAppInstanceRoleDefaultPolicy1FBC272C": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*",
+        "s3:DeleteObject*",
+        "s3:PutObject",
+        "s3:PutObjectLegalHold",
+        "s3:PutObjectRetention",
+        "s3:PutObjectTagging",
+        "s3:PutObjectVersionTagging",
+        "s3:Abort*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "PlethoraUploadsBucket29BAEC2D",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "PlethoraUploadsBucket29BAEC2D",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "PlethoraDeployBucket1D83280E",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::GetAtt": [
+             "PlethoraDeployBucket1D83280E",
+             "Arn"
+            ]
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Ref": "PlethoraAppSecretsEB7738A1"
+       }
+      },
+      {
+       "Action": [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Ref": "PlethoraDbSecret2D5A6E00"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "PlethoraAppInstanceRoleDefaultPolicy1FBC272C",
+    "Roles": [
+     {
+      "Ref": "PlethoraAppInstanceRole178AE496"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraAppInstanceRole/DefaultPolicy/Resource"
+   }
+  },
+  "PlethoraAppLaunchTemplateProfile4F77F8E5": {
+   "Type": "AWS::IAM::InstanceProfile",
+   "Properties": {
+    "Roles": [
+     {
+      "Ref": "PlethoraAppInstanceRole178AE496"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraAppLaunchTemplate/Profile"
+   }
+  },
+  "PlethoraAppLaunchTemplateCE113F3C": {
+   "Type": "AWS::EC2::LaunchTemplate",
+   "Properties": {
+    "LaunchTemplateData": {
+     "BlockDeviceMappings": [
+      {
+       "DeviceName": "/dev/sda1",
+       "Ebs": {
+        "Encrypted": true,
+        "VolumeSize": 30,
+        "VolumeType": "gp3"
+       }
+      }
+     ],
+     "IamInstanceProfile": {
+      "Arn": {
+       "Fn::GetAtt": [
+        "PlethoraAppLaunchTemplateProfile4F77F8E5",
+        "Arn"
+       ]
+      }
+     },
+     "ImageId": {
+      "Ref": "SsmParameterValueawsservicecanonicalubuntuserver2404stablecurrentarm64hvmebsgp3amiidC96584B6F00A464EAD1953AFF4B05118Parameter"
+     },
+     "InstanceType": "t4g.medium",
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "PlethoraAppSg73338C58",
+        "GroupId"
+       ]
+      }
+     ],
+     "TagSpecifications": [
+      {
+       "ResourceType": "instance",
+       "Tags": [
+        {
+         "Key": "Name",
+         "Value": "PlethoraAwsStack/PlethoraAppLaunchTemplate"
+        }
+       ]
+      },
+      {
+       "ResourceType": "volume",
+       "Tags": [
+        {
+         "Key": "Name",
+         "Value": "PlethoraAwsStack/PlethoraAppLaunchTemplate"
+        }
+       ]
+      }
+     ],
+     "UserData": {
+      "Fn::Base64": {
+       "Fn::Join": [
+        "",
+        [
+         "#!/bin/bash\n#!/usr/bin/env bash\nset -euo pipefail\n\nexport DEBIAN_FRONTEND=noninteractive\n\napt-get update -y\napt-get upgrade -y\napt-get install -y \\\n  ca-certificates \\\n  curl \\\n  gnupg \\\n  jq \\\n  ruby-full \\\n  wget \\\n  unzip \\\n  chromium \\\n  fonts-liberation \\\n  libnss3 \\\n  libatk-bridge2.0-0 \\\n  libgtk-3-0 \\\n  libasound2t64 || apt-get install -y libasound2 \\\n  libxss1 \\\n  libgbm1\n\n# Install Node.js 24 LTS\ncurl -fsSL https://deb.nodesource.com/setup_24.x | bash -\napt-get install -y nodejs\nnpm install -g npm@11.17.0\n\n# Install AWS CLI v2 (detect architecture for ARM64 Graviton or x86_64)\nARCH=\"$(uname -m)\"\nif [[ \"$ARCH\" == \"aarch64\" ]]; then\n  AWS_CLI_URL=\"https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip\"\nelse\n  AWS_CLI_URL=\"https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip\"\nfi\ncurl -fsSL \"$AWS_CLI_URL\" -o /tmp/awscliv2.zip\nunzip -q /tmp/awscliv2.zip -d /tmp\n/tmp/aws/install --update\nrm -rf /tmp/aws /tmp/awscliv2.zip\n\n# Install AWS CodeDeploy Agent for af-south-1\ncd /tmp\nwget -q \"https://aws-codedeploy-af-south-1.s3.af-south-1.amazonaws.com/latest/install\" -O codedeploy-install\nchmod +x ./codedeploy-install\n./codedeploy-install auto\nsystemctl enable codedeploy-agent\nsystemctl start codedeploy-agent\nrm -f /tmp/codedeploy-install\n\n# Create dedicated service user and application directories\nid -u plethora >/dev/null 2>&1 || useradd --system --create-home --shell /usr/sbin/nologin plethora\nmkdir -p /opt/plethora/current /opt/plethora/release /run/plethora\nchown -R plethora:plethora /opt/plethora /run/plethora\n\nmkdir -p /etc/plethora\ncat <<'EOF' > /etc/plethora/instance.env\nAWS_REGION=af-south-1\nPLETHORA_APP_SECRET_ID=",
+         {
+          "Fn::Join": [
+           "-",
+           [
+            {
+             "Fn::Select": [
+              0,
+              {
+               "Fn::Split": [
+                "-",
+                {
+                 "Fn::Select": [
+                  6,
+                  {
+                   "Fn::Split": [
+                    ":",
+                    {
+                     "Ref": "PlethoraAppSecretsEB7738A1"
+                    }
+                   ]
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            },
+            {
+             "Fn::Select": [
+              1,
+              {
+               "Fn::Split": [
+                "-",
+                {
+                 "Fn::Select": [
+                  6,
+                  {
+                   "Fn::Split": [
+                    ":",
+                    {
+                     "Ref": "PlethoraAppSecretsEB7738A1"
+                    }
+                   ]
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            },
+            {
+             "Fn::Select": [
+              2,
+              {
+               "Fn::Split": [
+                "-",
+                {
+                 "Fn::Select": [
+                  6,
+                  {
+                   "Fn::Split": [
+                    ":",
+                    {
+                     "Ref": "PlethoraAppSecretsEB7738A1"
+                    }
+                   ]
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            },
+            {
+             "Fn::Select": [
+              3,
+              {
+               "Fn::Split": [
+                "-",
+                {
+                 "Fn::Select": [
+                  6,
+                  {
+                   "Fn::Split": [
+                    ":",
+                    {
+                     "Ref": "PlethoraAppSecretsEB7738A1"
+                    }
+                   ]
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          ]
+         },
+         "\nPLETHORA_DB_SECRET_ID=",
+         {
+          "Fn::Join": [
+           "-",
+           [
+            {
+             "Fn::Select": [
+              0,
+              {
+               "Fn::Split": [
+                "-",
+                {
+                 "Fn::Select": [
+                  6,
+                  {
+                   "Fn::Split": [
+                    ":",
+                    {
+                     "Ref": "PlethoraDbSecret2D5A6E00"
+                    }
+                   ]
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            },
+            {
+             "Fn::Select": [
+              1,
+              {
+               "Fn::Split": [
+                "-",
+                {
+                 "Fn::Select": [
+                  6,
+                  {
+                   "Fn::Split": [
+                    ":",
+                    {
+                     "Ref": "PlethoraDbSecret2D5A6E00"
+                    }
+                   ]
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            },
+            {
+             "Fn::Select": [
+              2,
+              {
+               "Fn::Split": [
+                "-",
+                {
+                 "Fn::Select": [
+                  6,
+                  {
+                   "Fn::Split": [
+                    ":",
+                    {
+                     "Ref": "PlethoraDbSecret2D5A6E00"
+                    }
+                   ]
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            },
+            {
+             "Fn::Select": [
+              3,
+              {
+               "Fn::Split": [
+                "-",
+                {
+                 "Fn::Select": [
+                  6,
+                  {
+                   "Fn::Split": [
+                    ":",
+                    {
+                     "Ref": "PlethoraDbSecret2D5A6E00"
+                    }
+                   ]
+                  }
+                 ]
+                }
+               ]
+              }
+             ]
+            }
+           ]
+          ]
+         },
+         "\nPLETHORA_UPLOADS_BUCKET=",
+         {
+          "Ref": "PlethoraUploadsBucket29BAEC2D"
+         },
+         "\nEOF"
+        ]
+       ]
+      }
+     }
+    },
+    "TagSpecifications": [
+     {
+      "ResourceType": "launch-template",
+      "Tags": [
+       {
+        "Key": "Name",
+        "Value": "PlethoraAwsStack/PlethoraAppLaunchTemplate"
+       }
+      ]
+     }
+    ]
+   },
+   "DependsOn": [
+    "PlethoraAppInstanceRoleDefaultPolicy1FBC272C",
+    "PlethoraAppInstanceRole178AE496"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraAppLaunchTemplate/Resource"
+   }
+  },
+  "PlethoraAppAsgASG852112F2": {
+   "Type": "AWS::AutoScaling::AutoScalingGroup",
+   "Properties": {
+    "HealthCheckGracePeriod": 300,
+    "HealthCheckType": "ELB",
+    "LaunchTemplate": {
+     "LaunchTemplateId": {
+      "Ref": "PlethoraAppLaunchTemplateCE113F3C"
+     },
+     "Version": {
+      "Fn::GetAtt": [
+       "PlethoraAppLaunchTemplateCE113F3C",
+       "LatestVersionNumber"
+      ]
+     }
+    },
+    "MaxSize": "3",
+    "MinSize": "1",
+    "TargetGroupARNs": [
+     {
+      "Ref": "PlethoraWebTg28B7CCAC"
+     },
+     {
+      "Ref": "PlethoraApiTg3BC875E7"
+     }
+    ],
+    "VPCZoneIdentifier": [
+     {
+      "Ref": "PlethoraVpcPrivateAppSubnet1SubnetF783893C"
+     },
+     {
+      "Ref": "PlethoraVpcPrivateAppSubnet2Subnet34238544"
+     }
+    ]
+   },
+   "UpdatePolicy": {
+    "AutoScalingScheduledAction": {
+     "IgnoreUnmodifiedGroupSizeProperties": true
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraAppAsg/ASG"
+   }
+  },
+  "PlethoraAlb97DB386B": {
+   "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+   "Properties": {
+    "LoadBalancerAttributes": [
+     {
+      "Key": "deletion_protection.enabled",
+      "Value": "false"
+     }
+    ],
+    "Scheme": "internet-facing",
+    "SecurityGroups": [
+     {
+      "Fn::GetAtt": [
+       "PlethoraAlbSgC6913ECD",
+       "GroupId"
+      ]
+     }
+    ],
+    "Subnets": [
+     {
+      "Ref": "PlethoraVpcPublicSubnet1Subnet2865C558"
+     },
+     {
+      "Ref": "PlethoraVpcPublicSubnet2SubnetB846346F"
+     }
+    ],
+    "Type": "application"
+   },
+   "DependsOn": [
+    "PlethoraVpcPublicSubnet1DefaultRoute450B3817",
+    "PlethoraVpcPublicSubnet1RouteTableAssociation6F940112",
+    "PlethoraVpcPublicSubnet2DefaultRouteFF7BC110",
+    "PlethoraVpcPublicSubnet2RouteTableAssociationE2C94814"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraAlb/Resource"
+   }
+  },
+  "PlethoraAlbHttpsListener4C8C71EA": {
+   "Type": "AWS::ElasticLoadBalancingV2::Listener",
+   "Properties": {
+    "Certificates": [
+     {
+      "CertificateArn": "arn:aws:acm:af-south-1:779391599178:certificate/4f00faab-5f30-428c-9472-128269bb8fc2"
+     }
+    ],
+    "DefaultActions": [
+     {
+      "TargetGroupArn": {
+       "Ref": "PlethoraWebTg28B7CCAC"
+      },
+      "Type": "forward"
+     }
+    ],
+    "LoadBalancerArn": {
+     "Ref": "PlethoraAlb97DB386B"
+    },
+    "Port": 443,
+    "Protocol": "HTTPS"
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraAlb/HttpsListener/Resource"
+   }
+  },
+  "PlethoraAlbHttpsListenerApiHostRuleRuleE91EBB4B": {
+   "Type": "AWS::ElasticLoadBalancingV2::ListenerRule",
+   "Properties": {
+    "Actions": [
+     {
+      "TargetGroupArn": {
+       "Ref": "PlethoraApiTg3BC875E7"
+      },
+      "Type": "forward"
+     }
+    ],
+    "Conditions": [
+     {
+      "Field": "host-header",
+      "HostHeaderConfig": {
+       "Values": [
+        "api.quickbophasecurity.co.za"
+       ]
+      }
+     }
+    ],
+    "ListenerArn": {
+     "Ref": "PlethoraAlbHttpsListener4C8C71EA"
+    },
+    "Priority": 10
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraAlb/HttpsListener/ApiHostRuleRule/Resource"
+   }
+  },
+  "PlethoraAlbHttpListener32582A65": {
+   "Type": "AWS::ElasticLoadBalancingV2::Listener",
+   "Properties": {
+    "DefaultActions": [
+     {
+      "RedirectConfig": {
+       "Port": "443",
+       "Protocol": "HTTPS",
+       "StatusCode": "HTTP_301"
+      },
+      "Type": "redirect"
+     }
+    ],
+    "LoadBalancerArn": {
+     "Ref": "PlethoraAlb97DB386B"
+    },
+    "Port": 80,
+    "Protocol": "HTTP"
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraAlb/HttpListener/Resource"
+   }
+  },
+  "PlethoraWebTg28B7CCAC": {
+   "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+   "Properties": {
+    "HealthCheckIntervalSeconds": 30,
+    "HealthCheckPath": "/",
+    "Matcher": {
+     "HttpCode": "200-399"
+    },
+    "Port": 3000,
+    "Protocol": "HTTP",
+    "TargetGroupAttributes": [
+     {
+      "Key": "stickiness.enabled",
+      "Value": "false"
+     }
+    ],
+    "TargetType": "instance",
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraWebTg/Resource"
+   }
+  },
+  "PlethoraApiTg3BC875E7": {
+   "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+   "Properties": {
+    "HealthCheckIntervalSeconds": 30,
+    "HealthCheckPath": "/health/ready",
+    "Matcher": {
+     "HttpCode": "200"
+    },
+    "Port": 3001,
+    "Protocol": "HTTP",
+    "TargetGroupAttributes": [
+     {
+      "Key": "stickiness.enabled",
+      "Value": "false"
+     }
+    ],
+    "TargetType": "instance",
+    "VpcId": {
+     "Ref": "PlethoraVpcD2542505"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/PlethoraApiTg/Resource"
+   }
+  },
+  "AutoRosterCronConnection04B0D3DA": {
+   "Type": "AWS::Events::Connection",
+   "Properties": {
+    "AuthParameters": {
+     "ApiKeyAuthParameters": {
+      "ApiKeyName": "Authorization",
+      "ApiKeyValue": {
+       "Fn::Join": [
+        "",
+        [
+         "{{resolve:secretsmanager:",
+         {
+          "Ref": "PlethoraAppSecretsEB7738A1"
+         },
+         ":SecretString:CRON_SECRET::}}"
+        ]
+       ]
+      }
+     }
+    },
+    "AuthorizationType": "API_KEY",
+    "Description": "Bearer token connection for Plethora daily auto-roster endpoint"
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/AutoRosterCronConnection/Connection"
+   }
+  },
+  "AutoRosterDestinationApiDestinationA493D44E": {
+   "Type": "AWS::Events::ApiDestination",
+   "Properties": {
+    "ConnectionArn": {
+     "Fn::GetAtt": [
+      "AutoRosterCronConnection04B0D3DA",
+      "Arn"
+     ]
+    },
+    "Description": "Daily automatic rostering endpoint",
+    "HttpMethod": "POST",
+    "InvocationEndpoint": "https://api.quickbophasecurity.co.za/internal/cron/auto-roster"
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/AutoRosterDestination/ApiDestination"
+   }
+  },
+  "AutoRosterDestinationEventsRoleED93391A": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "events.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/AutoRosterDestination/EventsRole/Resource"
+   }
+  },
+  "AutoRosterDestinationEventsRoleDefaultPolicyFBB8ED34": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "events:InvokeApiDestination",
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::GetAtt": [
+         "AutoRosterDestinationApiDestinationA493D44E",
+         "Arn"
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "AutoRosterDestinationEventsRoleDefaultPolicyFBB8ED34",
+    "Roles": [
+     {
+      "Ref": "AutoRosterDestinationEventsRoleED93391A"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/AutoRosterDestination/EventsRole/DefaultPolicy/Resource"
+   }
+  },
+  "DailyAutoRosterRule05BC598B": {
+   "Type": "AWS::Events::Rule",
+   "Properties": {
+    "Description": "Triggers Plethora daily auto-roster at 02:00 UTC",
+    "ScheduleExpression": "cron(0 2 * * ? *)",
+    "State": "ENABLED",
+    "Targets": [
+     {
+      "Arn": {
+       "Fn::GetAtt": [
+        "AutoRosterDestinationApiDestinationA493D44E",
+        "Arn"
+       ]
+      },
+      "Id": "Target0",
+      "RoleArn": {
+       "Fn::GetAtt": [
+        "AutoRosterDestinationEventsRoleED93391A",
+        "Arn"
+       ]
+      }
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/DailyAutoRosterRule/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/31TTW/bMAz9Lb0rWpGi69lJiy5AsRl2kMMuAy2zqRqZMiQqQWD4vw+2/NV22Il8jw8SH0Wt5frhQd7ewMWvVHlaGV3IJmdQJwEX/6dBtZbNoVZi+0qHdCvSUBit8lAQcsfNWWYD4x4KgzM/c4n3VmlgbWkSd8nTLu3CT+BnYLzAVaROn4FxPnhHjI5wEsROBpQwg3qrkFgMzKFWT1TWVhMP0gnmqILTfH12NtR9l/8ldnR06L3YkWcghbGZIX+BQOptj1VtIFr5yLTCdR7v72QzOPphPWP521KvXqAkQ2Vd2c+lz3LkVvg72WyCOsUhDFkMqTVaXWc64la40svmERgK8JijcshihFPjcbCT48fNF2KUtsL3Z/gKCI7oZBMn1B0bwx7cEXnxBpPgSyXSrdBQySazcUvGON6YOvuqDYrZ4GgNAluvwGg6yiYJbPMIprY/c61AA561MhbKAgyQ0nQ8r2WT1LXRql/FFwvlpq+h659wiZc67Rlp0Iz5P+pZiH4+4IUuTmXqeQFbgWck9rLZWiJU40dZoKTWj+hZ0/SLPjHj7V1sW5Ght8HFtU3BQYUcHfwKXAduBdkS5bv/dl5/l/fy9ubda71ygVhXKLMY/wLDCbNlIAQAAA=="
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraAwsStack/CDKMetadata/Default"
+   }
+  }
+ },
+ "Parameters": {
+  "SsmParameterValueawsservicecanonicalubuntuserver2404stablecurrentarm64hvmebsgp3amiidC96584B6F00A464EAD1953AFF4B05118Parameter": {
+   "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+   "Default": "/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id"
+  },
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Outputs": {
+  "AlbDnsName": {
+   "Value": {
+    "Fn::GetAtt": [
+     "PlethoraAlb97DB386B",
+     "DNSName"
+    ]
+   }
+  },
+  "UploadsBucketName": {
+   "Value": {
+    "Ref": "PlethoraUploadsBucket29BAEC2D"
+   }
+  },
+  "DeployBucketName": {
+   "Value": {
+    "Ref": "PlethoraDeployBucket1D83280E"
+   }
+  },
+  "OllamaPrivateIp": {
+   "Value": {
+    "Fn::GetAtt": [
+     "PlethoraOllamaInstance4326AE51",
+     "PrivateIp"
+    ]
+   }
+  },
+  "ExportsOutputRefPlethoraAppAsgASG852112F25B2B12F6": {
+   "Value": {
+    "Ref": "PlethoraAppAsgASG852112F2"
+   },
+   "Export": {
+    "Name": "PlethoraAwsStack:ExportsOutputRefPlethoraAppAsgASG852112F25B2B12F6"
+   }
+  },
+  "ExportsOutputRefPlethoraVpcPrivateAppSubnet1SubnetF783893C4368EA2D": {
+   "Value": {
+    "Ref": "PlethoraVpcPrivateAppSubnet1SubnetF783893C"
+   },
+   "Export": {
+    "Name": "PlethoraAwsStack:ExportsOutputRefPlethoraVpcPrivateAppSubnet1SubnetF783893C4368EA2D"
+   }
+  },
+  "ExportsOutputRefPlethoraVpcPrivateAppSubnet2Subnet34238544B7252223": {
+   "Value": {
+    "Ref": "PlethoraVpcPrivateAppSubnet2Subnet34238544"
+   },
+   "Export": {
+    "Name": "PlethoraAwsStack:ExportsOutputRefPlethoraVpcPrivateAppSubnet2Subnet34238544B7252223"
+   }
+  },
+  "ExportsOutputFnGetAttPlethoraDeployBucket1D83280EArn732F58F3": {
+   "Value": {
+    "Fn::GetAtt": [
+     "PlethoraDeployBucket1D83280E",
+     "Arn"
+    ]
+   },
+   "Export": {
+    "Name": "PlethoraAwsStack:ExportsOutputFnGetAttPlethoraDeployBucket1D83280EArn732F58F3"
+   }
+  },
+  "ExportsOutputRefPlethoraDbSecret2D5A6E009C22E584": {
+   "Value": {
+    "Ref": "PlethoraDbSecret2D5A6E00"
+   },
+   "Export": {
+    "Name": "PlethoraAwsStack:ExportsOutputRefPlethoraDbSecret2D5A6E009C22E584"
+   }
+  },
+  "ExportsOutputRefPlethoraDeployBucket1D83280E4CC91C1C": {
+   "Value": {
+    "Ref": "PlethoraDeployBucket1D83280E"
+   },
+   "Export": {
+    "Name": "PlethoraAwsStack:ExportsOutputRefPlethoraDeployBucket1D83280E4CC91C1C"
+   }
+  },
+  "ExportsOutputRefPlethoraPostgres0B2FDFDD29E7C763": {
+   "Value": {
+    "Ref": "PlethoraPostgres0B2FDFDD"
+   },
+   "Export": {
+    "Name": "PlethoraAwsStack:ExportsOutputRefPlethoraPostgres0B2FDFDD29E7C763"
+   }
+  },
+  "ExportsOutputRefPlethoraVpcD254250513A436DA": {
+   "Value": {
+    "Ref": "PlethoraVpcD2542505"
+   },
+   "Export": {
+    "Name": "PlethoraAwsStack:ExportsOutputRefPlethoraVpcD254250513A436DA"
+   }
+  },
+  "ExportsOutputFnGetAttPlethoraCodeBuildSg8D148C66GroupIdCC2313B3": {
+   "Value": {
+    "Fn::GetAtt": [
+     "PlethoraCodeBuildSg8D148C66",
+     "GroupId"
+    ]
+   },
+   "Export": {
+    "Name": "PlethoraAwsStack:ExportsOutputFnGetAttPlethoraCodeBuildSg8D148C66GroupIdCC2313B3"
+   }
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

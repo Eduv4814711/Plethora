@@ -186,4 +186,28 @@ describe("buildTodayWorkItems", () => {
     expect(rosterItem?.verb).toBe("Fix 1 roster");
     expect(rosterItem?.href).toBe("/rostering/sites/site-hq");
   });
+
+  it("includes critical incidents and overdue tasks when user has capability", () => {
+    const opsUser = makeUser({ "/incidents": ["view"], "/tasks": ["view"] });
+    const items = buildTodayWorkItems({
+      user: opsUser,
+      dashboard: {
+        ...sampleDashboard,
+        openCriticalIncidents: 2,
+        taskStats: { overdue: 3, dueToday: 1 },
+      },
+    });
+
+    const incidentItem = items.find((i) => i.id === "critical-incidents");
+    expect(incidentItem).toBeDefined();
+    expect(incidentItem?.priority).toBe("CRITICAL");
+    expect(incidentItem?.verb).toBe("Review 2 incidents");
+    expect(incidentItem?.href).toBe("/incidents?severity=CRITICAL");
+
+    const taskItem = items.find((i) => i.id === "tasks-overdue");
+    expect(taskItem).toBeDefined();
+    expect(taskItem?.priority).toBe("MEDIUM");
+    expect(taskItem?.verb).toBe("Open 3 tasks");
+    expect(taskItem?.href).toBe("/tasks");
+  });
 });

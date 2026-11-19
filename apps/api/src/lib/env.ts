@@ -100,6 +100,22 @@ const rawEnvSchema = z.object({
     },
     z.number().int().min(1).max(240).optional()
   ),
+  STORAGE_DRIVER: z.preprocess(emptyToUndefined, z.enum(["local", "s3"]).optional()),
+  AWS_S3_BUCKET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  AWS_REGION: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  AI_ENABLED: z.preprocess(parseStrictBooleanFlag, z.boolean().optional()),
+  AI_PROVIDER: z.preprocess(emptyToUndefined, z.enum(["ollama", "openai-compatible"]).optional()),
+  AI_BASE_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
+  AI_MODEL: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  AI_TIMEOUT_MS: z.preprocess(
+    (value) => {
+      const trimmed = emptyToUndefined(value);
+      if (trimmed === undefined) return undefined;
+      const n = Number(trimmed);
+      return Number.isFinite(n) ? n : trimmed;
+    },
+    z.number().int().min(500).max(60_000).optional()
+  ),
 });
 
 type RawEnv = z.infer<typeof rawEnvSchema>;
@@ -128,6 +144,18 @@ export type Env = {
   encryptionKey: string | undefined;
   cronSecret: string | undefined;
   auditRetentionMonths: number;
+  storage: {
+    driver: "local" | "s3";
+    bucket: string | undefined;
+    region: string;
+  };
+  ai: {
+    enabled: boolean;
+    provider: "ollama" | "openai-compatible";
+    baseUrl: string;
+    model: string;
+    timeoutMs: number;
+  };
 };
 
 export function formatEnvValidationError(error: z.ZodError): string {
@@ -160,6 +188,14 @@ function pickRawEnv(source: NodeJS.ProcessEnv): Record<string, unknown> {
     ENCRYPTION_KEY: source.ENCRYPTION_KEY,
     CRON_SECRET: source.CRON_SECRET,
     AUDIT_RETENTION_MONTHS: source.AUDIT_RETENTION_MONTHS,
+    STORAGE_DRIVER: source.STORAGE_DRIVER,
+    AWS_S3_BUCKET: source.AWS_S3_BUCKET,
+    AWS_REGION: source.AWS_REGION,
+    AI_ENABLED: source.AI_ENABLED,
+    AI_PROVIDER: source.AI_PROVIDER,
+    AI_BASE_URL: source.AI_BASE_URL,
+    AI_MODEL: source.AI_MODEL,
+    AI_TIMEOUT_MS: source.AI_TIMEOUT_MS,
   };
 }
 
@@ -258,6 +294,10 @@ function assertProductionEnv(raw: RawEnv): void {
   const whatsappError = getWhatsAppConfigurationError(raw);
   if (whatsappError) errors.push(whatsappError);
 
+  if (raw.STORAGE_DRIVER === "s3" && !raw.AWS_S3_BUCKET) {
+    errors.push("AWS_S3_BUCKET is required when STORAGE_DRIVER=s3.");
+  }
+
   if (errors.length > 0) {
     throw new Error(
       `Invalid production environment configuration:\n${errors.map((e) => `- ${e}`).join("\n")}`
@@ -337,6 +377,18 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     encryptionKey: raw.ENCRYPTION_KEY,
     cronSecret: raw.CRON_SECRET,
     auditRetentionMonths: raw.AUDIT_RETENTION_MONTHS ?? 24,
+    storage: {
+      driver: raw.STORAGE_DRIVER ?? "local",
+      bucket: raw.AWS_S3_BUCKET,
+      region: raw.AWS_REGION ?? "af-south-1",
+    },
+    ai: {
+      enabled: raw.AI_ENABLED === true,
+      provider: raw.AI_PROVIDER ?? "ollama",
+      baseUrl: (raw.AI_BASE_URL ?? "http://ollama.plethora.local:11434").replace(/\/+$/, ""),
+      model: raw.AI_MODEL ?? "llama3.3:3b",
+      timeoutMs: raw.AI_TIMEOUT_MS ?? 8_000,
+    },
   };
 }
 

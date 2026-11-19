@@ -1,0 +1,731 @@
+{
+ "Description": "Plethora ERP GitHub OIDC, AWS CodeBuild, and AWS CodeDeploy CI/CD pipeline",
+ "Resources": {
+  "PlethoraCodeDeployApp643E7B15": {
+   "Type": "AWS::CodeDeploy::Application",
+   "Properties": {
+    "ApplicationName": "plethora-app",
+    "ComputePlatform": "Server"
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraCicdStack/PlethoraCodeDeployApp/Resource"
+   }
+  },
+  "PlethoraCodeDeployGroupRoleA0F8A6B2": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "codedeploy.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSCodeDeployRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraCicdStack/PlethoraCodeDeployGroup/Role/Resource"
+   }
+  },
+  "PlethoraCodeDeployGroup2B42892D": {
+   "Type": "AWS::CodeDeploy::DeploymentGroup",
+   "Properties": {
+    "ApplicationName": {
+     "Ref": "PlethoraCodeDeployApp643E7B15"
+    },
+    "AutoRollbackConfiguration": {
+     "Enabled": true,
+     "Events": [
+      "DEPLOYMENT_FAILURE"
+     ]
+    },
+    "AutoScalingGroups": [
+     {
+      "Fn::ImportValue": "PlethoraAwsStack:ExportsOutputRefPlethoraAppAsgASG852112F25B2B12F6"
+     }
+    ],
+    "DeploymentConfigName": "CodeDeployDefault.OneAtATime",
+    "DeploymentGroupName": "plethora-app-dg",
+    "ServiceRoleArn": {
+     "Fn::GetAtt": [
+      "PlethoraCodeDeployGroupRoleA0F8A6B2",
+      "Arn"
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraCicdStack/PlethoraCodeDeployGroup/Resource"
+   }
+  },
+  "GitHubActionsRole4F1BBA26": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRoleWithWebIdentity",
+       "Condition": {
+        "StringEquals": {
+         "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+        },
+        "StringLike": {
+         "token.actions.githubusercontent.com:sub": "repo:Eduv4814711/Plethora:*"
+        }
+       },
+       "Effect": "Allow",
+       "Principal": {
+        "Federated": "arn:aws:iam::779391599178:oidc-provider/token.actions.githubusercontent.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "RoleName": "plethora-github-actions-role"
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraCicdStack/GitHubActionsRole/Resource"
+   }
+  },
+  "GitHubActionsRoleDefaultPolicy69DA0189": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "codebuild:StartBuild",
+        "codebuild:BatchGetBuilds",
+        "logs:GetLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::GetAtt": [
+          "PlethoraMainDeployProject08DB2B2F",
+          "Arn"
+         ]
+        },
+        {
+         "Fn::GetAtt": [
+          "PlethoraPrVerifyProject22471069",
+          "Arn"
+         ]
+        },
+        "*"
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "GitHubActionsRoleDefaultPolicy69DA0189",
+    "Roles": [
+     {
+      "Ref": "GitHubActionsRole4F1BBA26"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraCicdStack/GitHubActionsRole/DefaultPolicy/Resource"
+   }
+  },
+  "PlethoraPrVerifyProjectRoleAF0C25D0": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "codebuild.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraCicdStack/PlethoraPrVerifyProject/Role/Resource"
+   }
+  },
+  "PlethoraPrVerifyProjectRoleDefaultPolicy3BEC332E": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:",
+           {
+            "Ref": "AWS::Partition"
+           },
+           ":logs:af-south-1:779391599178:log-group:/aws/codebuild/",
+           {
+            "Ref": "PlethoraPrVerifyProject22471069"
+           }
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:",
+           {
+            "Ref": "AWS::Partition"
+           },
+           ":logs:af-south-1:779391599178:log-group:/aws/codebuild/",
+           {
+            "Ref": "PlethoraPrVerifyProject22471069"
+           },
+           ":*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "codebuild:CreateReportGroup",
+        "codebuild:CreateReport",
+        "codebuild:UpdateReport",
+        "codebuild:BatchPutTestCases",
+        "codebuild:BatchPutCodeCoverages"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:",
+          {
+           "Ref": "AWS::Partition"
+          },
+          ":codebuild:af-south-1:779391599178:report-group/",
+          {
+           "Ref": "PlethoraPrVerifyProject22471069"
+          },
+          "-*"
+         ]
+        ]
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "PlethoraPrVerifyProjectRoleDefaultPolicy3BEC332E",
+    "Roles": [
+     {
+      "Ref": "PlethoraPrVerifyProjectRoleAF0C25D0"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraCicdStack/PlethoraPrVerifyProject/Role/DefaultPolicy/Resource"
+   }
+  },
+  "PlethoraPrVerifyProject22471069": {
+   "Type": "AWS::CodeBuild::Project",
+   "Properties": {
+    "Artifacts": {
+     "Type": "NO_ARTIFACTS"
+    },
+    "Cache": {
+     "Type": "NO_CACHE"
+    },
+    "Description": "Runs Plethora PR tests, DB migrations, data audit, and CDK synth without Docker",
+    "EncryptionKey": "alias/aws/s3",
+    "Environment": {
+     "ComputeType": "BUILD_GENERAL1_MEDIUM",
+     "Image": "aws/codebuild/standard:7.0",
+     "ImagePullCredentialsType": "CODEBUILD",
+     "PrivilegedMode": false,
+     "Type": "LINUX_CONTAINER"
+    },
+    "Name": "plethora-pr-verify",
+    "ServiceRole": {
+     "Fn::GetAtt": [
+      "PlethoraPrVerifyProjectRoleAF0C25D0",
+      "Arn"
+     ]
+    },
+    "Source": {
+     "BuildSpec": "buildspec.ci.yml",
+     "Location": "https://github.com/Eduv4814711/Plethora.git",
+     "ReportBuildStatus": true,
+     "Type": "GITHUB"
+    },
+    "TimeoutInMinutes": 30,
+    "Triggers": {
+     "Webhook": false
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraCicdStack/PlethoraPrVerifyProject/Resource"
+   }
+  },
+  "PlethoraMainDeployProjectRole73C33401": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "codebuild.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraCicdStack/PlethoraMainDeployProject/Role/Resource"
+   }
+  },
+  "PlethoraMainDeployProjectRoleDefaultPolicy9F4E42F2": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": "ec2:CreateNetworkInterfacePermission",
+       "Condition": {
+        "StringEquals": {
+         "ec2:Subnet": [
+          {
+           "Fn::Join": [
+            "",
+            [
+             "arn:",
+             {
+              "Ref": "AWS::Partition"
+             },
+             ":ec2:",
+             {
+              "Ref": "AWS::Region"
+             },
+             ":",
+             {
+              "Ref": "AWS::AccountId"
+             },
+             ":subnet/",
+             {
+              "Fn::ImportValue": "PlethoraAwsStack:ExportsOutputRefPlethoraVpcPrivateAppSubnet1SubnetF783893C4368EA2D"
+             }
+            ]
+           ]
+          },
+          {
+           "Fn::Join": [
+            "",
+            [
+             "arn:",
+             {
+              "Ref": "AWS::Partition"
+             },
+             ":ec2:",
+             {
+              "Ref": "AWS::Region"
+             },
+             ":",
+             {
+              "Ref": "AWS::AccountId"
+             },
+             ":subnet/",
+             {
+              "Fn::ImportValue": "PlethoraAwsStack:ExportsOutputRefPlethoraVpcPrivateAppSubnet2Subnet34238544B7252223"
+             }
+            ]
+           ]
+          }
+         ],
+         "ec2:AuthorizedService": "codebuild.amazonaws.com"
+        }
+       },
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:",
+          {
+           "Ref": "AWS::Partition"
+          },
+          ":ec2:",
+          {
+           "Ref": "AWS::Region"
+          },
+          ":",
+          {
+           "Ref": "AWS::AccountId"
+          },
+          ":network-interface/*"
+         ]
+        ]
+       }
+      },
+      {
+       "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:",
+           {
+            "Ref": "AWS::Partition"
+           },
+           ":logs:af-south-1:779391599178:log-group:/aws/codebuild/",
+           {
+            "Ref": "PlethoraMainDeployProject08DB2B2F"
+           }
+          ]
+         ]
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           "arn:",
+           {
+            "Ref": "AWS::Partition"
+           },
+           ":logs:af-south-1:779391599178:log-group:/aws/codebuild/",
+           {
+            "Ref": "PlethoraMainDeployProject08DB2B2F"
+           },
+           ":*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "codebuild:CreateReportGroup",
+        "codebuild:CreateReport",
+        "codebuild:UpdateReport",
+        "codebuild:BatchPutTestCases",
+        "codebuild:BatchPutCodeCoverages"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::Join": [
+         "",
+         [
+          "arn:",
+          {
+           "Ref": "AWS::Partition"
+          },
+          ":codebuild:af-south-1:779391599178:report-group/",
+          {
+           "Ref": "PlethoraMainDeployProject08DB2B2F"
+          },
+          "-*"
+         ]
+        ]
+       }
+      },
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*",
+        "s3:DeleteObject*",
+        "s3:PutObject",
+        "s3:PutObjectLegalHold",
+        "s3:PutObjectRetention",
+        "s3:PutObjectTagging",
+        "s3:PutObjectVersionTagging",
+        "s3:Abort*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::ImportValue": "PlethoraAwsStack:ExportsOutputFnGetAttPlethoraDeployBucket1D83280EArn732F58F3"
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::ImportValue": "PlethoraAwsStack:ExportsOutputFnGetAttPlethoraDeployBucket1D83280EArn732F58F3"
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::ImportValue": "PlethoraAwsStack:ExportsOutputRefPlethoraDbSecret2D5A6E009C22E584"
+       }
+      },
+      {
+       "Action": [
+        "rds:CreateDBSnapshot",
+        "rds:DescribeDBSnapshots",
+        "codedeploy:CreateDeployment",
+        "codedeploy:GetDeployment",
+        "codedeploy:GetApplicationRevision",
+        "codedeploy:RegisterApplicationRevision"
+       ],
+       "Effect": "Allow",
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "PlethoraMainDeployProjectRoleDefaultPolicy9F4E42F2",
+    "Roles": [
+     {
+      "Ref": "PlethoraMainDeployProjectRole73C33401"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraCicdStack/PlethoraMainDeployProject/Role/DefaultPolicy/Resource"
+   }
+  },
+  "PlethoraMainDeployProject08DB2B2F": {
+   "Type": "AWS::CodeBuild::Project",
+   "Properties": {
+    "Artifacts": {
+     "Type": "NO_ARTIFACTS"
+    },
+    "Cache": {
+     "Type": "NO_CACHE"
+    },
+    "Description": "Builds Plethora ERP, runs RDS migration gate, and deploys via CodeDeploy",
+    "EncryptionKey": "alias/aws/s3",
+    "Environment": {
+     "ComputeType": "BUILD_GENERAL1_MEDIUM",
+     "EnvironmentVariables": [
+      {
+       "Name": "DEPLOY_BUCKET",
+       "Type": "PLAINTEXT",
+       "Value": {
+        "Fn::ImportValue": "PlethoraAwsStack:ExportsOutputRefPlethoraDeployBucket1D83280E4CC91C1C"
+       }
+      },
+      {
+       "Name": "CODEDEPLOY_APP",
+       "Type": "PLAINTEXT",
+       "Value": {
+        "Ref": "PlethoraCodeDeployApp643E7B15"
+       }
+      },
+      {
+       "Name": "CODEDEPLOY_GROUP",
+       "Type": "PLAINTEXT",
+       "Value": {
+        "Ref": "PlethoraCodeDeployGroup2B42892D"
+       }
+      },
+      {
+       "Name": "DB_SECRET_ARN",
+       "Type": "PLAINTEXT",
+       "Value": {
+        "Fn::ImportValue": "PlethoraAwsStack:ExportsOutputRefPlethoraDbSecret2D5A6E009C22E584"
+       }
+      },
+      {
+       "Name": "DB_INSTANCE_ID",
+       "Type": "PLAINTEXT",
+       "Value": {
+        "Fn::ImportValue": "PlethoraAwsStack:ExportsOutputRefPlethoraPostgres0B2FDFDD29E7C763"
+       }
+      },
+      {
+       "Name": "API_HEALTH_URL",
+       "Type": "PLAINTEXT",
+       "Value": "https://api.quickbophasecurity.co.za/health/ready"
+      }
+     ],
+     "Image": "aws/codebuild/standard:7.0",
+     "ImagePullCredentialsType": "CODEBUILD",
+     "PrivilegedMode": false,
+     "Type": "LINUX_CONTAINER"
+    },
+    "Name": "plethora-main-deploy",
+    "ServiceRole": {
+     "Fn::GetAtt": [
+      "PlethoraMainDeployProjectRole73C33401",
+      "Arn"
+     ]
+    },
+    "Source": {
+     "BuildSpec": "buildspec.deploy.yml",
+     "Location": "https://github.com/Eduv4814711/Plethora.git",
+     "ReportBuildStatus": true,
+     "Type": "GITHUB"
+    },
+    "SourceVersion": "main",
+    "TimeoutInMinutes": 30,
+    "Triggers": {
+     "Webhook": false
+    },
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::ImportValue": "PlethoraAwsStack:ExportsOutputFnGetAttPlethoraCodeBuildSg8D148C66GroupIdCC2313B3"
+      }
+     ],
+     "Subnets": [
+      {
+       "Fn::ImportValue": "PlethoraAwsStack:ExportsOutputRefPlethoraVpcPrivateAppSubnet1SubnetF783893C4368EA2D"
+      },
+      {
+       "Fn::ImportValue": "PlethoraAwsStack:ExportsOutputRefPlethoraVpcPrivateAppSubnet2Subnet34238544B7252223"
+      }
+     ],
+     "VpcId": {
+      "Fn::ImportValue": "PlethoraAwsStack:ExportsOutputRefPlethoraVpcD254250513A436DA"
+     }
+    }
+   },
+   "DependsOn": [
+    "PlethoraMainDeployProjectPolicyDocumentD0E9CD9F"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "PlethoraCicdStack/PlethoraMainDeployProject/Resource"
+   }
+  },
+  "PlethoraMainDeployProjectPolicyDocumentD0E9CD9F": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "ec2:CreateNetworkInterface",
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:DeleteNetworkInterface",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeDhcpOptions",
+        "ec2:DescribeVpcs"
+       ],
+       "Effect": "Allow",
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "PlethoraMainDeployProjectPolicyDocumentD0E9CD9F",
+    "Roles": [
+     {
+      "Ref": "PlethoraMainDeployProjectRole73C33401"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraCicdStack/PlethoraMainDeployProject/PolicyDocument/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/12OzQrCMBCEn8V7ukpFPfsDHpX2ASQmK2ybZkN+LBLy7tL2Ip5mZvdjmBrqwwE2KzmGSum+MvSE3EapeiHH8MiKNWp0hj+QW/Rv9EfnDCkZia04v+xvXIDLjA9o49VzchP0dyqC5AC5YYPTd9Y7G1KfKS6uiLCFU1I9xpMMKKYhz0RGQ7577lDFmV1sKaLBwMmrufCWokuxCMsaoQvrd72HHWxWXSCqfLKRBoRm0S8WB0jhAQEAAA=="
+   },
+   "Metadata": {
+    "aws:cdk:path": "PlethoraCicdStack/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "GitHubActionsRoleArn": {
+   "Value": {
+    "Fn::GetAtt": [
+     "GitHubActionsRole4F1BBA26",
+     "Arn"
+    ]
+   }
+  },
+  "PrVerifyProjectName": {
+   "Value": {
+    "Ref": "PlethoraPrVerifyProject22471069"
+   }
+  },
+  "MainDeployProjectName": {
+   "Value": {
+    "Ref": "PlethoraMainDeployProject08DB2B2F"
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}
