@@ -1,0 +1,25 @@
+[Unit]
+Description=Plethora ERP Next.js Web Application
+After=network-online.target plethora-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=plethora
+Group=plethora
+WorkingDirectory=/opt/plethora/current/apps/web
+EnvironmentFile=/run/plethora/web.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOSTNAME=0.0.0.0
+ExecStart=/opt/plethora/current/node_modules/.bin/next start --hostname 0.0.0.0 --port 3000
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=plethora-web
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

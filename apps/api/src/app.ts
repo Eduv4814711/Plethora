@@ -66,6 +66,7 @@ import { clientsRoutes, clientPortalRoutes } from "./modules/clients/clients.rou
 import { reportsExtendedRoutes } from "./modules/reports-extended/reports-extended.routes.js";
 import { complianceRoutes } from "./modules/compliance/compliance.routes.js";
 import { eventsRoutes } from "./routes/events.js";
+import { aiRoutes } from "./routes/ai.routes.js";
 import { corsOriginFromEnv, env } from "./lib/env.js";
 import { verifyDatabaseReadiness } from "./lib/db-connectivity.js";
 
@@ -272,6 +273,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(academyRoutes, { prefix: "/academy" });
   await app.register(complianceRoutes, { prefix: "/compliance" });
   await app.register(eventsRoutes, { prefix: "/events" });
+  await app.register(aiRoutes, { prefix: "/ai" });
   await app.register(internalCronRoutes, { prefix: "/internal" });
 
   return app;

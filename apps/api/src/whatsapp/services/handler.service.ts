@@ -1,6 +1,11 @@
 import { prisma } from "../../lib/prisma.js";
 import { randomUUID } from "node:crypto";
 import { config } from "../../lib/config.js";
+import { env } from "../../lib/env.js";
+import {
+  classifyWhatsAppIntent,
+  INTENT_CONFIDENCE_THRESHOLD,
+} from "../../services/ai/whatsapp-intent.service.js";
 import { normalizeWhatsAppPhone } from "../../lib/phone.js";
 import {
   validateClockIn,
@@ -389,6 +394,89 @@ export async function processIncomingMessage(
       employee.companyId,
       "Employee requested contact via WhatsApp keyword"
     );
+  }
+
+  // Optional AI Natural-Language Intent Routing (read-only direct, mutating via confirmation buttons)
+  if (env.ai.enabled) {
+    const aiResult = await classifyWhatsAppIntent(rawTrimmed, {
+      firstName: employee.firstName,
+      employeeType: employee.employeeType,
+    });
+    if (aiResult && aiResult.confidence >= INTENT_CONFIDENCE_THRESHOLD && aiResult.intent !== "UNKNOWN") {
+      sessionManager.resetUnrecognized(from);
+      await createAuditLog({
+        companyId: employee.companyId,
+        action: "whatsapp.ai_intent_routed",
+        entityType: "employee",
+        entityId: employee.id,
+        metadata: {
+          intent: aiResult.intent,
+          confidence: aiResult.confidence,
+          model: env.ai.model,
+        },
+      }).catch(() => undefined);
+
+      switch (aiResult.intent) {
+        case "ROSTER":
+          return handleRoster(employee, from);
+        case "PAYSLIP":
+          return handlePayslip(employee);
+        case "LEAVE_BALANCE":
+          return handleLeaveBalance(employee);
+        case "LEAVE_HISTORY":
+          return handleLeaveHistory(employee);
+        case "STATUS":
+          return handleStatusFlow(employee.id, employee.companyId);
+        case "FAQ_HELP":
+          return {
+            sendInteractiveList: {
+              body: aiResult.reply || "Here is what I can help you with. Tap an option below:",
+              buttonText: "Choose an option",
+              rows: HELP_INTERACTIVE_ROWS,
+            },
+          };
+        case "CLOCK_IN":
+          return {
+            reply: "It sounds like you want to *Clock In*. Please confirm below:",
+            buttons: [
+              { id: "clock_in", title: "1. Clock In" },
+              { id: "help", title: "Main Menu" },
+            ],
+          };
+        case "CLOCK_OUT":
+          return {
+            reply: "It sounds like you want to *Clock Out*. Please confirm below:",
+            buttons: [
+              { id: "clock_out", title: "2. Clock Out" },
+              { id: "help", title: "Main Menu" },
+            ],
+          };
+        case "INCIDENT_REPORT":
+          return {
+            reply: "Do you want to log a new *Incident Report*?",
+            buttons: [
+              { id: "incident", title: "3. Report Incident" },
+              { id: "help", title: "Main Menu" },
+            ],
+          };
+        case "LEAVE_APPLY":
+          return {
+            reply: "Would you like to *Apply for Leave* or check your balance?",
+            buttons: [
+              { id: "leave", title: "6. Apply Leave" },
+              { id: "help", title: "Main Menu" },
+            ],
+          };
+        case "SUPERVISOR":
+          return {
+            reply: "Would you like to alert a *Supervisor / Controller* to contact you?",
+            buttons: [
+              { id: "supervisor", title: "8. Alert Supervisor" },
+              { id: "help", title: "Main Menu" },
+            ],
+          };
+      }
+    }
   }
 
   // Fallback Handling

@@ -27,6 +27,7 @@ import {
   Cell,
   AreaChart,
   Area,
+  Tooltip,
 } from "recharts";
 import { CHART_PRIMARY, CHART_SECONDARY, CHART_SERIES } from "@/lib/chart-theme";
 import { ComplianceSummaryWidget } from "@/components/dashboard/ComplianceSummaryWidget";
@@ -129,6 +130,8 @@ export default function DashboardPage() {
   const canWhatsApp = user ? canAccessRoute("/whatsapp", user) : false;
   const canPayroll = user ? canAccessRoute("/payroll", user) : false;
   const canRostering = user ? canAccessRoute("/rostering", user) : false;
+  const canEmployees = user ? canAccessRoute("/employees", user) : false;
+  const canAttendance = user ? canAccessRoute("/attendance", user) : false;
   const canEditAlerts = Boolean(
     user &&
       ["/attendance", "/sites", "/tasks", "/payroll"].some((path) =>
@@ -346,13 +349,65 @@ export default function DashboardPage() {
     </article>
   );
 
-  const KpiTile = ({ label, value, hint, accent }: { label: string; value: string | number; hint?: string; accent?: "default" | "alert" }) => (
-    <div className={`card-dashboard spine min-w-0 py-2.5 pl-4 pr-3 lg:py-2 ${accent === "alert" && Number(value) > 0 ? "spine-live" : "spine-idle before:bg-transparent"}`}>
-      <p className="truncate font-mono text-[0.625rem] font-medium uppercase tracking-[0.12em] text-security-navy-500">{label}</p>
-      <p className="mt-1 font-display text-xl font-semibold tabular-nums tracking-[-0.02em] text-security-navy-900 lg:text-lg">{value}</p>
-      {hint ? <p className="mt-0.5 truncate text-[10px] text-security-navy-500">{hint}</p> : null}
-    </div>
-  );
+  const KpiTile = ({
+    label,
+    value,
+    hint,
+    accent,
+    href,
+    onClick,
+  }: {
+    label: string;
+    value: string | number;
+    hint?: string;
+    accent?: "default" | "alert";
+    href?: string;
+    onClick?: () => void;
+  }) => {
+    const baseClasses = `card-dashboard spine group relative min-w-0 py-2.5 pl-4 pr-3 text-left transition-all lg:py-2 ${
+      accent === "alert" && Number(value) > 0 ? "spine-live" : "spine-idle before:bg-transparent"
+    }`;
+    const interactiveClasses =
+      "hover:-translate-y-0.5 hover:border-security-navy-300 hover:shadow-security-card-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-security-amber-500";
+
+    const content = (
+      <>
+        <div className="flex items-center justify-between gap-1">
+          <p className="truncate font-mono text-[0.625rem] font-medium uppercase tracking-[0.12em] text-security-navy-500">
+            {label}
+          </p>
+          {(href || onClick) && (
+            <span
+              className="text-xs font-semibold text-security-navy-400 opacity-0 transition-all group-hover:translate-x-0.5 group-hover:text-security-navy-800 group-hover:opacity-100"
+              aria-hidden="true"
+            >
+              →
+            </span>
+          )}
+        </div>
+        <p className="mt-1 font-display text-xl font-semibold tabular-nums tracking-[-0.02em] text-security-navy-900 lg:text-lg">
+          {value}
+        </p>
+        {hint ? <p className="mt-0.5 truncate text-[10px] text-security-navy-500">{hint}</p> : null}
+      </>
+    );
+
+    if (href) {
+      return (
+        <Link href={href} className={`${baseClasses} ${interactiveClasses} no-underline`}>
+          {content}
+        </Link>
+      );
+    }
+    if (onClick) {
+      return (
+        <button type="button" onClick={onClick} className={`${baseClasses} ${interactiveClasses} w-full`}>
+          {content}
+        </button>
+      );
+    }
+    return <div className={baseClasses}>{content}</div>;
+  };
 
   const ChartWrap = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
     <div className={`relative min-h-[5rem] w-full flex-1 ${className}`}>{children}</div>
@@ -362,15 +417,37 @@ export default function DashboardPage() {
     <div className="animate-fade-in mx-auto flex min-h-0 w-full min-w-0 max-w-[1600px] flex-col pb-6">
       <header className="flex shrink-0 flex-col gap-3 border-b border-security-navy-100/80 pb-3 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:pb-2.5">
         <div className="min-w-0 shrink-0 lg:flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-security-navy-700 lg:text-xs">
-            {format(new Date(), "EEEE, MMMM d, yyyy")}
-          </p>
-          <h1 className="text-xl font-bold tracking-tight text-security-navy-900 lg:text-2xl">Dashboard</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1 rounded border border-security-navy-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-security-navy-700 shadow-sm transition hover:border-security-amber-400 hover:bg-security-amber-50/40 hover:text-security-navy-900"
+            >
+              <span aria-hidden="true">←</span>
+              <span>Command Center</span>
+            </Link>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-security-navy-700 lg:text-xs">
+              {format(new Date(), "EEEE, MMMM d, yyyy")}
+            </p>
+          </div>
+          <h1 className="mt-1 text-xl font-bold tracking-tight text-security-navy-900 lg:text-2xl">
+            Operations Overview &amp; Analytics
+          </h1>
           <p className="mt-1 hidden text-sm text-security-navy-600 max-lg:block">
             Live snapshot of guards, sites, shifts, and tasks.
           </p>
         </div>
         <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+          <button
+            type="button"
+            onClick={() => fetchDashboard()}
+            className="inline-flex items-center justify-center gap-1.5 rounded-security-lg border border-security-navy-100 bg-white px-3 py-2 text-xs font-semibold text-security-navy-800 shadow-security-card transition hover:border-security-navy-300 hover:bg-security-navy-50"
+            title="Refresh dashboard metrics"
+          >
+            <svg className="h-3.5 w-3.5 text-security-navy-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>Refresh</span>
+          </button>
           {canSites && (
             <div className="relative w-full min-w-0 sm:w-auto" ref={siteFilterRef}>
               <button
@@ -522,11 +599,45 @@ export default function DashboardPage() {
       {error && !data ? null : (
       <>
       <section className="grid shrink-0 grid-cols-2 gap-2 py-2 sm:grid-cols-3 lg:grid-cols-5 lg:gap-2.5 lg:py-2.5" aria-label="Key metrics">
-        <KpiTile label="Total employees" value={employeesTotal} hint={`All statuses${companyWideHint}`} />
-        <KpiTile label="Guards on duty" value={data?.guardsOnDuty ?? 0} hint="Right now" />
-        <KpiTile label="Active sites" value={data?.activeSitesCount ?? 0} hint="Operational" />
-        <KpiTile label="Pending payroll" value={pendingPayrollCount} hint={`Runs not yet paid${companyWideHint}`} accent={pendingPayrollCount > 0 ? "alert" : "default"} />
-        <KpiTile label="Needs attention" value={needsAttentionCount} hint="Alerts + urgent tasks" accent={needsAttentionCount > 0 ? "alert" : "default"} />
+        <KpiTile
+          label="Total employees"
+          value={employeesTotal}
+          hint={`All statuses${companyWideHint}`}
+          href={canEmployees ? "/employees" : undefined}
+        />
+        <KpiTile
+          label="Guards on duty"
+          value={data?.guardsOnDuty ?? 0}
+          hint="Right now"
+          href={canAttendance ? "/attendance" : undefined}
+        />
+        <KpiTile
+          label="Active sites"
+          value={data?.activeSitesCount ?? 0}
+          hint="Operational"
+          href={canSites ? "/sites" : undefined}
+        />
+        <KpiTile
+          label="Pending payroll"
+          value={pendingPayrollCount}
+          hint={`Runs not yet paid${companyWideHint}`}
+          accent={pendingPayrollCount > 0 ? "alert" : "default"}
+          href={canPayroll ? "/payroll" : undefined}
+        />
+        <KpiTile
+          label="Needs attention"
+          value={needsAttentionCount}
+          hint="Alerts + urgent tasks"
+          accent={needsAttentionCount > 0 ? "alert" : "default"}
+          onClick={() => {
+            setAlertsSectionOpen(true);
+            setTimeout(() => {
+              document
+                .getElementById("dashboard-operational-alerts")
+                ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            }, 50);
+          }}
+        />
       </section>
 
       {payrollReadinessLabel && (
@@ -738,6 +849,10 @@ export default function DashboardPage() {
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis dataKey="name" tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis domain={[0, "auto"]} tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
+              <Tooltip
+                contentStyle={{ fontSize: "12px", borderRadius: "8px", borderColor: "#e2e8f0" }}
+                formatter={(val: unknown) => [String(val ?? 0), "Guards"]}
+              />
               <Bar dataKey="value" fill={CHART_PRIMARY} radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -790,6 +905,10 @@ export default function DashboardPage() {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                   <XAxis dataKey="name" tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{ fontSize: "12px", borderRadius: "8px", borderColor: "#e2e8f0" }}
+                    formatter={(val: unknown) => [String(val ?? 0), "Rostered guards"]}
+                  />
                   <Area type="monotone" dataKey="value" stroke={CHART_PRIMARY} strokeWidth={2} fill="url(#areaFill)" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -830,6 +949,9 @@ export default function DashboardPage() {
             <ChartWrap>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
+                  <Tooltip
+                    contentStyle={{ fontSize: "12px", borderRadius: "8px", borderColor: "#e2e8f0" }}
+                  />
                   <Pie
                     data={(() => {
                       const raw = data?.employeesByStatus ?? [];
@@ -883,6 +1005,10 @@ export default function DashboardPage() {
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis dataKey="name" tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: "#525252", fontSize: 10 }} axisLine={false} tickLine={false} />
+              <Tooltip
+                contentStyle={{ fontSize: "12px", borderRadius: "8px", borderColor: "#e2e8f0" }}
+                formatter={(val: unknown) => [String(val ?? 0), "Shifts"]}
+              />
               <Bar dataKey="value" fill={CHART_SECONDARY} radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>

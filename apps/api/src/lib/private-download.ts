@@ -64,6 +64,32 @@ export async function sendPrivateStoredFile(
     return reply.code(404).send({ error: "Not found", message: "Stored file not found" });
   }
 
+  const name = safeAttachmentName(
+    sanitizeUploadFilename(options.fileName, options.mimeType)
+  );
+  const contentType = SAFE_DOWNLOAD_MIMES.has(options.mimeType)
+    ? options.mimeType
+    : "application/octet-stream";
+
+  if (storage.driver === "s3" && storage.getObjectStream) {
+    const objectResult = await storage.getObjectStream(key);
+    if (!objectResult) {
+      return reply.code(404).send({ error: "Not found", message: "Stored file not found" });
+    }
+    reply.header("content-type", contentType);
+    if (objectResult.contentLength !== undefined) {
+      reply.header("content-length", String(objectResult.contentLength));
+    }
+    reply.header(
+      "content-disposition",
+      `attachment; filename="${name.ascii}"; filename*=UTF-8''${name.encoded}`
+    );
+    reply.header("cache-control", "private, no-store");
+    reply.header("pragma", "no-cache");
+    reply.header("x-content-type-options", "nosniff");
+    return reply.send(objectResult.stream);
+  }
+
   const root = resolve(uploadsRoot);
   const candidatePath = resolve(join(root, ...key.split("/")));
   if (!candidatePath.startsWith(`${root}${sep}`)) {
@@ -86,13 +112,7 @@ export async function sendPrivateStoredFile(
     return reply.code(404).send({ error: "Not found", message: "Stored file not found" });
   }
 
-  const name = safeAttachmentName(
-    sanitizeUploadFilename(options.fileName, options.mimeType)
-  );
-  reply.header(
-    "content-type",
-    SAFE_DOWNLOAD_MIMES.has(options.mimeType) ? options.mimeType : "application/octet-stream"
-  );
+  reply.header("content-type", contentType);
   reply.header("content-length", String(fileStats.size));
   reply.header(
     "content-disposition",

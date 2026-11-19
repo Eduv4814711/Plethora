@@ -1,0 +1,9 @@
+# Default code owners for Plethora ERP
+* @quickbopa/engineering
+
+# Critical infrastructure, payroll, and security paths
+/infra/ @quickbopa/platform
+/.github/ @quickbopa/platform
+/apps/api/prisma/ @quickbopa/platform
+/apps/api/src/whatsapp/ @quickbopa/platform
+/apps/api/src/services/ai/ @quickbopa/platform

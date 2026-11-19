@@ -1,0 +1,56 @@
+version: 0.2
+
+env:
+  variables:
+    NODE_ENV: "production"
+    PUPPETEER_SKIP_DOWNLOAD: "true"
+    NEXT_PUBLIC_API_URL: "https://api.quickbophasecurity.co.za"
+    NEXT_PUBLIC_API_PATH_PREFIX: ""
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 24
+    commands:
+      - npm install --global npm@11.17.0
+      - npm ci
+  pre_build:
+    commands:
+      - echo "Creating pre-deploy RDS snapshot..."
+      - SNAP_ID="plethora-predeploy-$(echo "$CODEBUILD_RESOLVED_SOURCE_VERSION" | cut -c1-8)-$(date +%Y%m%d%H%M%S)"
+      - aws rds create-db-snapshot --db-instance-identifier "$DB_INSTANCE_ID" --db-snapshot-identifier "$SNAP_ID"
+      - echo "Resolving DATABASE_URL from Secrets Manager and running Prisma migrations..."
+      - |
+        DB_JSON="$(aws secretsmanager get-secret-value --secret-id "$DB_SECRET_ARN" --query SecretString --output text)"
+        DB_HOST="$(echo "$DB_JSON" | jq -r '.host')"
+        DB_PORT="$(echo "$DB_JSON" | jq -r '.port // 5432')"
+        DB_NAME="$(echo "$DB_JSON" | jq -r '.dbname // "plethora"')"
+        DB_USER="$(echo "$DB_JSON" | jq -r '.username')"
+        DB_PASS="$(echo "$DB_JSON" | jq -r '.password')"
+        export DATABASE_URL="postgresql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=public&sslmode=require"
+        npm run db:migrate:deploy --workspace=api
+  build:
+    commands:
+      - npm run build --workspace=api
+      - npm run build --workspace=web
+      - npm prune --omit=dev
+      - |
+        BUNDLE_KEY="releases/plethora-${CODEBUILD_RESOLVED_SOURCE_VERSION}.zip"
+        zip -qr /tmp/plethora-release.zip \
+          package.json package-lock.json appspec.yml \
+          apps/api/package.json apps/api/dist apps/api/prisma \
+          apps/web/package.json apps/web/.next apps/web/public apps/web/next.config.js \
+          node_modules infra/ec2/systemd scripts/codedeploy
+        aws s3 cp /tmp/plethora-release.zip "s3://${DEPLOY_BUCKET}/${BUNDLE_KEY}"
+  post_build:
+    commands:
+      - |
+        BUNDLE_KEY="releases/plethora-${CODEBUILD_RESOLVED_SOURCE_VERSION}.zip"
+        DEPLOY_ID="$(aws deploy create-deployment \
+          --application-name "$CODEDEPLOY_APP" \
+          --deployment-group-name "$CODEDEPLOY_GROUP" \
+          --s3-location "bucket=${DEPLOY_BUCKET},key=${BUNDLE_KEY},bundleType=zip" \
+          --query deploymentId --output text)"
+        echo "Started CodeDeploy deployment: $DEPLOY_ID"
+        aws deploy wait deployment-successful --deployment-id "$DEPLOY_ID"
+        curl -fsS "$API_HEALTH_URL"

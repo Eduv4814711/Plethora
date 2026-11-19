@@ -3,7 +3,12 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { canAccessRoute } from "@/lib/permissions";
+import { NAV_ITEMS, canAccessRoute } from "@/lib/permissions";
+import {
+  MODULE_DESCRIPTIONS,
+  MODULE_CATEGORIES,
+  getModuleCategory,
+} from "@/lib/module-presentation";
 import { search, type SearchResults } from "@/lib/api";
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -21,7 +26,7 @@ interface SearchDropdownProps {
 
 interface FlatSearchResult {
   key: string;
-  type: "employee" | "site" | "client" | "task" | "incident" | "invoice";
+  type: "module" | "employee" | "site" | "client" | "task" | "incident" | "invoice";
   category: string;
   title: string;
   subtitle?: string;
@@ -29,6 +34,17 @@ interface FlatSearchResult {
   badgeVariant?: "neutral" | "warning" | "success" | "error";
   href: string;
 }
+
+const EXTRA_SEARCHABLE_PAGES: { href: string; label: string; description: string }[] = [
+  { href: "/overview", label: "Overview & Analytics", description: "Live KPIs, charts, and operational alerts" },
+  { href: "/attendance/exceptions", label: "Attendance Exceptions", description: "Resolve unconfirmed shifts and payroll blockers" },
+  { href: "/attendance/staff", label: "Staff Attendance", description: "Office and administrative staff roll-call" },
+  { href: "/employees/compliance", label: "Workforce Compliance", description: "PSIRA grades, expiring documents, and missing records" },
+  { href: "/payroll/configuration", label: "Payroll Configuration", description: "Pay areas, grade rates, earnings, and deductions" },
+  { href: "/payroll/leave-requests", label: "Payroll Leave Requests", description: "Leave approvals and payroll integration" },
+  { href: "/payroll/billing/invoices", label: "Client Invoices", description: "Billing invoices and payment status" },
+  { href: "/payroll/billing/quotes", label: "Client Quotes", description: "Service quotes for active and prospective clients" },
+];
 
 export function SearchDropdown({ onClose }: SearchDropdownProps) {
   const [query, setQuery] = useState("");
@@ -64,17 +80,82 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
         e.preventDefault();
         inputRef.current?.focus();
         inputRef.current?.select();
-        if (query.trim().length >= 2) setOpen(true);
+        setOpen(true);
       } else if (e.key === "/" && !isInputActive) {
         e.preventDefault();
         inputRef.current?.focus();
         inputRef.current?.select();
-        if (query.trim().length >= 2) setOpen(true);
+        setOpen(true);
       }
     }
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [query]);
+
+  const accessibleModules = useMemo(() => {
+    if (!user) return [];
+    const seen = new Set<string>();
+    const list: { href: string; label: string; description: string; categoryLabel: string }[] = [];
+
+    const addEntry = (href: string, label: string, description?: string) => {
+      if (seen.has(href) || !canAccessRoute(href, user)) return;
+      seen.add(href);
+      const catKey = getModuleCategory(href);
+      list.push({
+        href,
+        label,
+        description: description ?? MODULE_DESCRIPTIONS[href] ?? "System module",
+        categoryLabel: MODULE_CATEGORIES[catKey]?.label ?? "Module",
+      });
+    };
+
+    addEntry("/", "Command Center (Home)", "Daily operations launcher and work queue");
+    for (const item of EXTRA_SEARCHABLE_PAGES) {
+      addEntry(item.href, item.label, item.description);
+    }
+    for (const item of NAV_ITEMS) {
+      if (item.href !== "/") {
+        addEntry(item.href, item.label, MODULE_DESCRIPTIONS[item.href]);
+      }
+    }
+    return list;
+  }, [user]);
+
+  const matchingModules = useMemo<FlatSearchResult[]>(() => {
+    const trimmed = query.trim().toLowerCase();
+    if (!trimmed) {
+      // Show top quick-jump modules when opened with an empty query
+      return accessibleModules.slice(0, 6).map((m) => ({
+        key: `mod-${m.href}`,
+        type: "module",
+        category: "Modules & Pages",
+        title: m.label,
+        subtitle: m.description,
+        badge: m.categoryLabel,
+        badgeVariant: "neutral",
+        href: m.href,
+      }));
+    }
+    return accessibleModules
+      .filter(
+        (m) =>
+          m.label.toLowerCase().includes(trimmed) ||
+          m.description.toLowerCase().includes(trimmed) ||
+          m.categoryLabel.toLowerCase().includes(trimmed) ||
+          m.href.toLowerCase().includes(trimmed)
+      )
+      .slice(0, 6)
+      .map((m) => ({
+        key: `mod-${m.href}`,
+        type: "module",
+        category: "Modules & Pages",
+        title: m.label,
+        subtitle: m.description,
+        badge: m.categoryLabel,
+        badgeVariant: "neutral",
+        href: m.href,
+      }));
+  }, [accessibleModules, query]);
 
   const fetchResults = useCallback(async () => {
     if (!token || debouncedQuery.length < 2) {
@@ -105,8 +186,11 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
   }, [fetchResults]);
 
   useEffect(() => {
-    setOpen(debouncedQuery.length >= 2);
-  }, [debouncedQuery]);
+    if (query.trim().length >= 1) {
+      setOpen(true);
+      setFocusedIndex(0);
+    }
+  }, [query]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -119,8 +203,8 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
   }, []);
 
   const flatItems = useMemo<FlatSearchResult[]>(() => {
-    if (!results) return [];
-    const items: FlatSearchResult[] = [];
+    const items: FlatSearchResult[] = [...matchingModules];
+    if (!results) return items;
 
     if (showEmployees && results.employees?.length) {
       for (const emp of results.employees) {
@@ -212,7 +296,7 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
     }
 
     return items;
-  }, [results, showEmployees, showSites, showClients, showInvoices, showTasks, showIncidents, debouncedQuery]);
+  }, [matchingModules, results, showEmployees, showSites, showClients, showInvoices, showTasks, showIncidents, debouncedQuery]);
 
   const totalItems = flatItems.length;
 
@@ -282,10 +366,10 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
         <input
           ref={inputRef}
           type="search"
-          placeholder="Search team, sites, clients, tasks..."
+          placeholder="Search modules, team, sites, clients..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => debouncedQuery.length >= 2 && setOpen(true)}
+          onFocus={() => setOpen(true)}
           onKeyDown={handleKeyDown}
           className="peer h-9 w-[min(17rem,calc(100vw-10rem))] min-w-0 max-w-[calc(100vw-2rem)] rounded-security border border-white/10 bg-white/[0.08] py-1.5 pl-9 pr-9 text-xs sm:text-[13px] text-white outline-none transition-[background-color,border-color,width] duration-200 placeholder:text-white/55 hover:border-white/20 hover:bg-white/[0.12] focus:border-security-amber-500 focus:bg-white focus:text-security-navy-900 focus:placeholder:text-security-navy-400 sm:w-64 sm:max-w-none lg:focus:w-80 [&::-webkit-search-cancel-button]:appearance-none"
           aria-label="Global search across modules"
@@ -314,61 +398,64 @@ export function SearchDropdown({ onClose }: SearchDropdownProps) {
           className="absolute left-0 right-0 top-full z-50 mt-2 max-h-96 min-w-[20rem] animate-slide-up overflow-y-auto rounded-security-lg border border-security-navy-100 bg-white py-1 shadow-security-elevated motion-reduce:animate-none"
           role="listbox"
         >
-          {loading ? (
-            <div className="flex items-center gap-2 px-4 py-3 text-sm text-security-navy-600">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-security-amber-500 border-t-transparent" />
-              Searching records...
-            </div>
-          ) : totalItems === 0 ? (
+          {totalItems === 0 && !loading ? (
             <div className="px-4 py-4 text-center text-sm text-security-navy-500">
-              No matching records found for &ldquo;{debouncedQuery}&rdquo;
+              No matching modules or records found for &ldquo;{query.trim()}&rdquo;
             </div>
           ) : (
-            groupedItems.map((group) => (
-              <div key={group.category}>
-                <div className="bg-security-navy-50 px-4 py-1.5 font-mono text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-security-navy-500">
-                  {group.category}
-                </div>
-                {group.items.map(({ item, globalIndex }) => {
-                  const isSelected = focusedIndex === globalIndex;
-                  return (
-                    <button
-                      key={item.key}
-                      type="button"
-                      role="option"
-                      data-index={globalIndex}
-                      aria-selected={isSelected}
-                      className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
-                        isSelected ? "bg-security-navy-50" : "hover:bg-security-navy-50"
-                      }`}
-                      onClick={() => handleSelectItem(item)}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium text-security-navy-900">{item.title}</p>
-                        {item.subtitle && (
-                          <p className="truncate text-xs text-security-navy-500">{item.subtitle}</p>
+            <>
+              {groupedItems.map((group) => (
+                <div key={group.category}>
+                  <div className="bg-security-navy-50 px-4 py-1.5 font-mono text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-security-navy-500">
+                    {group.category}
+                  </div>
+                  {group.items.map(({ item, globalIndex }) => {
+                    const isSelected = focusedIndex === globalIndex;
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        role="option"
+                        data-index={globalIndex}
+                        aria-selected={isSelected}
+                        className={`flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
+                          isSelected ? "bg-security-navy-50" : "hover:bg-security-navy-50"
+                        }`}
+                        onClick={() => handleSelectItem(item)}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium text-security-navy-900">{item.title}</p>
+                          {item.subtitle && (
+                            <p className="truncate text-xs text-security-navy-500">{item.subtitle}</p>
+                          )}
+                        </div>
+                        {item.badge && (
+                          <span
+                            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                              item.badgeVariant === "error"
+                                ? "bg-red-50 text-red-700 border border-red-200"
+                                : item.badgeVariant === "success"
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : item.badgeVariant === "warning"
+                                ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                : "bg-security-navy-100 text-security-navy-700"
+                            }`}
+                          >
+                            {item.badge}
+                          </span>
                         )}
-                      </div>
-                      {item.badge && (
-                        <span
-                          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-                            item.badgeVariant === "error"
-                              ? "bg-red-50 text-red-700 border border-red-200"
-                              : item.badgeVariant === "success"
-                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                              : item.badgeVariant === "warning"
-                              ? "bg-amber-50 text-amber-700 border border-amber-200"
-                              : "bg-security-navy-100 text-security-navy-700"
-                          }`}
-                        >
-                          {item.badge}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            ))
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+              {loading && (
+                <div className="flex items-center gap-2 border-t border-security-navy-50 px-4 py-2.5 text-xs text-security-navy-500">
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-security-amber-500 border-t-transparent" />
+                  Searching records...
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

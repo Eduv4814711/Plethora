@@ -50,6 +50,14 @@ function writeList(key: string, hrefs: string[]) {
   }
 }
 
+function clearList(key: string) {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Ignore storage removal errors
+  }
+}
+
 export interface DashboardModuleSelection {
   /** Modules on the launcher, pinned ones first, capped at DASHBOARD_TILE_LIMIT. */
   shown: string[];
@@ -59,11 +67,14 @@ export interface DashboardModuleSelection {
   pinned: string[];
   /** True once stored preferences have been read (server render shows defaults). */
   ready: boolean;
+  /** True when the user has customized visible tiles or pinned favourites. */
+  isCustomized: boolean;
   atLimit: boolean;
   pinsAtLimit: boolean;
   add: (href: string) => void;
   remove: (href: string) => void;
   togglePin: (href: string) => void;
+  reset: () => void;
 }
 
 /**
@@ -166,15 +177,26 @@ export function useDashboardModules(userId: string, available: string[]): Dashbo
     [pinned, members, persistPins]
   );
 
+  const reset = useCallback(() => {
+    setStoredShown(null);
+    setStoredPins(null);
+    clearList(shownKey(userId));
+    clearList(pinnedKey(userId));
+  }, [userId]);
+
+  const isCustomized = storedShown !== null || (storedPins !== null && storedPins.length > 0);
+
   return {
     shown,
     hidden,
     pinned,
     ready,
+    isCustomized,
     atLimit: members.length >= DASHBOARD_TILE_LIMIT,
     pinsAtLimit: pinned.length >= PINNED_LIMIT,
     add,
     remove,
     togglePin,
+    reset,
   };
 }

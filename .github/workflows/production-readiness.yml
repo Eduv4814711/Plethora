@@ -101,3 +101,29 @@ jobs:
           done
           cat api-startup.log
           exit 1
+
+  cdk-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: infra/aws-cdk/package-lock.json
+
+      - name: Install CDK dependencies
+        working-directory: infra/aws-cdk
+        run: npm ci || npm install
+
+      - name: Run CDK unit tests
+        working-directory: infra/aws-cdk
+        run: npm test
+
+      - name: Synthesize AWS CloudFormation stacks
+        working-directory: infra/aws-cdk
+        run: npx cdk synth --quiet

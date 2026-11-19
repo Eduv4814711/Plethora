@@ -7,9 +7,11 @@ const configuredUploadsRoot =
   process.env.UPLOADS_DIR?.trim() ||
   process.env.RAILWAY_VOLUME_MOUNT_PATH?.trim();
 
-if (process.env.NODE_ENV === "production" && !configuredUploadsRoot) {
+const storageDriver = process.env.STORAGE_DRIVER?.trim().toLowerCase() || "local";
+
+if (process.env.NODE_ENV === "production" && storageDriver !== "s3" && !configuredUploadsRoot) {
   throw new Error(
-    "Persistent uploads are required in production. Attach a Railway Volume or set UPLOADS_DIR."
+    "Persistent uploads are required in production. Set STORAGE_DRIVER=s3 with AWS_S3_BUCKET, attach a Railway Volume, or set UPLOADS_DIR."
   );
 }
 
