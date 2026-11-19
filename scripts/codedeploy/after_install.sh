@@ -9,6 +9,12 @@ fi
 mv /opt/plethora/release /opt/plethora/current
 chown -R plethora:plethora /opt/plethora/current
 
+# Ensure Amazon RDS Global CA Bundle is present for verified PostgreSQL TLS
+if [[ ! -s /etc/ssl/certs/rds-global-bundle.pem ]]; then
+  curl -fsSL https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o /etc/ssl/certs/rds-global-bundle.pem
+  chmod 0644 /etc/ssl/certs/rds-global-bundle.pem
+fi
+
 # Install systemd unit files from the release bundle
 cp /opt/plethora/current/infra/ec2/systemd/plethora-api.service /etc/systemd/system/plethora-api.service
 cp /opt/plethora/current/infra/ec2/systemd/plethora-web.service /etc/systemd/system/plethora-web.service
