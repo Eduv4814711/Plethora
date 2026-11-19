@@ -23,7 +23,7 @@ phases:
     commands:
       - npm run db:generate
       - npm run db:migrate:deploy
-      - npm run test --workspace=api
+      - env -u DATABASE_URL npm run test --workspace=api
       - npm run db:audit --workspace=api
       - npm run test --workspace=web
       - NODE_ENV=production npm run build --workspace=api
