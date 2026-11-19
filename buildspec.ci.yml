@@ -6,7 +6,6 @@ env:
     NODE_ENV: "test"
     PUPPETEER_SKIP_DOWNLOAD: "true"
     DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/plethora_test"
-    TEST_DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/plethora_test"
     NEXT_PUBLIC_API_URL: "http://localhost:3001"
 
 phases:
