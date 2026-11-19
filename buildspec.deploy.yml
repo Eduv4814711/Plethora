@@ -2,7 +2,6 @@ version: 0.2
 
 env:
   variables:
-    NODE_ENV: "production"
     PUPPETEER_SKIP_DOWNLOAD: "true"
     NEXT_PUBLIC_API_URL: "https://api.quickbophasecurity.co.za"
     NEXT_PUBLIC_API_PATH_PREFIX: ""
@@ -13,7 +12,7 @@ phases:
       nodejs: 24
     commands:
       - npm install --global npm@11.17.0
-      - npm ci
+      - npm ci --include=dev
   pre_build:
     commands:
       - echo "Creating pre-deploy RDS snapshot..."
@@ -32,7 +31,7 @@ phases:
   build:
     commands:
       - npm run build --workspace=api
-      - npm run build --workspace=web
+      - NODE_ENV=production npm run build --workspace=web
       - npm prune --omit=dev
       - |
         BUNDLE_KEY="releases/plethora-${CODEBUILD_RESOLVED_SOURCE_VERSION}.zip"
