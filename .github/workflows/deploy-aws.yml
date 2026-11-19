@@ -1,12 +1,6 @@
 name: Deploy to AWS (af-south-1)
 
 on:
-  workflow_run:
-    workflows: ["Production readiness"]
-    types:
-      - completed
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       confirm_deploy:

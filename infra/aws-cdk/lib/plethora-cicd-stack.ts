@@ -58,8 +58,9 @@ export class PlethoraCicdStack extends cdk.Stack {
     const githubSource = codebuild.Source.gitHub({
       owner: props.githubOwner,
       repo: props.githubRepo,
-      webhook: props.enableCodeBuildWebhook ?? false,
-      ...(props.enableCodeBuildWebhook
+      webhook: props.enableCodeBuildWebhook ?? true,
+      reportBuildStatus: true,
+      ...(props.enableCodeBuildWebhook !== false
         ? {
             webhookFilters: [
               codebuild.FilterGroup.inEventOf(
@@ -88,7 +89,15 @@ export class PlethoraCicdStack extends cdk.Stack {
       owner: props.githubOwner,
       repo: props.githubRepo,
       branchOrRef: "main",
-      webhook: false,
+      webhook: props.enableCodeBuildWebhook ?? true,
+      reportBuildStatus: true,
+      ...(props.enableCodeBuildWebhook !== false
+        ? {
+            webhookFilters: [
+              codebuild.FilterGroup.inEventOf(codebuild.EventAction.PUSH).andBranchIs("main"),
+            ],
+          }
+        : {}),
     });
 
     const deployProject = new codebuild.Project(this, "PlethoraMainDeployProject", {

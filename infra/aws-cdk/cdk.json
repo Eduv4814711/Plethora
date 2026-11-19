@@ -5,6 +5,7 @@
     "exclude": ["README.md", "cdk*.json", "**/*.d.ts", "**/*.js", "tsconfig.json", "package*.json", "node_modules", "dist"]
   },
   "context": {
+    "acmCertificateArn": "arn:aws:acm:af-south-1:779391599178:certificate/4f00faab-5f30-428c-9472-128269bb8fc2",
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
     "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/core:target-partitions": ["aws"]
