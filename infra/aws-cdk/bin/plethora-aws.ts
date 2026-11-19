@@ -12,7 +12,7 @@ const env: cdk.Environment = {
 
 const githubOwner = app.node.tryGetContext("githubOwner") ?? "Eduv4814711";
 const githubRepo = app.node.tryGetContext("githubRepo") ?? "Plethora";
-const enableCodeBuildWebhook = app.node.tryGetContext("enableCodeBuildWebhook") === "true";
+const enableCodeBuildWebhook = app.node.tryGetContext("enableCodeBuildWebhook") !== "false";
 const acmCertificateArn = app.node.tryGetContext("acmCertificateArn") as string | undefined;
 const apiDomain = app.node.tryGetContext("apiDomain") ?? "api.quickbophasecurity.co.za";
 const webDomain = app.node.tryGetContext("webDomain") ?? "plethora.quickbophasecurity.co.za";
