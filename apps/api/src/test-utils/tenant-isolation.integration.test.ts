@@ -173,7 +173,7 @@ describe.runIf(dbReady)("tenant isolation (integration)", () => {
         method: "PUT",
         url: `/attendance/${fx.tenantB.attendanceId}`,
         headers: { ...authHeader(fx.tenantA.accessToken), "content-type": "application/json" },
-        payload: { clockIn: "2026-08-02T08:00:00.000Z" },
+        payload: { clockIn: "2026-08-02T08:00:00.000Z", reason: "Cross-tenant test adjustment" },
       });
       expect(res.statusCode).toBe(404);
     });

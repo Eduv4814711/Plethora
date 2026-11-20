@@ -225,6 +225,8 @@ describe.runIf(dbReady)("external payroll export module (integration)", () => {
   }, 60_000);
 
   afterAll(async () => {
+    await prisma.payrollExportBatch.deleteMany({ where: { companyId: { in: companyIds } } });
+    await prisma.payrollExportProfile.deleteMany({ where: { companyId: { in: companyIds } } });
     await prisma.company.deleteMany({ where: { id: { in: companyIds } } });
     await app?.close();
   }, 30_000);

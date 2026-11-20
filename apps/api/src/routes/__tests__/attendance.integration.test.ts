@@ -191,7 +191,10 @@ describe.runIf(dbReady)("attendance routes (integration)", () => {
       method: "PUT",
       url: `/attendance/${attendance.id}`,
       headers: { ...authHeader(accessToken), "content-type": "application/json" },
-      payload: { clockIn: new Date(shift.startTime.getTime() + 5 * 60 * 1000).toISOString() },
+      payload: {
+        clockIn: new Date(shift.startTime.getTime() + 5 * 60 * 1000).toISOString(),
+        reason: "Manual clock adjustment",
+      },
     });
 
     expect(res.statusCode).toBe(200);
@@ -211,7 +214,10 @@ describe.runIf(dbReady)("attendance routes (integration)", () => {
       method: "PUT",
       url: `/attendance/${attendance.id}`,
       headers: { ...authHeader(accessToken), "content-type": "application/json" },
-      payload: { clockOut: new Date(shift.endTime).toISOString() },
+      payload: {
+        clockOut: new Date(shift.endTime).toISOString(),
+        reason: "Manual clock adjustment",
+      },
     });
 
     expect(res.statusCode).toBe(400);
@@ -230,7 +236,11 @@ describe.runIf(dbReady)("attendance routes (integration)", () => {
       method: "PUT",
       url: `/attendance/${attendance.id}`,
       headers: { ...authHeader(accessToken), "content-type": "application/json" },
-      payload: { clockIn: clockIn.toISOString(), clockOut: clockOut.toISOString() },
+      payload: {
+        clockIn: clockIn.toISOString(),
+        clockOut: clockOut.toISOString(),
+        reason: "Manual clock adjustment",
+      },
     });
 
     expect(res.statusCode).toBe(200);
