@@ -23,6 +23,7 @@ export function ControllerTodayWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [date, setDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [shiftFilter, setShiftFilter] = useState<"all" | "day" | "night">("all");
+  const [statusChip, setStatusChip] = useState<"all" | "not_in" | "late_alert" | "on_duty" | "done">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [collapsedSites, setCollapsedSites] = useState<Record<string, boolean>>({});
 
@@ -115,8 +116,8 @@ export function ControllerTodayWorkspace({
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="mt-3.5">
+        {/* Search Bar & Quick Status Filter Chips */}
+        <div className="mt-3.5 space-y-2.5">
           <input
             type="search"
             value={searchQuery}
@@ -124,6 +125,34 @@ export function ControllerTodayWorkspace({
             placeholder="Search guard name, site name, or employee ID..."
             className="input-modern w-full min-h-10 text-xs"
           />
+          <div className="flex flex-nowrap overflow-x-auto gap-1.5 pb-0.5" role="group" aria-label="Filter guards by duty status">
+            {(
+              [
+                { id: "all", label: "All Guards" },
+                { id: "not_in", label: "Not Clocked In" },
+                { id: "late_alert", label: "Late / Alerts" },
+                { id: "on_duty", label: "On Duty Now" },
+                { id: "done", label: "Completed" },
+              ] as const
+            ).map((chip) => {
+              const active = statusChip === chip.id;
+              return (
+                <button
+                  key={chip.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setStatusChip(chip.id)}
+                  className={`touch-target shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    active
+                      ? "bg-security-navy-900 text-white dark:bg-white dark:text-security-navy-950"
+                      : "bg-security-navy-100 text-security-navy-700 hover:bg-security-navy-200 dark:bg-security-navy-800 dark:text-security-navy-300"
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -215,6 +244,21 @@ export function ControllerTodayWorkspace({
             {/* Sites within this Shift Window */}
             <div className="space-y-4">
               {shiftWindow.sites.map((site) => {
+                const visibleGuards = site.guards.filter((g) => {
+                  if (statusChip === "all") return true;
+                  if (statusChip === "not_in") return !g.clockInTime && g.status !== "absent";
+                  if (statusChip === "on_duty") return Boolean(g.clockInTime && !g.clockOutTime);
+                  if (statusChip === "done") return Boolean(g.clockInTime && g.clockOutTime);
+                  return Boolean(
+                    g.late ||
+                      g.exceptionDescription ||
+                      g.status === "missing_clock_in" ||
+                      g.status === "missing_clock_out" ||
+                      g.status === "absent" ||
+                      g.status === "requires_review"
+                  );
+                });
+                if (visibleGuards.length === 0) return null;
                 const isCollapsed = collapsedSites[site.siteId] ?? false;
                 return (
                   <div
@@ -266,7 +310,7 @@ export function ControllerTodayWorkspace({
                     {/* Guards in Site */}
                     {!isCollapsed && (
                       <div className="p-3 space-y-2">
-                        {site.guards.map((guard) => (
+                        {visibleGuards.map((guard) => (
                           <ControllerGuardRow
                             key={guard.shiftId}
                             guard={guard}

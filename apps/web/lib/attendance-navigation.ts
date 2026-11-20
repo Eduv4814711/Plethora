@@ -68,11 +68,12 @@ export function attendanceOverviewHref(state: AttendanceRouteState): string {
 }
 
 /** Which population / workflow the attendance screen is showing: controller today workspace, pay-period timesheets (sites), or office staff. */
-export type AttendanceView = "today" | "sites" | "staff";
+export type AttendanceView = "today" | "attention" | "sites" | "staff";
 
 export function parseAttendanceView(value: string | null | undefined): AttendanceView {
   if (value === "staff") return "staff";
   if (value === "sites") return "sites";
+  if (value === "attention") return "attention";
   return "today";
 }
 

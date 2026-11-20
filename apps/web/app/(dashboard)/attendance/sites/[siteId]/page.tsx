@@ -8,7 +8,7 @@ import { format, isValid, parseISO } from "date-fns";
 import { useAuth } from "@/lib/auth-context";
 import { authFetch, fetchCurrentPayPeriod } from "@/lib/api";
 import type { AttendanceShiftTypeFilter } from "@/lib/roster-api";
-import { attendanceOverviewHref, attendanceSiteHref } from "@/lib/attendance-navigation";
+import { attendanceSiteHref } from "@/lib/attendance-navigation";
 import { SiteTimesheetsSection } from "../../SiteTimesheetsSection";
 
 const SHIFT_OPTIONS: Array<{ value: AttendanceShiftTypeFilter; label: string }> = [
@@ -103,10 +103,10 @@ export default function AttendanceSitePage() {
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <Link
-              href={returnTo ?? attendanceOverviewHref(routeState)}
+              href={returnTo ?? `/attendance?view=sites&start=${start}&end=${end}&shiftType=${shiftType}`}
               className="inline-flex min-h-11 items-center text-sm font-medium text-security-navy-700 hover:underline dark:text-security-navy-300"
             >
-              {returnTo ? "← Back to attendance issues" : "← Back to attendance overview"}
+              {returnTo ? "← Back to attendance issues" : "← Back to Monthly Sign-Off"}
             </Link>
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <h1 className="text-xl font-semibold text-security-navy-900 dark:text-security-navy-100">{siteName}</h1>

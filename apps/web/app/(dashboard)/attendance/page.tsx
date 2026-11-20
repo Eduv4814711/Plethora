@@ -6,9 +6,11 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { clsx } from "clsx";
 import { useAuth } from "@/lib/auth-context";
+import { hasCapability } from "@/lib/permissions";
 import { fetchCurrentPayPeriod, fetchPayPeriods, type PayPeriodOption } from "@/lib/api";
 import { PayPeriodSelect } from "@/components/pay-period-select";
 import { AttendanceCaptureDashboard } from "@/components/attendance-capture-dashboard";
+import { AttendanceNeedsAttentionPanel } from "@/components/attendance-needs-attention-panel";
 import { ControllerTodayWorkspace } from "@/components/controller-today-workspace";
 import { StaffRollCall } from "@/components/staff-rollcall";
 import { ShiftRollCallModal } from "@/components/shift-rollcall-modal";
@@ -43,7 +45,7 @@ function emptyDateRange() {
 }
 
 export default function AttendancePage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -112,6 +114,7 @@ export default function AttendancePage() {
     params.set("shiftType", shiftType);
     if (view === "staff") params.set("view", "staff");
     else if (view === "sites") params.set("view", "sites");
+    else if (view === "attention") params.set("view", "attention");
     else params.delete("view");
     if (siteQuery.trim()) params.set("q", siteQuery.trim());
     else params.delete("q");
@@ -197,10 +200,12 @@ export default function AttendancePage() {
           <h1 className="page-title mt-1">Attendance</h1>
           <p className="mt-1 max-w-2xl text-sm text-security-navy-600 dark:text-security-navy-400">
             {view === "today"
-              ? "Live control-room workspace: guards expected to work today, attendance status, and quick capture."
+              ? "Live control room: track who clocked in today, mark absences, or swap a reliever."
+              : view === "attention"
+              ? "Quickly resolve open clock-in issues, no-shows, and sites waiting for confirmation."
               : view === "staff"
               ? "Mark who was at the office today. Salaried staff are recorded for leave and reporting only."
-              : "Pay-period review and approvals: verify site timesheets before locking for payroll."}
+              : "Review, confirm, and approve site timesheets for Sage payroll export."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0 self-start">
@@ -216,59 +221,77 @@ export default function AttendancePage() {
             href={`/attendance/exceptions?${exceptionParams}`}
             className="btn-secondary min-h-11 text-sm"
           >
-            Review attendance issues
+            Full exception log
           </Link>
         </div>
       </header>
 
-      {/* Operational Mode Tabs: Today (Daily Control Room) vs Timesheets/History vs Staff */}
+      {/* Primary Attendance Tabs: Live Today | Needs Attention | Monthly Sign-Off | Office Staff */}
       <div
-        className="flex flex-wrap rounded-lg border border-security-navy-100 bg-security-navy-50 p-1 dark:border-security-navy-700 dark:bg-security-navy-900"
-        role="group"
-        aria-label="Attendance view mode"
+        className="flex flex-nowrap overflow-x-auto border-b border-security-navy-200 dark:border-security-navy-800 gap-1"
+        role="tablist"
+        aria-label="Attendance views"
       >
         <button
           type="button"
+          role="tab"
+          aria-selected={view === "today"}
           onClick={() => setView("today")}
-          aria-pressed={view === "today"}
           className={clsx(
-            "min-h-11 rounded-md px-4 text-sm font-semibold flex items-center gap-2",
+            "shrink-0 min-h-11 px-4 text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors",
             view === "today"
-              ? "bg-security-navy-800 text-white shadow-security-card dark:bg-security-navy-600"
-              : "text-security-navy-700 hover:bg-white dark:text-security-navy-300 dark:hover:bg-security-navy-800"
+              ? "border-[var(--accent-primary)] text-security-navy-900 dark:text-white"
+              : "border-transparent text-security-navy-500 hover:text-security-navy-800 dark:text-security-navy-400 dark:hover:text-white"
           )}
         >
-          <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
-          Today&apos;s Operations
+          <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+          Live Today
         </button>
 
         <button
           type="button"
-          onClick={() => setView("sites")}
-          aria-pressed={view === "sites"}
+          role="tab"
+          aria-selected={view === "attention"}
+          onClick={() => setView("attention")}
           className={clsx(
-            "min-h-11 rounded-md px-4 text-sm font-medium",
-            view === "sites"
-              ? "bg-security-navy-800 text-white shadow-security-card dark:bg-security-navy-600"
-              : "text-security-navy-700 hover:bg-white dark:text-security-navy-300 dark:hover:bg-security-navy-800"
+            "shrink-0 min-h-11 px-4 text-sm font-semibold border-b-2 transition-colors",
+            view === "attention"
+              ? "border-[var(--accent-primary)] text-security-navy-900 dark:text-white"
+              : "border-transparent text-security-navy-500 hover:text-security-navy-800 dark:text-security-navy-400 dark:hover:text-white"
           )}
         >
-          Pay-Period Timesheets & History
+          Needs Attention
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === "sites"}
+          onClick={() => setView("sites")}
+          className={clsx(
+            "shrink-0 min-h-11 px-4 text-sm font-semibold border-b-2 transition-colors",
+            view === "sites"
+              ? "border-[var(--accent-primary)] text-security-navy-900 dark:text-white"
+              : "border-transparent text-security-navy-500 hover:text-security-navy-800 dark:text-security-navy-400 dark:hover:text-white"
+          )}
+        >
+          Monthly Sign-Off
         </button>
 
         {officeStaffCount !== 0 && (
           <button
             type="button"
+            role="tab"
+            aria-selected={view === "staff"}
             onClick={() => setView("staff")}
-            aria-pressed={view === "staff"}
             className={clsx(
-              "min-h-11 rounded-md px-4 text-sm font-medium",
+              "shrink-0 min-h-11 px-4 text-sm font-semibold border-b-2 transition-colors",
               view === "staff"
-                ? "bg-security-navy-800 text-white shadow-security-card dark:bg-security-navy-600"
-                : "text-security-navy-700 hover:bg-white dark:text-security-navy-300 dark:hover:bg-security-navy-800"
+                ? "border-[var(--accent-primary)] text-security-navy-900 dark:text-white"
+                : "border-transparent text-security-navy-500 hover:text-security-navy-800 dark:text-security-navy-400 dark:hover:text-white"
             )}
           >
-            Office Staff (Daily)
+            Office Staff
           </button>
         )}
       </div>
@@ -277,6 +300,16 @@ export default function AttendancePage() {
         <ControllerTodayWorkspace
           token={token}
           onOpenHistory={() => setView("sites")}
+        />
+      )}
+
+      {view === "attention" && token && (
+        <AttendanceNeedsAttentionPanel
+          token={token}
+          periodStart={format(dateRange.start, "yyyy-MM-dd")}
+          periodEnd={format(dateRange.end, "yyyy-MM-dd")}
+          shiftType={shiftType}
+          canApprove={Boolean(user && hasCapability(user, "/attendance", "approve"))}
         />
       )}
 

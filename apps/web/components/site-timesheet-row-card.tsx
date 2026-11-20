@@ -11,6 +11,8 @@ import {
   isRowPendingReview,
   resolveDutyOffFromRow,
   resolveDutyOnFromRow,
+  rowRequiresObInUi,
+  type ObBookModeUi,
 } from "@/lib/site-timesheet-utils";
 import {
   combineClockOut,
@@ -44,6 +46,7 @@ type SiteTimesheetRowCardProps = {
   onApprove: (row: SiteTimesheetRow) => void;
   onReopen: (row: SiteTimesheetRow) => void;
   focused?: boolean;
+  obBookMode?: ObBookModeUi;
 };
 
 export function SiteTimesheetRowCard({
@@ -62,7 +65,9 @@ export function SiteTimesheetRowCard({
   onApprove,
   onReopen,
   focused = false,
+  obBookMode = "REQUIRED",
 }: SiteTimesheetRowCardProps) {
+  const needsOb = rowRequiresObInUi(row, obBookMode);
   const guardChanged = Boolean(row.actualGuardId && row.actualGuardId !== row.plannedGuardId);
   // Open the editor straight away when the row already departs from the roster — there is
   // nothing to collapse behind a summary in that case.
@@ -335,7 +340,45 @@ export function SiteTimesheetRowCard({
         second field used to stay disabled until the first had been saved to the server,
         which made every row a three-step round trip.
       */}
-      <div className="grid gap-3 sm:grid-cols-2">
+      {!needsOb && obBookMode !== "REQUIRED" ? (
+        <details className="rounded-lg border border-security-navy-100 bg-security-navy-50/40 px-3 py-2 text-xs dark:border-security-navy-800">
+          <summary className="cursor-pointer font-medium text-security-navy-700 dark:text-security-navy-300">
+            {obBookMode === "OPTIONAL_WHEN_DIGITAL" && row.clockIn && row.clockOut
+              ? "Verified digitally · OB note optional"
+              : "Add OB reference (optional)"}
+          </summary>
+          <div className="mt-2 grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
+                Duty ON OB (optional)
+              </label>
+              <input
+                value={dutyOnObNumber}
+                onChange={(e) => onDutyOnObNumberChange(e.target.value)}
+                onBlur={() => onDutyOnObNumberSave?.()}
+                disabled={saving || locked || row.approvalStatus === "approved" || dutyOnLocked}
+                className="input-modern mt-1 w-full"
+                placeholder="Optional"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
+                Duty OFF OB (optional)
+              </label>
+              <input
+                ref={dutyOffRef}
+                value={dutyOffObNumber}
+                onChange={(e) => onDutyOffObNumberChange(e.target.value)}
+                onBlur={() => onDutyOffObNumberSave?.()}
+                disabled={saving || locked || row.approvalStatus === "approved" || dutyOffLocked}
+                className="input-modern mt-1 w-full"
+                placeholder="Optional"
+              />
+            </div>
+          </div>
+        </details>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label className="text-[10px] font-semibold uppercase tracking-wider text-security-navy-500">
             Duty ON OB
@@ -406,6 +449,7 @@ export function SiteTimesheetRowCard({
           )}
         </div>
       </div>
+      )}
 
       {!locked && pendingReview && (
         <button

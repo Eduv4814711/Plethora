@@ -222,21 +222,14 @@ export const siteTimesheetRowCreateSchema = z.object({
     "training",
     "off",
   ]),
-  dutyOnObNumber: z.string().trim().min(1, "Duty ON OB number is required").max(80).optional(),
+  dutyOnObNumber: z.string().trim().max(80).optional(),
   dutyOffObNumber: z.string().trim().max(80).nullable().optional(),
   /** @deprecated Use dutyOnObNumber */
-  occurrenceBookNumber: z.string().trim().min(1).max(80).optional(),
+  occurrenceBookNumber: z.string().trim().max(80).optional(),
   comments: z.string().nullable().optional(),
   hoursWorked: timesheetHoursSchema.nullable().optional(),
   overtimeHours: timesheetHoursSchema.nullable().optional(),
 }).superRefine((data, ctx) => {
-  if (!data.dutyOnObNumber?.trim() && !data.occurrenceBookNumber?.trim()) {
-    ctx.addIssue({
-      code: "custom",
-      message: "Duty ON OB number is required",
-      path: ["dutyOnObNumber"],
-    });
-  }
   if (
     data.hoursWorked != null &&
     data.overtimeHours != null &&
@@ -280,4 +273,94 @@ export const continuityPauseSchema = z.object({
 
 export const confirmReplacementSchema = z.object({
   employeeId: z.string().min(1),
+});
+
+export const smartFrameworkEnum = z.enum([
+  "4on4off_12h",
+  "5on2off_day",
+  "4on2off_swing",
+  "6on3off_mixed",
+  "continental_223",
+  "24x7_reliever_pool",
+  "event_ad_hoc",
+]);
+
+export const siteRosterSetupSchema = z.object({
+  operatingFramework: smartFrameworkEnum.optional(),
+  obBookMode: z.enum(["REQUIRED", "OPTIONAL_WHEN_DIGITAL", "OPTIONAL"]).nullable().optional(),
+  psiraEnforcementMode: z.enum(["BLOCK", "WARN", "OFF"]).nullable().optional(),
+  mealIntervalPaid: z.boolean().optional(),
+  mealIntervalMinutes: z.number().int().min(0).max(180).optional(),
+  dayGuardsRequired: z.number().int().min(0).max(50).optional(),
+  nightGuardsRequired: z.number().int().min(0).max(50).optional(),
+  dayStartTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  dayEndTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  nightStartTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  nightEndTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  dayShiftDays: z.array(z.number().int().min(0).max(6)).optional(),
+  nightShiftDays: z.array(z.number().int().min(0).max(6)).optional(),
+  assignedGuardIds: z.array(z.string().min(1)).optional(),
+  postUpdates: z
+    .array(
+      z.object({
+        id: z.string().cuid().optional(),
+        name: z.string().trim().min(1).max(120),
+        shiftType: z.enum(["day", "night"]).default("day"),
+        requiredPsiraGrade: z.enum(["E", "D", "C", "B", "A"]).nullable().optional(),
+        requiresFirearm: z.boolean().optional(),
+        requiredGender: z.enum(["M", "F", "any"]).nullable().optional(),
+      }),
+    )
+    .optional(),
+});
+
+export const smartGenerateSchema = z.object({
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  frameworkId: smartFrameworkEnum.optional(),
+  guardIds: z.array(z.string().min(1)).optional(),
+  includeRelieverPool: z.boolean().optional().default(true),
+  allowOvertime: z.boolean().optional().default(false),
+  maxWeeklyOvertimeHours: z.number().min(0).max(20).optional().default(10),
+  preferDedicatedDayNight: z.boolean().optional().default(true),
+});
+
+export const smartApplyAssignmentSchema = z.object({
+  guardId: z.string().min(1),
+  dateKey: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  shiftType: z.enum(["day", "night"]),
+  shiftCode: z.enum(["D", "N", "R"]),
+  postId: z.string().nullable().optional(),
+});
+
+export const smartApplySchema = z.object({
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  frameworkId: smartFrameworkEnum.optional(),
+  publishImmediately: z.boolean().optional().default(true),
+  assignments: z.array(smartApplyAssignmentSchema),
+});
+
+export const quickEditRosterCellSchema = z.object({
+  rosterDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  guardId: z.string().min(1),
+  replacementGuardId: z.string().min(1).optional(),
+  shiftCode: z.enum(["D", "N", "O", "R"]),
+  sitePostId: z.string().nullable().optional(),
+  reason: z.string().trim().max(300).optional(),
+  syncPublishedShift: z.boolean().optional().default(true),
+});
+
+export const smartReplacementsQuerySchema = z.object({
+  workDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  shiftType: z.enum(["day", "night"]).default("day"),
+  postId: z.string().optional(),
+  excludeEmployeeId: z.string().optional(),
+});
+
+export const autoBuildUnrosteredSchema = z.object({
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  dryRun: z.boolean().optional().default(false),
+  siteIds: z.array(z.string().min(1)).optional(),
 });

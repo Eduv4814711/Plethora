@@ -9,6 +9,8 @@ import {
   isRowFullyReviewed,
   resolveDutyOffFromRow,
   resolveDutyOnFromRow,
+  rowRequiresObInUi,
+  type ObBookModeUi,
 } from "@/lib/site-timesheet-utils";
 import {
   combineClockOut,
@@ -50,6 +52,7 @@ export function SiteTimesheetTable({
   onApprove,
   onReopen,
   focusedRowId,
+  obBookMode = "REQUIRED",
 }: {
   rows: SiteTimesheetRow[];
   guardOptions: GuardPickerOption[];
@@ -67,11 +70,17 @@ export function SiteTimesheetTable({
   onApprove: (row: SiteTimesheetRow) => void;
   onReopen: (row: SiteTimesheetRow) => void;
   focusedRowId?: string;
+  obBookMode?: ObBookModeUi;
 }) {
   return (
     <div className="hidden xl:block">
-      <div className="overflow-x-auto rounded-lg border border-security-navy-100 dark:border-security-navy-700">
-        <table className="site-timesheet-table w-full table-fixed text-left text-[11px]">
+      <div
+        role="region"
+        tabIndex={0}
+        aria-label="Site attendance entries table"
+        className="overflow-x-auto rounded-lg border border-security-navy-100 dark:border-security-navy-700"
+      >
+        <table className="site-timesheet-table w-full table-fixed text-left text-xs">
           <colgroup>
             <col className="w-[7%]" />
             <col className="w-[18%]" />
@@ -258,8 +267,8 @@ export function SiteTimesheetTable({
                         inputMode="numeric"
                         enterKeyHint="next"
                         className="input-compact w-full !px-2 !py-1 text-[11px]"
-                        placeholder="Duty ON"
-                        title="Duty ON OB number"
+                        placeholder={rowRequiresObInUi(row, obBookMode) ? "Duty ON" : "Optional"}
+                        title={rowRequiresObInUi(row, obBookMode) ? "Duty ON OB number (required)" : "Duty ON OB (optional)"}
                         aria-label={`Duty ON OB for ${row.workDate}`}
                       />
                     )}
@@ -285,8 +294,8 @@ export function SiteTimesheetTable({
                         inputMode="numeric"
                         enterKeyHint="done"
                         className="input-compact w-full !px-2 !py-1 text-[11px]"
-                        placeholder="Duty OFF"
-                        title="Duty OFF OB — required before confirming attendance"
+                        placeholder={rowRequiresObInUi(row, obBookMode) ? "Duty OFF" : "Optional"}
+                        title={rowRequiresObInUi(row, obBookMode) ? "Duty OFF OB — required before confirming attendance" : "Duty OFF OB (optional)"}
                         aria-label={`Duty OFF OB for ${row.workDate}`}
                       />
                     )}

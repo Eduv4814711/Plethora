@@ -79,6 +79,10 @@ export type RosterSiteConfig = {
   rosterSheetNotes: string | null;
   rosterRelieverEmployeeIds: string[];
   assignedGuardIds: string[];
+  operatingFramework?: string | null;
+  obBookMode?: string | null;
+  psiraEnforcementMode?: string | null;
+  mealIntervalPaid?: boolean;
   activePattern: RosterPeriodGrid["activePattern"] & { effectiveFrom?: string };
 };
 
@@ -256,6 +260,9 @@ export type SiteTimesheet = {
   id: string;
   siteId: string;
   siteName: string;
+  obBookMode?: "REQUIRED" | "OPTIONAL_WHEN_DIGITAL" | "OPTIONAL";
+  psiraEnforcementMode?: "BLOCK" | "WARN" | "OFF";
+  operatingFramework?: string | null;
   periodStart: string;
   periodEnd: string;
   status: "draft" | "approved" | "locked";
@@ -270,6 +277,23 @@ export type SiteTimesheet = {
    */
   coverageDays?: { day: number[]; night: number[] };
   rows: SiteTimesheetRow[];
+  guardSummaries?: Array<{
+    employeeId: string;
+    guardName: string;
+    employeeNumber: string;
+    basicHours: number;
+    overtimeHours: number;
+    sundayHours: number;
+    sundayDoubleHours: number;
+    publicHolidayHours: number;
+    nightShiftHours: number;
+    nightShiftCount: number;
+    nightAllowanceTotalRand: number;
+    totalWorkedHours: number;
+    flags: Array<{ code: string; severity: string; message: string; dateKey: string }>;
+  }>;
+  nightShiftAllowanceCount?: number;
+  complianceFlagsCount?: number;
   totals: {
     dayShifts: number;
     nightShifts: number;
@@ -286,6 +310,8 @@ export type GuardPickerOption = {
   firstName: string;
   lastName: string;
   employeeNumber?: string | null;
+  status?: string | null;
+  psiraGrade?: string | null;
   psiraRegistrationNumber?: string | null;
   employeeType?: string | null;
 };
@@ -901,3 +927,280 @@ export const SHIFT_CODE_COLORS: Record<RosterShiftCode, string> = {
 };
 
 export const CYCLE_LENGTH_PRESETS = [3, 6, 7, 9, 12, 14];
+
+export type SaSecurityFrameworkId =
+  | "4on4off_12h"
+  | "5on2off_day"
+  | "4on2off_swing"
+  | "6on3off_mixed"
+  | "continental_223"
+  | "24x7_reliever_pool"
+  | "event_ad_hoc";
+
+export type SaSecurityFrameworkDefinition = {
+  id: SaSecurityFrameworkId;
+  name: string;
+  shortLabel: string;
+  tagline: string;
+  bestFor: string;
+  defaultDayStart: string;
+  defaultDayEnd: string;
+  defaultNightStart: string;
+  defaultNightEnd: string;
+  shiftDurationHours: number;
+  workDaysOn: number;
+  restDaysOff: number;
+  guardsPerPost24x7: number;
+  guardsPerPostSingleShift: number;
+  avgWeeklyHoursPerGuard: number;
+  requiresAveragingAgreement: boolean;
+  notes: string;
+};
+
+export type SmartRosterPreviewResponse = {
+  siteId: string;
+  siteName: string;
+  frameworkId: SaSecurityFrameworkId;
+  periodStart: string;
+  periodEnd: string;
+  guardsPoolCount: number;
+  solverUsed: "highs_milp" | "heuristic_lns" | "external_http";
+  solverStatus: "Optimal" | "Feasible" | "Heuristic";
+  solveDurationMs: number;
+  fallbackReason?: string;
+  staffingEstimate: {
+    recommendedTotalGuards: number;
+    minimumGuardsWithoutOvertime: number;
+    estimatedWeeklyHoursPerGuard: number;
+    estimatedMonthlyOvertimeHours: number;
+    complianceNotes: string[];
+  };
+  assignments: Array<{
+    guardId: string;
+    guardName: string;
+    employeeNumber: string;
+    dateKey: string;
+    shiftType: "day" | "night";
+    shiftCode: "D" | "N" | "R";
+    postId: string | null;
+    postName: string | null;
+    warnings: string[];
+  }>;
+  unfilledSlots: Array<{
+    dateKey: string;
+    shiftType: "day" | "night";
+    postId: string | null;
+    postName: string | null;
+    requiredCount: number;
+    filledCount: number;
+    shortfall: number;
+    reasons: string[];
+  }>;
+  guardSummaries: Array<{
+    guardId: string;
+    guardName: string;
+    employeeNumber: string;
+    totalShifts: number;
+    dayShifts: number;
+    nightShifts: number;
+    totalHours: number;
+    ordinaryHours: number;
+    overtimeHours: number;
+    sundayHours: number;
+    sundayDoubleHours: number;
+    publicHolidayHours: number;
+    nightShiftCount: number;
+    nightAllowanceRand: number;
+    restWarnings: string[];
+    credentialWarnings: string[];
+  }>;
+  metrics: {
+    totalRequiredSlots: number;
+    totalFilledSlots: number;
+    coveragePercent: number;
+    totalOvertimeHours: number;
+    restViolationsCount: number;
+    credentialWarningsCount: number;
+  };
+};
+
+export type RankedReplacementCandidate = {
+  employeeId: string;
+  fullName: string;
+  employeeNumber: string;
+  status: string;
+  psiraGrade: string | null;
+  psiraExpiry: string | null;
+  firearmCompetency: boolean;
+  gender: string | null;
+  isSitePrimary: boolean;
+  isReliever: boolean;
+  weekHoursBefore: number;
+  weekHoursAfter: number;
+  projectedOvertimeHours: number;
+  eligible: boolean;
+  ineligibleReason?: string;
+  score: number;
+  badges: string[];
+  warnings: string[];
+};
+
+export async function getRosterFrameworks(token: string) {
+  const res = await authFetch("/rosters/frameworks", token);
+  return parseJson<{ frameworks: SaSecurityFrameworkDefinition[] }>(res);
+}
+
+export async function updateSiteRosterSetup(
+  token: string,
+  siteId: string,
+  body: {
+    operatingFramework?: SaSecurityFrameworkId;
+    obBookMode?: "REQUIRED" | "OPTIONAL_WHEN_DIGITAL" | "OPTIONAL" | null;
+    psiraEnforcementMode?: "BLOCK" | "WARN" | "OFF" | null;
+    mealIntervalPaid?: boolean;
+    mealIntervalMinutes?: number;
+    dayGuardsRequired?: number;
+    nightGuardsRequired?: number;
+    dayStartTime?: string;
+    dayEndTime?: string;
+    nightStartTime?: string;
+    nightEndTime?: string;
+    dayShiftDays?: number[];
+    nightShiftDays?: number[];
+    assignedGuardIds?: string[];
+  }
+) {
+  const res = await authFetch(`/rosters/sites/${siteId}/roster-setup`, token, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+  return parseJson<{ success: boolean; siteId: string }>(res);
+}
+
+export async function smartGenerateRoster(
+  token: string,
+  siteId: string,
+  body: {
+    startDate: string;
+    endDate: string;
+    frameworkId?: SaSecurityFrameworkId;
+    guardIds?: string[];
+    includeRelieverPool?: boolean;
+    allowOvertime?: boolean;
+    maxWeeklyOvertimeHours?: number;
+    preferDedicatedDayNight?: boolean;
+  }
+) {
+  const res = await authFetch(`/rosters/sites/${siteId}/smart-generate`, token, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return parseJson<SmartRosterPreviewResponse>(res);
+}
+
+export async function smartApplyRoster(
+  token: string,
+  siteId: string,
+  body: {
+    startDate: string;
+    endDate: string;
+    frameworkId?: SaSecurityFrameworkId;
+    publishImmediately?: boolean;
+    assignments: Array<{
+      guardId: string;
+      dateKey: string;
+      shiftType: "day" | "night";
+      shiftCode: "D" | "N" | "R";
+      postId?: string | null;
+    }>;
+  }
+) {
+  const res = await authFetch(`/rosters/sites/${siteId}/smart-apply`, token, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return parseJson<{
+    success: boolean;
+    siteId: string;
+    appliedCount: number;
+    publishedCount: number;
+    protectedDatesSkipped: number;
+  }>(res);
+}
+
+export async function quickEditRosterCell(
+  token: string,
+  siteId: string,
+  body: {
+    rosterDate: string;
+    guardId: string;
+    replacementGuardId?: string;
+    shiftCode: "D" | "N" | "O" | "R";
+    sitePostId?: string | null;
+    reason?: string;
+    syncPublishedShift?: boolean;
+  }
+) {
+  const res = await authFetch(`/rosters/sites/${siteId}/quick-edit`, token, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return parseJson<{ success: boolean; warnings: string[] }>(res);
+}
+
+export async function getSmartReplacements(
+  token: string,
+  siteId: string,
+  params: { workDate: string; shiftType: "day" | "night"; postId?: string; excludeEmployeeId?: string }
+) {
+  const q = new URLSearchParams({ workDate: params.workDate, shiftType: params.shiftType });
+  if (params.postId) q.set("postId", params.postId);
+  if (params.excludeEmployeeId) q.set("excludeEmployeeId", params.excludeEmployeeId);
+  const res = await authFetch(`/rosters/sites/${siteId}/smart-replacements?${q}`, token);
+  return parseJson<{
+    siteName: string;
+    requiredGrade: string | null;
+    requiresFirearm: boolean;
+    psiraEnforcementMode: "BLOCK" | "WARN" | "OFF";
+    candidates: RankedReplacementCandidate[];
+  }>(res);
+}
+
+export async function autoBuildUnrosteredSites(
+  token: string,
+  body: { startDate: string; endDate: string; dryRun?: boolean; siteIds?: string[] }
+) {
+  const res = await authFetch("/rosters/auto-build-unrostered", token, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return parseJson<{
+    periodStart: string;
+    periodEnd: string;
+    dryRun: boolean;
+    builtCount: number;
+    previewedCount: number;
+    sites: Array<{
+      siteId: string;
+      siteName: string;
+      status: "built" | "previewed" | "skipped_already_rostered" | "skipped_zero_headcount";
+      coveragePercent: number;
+      filledSlots: number;
+      requiredSlots: number;
+      overtimeHours: number;
+      unfilledCount: number;
+    }>;
+  }>(res);
+}
+
+export async function getAttendanceReplacementSuggestions(token: string, shiftId: string) {
+  const q = new URLSearchParams({ shiftId });
+  const res = await authFetch(`/attendance/replacement-suggestions?${q}`, token);
+  return parseJson<{
+    siteName: string;
+    requiredGrade: string | null;
+    requiresFirearm: boolean;
+    psiraEnforcementMode: "BLOCK" | "WARN" | "OFF";
+    candidates: RankedReplacementCandidate[];
+  }>(res);
+}

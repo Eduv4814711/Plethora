@@ -8,6 +8,10 @@ const employeeSelect = {
   phone: true,
   gender: true,
   employeeType: true,
+  psiraGrade: true,
+  psiraRegistrationExpiry: true,
+  firearmCompetency: true,
+  armedGuard: true,
 } satisfies Prisma.EmployeeSelect;
 
 export const siteDetailInclude = {
@@ -53,6 +57,10 @@ export function mapPostForApi(post: SitePostRow) {
     id: post.id,
     name: post.name,
     shiftType: inferPostShiftType(post.coverageRequirements),
+    requiredPsiraGrade: post.requiredPsiraGrade ?? null,
+    requiresFirearm: post.requiresFirearm ?? false,
+    requiredGender: post.requiredGender ?? null,
+    shiftPatternPreference: post.shiftPatternPreference ?? null,
     assignedGuards: post.guardEligibilities.map((g) => ({
       id: g.id,
       employee: g.employee,

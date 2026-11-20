@@ -49,6 +49,13 @@ const businessSettingsSchema = z.object({
   adminOfficeLatitude: z.number().min(-90).max(90).optional().nullable(),
   adminOfficeLongitude: z.number().min(-180).max(180).optional().nullable(),
   adminGeofenceRadiusMeters: z.number().int().min(10).max(100000).optional().nullable(),
+  obBookMode: z.enum(["REQUIRED", "OPTIONAL_WHEN_DIGITAL", "OPTIONAL"]).optional(),
+  psiraEnforcementMode: z.enum(["BLOCK", "WARN", "OFF"]).optional(),
+  averagingEnabled: z.boolean().optional(),
+  averagingWeeks: z.number().int().min(2).max(16).optional(),
+  overnightBoundaryMode: z.enum(["shift_start_day", "midnight_split"]).optional(),
+  sundayDoubleRateSplit: z.boolean().optional(),
+  fortnightlyRestEnabled: z.boolean().optional(),
 });
 
 const updateSettingsSchema = z.object({

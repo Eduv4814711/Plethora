@@ -18,6 +18,7 @@ import { normalizeLeaveDate } from "../services/leave-availability.service.js";
 import { getTodayAttendance } from "../modules/attendance-today/attendance-today.service.js";
 import { syncAttendanceToTimesheetRow } from "../modules/attendance-today/attendance-timesheet-sync.js";
 import { recordAttendanceEvent, recordAttendanceEventQuietly, attendanceSnapshot } from "../modules/attendance-today/attendance-events.js";
+import { rankReplacementCandidates } from "../modules/rosters/solver/replacement-ranker.service.js";
 const optionalCoords = z
   .object({
     latitude: z.number().min(-90).max(90).optional(),
@@ -510,6 +511,31 @@ export async function attendanceRoutes(app: FastifyInstance) {
     shiftId: z.string().min(1),
     replacementEmployeeId: z.string().min(1),
     reason: z.string().min(3, "A reason of at least 3 characters is required to assign a replacement guard"),
+  });
+
+  app.get("/replacement-suggestions", { preHandler: protect }, async (request, reply) => {
+    const q = request.query as { shiftId?: string };
+    if (!q.shiftId) {
+      return reply.code(400).send({ error: "shiftId query parameter is required" });
+    }
+    const companyId = request.user!.companyId;
+    const shift = await prisma.shift.findFirst({
+      where: { id: q.shiftId, companyId },
+      select: { id: true, siteId: true, employeeId: true, shiftType: true, startTime: true },
+    });
+    if (!shift) {
+      return reply.code(404).send({ error: "Shift not found" });
+    }
+    const tz = await getCompanyTimezone(companyId);
+    const workDate = dateKeyInTimeZone(shift.startTime, tz);
+    const ranked = await rankReplacementCandidates({
+      companyId,
+      siteId: shift.siteId,
+      workDate,
+      shiftType: shift.shiftType === "night" ? "night" : "day",
+      excludeEmployeeId: shift.employeeId,
+    });
+    return reply.send(ranked);
   });
 
   app.post("/replace-guard", { preHandler: protect }, async (request, reply) => {

@@ -143,6 +143,11 @@ const createSiteSchema = z
     rosterNightShiftEndTime: SHIFT_TIME_STRING,
     autoRosterEnabled: z.boolean().optional(),
     autoRosterMinCoveragePercent: z.number().int().min(0).max(100).optional(),
+    obBookMode: z.enum(["REQUIRED", "OPTIONAL_WHEN_DIGITAL", "OPTIONAL"]).nullable().optional(),
+    psiraEnforcementMode: z.enum(["BLOCK", "WARN", "OFF"]).nullable().optional(),
+    operatingFramework: z.string().max(60).nullable().optional(),
+    mealIntervalPaid: z.boolean().optional(),
+    mealIntervalMinutes: z.number().int().min(0).max(180).optional(),
   })
   .superRefine((data, ctx) => {
     const g = refineSiteGeofenceThreeOrNone(data);
@@ -191,6 +196,11 @@ const updateSiteSchema = z
     rosterNightShiftEndTime: SHIFT_TIME_STRING,
     autoRosterEnabled: z.boolean().optional(),
     autoRosterMinCoveragePercent: z.number().int().min(0).max(100).optional(),
+    obBookMode: z.enum(["REQUIRED", "OPTIONAL_WHEN_DIGITAL", "OPTIONAL"]).nullable().optional(),
+    psiraEnforcementMode: z.enum(["BLOCK", "WARN", "OFF"]).nullable().optional(),
+    operatingFramework: z.string().max(60).nullable().optional(),
+    mealIntervalPaid: z.boolean().optional(),
+    mealIntervalMinutes: z.number().int().min(0).max(180).optional(),
   })
   .superRefine((data, ctx) => {
     const g = refineSiteGeofenceThreeOrNone(data);
@@ -212,11 +222,19 @@ const POST_SHIFT_TYPES = ["day", "night"] as const;
 const createPostSchema = z.object({
   name: z.string().min(1),
   shiftType: z.enum(POST_SHIFT_TYPES).default("day"),
+  requiredPsiraGrade: z.enum(["E", "D", "C", "B", "A"]).nullable().optional(),
+  requiresFirearm: z.boolean().optional(),
+  requiredGender: z.enum(["M", "F", "any"]).nullable().optional(),
+  shiftPatternPreference: z.enum(["day", "night", "both"]).nullable().optional(),
 });
 
 const updatePostSchema = z.object({
   name: z.string().min(1).optional(),
   shiftType: z.enum(POST_SHIFT_TYPES).optional(),
+  requiredPsiraGrade: z.enum(["E", "D", "C", "B", "A"]).nullable().optional(),
+  requiresFirearm: z.boolean().optional(),
+  requiredGender: z.enum(["M", "F", "any"]).nullable().optional(),
+  shiftPatternPreference: z.enum(["day", "night", "both"]).nullable().optional(),
 });
 
 const assignGuardSchema = z.object({
@@ -333,6 +351,11 @@ export async function sitesRoutes(app: FastifyInstance) {
         rosterNightShiftEndTime: d.rosterNightShiftEndTime ?? "06:00",
         autoRosterEnabled: d.autoRosterEnabled ?? undefined,
         autoRosterMinCoveragePercent: d.autoRosterMinCoveragePercent ?? undefined,
+        obBookMode: d.obBookMode ?? undefined,
+        psiraEnforcementMode: d.psiraEnforcementMode ?? undefined,
+        operatingFramework: d.operatingFramework ?? undefined,
+        mealIntervalPaid: d.mealIntervalPaid ?? undefined,
+        mealIntervalMinutes: d.mealIntervalMinutes ?? undefined,
       },
     });
 
@@ -732,6 +755,10 @@ export async function sitesRoutes(app: FastifyInstance) {
       data: {
         siteId,
         name: parsed.data.name,
+        requiredPsiraGrade: parsed.data.requiredPsiraGrade ?? null,
+        requiresFirearm: parsed.data.requiresFirearm ?? false,
+        requiredGender: parsed.data.requiredGender ?? null,
+        shiftPatternPreference: parsed.data.shiftPatternPreference ?? null,
       },
     });
     await prisma.coverageRequirement.create({
@@ -787,10 +814,24 @@ export async function sitesRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: "Post not found" });
     }
 
-    if (parsed.data.name) {
+    const postPatch: Record<string, unknown> = {};
+    if (parsed.data.name !== undefined) postPatch.name = parsed.data.name;
+    if (parsed.data.requiredPsiraGrade !== undefined) {
+      postPatch.requiredPsiraGrade = parsed.data.requiredPsiraGrade;
+    }
+    if (parsed.data.requiresFirearm !== undefined) {
+      postPatch.requiresFirearm = parsed.data.requiresFirearm;
+    }
+    if (parsed.data.requiredGender !== undefined) {
+      postPatch.requiredGender = parsed.data.requiredGender;
+    }
+    if (parsed.data.shiftPatternPreference !== undefined) {
+      postPatch.shiftPatternPreference = parsed.data.shiftPatternPreference;
+    }
+    if (Object.keys(postPatch).length > 0) {
       await prisma.sitePost.updateMany({
         where: { id: postId, site: { companyId: user.companyId } },
-        data: { name: parsed.data.name },
+        data: postPatch,
       });
     }
 

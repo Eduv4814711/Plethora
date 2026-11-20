@@ -233,7 +233,7 @@ export default function AttendanceExceptionsPage() {
 
   return (
     <main className="animate-fade-in mx-auto max-w-6xl space-y-5">
-      <Link href={`/attendance?${overviewParams}`} className="inline-flex min-h-11 items-center text-sm font-medium text-security-navy-700 hover:underline dark:text-security-navy-300">
+      <Link href={`/attendance?view=attention&${overviewParams}`} className="inline-flex min-h-11 items-center text-sm font-medium text-security-navy-700 hover:underline dark:text-security-navy-300">
         ← Back to attendance overview
       </Link>
 

@@ -116,6 +116,7 @@ export function SiteTimesheetsSection({
   const [bulkSaving, setBulkSaving] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
   const [unlockReason, setUnlockReason] = useState("");
+  const [viewMode, setViewMode] = useState<"by_date" | "by_guard">("by_date");
 
   const displaySiteName = sheet?.siteName ?? siteName;
   const guardFilterActive = guardFilter.trim().length > 0;
@@ -206,6 +207,7 @@ export function SiteTimesheetsSection({
         <SiteTimesheetBulkConfirmModal
           rows={bulkRows}
           saving={bulkSaving}
+          obBookMode={sheet?.obBookMode ?? "REQUIRED"}
           onCancel={() => setBulkRows(null)}
           onSubmit={async (entries) => {
             setBulkSaving(true);
@@ -581,33 +583,70 @@ export function SiteTimesheetsSection({
               </p>
             </div>
             {!focusActive && (
-              <div
-                className="flex flex-wrap gap-1 rounded-lg border border-security-navy-100 bg-white p-1 dark:border-security-navy-700 dark:bg-security-navy-900"
-                role="group"
-                aria-label="Show attendance entries"
-              >
-                {(
-                  [
-                    ["pending", `Needs confirmation (${pendingReviewCount})`],
-                    ["confirmed", `Confirmed (${reviewedCount})`],
-                    ["all", `All (${shiftScopedRows.length})`],
-                  ] as const
-                ).map(([value, text]) => (
+              <div className="flex flex-wrap items-center gap-2">
+                <div
+                  className="flex rounded-lg border border-security-navy-100 bg-white p-1 dark:border-security-navy-700 dark:bg-security-navy-950"
+                  role="group"
+                  aria-label="Timesheet view grouping"
+                >
                   <button
-                    key={value}
                     type="button"
-                    onClick={() => setReviewFilter(value)}
-                    aria-pressed={reviewFilter === value}
+                    aria-pressed={viewMode === "by_date"}
+                    onClick={() => setViewMode("by_date")}
                     className={clsx(
-                      "min-h-11 rounded-md px-3 text-sm font-medium",
-                      reviewFilter === value
-                        ? "bg-security-navy-800 text-white dark:bg-security-navy-600"
-                        : "text-security-navy-700 hover:bg-security-navy-50 dark:text-security-navy-300 dark:hover:bg-security-navy-900"
+                      "min-h-11 rounded-md px-3 text-xs font-semibold",
+                      viewMode === "by_date"
+                        ? "bg-[var(--accent-primary)] text-white"
+                        : "text-security-navy-700 dark:text-security-navy-300"
                     )}
                   >
-                    {text}
+                    By Date
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    aria-pressed={viewMode === "by_guard"}
+                    onClick={() => setViewMode("by_guard")}
+                    className={clsx(
+                      "min-h-11 rounded-md px-3 text-xs font-semibold",
+                      viewMode === "by_guard"
+                        ? "bg-[var(--accent-primary)] text-white"
+                        : "text-security-navy-700 dark:text-security-navy-300"
+                    )}
+                  >
+                    By Guard (SA Pay)
+                  </button>
+                </div>
+
+                {viewMode === "by_date" && (
+                  <div
+                    className="flex flex-wrap gap-1 rounded-lg border border-security-navy-100 bg-white p-1 dark:border-security-navy-700 dark:bg-security-navy-900"
+                    role="group"
+                    aria-label="Show attendance entries"
+                  >
+                    {(
+                      [
+                        ["pending", `Needs confirmation (${pendingReviewCount})`],
+                        ["confirmed", `Confirmed (${reviewedCount})`],
+                        ["all", `All (${shiftScopedRows.length})`],
+                      ] as const
+                    ).map(([value, text]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setReviewFilter(value)}
+                        aria-pressed={reviewFilter === value}
+                        className={clsx(
+                          "min-h-11 rounded-md px-3 text-sm font-medium",
+                          reviewFilter === value
+                            ? "bg-security-navy-800 text-white dark:bg-security-navy-600"
+                            : "text-security-navy-700 hover:bg-security-navy-50 dark:text-security-navy-300 dark:hover:bg-security-navy-900"
+                        )}
+                      >
+                        {text}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -676,47 +715,121 @@ export function SiteTimesheetsSection({
             </div>
           )}
 
-          <div className="space-y-3 xl:hidden">
-            {displayRows.map((row) => (
-              <SiteTimesheetRowCard
-                key={row.id}
-                row={row}
-                guards={guardOptions}
-                locked={locked || !canEdit}
-                saving={savingRowId === row.id}
-                dutyOnObNumber={timesheet.getDutyOnDraft(row)}
-                dutyOffObNumber={timesheet.getDutyOffDraft(row)}
-                onDutyOnObNumberChange={(value) => timesheet.setDutyOnDraft(row.id, value)}
-                onDutyOffObNumberChange={(value) => timesheet.setDutyOffDraft(row.id, value)}
-                onDutyOnObNumberSave={(value) => void timesheet.saveDutyObNumber(row, "on", value)}
-                onDutyOffObNumberSave={(value) => void timesheet.saveDutyObNumber(row, "off", value)}
-                canEditLockedOb={canEditLockedOb}
-                onUpdate={(r, patch) => void timesheet.updateRow(r, patch)}
-                onApprove={(r) => void timesheet.approveRowAttendance(r)}
-                onReopen={(r) => void timesheet.reopenRow(r)}
-                focused={focusedRow?.id === row.id}
-              />
-            ))}
-          </div>
+          {viewMode === "by_guard" ? (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-security-navy-100 bg-security-navy-50/70 px-4 py-3 text-xs text-security-navy-700 dark:border-security-navy-700 dark:bg-security-navy-800/40 dark:text-security-navy-300">
+                South African NBCPSS payroll preview per guard across all captured shifts on this site. OB mode: <strong>{sheet.obBookMode ?? "REQUIRED"}</strong>.
+              </div>
+              <div
+                role="region"
+                tabIndex={0}
+                aria-label="Per-guard SA NBCPSS hours summary"
+                className="overflow-x-auto rounded-lg border border-security-navy-100 dark:border-security-navy-700"
+              >
+                <table className="min-w-full text-xs text-left">
+                  <thead className="bg-security-navy-50 text-security-navy-600 dark:bg-security-navy-950 dark:text-security-navy-300 border-b border-security-navy-100 dark:border-security-navy-800">
+                    <tr>
+                      <th scope="col" className="px-3 py-2.5 font-semibold">Guard</th>
+                      <th scope="col" className="px-3 py-2.5 text-right font-semibold">Total (h)</th>
+                      <th scope="col" className="px-3 py-2.5 text-right font-semibold">Basic &lt;=48h</th>
+                      <th scope="col" className="px-3 py-2.5 text-right font-semibold">Overtime 1.5x</th>
+                      <th scope="col" className="px-3 py-2.5 text-right font-semibold">Sunday 1.5x</th>
+                      <th scope="col" className="px-3 py-2.5 text-right font-semibold">Sunday 2x</th>
+                      <th scope="col" className="px-3 py-2.5 text-right font-semibold">Pub Hol 2x</th>
+                      <th scope="col" className="px-3 py-2.5 text-right font-semibold">Night Allow.</th>
+                      <th scope="col" className="px-3 py-2.5 font-semibold">SA Compliance</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-security-navy-100 dark:divide-security-navy-800">
+                    {(sheet.guardSummaries ?? []).length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="px-4 py-6 text-center text-security-navy-500">
+                          Confirm shifts in &ldquo;By Date&rdquo; to preview South African pay-period hour buckets per guard.
+                        </td>
+                      </tr>
+                    ) : (
+                      (sheet.guardSummaries ?? []).map((gs) => (
+                        <tr key={gs.employeeId}>
+                          <th scope="row" className="px-3 py-2.5 font-medium text-security-navy-900 dark:text-white">
+                            {gs.guardName}{" "}
+                            <span className="text-security-navy-500 font-normal">({gs.employeeNumber})</span>
+                          </th>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{gs.totalWorkedHours}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{gs.basicHours}</td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${gs.overtimeHours > 0 ? "text-amber-700" : ""}`}>
+                            {gs.overtimeHours}
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{gs.sundayHours}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{gs.sundayDoubleHours}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{gs.publicHolidayHours}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">
+                            {gs.nightShiftCount} (R{gs.nightAllowanceTotalRand.toFixed(2)})
+                          </td>
+                          <td className="px-3 py-2.5">
+                            {gs.flags.length === 0 ? (
+                              <span className="rounded bg-emerald-100 text-emerald-900 px-2 py-0.5 text-[10px] font-semibold">
+                                Compliant
+                              </span>
+                            ) : (
+                              <span className="text-amber-800 dark:text-amber-300">
+                                {gs.flags.map((f) => f.message).join("; ")}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-3 xl:hidden">
+                {displayRows.map((row) => (
+                  <SiteTimesheetRowCard
+                    key={row.id}
+                    row={row}
+                    guards={guardOptions}
+                    locked={locked || !canEdit}
+                    saving={savingRowId === row.id}
+                    obBookMode={sheet.obBookMode ?? "REQUIRED"}
+                    dutyOnObNumber={timesheet.getDutyOnDraft(row)}
+                    dutyOffObNumber={timesheet.getDutyOffDraft(row)}
+                    onDutyOnObNumberChange={(value) => timesheet.setDutyOnDraft(row.id, value)}
+                    onDutyOffObNumberChange={(value) => timesheet.setDutyOffDraft(row.id, value)}
+                    onDutyOnObNumberSave={(value) => void timesheet.saveDutyObNumber(row, "on", value)}
+                    onDutyOffObNumberSave={(value) => void timesheet.saveDutyObNumber(row, "off", value)}
+                    canEditLockedOb={canEditLockedOb}
+                    onUpdate={(r, patch) => void timesheet.updateRow(r, patch)}
+                    onApprove={(r) => void timesheet.approveRowAttendance(r)}
+                    onReopen={(r) => void timesheet.reopenRow(r)}
+                    focused={focusedRow?.id === row.id}
+                  />
+                ))}
+              </div>
 
-          <SiteTimesheetTable
-            rows={displayRows}
-            guardOptions={guardOptions}
-            locked={locked}
-            readOnly={readOnly}
-            canEdit={canEdit}
-            canEditLockedOb={canEditLockedOb}
-            savingRowId={savingRowId}
-            getDutyOnDraft={timesheet.getDutyOnDraft}
-            getDutyOffDraft={timesheet.getDutyOffDraft}
-            setDutyOnDraft={timesheet.setDutyOnDraft}
-            setDutyOffDraft={timesheet.setDutyOffDraft}
-            onSaveDutyOb={(row, which) => void timesheet.saveDutyObNumber(row, which)}
-            onUpdate={(row, patch) => void timesheet.updateRow(row, patch)}
-            onApprove={(row) => void timesheet.approveRowAttendance(row)}
-            onReopen={(row) => void timesheet.reopenRow(row)}
-            focusedRowId={focusedRow?.id}
-          />
+              <SiteTimesheetTable
+                rows={displayRows}
+                guardOptions={guardOptions}
+                locked={locked}
+                readOnly={readOnly}
+                canEdit={canEdit}
+                canEditLockedOb={canEditLockedOb}
+                savingRowId={savingRowId}
+                obBookMode={sheet.obBookMode ?? "REQUIRED"}
+                getDutyOnDraft={timesheet.getDutyOnDraft}
+                getDutyOffDraft={timesheet.getDutyOffDraft}
+                setDutyOnDraft={timesheet.setDutyOnDraft}
+                setDutyOffDraft={timesheet.setDutyOffDraft}
+                onSaveDutyOb={(row, which) => void timesheet.saveDutyObNumber(row, which)}
+                onUpdate={(row, patch) => void timesheet.updateRow(row, patch)}
+                onApprove={(row) => void timesheet.approveRowAttendance(row)}
+                onReopen={(row) => void timesheet.reopenRow(row)}
+                focusedRowId={focusedRow?.id}
+              />
+            </>
+          )}
         </>
       )}
 

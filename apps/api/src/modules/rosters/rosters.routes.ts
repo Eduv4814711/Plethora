@@ -24,7 +24,22 @@ import {
   updatePatternSchema,
   continuityPauseSchema,
   confirmReplacementSchema,
+  siteRosterSetupSchema,
+  smartGenerateSchema,
+  smartApplySchema,
+  quickEditRosterCellSchema,
+  smartReplacementsQuerySchema,
+  autoBuildUnrosteredSchema,
 } from "./rosters.schemas.js";
+import { SA_SECURITY_FRAMEWORKS } from "./solver/sa-frameworks.js";
+import { rankReplacementCandidates } from "./solver/replacement-ranker.service.js";
+import {
+  applySmartRoster,
+  autoBuildUnrosteredSites,
+  previewSmartRoster,
+  quickEditRosterCell,
+  updateSiteRosterSetup,
+} from "./solver/smart-roster.service.js";
 import {
   activatePattern,
   addPlaceholderGuardToSite,
@@ -588,6 +603,121 @@ export async function rostersRoutes(app: FastifyInstance) {
     }
     const result = await publishRoster(request.user!.companyId, parsed.data);
     if (!result) return reply.code(404).send({ error: "Site not found" });
+    return reply.send(result);
+  });
+
+  app.get("/frameworks", { preHandler: rosterReadProtect }, async (_request, reply) => {
+    return reply.send({ frameworks: SA_SECURITY_FRAMEWORKS });
+  });
+
+  app.put("/sites/:siteId/roster-setup", { preHandler: rosterManagerProtect }, async (request, reply) => {
+    const { siteId } = request.params as { siteId: string };
+    const parsed = siteRosterSetupSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
+    }
+    const result = await updateSiteRosterSetup(
+      request.user!.companyId,
+      siteId,
+      request.user!.sub,
+      parsed.data,
+    );
+    if (!result) return reply.code(404).send({ error: "Site not found" });
+    return reply.send(result);
+  });
+
+  app.post("/sites/:siteId/smart-generate", { preHandler: rosterManagerProtect }, async (request, reply) => {
+    const { siteId } = request.params as { siteId: string };
+    const parsed = smartGenerateSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
+    }
+    const result = await previewSmartRoster(request.user!.companyId, siteId, parsed.data);
+    if (!result) return reply.code(404).send({ error: "Site not found" });
+    return reply.send(result);
+  });
+
+  app.post("/sites/:siteId/smart-apply", { preHandler: rosterManagerProtect }, async (request, reply) => {
+    const { siteId } = request.params as { siteId: string };
+    const parsed = smartApplySchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
+    }
+    try {
+      const result = await applySmartRoster(
+        request.user!.companyId,
+        siteId,
+        request.user!.sub,
+        parsed.data,
+      );
+      if (!result) return reply.code(404).send({ error: "Site not found" });
+      return reply.send(result);
+    } catch (error) {
+      return reply.code(400).send({
+        error: "Unable to apply smart roster",
+        message: error instanceof Error ? error.message : "Invalid roster assignment payload",
+      });
+    }
+  });
+
+  app.post("/sites/:siteId/quick-edit", { preHandler: rosterManagerProtect }, async (request, reply) => {
+    const { siteId } = request.params as { siteId: string };
+    const parsed = quickEditRosterCellSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
+    }
+    try {
+      const result = await quickEditRosterCell(
+        request.user!.companyId,
+        siteId,
+        request.user!.sub,
+        parsed.data,
+      );
+      if (!result) return reply.code(404).send({ error: "Site not found" });
+      if ("error" in result) return reply.code(400).send(result);
+      return reply.send(result);
+    } catch (error) {
+      return reply.code(400).send({
+        error: "Unable to update shift cell",
+        message: error instanceof Error ? error.message : "Invalid quick-edit request",
+      });
+    }
+  });
+
+  app.get("/sites/:siteId/smart-replacements", { preHandler: rosterReadProtect }, async (request, reply) => {
+    const { siteId } = request.params as { siteId: string };
+    const parsed = smartReplacementsQuerySchema.safeParse(request.query ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
+    }
+    try {
+      const result = await rankReplacementCandidates({
+        companyId: request.user!.companyId,
+        siteId,
+        workDate: parsed.data.workDate,
+        shiftType: parsed.data.shiftType,
+        postId: parsed.data.postId,
+        excludeEmployeeId: parsed.data.excludeEmployeeId,
+      });
+      return reply.send(result);
+    } catch (error) {
+      if (error instanceof Error && error.message === "Site not found") {
+        return reply.code(404).send({ error: "Site not found" });
+      }
+      throw error;
+    }
+  });
+
+  app.post("/auto-build-unrostered", { preHandler: rosterManagerProtect }, async (request, reply) => {
+    const parsed = autoBuildUnrosteredSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "Validation error", message: parsed.error.flatten() });
+    }
+    const result = await autoBuildUnrosteredSites(
+      request.user!.companyId,
+      request.user!.sub,
+      parsed.data,
+    );
     return reply.send(result);
   });
 }

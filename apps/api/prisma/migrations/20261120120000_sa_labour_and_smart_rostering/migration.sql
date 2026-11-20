@@ -1,0 +1,30 @@
+-- South African NBCPSS / BCEA Compliance & Smart Rostering additive columns
+
+ALTER TABLE "Employee"
+  ADD COLUMN IF NOT EXISTS "firearmCompetency" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS "firearmCompetencyExpiry" TIMESTAMP(3),
+  ADD COLUMN IF NOT EXISTS "armedGuard" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS "bceaSectorOverride" TEXT,
+  ADD COLUMN IF NOT EXISTS "preferredShiftType" TEXT;
+
+ALTER TABLE "Site"
+  ADD COLUMN IF NOT EXISTS "obBookMode" TEXT,
+  ADD COLUMN IF NOT EXISTS "psiraEnforcementMode" TEXT,
+  ADD COLUMN IF NOT EXISTS "operatingFramework" TEXT,
+  ADD COLUMN IF NOT EXISTS "mealIntervalPaid" BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS "mealIntervalMinutes" INTEGER NOT NULL DEFAULT 60;
+
+ALTER TABLE "SitePost"
+  ADD COLUMN IF NOT EXISTS "requiredPsiraGrade" TEXT,
+  ADD COLUMN IF NOT EXISTS "requiresFirearm" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS "requiredGender" TEXT,
+  ADD COLUMN IF NOT EXISTS "shiftPatternPreference" TEXT;
+
+ALTER TABLE "SiteTimesheetRow"
+  ADD COLUMN IF NOT EXISTS "sundayDoubleHours" DECIMAL(8, 2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "nightShiftCount" INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "complianceFlags" JSONB;
+
+ALTER TABLE "PayrollExportLine"
+  ADD COLUMN IF NOT EXISTS "sundayDoubleHours" DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "nightShiftCount" INTEGER NOT NULL DEFAULT 0;
