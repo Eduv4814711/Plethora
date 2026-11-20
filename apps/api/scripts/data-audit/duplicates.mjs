@@ -49,22 +49,22 @@ export async function runDuplicatesAudit(prisma) {
     );
   }
 
-  const payrollItemDupes = await prisma.$queryRaw`
-    SELECT "payrollRunId", "employeeId", COUNT(*)::int AS cnt
-    FROM "PayrollItem"
-    GROUP BY "payrollRunId", "employeeId"
+  const payrollExportLineDupes = await prisma.$queryRaw`
+    SELECT "batchId", "employeeId", COALESCE("siteId", '') AS site_key, COUNT(*)::int AS cnt
+    FROM "PayrollExportLine"
+    GROUP BY "batchId", "employeeId", COALESCE("siteId", '')
     HAVING COUNT(*) > 1
     LIMIT 200
   `;
-  if (payrollItemDupes.length > 0) {
+  if (payrollExportLineDupes.length > 0) {
     findings.push(
       finding({
-        id: "duplicate-payroll-item-per-employee",
+        id: "duplicate-payroll-export-line",
         category: "duplicates",
         severity: SEVERITY.HIGH,
-        message: "Multiple PayrollItem rows for same employee in one payroll run (no DB unique constraint)",
-        count: payrollItemDupes.length,
-        sample: payrollItemDupes.slice(0, 3),
+        message: "Multiple PayrollExportLine rows for same batch+employee+site",
+        count: payrollExportLineDupes.length,
+        sample: payrollExportLineDupes.slice(0, 3),
       })
     );
   }

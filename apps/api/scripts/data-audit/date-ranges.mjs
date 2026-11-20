@@ -8,21 +8,21 @@ import { createPrisma, finding, printFindings, SEVERITY } from "./shared.mjs";
 export async function runDateRangesAudit(prisma) {
   const findings = [];
 
-  const badPayrollPeriods = await prisma.$queryRaw`
+  const badExportPeriods = await prisma.$queryRaw`
     SELECT id, "companyId", "periodStart", "periodEnd"
-    FROM "PayrollRun"
+    FROM "PayrollExportBatch"
     WHERE "periodEnd" < "periodStart"
     LIMIT 200
   `;
-  if (badPayrollPeriods.length > 0) {
+  if (badExportPeriods.length > 0) {
     findings.push(
       finding({
-        id: "payroll-period-end-before-start",
+        id: "payroll-export-period-end-before-start",
         category: "date-ranges",
         severity: SEVERITY.CRITICAL,
-        message: "PayrollRun periodEnd before periodStart",
-        count: badPayrollPeriods.length,
-        sample: badPayrollPeriods.slice(0, 3),
+        message: "PayrollExportBatch periodEnd before periodStart",
+        count: badExportPeriods.length,
+        sample: badExportPeriods.slice(0, 3),
       })
     );
   }
