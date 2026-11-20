@@ -24,8 +24,8 @@ export async function runDashboardReconciliationAudit(prisma) {
       },
     });
 
-    const calculatedPayrollDb = await prisma.payrollRun.count({
-      where: { companyId: company.id, status: "calculated" },
+    const draftExportBatchesDb = await prisma.payrollExportBatch.count({
+      where: { companyId: company.id, status: "DRAFT" },
     });
 
     const openAlertsDb = await prisma.operationalAlert.count({
@@ -68,14 +68,14 @@ export async function runDashboardReconciliationAudit(prisma) {
       );
     }
 
-    if (calculatedPayrollDb > 5) {
+    if (draftExportBatchesDb > 5) {
       findings.push(
         finding({
-          id: `many-pending-payroll-approvals-${company.id}`,
+          id: `many-draft-export-batches-${company.id}`,
           category: "dashboard-reconciliation",
           severity: SEVERITY.MEDIUM,
-          message: `"${company.name}": ${calculatedPayrollDb} payroll runs awaiting approval (dashboard pending_approvals)`,
-          count: calculatedPayrollDb,
+          message: `"${company.name}": ${draftExportBatchesDb} draft payroll export batches awaiting lock/export`,
+          count: draftExportBatchesDb,
         })
       );
     }
@@ -90,7 +90,7 @@ export async function runDashboardReconciliationAudit(prisma) {
         sample: [
           {
             guardsOnDuty: guardsOnDutyDb,
-            pendingPayrollApprovals: calculatedPayrollDb,
+            draftExportBatches: draftExportBatchesDb,
             openAlerts: openAlertsDb,
             criticalAlerts: criticalAlertsDb,
             missedShiftsThisMonth: missedCount,

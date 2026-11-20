@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Verify SiteTimesheet and PayrollRun period bounds match company 26–25 (or configured) cycle.
+ * Verify SiteTimesheet and PayrollExportBatch period bounds match company 26–25 (or configured) cycle.
  */
 import { createPrisma, finding, parsePayPeriodDays, printFindings, SEVERITY, expectedSpanDays } from "./shared.mjs";
 
@@ -42,35 +42,25 @@ export async function runRosterPeriodsAudit(prisma) {
       );
     }
 
-    const badPayrollRuns = await prisma.$queryRaw`
-      SELECT pr.id, pr."periodStart", pr."periodEnd"
-      FROM "PayrollRun" pr
-      WHERE pr."companyId" = ${company.id}
-        AND pr.status != 'draft'
-        AND (
-          EXTRACT(DAY FROM pr."periodStart")::int NOT BETWEEN 1 AND 31
-        )
-      LIMIT 50
-    `;
-    // PayrollRun uses DateTime — flag runs whose period span is wildly off expected
-    const badPayrollSpan = await prisma.$queryRaw`
-      SELECT pr.id, pr."periodStart", pr."periodEnd",
-        (pr."periodEnd"::date - pr."periodStart"::date + 1)::int AS span_days
-      FROM "PayrollRun" pr
-      WHERE pr."companyId" = ${company.id}
-        AND (pr."periodEnd"::date - pr."periodStart"::date + 1)::int NOT BETWEEN ${span - 2} AND ${span + 2}
+    const badExportSpan = await prisma.$queryRaw`
+      SELECT pb.id, pb."periodStart", pb."periodEnd",
+        (pb."periodEnd"::date - pb."periodStart"::date + 1)::int AS span_days
+      FROM "PayrollExportBatch" pb
+      WHERE pb."companyId" = ${company.id}
+        AND pb.status != 'VOIDED'
+        AND (pb."periodEnd"::date - pb."periodStart"::date + 1)::int NOT BETWEEN ${span - 2} AND ${span + 2}
       LIMIT 100
     `;
 
-    if (badPayrollSpan.length > 0) {
+    if (badExportSpan.length > 0) {
       findings.push(
         finding({
-          id: `payroll-run-span-mismatch-${company.id}`,
+          id: `payroll-export-span-mismatch-${company.id}`,
           category: "roster-periods",
           severity: SEVERITY.MEDIUM,
-          message: `PayrollRun period span does not match expected ${span}-day pay cycle for "${company.name}"`,
-          count: badPayrollSpan.length,
-          sample: badPayrollSpan.slice(0, 3),
+          message: `PayrollExportBatch period span does not match expected ${span}-day pay cycle for "${company.name}"`,
+          count: badExportSpan.length,
+          sample: badExportSpan.slice(0, 3),
         })
       );
     }

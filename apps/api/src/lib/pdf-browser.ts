@@ -109,6 +109,19 @@ async function resolveBundledBrowserPath(): Promise<string | null> {
   return findDownloadedChromeExecutable();
 }
 
+export function findAvailablePdfBrowserPath(): string | null {
+  const envExe = process.env.PUPPETEER_EXECUTABLE_PATH?.trim();
+  if (envExe && fs.existsSync(envExe)) return envExe;
+
+  const bundled = findDownloadedChromeExecutable();
+  if (bundled) return bundled;
+
+  for (const candidatePath of KNOWN_EXECUTABLE_PATHS) {
+    if (fs.existsSync(candidatePath)) return candidatePath;
+  }
+  return null;
+}
+
 /**
  * Launches a browser for HTML→PDF conversion using puppeteer-core with resilient discovery:
  * 1. Checks PUPPETEER_EXECUTABLE_PATH if configured and exists on disk.

@@ -76,46 +76,22 @@ export async function runStatusConsistencyAudit(prisma) {
     );
   }
 
-  const guardsNoPayRate = await prisma.$queryRaw`
+  const activeNoPayrollCode = await prisma.$queryRaw`
     SELECT id, "employeeNumber", "employeeType", status
     FROM "Employee"
-    WHERE "employeeType" = 'guard'
-      AND status = 'active'
-      AND "hourlyRate" IS NULL
-      AND ("monthlySalary" IS NULL OR "monthlySalary" = 0)
+    WHERE status = 'active'
+      AND ("externalPayrollCode" IS NULL OR BTRIM("externalPayrollCode") = '')
     LIMIT 500
   `;
-  if (guardsNoPayRate.length > 0) {
+  if (activeNoPayrollCode.length > 0) {
     findings.push(
       finding({
-        id: "active-guard-no-pay-rate",
+        id: "active-employee-missing-external-payroll-code",
         category: "status-consistency",
-        severity: SEVERITY.HIGH,
-        message: "Active guards with no hourlyRate or monthlySalary",
-        count: guardsNoPayRate.length,
-        sample: guardsNoPayRate.slice(0, 3),
-      })
-    );
-  }
-
-  const officeNoSalary = await prisma.$queryRaw`
-    SELECT id, "employeeNumber", status
-    FROM "Employee"
-    WHERE "employeeType" = 'general'
-      AND status = 'active'
-      AND ("monthlySalary" IS NULL OR "monthlySalary" = 0)
-      AND ("hourlyRate" IS NULL OR "hourlyRate" = 0)
-    LIMIT 500
-  `;
-  if (officeNoSalary.length > 0) {
-    findings.push(
-      finding({
-        id: "active-office-no-salary",
-        category: "status-consistency",
-        severity: SEVERITY.HIGH,
-        message: "Active office employees with no monthlySalary or hourlyRate",
-        count: officeNoSalary.length,
-        sample: officeNoSalary.slice(0, 3),
+        severity: SEVERITY.MEDIUM,
+        message: "Active employees missing externalPayrollCode for Sage/external payroll export",
+        count: activeNoPayrollCode.length,
+        sample: activeNoPayrollCode.slice(0, 3),
       })
     );
   }
