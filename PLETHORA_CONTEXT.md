@@ -685,9 +685,9 @@ Plethora may eventually use WhatsApp as an interface for selected operational wo
 
 Examples:
 
-Employee receives roster.
+Employee receives roster PDF (rendered with zero-Chrome `pdf-lib`).
 
-Employee receives payslip.
+Employee receives payslip guidance pointing to HR / external Sage payroll.
 
 Employee requests leave.
 
@@ -1056,18 +1056,11 @@ Follow secure development practices throughout the system.
 
 Plethora operates within South Africa.
 
-The system should therefore remain compatible with relevant South African requirements that may apply, including areas such as:
+The system should therefore remain compatible with relevant South African requirements that may apply:
 
-* labour legislation
-* BCEA
-* UIF
-* PAYE
-* SDL
-* POPIA
-* PSIRA requirements
-* private security employment requirements
-* bargaining council requirements where applicable
-* statutory payroll obligations
+* Plethora directly enforces operational and BCEA workforce rules: attendance classification buckets (ordinary, overtime 1.5x, Sunday, public holiday, night shift), BCEA leave entitlements, PSIRA security grades and registrations, POPIA access controls, and company compliance obligations / legal cases.
+* Gross-to-net pay, PAYE, UIF, SDL, bargaining council deductions, and employee payslips execute downstream in **Sage** (Sage Business Cloud Payroll ZA, Sage VIP, Sage 300 People) or the configured external payroll system using exported approved batches from `/payroll-exports`.
+* Company statutory obligations (SARS EMP201, UIF, COIDA, PSIRA, POPIA, OHS) are tracked in Plethora as operational compliance obligations rather than an in-app statutory ledger.
 
 Do not invent legal requirements.
 
@@ -1364,41 +1357,30 @@ Never use destructive production database commands merely to make development ea
 
 ---
 
-# 36. WHEN MODIFYING PAYROLL
+# 36. WHEN MODIFYING EXTERNAL PAYROLL EXPORT
 
-Treat payroll modifications as high risk.
+Treat external payroll export (`/payroll-exports`) modifications as high risk.
 
-Before changing payroll code:
+Before changing export aggregation, adapter formatting, or batch lifecycle code:
 
 Trace:
 
-attendance
-→ hours
-→ rate calculation
-→ overtime
-→ allowances
-→ deductions
-→ statutory amounts
-→ gross pay
-→ net pay
-→ payslip
+approved attendance & approved leave
+→ BCEA hour classifications (`basicHours`, `overtimeHours`, `sundayHours`, `publicHolidayHours`, `nightShiftHours`, leave buckets)
+→ normalized export lines (`externalPayrollCode`, `costCenterCode`)
+→ adapter rendering (Sage Business Cloud ZA / Sage VIP / Sage 300 People / Generic CSV / JSON Webhook)
+→ readiness gate, lock, SHA-256 checksum download, and void lifecycle
 
-Create or update tests.
+Create or update unit and integration tests covering:
 
-Use representative scenarios.
+* ordinary shifts & night shift allowance
+* overtime, Sunday, and public holiday hours
+* paid vs. unpaid leave & mid-period leave proration
+* unapproved scheduled shifts excluded by the strict attendance gate
+* missing `externalPayrollCode` / unapproved site blockers and override audit trail
+* cross-tenant isolation and void/re-unlock semantics
 
-Examples should include:
-
-* normal employee
-* overtime
-* absence
-* leave
-* public holiday
-* deductions
-* mid-period employment changes
-* edge cases where applicable
-
-Never rely only on UI testing for payroll calculations.
+Never rely only on UI testing for payroll export behaviour.
 
 ---
 

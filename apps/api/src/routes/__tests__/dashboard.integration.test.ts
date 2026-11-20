@@ -59,7 +59,7 @@ describe.runIf(dbReady)("dashboard attention alerts (PostgreSQL integration)", (
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.alerts.some((alert: { type: string }) => alert.type === "attendance_exceptions")).toBe(false);
-    expect(body.payrollReadiness?.openExceptions ?? 0).toBe(0);
+    expect(body.exportReadiness?.openExceptions ?? 0).toBe(0);
   });
 
   it("surfaces open attendance exceptions from the current pay period as a needs-attention alert, even after an earlier dashboard read cached a zero-count readiness row", async () => {
@@ -87,7 +87,7 @@ describe.runIf(dbReady)("dashboard attention alerts (PostgreSQL integration)", (
     const alert = body.alerts.find((a: { type: string }) => a.type === "attendance_exceptions");
     expect(alert).toBeDefined();
     expect(alert.count).toBeGreaterThan(0);
-    expect(body.payrollReadiness?.openExceptions).toBeGreaterThan(0);
+    expect(body.exportReadiness?.openExceptions).toBeGreaterThan(0);
   });
 
   it("honours the dateRange filter instead of silently returning the same window", async () => {
@@ -133,6 +133,7 @@ describe.runIf(dbReady)("dashboard attention alerts (PostgreSQL integration)", (
   });
 
   it("returns a rostered-guards series distinct from the shift-volume series", async () => {
+    await prisma.shift.deleteMany({ where: { companyId } });
     const employee = await prisma.employee.create({
       data: { companyId, employeeNumber: `DASH-ROSTER-${runId}`, firstName: "Roster", lastName: "Guard", status: "active", employeeType: "security_officer" },
     });

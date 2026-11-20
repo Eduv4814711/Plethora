@@ -209,6 +209,12 @@ export async function provisionTenantFixture(): Promise<TenantFixture> {
     tenantA,
     tenantB,
     teardown: async () => {
+      await prisma.payrollExportBatch.deleteMany({
+        where: { companyId: { in: [tenantA.companyId, tenantB.companyId] } },
+      });
+      await prisma.payrollExportProfile.deleteMany({
+        where: { companyId: { in: [tenantA.companyId, tenantB.companyId] } },
+      });
       await prisma.company.deleteMany({
         where: { id: { in: [tenantA.companyId, tenantB.companyId] } },
       });

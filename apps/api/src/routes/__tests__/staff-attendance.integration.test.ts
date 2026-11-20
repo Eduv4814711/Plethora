@@ -42,6 +42,10 @@ describe.runIf(dbReady)("office staff attendance (integration)", () => {
   beforeAll(async () => {
     app = await buildApp();
     fixture = await provisionTenantFixture();
+    await prisma.employee.update({
+      where: { id: fixture.tenantA.employeeId },
+      data: { employeeType: "security_officer" },
+    });
 
     const officeEmployee = await prisma.employee.create({
       data: {

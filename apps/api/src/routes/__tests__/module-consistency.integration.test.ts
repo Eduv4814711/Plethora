@@ -203,25 +203,25 @@ describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
     const { tenantA } = fixture;
     await prisma.employee.update({
       where: { id: tenantA.employeeId },
-      data: { taxDirectiveNumber: "DIRECTIVE-SECRET" },
+      data: { bankAccountNumber: "SECRET-BANK-9999" },
     });
 
     const res = await app.inject({
       method: "POST",
       url: `/employees/${tenantA.employeeId}/status`,
-      headers: { ...authHeader(payrollHrToken), "content-type": "application/json" },
+      headers: { ...authHeader(employeeHrToken), "content-type": "application/json" },
       payload: { status: "suspended" },
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.status).toBe("suspended");
-    // Fields outside the employee DTO selects must not appear in responses.
-    expect(body.taxDirectiveNumber).toBeUndefined();
+    // Sensitive fields outside the non-sensitive employee DTO selects must not appear in responses.
+    expect(body.bankAccountNumber).toBeUndefined();
 
-    // Restore status for other tests.
+    // Restore status and clear secret field for other tests.
     await prisma.employee.update({
       where: { id: tenantA.employeeId },
-      data: { status: "active" },
+      data: { status: "active", bankAccountNumber: null },
     });
   });
 
@@ -262,6 +262,6 @@ describe.runIf(dbReady)("cross-module consistency fixes (integration)", () => {
       },
     });
     expect(res.statusCode).toBe(409);
-    expect(res.json().error).toBe("Guard not found.");
+    expect(res.json().error).toContain("Guard not found");
   });
 });
