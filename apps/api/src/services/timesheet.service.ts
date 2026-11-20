@@ -3,6 +3,17 @@ import { prisma } from "../lib/prisma.js";
 import { dateKeyInTimeZone, getCompanyTimezone } from "../lib/timezone.js";
 import { employeeTypeConfig } from "../lib/leave-rules.config.js";
 import { toLeaveConfigEmployeeType } from "./leave-v3.service.js";
+import {
+  buildEffectiveHolidaySet,
+  parseLabourComplianceSettings,
+  resolveEmployeeBceaCategory,
+  toSastDateKey,
+} from "../lib/sa-labour-rules.config.js";
+import {
+  classifyEmployeePeriodShifts,
+  type EmployeeCredentialCheckInput,
+  type ShiftClassificationInput,
+} from "./sa-hours-classifier.service.js";
 
 export interface TimesheetSegment {
   siteId: string;
@@ -10,8 +21,10 @@ export interface TimesheetSegment {
   basicHours: number;
   overtimeHours: number;
   sundayHours: number;
+  sundayDoubleHours?: number;
   publicHolidayHours: number;
   nightShiftHours: number;
+  nightShiftCount?: number;
 }
 
 export interface TimesheetLeaveDay {
@@ -26,8 +39,10 @@ export interface TimesheetAggregate {
   basicHours: number;
   overtimeHours: number;
   sundayHours: number;
+  sundayDoubleHours?: number;
   publicHolidayHours: number;
   nightShiftHours: number;
+  nightShiftCount?: number;
   /** Derived from leave hours (hours / 8) for display and legacy consumers. */
   leaveDays: number;
   /** Paid leave hours (annual/sick/family_responsibility/study) approved in the period. */
@@ -131,9 +146,22 @@ export function isNightShift(params: {
   return hour >= 18 || hour < 6;
 }
 
+function roundHours2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+function anchorWorkDateToShiftStart(
+  workDate: Date,
+  shiftType: string | null | undefined,
+): Date {
+  const datePart = workDate.toISOString().slice(0, 10);
+  const hourPart = shiftType === "night" ? "18:00:00" : "06:00:00";
+  return new Date(`${datePart}T${hourPart}+02:00`);
+}
+
 /**
- * Aggregate hours from Shift + Attendance for a period.
- * Classifies hours into basic, overtime, sunday, public holiday using company timezone.
+ * Aggregate hours from SiteTimesheet + Shift/Attendance for a period using
+ * South African NBCPSS Main Collective Agreement + BCEA classification rules.
  */
 export async function aggregateTimesheets(
   companyId: string,
@@ -146,27 +174,67 @@ export async function aggregateTimesheets(
     periodEnd.getUTCMonth(),
     periodEnd.getUTCDate() + 1
   ));
+  const borderStart = new Date(Date.UTC(
+    periodStart.getUTCFullYear(),
+    periodStart.getUTCMonth(),
+    periodStart.getUTCDate() - 6
+  ));
+  const periodStartKey = toSastDateKey(periodStart);
+  const periodEndKey = toSastDateKey(periodEnd);
+  const borderStartKey = toSastDateKey(borderStart);
 
-  const holidayDates = new Set<string>();
-  const holidays = await prisma.publicHoliday.findMany({
-    where: {
-      companyId,
-      date: { gte: periodStart, lte: periodEnd },
-    },
-  });
-  for (const h of holidays) {
-    holidayDates.add(dateKeyInTimeZone(new Date(h.date), timeZone));
+  const [companyRow, siteMealRows, holidays] = await Promise.all([
+    (prisma as any).company?.findUnique?.({
+      where: { id: companyId },
+      select: { settings: true },
+    }) ?? Promise.resolve(null),
+    (prisma as any).site?.findMany?.({
+      where: { companyId },
+      select: { id: true, mealIntervalPaid: true, mealIntervalMinutes: true },
+    }) ?? Promise.resolve([]),
+    prisma.publicHoliday.findMany({
+      where: {
+        companyId,
+        date: { gte: borderStart, lte: periodEnd },
+      },
+    }),
+  ]);
+
+  const labourSettings = parseLabourComplianceSettings(companyRow?.settings);
+  const siteMealMap = new Map<string, { mealIntervalPaid: boolean; mealIntervalMinutes: number }>();
+  for (const s of (siteMealRows ?? []) as Array<{
+    id: string;
+    mealIntervalPaid?: boolean;
+    mealIntervalMinutes?: number;
+  }>) {
+    siteMealMap.set(s.id, {
+      mealIntervalPaid: s.mealIntervalPaid ?? true,
+      mealIntervalMinutes: s.mealIntervalMinutes ?? 60,
+    });
   }
 
+  const holidayYears = new Set<number>();
+  for (let y = borderStart.getUTCFullYear(); y <= periodEnd.getUTCFullYear(); y++) {
+    holidayYears.add(y);
+  }
+  const effectiveHolidays = buildEffectiveHolidaySet(
+    holidayYears,
+    holidays.map((h) => ({
+      date: new Date(h.date),
+      name: (h as { name?: string }).name,
+      isRecurring: Boolean((h as { isRecurring?: boolean }).isRecurring),
+    })),
+    true,
+  );
+
   // Per-site aggregation: a site contributes hours either through its approved/locked
-  // site timesheet rows OR through raw shift attendance — never both. This avoids the
-  // legacy all-or-nothing switch where one approved site disabled raw attendance for all.
+  // site timesheet rows OR through raw shift attendance — never both.
   const approvedTimesheets = await prisma.siteTimesheet.findMany({
     where: {
       companyId,
       status: { in: ["approved", "locked"] },
       periodStart: { lte: periodEnd },
-      periodEnd: { gte: periodStart },
+      periodEnd: { gte: borderStart },
     },
     select: { id: true, siteId: true, periodStart: true, periodEnd: true },
   });
@@ -176,24 +244,41 @@ export async function aggregateTimesheets(
         where: {
           companyId,
           siteTimesheetId: { in: approvedTimesheets.map((timesheet) => timesheet.id) },
-          workDate: { gte: periodStart, lte: periodEnd },
+          workDate: { gte: borderStart, lte: periodEnd },
           actualGuardId: { not: null },
           attendanceStatus: {
             in: ["present", "late", "left_early", "reliever", "shift_swapped", "leave", "sick_leave", "training"],
           },
         },
+        include: {
+          actualGuard: {
+            select: {
+              employeeType: true,
+              bceaSectorOverride: true,
+              psiraRegistrationExpiry: true,
+              firearmCompetency: true,
+              firearmCompetencyExpiry: true,
+            },
+          },
+        },
       })
     : [];
-  const approvedSiteRows = approvedSiteRowsRaw.filter((row) =>
-    approvedCoverage.has(`${row.siteId}:${row.workDate.toISOString().slice(0, 10)}`)
-  );
+
+  const approvedSiteRows = approvedSiteRowsRaw.filter((row) => {
+    const dk = row.workDate.toISOString().slice(0, 10);
+    return approvedCoverage.has(`${row.siteId}:${dk}`);
+  });
+  const inPeriodApprovedSiteRows = approvedSiteRows.filter((row) => {
+    const dk = row.workDate.toISOString().slice(0, 10);
+    return dk >= periodStartKey && dk <= periodEndKey;
+  });
   const approvedSourceShiftIds = new Set(
-    approvedSiteRows
+    inPeriodApprovedSiteRows
       .map((row) => row.sourceShiftId)
       .filter((id): id is string => typeof id === "string")
   );
   const approvedFallbackShiftKeys = new Set(
-    approvedSiteRows
+    inPeriodApprovedSiteRows
       .filter((row) => row.sourceShiftId == null && row.actualGuardId != null)
       .map((row) =>
         siteTimesheetShiftMatchKey(
@@ -210,7 +295,7 @@ export async function aggregateTimesheets(
       companyId,
       status: { in: ["completed", "verified"] },
       startTime: { lt: periodEndExclusive },
-      endTime: { gt: periodStart },
+      endTime: { gt: borderStart },
       attendances: {
         some: {
           clockIn: { not: null },
@@ -241,11 +326,6 @@ export async function aggregateTimesheets(
       )
   );
 
-  // Paid leave types (annual/sick/family_responsibility/study) contribute
-  // leaveHours; parental leave is unpaid by statute and contributes
-  // unpaidLeaveHours instead. UIF/IOD/information-only treatments no longer
-  // exist as leave types in the simple engine, so those buckets always
-  // report zero — out of scope per the leave rebuild (see README).
   const approvedLeaveRequests = await prisma.leaveRequest.findMany({
     where: {
       companyId,
@@ -325,14 +405,17 @@ export async function aggregateTimesheets(
       basicHours: number;
       overtimeHours: number;
       sundayHours: number;
+      sundayDoubleHours: number;
       publicHolidayHours: number;
       nightShiftHours: number;
+      nightShiftCount: number;
     }
   ) {
     if (
       bucket.basicHours === 0 &&
       bucket.overtimeHours === 0 &&
       bucket.sundayHours === 0 &&
+      bucket.sundayDoubleHours === 0 &&
       bucket.publicHolidayHours === 0 &&
       bucket.nightShiftHours === 0
     ) {
@@ -342,15 +425,17 @@ export async function aggregateTimesheets(
       employeeSegmentsMap.set(empId, new Map());
     }
     const map = employeeSegmentsMap.get(empId)!;
-    const dateKey = workDate.toISOString().slice(0, 10);
-    const key = `${siteId}:${dateKey}`;
+    const dk = workDate.toISOString().slice(0, 10);
+    const key = `${siteId}:${dk}`;
     const existing = map.get(key);
     if (existing) {
       existing.basicHours += bucket.basicHours;
       existing.overtimeHours += bucket.overtimeHours;
       existing.sundayHours += bucket.sundayHours;
+      existing.sundayDoubleHours = (existing.sundayDoubleHours ?? 0) + bucket.sundayDoubleHours;
       existing.publicHolidayHours += bucket.publicHolidayHours;
       existing.nightShiftHours += bucket.nightShiftHours;
+      existing.nightShiftCount = (existing.nightShiftCount ?? 0) + bucket.nightShiftCount;
     } else {
       map.set(key, {
         siteId,
@@ -358,8 +443,10 @@ export async function aggregateTimesheets(
         basicHours: bucket.basicHours,
         overtimeHours: bucket.overtimeHours,
         sundayHours: bucket.sundayHours,
+        sundayDoubleHours: bucket.sundayDoubleHours,
         publicHolidayHours: bucket.publicHolidayHours,
         nightShiftHours: bucket.nightShiftHours,
+        nightShiftCount: bucket.nightShiftCount,
       });
     }
   }
@@ -369,10 +456,6 @@ export async function aggregateTimesheets(
     const overlapEnd = request.endDate < periodEnd ? request.endDate : periodEnd;
     if (overlapEnd < overlapStart) continue;
 
-    // A request spanning a pay-period boundary contributes only the
-    // proportion of its units that fall within this period, split evenly
-    // across the calendar days of the request (an approximation, not a
-    // roster-aware day-by-day allocation).
     const totalDays = Math.round((request.endDate.getTime() - request.startDate.getTime()) / DAY_MS) + 1;
     const overlapDays = Math.round((overlapEnd.getTime() - overlapStart.getTime()) / DAY_MS) + 1;
     const ratio = totalDays > 0 ? overlapDays / totalDays : 0;
@@ -409,142 +492,241 @@ export async function aggregateTimesheets(
     }
   }
 
+  interface QueuedWorkedShift {
+    classificationInput: ShiftClassificationInput;
+    siteId: string;
+    workDate: Date;
+  }
+
+  const employeeWorkedQueue = new Map<string, QueuedWorkedShift[]>();
+  const employeeCredentialsMap = new Map<string, EmployeeCredentialCheckInput>();
   const totals = new Map<
     string,
     {
       basicHours: number;
       overtimeHours: number;
       sundayHours: number;
+      sundayDoubleHours: number;
       publicHolidayHours: number;
       nightShiftHours: number;
+      nightShiftCount: number;
       workedShiftsCount: number;
     }
   >();
 
-  for (const row of approvedSiteRows) {
-    const empId = row.actualGuardId;
-    if (!empId) continue;
-    addSourceSiteTimesheet(empId, row.siteTimesheetId);
-    if (row.attendanceStatus === "leave" || row.attendanceStatus === "sick_leave") {
-      const dayKey = `${empId}:${row.workDate.toISOString().slice(0, 10)}`;
-      if (!knownLeaveDayKeys.has(dayKey)) {
-        const fallbackHours = row.hoursWorked != null ? Number(row.hoursWorked) : 8;
-        if (Number.isFinite(fallbackHours) && fallbackHours > 0 && fallbackHours <= MAX_LEAVE_HOURS_PER_RECORD) {
-          employeeLeaveHours.set(empId, (employeeLeaveHours.get(empId) ?? 0) + fallbackHours);
-          const leaveType = row.attendanceStatus === "sick_leave" ? "SICK" : "ANNUAL";
-          addLeaveHoursByType(empId, leaveType, fallbackHours);
-          const date = new Date(row.workDate);
-          date.setUTCHours(0, 0, 0, 0);
-          if (!employeeLeaveDaysList.has(empId)) {
-            employeeLeaveDaysList.set(empId, []);
-          }
-          employeeLeaveDaysList.get(empId)!.push({
-            date,
-            leaveType,
-            hours: fallbackHours,
-            isPaid: true,
-          });
-        }
-      }
-      // Leave is paid or deducted from the leave source of truth. It is never
-      // also ordinary worked time from the site-timesheet row.
-      continue;
+  function enqueueWorked(empId: string, item: QueuedWorkedShift) {
+    if (!employeeWorkedQueue.has(empId)) {
+      employeeWorkedQueue.set(empId, []);
     }
+    employeeWorkedQueue.get(empId)!.push(item);
+  }
+
+  function ensureTotalsEntry(empId: string) {
     if (!totals.has(empId)) {
       totals.set(empId, {
         basicHours: 0,
         overtimeHours: 0,
         sundayHours: 0,
+        sundayDoubleHours: 0,
         publicHolidayHours: 0,
         nightShiftHours: 0,
+        nightShiftCount: 0,
         workedShiftsCount: 0,
       });
     }
-    const t = totals.get(empId)!;
-    const hoursWorked = row.hoursWorked != null ? Number(row.hoursWorked) : row.attendanceStatus === "training" ? 8 : 0;
-    const overtimeHours = row.overtimeHours != null ? Number(row.overtimeHours) : 0;
-    const bucket = classifyShiftHours({
-      shiftStartTime: row.clockIn ?? row.workDate,
-      hoursWorked,
-      overtimeHours,
-      timeZone,
-      holidayDates,
-    });
-    const shiftWorkedHours =
-      bucket.basicHours + bucket.overtimeHours + bucket.sundayHours + bucket.publicHolidayHours;
-    const nightHours =
-      shiftWorkedHours > 0 &&
-      isNightShift({
-        shiftStartTime: row.clockIn ?? row.workDate,
-        timeZone,
-        shiftType: row.actualShiftType,
-      })
-        ? shiftWorkedHours
-        : 0;
-    if (shiftWorkedHours > 0) {
-      t.workedShiftsCount += 1;
+    return totals.get(empId)!;
+  }
+
+  for (const row of approvedSiteRows) {
+    const empId = row.actualGuardId;
+    if (!empId) continue;
+    const dk = row.workDate.toISOString().slice(0, 10);
+    if (dk < borderStartKey || dk > periodEndKey) continue;
+    const isCarryover = dk < periodStartKey;
+
+    if (!isCarryover) {
+      addSourceSiteTimesheet(empId, row.siteTimesheetId);
     }
-    t.basicHours += bucket.basicHours;
-    t.overtimeHours += bucket.overtimeHours;
-    t.sundayHours += bucket.sundayHours;
-    t.publicHolidayHours += bucket.publicHolidayHours;
-    t.nightShiftHours += nightHours;
+
+    if (row.attendanceStatus === "leave" || row.attendanceStatus === "sick_leave") {
+      if (!isCarryover) {
+        const dayKey = `${empId}:${dk}`;
+        if (!knownLeaveDayKeys.has(dayKey)) {
+          const fallbackHours = row.hoursWorked != null ? Number(row.hoursWorked) : 8;
+          if (Number.isFinite(fallbackHours) && fallbackHours > 0 && fallbackHours <= MAX_LEAVE_HOURS_PER_RECORD) {
+            employeeLeaveHours.set(empId, (employeeLeaveHours.get(empId) ?? 0) + fallbackHours);
+            const leaveType = row.attendanceStatus === "sick_leave" ? "SICK" : "ANNUAL";
+            addLeaveHoursByType(empId, leaveType, fallbackHours);
+            const date = new Date(row.workDate);
+            date.setUTCHours(0, 0, 0, 0);
+            if (!employeeLeaveDaysList.has(empId)) {
+              employeeLeaveDaysList.set(empId, []);
+            }
+            employeeLeaveDaysList.get(empId)!.push({
+              date,
+              leaveType,
+              hours: fallbackHours,
+              isPaid: true,
+            });
+          }
+        }
+      }
+      continue;
+    }
+
+    if ((row as { actualGuard?: EmployeeCredentialCheckInput | null }).actualGuard) {
+      employeeCredentialsMap.set(
+        empId,
+        (row as { actualGuard: EmployeeCredentialCheckInput }).actualGuard,
+      );
+    }
+
+    const hoursWorked = row.hoursWorked != null ? Number(row.hoursWorked) : row.attendanceStatus === "training" ? 8 : 0;
+    const explicitOt = row.overtimeHours != null ? Number(row.overtimeHours) : 0;
+    const totalShiftHours = hoursWorked + explicitOt;
+    const siteMeal = siteMealMap.get(row.siteId);
+    const startTime = row.clockIn ?? anchorWorkDateToShiftStart(row.workDate, row.actualShiftType);
+    const endTime = new Date(startTime.getTime() + Math.max(0, totalShiftHours) * 3_600_000);
+    const scheduledEndTime =
+      explicitOt > 0 ? new Date(startTime.getTime() + Math.max(0, hoursWorked) * 3_600_000) : undefined;
+    const guardObj = (row as {
+      actualGuard?: { employeeType?: string | null; bceaSectorOverride?: string | null } | null;
+    }).actualGuard;
 
     const rowWorkDate = new Date(row.workDate);
     rowWorkDate.setUTCHours(0, 0, 0, 0);
-    addSegment(empId, row.siteId, rowWorkDate, { ...bucket, nightShiftHours: nightHours });
+
+    if (!isCarryover) {
+      ensureTotalsEntry(empId);
+    }
+
+    enqueueWorked(empId, {
+      siteId: row.siteId,
+      workDate: rowWorkDate,
+      classificationInput: {
+        id: `row:${row.id}`,
+        employeeId: empId,
+        siteId: row.siteId,
+        startTime,
+        endTime,
+        scheduledStartTime: explicitOt > 0 ? startTime : undefined,
+        scheduledEndTime,
+        isScheduledOnRoster: !(row.attendanceStatus === "reliever" && !row.plannedGuardId && !row.sourceShiftId),
+        mealIntervalPaid: siteMeal?.mealIntervalPaid ?? true,
+        mealIntervalMinutes: siteMeal?.mealIntervalMinutes ?? 60,
+        employeeCategory: resolveEmployeeBceaCategory(
+          guardObj?.employeeType,
+          guardObj?.bceaSectorOverride,
+          companyRow?.settings,
+        ),
+        isCarryoverContextOnly: isCarryover,
+      },
+    });
   }
 
   for (const shift of shiftsWithAttendance) {
     const empId = shift.employeeId;
-    if (!totals.has(empId)) {
-      totals.set(empId, {
-        basicHours: 0,
-        overtimeHours: 0,
-        sundayHours: 0,
-        publicHolidayHours: 0,
-        nightShiftHours: 0,
-        workedShiftsCount: 0,
-      });
+    const shiftStartKey = toSastDateKey(shift.startTime);
+    if (shiftStartKey < borderStartKey || shiftStartKey > periodEndKey) continue;
+    const isCarryover = shiftStartKey < periodStartKey;
+
+    if (!isCarryover) {
+      ensureTotalsEntry(empId);
     }
-    const t = totals.get(empId)!;
+
+    if ((shift as { employee?: EmployeeCredentialCheckInput | null }).employee) {
+      employeeCredentialsMap.set(
+        empId,
+        (shift as { employee: EmployeeCredentialCheckInput }).employee,
+      );
+    }
 
     const shiftStartZoned = toZonedTime(shift.startTime, timeZone);
     const shiftWorkDate = new Date(
       Date.UTC(shiftStartZoned.getFullYear(), shiftStartZoned.getMonth(), shiftStartZoned.getDate())
     );
+    const siteMeal = siteMealMap.get(shift.siteId);
+    const empObj = (shift as {
+      employee?: { employeeType?: string | null; bceaSectorOverride?: string | null } | null;
+    }).employee;
 
     for (const att of shift.attendances) {
       const hoursWorked = att.hoursWorked != null ? Number(att.hoursWorked) : 0;
-      const overtimeHours = att.overtimeHours != null ? Number(att.overtimeHours) : 0;
-      const bucket = classifyShiftHours({
-        shiftStartTime: shift.startTime,
-        hoursWorked,
-        overtimeHours,
-        timeZone,
-        holidayDates,
+      const explicitOt = att.overtimeHours != null ? Number(att.overtimeHours) : 0;
+      const totalShiftHours = hoursWorked + explicitOt;
+      const startTime = shift.startTime;
+      const endTime = new Date(startTime.getTime() + Math.max(0, totalShiftHours) * 3_600_000);
+      const scheduledEndTime =
+        explicitOt > 0 ? new Date(startTime.getTime() + Math.max(0, hoursWorked) * 3_600_000) : undefined;
+
+      enqueueWorked(empId, {
+        siteId: shift.siteId,
+        workDate: shiftWorkDate,
+        classificationInput: {
+          id: `att:${att.id}`,
+          employeeId: empId,
+          siteId: shift.siteId,
+          startTime,
+          endTime,
+          scheduledStartTime: explicitOt > 0 ? startTime : undefined,
+          scheduledEndTime,
+          isScheduledOnRoster: true,
+          mealIntervalPaid: siteMeal?.mealIntervalPaid ?? true,
+          mealIntervalMinutes: siteMeal?.mealIntervalMinutes ?? 60,
+          employeeCategory: resolveEmployeeBceaCategory(
+            empObj?.employeeType,
+            empObj?.bceaSectorOverride,
+            companyRow?.settings,
+          ),
+          isCarryoverContextOnly: isCarryover,
+        },
       });
-      const shiftWorkedHours =
-        bucket.basicHours + bucket.overtimeHours + bucket.sundayHours + bucket.publicHolidayHours;
-      const nightHours =
-        shiftWorkedHours > 0 &&
-        isNightShift({
-          shiftStartTime: shift.startTime,
-          timeZone,
-          shiftType: shift.shiftType,
-        })
-          ? shiftWorkedHours
-          : 0;
-      if (shiftWorkedHours > 0) {
+    }
+  }
+
+  for (const [empId, queue] of employeeWorkedQueue) {
+    const hasInPeriod = queue.some((q) => !q.classificationInput.isCarryoverContextOnly);
+    if (!hasInPeriod) continue;
+
+    const classifiedPeriod = classifyEmployeePeriodShifts({
+      employeeId: empId,
+      shifts: queue.map((q) => q.classificationInput),
+      holidays: effectiveHolidays,
+      settings: labourSettings,
+      employeeCredentials: employeeCredentialsMap.get(empId),
+    });
+
+    const t = ensureTotalsEntry(empId);
+    for (const item of queue) {
+      if (item.classificationInput.isCarryoverContextOnly) continue;
+      const res = classifiedPeriod.byShiftId.get(item.classificationInput.id);
+      if (!res) continue;
+
+      const effectiveSunday = labourSettings.sundayDoubleRateSplit
+        ? res.sundayHours
+        : roundHours2(res.sundayHours + res.sundayDoubleHours);
+      const effectiveSundayDouble = labourSettings.sundayDoubleRateSplit ? res.sundayDoubleHours : 0;
+
+      if (res.totalHours > 0) {
         t.workedShiftsCount += 1;
       }
-      t.basicHours += bucket.basicHours;
-      t.overtimeHours += bucket.overtimeHours;
-      t.sundayHours += bucket.sundayHours;
-      t.publicHolidayHours += bucket.publicHolidayHours;
-      t.nightShiftHours += nightHours;
+      t.basicHours += res.basicHours;
+      t.overtimeHours += res.overtimeHours;
+      t.sundayHours += effectiveSunday;
+      t.sundayDoubleHours += effectiveSundayDouble;
+      t.publicHolidayHours += res.publicHolidayHours;
+      t.nightShiftHours += res.nightShiftHours;
+      t.nightShiftCount += res.nightShiftCount;
 
-      addSegment(empId, shift.siteId, shiftWorkDate, { ...bucket, nightShiftHours: nightHours });
+      addSegment(empId, item.siteId, item.workDate, {
+        basicHours: res.basicHours,
+        overtimeHours: res.overtimeHours,
+        sundayHours: effectiveSunday,
+        sundayDoubleHours: effectiveSundayDouble,
+        publicHolidayHours: res.publicHolidayHours,
+        nightShiftHours: res.nightShiftHours,
+        nightShiftCount: res.nightShiftCount,
+      });
     }
   }
 
@@ -557,8 +739,10 @@ export async function aggregateTimesheets(
       basicHours: Math.round(s.basicHours * 100) / 100,
       overtimeHours: Math.round(s.overtimeHours * 100) / 100,
       sundayHours: Math.round(s.sundayHours * 100) / 100,
+      sundayDoubleHours: Math.round((s.sundayDoubleHours ?? 0) * 100) / 100,
       publicHolidayHours: Math.round(s.publicHolidayHours * 100) / 100,
       nightShiftHours: Math.round(s.nightShiftHours * 100) / 100,
+      nightShiftCount: s.nightShiftCount ?? 0,
     }));
   }
 
@@ -573,8 +757,10 @@ export async function aggregateTimesheets(
       basicHours: Math.round(t.basicHours * 100) / 100,
       overtimeHours: Math.round(t.overtimeHours * 100) / 100,
       sundayHours: Math.round(t.sundayHours * 100) / 100,
+      sundayDoubleHours: Math.round(t.sundayDoubleHours * 100) / 100,
       publicHolidayHours: Math.round(t.publicHolidayHours * 100) / 100,
       nightShiftHours: Math.round(t.nightShiftHours * 100) / 100,
+      nightShiftCount: t.nightShiftCount,
       leaveHours,
       unpaidLeaveHours: Math.round((employeeUnpaidLeaveHours.get(employeeId) ?? 0) * 100) / 100,
       uifLeaveHours: Math.round((employeeUifLeaveHours.get(employeeId) ?? 0) * 100) / 100,
@@ -598,8 +784,10 @@ export async function aggregateTimesheets(
       basicHours: 0,
       overtimeHours: 0,
       sundayHours: 0,
+      sundayDoubleHours: 0,
       publicHolidayHours: 0,
       nightShiftHours: 0,
+      nightShiftCount: 0,
       leaveHours,
       unpaidLeaveHours: Math.round((employeeUnpaidLeaveHours.get(employeeId) ?? 0) * 100) / 100,
       uifLeaveHours: Math.round((employeeUifLeaveHours.get(employeeId) ?? 0) * 100) / 100,
@@ -621,8 +809,10 @@ export async function aggregateTimesheets(
       basicHours: 0,
       overtimeHours: 0,
       sundayHours: 0,
+      sundayDoubleHours: 0,
       publicHolidayHours: 0,
       nightShiftHours: 0,
+      nightShiftCount: 0,
       leaveHours: 0,
       unpaidLeaveHours: Math.round(unpaidLeaveHoursRaw * 100) / 100,
       uifLeaveHours: Math.round((employeeUifLeaveHours.get(employeeId) ?? 0) * 100) / 100,
@@ -640,7 +830,7 @@ export async function aggregateTimesheets(
   for (const employeeId of new Set([...employeeUifLeaveHours.keys(), ...employeeIodLeaveHours.keys(), ...employeeInformationLeaveHours.keys()])) {
     if (seen.has(employeeId) || employeeUnpaidLeaveHours.has(employeeId)) continue;
     result.push({
-      employeeId, basicHours: 0, overtimeHours: 0, sundayHours: 0, publicHolidayHours: 0, nightShiftHours: 0,
+      employeeId, basicHours: 0, overtimeHours: 0, sundayHours: 0, sundayDoubleHours: 0, publicHolidayHours: 0, nightShiftHours: 0, nightShiftCount: 0,
       leaveHours: 0, unpaidLeaveHours: 0, leaveDays: 0,
       uifLeaveHours: Math.round((employeeUifLeaveHours.get(employeeId) ?? 0) * 100) / 100,
       iodLeaveHours: Math.round((employeeIodLeaveHours.get(employeeId) ?? 0) * 100) / 100,

@@ -13,6 +13,10 @@ import {
   replaceGuard,
   fetchAvailableGuards,
 } from "@/lib/attendance-today-api";
+import {
+  getAttendanceReplacementSuggestions,
+  type RankedReplacementCandidate,
+} from "@/lib/roster-api";
 
 interface GuardRowProps {
   guard: GuardAttendanceItem;
@@ -78,6 +82,7 @@ export function ControllerGuardRow({ guard, token, onRefresh }: GuardRowProps) {
 
   // Replacement modal state
   const [availableGuards, setAvailableGuards] = useState<AvailableGuardOption[]>([]);
+  const [rankedCandidates, setRankedCandidates] = useState<RankedReplacementCandidate[]>([]);
   const [loadingGuards, setLoadingGuards] = useState(false);
   const [selectedReplacementId, setSelectedReplacementId] = useState("");
   const [replacementReason, setReplacementReason] = useState("");
@@ -172,11 +177,17 @@ export function ControllerGuardRow({ guard, token, onRefresh }: GuardRowProps) {
     setReplacementReason("");
     setSelectedReplacementId("");
     setGuardSearch("");
+    setRankedCandidates([]);
     setReplaceModalOpen(true);
     setLoadingGuards(true);
     try {
-      const guards = await fetchAvailableGuards(token);
-      // Filter out the currently assigned guard
+      const [rankedRes, guards] = await Promise.all([
+        getAttendanceReplacementSuggestions(token, guard.shiftId).catch(() => null),
+        fetchAvailableGuards(token),
+      ]);
+      if (rankedRes?.candidates) {
+        setRankedCandidates(rankedRes.candidates);
+      }
       setAvailableGuards(guards.filter((g) => g.id !== guard.employeeId));
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to load active guards");
@@ -404,12 +415,72 @@ export function ControllerGuardRow({ guard, token, onRefresh }: GuardRowProps) {
                   className="input-modern mt-1 w-full text-xs"
                 />
 
-                <div className="mt-2 max-h-48 overflow-y-auto rounded border border-security-navy-200 bg-security-navy-50/50 p-1 divide-y divide-security-navy-100 dark:border-security-navy-800 dark:bg-security-navy-950">
+                <div className="mt-2 max-h-56 overflow-y-auto rounded border border-security-navy-200 bg-security-navy-50/50 p-1 divide-y divide-security-navy-100 dark:border-security-navy-800 dark:bg-security-navy-950">
                   {loadingGuards ? (
                     <div className="p-4 text-center">
                       <Spinner className="h-5 w-5 mx-auto text-security-navy-600 mb-1" />
-                      <p className="text-xs text-security-navy-500">Loading active guards...</p>
+                      <p className="text-xs text-security-navy-500">Ranking guards by SA overtime &amp; PSIRA…</p>
                     </div>
+                  ) : rankedCandidates.length > 0 ? (
+                    rankedCandidates
+                      .filter((c) => {
+                        if (!guardSearch.trim()) return true;
+                        const term = guardSearch.toLowerCase();
+                        return `${c.fullName} ${c.employeeNumber}`.toLowerCase().includes(term);
+                      })
+                      .map((c) => (
+                        <label
+                          key={c.employeeId}
+                          className={`flex flex-col gap-1 p-2.5 rounded transition-colors text-xs ${
+                            !c.eligible
+                              ? "opacity-45 cursor-not-allowed"
+                              : selectedReplacementId === c.employeeId
+                                ? "bg-security-navy-800 text-white font-semibold cursor-pointer"
+                                : "hover:bg-white dark:hover:bg-security-navy-900 text-security-navy-800 dark:text-security-navy-200 cursor-pointer"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name="replacementGuard"
+                                value={c.employeeId}
+                                disabled={!c.eligible}
+                                checked={selectedReplacementId === c.employeeId}
+                                onChange={() => setSelectedReplacementId(c.employeeId)}
+                                className="sr-only"
+                              />
+                              <span>{c.fullName}</span>
+                              <span className="text-[10px] opacity-75">#{c.employeeNumber}</span>
+                            </div>
+                            <span className="text-[10px] tabular-nums opacity-85">
+                              {c.weekHoursBefore}h → {c.weekHoursAfter}h
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {c.eligible ? (
+                              c.badges.map((b) => (
+                                <span
+                                  key={b}
+                                  className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                                    selectedReplacementId === c.employeeId
+                                      ? "bg-white/20 text-white"
+                                      : b === "Zero OT"
+                                        ? "bg-emerald-100 text-emerald-900"
+                                        : b.startsWith("+")
+                                          ? "bg-amber-100 text-amber-900"
+                                          : "bg-security-navy-100 text-security-navy-700 dark:bg-security-navy-800 dark:text-security-navy-300"
+                                  }`}
+                                >
+                                  {b}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-[10px] text-red-600">{c.ineligibleReason}</span>
+                            )}
+                          </div>
+                        </label>
+                      ))
                   ) : filteredReplacementGuards.length === 0 ? (
                     <p className="p-4 text-center text-xs text-security-navy-500">
                       No active replacement guards found matching your search.

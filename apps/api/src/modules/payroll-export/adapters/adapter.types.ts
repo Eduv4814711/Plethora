@@ -64,8 +64,10 @@ export interface NormalizedExportLine {
   basicHours: number;
   overtimeHours: number;
   sundayHours: number;
+  sundayDoubleHours?: number;
   publicHolidayHours: number;
   nightShiftHours: number;
+  nightShiftCount?: number;
   annualLeaveHours: number;
   sickLeaveHours: number;
   familyLeaveHours: number;

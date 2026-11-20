@@ -246,6 +246,11 @@ model Employee {
   criminalInvestigation   Boolean?
   mentallyUnstable        Boolean?
   trainingCompleted       Boolean?
+  firearmCompetency       Boolean   @default(false)
+  firearmCompetencyExpiry DateTime?
+  armedGuard              Boolean   @default(false)
+  bceaSectorOverride      String?
+  preferredShiftType      String?
 
   groupId                   String?
   company                   Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -356,6 +361,12 @@ model Site {
   rosterLastReconciledAt         DateTime?
   rosterLastReconciliationStatus String?
   rosterContinuityPauseReason    String?               @db.Text
+  /// SA Labour, Occurrence Book, Meal Interval & Rostering Framework defaults (nullable = inherit company settings)
+  obBookMode                     String?
+  psiraEnforcementMode           String?
+  operatingFramework             String?
+  mealIntervalPaid               Boolean               @default(true)
+  mealIntervalMinutes            Int                   @default(60)
   createdAt                      DateTime              @default(now())
   updatedAt                      DateTime              @updatedAt
 
@@ -448,13 +459,17 @@ enum SiteGuardAssignmentType {
 }
 
 model SitePost {
-  id        String   @id @default(cuid())
-  siteId    String
-  name      String
-  sortOrder Int      @default(0)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                     String   @id @default(cuid())
+  siteId                 String
+  name                   String
+  sortOrder              Int      @default(0)
+  isActive               Boolean  @default(true)
+  requiredPsiraGrade     String?
+  requiresFirearm        Boolean  @default(false)
+  requiredGender         String?
+  shiftPatternPreference String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   site                      Site                       @relation(fields: [siteId], references: [id], onDelete: Cascade)
   guardEligibilities        GuardSiteEligibility[]
@@ -652,6 +667,9 @@ model SiteTimesheetRow {
   occurrenceBookNumber String?
   comments             String?
   discrepancyCodes     Json?
+  sundayDoubleHours    Decimal                 @default(0) @db.Decimal(8, 2)
+  nightShiftCount      Int                     @default(0)
+  complianceFlags      Json?
   sourceShiftId        String?
   sourceAttendanceId   String?
   createdAt            DateTime                @default(now())
@@ -2399,8 +2417,10 @@ model PayrollExportLine {
   basicHours          Decimal  @default(0) @db.Decimal(10, 2)
   overtimeHours       Decimal  @default(0) @db.Decimal(10, 2)
   sundayHours         Decimal  @default(0) @db.Decimal(10, 2)
+  sundayDoubleHours   Decimal  @default(0) @db.Decimal(10, 2)
   publicHolidayHours  Decimal  @default(0) @db.Decimal(10, 2)
   nightShiftHours     Decimal  @default(0) @db.Decimal(10, 2)
+  nightShiftCount     Int      @default(0)
   annualLeaveHours    Decimal  @default(0) @db.Decimal(10, 2)
   sickLeaveHours      Decimal  @default(0) @db.Decimal(10, 2)
   familyLeaveHours    Decimal  @default(0) @db.Decimal(10, 2)

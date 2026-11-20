@@ -16,6 +16,27 @@ export function rowNeedsObNumbers(attendanceStatus: SiteTimesheetAttendance | st
   return true;
 }
 
+export type ObBookModeUi = "REQUIRED" | "OPTIONAL_WHEN_DIGITAL" | "OPTIONAL";
+
+/** Mode-aware OB requirement helper matching backend `rowRequiresObNumbers`. */
+export function rowRequiresObInUi(
+  row: {
+    attendanceStatus: SiteTimesheetAttendance | string;
+    clockIn?: string | null;
+    clockOut?: string | null;
+  },
+  obBookMode: ObBookModeUi = "REQUIRED",
+  statusOverride?: SiteTimesheetAttendance | string
+): boolean {
+  const effectiveStatus = statusOverride ?? row.attendanceStatus;
+  if (!rowNeedsObNumbers(effectiveStatus)) return false;
+  if (obBookMode === "OPTIONAL") return false;
+  if (obBookMode === "OPTIONAL_WHEN_DIGITAL") {
+    return !Boolean(row.clockIn && row.clockOut);
+  }
+  return true;
+}
+
 export function isRowPendingReview(approvalStatus: string): boolean {
   return approvalStatus === "pending" || approvalStatus === "partially_reviewed";
 }

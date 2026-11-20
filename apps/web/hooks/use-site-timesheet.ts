@@ -24,7 +24,7 @@ import {
   resolveDutyOffFromRow,
   resolveDutyOnFromRow,
   rowMatchesShiftTypeFilter,
-  rowNeedsObNumbers,
+  rowRequiresObInUi,
   sortSiteTimesheetRows,
 } from "@/lib/site-timesheet-utils";
 import { buildRowApprovalPatch, isBulkConfirmable } from "@/lib/site-timesheet-row-patch";
@@ -242,7 +242,7 @@ export function useSiteTimesheet(params: {
   const approveRowAttendance = async (row: SiteTimesheetRow) => {
     const dutyOn = getDutyOnDraft(row).trim();
     const dutyOff = getDutyOffDraft(row).trim();
-    const needsOb = rowNeedsObNumbers(row.attendanceStatus);
+    const needsOb = rowRequiresObInUi(row, sheet?.obBookMode ?? "REQUIRED");
     if (needsOb && (!dutyOn || !dutyOff)) {
       showNotice(
         "Cannot confirm this attendance entry",

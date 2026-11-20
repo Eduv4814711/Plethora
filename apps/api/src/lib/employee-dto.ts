@@ -19,6 +19,11 @@ export const employeeListSelect = {
   psiraRegistrationNumber: true,
   psiraRegistrationExpiry: true,
   psiraGrade: true,
+  firearmCompetency: true,
+  firearmCompetencyExpiry: true,
+  armedGuard: true,
+  bceaSectorOverride: true,
+  preferredShiftType: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.EmployeeSelect;

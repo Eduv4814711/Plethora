@@ -272,6 +272,13 @@ export interface CompanySettings {
     adminOfficeLatitude?: number | null;
     adminOfficeLongitude?: number | null;
     adminGeofenceRadiusMeters?: number | null;
+    obBookMode?: "REQUIRED" | "OPTIONAL_WHEN_DIGITAL" | "OPTIONAL";
+    psiraEnforcementMode?: "BLOCK" | "WARN" | "OFF";
+    averagingEnabled?: boolean;
+    averagingWeeks?: number;
+    overnightBoundaryMode?: "shift_start_day" | "midnight_split";
+    sundayDoubleRateSplit?: boolean;
+    fortnightlyRestEnabled?: boolean;
   } | null;
 }
 

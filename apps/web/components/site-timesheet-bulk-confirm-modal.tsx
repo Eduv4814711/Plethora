@@ -2,26 +2,25 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { BulkConfirmResult, SiteTimesheetRow } from "@/lib/roster-api";
-import { suggestNextObNumber } from "@/lib/site-timesheet-utils";
+import { rowRequiresObInUi, suggestNextObNumber, type ObBookModeUi } from "@/lib/site-timesheet-utils";
 import { humanizeCode } from "@/lib/site-timesheet-row-patch";
 
 type Draft = { dutyOn: string; dutyOff: string };
 
 /**
  * Confirm a whole day (or a whole sheet) of routine shifts in one pass.
- *
- * OB numbers stay mandatory per shift — they are the occurrence book audit trail — so the
- * modal collects them in a single grid instead of asking the controller to walk each row
- * card. Duty ON numbers auto-advance from the row above, which is how the book is written.
+ * Respects per-site `obBookMode` (`REQUIRED` | `OPTIONAL_WHEN_DIGITAL` | `OPTIONAL`).
  */
 export function SiteTimesheetBulkConfirmModal({
   rows,
   saving,
+  obBookMode = "REQUIRED",
   onCancel,
   onSubmit,
 }: {
   rows: SiteTimesheetRow[];
   saving: boolean;
+  obBookMode?: ObBookModeUi;
   onCancel: () => void;
   onSubmit: (
     entries: Array<{ rowId: string; dutyOnObNumber: string; dutyOffObNumber: string }>
@@ -75,8 +74,10 @@ export function SiteTimesheetBulkConfirmModal({
   };
 
   const complete = rows.filter((row) => {
+    const needsOb = rowRequiresObInUi(row, obBookMode);
+    if (!needsOb) return true;
     const draft = draftFor(row.id);
-    return draft.dutyOn.trim() && draft.dutyOff.trim();
+    return Boolean(draft.dutyOn.trim() && draft.dutyOff.trim());
   });
 
   const submit = async () => {
@@ -217,7 +218,12 @@ export function SiteTimesheetBulkConfirmModal({
 
         <div className="flex flex-col gap-3 border-t border-security-navy-100 p-4 dark:border-security-navy-700 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-security-navy-600 dark:text-security-navy-400" aria-live="polite">
-            {complete.length} of {rows.length} ready — both OB numbers are required for each shift.
+            {complete.length} of {rows.length} ready —{" "}
+            {obBookMode === "OPTIONAL"
+              ? "OB numbers are optional on this site."
+              : obBookMode === "OPTIONAL_WHEN_DIGITAL"
+                ? "OB numbers are waived for digitally clocked shifts."
+                : "both OB numbers are required for each shift."}
           </p>
           <div className="flex gap-2">
             <button type="button" onClick={onCancel} className="btn-secondary min-h-11">

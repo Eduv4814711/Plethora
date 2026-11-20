@@ -462,6 +462,13 @@ function BusinessSettingsSection({
     adminOfficeLatitude: "",
     adminOfficeLongitude: "",
     adminGeofenceRadiusMeters: "200",
+    obBookMode: "REQUIRED" as "REQUIRED" | "OPTIONAL_WHEN_DIGITAL" | "OPTIONAL",
+    psiraEnforcementMode: "WARN" as "BLOCK" | "WARN" | "OFF",
+    averagingEnabled: false,
+    averagingWeeks: "4",
+    overnightBoundaryMode: "shift_start_day" as "shift_start_day" | "midnight_split",
+    sundayDoubleRateSplit: false,
+    fortnightlyRestEnabled: false,
   });
   const [geoDetecting, setGeoDetecting] = useState(false);
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -495,6 +502,13 @@ function BusinessSettingsSection({
         adminOfficeLatitude: s.adminOfficeLatitude != null ? String(s.adminOfficeLatitude) : "",
         adminOfficeLongitude: s.adminOfficeLongitude != null ? String(s.adminOfficeLongitude) : "",
         adminGeofenceRadiusMeters: s.adminGeofenceRadiusMeters != null ? String(s.adminGeofenceRadiusMeters) : "200",
+        obBookMode: s.obBookMode ?? "REQUIRED",
+        psiraEnforcementMode: s.psiraEnforcementMode ?? "WARN",
+        averagingEnabled: Boolean(s.averagingEnabled),
+        averagingWeeks: String(s.averagingWeeks ?? 4),
+        overnightBoundaryMode: s.overnightBoundaryMode ?? "shift_start_day",
+        sundayDoubleRateSplit: Boolean(s.sundayDoubleRateSplit),
+        fortnightlyRestEnabled: Boolean(s.fortnightlyRestEnabled),
       });
     }
   }, [settings?.settings]);
@@ -595,6 +609,13 @@ function BusinessSettingsSection({
       adminOfficeLatitude: latNum,
       adminOfficeLongitude: lngNum,
       adminGeofenceRadiusMeters: radiusNum ?? (latNum != null ? 200 : null),
+      obBookMode: form.obBookMode,
+      psiraEnforcementMode: form.psiraEnforcementMode,
+      averagingEnabled: form.averagingEnabled,
+      averagingWeeks: Math.max(2, Math.min(16, parseInt(form.averagingWeeks, 10) || 4)),
+      overnightBoundaryMode: form.overnightBoundaryMode,
+      sundayDoubleRateSplit: form.sundayDoubleRateSplit,
+      fortnightlyRestEnabled: form.fortnightlyRestEnabled,
     });
   };
 
@@ -1003,6 +1024,131 @@ function BusinessSettingsSection({
                 </a>
               </div>
             )}
+          </div>
+        </div>
+
+        <div className="p-4 rounded-xl bg-security-navy-50/70 dark:bg-security-navy-800/30 border border-security-navy-200 dark:border-security-navy-700 space-y-4">
+          <div>
+            <h4 className="font-semibold text-sm text-security-navy-900 dark:text-white">
+              South African Labour &amp; Operations Rules (NBCPSS / BCEA / PSIRA)
+            </h4>
+            <p className="text-xs text-security-navy-500 dark:text-security-navy-400 mt-1">
+              Applies Sector 6 private security rules (48h/week ordinary cap, 12h daily max, Sunday &amp; Public Holiday rates, night allowance) and default Occurrence Book policy across sites.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+                Default Occurrence Book (OB) Policy
+              </label>
+              <select
+                value={form.obBookMode}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    obBookMode: e.target.value as "REQUIRED" | "OPTIONAL_WHEN_DIGITAL" | "OPTIONAL",
+                  }))
+                }
+                className="input-modern w-full"
+                disabled={readOnly}
+              >
+                <option value="REQUIRED">Always Required (Traditional OB Book)</option>
+                <option value="OPTIONAL_WHEN_DIGITAL">Optional when clocked via App/WhatsApp</option>
+                <option value="OPTIONAL">Optional / Digital Only (No OB Required)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+                PSIRA Registration &amp; Grade Check
+              </label>
+              <select
+                value={form.psiraEnforcementMode}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    psiraEnforcementMode: e.target.value as "BLOCK" | "WARN" | "OFF",
+                  }))
+                }
+                className="input-modern w-full"
+                disabled={readOnly}
+              >
+                <option value="WARN">Warn on expired/missing PSIRA (Recommended)</option>
+                <option value="BLOCK">Block rostering expired/under-graded guards</option>
+                <option value="OFF">Off</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+                Overnight Shift Date Boundary
+              </label>
+              <select
+                value={form.overnightBoundaryMode}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    overnightBoundaryMode: e.target.value as "shift_start_day" | "midnight_split",
+                  }))
+                }
+                className="input-modern w-full"
+                disabled={readOnly}
+              >
+                <option value="shift_start_day">Full shift on start date (SA NBCPSS Standard)</option>
+                <option value="midnight_split">Split hours at midnight (Sun/Holiday pro-rata)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-security-navy-700 dark:text-security-navy-300 mb-1">
+                BCEA s12 Averaging Cycle (weeks)
+              </label>
+              <input
+                type="number"
+                min={2}
+                max={16}
+                value={form.averagingWeeks}
+                onChange={(e) => setForm((f) => ({ ...f, averagingWeeks: e.target.value }))}
+                className="input-modern w-full"
+                disabled={readOnly || !form.averagingEnabled}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2 pt-1">
+            <label className="flex items-center gap-2 text-xs text-security-navy-800 dark:text-security-navy-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.averagingEnabled}
+                onChange={(e) => setForm((f) => ({ ...f, averagingEnabled: e.target.checked }))}
+                disabled={readOnly}
+                className="rounded border-security-navy-300 text-security-navy-600 focus:ring-security-navy-500"
+              />
+              Enable BCEA s12 hours averaging agreement (up to 4 weeks/cycle for 4-on/4-off shifts)
+            </label>
+            <label className="flex items-center gap-2 text-xs text-security-navy-800 dark:text-security-navy-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.sundayDoubleRateSplit}
+                onChange={(e) => setForm((f) => ({ ...f, sundayDoubleRateSplit: e.target.checked }))}
+                disabled={readOnly}
+                className="rounded border-security-navy-300 text-security-navy-600 focus:ring-security-navy-500"
+              />
+              Split Sunday 1.5x (scheduled) vs Sunday 2.0x (unscheduled reliever) on payroll export
+            </label>
+            <label className="flex items-center gap-2 text-xs text-security-navy-800 dark:text-security-navy-200 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.fortnightlyRestEnabled}
+                onChange={(e) => setForm((f) => ({ ...f, fortnightlyRestEnabled: e.target.checked }))}
+                disabled={readOnly}
+                className="rounded border-security-navy-300 text-security-navy-600 focus:ring-security-navy-500"
+              />
+              Use BCEA 60h fortnightly rest agreement (instead of 36h every 7 days)
+            </label>
           </div>
         </div>
 

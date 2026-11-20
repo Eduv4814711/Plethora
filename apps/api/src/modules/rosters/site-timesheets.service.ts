@@ -10,9 +10,58 @@ import {
   isShiftCoveredOnDateKey,
   resolveSiteCoverageDays,
 } from "../../lib/site-coverage-days.js";
+import {
+  buildEffectiveHolidaySet,
+  parseLabourComplianceSettings,
+  resolveEmployeeBceaCategory,
+  resolveSiteObBookMode,
+  resolveSitePsiraMode,
+  type ObBookMode,
+} from "../../lib/sa-labour-rules.config.js";
+import {
+  classifyEmployeePeriodShifts,
+  type ShiftClassificationInput,
+} from "../../services/sa-hours-classifier.service.js";
 import { reconcileSupersededAttendanceExceptions } from "../attendance-exceptions/exceptions.service.js";
 
 type Tx = Prisma.TransactionClient | typeof prisma;
+
+/** Safe settings loader that degrades to defaults if lightweight test mocks omit `prisma.company`. */
+async function loadCompanySettingsSafe(companyId: string): Promise<unknown> {
+  const companyClient = (
+    prisma as unknown as {
+      company?: {
+        findUnique?: (args: {
+          where: { id: string };
+          select: { settings: true };
+        }) => Promise<{ settings: unknown } | null>;
+      };
+    }
+  ).company;
+  if (!companyClient?.findUnique) return null;
+  const row = await companyClient.findUnique({
+    where: { id: companyId },
+    select: { settings: true },
+  });
+  return row?.settings ?? null;
+}
+
+/** Safe holiday loader that returns [] when lightweight test mocks omit `prisma.publicHoliday`. */
+async function loadPublicHolidaysSafe(companyId: string, start: Date, end: Date) {
+  const holidayClient = (
+    prisma as unknown as {
+      publicHoliday?: {
+        findMany?: (args: {
+          where: { companyId: string; date: { gte: Date; lte: Date } };
+        }) => Promise<Array<{ date: Date; name: string; isRecurring: boolean }>>;
+      };
+    }
+  ).publicHoliday;
+  if (!holidayClient?.findMany) return [];
+  return holidayClient.findMany({
+    where: { companyId, date: { gte: start, lte: end } },
+  });
+}
 
 const WORKING_CODES = new Set(["D", "N", "R"]);
 const WORKING_SHIFT_CODES: SiteRosterShiftCode[] = ["D", "N", "R"];
@@ -800,28 +849,143 @@ export async function getSiteTimesheetCaptureOverview(
 export async function getSiteTimesheet(companyId: string, siteId: string, startDate: string, endDate: string) {
   const start = dateOnly(startDate);
   const end = dateOnly(endDate);
-  const site = await prisma.site.findFirst({ where: { id: siteId, companyId } });
+  const [site, companySettings] = await Promise.all([
+    prisma.site.findFirst({ where: { id: siteId, companyId } }),
+    loadCompanySettingsSafe(companyId),
+  ]);
   if (!site) return null;
 
   const sheet = await getOrCreateTimesheet(prisma, companyId, siteId, start, end);
   await seedRows(prisma, companyId, sheet.id, siteId, start, end);
 
-  const timesheet = await prisma.siteTimesheet.findUnique({
-    where: { id: sheet.id },
-    include: {
-      rows: {
-        include: { plannedGuard: true, actualGuard: true },
-        orderBy: [{ workDate: "asc" }, { id: "asc" }],
+  const [timesheet, holidays] = await Promise.all([
+    prisma.siteTimesheet.findUnique({
+      where: { id: sheet.id },
+      include: {
+        rows: {
+          include: { plannedGuard: true, actualGuard: true },
+          orderBy: [{ workDate: "asc" }, { id: "asc" }],
+        },
       },
-    },
-  });
+    }),
+    loadPublicHolidaysSafe(companyId, start, end),
+  ]);
 
   if (!timesheet) return null;
+  const obBookMode = resolveSiteObBookMode(companySettings, site.obBookMode);
+  const psiraEnforcementMode = resolveSitePsiraMode(companySettings, site.psiraEnforcementMode);
+  const labourSettings = parseLabourComplianceSettings(companySettings);
   const siteCoverage = resolveSiteCoverageDays(site);
   const discrepancyMap = computeDiscrepancyMap(site, timesheet.rows);
   const rows = [...timesheet.rows]
     .sort(compareSiteTimesheetRows)
     .map((row) => serializeRow(row, discrepancyMap.get(row.id) ?? []));
+
+  // Build live NBCPSS/BCEA summary per guard for controller/manager review
+  const years = new Set<number>([start.getUTCFullYear(), end.getUTCFullYear()]);
+  const effectiveHolidays = buildEffectiveHolidaySet(
+    years,
+    holidays.map((h) => ({ date: h.date, name: h.name, isRecurring: h.isRecurring })),
+    true,
+  );
+  const rowsByGuard = new Map<string, Array<(typeof timesheet.rows)[number]>>();
+  for (const r of timesheet.rows) {
+    if (["off", "absent", "leave", "sick_leave"].includes(r.attendanceStatus)) continue;
+    const guardId = r.actualGuardId ?? r.plannedGuardId;
+    if (!guardId) continue;
+    // Skip uncaptured rows unless they already have hours or explicit working status
+    if (r.attendanceStatus === "pending" && r.hoursWorked == null && !r.clockIn) continue;
+    if (!rowsByGuard.has(guardId)) rowsByGuard.set(guardId, []);
+    rowsByGuard.get(guardId)!.push(r);
+  }
+
+  const guardSummaries: Array<{
+    employeeId: string;
+    guardName: string;
+    employeeNumber: string;
+    basicHours: number;
+    overtimeHours: number;
+    sundayHours: number;
+    sundayDoubleHours: number;
+    publicHolidayHours: number;
+    nightShiftHours: number;
+    nightShiftCount: number;
+    nightAllowanceTotalRand: number;
+    totalWorkedHours: number;
+    flags: Array<{ code: string; severity: string; message: string; dateKey: string }>;
+  }> = [];
+
+  for (const [employeeId, guardRows] of rowsByGuard) {
+    const sampleGuard = guardRows.find((r) => r.actualGuard?.id === employeeId)?.actualGuard
+      ?? guardRows.find((r) => r.plannedGuard?.id === employeeId)?.plannedGuard;
+    const shiftInputs: ShiftClassificationInput[] = [];
+    for (const r of guardRows) {
+      const hours = r.hoursWorked != null ? Number(r.hoursWorked) : r.attendanceStatus === "training" ? 8 : 0;
+      const ot = r.overtimeHours != null ? Number(r.overtimeHours) : 0;
+      const total = hours + ot;
+      if (total <= 0) continue;
+      const datePart = dateKey(r.workDate);
+      const shiftType = r.actualShiftType ?? r.plannedShiftType ?? "day";
+      const startTime = r.clockIn ?? new Date(`${datePart}T${shiftType === "night" ? "18:00:00" : "06:00:00"}+02:00`);
+      const endTime = new Date(startTime.getTime() + total * 3_600_000);
+      shiftInputs.push({
+        id: r.id,
+        employeeId,
+        siteId,
+        startTime,
+        endTime,
+        scheduledStartTime: ot > 0 ? startTime : undefined,
+        scheduledEndTime: ot > 0 ? new Date(startTime.getTime() + hours * 3_600_000) : undefined,
+        isScheduledOnRoster: !(r.attendanceStatus === "reliever" && !r.plannedGuardId && !r.sourceShiftId),
+        mealIntervalPaid: site.mealIntervalPaid,
+        mealIntervalMinutes: site.mealIntervalMinutes,
+        employeeCategory: resolveEmployeeBceaCategory(
+          sampleGuard?.employeeType,
+          sampleGuard?.bceaSectorOverride,
+          companySettings,
+        ),
+      });
+    }
+    if (shiftInputs.length === 0) continue;
+    const summary = classifyEmployeePeriodShifts({
+      employeeId,
+      shifts: shiftInputs,
+      holidays: effectiveHolidays,
+      settings: labourSettings,
+      employeeCredentials: sampleGuard
+        ? {
+            psiraRegistrationExpiry: sampleGuard.psiraRegistrationExpiry,
+            firearmCompetency: sampleGuard.firearmCompetency,
+            firearmCompetencyExpiry: sampleGuard.firearmCompetencyExpiry,
+          }
+        : undefined,
+    });
+    guardSummaries.push({
+      employeeId,
+      guardName: sampleGuard ? `${sampleGuard.firstName} ${sampleGuard.lastName}`.trim() : "Guard",
+      employeeNumber: sampleGuard?.employeeNumber ?? "",
+      basicHours: summary.basicHours,
+      overtimeHours: summary.overtimeHours,
+      sundayHours: summary.sundayHours,
+      sundayDoubleHours: summary.sundayDoubleHours,
+      publicHolidayHours: summary.publicHolidayHours,
+      nightShiftHours: summary.nightShiftHours,
+      nightShiftCount: summary.nightShiftCount,
+      nightAllowanceTotalRand: summary.nightAllowanceTotalRand,
+      totalWorkedHours: summary.totalWorkedHours,
+      flags: summary.flags.map((f) => ({
+        code: f.code,
+        severity: f.severity,
+        message: f.message,
+        dateKey: f.dateKey,
+      })),
+    });
+  }
+  guardSummaries.sort((a, b) => a.guardName.localeCompare(b.guardName));
+
+  const nightShiftAllowanceCount = guardSummaries.reduce((n, g) => n + g.nightShiftCount, 0);
+  const complianceFlagsCount = guardSummaries.reduce((n, g) => n + g.flags.length, 0);
+
   const totals = rows.reduce(
     (acc, row) => {
       if (row.actualShiftType === "day") acc.dayShifts += 1;
@@ -840,6 +1004,9 @@ export async function getSiteTimesheet(companyId: string, siteId: string, startD
     id: timesheet.id,
     siteId,
     siteName: site.name,
+    obBookMode,
+    psiraEnforcementMode,
+    operatingFramework: site.operatingFramework ?? null,
     periodStart: dateKey(timesheet.periodStart),
     periodEnd: dateKey(timesheet.periodEnd),
     status: timesheet.status,
@@ -855,6 +1022,9 @@ export async function getSiteTimesheet(companyId: string, siteId: string, startD
       night: [...siteCoverage.night].sort((a, b) => a - b),
     },
     rows,
+    guardSummaries,
+    nightShiftAllowanceCount,
+    complianceFlagsCount,
     totals: {
       ...totals,
       totalHours: Math.round(totals.totalHours * 100) / 100,
@@ -894,10 +1064,36 @@ export function normalizeObNumber(value: string | null | undefined): string | nu
   return trimmed.length > 0 ? trimmed : null;
 }
 
-/** Working shifts need Duty ON and Duty OFF before full row review. */
+/** Working shifts need Duty ON and Duty OFF before full row review (status-only helper). */
 export function rowNeedsObNumbers(attendanceStatus: SiteTimesheetAttendance): boolean {
   if (attendanceStatus === "off") return false;
   if (attendanceStatus === "leave" || attendanceStatus === "sick_leave") return false;
+  return true;
+}
+
+/**
+ * Mode-aware OB requirement check:
+ * - "REQUIRED": always requires Duty ON + OFF on working statuses
+ * - "OPTIONAL_WHEN_DIGITAL": waived when row has digital clock-in/out or attendance capture
+ * - "OPTIONAL": never blocks confirmation/approval for missing OB numbers
+ */
+export function rowRequiresObNumbers(params: {
+  attendanceStatus: SiteTimesheetAttendance;
+  obBookMode: ObBookMode;
+  clockIn?: Date | string | null;
+  clockOut?: Date | string | null;
+  sourceAttendanceId?: string | null;
+  hasDigitalAttendance?: boolean;
+}): boolean {
+  if (!rowNeedsObNumbers(params.attendanceStatus)) return false;
+  if (params.obBookMode === "OPTIONAL") return false;
+  if (params.obBookMode === "OPTIONAL_WHEN_DIGITAL") {
+    const hasDigital =
+      Boolean(params.hasDigitalAttendance) ||
+      Boolean(params.sourceAttendanceId) ||
+      Boolean(params.clockIn && params.clockOut);
+    return !hasDigital;
+  }
   return true;
 }
 
@@ -1071,10 +1267,17 @@ async function writeSiteTimesheetRow(
   actor?: { canOverrideObNumbers: boolean; userId?: string },
   approvalAction?: "reviewed"
 ) {
-  const existing = await prisma.siteTimesheetRow.findFirst({
-    where: { id: rowId, companyId },
-    include: { siteTimesheet: true },
-  });
+  const [existing, companySettings] = await Promise.all([
+    prisma.siteTimesheetRow.findFirst({
+      where: { id: rowId, companyId },
+      include: {
+        siteTimesheet: {
+          include: { site: { select: { obBookMode: true } } },
+        },
+      },
+    }),
+    loadCompanySettingsSafe(companyId),
+  ]);
   if (!existing) return null;
   if (existing.siteTimesheet.status === "approved" || existing.siteTimesheet.status === "locked") {
     return { error: "Timesheet is approved and locked. Unlock it before making changes." };
@@ -1138,7 +1341,17 @@ async function writeSiteTimesheetRow(
   const resolvedDutyOn = nextDutyOn !== undefined ? nextDutyOn : existingDutyOn;
   const resolvedDutyOff = nextDutyOff !== undefined ? nextDutyOff : existingDutyOff;
   const attendanceStatus = input.attendanceStatus ?? existing.attendanceStatus;
-  const needsOb = rowNeedsObNumbers(attendanceStatus);
+  const obBookMode = resolveSiteObBookMode(
+    companySettings,
+    existing.siteTimesheet?.site?.obBookMode,
+  );
+  const needsOb = rowRequiresObNumbers({
+    attendanceStatus,
+    obBookMode,
+    clockIn: effectiveClockIn,
+    clockOut: effectiveClockOut,
+    sourceAttendanceId: existing.sourceAttendanceId,
+  });
   const effectiveGuardId = input.actualGuardId !== undefined
     ? input.actualGuardId
     : existing.actualGuardId ?? existing.plannedGuardId;
@@ -1258,7 +1471,13 @@ export async function addSiteTimesheetRow(
     overtimeHours?: number | null;
   }
 ) {
-  const sheet = await prisma.siteTimesheet.findFirst({ where: { id: siteTimesheetId, companyId } });
+  const [sheet, companySettings] = await Promise.all([
+    prisma.siteTimesheet.findFirst({
+      where: { id: siteTimesheetId, companyId },
+      include: { site: { select: { obBookMode: true } } },
+    }),
+    loadCompanySettingsSafe(companyId),
+  ]);
   if (!sheet) return null;
   if (sheet.status === "approved" || sheet.status === "locked") {
     return { error: "Timesheet is approved and locked. Unlock it before adding rows." };
@@ -1271,9 +1490,16 @@ export async function addSiteTimesheetRow(
   if (!(await guardBelongsToCompany(input.actualGuardId, companyId))) {
     return { error: "Guard not found, or is a roster-planning placeholder. Assign a real employee before recording hours." };
   }
+  const obBookMode = resolveSiteObBookMode(companySettings, sheet.site?.obBookMode);
   const dutyOnObNumber =
     normalizeObNumber(input.dutyOnObNumber ?? input.occurrenceBookNumber) ?? null;
-  if (!dutyOnObNumber) {
+  if (
+    rowRequiresObNumbers({
+      attendanceStatus: input.attendanceStatus,
+      obBookMode,
+    }) &&
+    !dutyOnObNumber
+  ) {
     return {
       error: "Duty ON OB number is required before you can add a reliever to the timesheet.",
     };
@@ -1408,14 +1634,18 @@ export async function bulkConfirmSiteTimesheetRows(
   entries: BulkConfirmEntry[],
   actor: { canOverrideObNumbers: boolean; userId?: string }
 ) {
-  const sheet = await prisma.siteTimesheet.findFirst({
-    where: { id: timesheetId, companyId },
-    include: { site: true, rows: true },
-  });
+  const [sheet, companySettings] = await Promise.all([
+    prisma.siteTimesheet.findFirst({
+      where: { id: timesheetId, companyId },
+      include: { site: true, rows: true },
+    }),
+    loadCompanySettingsSafe(companyId),
+  ]);
   if (!sheet) return null;
   if (sheet.status === "approved" || sheet.status === "locked") {
     return { error: "Timesheet is approved and locked. Unlock it before making changes." };
   }
+  const obBookMode = resolveSiteObBookMode(companySettings, sheet.site?.obBookMode);
 
   const timeZone = await getCompanyTimezone(companyId);
   const rowsById = new Map(sheet.rows.map((row) => [row.id, row]));
@@ -1520,7 +1750,16 @@ export async function bulkConfirmSiteTimesheetRows(
 
     const resolvedDutyOn = requestedDutyOn !== undefined ? requestedDutyOn : existingDutyOn;
     const resolvedDutyOff = requestedDutyOff !== undefined ? requestedDutyOff : existingDutyOff;
-    if (rowNeedsObNumbers(patch.attendanceStatus) && (!resolvedDutyOn || !resolvedDutyOff)) {
+    if (
+      rowRequiresObNumbers({
+        attendanceStatus: patch.attendanceStatus,
+        obBookMode,
+        clockIn: patch.clockIn,
+        clockOut: patch.clockOut,
+        sourceAttendanceId: row.sourceAttendanceId,
+      }) &&
+      (!resolvedDutyOn || !resolvedDutyOff)
+    ) {
       fail(rowId, "MISSING_OB");
       continue;
     }
@@ -1633,33 +1872,42 @@ export async function approveSiteTimesheet(
   userId: string,
   options?: { notes?: string; shiftType?: CaptureShiftTypeFilter }
 ) {
-  const sheet = await prisma.siteTimesheet.findFirst({
-    where: { id: timesheetId, companyId },
-    include: {
-      rows: {
-        select: {
-          id: true,
-          approvalStatus: true,
-          dutyOnObNumber: true,
-          dutyOffObNumber: true,
-          occurrenceBookNumber: true,
-          plannedShiftType: true,
-          plannedShiftCode: true,
-          actualShiftType: true,
-          actualShiftCode: true,
-          attendanceStatus: true,
-          actualGuardId: true,
-          plannedGuardId: true,
-          sourceShiftId: true,
-          workDate: true,
+  const [sheet, companySettings] = await Promise.all([
+    prisma.siteTimesheet.findFirst({
+      where: { id: timesheetId, companyId },
+      include: {
+        site: { select: { obBookMode: true } },
+        rows: {
+          select: {
+            id: true,
+            approvalStatus: true,
+            dutyOnObNumber: true,
+            dutyOffObNumber: true,
+            occurrenceBookNumber: true,
+            plannedShiftType: true,
+            plannedShiftCode: true,
+            actualShiftType: true,
+            actualShiftCode: true,
+            attendanceStatus: true,
+            actualGuardId: true,
+            plannedGuardId: true,
+            sourceShiftId: true,
+            sourceAttendanceId: true,
+            clockIn: true,
+            clockOut: true,
+            workDate: true,
+          },
         },
       },
-    },
-  });
+    }),
+    loadCompanySettingsSafe(companyId),
+  ]);
   if (!sheet) return null;
   if (sheet.status === "approved" || sheet.status === "locked") {
     return { error: "Timesheet is already approved and locked." };
   }
+
+  const obBookMode = resolveSiteObBookMode(companySettings, sheet.site?.obBookMode);
 
   const shiftType: CaptureShiftTypeFilter = options?.shiftType ?? "all";
   const targetRows =
@@ -1685,7 +1933,17 @@ export async function approveSiteTimesheet(
   }
 
   const missingOb = targetRows.filter((r) => {
-    if (!rowNeedsObNumbers(r.attendanceStatus)) return false;
+    if (
+      !rowRequiresObNumbers({
+        attendanceStatus: r.attendanceStatus,
+        obBookMode,
+        clockIn: r.clockIn,
+        clockOut: r.clockOut,
+        sourceAttendanceId: r.sourceAttendanceId,
+      })
+    ) {
+      return false;
+    }
     const dutyOn = resolveDutyOnFromRow(r);
     const dutyOff = normalizeObNumber(r.dutyOffObNumber) ?? null;
     return !dutyOn || !dutyOff;

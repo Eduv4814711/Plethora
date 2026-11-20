@@ -287,6 +287,10 @@ export async function getSiteRosterConfig(companyId: string, siteId: string) {
     rosterSheetNotes: site.rosterSheetNotes,
     rosterRelieverEmployeeIds: [] as string[],
     assignedGuardIds: site.assignedGuards.map((g) => g.employeeId),
+    operatingFramework: site.operatingFramework ?? null,
+    obBookMode: site.obBookMode ?? null,
+    psiraEnforcementMode: site.psiraEnforcementMode ?? null,
+    mealIntervalPaid: site.mealIntervalPaid,
     activePattern: activePattern
       ? {
           id: activePattern.id,

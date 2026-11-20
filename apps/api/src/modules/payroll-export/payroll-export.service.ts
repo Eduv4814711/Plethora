@@ -416,8 +416,10 @@ async function buildNormalizedLines(
         basicHours: number;
         overtimeHours: number;
         sundayHours: number;
+        sundayDoubleHours: number;
         publicHolidayHours: number;
         nightShiftHours: number;
+        nightShiftCount: number;
       }
     >();
 
@@ -426,14 +428,18 @@ async function buildNormalizedLines(
         basicHours: 0,
         overtimeHours: 0,
         sundayHours: 0,
+        sundayDoubleHours: 0,
         publicHolidayHours: 0,
         nightShiftHours: 0,
+        nightShiftCount: 0,
       };
       existing.basicHours += seg.basicHours;
       existing.overtimeHours += seg.overtimeHours;
       existing.sundayHours += seg.sundayHours;
+      existing.sundayDoubleHours += seg.sundayDoubleHours ?? 0;
       existing.publicHolidayHours += seg.publicHolidayHours;
       existing.nightShiftHours += seg.nightShiftHours;
+      existing.nightShiftCount += seg.nightShiftCount ?? 0;
       bySite.set(seg.siteId, existing);
     }
 
@@ -445,7 +451,11 @@ async function buildNormalizedLines(
       let highestHours = -1;
       for (const [sid, hrs] of entries) {
         const worked =
-          hrs.basicHours + hrs.overtimeHours + hrs.sundayHours + hrs.publicHolidayHours;
+          hrs.basicHours +
+          hrs.overtimeHours +
+          hrs.sundayHours +
+          hrs.sundayDoubleHours +
+          hrs.publicHolidayHours;
         if (worked > highestHours) {
           highestHours = worked;
           primarySiteId = sid;
@@ -466,8 +476,10 @@ async function buildNormalizedLines(
           basicHours: round2(hrs.basicHours),
           overtimeHours: round2(hrs.overtimeHours),
           sundayHours: round2(hrs.sundayHours),
+          sundayDoubleHours: round2(hrs.sundayDoubleHours),
           publicHolidayHours: round2(hrs.publicHolidayHours),
           nightShiftHours: round2(hrs.nightShiftHours),
+          nightShiftCount: hrs.nightShiftCount,
           annualLeaveHours: isPrimary ? round2(agg.annualLeaveHours) : 0,
           sickLeaveHours: isPrimary ? round2(agg.sickLeaveHours) : 0,
           familyLeaveHours: isPrimary ? round2(agg.familyLeaveHours) : 0,
@@ -493,8 +505,10 @@ async function buildNormalizedLines(
         basicHours: round2(agg.basicHours),
         overtimeHours: round2(agg.overtimeHours),
         sundayHours: round2(agg.sundayHours),
+        sundayDoubleHours: round2(agg.sundayDoubleHours ?? 0),
         publicHolidayHours: round2(agg.publicHolidayHours),
         nightShiftHours: round2(agg.nightShiftHours),
+        nightShiftCount: agg.nightShiftCount ?? 0,
         annualLeaveHours: round2(agg.annualLeaveHours),
         sickLeaveHours: round2(agg.sickLeaveHours),
         familyLeaveHours: round2(agg.familyLeaveHours),
@@ -711,8 +725,10 @@ export async function createBatch(
       basicHours: l.basicHours,
       overtimeHours: l.overtimeHours,
       sundayHours: l.sundayHours,
+      sundayDoubleHours: l.sundayDoubleHours ?? 0,
       publicHolidayHours: l.publicHolidayHours,
       nightShiftHours: l.nightShiftHours,
+      nightShiftCount: l.nightShiftCount ?? 0,
       annualLeaveHours: l.annualLeaveHours,
       sickLeaveHours: l.sickLeaveHours,
       familyLeaveHours: l.familyLeaveHours,
@@ -759,8 +775,10 @@ export async function createBatch(
             basicHours: l.basicHours,
             overtimeHours: l.overtimeHours,
             sundayHours: l.sundayHours,
+            sundayDoubleHours: l.sundayDoubleHours ?? 0,
             publicHolidayHours: l.publicHolidayHours,
             nightShiftHours: l.nightShiftHours,
+            nightShiftCount: l.nightShiftCount ?? 0,
             annualLeaveHours: l.annualLeaveHours,
             sickLeaveHours: l.sickLeaveHours,
             familyLeaveHours: l.familyLeaveHours,
