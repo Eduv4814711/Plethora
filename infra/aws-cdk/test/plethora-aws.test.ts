@@ -34,8 +34,24 @@ describe("Plethora AWS CDK Stacks (Zero-Docker)", () => {
     coreTemplate.resourceCountIs("AWS::S3::Bucket", 2);
     coreTemplate.resourceCountIs("AWS::ElasticLoadBalancingV2::LoadBalancer", 1);
     coreTemplate.resourceCountIs("AWS::AutoScaling::AutoScalingGroup", 1);
+    coreTemplate.resourceCountIs("AWS::EC2::Instance", 0);
     coreTemplate.resourceCountIs("AWS::ECS::Cluster", 0);
     coreTemplate.resourceCountIs("AWS::ECR::Repository", 0);
+    coreTemplate.hasResourceProperties("AWS::IAM::Policy", {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Sid: "AllowBedrockKimiInference",
+            Effect: "Allow",
+            Action: Match.arrayWith([
+              "bedrock:InvokeModel",
+              "bedrock:InvokeModelWithResponseStream",
+              "bedrock:GetInferenceProfile",
+            ]),
+          }),
+        ]),
+      },
+    });
 
     const cicdTemplate = Template.fromStack(cicd);
     cicdTemplate.resourceCountIs("AWS::CodeBuild::Project", 2);

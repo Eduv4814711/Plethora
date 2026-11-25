@@ -916,49 +916,6 @@
     "aws:cdk:path": "PlethoraAwsStack/PlethoraAppSg/from PlethoraAwsStackPlethoraAlbSg6DC56DB9:3001"
    }
   },
-  "PlethoraOllamaSg50EF0B0D": {
-   "Type": "AWS::EC2::SecurityGroup",
-   "Properties": {
-    "GroupDescription": "Internal Ollama LLM access from Plethora app instances only",
-    "SecurityGroupEgress": [
-     {
-      "CidrIp": "0.0.0.0/0",
-      "Description": "Allow all outbound traffic by default",
-      "IpProtocol": "-1"
-     }
-    ],
-    "VpcId": {
-     "Ref": "PlethoraVpcD2542505"
-    }
-   },
-   "Metadata": {
-    "aws:cdk:path": "PlethoraAwsStack/PlethoraOllamaSg/Resource"
-   }
-  },
-  "PlethoraOllamaSgfromPlethoraAwsStackPlethoraAppSg0887C2B111434376338AF": {
-   "Type": "AWS::EC2::SecurityGroupIngress",
-   "Properties": {
-    "Description": "App to Ollama LLM",
-    "FromPort": 11434,
-    "GroupId": {
-     "Fn::GetAtt": [
-      "PlethoraOllamaSg50EF0B0D",
-      "GroupId"
-     ]
-    },
-    "IpProtocol": "tcp",
-    "SourceSecurityGroupId": {
-     "Fn::GetAtt": [
-      "PlethoraAppSg73338C58",
-      "GroupId"
-     ]
-    },
-    "ToPort": 11434
-   },
-   "Metadata": {
-    "aws:cdk:path": "PlethoraAwsStack/PlethoraOllamaSg/from PlethoraAwsStackPlethoraAppSg0887C2B1:11434"
-   }
-  },
   "PlethoraCodeBuildSg8D148C66": {
    "Type": "AWS::EC2::SecurityGroup",
    "Properties": {
@@ -1095,7 +1052,7 @@
      "ExcludePunctuation": true,
      "GenerateStringKey": "CRON_SECRET",
      "PasswordLength": 48,
-     "SecretStringTemplate": "{\"AI_ENABLED\":\"true\",\"AI_BASE_URL\":\"http://ollama.plethora.local:11434\",\"AI_MODEL\":\"llama3.3:3b\",\"AI_TIMEOUT_MS\":\"8000\",\"CORS_ORIGIN\":\"https://plethora.quickbophasecurity.co.za\",\"FRONTEND_URL\":\"https://plethora.quickbophasecurity.co.za\",\"NEXT_PUBLIC_API_URL\":\"https://api.quickbophasecurity.co.za\",\"WHATSAPP_ENABLED\":\"false\",\"WHATSAPP_API_VERSION\":\"v26.0\",\"WHATSAPP_PHONE_NUMBER_ID\":\"\",\"WHATSAPP_WABA_ID\":\"\",\"WHATSAPP_ACCESS_TOKEN\":\"\",\"WHATSAPP_VERIFY_TOKEN\":\"\",\"WHATSAPP_APP_SECRET\":\"\"}"
+     "SecretStringTemplate": "{\"AI_ENABLED\":\"true\",\"AI_PROVIDER\":\"bedrock\",\"AI_REGION\":\"af-south-1\",\"AI_MODEL\":\"global.moonshotai.kimi-k3.1\",\"AI_TIMEOUT_MS\":\"15000\",\"CORS_ORIGIN\":\"https://plethora.quickbophasecurity.co.za\",\"FRONTEND_URL\":\"https://plethora.quickbophasecurity.co.za\",\"NEXT_PUBLIC_API_URL\":\"https://api.quickbophasecurity.co.za\",\"WHATSAPP_ENABLED\":\"false\",\"WHATSAPP_API_VERSION\":\"v26.0\",\"WHATSAPP_PHONE_NUMBER_ID\":\"\",\"WHATSAPP_WABA_ID\":\"\",\"WHATSAPP_ACCESS_TOKEN\":\"\",\"WHATSAPP_VERIFY_TOKEN\":\"\",\"WHATSAPP_APP_SECRET\":\"\"}"
     },
     "Name": "plethora-prod-app-secrets"
    },
@@ -1103,124 +1060,6 @@
    "DeletionPolicy": "Delete",
    "Metadata": {
     "aws:cdk:path": "PlethoraAwsStack/PlethoraAppSecrets/Resource"
-   }
-  },
-  "PlethoraOllamaRole3405923C": {
-   "Type": "AWS::IAM::Role",
-   "Properties": {
-    "AssumeRolePolicyDocument": {
-     "Statement": [
-      {
-       "Action": "sts:AssumeRole",
-       "Effect": "Allow",
-       "Principal": {
-        "Service": "ec2.amazonaws.com"
-       }
-      }
-     ],
-     "Version": "2012-10-17"
-    },
-    "ManagedPolicyArns": [
-     {
-      "Fn::Join": [
-       "",
-       [
-        "arn:",
-        {
-         "Ref": "AWS::Partition"
-        },
-        ":iam::aws:policy/AmazonSSMManagedInstanceCore"
-       ]
-      ]
-     }
-    ]
-   },
-   "Metadata": {
-    "aws:cdk:path": "PlethoraAwsStack/PlethoraOllamaRole/Resource"
-   }
-  },
-  "PlethoraOllamaInstanceInstanceProfile5812B5C7": {
-   "Type": "AWS::IAM::InstanceProfile",
-   "Properties": {
-    "Roles": [
-     {
-      "Ref": "PlethoraOllamaRole3405923C"
-     }
-    ]
-   },
-   "Metadata": {
-    "aws:cdk:path": "PlethoraAwsStack/PlethoraOllamaInstance/InstanceProfile"
-   }
-  },
-  "PlethoraOllamaInstance4326AE51": {
-   "Type": "AWS::EC2::Instance",
-   "Properties": {
-    "AvailabilityZone": "af-south-1a",
-    "BlockDeviceMappings": [
-     {
-      "DeviceName": "/dev/sda1",
-      "Ebs": {
-       "Encrypted": true,
-       "VolumeSize": 30,
-       "VolumeType": "gp3"
-      }
-     }
-    ],
-    "IamInstanceProfile": {
-     "Ref": "PlethoraOllamaInstanceInstanceProfile5812B5C7"
-    },
-    "ImageId": {
-     "Ref": "SsmParameterValueawsservicecanonicalubuntuserver2404stablecurrentarm64hvmebsgp3amiidC96584B6F00A464EAD1953AFF4B05118Parameter"
-    },
-    "InstanceType": "m7g.large",
-    "SecurityGroupIds": [
-     {
-      "Fn::GetAtt": [
-       "PlethoraOllamaSg50EF0B0D",
-       "GroupId"
-      ]
-     }
-    ],
-    "SubnetId": {
-     "Ref": "PlethoraVpcPrivateAppSubnet1SubnetF783893C"
-    },
-    "Tags": [
-     {
-      "Key": "Name",
-      "Value": "PlethoraAwsStack/PlethoraOllamaInstance"
-     }
-    ],
-    "UserData": {
-     "Fn::Base64": "#!/bin/bash\n#!/usr/bin/env bash\nset -euo pipefail\n\nexport DEBIAN_FRONTEND=noninteractive\nexport HOME=/root\nOLLAMA_MODEL=\"${OLLAMA_MODEL:-llama3.2:3b}\"\n\napt-get update -y\napt-get install -y ca-certificates curl\n\n# Install Ollama natively (no Docker)\ncurl -fsSL https://ollama.com/install.sh | sh\n\n# Bind Ollama to all VPC interfaces on port 11434 and keep model loaded in RAM\nmkdir -p /etc/systemd/system/ollama.service.d\ncat <<'EOF' > /etc/systemd/system/ollama.service.d/override.conf\n[Service]\nEnvironment=\"OLLAMA_HOST=0.0.0.0:11434\"\nEnvironment=\"OLLAMA_KEEP_ALIVE=24h\"\nEnvironment=\"OLLAMA_NUM_PARALLEL=2\"\nEOF\n\nsystemctl daemon-reload\nsystemctl enable ollama\nsystemctl restart ollama\n\n# Wait for Ollama daemon to listen before pulling the model\nfor i in $(seq 1 30); do\n  if curl -fsS http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then\n    break\n  fi\n  sleep 2\ndone\n\nollama pull \"$OLLAMA_MODEL\"\n"
-    }
-   },
-   "DependsOn": [
-    "PlethoraOllamaRole3405923C"
-   ],
-   "Metadata": {
-    "aws:cdk:path": "PlethoraAwsStack/PlethoraOllamaInstance/Resource"
-   }
-  },
-  "OllamaPrivateDns6081BDD2": {
-   "Type": "AWS::Route53::RecordSet",
-   "Properties": {
-    "HostedZoneId": {
-     "Ref": "PlethoraPrivateZoneB4936A6B"
-    },
-    "Name": "ollama.plethora.local.",
-    "ResourceRecords": [
-     {
-      "Fn::GetAtt": [
-       "PlethoraOllamaInstance4326AE51",
-       "PrivateIp"
-      ]
-     }
-    ],
-    "TTL": "60",
-    "Type": "A"
-   },
-   "Metadata": {
-    "aws:cdk:path": "PlethoraAwsStack/OllamaPrivateDns/Resource"
    }
   },
   "PlethoraAppInstanceRole178AE496": {
@@ -1348,6 +1187,21 @@
        "Resource": {
         "Ref": "PlethoraDbSecret2D5A6E00"
        }
+      },
+      {
+       "Action": [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream",
+        "bedrock:GetInferenceProfile",
+        "bedrock:GetFoundationModel"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        "arn:aws:bedrock:*:779391599178:inference-profile/*moonshotai*",
+        "arn:aws:bedrock:*:779391599178:application-inference-profile/*",
+        "arn:aws:bedrock:*::foundation-model/moonshot*"
+       ],
+       "Sid": "AllowBedrockKimiInference"
       }
      ],
      "Version": "2012-10-17"
@@ -2000,7 +1854,7 @@
   "CDKMetadata": {
    "Type": "AWS::CDK::Metadata",
    "Properties": {
-    "Analytics": "v2:deflate64:H4sIAAAAAAAA/31TTW/bMAz9Lb0rWpGi69lJiy5AsRl2kMMuAy2zqRqZMiQqQWD4vw+2/NV22Il8jw8SH0Wt5frhQd7ewMWvVHlaGV3IJmdQJwEX/6dBtZbNoVZi+0qHdCvSUBit8lAQcsfNWWYD4x4KgzM/c4n3VmlgbWkSd8nTLu3CT+BnYLzAVaROn4FxPnhHjI5wEsROBpQwg3qrkFgMzKFWT1TWVhMP0gnmqILTfH12NtR9l/8ldnR06L3YkWcghbGZIX+BQOptj1VtIFr5yLTCdR7v72QzOPphPWP521KvXqAkQ2Vd2c+lz3LkVvg72WyCOsUhDFkMqTVaXWc64la40svmERgK8JijcshihFPjcbCT48fNF2KUtsL3Z/gKCI7oZBMn1B0bwx7cEXnxBpPgSyXSrdBQySazcUvGON6YOvuqDYrZ4GgNAluvwGg6yiYJbPMIprY/c61AA561MhbKAgyQ0nQ8r2WT1LXRql/FFwvlpq+h659wiZc67Rlp0Iz5P+pZiH4+4IUuTmXqeQFbgWck9rLZWiJU40dZoKTWj+hZ0/SLPjHj7V1sW5Ght8HFtU3BQYUcHfwKXAduBdkS5bv/dl5/l/fy9ubda71ygVhXKLMY/wLDCbNlIAQAAA=="
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/31Ty27bMBD8ltxpNnCQ5OxHkBoIGsE2fOilWFEbhzG1FMilDYPQvxcS9UpS9LQ7swNqZknN5fzxUd7ewMXPVHGaGZ3LuGNQJwEX/yeimst4qJRYvdEhW4ks5EarXcgJueHGbmsD4x5ygyM/cgvvrdLA2tIgbpqnTdaUX8DPwHiBq8icPgPjePCGGB3hIEhOOrRgBvVeIrHomEOlnqiorCbupAPcoQpO8/XZ2VC1Lv9LbOjo0HvxAoHU+x7LykBy/ZmphWvi3N/J2Jn/aT1j8dtSqx5RLfydjMugTila16WSWaPVdaQTroUrvIxrYMjB4w6VQxY93JBnIIUirWvIsV5+I3ppLXx7hi+B4IhOxpS7OTaVPbgj8mSzg+DbJNG10FDKuLXp7ts6phm73kLm7Js2WAsIbL0Co+ko4yKw3SUw2P7K1QINeNbKWChyMEBK0/E8l3FRVUar9oG9WCiW7Qxde1tTPNVpz0idpu//Md+GlOsTnujSVgbPE1gLPCOxl3FliVD1z3+CFpVeo2dNw7/xhem/3tS6Flv0NjjVUhk4KJFTgtfAVeBakC1Qfvgf5/mDvJe3Nx9e65kLxLpEuU31LzAlK832AwAA"
    },
    "Metadata": {
     "aws:cdk:path": "PlethoraAwsStack/CDKMetadata/Default"
@@ -2035,14 +1889,6 @@
   "DeployBucketName": {
    "Value": {
     "Ref": "PlethoraDeployBucket1D83280E"
-   }
-  },
-  "OllamaPrivateIp": {
-   "Value": {
-    "Fn::GetAtt": [
-     "PlethoraOllamaInstance4326AE51",
-     "PrivateIp"
-    ]
    }
   },
   "ExportsOutputRefPlethoraAppAsgASG852112F25B2B12F6": {

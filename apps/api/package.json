@@ -37,6 +37,8 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock": "^3.1171.0",
+    "@aws-sdk/client-bedrock-runtime": "^3.1171.0",
     "@aws-sdk/client-s3": "^3.1171.0",
     "@aws-sdk/s3-request-presigner": "^3.1171.0",
     "@fastify/cookie": "^11.1.2",

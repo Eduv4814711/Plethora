@@ -47,7 +47,7 @@ export class PlethoraAwsStack extends cdk.Stack {
       service: ec2.GatewayVpcEndpointAwsService.S3,
     });
 
-    const privateZone = new route53.PrivateHostedZone(this, "PlethoraPrivateZone", {
+    new route53.PrivateHostedZone(this, "PlethoraPrivateZone", {
       vpc: this.vpc,
       zoneName: "plethora.local",
     });
@@ -85,12 +85,6 @@ export class PlethoraAwsStack extends cdk.Stack {
       allowAllOutbound: true,
     });
 
-    const ollamaSecurityGroup = new ec2.SecurityGroup(this, "PlethoraOllamaSg", {
-      vpc: this.vpc,
-      description: "Internal Ollama LLM access from Plethora app instances only",
-      allowAllOutbound: true,
-    });
-
     this.codeBuildSecurityGroup = new ec2.SecurityGroup(this, "PlethoraCodeBuildSg", {
       vpc: this.vpc,
       description: "CodeBuild VPC runner for pre-deploy RDS migrations",
@@ -107,7 +101,6 @@ export class PlethoraAwsStack extends cdk.Stack {
 
     appSecurityGroup.addIngressRule(albSecurityGroup, ec2.Port.tcp(3000), "ALB to Web");
     appSecurityGroup.addIngressRule(albSecurityGroup, ec2.Port.tcp(3001), "ALB to API");
-    ollamaSecurityGroup.addIngressRule(appSecurityGroup, ec2.Port.tcp(11434), "App to Ollama LLM");
     dbSecurityGroup.addIngressRule(appSecurityGroup, ec2.Port.tcp(5432), "App to RDS Postgres");
     dbSecurityGroup.addIngressRule(this.codeBuildSecurityGroup, ec2.Port.tcp(5432), "CodeBuild migrations to RDS");
 
@@ -135,9 +128,10 @@ export class PlethoraAwsStack extends cdk.Stack {
       generateSecretString: {
         secretStringTemplate: JSON.stringify({
           AI_ENABLED: "true",
-          AI_BASE_URL: "http://ollama.plethora.local:11434",
-          AI_MODEL: "llama3.3:3b",
-          AI_TIMEOUT_MS: "8000",
+          AI_PROVIDER: "bedrock",
+          AI_REGION: "af-south-1",
+          AI_MODEL: "global.moonshotai.kimi-k3.1",
+          AI_TIMEOUT_MS: "15000",
           CORS_ORIGIN: `https://${props.webDomain}`,
           FRONTEND_URL: `https://${props.webDomain}`,
           NEXT_PUBLIC_API_URL: `https://${props.apiDomain}`,
@@ -160,44 +154,6 @@ export class PlethoraAwsStack extends cdk.Stack {
       { os: ec2.OperatingSystemType.LINUX }
     );
 
-    const ollamaUserDataScript = fs.readFileSync(
-      path.resolve(__dirname, "../../ec2/user-data-ollama.sh"),
-      "utf8"
-    );
-    const ollamaUserData = ec2.UserData.forLinux();
-    ollamaUserData.addCommands(ollamaUserDataScript);
-
-    const ollamaRole = new iam.Role(this, "PlethoraOllamaRole", {
-      assumedBy: new iam.ServicePrincipal("ec2.amazonaws.com"),
-      managedPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")],
-    });
-
-    const ollamaInstance = new ec2.Instance(this, "PlethoraOllamaInstance", {
-      vpc: this.vpc,
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      securityGroup: ollamaSecurityGroup,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.M7G, ec2.InstanceSize.LARGE),
-      machineImage: ubuntuArmAmi,
-      role: ollamaRole,
-      userData: ollamaUserData,
-      blockDevices: [
-        {
-          deviceName: "/dev/sda1",
-          volume: ec2.BlockDeviceVolume.ebs(30, {
-            encrypted: true,
-            volumeType: ec2.EbsDeviceVolumeType.GP3,
-          }),
-        },
-      ],
-    });
-
-    new route53.ARecord(this, "OllamaPrivateDns", {
-      zone: privateZone,
-      recordName: "ollama",
-      target: route53.RecordTarget.fromIpAddresses(ollamaInstance.instancePrivateIp),
-      ttl: cdk.Duration.seconds(60),
-    });
-
     const appRole = new iam.Role(this, "PlethoraAppInstanceRole", {
       assumedBy: new iam.ServicePrincipal("ec2.amazonaws.com"),
       managedPolicies: [iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")],
@@ -206,6 +162,22 @@ export class PlethoraAwsStack extends cdk.Stack {
     this.deployBucket.grantRead(appRole);
     this.appSecret.grantRead(appRole);
     this.dbSecret.grantRead(appRole);
+    appRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: "AllowBedrockKimiInference",
+        actions: [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream",
+          "bedrock:GetInferenceProfile",
+          "bedrock:GetFoundationModel",
+        ],
+        resources: [
+          `arn:aws:bedrock:*:${this.account}:inference-profile/*moonshotai*`,
+          `arn:aws:bedrock:*:${this.account}:application-inference-profile/*`,
+          "arn:aws:bedrock:*::foundation-model/moonshot*",
+        ],
+      })
+    );
 
     const appUserDataScript = fs.readFileSync(
       path.resolve(__dirname, "../../ec2/user-data-app.sh"),
@@ -341,6 +313,5 @@ export class PlethoraAwsStack extends cdk.Stack {
     new cdk.CfnOutput(this, "AlbDnsName", { value: alb.loadBalancerDnsName });
     new cdk.CfnOutput(this, "UploadsBucketName", { value: this.uploadsBucket.bucketName });
     new cdk.CfnOutput(this, "DeployBucketName", { value: this.deployBucket.bucketName });
-    new cdk.CfnOutput(this, "OllamaPrivateIp", { value: ollamaInstance.instancePrivateIp });
   }
 }

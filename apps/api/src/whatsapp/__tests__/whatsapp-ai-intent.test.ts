@@ -5,7 +5,7 @@ import {
 } from "../../services/ai/whatsapp-intent.service.js";
 import { checkLlmHealth } from "../../services/ai/llm-client.js";
 
-describe("WhatsApp AI intent classifier (Ollama llama3.3:3b)", () => {
+describe("WhatsApp AI intent classifier (Amazon Bedrock Kimi K3.1)", () => {
   it("parses valid JSON intent classifications", async () => {
     const mockChat = vi.fn(async () => ({
       content: JSON.stringify({
@@ -76,7 +76,8 @@ describe("WhatsApp AI intent classifier (Ollama llama3.3:3b)", () => {
   it("reports disabled state cleanly in checkLlmHealth when AI_ENABLED is false", async () => {
     const health = await checkLlmHealth();
     expect(health.enabled).toBe(false);
-    expect(health.configuredModel).toBe("llama3.3:3b");
+    expect(health.provider).toBe("bedrock");
+    expect(health.configuredModel).toBe("global.moonshotai.kimi-k3.1");
     expect(health.reachable).toBe(false);
   });
 });

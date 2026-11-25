@@ -104,7 +104,11 @@ const rawEnvSchema = z.object({
   AWS_S3_BUCKET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   AWS_REGION: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   AI_ENABLED: z.preprocess(parseStrictBooleanFlag, z.boolean().optional()),
-  AI_PROVIDER: z.preprocess(emptyToUndefined, z.enum(["ollama", "openai-compatible"]).optional()),
+  AI_PROVIDER: z.preprocess(
+    emptyToUndefined,
+    z.enum(["bedrock", "ollama", "openai-compatible"]).optional()
+  ),
+  AI_REGION: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   AI_BASE_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
   AI_MODEL: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   AI_TIMEOUT_MS: z.preprocess(
@@ -151,7 +155,8 @@ export type Env = {
   };
   ai: {
     enabled: boolean;
-    provider: "ollama" | "openai-compatible";
+    provider: "bedrock" | "ollama" | "openai-compatible";
+    region: string;
     baseUrl: string;
     model: string;
     timeoutMs: number;
@@ -193,6 +198,7 @@ function pickRawEnv(source: NodeJS.ProcessEnv): Record<string, unknown> {
     AWS_REGION: source.AWS_REGION,
     AI_ENABLED: source.AI_ENABLED,
     AI_PROVIDER: source.AI_PROVIDER,
+    AI_REGION: source.AI_REGION,
     AI_BASE_URL: source.AI_BASE_URL,
     AI_MODEL: source.AI_MODEL,
     AI_TIMEOUT_MS: source.AI_TIMEOUT_MS,
@@ -382,13 +388,23 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
       bucket: raw.AWS_S3_BUCKET,
       region: raw.AWS_REGION ?? "af-south-1",
     },
-    ai: {
-      enabled: raw.AI_ENABLED === true,
-      provider: raw.AI_PROVIDER ?? "ollama",
-      baseUrl: (raw.AI_BASE_URL ?? "http://ollama.plethora.local:11434").replace(/\/+$/, ""),
-      model: raw.AI_MODEL ?? "llama3.3:3b",
-      timeoutMs: raw.AI_TIMEOUT_MS ?? 8_000,
-    },
+    ai: (() => {
+      const provider = raw.AI_PROVIDER ?? "bedrock";
+      const region = raw.AI_REGION ?? raw.AWS_REGION ?? "af-south-1";
+      const defaultModel = provider === "bedrock" ? "global.moonshotai.kimi-k3.1" : "llama3.3:3b";
+      const defaultBaseUrl =
+        provider === "bedrock"
+          ? `https://bedrock-runtime.${region}.amazonaws.com`
+          : "http://ollama.plethora.local:11434";
+      return {
+        enabled: raw.AI_ENABLED === true,
+        provider,
+        region,
+        baseUrl: (raw.AI_BASE_URL ?? defaultBaseUrl).replace(/\/+$/, ""),
+        model: raw.AI_MODEL ?? defaultModel,
+        timeoutMs: raw.AI_TIMEOUT_MS ?? 15_000,
+      };
+    })(),
   };
 }
 
