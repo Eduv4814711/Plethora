@@ -21,7 +21,7 @@ if ($ids -and $ids.Count -gt 0) {
 
 Write-Host "`n=== Live Production HTTPS Health ==="
 Write-Host "API (/health/ready):"
-curl.exe -sS -i --max-time 10 https://api.quickbophasecurity.co.za/health/ready | Select-Object -First 6
+(curl.exe -sS -i --max-time 10 https://api.quickbophasecurity.co.za/health/ready) | Select-Object -First 6
 curl.exe -sS --max-time 10 https://api.quickbophasecurity.co.za/health/ready
 Write-Host "`n`nWeb (/):"
-curl.exe -sS -I --max-time 10 https://plethora.quickbophasecurity.co.za/ | Select-Object -First 6
+(curl.exe -sS -I --max-time 10 https://plethora.quickbophasecurity.co.za/) | Select-Object -First 6

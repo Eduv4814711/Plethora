@@ -1,6 +1,7 @@
 version: 0.2
 
 env:
+  shell: "bash"
   variables:
     PUPPETEER_SKIP_DOWNLOAD: "true"
     NEXT_PUBLIC_API_URL: "https://api.quickbophasecurity.co.za"
