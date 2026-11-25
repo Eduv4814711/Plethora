@@ -98,7 +98,9 @@ describe("S3 storage driver", () => {
     expect(parsed.storage.driver).toBe("s3");
     expect(parsed.storage.region).toBe("af-south-1");
     expect(parsed.ai.enabled).toBe(true);
-    expect(parsed.ai.model).toBe("llama3.3:3b");
-    expect(parsed.ai.baseUrl).toBe("http://ollama.plethora.local:11434");
+    expect(parsed.ai.provider).toBe("bedrock");
+    expect(parsed.ai.region).toBe("af-south-1");
+    expect(parsed.ai.model).toBe("global.moonshotai.kimi-k3.1");
+    expect(parsed.ai.baseUrl).toBe("https://bedrock-runtime.af-south-1.amazonaws.com");
   });
 });
