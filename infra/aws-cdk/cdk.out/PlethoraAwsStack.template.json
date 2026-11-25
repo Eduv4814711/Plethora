@@ -1056,8 +1056,8 @@
     },
     "Name": "plethora-prod-app-secrets"
    },
-   "UpdateReplacePolicy": "Delete",
-   "DeletionPolicy": "Delete",
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
    "Metadata": {
     "aws:cdk:path": "PlethoraAwsStack/PlethoraAppSecrets/Resource"
    }

@@ -122,9 +122,12 @@ export class PlethoraAwsStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.SNAPSHOT,
     });
 
+    // Do not change secretStringTemplate after initial creation: CloudFormation GenerateSecretString
+    // creates a new secret version and omits keys populated out-of-band (JWT_SECRET, ENCRYPTION_KEY).
     this.appSecret = new secretsmanager.Secret(this, "PlethoraAppSecrets", {
       secretName: "plethora-prod-app-secrets",
       description: "Runtime secrets for Plethora ERP API, WhatsApp Cloud API, and Cron",
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
       generateSecretString: {
         secretStringTemplate: JSON.stringify({
           AI_ENABLED: "true",

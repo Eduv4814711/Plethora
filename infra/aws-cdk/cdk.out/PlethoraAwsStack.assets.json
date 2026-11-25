@@ -1,16 +1,16 @@
 {
   "version": "55.0.0",
   "files": {
-    "715df8dc29ba9ba86ae6e7ce4c27434a7f0c93b46e08fe38b6f143aa9e4e45ca": {
+    "7356a13425d28a42db73e10a4de9cc67a353df9da7f3807af68062c311d7550e": {
       "displayName": "PlethoraAwsStack Template",
       "source": {
         "path": "PlethoraAwsStack.template.json",
         "packaging": "file"
       },
       "destinations": {
-        "779391599178-af-south-1-56756acc": {
+        "779391599178-af-south-1-39f4f4bb": {
           "bucketName": "cdk-hnb659fds-assets-779391599178-af-south-1",
-          "objectKey": "715df8dc29ba9ba86ae6e7ce4c27434a7f0c93b46e08fe38b6f143aa9e4e45ca.json",
+          "objectKey": "7356a13425d28a42db73e10a4de9cc67a353df9da7f3807af68062c311d7550e.json",
           "region": "af-south-1",
           "assumeRoleArn": "arn:${AWS::Partition}:iam::779391599178:role/cdk-hnb659fds-file-publishing-role-779391599178-af-south-1"
         }
