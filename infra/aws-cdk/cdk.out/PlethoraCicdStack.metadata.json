@@ -4,7 +4,7 @@
       "type": "aws:cdk:creationStack",
       "data": [
         "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
-        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:42:2)",
         "...node internals, tsx..."
       ]
     },
@@ -40,9 +40,9 @@
     {
       "type": "aws:cdk:creationStack",
       "data": [
-        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:149:5)",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:156:5)",
         "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
-        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:42:2)",
         "...node internals, tsx..."
       ]
     }
@@ -55,9 +55,9 @@
     {
       "type": "aws:cdk:creationStack",
       "data": [
-        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:150:5)",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:157:5)",
         "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
-        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:42:2)",
         "...node internals, tsx..."
       ]
     }
@@ -70,9 +70,9 @@
     {
       "type": "aws:cdk:creationStack",
       "data": [
-        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:151:5)",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:158:5)",
         "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
-        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:42:2)",
         "...node internals, tsx..."
       ]
     }
@@ -112,9 +112,9 @@
       "type": "aws:cdk:creationStack",
       "data": [
         "...new ServerApplication2 in aws-cdk-lib...",
-        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:28:27)",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:29:27)",
         "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
-        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:42:2)",
         "...node internals, tsx..."
       ]
     }
@@ -128,9 +128,9 @@
       "type": "aws:cdk:creationStack",
       "data": [
         "...new ServerDeploymentGroup2 in aws-cdk-lib...",
-        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:32:29)",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:33:29)",
         "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
-        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:42:2)",
         "...node internals, tsx..."
       ]
     }
@@ -144,9 +144,9 @@
       "type": "aws:cdk:creationStack",
       "data": [
         "...new Role2 in aws-cdk-lib...",
-        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:46:31)",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:47:31)",
         "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
-        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:42:2)",
         "...node internals, tsx..."
       ]
     }
@@ -160,9 +160,9 @@
       "type": "aws:cdk:creationStack",
       "data": [
         "...new Project2 in aws-cdk-lib...",
-        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:76:29)",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:77:29)",
         "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
-        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:42:2)",
         "...node internals, tsx..."
       ]
     }
@@ -176,9 +176,9 @@
       "type": "aws:cdk:creationStack",
       "data": [
         "...new Project2 in aws-cdk-lib...",
-        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:103:27)",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:104:27)",
         "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
-        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:42:2)",
         "...node internals, tsx..."
       ]
     }
@@ -205,9 +205,9 @@
       "type": "aws:cdk:creationStack",
       "data": [
         "...new ServerDeploymentGroup2 in aws-cdk-lib...",
-        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:32:29)",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:33:29)",
         "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
-        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)"
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:42:2)"
       ]
     }
   ],
@@ -220,9 +220,9 @@
       "type": "aws:cdk:creationStack",
       "data": [
         "...PropertyInjectable.<anonymous> in aws-cdk-lib...",
-        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:142:23)",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:149:23)",
         "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
-        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)"
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:42:2)"
       ]
     }
   ],
@@ -235,9 +235,9 @@
       "type": "aws:cdk:creationStack",
       "data": [
         "...new Project2 in aws-cdk-lib...",
-        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:76:29)",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:77:29)",
         "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
-        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:42:2)",
         "...node internals, tsx..."
       ]
     }
@@ -251,9 +251,9 @@
       "type": "aws:cdk:creationStack",
       "data": [
         "...new Project2 in aws-cdk-lib...",
-        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:103:27)",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:104:27)",
         "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
-        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)",
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:42:2)",
         "...node internals, tsx..."
       ]
     }
@@ -267,9 +267,9 @@
       "type": "aws:cdk:creationStack",
       "data": [
         "...new Project2 in aws-cdk-lib...",
-        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:103:27)",
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:104:27)",
         "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:28:1)",
-        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:41:2)"
+        "<anonymous> (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\bin\\plethora-aws.ts:42:2)"
       ]
     }
   ],
@@ -282,7 +282,7 @@
       "type": "aws:cdk:creationStack",
       "data": [
         "...new Project2 in aws-cdk-lib...",
-        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:76:29)"
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:77:29)"
       ]
     }
   ],
@@ -295,7 +295,7 @@
       "type": "aws:cdk:creationStack",
       "data": [
         "...new Project2 in aws-cdk-lib...",
-        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:103:27)"
+        "new PlethoraCicdStack (C:\\Users\\nkagi\\Desktop\\Plethora\\infra\\aws-cdk\\lib\\plethora-cicd-stack.ts:104:27)"
       ]
     }
   ]

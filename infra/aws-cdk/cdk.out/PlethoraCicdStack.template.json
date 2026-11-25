@@ -514,8 +514,12 @@
        "Action": [
         "rds:CreateDBSnapshot",
         "rds:DescribeDBSnapshots",
+        "rds:DescribeDBInstances",
         "codedeploy:CreateDeployment",
         "codedeploy:GetDeployment",
+        "codedeploy:GetDeploymentConfig",
+        "codedeploy:GetDeploymentGroup",
+        "codedeploy:GetApplication",
         "codedeploy:GetApplicationRevision",
         "codedeploy:RegisterApplicationRevision"
        ],
@@ -545,6 +549,7 @@
     "Cache": {
      "Type": "NO_CACHE"
     },
+    "ConcurrentBuildLimit": 1,
     "Description": "Builds Plethora ERP, runs RDS migration gate, and deploys via CodeDeploy",
     "EncryptionKey": "alias/aws/s3",
     "Environment": {
@@ -589,6 +594,11 @@
        "Name": "API_HEALTH_URL",
        "Type": "PLAINTEXT",
        "Value": "https://api.quickbophasecurity.co.za/health/ready"
+      },
+      {
+       "Name": "WEB_HEALTH_URL",
+       "Type": "PLAINTEXT",
+       "Value": "https://plethora.quickbophasecurity.co.za/"
       }
      ],
      "Image": "aws/codebuild/standard:7.0",

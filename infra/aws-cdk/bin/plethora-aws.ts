@@ -38,4 +38,5 @@ new PlethoraCicdStack(app, "PlethoraCicdStack", {
   githubRepo,
   enableCodeBuildWebhook,
   apiDomain,
+  webDomain,
 });

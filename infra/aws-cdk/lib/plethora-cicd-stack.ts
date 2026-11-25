@@ -19,6 +19,7 @@ export interface PlethoraCicdStackProps extends cdk.StackProps {
   githubRepo: string;
   enableCodeBuildWebhook?: boolean;
   apiDomain: string;
+  webDomain?: string;
 }
 
 export class PlethoraCicdStack extends cdk.Stack {
@@ -108,6 +109,7 @@ export class PlethoraCicdStack extends cdk.Stack {
       subnetSelection: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       securityGroups: [props.codeBuildSecurityGroup],
       buildSpec: codebuild.BuildSpec.fromSourceFilename("buildspec.deploy.yml"),
+      concurrentBuildLimit: 1,
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
         computeType: codebuild.ComputeType.MEDIUM,
@@ -119,6 +121,7 @@ export class PlethoraCicdStack extends cdk.Stack {
         DB_SECRET_ARN: { value: props.dbSecret.secretArn },
         DB_INSTANCE_ID: { value: props.dbInstance.instanceIdentifier },
         API_HEALTH_URL: { value: `https://${props.apiDomain}/health/ready` },
+        WEB_HEALTH_URL: { value: props.webDomain ? `https://${props.webDomain}/` : "" },
       },
       timeout: cdk.Duration.minutes(30),
     });
@@ -130,6 +133,7 @@ export class PlethoraCicdStack extends cdk.Stack {
         actions: [
           "rds:CreateDBSnapshot",
           "rds:DescribeDBSnapshots",
+          "rds:DescribeDBInstances",
           "codedeploy:CreateDeployment",
           "codedeploy:GetDeployment",
           "codedeploy:GetDeploymentConfig",
